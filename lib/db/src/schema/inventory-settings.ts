@@ -7,6 +7,8 @@ export const inventorySettingsTable = pgTable("inventory_settings", {
   skuPrefix:    text("sku_prefix").notNull().default("KP"),
   showCosts:    text("show_costs").notNull().default("false"),
   groupPricing: text("group_pricing").notNull().default("false"),
+  /** Fallback image shown for products that have no image of their own. */
+  defaultImageUrl: text("default_image_url"),
 });
 
 export type InventorySettings = typeof inventorySettingsTable.$inferSelect;

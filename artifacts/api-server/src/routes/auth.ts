@@ -1,13 +1,16 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
-import { randomBytes, createHash } from "crypto";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, posRegistersTable } from "@workspace/db";
+import { randomBytes, createHash, createHmac } from "crypto";
+import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, posRegistersTable, partnerReferralsTable } from "@workspace/db";
 import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requireAuth";
+import { getDeleteOrderedTables } from "../lib/backup-tables";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
-import { sendEmail } from "../services/email";
+import { sendEmail, sendSystemEmail } from "../services/email";
+import { validateABN } from "../lib/abn";
+import { publicOrigin } from "../lib/publicUrl";
 
 
 const FAILED_LOGIN_NOTIFY_COOLDOWN_MS = parseInt(
@@ -125,6 +128,9 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect, staffRole: "owner
     logoUrl: m.logoUrl ?? null,
     createdAt: m.createdAt.toISOString(),
     staffRole,
+    emailVerified: m.emailVerifiedAt !== null,
+    onboardingCompleted: m.onboardingCompletedAt !== null,
+    isDemoAccount: m.isDemoAccount === "true",
   };
 }
 
@@ -166,7 +172,12 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
   const passwordHash = await hashPassword(password);
   const [merchant] = await db
     .insert(merchantsTable)
-    .values({ email, passwordHash, businessName, ownerName, phone })
+    .values({
+      email, passwordHash, businessName, ownerName, phone,
+      tosAcceptedAt: new Date(),
+      tosAcceptedIp: req.ip ?? null,
+      isDemoAccount: "true",
+    })
     .returning();
 
   // Get the plan (use planId if provided, else default to Starter = id 1)
@@ -183,8 +194,75 @@ router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
     });
   }
 
+  // Partner referral attribution: if the signup arrived via a "Powered by KoaPOS"
+  // landing-page footer (?ref=CODE), credit the referring merchant. Read from the
+  // raw body since RegisterBody strips unknown keys.
+  const referralCode = typeof (req.body as { referralCode?: unknown })?.referralCode === "string"
+    ? (req.body as { referralCode: string }).referralCode.trim()
+    : "";
+  if (referralCode) {
+    const [referrer] = await db.select({ id: merchantsTable.id })
+      .from(merchantsTable).where(eq(merchantsTable.partnerReferralCode, referralCode)).limit(1);
+    if (referrer && referrer.id !== merchant.id) {
+      await db.insert(partnerReferralsTable).values({
+        referrerMerchantId: referrer.id,
+        referredBusinessName: businessName,
+        contactName: ownerName ?? businessName,
+        contactEmail: email,
+        plan: plan?.name ?? null,
+        status: "pending",
+      });
+    }
+  }
+
   await seedProductTypes(merchant.id);
   await seedDefaultRegister(merchant.id);
+
+  // Verification + welcome emails — fire-and-forget, do not block registration
+  const appBase = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
+
+  const verifySecret = process.env.EMAIL_VERIFY_SECRET ?? "koapos-dev-verify";
+  const verifyHmac = createHmac("sha256", verifySecret).update(String(merchant.id)).digest("hex");
+  const verifyToken = `${merchant.id}.${verifyHmac}`;
+  const verifyUrl = `${appBase}/api/auth/verify-email?token=${verifyToken}`;
+
+  void sendSystemEmail({
+    to: merchant.email,
+    subject: "Verify your KoaPOS email address",
+    html: `
+      <div style="font-family:sans-serif;max-width:540px;margin:0 auto;color:#111">
+        <h2 style="margin-top:0;color:#16a34a">Verify your email address</h2>
+        <p>Click the button below to verify your email and activate your KoaPOS account.</p>
+        <p style="margin-top:24px">
+          <a href="${verifyUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Verify email address →</a>
+        </p>
+        <p style="color:#666;font-size:13px;margin-top:24px">This link expires after 7 days. If you didn't create a KoaPOS account, you can ignore this email.</p>
+      </div>
+    `,
+    text: `Verify your KoaPOS email address\n\nClick here to verify: ${verifyUrl}\n\nIf you didn't create a KoaPOS account, ignore this email.`,
+  });
+  void sendSystemEmail({
+    to: merchant.email,
+    subject: "Welcome to KoaPOS 🎉",
+    html: `
+      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
+        <h2 style="margin-top:0;color:#16a34a">Welcome to KoaPOS, ${businessName}!</h2>
+        <p>Your account is ready. Here are three things to do first:</p>
+        <ol style="padding-left:20px;line-height:1.8">
+          <li><a href="${appBase}/products" style="color:#16a34a;font-weight:600">Add your first product</a> — set up your catalogue before your first sale.</li>
+          <li><a href="${appBase}/staff" style="color:#16a34a;font-weight:600">Invite your team</a> — add staff members and assign roles.</li>
+          <li><a href="${appBase}/management/registers" style="color:#16a34a;font-weight:600">Configure your receipt</a> — add your logo, ABN, and contact details.</li>
+        </ol>
+        <p style="margin-top:24px">
+          <a href="${appBase}/dashboard" style="background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Go to your dashboard →</a>
+        </p>
+        <p style="color:#666;font-size:13px;margin-top:32px">
+          Need help? Reply to this email or visit your dashboard at any time.
+        </p>
+      </div>
+    `,
+    text: `Welcome to KoaPOS, ${businessName}!\n\n1. Add your first product: ${appBase}/products\n2. Invite your team: ${appBase}/staff\n3. Configure your receipt: ${appBase}/management/registers\n\nGo to your dashboard: ${appBase}/dashboard`,
+  });
 
   await new Promise<void>((resolve, reject) => {
     req.session.regenerate((err) => (err ? reject(err) : resolve()));
@@ -716,29 +794,15 @@ const resetPasswordLimiter = rateLimit({
 /**
  * Returns the trusted public origin for this app (used in password-reset links).
  *
- * Priority:
- *   1. APP_BASE_URL — operator-configured, most explicit (e.g. "https://my.koapos.com")
- *   2. REPLIT_DOMAINS — set by Replit infrastructure, not by inbound requests
+ * Delegates to the shared publicOrigin() helper, which resolves to the
+ * operator-configured APP_BASE_URL/PUBLIC_DOMAIN or the koapos.com.au default.
  *
  * Request headers (Host, X-Forwarded-Host, etc.) are intentionally NOT used
  * because they are attacker-controlled and can be poisoned to redirect reset
  * links to an attacker-owned domain.
- *
- * In development neither var may be set; we fall back to localhost so local
- * testing still works — but we never use request headers even then.
  */
 function getAppBaseUrl(): string {
-  const explicit = process.env.APP_BASE_URL?.trim();
-  if (explicit) return explicit.replace(/\/$/, "");
-
-  const replitDomains = process.env.REPLIT_DOMAINS;
-  if (replitDomains) {
-    const first = replitDomains.split(",")[0]?.trim();
-    if (first) return `https://${first}`;
-  }
-
-  // Development fallback — never used in production (REPLIT_DOMAINS is always set there)
-  return "http://localhost";
+  return publicOrigin();
 }
 
 router.post("/auth/forgot-password", resetPasswordLimiter, async (req, res): Promise<void> => {
@@ -1071,6 +1135,135 @@ router.get("/auth/account-hold/clear", holdClearLimiter, async (req, res): Promi
 });
 
 router.post("/auth/logout", async (req, res): Promise<void> => {
+  req.session.destroy(() => {});
+  res.json({ ok: true });
+});
+
+/* ── Email verification ──────────────────────────────────────────────────── */
+
+function makeVerifyToken(merchantId: number): string {
+  const secret = process.env.EMAIL_VERIFY_SECRET ?? "koapos-dev-verify";
+  const hmac = createHmac("sha256", secret).update(String(merchantId)).digest("hex");
+  return `${merchantId}.${hmac}`;
+}
+
+function parseVerifyToken(token: string): number | null {
+  const [idStr, hmac] = token.split(".");
+  const id = parseInt(idStr ?? "", 10);
+  if (!idStr || !hmac || isNaN(id)) return null;
+  const expected = createHmac("sha256", process.env.EMAIL_VERIFY_SECRET ?? "koapos-dev-verify")
+    .update(String(id)).digest("hex");
+  if (hmac !== expected) return null;
+  return id;
+}
+
+router.get("/auth/verify-email", async (req, res): Promise<void> => {
+  const token = typeof req.query.token === "string" ? req.query.token : "";
+  const merchantId = parseVerifyToken(token);
+  if (!merchantId) {
+    res.status(400).send("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Invalid or expired verification link.</h2><p><a href='/login'>Go to login</a></p></body></html>");
+    return;
+  }
+
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  if (!merchant) {
+    res.status(404).send("<html><body style='font-family:sans-serif;padding:40px;text-align:center'><h2>Account not found.</h2></body></html>");
+    return;
+  }
+
+  if (!merchant.emailVerifiedAt) {
+    await db.update(merchantsTable).set({ emailVerifiedAt: new Date() }).where(eq(merchantsTable.id, merchantId));
+  }
+
+  const base = getAppBaseUrl();
+  res.redirect(302, `${base}/dashboard?emailVerified=1`);
+});
+
+const resendVerifyLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000,
+  max: 3,
+  message: { error: "Too many resend requests — please wait 10 minutes." },
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+
+router.post("/auth/resend-verification", requireAuth, resendVerifyLimiter, async (req, res): Promise<void> => {
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, req.session.merchantId!));
+  if (!merchant) { res.status(404).json({ error: "Not found" }); return; }
+  if (merchant.emailVerifiedAt) { res.status(400).json({ error: "Email is already verified." }); return; }
+
+  const token = makeVerifyToken(merchant.id);
+  const base = getAppBaseUrl();
+  void sendSystemEmail({
+    to: merchant.email,
+    subject: "Verify your KoaPOS email address",
+    html: `
+      <div style="font-family:sans-serif;max-width:540px;margin:0 auto;color:#111">
+        <h2 style="margin-top:0;color:#16a34a">Verify your email address</h2>
+        <p>Click the button below to verify your KoaPOS account email.</p>
+        <p style="margin-top:24px">
+          <a href="${base}/api/auth/verify-email?token=${token}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Verify email address →</a>
+        </p>
+      </div>
+    `,
+    text: `Verify your KoaPOS email: ${base}/api/auth/verify-email?token=${token}`,
+  });
+  res.json({ ok: true });
+});
+
+/* ── Onboarding completion ────────────────────────────────────────────────── */
+
+router.patch("/auth/onboarding/complete", requireAuth, async (req, res): Promise<void> => {
+  await db.update(merchantsTable)
+    .set({ onboardingCompletedAt: new Date() })
+    .where(eq(merchantsTable.id, req.session.merchantId!));
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, req.session.merchantId!));
+  res.json(formatMerchant(merchant!, req.session.staffRole ?? "owner"));
+});
+
+/* ── Account deletion ────────────────────────────────────────────────────── */
+
+router.delete("/auth/account", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { currentPassword } = req.body as { currentPassword?: string };
+  if (!currentPassword) {
+    res.status(400).json({ error: "Current password is required." });
+    return;
+  }
+
+  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  if (!merchant) { res.status(404).json({ error: "Not found" }); return; }
+
+  if (!(await verifyPassword(currentPassword, merchant.passwordHash))) {
+    res.status(401).json({ error: "Incorrect password." });
+    return;
+  }
+
+  // Closing an account purges all of the merchant's business data, then
+  // SUSPENDS the merchant row rather than hard-deleting it: a database trigger
+  // (prevent_merchant_delete) intentionally forbids DELETEs on `merchants`, and
+  // requireAuth/login already reject any account whose status is not "active",
+  // so suspension fully and irreversibly locks out access.
+  //
+  // Reuse the shared merchant-scoped-table discovery (the same set backup/restore
+  // operate on) so every owned table — including ones keyed by a non-`merchantId`
+  // column such as partner_referrals (referrerMerchantId) — is purged child-first.
+  const deleteOrder = getDeleteOrderedTables();
+
+  await db.transaction(async (tx) => {
+    for (const { table, merchantColKey } of deleteOrder) {
+      const col = (table as unknown as Record<string, unknown>)[merchantColKey] as Parameters<typeof eq>[0];
+      await tx.delete(table).where(eq(col, merchantId));
+    }
+    // Suspend (not DELETE) the merchant: hard deletes are blocked by the
+    // prevent_merchant_delete trigger; suspension locks out all access.
+    await tx.update(merchantsTable).set({ status: "suspended" }).where(eq(merchantsTable.id, merchantId));
+  });
+
+  // Evict the cached "active" status immediately so any other open sessions for
+  // this account lose API access on their very next request (not up to 60s later).
+  invalidateMerchantStatusCache(merchantId);
+
   req.session.destroy(() => {});
   res.json({ ok: true });
 });

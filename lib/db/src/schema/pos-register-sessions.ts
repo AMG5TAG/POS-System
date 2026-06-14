@@ -14,7 +14,9 @@ export const posRegisterSessionsTable = pgTable("pos_register_sessions", {
   closedAt:        timestamp("closed_at", { withTimezone: true }),
   cashCounted:       numeric("cash_counted").default("0"),
   eftposDeclared:    numeric("eftpos_declared").default("0"),
+  paymentTotals:     text("payment_totals").default("{}"),
   closingNotes:      text("closing_notes").default(""),
+  deviceId:          text("device_id"),
 });
 
 export type PosRegisterSession = typeof posRegisterSessionsTable.$inferSelect;

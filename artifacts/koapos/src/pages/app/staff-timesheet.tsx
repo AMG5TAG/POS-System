@@ -15,34 +15,17 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { useListStaff, type Staff } from "@workspace/api-client-react";
-import { Clock, ChevronLeft, ChevronRight, Plus, LogIn, LogOut, Trash2, Timer } from "lucide-react";
+import {
+  useListStaff,
+  useListStaffTimesheets,
+  useCreateStaffTimesheet,
+  useDeleteStaffTimesheet,
+  type Staff,
+  type StaffTimesheetEntry,
+} from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
+import { Clock, ChevronLeft, ChevronRight, Plus, LogIn, Trash2, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-/* ─── Local storage model ─────────────────────────────────────────────────── */
-
-interface TimesheetEntry {
-  id: string;
-  staffId: number;
-  staffName: string;
-  date: string;        // YYYY-MM-DD
-  clockIn: string;     // HH:MM
-  clockOut: string | null;  // HH:MM or null if still clocked in
-}
-
-const LS_KEY = "koapos_timesheet_entries";
-
-function loadEntries(): TimesheetEntry[] {
-  try {
-    return JSON.parse(localStorage.getItem(LS_KEY) ?? "[]") as TimesheetEntry[];
-  } catch {
-    return [];
-  }
-}
-
-function saveEntries(entries: TimesheetEntry[]) {
-  localStorage.setItem(LS_KEY, JSON.stringify(entries));
-}
 
 /* ─── Time math ──────────────────────────────────────────────────────────── */
 
@@ -50,7 +33,7 @@ function hoursWorked(clockIn: string, clockOut: string | null): number {
   if (!clockOut) return 0;
   const [ih, im] = clockIn.split(":").map(Number);
   const [oh, om] = clockOut.split(":").map(Number);
-  const mins = (oh * 60 + om) - (ih * 60 + im);
+  const mins = (oh! * 60 + om!) - (ih! * 60 + im!);
   return Math.max(0, mins / 60);
 }
 
@@ -111,7 +94,7 @@ function AddEntryDialog({
   open: boolean;
   onOpenChange: (v: boolean) => void;
   staff: Staff[];
-  onAdd: (entry: TimesheetEntry) => void;
+  onAdd: (staffId: number, staffName: string, date: string, clockIn: string, clockOut: string | null) => void;
 }) {
   const [staffId, setStaffId] = useState("");
   const [date, setDate] = useState(todayDate);
@@ -128,14 +111,7 @@ function AddEntryDialog({
     if (!stillIn && clockOut && clockOut <= clockIn) { toast.error("Clock-out must be after clock-in"); return; }
     const member = staff.find(s => String(s.id) === staffId);
     if (!member) return;
-    onAdd({
-      id: crypto.randomUUID(),
-      staffId: member.id,
-      staffName: member.name,
-      date,
-      clockIn,
-      clockOut: stillIn ? null : clockOut,
-    });
+    onAdd(member.id, member.name, date, clockIn, stillIn ? null : clockOut);
     toast.success("Entry added");
     reset();
     onOpenChange(false);
@@ -201,29 +177,48 @@ function AddEntryDialog({
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffTimesheetPage() {
+  const queryClient = useQueryClient();
   const { data: staffList, isLoading: staffLoading } = useListStaff();
   const activeStaff: Staff[] = (staffList ?? []).filter(s => s.isActive);
 
   const [weekOffset, setWeekOffset] = useState(0);
   const [filterStaff, setFilterStaff] = useState("all");
-  const [entries, setEntries] = useState<TimesheetEntry[]>(loadEntries);
   const [addOpen, setAddOpen] = useState(false);
 
   const weekDates = useMemo(() => getWeekDates(weekOffset), [weekOffset]);
   const today = todayDate();
 
-  const mutateEntries = useCallback((updated: TimesheetEntry[]) => {
-    setEntries(updated);
-    saveEntries(updated);
-  }, []);
+  const startDate = weekDates[0]!;
+  const endDate   = weekDates[6]!;
 
-  const handleAdd = (entry: TimesheetEntry) => mutateEntries([...entries, entry]);
+  const { data: timesheetData, isLoading: timesheetLoading } = useListStaffTimesheets(
+    { startDate, endDate },
+    { query: { queryKey: ["/api/staff-timesheets", startDate, endDate], staleTime: 30_000 } },
+  );
+  const entries: StaffTimesheetEntry[] = timesheetData?.items ?? [];
 
-  const handleDelete = (id: string) => mutateEntries(entries.filter(e => e.id !== id));
+  const createMutation  = useCreateStaffTimesheet();
+  const deleteMutation  = useDeleteStaffTimesheet();
 
-  const handleClockOut = (id: string) => {
-    mutateEntries(entries.map(e => e.id === id ? { ...e, clockOut: nowTime() } : e));
-    toast.success("Clocked out");
+  const invalidate = useCallback(() => {
+    queryClient.invalidateQueries({ queryKey: ["/api/staff-timesheets"] });
+  }, [queryClient]);
+
+  const handleAddEntry = (staffId: number, staffName: string, date: string, clockInTime: string, clockOutTime: string | null) => {
+    createMutation.mutate(
+      { data: { staffId, staffName, date, clockIn: clockInTime, clockOut: clockOutTime } },
+      {
+        onSuccess: () => { toast.success("Entry added"); invalidate(); },
+        onError: () => toast.error("Failed to add entry"),
+      },
+    );
+  };
+
+  const handleDelete = (id: number) => {
+    deleteMutation.mutate({ id }, {
+      onSuccess: () => { toast.success("Entry deleted"); invalidate(); },
+      onError: () => toast.error("Failed to delete entry"),
+    });
   };
 
   const visibleStaff = useMemo(() => {
@@ -231,10 +226,7 @@ export default function StaffTimesheetPage() {
     return activeStaff.filter(s => String(s.id) === filterStaff);
   }, [activeStaff, filterStaff]);
 
-  const weekEntries = useMemo(
-    () => entries.filter(e => weekDates.includes(e.date)),
-    [entries, weekDates],
-  );
+  const weekEntries = entries;
 
   const totalHours = useMemo(
     () => weekEntries
@@ -342,7 +334,7 @@ export default function StaffTimesheetPage() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {staffLoading ? (
+              {staffLoading || timesheetLoading ? (
                 Array.from({ length: 3 }).map((_, i) => (
                   <TableRow key={i}>
                     {Array.from({ length: 9 }).map((__, j) => (
@@ -366,6 +358,9 @@ export default function StaffTimesheetPage() {
                       <TableCell className="pl-5">
                         <p className="font-medium text-sm">{member.name}</p>
                         <p className="text-xs text-muted-foreground capitalize">{member.role}</p>
+                        {member.payRate && (
+                          <p className="text-xs text-muted-foreground">${member.payRate}/hr</p>
+                        )}
                       </TableCell>
                       {weekDates.map(d => {
                         const dayEntries = memberEntries.filter(e => e.date === d);
@@ -391,23 +386,13 @@ export default function StaffTimesheetPage() {
                                           {entry.clockIn}
                                           {entry.clockOut ? ` – ${entry.clockOut}` : " →"}
                                         </span>
-                                        {active ? (
-                                          <button
-                                            onClick={() => handleClockOut(entry.id)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity"
-                                            title="Clock out now"
-                                          >
-                                            <LogOut className="w-3 h-3" />
-                                          </button>
-                                        ) : (
-                                          <button
-                                            onClick={() => handleDelete(entry.id)}
-                                            className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
-                                            title="Delete entry"
-                                          >
-                                            <Trash2 className="w-3 h-3" />
-                                          </button>
-                                        )}
+                                        <button
+                                          onClick={() => handleDelete(entry.id)}
+                                          className="opacity-0 group-hover:opacity-100 transition-opacity text-muted-foreground hover:text-destructive"
+                                          title="Delete entry"
+                                        >
+                                          <Trash2 className="w-3 h-3" />
+                                        </button>
                                       </div>
                                       {hrs > 0 && <div className="text-[10px] opacity-70">{formatHours(hrs)}</div>}
                                       {active && <Badge className="text-[9px] px-1 py-0 h-3.5 bg-emerald-500 text-white border-0 mt-0.5">In</Badge>}
@@ -419,8 +404,15 @@ export default function StaffTimesheetPage() {
                           </TableCell>
                         );
                       })}
-                      <TableCell className="pr-5 text-right font-medium text-sm">
-                        {memberTotal > 0 ? formatHours(memberTotal) : <span className="text-muted-foreground text-xs">—</span>}
+                      <TableCell className="pr-5 text-right">
+                        <p className="font-medium text-sm">
+                          {memberTotal > 0 ? formatHours(memberTotal) : <span className="text-muted-foreground text-xs">—</span>}
+                        </p>
+                        {member.payRate && memberTotal > 0 && (
+                          <p className="text-xs text-muted-foreground">
+                            ${(memberTotal * parseFloat(member.payRate)).toFixed(2)}
+                          </p>
+                        )}
                       </TableCell>
                     </TableRow>
                   );
@@ -430,16 +422,41 @@ export default function StaffTimesheetPage() {
           </Table>
         </div>
 
-        <p className="text-xs text-muted-foreground">
-          Timesheet entries are stored locally in this browser. Backend sync will be available in a future update.
-        </p>
+        {/* Week pay summary */}
+        {activeStaff.some(s => s.payRate) && weekEntries.length > 0 && (
+          <div className="rounded-xl border bg-card p-4">
+            <h3 className="text-sm font-semibold mb-3">Weekly Pay Summary</h3>
+            <div className="space-y-2">
+              {activeStaff
+                .filter(s => s.payRate)
+                .map(member => {
+                  const hrs = weekEntries
+                    .filter(e => e.staffId === member.id)
+                    .reduce((acc, e) => acc + hoursWorked(e.clockIn, e.clockOut), 0);
+                  if (hrs === 0) return null;
+                  const gross = hrs * parseFloat(member.payRate!);
+                  return (
+                    <div key={member.id} className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">{member.name}</span>
+                      <div className="flex items-center gap-4">
+                        <span className="text-xs text-muted-foreground">{formatHours(hrs)} × ${member.payRate}/hr</span>
+                        <span className="font-medium">${gross.toFixed(2)}</span>
+                      </div>
+                    </div>
+                  );
+                })
+                .filter(Boolean)
+              }
+            </div>
+          </div>
+        )}
       </div>
 
       <AddEntryDialog
         open={addOpen}
         onOpenChange={setAddOpen}
         staff={activeStaff}
-        onAdd={handleAdd}
+        onAdd={handleAddEntry}
       />
     </AppLayout>
   );

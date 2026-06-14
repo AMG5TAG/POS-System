@@ -157,7 +157,7 @@ function NotConnectedCard({ platform }: { platform: typeof PLATFORMS[number] }) 
           <p className="text-xs text-muted-foreground mt-1">Connect your account in Integrations to see posts here.</p>
         </div>
         <Button asChild size="sm" variant="outline" className="mt-1">
-          <Link href="/management/integrations">Go to Integrations</Link>
+          <Link href="/management/settings-integrations/integrations">Go to Integrations</Link>
         </Button>
       </CardContent>
     </Card>
@@ -176,7 +176,7 @@ function ErrorCard({ platform, error }: { platform: typeof PLATFORMS[number]; er
           <p className="text-xs text-muted-foreground mt-1">{error ?? "Could not load posts. Your token may have expired."}</p>
         </div>
         <Button asChild size="sm" variant="outline" className="mt-1">
-          <Link href="/management/integrations">Re-connect</Link>
+          <Link href="/management/settings-integrations/integrations">Re-connect</Link>
         </Button>
       </CardContent>
     </Card>
@@ -263,7 +263,7 @@ export default function StaffSocialFeedPage() {
               Refresh
             </Button>
             <Button asChild variant="ghost" size="sm">
-              <Link href="/management/marketing/social-feed">
+              <Link href="/management/marketing-reports/social-feed">
                 <Settings size={14} />
                 Settings
               </Link>
@@ -370,7 +370,7 @@ export default function StaffSocialFeedPage() {
                     <p className="font-semibold">No platforms enabled</p>
                     <p className="text-sm text-muted-foreground">Enable platforms in Social Feed settings.</p>
                     <Button asChild variant="outline" size="sm">
-                      <Link href="/management/marketing/social-feed">Open Settings</Link>
+                      <Link href="/management/marketing-reports/social-feed">Open Settings</Link>
                     </Button>
                   </div>
                 )}
@@ -383,7 +383,7 @@ export default function StaffSocialFeedPage() {
         {settings && (
           <p className="text-xs text-muted-foreground text-center pt-2">
             Feed syncs every {settings.refreshIntervalMinutes} minute{settings.refreshIntervalMinutes !== 1 ? "s" : ""}.
-            Manage settings in <Link href="/management/marketing/social-feed" className="underline hover:text-foreground">Marketing &gt; Social Feed</Link>.
+            Manage settings in <Link href="/management/marketing-reports/social-feed" className="underline hover:text-foreground">Marketing &gt; Social Feed</Link>.
           </p>
         )}
       </div>

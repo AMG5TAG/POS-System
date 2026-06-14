@@ -157,9 +157,7 @@ export default function CustomerDisplayPage() {
                     <p className="text-sm text-emerald-300 font-semibold">
                       {payload!.loyaltyUnit === "$"
                         ? `+${formatCurrency(payload!.loyaltyAmount)}`
-                        : payload!.loyaltyUnit === "pts"
-                        ? `+${payload!.loyaltyAmount} pts`
-                        : "+1 stamp"}
+                        : `+${payload!.loyaltyAmount} ${payload!.loyaltyUnit}`}
                     </p>
                   </div>
                 </div>

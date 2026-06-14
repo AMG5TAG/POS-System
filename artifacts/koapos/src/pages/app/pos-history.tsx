@@ -1,4 +1,5 @@
-import { useState, useRef } from "react";
+import { useState } from "react";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListTransactions, useGetTransaction,
@@ -22,14 +23,15 @@ import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { customerDisplayName } from "@/lib/customer-name";
 import {
   History, Eye, CreditCard, Banknote, Search,
-  Send, Printer, Mail, MessageSquare, Check, X,
   RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Tag,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDocumentTemplate } from "@/lib/use-document-template";
+import { SendButton } from "@/components/send/send-dialog";
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   completed: "default",
@@ -37,200 +39,6 @@ const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "o
   voided: "secondary",
 };
 
-/* ─── Send dialog ────────────────────────────────────────────────────────── */
-
-type SendMode = "reprint" | "email" | "sms" | null;
-
-interface SendDialogProps {
-  tx: Transaction | null;
-  txDetail: import("@workspace/api-client-react").Transaction | null | undefined;
-  initialMode?: SendMode;
-  onClose: () => void;
-}
-
-function SendDialog({ tx, txDetail, initialMode = null, onClose }: SendDialogProps) {
-  const [mode, setMode] = useState<SendMode>(initialMode);
-  const [email, setEmail] = useState(tx?.customer?.email ?? "");
-  const [phone, setPhone] = useState("");
-  const [sent, setSent] = useState(false);
-  const printRef = useRef<HTMLDivElement>(null);
-  const { printReceipt, isLoading: tplLoading } = useDocumentTemplate();
-
-  if (!tx) return null;
-
-  function handleClose() {
-    setMode(null);
-    setEmail("");
-    setPhone("");
-    setSent(false);
-    onClose();
-  }
-
-  function handleReprint() {
-    if (!tx) return;
-    if (tplLoading) { toast.info("Loading receipt template…"); return; }
-    printReceipt(tx);
-    toast.success("Receipt sent to printer");
-    setSent(true);
-    setTimeout(handleClose, 800);
-  }
-
-  function handleEmail() {
-    if (!email.trim() || !email.includes("@")) { toast.error("Please enter a valid email address"); return; }
-    toast.success(`Receipt emailed to ${email}`);
-    setSent(true);
-    setTimeout(handleClose, 800);
-  }
-
-  function handleSMS() {
-    if (!phone.trim() || phone.replace(/\D/g, "").length < 8) { toast.error("Please enter a valid phone number"); return; }
-    toast.success(`Receipt SMS sent to ${phone}`);
-    setSent(true);
-    setTimeout(handleClose, 800);
-  }
-
-  const items = (txDetail?.items ?? []) as { productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number }[];
-
-  return (
-    <Dialog open={!!tx} onOpenChange={handleClose}>
-      <DialogContent className="max-w-md">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <Send className="w-4 h-4 text-primary" />
-            Send Receipt
-            <span className="text-muted-foreground font-normal text-sm ml-1">
-              {tx.receiptNumber ?? `#${tx.id}`}
-            </span>
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="space-y-4 py-1">
-          <div className="grid grid-cols-3 gap-2">
-            {([
-              { key: "reprint", icon: Printer,      label: "Reprint",  sub: "Print to receipt printer" },
-              { key: "email",   icon: Mail,          label: "Email",    sub: "Send to email address" },
-              { key: "sms",     icon: MessageSquare, label: "SMS",      sub: "Send via text message" },
-            ] as const).map(({ key, icon: Icon, label, sub }) => (
-              <button
-                key={key}
-                type="button"
-                onClick={() => { setMode(key); setSent(false); }}
-                className={cn(
-                  "flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border text-center transition-colors",
-                  mode === key
-                    ? "border-primary bg-primary/5 text-primary"
-                    : "border-border hover:bg-muted/40 text-muted-foreground hover:text-foreground"
-                )}
-              >
-                <Icon className="w-5 h-5 shrink-0" />
-                <span className="text-sm font-medium leading-tight">{label}</span>
-                <span className="text-[10px] leading-tight opacity-70">{sub}</span>
-              </button>
-            ))}
-          </div>
-
-          {mode === "reprint" && (
-            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
-              <p className="text-sm text-muted-foreground">
-                This will open a print preview for receipt <strong>{tx.receiptNumber ?? `#${tx.id}`}</strong>.
-              </p>
-              <div ref={printRef} style={{ display: "none" }}>
-                <div className="center bold" style={{ marginBottom: 8 }}>RECEIPT</div>
-                <div className="center" style={{ marginBottom: 8 }}>{tx.receiptNumber ?? `#${tx.id}`}</div>
-                <div className="divider" />
-                {items.map((item, i) => (
-                  <div key={i} className="row">
-                    <span>{item.productName} × {item.quantity}</span>
-                    <span>{formatCurrency(item.totalPrice ?? (item.unitPrice ?? 0) * (item.quantity ?? 1))}</span>
-                  </div>
-                ))}
-                <div className="divider" />
-                <div className="row"><span>Subtotal</span><span>{formatCurrency(txDetail?.subtotal ?? 0)}</span></div>
-                <div className="row"><span>Tax</span><span>{formatCurrency(txDetail?.taxTotal ?? 0)}</span></div>
-                <div className="row total"><span>TOTAL</span><span>{formatCurrency(tx.total ?? 0)}</span></div>
-                <div className="divider" />
-                <div className="center" style={{ marginTop: 8, fontSize: 11 }}>Thank you for your purchase</div>
-              </div>
-              <Button className="w-full gap-2" onClick={handleReprint}>
-                <Printer className="w-4 h-4" /> Print Receipt
-              </Button>
-            </div>
-          )}
-
-          {mode === "email" && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Email Address</Label>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input
-                      type="email"
-                      placeholder="customer@example.com"
-                      value={email}
-                      onChange={(e) => setEmail(e.target.value)}
-                      className="pl-9"
-                      onKeyDown={(e) => e.key === "Enter" && handleEmail()}
-                      autoFocus
-                    />
-                  </div>
-                  <Button className="gap-1.5 shrink-0" onClick={handleEmail}>
-                    {sent ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                    {sent ? "Sent!" : "Send"}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  Receipt for {formatCurrency(tx.total ?? 0)} will be emailed as a PDF.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {mode === "sms" && (
-            <div className="space-y-3">
-              <div className="space-y-1.5">
-                <Label>Mobile Number</Label>
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <MessageSquare className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
-                    <Input
-                      type="tel"
-                      placeholder="04XX XXX XXX"
-                      value={phone}
-                      onChange={(e) => setPhone(e.target.value)}
-                      className="pl-9"
-                      onKeyDown={(e) => e.key === "Enter" && handleSMS()}
-                      autoFocus
-                    />
-                  </div>
-                  <Button className="gap-1.5 shrink-0" onClick={handleSMS}>
-                    {sent ? <Check className="w-4 h-4" /> : <Send className="w-4 h-4" />}
-                    {sent ? "Sent!" : "Send"}
-                  </Button>
-                </div>
-                <p className="text-xs text-muted-foreground">
-                  A receipt link for {formatCurrency(tx.total ?? 0)} will be sent via SMS.
-                </p>
-              </div>
-            </div>
-          )}
-
-          {!mode && (
-            <p className="text-xs text-muted-foreground text-center py-2">
-              Select a delivery method above
-            </p>
-          )}
-        </div>
-
-        <div className="flex justify-end pt-1">
-          <Button variant="outline" size="sm" onClick={handleClose}>
-            <X className="w-3.5 h-3.5 mr-1.5" /> Close
-          </Button>
-        </div>
-      </DialogContent>
-    </Dialog>
-  );
-}
 
 /* ─── Receipt viewer dialog ──────────────────────────────────────────────── */
 
@@ -355,7 +163,7 @@ type SortState = { key: SortKey; dir: "asc" | "desc" } | null;
 function customerName(tx: Transaction): string {
   const c = tx.customer;
   if (!c) return "";
-  return [c.firstName, c.lastName].filter(Boolean).join(" ").trim();
+  return customerDisplayName(c, "");
 }
 
 function discountLabel(tx: { discountPct?: number | null; discountTotal?: number }): string | null {
@@ -403,14 +211,14 @@ function SortHeaderButton({
 
 export default function POSHistoryPage() {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const [statusFilter, setStatusFilter] = useState("");
   const [search, setSearch] = useState("");
   const [sort, setSort] = useState<SortState>(null);
   const [viewingTx, setViewingTx] = useState<Transaction | null>(null);
-  const [sendTx, setSendTx] = useState<Transaction | null>(null);
-  const [reprintTx, setReprintTx] = useState<Transaction | null>(null);
   const [refundTx, setRefundTx] = useState<Transaction | null>(null);
   const [deleteTx, setDeleteTx] = useState<Transaction | null>(null);
+  const { printReceipt, isLoading: tplLoading } = useDocumentTemplate();
 
   const { data: txData, isLoading } = useListTransactions(
     { status: statusFilter && statusFilter !== "all" ? statusFilter : undefined, limit: 100 },
@@ -420,16 +228,6 @@ export default function POSHistoryPage() {
   const { data: viewDetail } = useGetTransaction(
     viewingTx?.id ?? 0,
     { query: { enabled: !!viewingTx, queryKey: ["transaction", viewingTx?.id] } }
-  );
-
-  const { data: sendDetail } = useGetTransaction(
-    sendTx?.id ?? 0,
-    { query: { enabled: !!sendTx, queryKey: ["transaction", sendTx?.id] } }
-  );
-
-  const { data: reprintDetail } = useGetTransaction(
-    reprintTx?.id ?? 0,
-    { query: { enabled: !!reprintTx, queryKey: ["transaction", reprintTx?.id] } }
   );
 
   const deleteMutation = useDeleteTransaction({
@@ -569,7 +367,21 @@ export default function POSHistoryPage() {
                     <td className="p-3 hidden sm:table-cell text-muted-foreground text-xs">{formatDate(tx.createdAt)}</td>
                     <td className="p-3 hidden lg:table-cell max-w-[160px]">
                       {customerName(tx) ? (
-                        <span className="truncate block">{customerName(tx)}</span>
+                        tx.customerId ? (
+                          <button
+                            type="button"
+                            title="View customer details"
+                            onClick={() => {
+                              sessionStorage.setItem("koapos_open_customer", String(tx.customerId));
+                              navigate("/customers");
+                            }}
+                            className="truncate block max-w-full text-left text-primary font-medium hover:underline"
+                          >
+                            {customerName(tx)}
+                          </button>
+                        ) : (
+                          <span className="truncate block">{customerName(tx)}</span>
+                        )
                       ) : (
                         <span className="text-muted-foreground/50 text-xs italic">Walk-in</span>
                       )}
@@ -612,24 +424,26 @@ export default function POSHistoryPage() {
                         >
                           <Eye className="w-3.5 h-3.5" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-7 w-7"
-                          title="Reprint receipt"
-                          onClick={() => setReprintTx(tx)}
-                        >
-                          <Printer className="w-3.5 h-3.5" />
-                        </Button>
-                        <Button
+                        <SendButton
+                          iconOnly
                           variant="ghost"
                           size="icon"
                           className="h-7 w-7 text-primary hover:text-primary"
-                          title="Send receipt"
-                          onClick={() => setSendTx(tx)}
-                        >
-                          <Send className="w-3.5 h-3.5" />
-                        </Button>
+                          buttonTitle="Send receipt"
+                          title="Send Receipt"
+                          documentLabel={tx.receiptNumber ?? `#${tx.id}`}
+                          defaultEmail={tx.customer?.email ?? ""}
+                          reprintHint={<>This will open a print preview for receipt <strong>{tx.receiptNumber ?? `#${tx.id}`}</strong>.</>}
+                          reprintButtonLabel="Print Receipt"
+                          onReprint={() => {
+                            if (tplLoading) { toast.info("Loading receipt template…"); return; }
+                            return printReceipt(tx).then(() => { toast.success("Receipt sent to printer"); });
+                          }}
+                          emailHint={`Receipt for ${formatCurrency(tx.total ?? 0)} will be emailed as a PDF.`}
+                          onEmail={(email) => { toast.success(`Receipt emailed to ${email}`); }}
+                          smsHint={`A receipt link for ${formatCurrency(tx.total ?? 0)} will be sent via SMS.`}
+                          onSms={(phone) => { toast.success(`Receipt SMS sent to ${phone}`); }}
+                        />
                         <Button
                           variant="ghost"
                           size="icon"
@@ -663,19 +477,6 @@ export default function POSHistoryPage() {
         tx={viewingTx}
         txDetail={viewDetail}
         onClose={() => setViewingTx(null)}
-      />
-
-      <SendDialog
-        tx={sendTx}
-        txDetail={sendDetail}
-        onClose={() => setSendTx(null)}
-      />
-
-      <SendDialog
-        tx={reprintTx}
-        txDetail={reprintDetail}
-        initialMode="reprint"
-        onClose={() => setReprintTx(null)}
       />
 
       <RefundDialog

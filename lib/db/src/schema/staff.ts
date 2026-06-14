@@ -22,6 +22,10 @@ export const staffTable = pgTable("staff", {
   role: text("role").notNull().default("cashier"),
   pin: text("pin"),
   isActive: text("is_active").notNull().default("true"),
+  // Per-staff POS preferences (JSON: gridColumns, tileSize, showPrices,
+  // showStockBadges, cartPosition) — overrides the account-level POS settings
+  // on whatever terminal this staff member signs in for the day.
+  posPrefs: text("pos_prefs"),
   // Employment
   defaultRegisterType: text("default_register_type"),
   payRate: text("pay_rate"),

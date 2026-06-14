@@ -43,16 +43,20 @@ export async function restoreFromArchive(
   const insertOrder = getInsertOrderedTables();
 
   await db.transaction(async (tx) => {
-    // Wipe current merchant data, children first.
-    for (const { table } of deleteOrder) {
+    // Wipe current merchant data, children first. Only wipe tables the snapshot
+    // actually captured: a backup taken before a table joined the scoped set
+    // (e.g. partner_referrals, added in schema v2) has no key for it, and wiping
+    // it would silently destroy data the backup can't restore.
+    for (const { name, table, merchantColKey } of deleteOrder) {
+      if (snapshot.tables[name] === undefined) continue;
       const col = (table as unknown as Record<string, unknown>)[
-        "merchantId"
+        merchantColKey
       ] as Parameters<typeof eq>[0];
       await tx.delete(table).where(eq(col, merchantId));
     }
 
     // Repopulate, parents first.
-    for (const { name, table } of insertOrder) {
+    for (const { name, table, merchantColKey } of insertOrder) {
       const rows = snapshot.tables[name];
       if (!Array.isArray(rows) || rows.length === 0) continue;
       // Identify date-typed columns so JSON ISO strings can be revived into
@@ -61,11 +65,12 @@ export async function restoreFromArchive(
       const dateKeys = Object.keys(cols).filter(
         (k) => cols[k]?.dataType === "date",
       );
-      // Force merchantId to the target merchant to prevent cross-tenant writes.
+      // Force the owning merchant column to the target merchant to prevent
+      // cross-tenant writes (the column name varies, e.g. referrerMerchantId).
       const scoped = rows.map((r) => {
         const row: Record<string, unknown> = {
           ...(r as Record<string, unknown>),
-          merchantId,
+          [merchantColKey]: merchantId,
         };
         for (const k of dateKeys) {
           const v = row[k];

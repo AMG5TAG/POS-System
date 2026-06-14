@@ -19,6 +19,8 @@ function formatRule(r: typeof marketingAutomationRulesTable.$inferSelect) {
     templateName: r.templateName ?? null,
     templateSubject: r.templateSubject ?? null,
     templateBody: r.templateBody ?? null,
+    delayDays: r.delayDays ?? null,
+    scheduledAt: r.scheduledAt?.toISOString() ?? null,
     lastRunAt: r.lastRunAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -39,11 +41,13 @@ router.get("/marketing-automation", requireAuth, async (req, res): Promise<void>
 // POST /marketing-automation
 router.post("/marketing-automation", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive } = req.body;
+  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt } = req.body;
   if (!name || !triggerEvent || !channel) {
     res.status(400).json({ error: "name, triggerEvent, and channel are required" });
     return;
   }
+  const parsedDelay = Number.isFinite(Number(delayDays)) && Number(delayDays) > 0 ? Math.floor(Number(delayDays)) : null;
+  const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
   const [rule] = await db
     .insert(marketingAutomationRulesTable)
     .values({
@@ -56,6 +60,8 @@ router.post("/marketing-automation", requireAuth, async (req, res): Promise<void
       templateName: templateName ?? null,
       templateSubject: templateSubject ?? null,
       templateBody: templateBody ?? null,
+      delayDays: parsedDelay,
+      scheduledAt: parsedScheduledAt && !isNaN(parsedScheduledAt.getTime()) ? parsedScheduledAt : null,
     })
     .returning();
   res.status(201).json(formatRule(rule));
@@ -66,7 +72,9 @@ router.put("/marketing-automation/:id", requireAuth, async (req, res): Promise<v
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive } = req.body;
+  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt } = req.body;
+  const parsedDelay = Number.isFinite(Number(delayDays)) && Number(delayDays) > 0 ? Math.floor(Number(delayDays)) : null;
+  const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
   const [rule] = await db
     .update(marketingAutomationRulesTable)
     .set({
@@ -78,6 +86,8 @@ router.put("/marketing-automation/:id", requireAuth, async (req, res): Promise<v
       templateName:    templateName ?? null,
       templateSubject: templateSubject ?? null,
       templateBody:    templateBody ?? null,
+      delayDays:       parsedDelay,
+      scheduledAt:     parsedScheduledAt && !isNaN(parsedScheduledAt.getTime()) ? parsedScheduledAt : null,
     })
     .where(and(eq(marketingAutomationRulesTable.id, id), eq(marketingAutomationRulesTable.merchantId, merchantId)))
     .returning();
@@ -90,6 +100,10 @@ router.delete("/marketing-automation/:id", requireAuth, async (req, res): Promis
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  // Confirm ownership before deleting log rows keyed only on ruleId.
+  const [owned] = await db.select({ id: marketingAutomationRulesTable.id }).from(marketingAutomationRulesTable)
+    .where(and(eq(marketingAutomationRulesTable.id, id), eq(marketingAutomationRulesTable.merchantId, merchantId)));
+  if (!owned) { res.status(404).json({ error: "Not found" }); return; }
   await db.delete(marketingAutomationLogTable).where(eq(marketingAutomationLogTable.ruleId, id));
   await db
     .delete(marketingAutomationRulesTable)

@@ -2,8 +2,10 @@ import { Router, type IRouter } from "express";
 import { db, serviceJobsTable, customersTable, merchantsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
+import { publicDomain } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -30,6 +32,18 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
     isPartnerRepair: job.isPartnerRepair === "true",
     isCritical: job.isCritical === "true",
     isUnderWarranty: job.isUnderWarranty === "true",
+    repairWarrantyDays: job.repairWarrantyDays ?? 0,
+    completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+    reworkOfJobId: job.reworkOfJobId ?? null,
+    estimateApprovedAt: job.estimateApprovedAt ? job.estimateApprovedAt.toISOString() : null,
+    estimateApprovedVia: job.estimateApprovedVia ?? null,
+    depositRequired: job.depositRequired != null ? parseFloat(job.depositRequired) : null,
+    depositPaid: parseFloat(job.depositPaid ?? "0"),
+    isMailIn: job.isMailIn === "true",
+    shippingCarrier: job.shippingCarrier ?? null,
+    inboundTracking: job.inboundTracking ?? null,
+    returnTracking: job.returnTracking ?? null,
+    returnAddress: job.returnAddress ?? null,
     workDescription: job.workDescription ?? null,
     additionalEquipment: job.additionalEquipment ?? null,
     passwordOrPin: job.passwordOrPin ?? null,
@@ -70,7 +84,7 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       : [];
   const customerMap = new Map<number, CustomerInfo>(
     customers.map((c) => [c.id, {
-      name:  `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
+      name:  customerDisplayName(c.firstName, c.lastName, c.company),
       phone: c.phone ?? null,
       email: c.email ?? null,
       portalToken: c.portalToken ?? null,
@@ -131,7 +145,7 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+        .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   res.status(201).json(formatJob(job, customer));
@@ -157,6 +171,12 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   if (body.isPartnerRepair !== undefined) updates.isPartnerRepair = body.isPartnerRepair ? "true" : "false";
   if (body.isCritical !== undefined) updates.isCritical = body.isCritical ? "true" : "false";
   if (body.isUnderWarranty !== undefined) updates.isUnderWarranty = body.isUnderWarranty ? "true" : "false";
+  if (body.repairWarrantyDays !== undefined) updates.repairWarrantyDays = Math.max(0, Math.round(Number(body.repairWarrantyDays) || 0));
+  if (body.isMailIn !== undefined) updates.isMailIn = body.isMailIn ? "true" : "false";
+  if (typeof body.shippingCarrier === "string") updates.shippingCarrier = body.shippingCarrier;
+  if (typeof body.inboundTracking === "string") updates.inboundTracking = body.inboundTracking;
+  if (typeof body.returnTracking === "string") updates.returnTracking = body.returnTracking;
+  if (typeof body.returnAddress === "string") updates.returnAddress = body.returnAddress;
   if (typeof body.workDescription === "string") updates.workDescription = body.workDescription;
   if (typeof body.additionalEquipment === "string") updates.additionalEquipment = body.additionalEquipment;
   if (typeof body.passwordOrPin === "string") updates.passwordOrPin = body.passwordOrPin;
@@ -177,14 +197,24 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
       .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)))
       .limit(1);
 
+    // Stamp completion time on the first transition into "completed" (anchors
+    // the repair-warranty window); clear it if reopened.
+    if (current && body.status !== current.status) {
+      if (body.status === "completed" && current.status !== "completed") updates.completedAt = new Date();
+      else if (body.status !== "completed" && current.status === "completed") updates.completedAt = null;
+    }
     if (current && body.status !== current.status) {
       const STATUS_LABELS: Record<string, string> = {
-        "pending":           "Pending",
-        "in-progress":       "In Progress",
-        "at-repairer":       "At Repairer",
-        "awaiting-customer": "Awaiting Customer",
-        "completed":         "Completed",
-        "cancelled":         "Cancelled",
+        "pending":                     "Pending",
+        "in-progress":                 "In Progress",
+        "awaiting-parts":              "Awaiting Parts",
+        "awaiting-stock":              "Awaiting Stock",
+        "at-repairer":                 "At Repairer",
+        "awaiting-partner-approval":   "Awaiting Partner Approval",
+        "partner-replacement":         "Partner Replacement",
+        "awaiting-customer":           "Awaiting Customer",
+        "completed":                   "Completed",
+        "cancelled":                   "Cancelled",
       };
       const fromLabel = STATUS_LABELS[current.status] ?? current.status;
       const toLabel   = STATUS_LABELS[body.status]    ?? body.status;
@@ -213,7 +243,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         .select()
         .from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+        .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   // Auto-send SMS on key status transitions
@@ -222,7 +252,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
       .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
     const bizName = merchant?.businessName ?? "Your repair shop";
-    const domain  = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+    const domain  = publicDomain(req);
     const portalUrl = merchant?.portalDomain
       ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
       : merchant?.username
@@ -240,7 +270,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
       ? `${bizName}: Your repair #${job.jobNumber} is now ${label}. Track it here: ${portalUrl}`
       : `${bizName}: Your repair #${job.jobNumber} is now ${label}.`;
 
-    sendSms({ to: customer.phone, body: smsBody }).catch(() => {});
+    sendSms({ to: customer.phone, body: smsBody }, merchantId).catch(() => {});
   }
 
   res.json(formatJob(job, customer));
@@ -270,7 +300,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const customer: CustomerInfo | null = job.customerId
     ? await db.select().from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
-        .then(([c]) => c ? { name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null, phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
+        .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
   const bodyPhone = (req.body as { phone?: string } | undefined)?.phone?.trim() || null;
@@ -281,7 +311,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
     .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
   const bizName   = merchant?.businessName ?? "Your repair shop";
-  const domain    = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
+  const domain    = publicDomain(req);
   const portalUrl = customer?.portalToken
     ? merchant?.portalDomain
       ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
@@ -293,12 +323,13 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const statusLabel: Record<string, string> = {
     "pending":                     "Pending",
     "in-progress":                 "In Progress",
+    "awaiting-parts":              "Awaiting Parts",
+    "awaiting-stock":              "Awaiting Stock",
     "at-repairer":                 "At Repairer",
     "awaiting-partner-approval":   "Awaiting Partner Approval",
-    "awaiting-stock":              "Awaiting Stock",
+    "partner-replacement":         "Partner Replacement",
     "awaiting-customer":           "Awaiting Your Decision",
     "completed":                   "Completed & ready for pickup",
-    "partner-replacement":         "Partner Replacement",
     "cancelled":                   "Cancelled",
   };
   const label = statusLabel[job.status] ?? job.status;
@@ -306,7 +337,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
     ? `${bizName}: Your repair #${job.jobNumber} (${job.deviceDescription ?? job.deviceType ?? "device"}) is ${label}. Track it: ${portalUrl}`
     : `${bizName}: Your repair #${job.jobNumber} is ${label}.`;
 
-  const result = await sendSms({ to: toPhone, body: smsBody });
+  const result = await sendSms({ to: toPhone, body: smsBody }, merchantId);
 
   if (!result.success) {
     req.log.warn({ serviceJobId: id, to: toPhone, error: result.error }, "Service job SMS failed");
@@ -336,7 +367,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     ? await db.select().from(customersTable)
         .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
         .then(([c]) => c ? {
-          name: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || null,
+          name: customerDisplayName(c.firstName, c.lastName, c.company),
           phone: c.phone ?? null,
           email: c.email ?? null,
           portalToken: c.portalToken ?? null,
@@ -418,6 +449,77 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
 
   req.log.info({ serviceJobId: id, to: toEmail, provider: result.provider }, "Service job email sent");
   res.json({ success: true });
+});
+
+// POST /service-jobs/:id/rework — open a no-charge rework job linked to the original.
+router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [orig] = await db.select().from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId))).limit(1);
+  if (!orig) { res.status(404).json({ error: "Service job not found" }); return; }
+
+  const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
+    .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
+  const jobNumber = nextJobNumber(existing);
+  const today = new Date().toISOString().split("T")[0];
+
+  const [created] = await db.insert(serviceJobsTable).values({
+    merchantId,
+    customerId: orig.customerId ?? null,
+    staffId: orig.staffId ?? null,
+    jobNumber,
+    title: `Rework of ${orig.jobNumber}`,
+    status: "pending",
+    bookInDate: today,
+    deviceType: orig.deviceType ?? null,
+    deviceDescription: orig.deviceDescription ?? null,
+    serialNumber: orig.serialNumber ?? null,
+    condition: orig.condition ?? null,
+    workDescription: orig.workDescription ?? null,
+    isUnderWarranty: "true",
+    reworkOfJobId: orig.id,
+  }).returning();
+
+  let customer: CustomerInfo | null = null;
+  if (created.customerId) {
+    const [c] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.id, created.customerId), eq(customersTable.merchantId, merchantId))).limit(1);
+    if (c) customer = { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null };
+  }
+  res.status(201).json(formatJob(created, customer));
+});
+
+// POST /service-jobs/:id/deposit — record a deposit collected against the job
+// (in-store). Soft/advisory: accumulates into depositPaid and logs an audit line.
+router.post("/service-jobs/:id/deposit", requireAuth, async (req, res): Promise<void> => {
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const merchantId = req.session.merchantId!;
+  const amount = Number((req.body ?? {}).amount);
+  if (!Number.isFinite(amount) || amount <= 0) { res.status(400).json({ error: "A positive amount is required" }); return; }
+  const method = typeof (req.body ?? {}).method === "string" ? (req.body as { method: string }).method : null;
+
+  const [job] = await db.select({ depositPaid: serviceJobsTable.depositPaid, notes: serviceJobsTable.notes })
+    .from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId))).limit(1);
+  if (!job) { res.status(404).json({ error: "Service job not found" }); return; }
+
+  const newPaid = Math.round((parseFloat(job.depositPaid ?? "0") + amount) * 100) / 100;
+  const logEntry = `[${new Date().toISOString()}] Deposit recorded: $${amount.toFixed(2)}${method ? ` (${method})` : ""}`;
+  const notes = job.notes ? `${job.notes}\n${logEntry}` : logEntry;
+
+  const [updated] = await db.update(serviceJobsTable)
+    .set({ depositPaid: String(newPaid), notes })
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)))
+    .returning({ depositRequired: serviceJobsTable.depositRequired, depositPaid: serviceJobsTable.depositPaid });
+
+  res.json({
+    depositRequired: updated.depositRequired != null ? parseFloat(updated.depositRequired) : null,
+    depositPaid: parseFloat(updated.depositPaid),
+  });
 });
 
 export default router;

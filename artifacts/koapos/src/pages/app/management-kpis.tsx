@@ -1,9 +1,11 @@
 import { useState, useMemo } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
+import { KpiImportDialog, type KpiImportRow } from "@/components/kpi-import-dialog";
 import {
-  useListStaff, useListTransactions,
+  useListStaff,
   useListKpiTargets, useCreateKpiTarget, useUpdateKpiTarget, useDeleteKpiTarget,
-  useGetKpiSettings, useUpsertKpiSettings,
+  useGetKpiSettings, useUpsertKpiSettings, useGetKpiProgress,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,7 +29,8 @@ import {
   DollarSign, ShoppingCart, UserPlus, Star, CalendarClock,
   Wrench, BarChart3, AlertCircle, CheckCircle2, Clock,
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
-  SplitSquareHorizontal, Flame, Store,
+  SplitSquareHorizontal, Flame, Store, Banknote, CalendarDays, Calendar,
+  FileSpreadsheet,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -35,7 +38,7 @@ import {
 type KpiMetric =
   | "revenue" | "transactions" | "avg_transaction" | "items_per_transaction"
   | "new_customers" | "loyalty_signups" | "category_revenue" | "appointments"
-  | "services" | "refund_rate" | "gross_margin" | "upsell_rate";
+  | "services" | "refund_rate" | "gross_margin" | "upsell_rate" | "net_profit";
 
 type KpiPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "annual";
 type RewardType = "cash" | "percent" | "voucher" | "time_off" | "badge" | "custom";
@@ -46,6 +49,8 @@ interface KpiTarget {
   id: string; name: string; metric: KpiMetric; categoryId: string;
   period: KpiPeriod; target: number; staffIds: string[];
   reward: KpiReward | null; notes: string; isActive: boolean;
+  startDate: string; endDate: string;
+  showOnDashboard?: string;
 }
 
 /* ─── API converters ─────────────────────────────────────────────────────── */
@@ -65,7 +70,10 @@ function apiToTarget(r: Record<string, unknown>): KpiTarget {
     staffIds,
     reward,
     notes: String(r.notes ?? ""),
+    startDate: String(r.startDate ?? ""),
+    endDate: String(r.endDate ?? ""),
     isActive: String(r.isActive) !== "false",
+    showOnDashboard: String(r.showOnDashboard ?? "false"),
   };
 }
 
@@ -84,6 +92,7 @@ const METRIC_META: Record<KpiMetric, { label: string; icon: React.ElementType; u
   refund_rate:          { label: "Refund Rate",             icon: AlertCircle,  unit: "%",   isCurrency: false, isInverse: true },
   gross_margin:         { label: "Gross Margin",            icon: BarChart3,    unit: "%",   isCurrency: false },
   upsell_rate:          { label: "Upsell / Add-on Rate",    icon: Zap,          unit: "%",   isCurrency: false },
+  net_profit:           { label: "Net Profit",               icon: Banknote,     unit: "$",   isCurrency: true  },
 };
 
 const PERIOD_LABELS: Record<KpiPeriod, string> = {
@@ -120,27 +129,36 @@ function progressColor(pct: number, isInverse?: boolean) {
 const BLANK: Omit<KpiTarget, "id"> = {
   name: "", metric: "revenue", categoryId: "", period: "monthly",
   target: 0, staffIds: [], reward: null, notes: "", isActive: true,
+  startDate: "", endDate: "",
 };
 const BLANK_REWARD: KpiReward = { type: "cash", value: 0, label: "", note: "" };
 
 /* ─── KPI card ───────────────────────────────────────────────────────────── */
 
-function KpiCard({ kpi, onEdit, onDelete, staffList }: {
-  kpi: KpiTarget; onEdit: () => void; onDelete: () => void; staffList: { id: number; name: string }[];
+function KpiCard({ kpi, onEdit, onDelete, onToggleDashboard, staffList }: {
+  kpi: KpiTarget; onEdit: () => void; onDelete: () => void;
+  onToggleDashboard: () => void;
+  staffList: { id: number; name: string }[];
 }) {
   const meta = METRIC_META[kpi.metric];
   const Icon = meta.icon;
   const isStoreWide = kpi.staffIds.length === 0;
+  const onDashboard = (kpi as KpiTarget & { showOnDashboard?: string }).showOnDashboard === "true";
   const assignedNames = kpi.staffIds.map((id) => staffList.find((s) => String(s.id) === id)?.name).filter(Boolean).join(", ");
 
   return (
-    <div className={cn("rounded-xl border bg-card p-4 flex flex-col gap-3 transition-opacity", !kpi.isActive && "opacity-50")}>
+    <div className={cn("rounded-xl border bg-card p-4 flex flex-col gap-3 transition-opacity", !kpi.isActive && "opacity-50", onDashboard && "ring-2 ring-primary/30")}>
       <div className="flex items-start gap-3">
         <div className="p-2 rounded-lg bg-primary/10 text-primary shrink-0"><Icon className="w-4 h-4" /></div>
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 flex-wrap">
             <p className="font-semibold text-sm">{kpi.name}</p>
             {!kpi.isActive && <Badge variant="outline" className="text-xs">Inactive</Badge>}
+            {onDashboard && (
+              <Badge className="text-xs bg-primary/10 text-primary border-primary/20 gap-0.5">
+                <BarChart3 className="w-2.5 h-2.5" /> Dashboard
+              </Badge>
+            )}
           </div>
           <p className="text-xs text-muted-foreground mt-0.5">{meta.label}</p>
           <div className="flex flex-wrap gap-1.5 mt-2">
@@ -152,6 +170,14 @@ function KpiCard({ kpi, onEdit, onDelete, staffList }: {
             }
           </div>
           {!isStoreWide && assignedNames && <p className="text-xs text-muted-foreground mt-1.5 truncate">{assignedNames}</p>}
+          {(kpi.startDate || kpi.endDate) && (
+            <div className="flex items-center gap-1 mt-1.5">
+              <CalendarDays className="w-3 h-3 text-muted-foreground shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                {kpi.startDate || "—"}{kpi.endDate ? ` → ${kpi.endDate}` : " onwards"}
+              </p>
+            </div>
+          )}
           {kpi.reward && (
             <div className="flex items-center gap-1 mt-1.5">
               <Trophy className="w-3 h-3 text-amber-500" />
@@ -165,8 +191,18 @@ function KpiCard({ kpi, onEdit, onDelete, staffList }: {
         </div>
       </div>
       <div className="flex gap-2 pt-1 border-t border-border">
-        <Button variant="ghost" size="sm" className="flex-1 text-muted-foreground hover:text-foreground" onClick={onEdit}>
-          <Pencil className="h-3.5 w-3.5 mr-1.5" />Edit
+        <Button
+          variant={onDashboard ? "default" : "outline"}
+          size="sm"
+          className={cn("flex-1 text-xs gap-1", onDashboard ? "bg-primary/10 text-primary hover:bg-primary/20 border-primary/20" : "text-muted-foreground")}
+          onClick={onToggleDashboard}
+          title={onDashboard ? "Remove from dashboard" : "Show on dashboard"}
+        >
+          <BarChart3 className="h-3 w-3" />
+          {onDashboard ? "On Dashboard" : "Add to Dashboard"}
+        </Button>
+        <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-foreground px-3" onClick={onEdit}>
+          <Pencil className="h-3.5 w-3.5" />
         </Button>
         <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive hover:bg-destructive/10 px-3" onClick={onDelete}>
           <Trash2 className="h-3.5 w-3.5" />
@@ -233,7 +269,7 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
             <div className="space-y-1.5">
               <Label>Period</Label>
               <Select value={form.period} onValueChange={(v) => setField("period", v as KpiPeriod)}>
-                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectTrigger className="h-10"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   {(Object.entries(PERIOD_LABELS) as [KpiPeriod, string][]).map(([k, l]) => <SelectItem key={k} value={k}>{l}</SelectItem>)}
                 </SelectContent>
@@ -247,6 +283,25 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
                   className={METRIC_META[form.metric].isCurrency ? "pl-7" : ""} placeholder="0" />
               </div>
             </div>
+          </div>
+          <div className="rounded-xl border bg-muted/20 p-3 space-y-3">
+            <div className="flex items-center gap-2">
+              <CalendarDays className="w-4 h-4 text-muted-foreground" />
+              <p className="text-sm font-medium">Budget Date Range <span className="text-muted-foreground font-normal text-xs">(optional — leave blank for rolling period)</span></p>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs">Start Date</Label>
+                <Input type="date" value={form.startDate ?? ""} onChange={(e) => setField("startDate", e.target.value)} />
+              </div>
+              <div className="space-y-1.5">
+                <Label className="text-xs">End Date</Label>
+                <Input type="date" value={form.endDate ?? ""} onChange={(e) => setField("endDate", e.target.value)} min={form.startDate ?? ""} />
+              </div>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              When set, progress tracks from the start date instead of the current {form.period === "weekly" ? "week" : form.period === "monthly" ? "month" : form.period === "daily" ? "day" : form.period === "quarterly" ? "quarter" : "year"}.
+            </p>
           </div>
           {!staffOnly && (
             <div className="space-y-1.5">
@@ -337,6 +392,7 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
       metric: selectedKpi.metric, categoryId: selectedKpi.categoryId, period: selectedKpi.period,
       target: perStaffTarget, staffIds: [staffId], reward: selectedKpi.reward,
       notes: `Spread from store target: ${selectedKpi.name}`, isActive: true,
+      startDate: selectedKpi.startDate ?? "", endDate: selectedKpi.endDate ?? "",
     }));
     onSpread(newTargets);
     onOpenChange(false);
@@ -399,12 +455,15 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
 
 /* ─── Progress bar row ───────────────────────────────────────────────────── */
 
-function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
+function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number | null }) {
   const meta = METRIC_META[kpi.metric];
-  const pct = kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
-  const color = progressColor(pct, meta.isInverse);
+  const unavailable = current === null;
+  const pct = !unavailable && kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
+  // A null actual means the metric can't be computed for this target yet — show
+  // it as neutral/"—" rather than letting an inverse metric read as 100% "good".
+  const color = unavailable ? "text-muted-foreground" : progressColor(pct, meta.isInverse);
   const Icon = meta.icon;
-  const hit = pct >= 100;
+  const hit = !unavailable && pct >= 100;
 
   return (
     <div className="space-y-1.5 py-3 border-b last:border-0">
@@ -415,12 +474,12 @@ function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
           {hit && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
         </div>
         <span className={cn("text-sm font-semibold shrink-0 tabular-nums", color)}>
-          {formatMetricValue(kpi.metric, current)} / {formatMetricValue(kpi.metric, kpi.target)}
+          {unavailable ? "—" : formatMetricValue(kpi.metric, current)} / {formatMetricValue(kpi.metric, kpi.target)}
         </span>
       </div>
       <Progress value={pct} className="h-2" />
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{pct}% of target</span>
+        <span>{unavailable ? "Not available yet" : `${pct}% of target`}</span>
         <span>{PERIOD_LABELS[kpi.period]}</span>
       </div>
       {kpi.reward && (
@@ -439,6 +498,7 @@ function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementKpisPage() {
+  const queryClient = useQueryClient();
   const { data: kpiListData, refetch: refetchTargets } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
   const { data: rawSettings } = useGetKpiSettings({ query: { queryKey: ["kpi-settings"] } });
   const createTarget = useCreateKpiTarget();
@@ -447,31 +507,45 @@ export default function ManagementKpisPage() {
   const upsertSettings = useUpsertKpiSettings();
 
   const rawItems = kpiListData?.items ?? [];
-  const targets: KpiTarget[] = (rawItems as unknown as Record<string, unknown>[]).map(apiToTarget);
+  const targets: KpiTarget[] = (rawItems as unknown as Record<string, unknown>[]).map(apiToTarget).filter((t) => t.metric in METRIC_META);
   const settingsRaw = rawSettings as Record<string, unknown> | undefined;
   const trackCategories   = settingsRaw ? String(settingsRaw.trackCategories)   !== "false" : true;
   const trackAppointments = settingsRaw ? String(settingsRaw.trackAppointments) !== "false" : true;
   const trackServices     = settingsRaw ? String(settingsRaw.trackServices)     !== "false" : true;
+  const weekStartDay      = settingsRaw ? String(settingsRaw.weekStartDay ?? "monday") : "monday";
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [spreadOpen, setSpreadOpen] = useState(false);
+  const [importOpen, setImportOpen] = useState(false);
   const [editing, setEditing] = useState<KpiTarget | null>(null);
   const [staffOnly, setStaffOnly] = useState(false);
 
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
-  const { data: txData } = useListTransactions(undefined, { query: { queryKey: ["transactions"] } });
+
+  // Actuals are computed server-side (period- and staff-scoped, with the
+  // budget end date and every metric handled consistently) so the Progress
+  // Tracker, the Staff KPI page and the dashboard tile always agree.
+  const { data: progressData } = useGetKpiProgress({ query: { queryKey: ["kpi-progress"] } });
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; email?: string }[];
-  const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string; staffId?: number; createdAt?: string }[];
+
+  // Per-target actual keyed by target id (null = not computable for this target).
+  const actualByTargetId = useMemo(() => {
+    const map: Record<string, number | null> = {};
+    for (const p of (progressData?.items ?? [])) map[String(p.id)] = p.actual ?? null;
+    return map;
+  }, [progressData]);
 
   const updateSetting = (key: "trackCategories" | "trackAppointments" | "trackServices", value: boolean) => {
-    upsertSettings.mutate({
-      data: {
-        trackCategories:   key === "trackCategories"   ? (value ? "true" : "false") : (trackCategories   ? "true" : "false"),
-        trackAppointments: key === "trackAppointments" ? (value ? "true" : "false") : (trackAppointments ? "true" : "false"),
-        trackServices:     key === "trackServices"     ? (value ? "true" : "false") : (trackServices     ? "true" : "false"),
-      },
-    }, {
+    upsertSettings.mutate({ data: { [key]: value ? "true" : "false" } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kpi-settings"] }),
+      onError: () => toast.error("Failed to save settings"),
+    });
+  };
+
+  const updateWeekStartDay = (day: string) => {
+    upsertSettings.mutate({ data: { weekStartDay: day } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["kpi-settings"] }),
       onError: () => toast.error("Failed to save settings"),
     });
   };
@@ -487,18 +561,28 @@ export default function ManagementKpisPage() {
       period: t.period,
       target: t.target,
       staffIds: JSON.stringify(t.staffIds),
-      reward: t.reward ? JSON.stringify(t.reward) : undefined,
+      // Send an explicit "null" (not undefined) so clearing a reward actually
+      // persists — the PATCH route ignores undefined fields, which previously
+      // made it impossible to remove a reward once set.
+      reward: t.reward ? JSON.stringify(t.reward) : "null",
       notes: t.notes,
       isActive: t.isActive ? "true" : "false",
+      startDate: t.startDate || null,
+      endDate: t.endDate || null,
+    };
+    const invalidateTargets = () => {
+      queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+      queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+      queryClient.invalidateQueries({ queryKey: ["dashboard-kpi"] });
     };
     if (editing) {
       updateTarget.mutate({ id: Number(editing.id), data: { ...payload, targetId: editing.id } }, {
-        onSuccess: () => { refetchTargets(); toast.success("KPI updated"); },
+        onSuccess: () => { invalidateTargets(); toast.success("KPI updated"); },
         onError: () => toast.error("Failed to update KPI"),
       });
     } else {
       createTarget.mutate({ data: { ...payload, targetId: `t-${Date.now()}-${Math.random().toString(36).slice(2, 6)}` } }, {
-        onSuccess: () => { refetchTargets(); toast.success("KPI created"); },
+        onSuccess: () => { invalidateTargets(); toast.success("KPI created"); },
         onError: () => toast.error("Failed to create KPI"),
       });
     }
@@ -506,9 +590,51 @@ export default function ManagementKpisPage() {
 
   const handleDelete = (id: string) => {
     deleteTarget.mutate({ id: Number(id) }, {
-      onSuccess: () => { refetchTargets(); toast.success("KPI deleted"); },
+      onSuccess: () => {
+        queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+        queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+        queryClient.invalidateQueries({ queryKey: ["dashboard-kpi"] });
+        toast.success("KPI deleted");
+      },
       onError: () => toast.error("Failed to delete KPI"),
     });
+  };
+
+  const handleToggleDashboard = (kpi: KpiTarget) => {
+    const currentlyOn = (kpi as KpiTarget & { showOnDashboard?: string }).showOnDashboard === "true";
+    updateTarget.mutate(
+      { id: Number(kpi.id), data: { targetId: kpi.id, name: kpi.name, metric: kpi.metric, period: kpi.period, target: kpi.target, showOnDashboard: currentlyOn ? "false" : "true" } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+          queryClient.invalidateQueries({ queryKey: ["dashboard-kpi"] });
+          toast.success(currentlyOn ? "Removed from dashboard" : `"${kpi.name}" will now show on the dashboard`);
+        },
+        onError: () => toast.error("Failed to update KPI"),
+      },
+    );
+  };
+
+  const handleImport = async (rows: KpiImportRow[]) => {
+    await Promise.all(rows.map((row, i) =>
+      createTarget.mutateAsync({
+        data: {
+          targetId: `t-${Date.now()}-${i}-${Math.random().toString(36).slice(2, 6)}`,
+          name: row.name,
+          metric: row.metric,
+          period: row.period,
+          target: row.target,
+          staffIds: JSON.stringify([]),
+          notes: row.notes,
+          isActive: row.isActive ? "true" : "false",
+          startDate: row.startDate || null,
+          endDate: row.endDate || null,
+        },
+      })
+    ));
+    queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
+    queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+    toast.success(`${rows.length} KPI${rows.length !== 1 ? "s" : ""} imported`);
   };
 
   const handleSpread = (newTargets: KpiTarget[]) => {
@@ -519,17 +645,11 @@ export default function ManagementKpisPage() {
         target: t.target, staffIds: JSON.stringify(t.staffIds),
         reward: t.reward ? JSON.stringify(t.reward) : undefined, notes: t.notes, isActive: "true",
       }})
-    )).then(() => { refetchTargets(); }).catch(() => toast.error("Failed to spread targets"));
+    )).then(() => {
+      refetchTargets();
+      queryClient.invalidateQueries({ queryKey: ["kpi-progress"] });
+    }).catch(() => toast.error("Failed to spread targets"));
   };
-
-  const { completedTx, totalRevenue, txCount, avgTransaction, actualValues } = useMemo(() => {
-    const completedTx    = txList.filter((t) => t.status === "completed");
-    const totalRevenue   = completedTx.reduce((s, t) => s + (t.total ?? 0), 0);
-    const txCount        = completedTx.length;
-    const avgTransaction = txCount > 0 ? totalRevenue / txCount : 0;
-    const actualValues: Partial<Record<KpiMetric, number>> = { revenue: totalRevenue, transactions: txCount, avg_transaction: avgTransaction };
-    return { completedTx, totalRevenue, txCount, avgTransaction, actualValues };
-  }, [txList]);
 
   const { storeWide, staffTargets, allWithRewards, inactiveTargets } = useMemo(() => ({
     storeWide:       targets.filter((t) => t.staffIds.length === 0 && t.isActive),
@@ -560,9 +680,14 @@ export default function ManagementKpisPage() {
             <h1 className="text-2xl font-bold">KPIs & Targets</h1>
             <p className="text-sm text-muted-foreground mt-1">Set performance targets for your store and team, track progress, and reward results.</p>
           </div>
-          <Button onClick={() => openNew()} className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground">
-            <Plus className="h-4 w-4 mr-1" />New KPI
-          </Button>
+          <div className="flex gap-2 shrink-0">
+            <Button variant="outline" onClick={() => setImportOpen(true)}>
+              <FileSpreadsheet className="h-4 w-4 mr-1" />Import
+            </Button>
+            <Button onClick={() => openNew()} className="bg-primary hover:bg-primary/90 text-primary-foreground">
+              <Plus className="h-4 w-4 mr-1" />New KPI
+            </Button>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -580,7 +705,7 @@ export default function ManagementKpisPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {storeWide.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} />)}
+                  {storeWide.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                 </div>
               )}
             </section>
@@ -600,7 +725,7 @@ export default function ManagementKpisPage() {
                   </CardHeader>
                   <CardContent className="pt-0">
                     {targets.filter((t) => t.isActive).map((kpi) => (
-                      <ProgressRow key={kpi.id} kpi={kpi} current={actualValues[kpi.metric] ?? 0} />
+                      <ProgressRow key={kpi.id} kpi={kpi} current={actualByTargetId[kpi.id] ?? null} />
                     ))}
                   </CardContent>
                 </Card>
@@ -611,10 +736,33 @@ export default function ManagementKpisPage() {
               <section className="space-y-3">
                 <div className="flex items-center gap-2"><Clock className="w-4 h-4 text-muted-foreground" /><h2 className="font-semibold text-muted-foreground text-sm">Inactive KPIs</h2><Badge variant="outline">{inactiveTargets.length}</Badge></div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {inactiveTargets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} />)}
+                  {inactiveTargets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                 </div>
               </section>
             )}
+
+            <Card>
+              <CardHeader className="pb-2">
+                <CardTitle className="text-sm font-medium flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" />Available Metrics</CardTitle>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
+                  {(Object.entries(METRIC_META) as [KpiMetric, typeof METRIC_META[KpiMetric]][]).map(([k, m]) => {
+                    const Icon = m.icon;
+                    return (
+                      <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0">
+                        <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                        <span className="text-sm flex-1 min-w-0 truncate">{m.label}</span>
+                        <div className="flex items-center gap-1 shrink-0">
+                          <Badge variant="outline" className="text-xs font-mono">{m.unit}</Badge>
+                          {m.isInverse && <span className="text-xs text-rose-500">↓</span>}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
           </div>
 
           <div className="space-y-6">
@@ -644,7 +792,7 @@ export default function ManagementKpisPage() {
                         <Badge variant="secondary" className="text-xs ml-auto">{group.targets.length} targets</Badge>
                       </div>
                       <div className="p-3 grid grid-cols-1 gap-3">
-                        {group.targets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} />)}
+                        {group.targets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                       </div>
                     </div>
                   ))}
@@ -705,37 +853,39 @@ export default function ManagementKpisPage() {
                       </div>
                     );
                   })}
-                </CardContent>
-              </Card>
-
-              <Card>
-                <CardHeader className="pb-2">
-                  <CardTitle className="text-sm font-medium flex items-center gap-2"><Flame className="w-4 h-4 text-orange-500" />Available Metrics</CardTitle>
-                </CardHeader>
-                <CardContent className="pt-0">
-                  <div className="grid grid-cols-2 gap-x-4 gap-y-0.5">
-                    {(Object.entries(METRIC_META) as [KpiMetric, typeof METRIC_META[KpiMetric]][]).map(([k, m]) => {
-                      const Icon = m.icon;
-                      return (
-                        <div key={k} className="flex items-center gap-2 py-1.5 border-b last:border-0">
-                          <Icon className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                          <span className="text-sm flex-1 min-w-0 truncate">{m.label}</span>
-                          <div className="flex items-center gap-1 shrink-0">
-                            <Badge variant="outline" className="text-xs font-mono">{m.unit}</Badge>
-                            {m.isInverse && <span className="text-xs text-rose-500">↓</span>}
-                          </div>
-                        </div>
-                      );
-                    })}
+                  <div className="flex items-center justify-between py-3 last:pb-0">
+                    <div className="flex items-center gap-3">
+                      <div className="p-1.5 rounded-lg bg-muted text-muted-foreground"><Calendar className="w-3.5 h-3.5" /></div>
+                      <div>
+                        <p className="text-sm font-medium">Week Starts On</p>
+                        <p className="text-xs text-muted-foreground">Affects how weekly KPI periods are calculated</p>
+                      </div>
+                    </div>
+                    <Select value={weekStartDay} onValueChange={updateWeekStartDay}>
+                      <SelectTrigger className="w-32 h-8 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="monday">Monday</SelectItem>
+                        <SelectItem value="tuesday">Tuesday</SelectItem>
+                        <SelectItem value="wednesday">Wednesday</SelectItem>
+                        <SelectItem value="thursday">Thursday</SelectItem>
+                        <SelectItem value="friday">Friday</SelectItem>
+                        <SelectItem value="saturday">Saturday</SelectItem>
+                        <SelectItem value="sunday">Sunday</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </CardContent>
               </Card>
+
             </section>
           </div>
         </div>
       </div>
 
       <KpiDialog
+        key={editing?.id ?? "new"}
         open={dialogOpen} onOpenChange={setDialogOpen}
         initial={editing ? { ...editing } : null}
         staffList={staffList} onSave={handleSave} staffOnly={staffOnly}
@@ -743,6 +893,10 @@ export default function ManagementKpisPage() {
       <SpreadDialog
         open={spreadOpen} onOpenChange={setSpreadOpen}
         storeTargets={targets} staffList={staffList} onSpread={handleSpread}
+      />
+      <KpiImportDialog
+        open={importOpen} onOpenChange={setImportOpen}
+        onImport={handleImport}
       />
     </AppLayout>
   );

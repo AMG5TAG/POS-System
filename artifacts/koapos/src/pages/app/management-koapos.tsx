@@ -67,7 +67,7 @@ export default function ManagementKoaPOSPage() {
         <div>
           <h1 className="text-2xl font-bold">KoaPOS Partner Referrals</h1>
           <p className="text-muted-foreground text-sm mt-1">
-            Refer other Australian retailers to KoaPOS and earn account credits and free months for every successful sign-up.
+            Refer other retailers to KoaPOS and earn account credits and free months for every successful sign-up.
           </p>
         </div>
 

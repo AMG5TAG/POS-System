@@ -16,24 +16,35 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Package, StickyNote, Camera, Upload, X,
-  Mail, MessageSquare, Loader2, Printer, Trash2, Eye,
+  Trash2, Eye,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
+import { SendButton } from "@/components/send/send-dialog";
+import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
+import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
+import { ServiceJobWarrantyPanel } from "@/components/service-jobs/ServiceJobWarrantyPanel";
+import { ServiceJobTimePanel } from "@/components/service-jobs/ServiceJobTimePanel";
+import { ServiceJobSignaturePanel } from "@/components/service-jobs/ServiceJobSignaturePanel";
+import { ServiceJobShippingPanel } from "@/components/service-jobs/ServiceJobShippingPanel";
+import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDialog";
+import { History, ListChecks, Clock, PenLine, Truck, Wallet } from "lucide-react";
+import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending:                     { label: "Pending",                     className: "bg-amber-50 text-amber-700 border-amber-300" },
   "in-progress":               { label: "In Progress",                 className: "bg-blue-50 text-blue-700 border-blue-300" },
+  "awaiting-parts":            { label: "Awaiting Parts",              className: "bg-rose-50 text-rose-700 border-rose-300" },
+  "awaiting-stock":            { label: "Awaiting Stock",              className: "bg-purple-50 text-purple-700 border-purple-300" },
   "at-repairer":               { label: "At Repairer",                 className: "bg-yellow-50 text-yellow-700 border-yellow-300" },
   "awaiting-partner-approval": { label: "Awaiting Partner Approval",   className: "bg-indigo-50 text-indigo-700 border-indigo-300" },
-  "awaiting-stock":            { label: "Awaiting Stock",              className: "bg-purple-50 text-purple-700 border-purple-300" },
+  "partner-replacement":       { label: "Partner Replacement",         className: "bg-teal-50 text-teal-700 border-teal-300" },
   "awaiting-customer":         { label: "Awaiting Customer",           className: "bg-orange-50 text-orange-600 border-orange-300" },
   completed:                   { label: "Completed",                   className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
-  "partner-replacement":       { label: "Partner Replacement",         className: "bg-teal-50 text-teal-700 border-teal-300" },
   cancelled:                   { label: "Cancelled",                   className: "bg-red-50 text-red-700 border-red-300" },
 };
 
@@ -119,11 +130,39 @@ export function ServiceJobDetailDialog({
   const [newNoteText, setNewNoteText] = useState("");
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
-  const [emailLoading, setEmailLoading] = useState(false);
-  const [smsLoading, setSmsLoading] = useState(false);
   const [uploading,   setUploading]   = useState(false);
+
+  /* Send job details to the customer on file. Both endpoints send server-side
+   * to the stored contact; they throw on failure so the Send dialog surfaces
+   * the error instead of falsely reporting success. */
+  const sendJobEmail = async () => {
+    if (!job?.customerEmail) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/email`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error("Network error — email not sent");
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send email");
+    toast.success(`Email sent to ${job.customerEmail}`);
+  };
+
+  const sendJobSms = async () => {
+    if (!job?.customerPhone) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/sms`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error("Network error — SMS not sent");
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send SMS");
+    toast.success(`SMS sent to ${job.customerPhone}`);
+  };
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
+  const [historyOpen, setHistoryOpen] = useState(false);
 
   useEffect(() => {
     if (!job) return;
@@ -148,7 +187,14 @@ export function ServiceJobDetailDialog({
     setLocalStatus(status);
     updateMutation.mutate(
       { id: job.id, data: { status } as never },
-      { onSuccess: invalidate, onError: () => toast.error("Failed to update status") }
+      {
+        onSuccess: () => {
+          invalidate();
+          if (status === "completed") toast.success("Service job completed — moved to Service History");
+          else if (status === "cancelled") toast.success("Service job cancelled — moved to Service History");
+        },
+        onError: () => toast.error("Failed to update status"),
+      }
     );
   };
 
@@ -318,9 +364,17 @@ export function ServiceJobDetailDialog({
             {/* Device */}
             {(showAll || job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
-                <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
-                  <MonitorSmartphone className="w-3.5 h-3.5 text-primary" />
-                  <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</span>
+                <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                  <div className="flex items-center gap-2">
+                    <MonitorSmartphone className="w-3.5 h-3.5 text-primary" />
+                    <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Device</span>
+                  </div>
+                  {job.serialNumber && (
+                    <Button variant="ghost" size="sm" className="h-6 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                      onClick={() => setHistoryOpen(true)}>
+                      <History className="w-3.5 h-3.5" /> Device history
+                    </Button>
+                  )}
                 </div>
                 {(job.deviceType || showAll) && <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType ?? (showAll ? "—" : null)} />}
                 {(job.deviceDescription || showAll) && <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription ?? (showAll ? "—" : null)} />}
@@ -380,6 +434,83 @@ export function ServiceJobDetailDialog({
                 {(job.additionalEquipment || showAll) && <DetailRow icon={Package} label="Additional Equipment" value={job.additionalEquipment ?? (showAll ? "—" : null)} />}
               </div>
             )}
+
+            {/* Parts & Labour */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Wrench className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parts &amp; Labour</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobLinesPanel jobId={job.id} customerId={job.customerId} />
+              </div>
+            </div>
+
+            {/* Estimate approval & deposit */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Wallet className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Approval &amp; Deposit</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobDepositPanel job={job} />
+              </div>
+            </div>
+
+            {/* Diagnostics / QC Checklist */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <ListChecks className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Diagnostics / QC Checklist</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobChecklistPanel jobId={job.id} deviceType={job.deviceType} />
+              </div>
+            </div>
+
+            {/* Repair warranty & rework */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Shield className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Repair Warranty &amp; Rework</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobWarrantyPanel job={job} />
+              </div>
+            </div>
+
+            {/* Technician time */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Clock className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Technician Time</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobTimePanel jobId={job.id} />
+              </div>
+            </div>
+
+            {/* Customer sign-off */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <PenLine className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer Sign-off</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobSignaturePanel job={job} />
+              </div>
+            </div>
+
+            {/* Mail-in / shipping */}
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <Truck className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Mail-in / Shipping</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobShippingPanel job={job} />
+              </div>
+            </div>
 
             {/* Notes */}
             <div className="rounded-xl border bg-muted/20">
@@ -517,77 +648,35 @@ export function ServiceJobDetailDialog({
               </Button>
             )}
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={emailLoading || !job?.customerEmail}
-                title={job?.customerEmail ? "Email job details to customer" : "No customer email on file"}
-                onClick={async () => {
-                  if (!job?.customerEmail || emailLoading) return;
-                  setEmailLoading(true);
-                  try {
-                    const res = await fetch(`/api/service-jobs/${job.id}/email`, {
-                      method: "POST",
-                      credentials: "include",
-                    });
-                    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
-                    if (res.ok && data.success) {
-                      toast.success(`Email sent to ${job.customerEmail}`);
-                    } else {
-                      toast.error(data.error ?? "Failed to send email");
-                    }
-                  } catch {
-                    toast.error("Network error — email not sent");
-                  } finally {
-                    setEmailLoading(false);
-                  }
-                }}
-              >
-                {emailLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Mail className="w-3.5 h-3.5" />}
-                Email
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="gap-1.5"
-                disabled={smsLoading || !job?.customerPhone}
-                title={job?.customerPhone ? "Send SMS status update to customer" : "No customer phone on file"}
-                onClick={async () => {
-                  if (!job?.customerPhone || smsLoading) return;
-                  setSmsLoading(true);
-                  try {
-                    const res = await fetch(`/api/service-jobs/${job.id}/sms`, {
-                      method: "POST",
-                      credentials: "include",
-                    });
-                    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
-                    if (res.ok && data.success) {
-                      toast.success(`SMS sent to ${job.customerPhone}`);
-                    } else {
-                      toast.error(data.error ?? "Failed to send SMS");
-                    }
-                  } catch {
-                    toast.error("Network error — SMS not sent");
-                  } finally {
-                    setSmsLoading(false);
-                  }
-                }}
-              >
-                {smsLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <MessageSquare className="w-3.5 h-3.5" />}
-                SMS
-              </Button>
-              {onPrint && (
-                <>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sheet")}>
-                    <Printer className="w-3.5 h-3.5" />
-                    Print
-                  </Button>
-                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => onPrint(job, "sticker")}>
-                    <Printer className="w-3.5 h-3.5" />
-                    Sticker
-                  </Button>
-                </>
+              {(job.customerEmail || job.customerPhone || onPrint) && (
+                <SendButton
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  buttonTitle="Send or print job"
+                  title="Send Job"
+                  documentLabel={job.jobNumber}
+                  {...(onPrint && {
+                    reprintLabel: "Print",
+                    reprintSub: "Sheet or sticker",
+                    reprintButtonLabel: "Print Job Sheet",
+                    reprintHint: <>Print the full job sheet for <strong>{job.jobNumber}</strong>.</>,
+                    onReprint: () => onPrint(job, "sheet"),
+                    reprintExtraActions: [{ label: "Print Sticker", onClick: () => onPrint(job, "sticker") }],
+                  })}
+                  {...(job.customerEmail && {
+                    defaultEmail: job.customerEmail,
+                    emailReadonly: true,
+                    emailHint: "Emails the job details to the customer's email on file.",
+                    onEmail: () => sendJobEmail(),
+                  })}
+                  {...(job.customerPhone && {
+                    defaultPhone: job.customerPhone,
+                    smsReadonly: true,
+                    smsHint: "Texts a status update to the customer's number on file.",
+                    onSms: () => sendJobSms(),
+                  })}
+                />
               )}
               <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
             </div>
@@ -616,6 +705,8 @@ export function ServiceJobDetailDialog({
           </AlertDialogContent>
         </AlertDialog>
       )}
+
+      <DeviceHistoryDialog serial={job?.serialNumber ?? null} open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </>
   );
 }

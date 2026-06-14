@@ -37,11 +37,19 @@ expertMode = true
 
 [postMerge]
 path = "scripts/post-merge.sh"
-timeoutMs = 20000
+timeoutMs = 300000
 
 [[ports]]
 localPort = 3000
 externalPort = 4200
+
+[[ports]]
+localPort = 5099
+externalPort = 5173
+
+[[ports]]
+localPort = 5199
+externalPort = 6000
 
 [[ports]]
 localPort = 8080
@@ -64,6 +72,10 @@ localPort = 8084
 externalPort = 3003
 
 [[ports]]
+localPort = 9876
+externalPort = 5000
+
+[[ports]]
 localPort = 19141
 externalPort = 3000
 
@@ -77,3 +89,6 @@ channel = "stable-25_05"
 [userenv.shared]
 SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"
 APP_BASE_URL = "https://koapos.com.au"
+
+[objectStorage]
+defaultBucketID = "replit-objstore-811efc31-e78b-4bbc-9dc8-6ad79963c826"

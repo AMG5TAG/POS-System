@@ -41,7 +41,8 @@ export function ColourPicker({ value, onChange, className, presets }: ColourPick
   const nativeRef = useRef<HTMLInputElement>(null);
   const rgb = hexToRgb(value);
 
-  const { brandColors } = useBrandColors();
+  const { brandColors: rawBrandColors } = useBrandColors();
+  const brandColors = Array.isArray(rawBrandColors) ? rawBrandColors : [];
 
   const palette = presets ?? APP_PALETTE;
 

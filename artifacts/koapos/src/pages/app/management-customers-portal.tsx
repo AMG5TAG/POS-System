@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link2, Copy, Check, Loader2 } from "lucide-react";
 
-function CustomerPortalCard({ merchant }: { merchant: { username: string | null; portalDomain?: string | null } | null }) {
+function CustomerPortalCard({ merchant }: { merchant: { username?: string | null; portalDomain?: string | null } | null }) {
   const qc = useQueryClient();
   const [domainInput, setDomainInput] = useState(merchant?.portalDomain ?? "");
   const [saving, setSaving] = useState(false);

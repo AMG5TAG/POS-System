@@ -92,6 +92,28 @@ const STARTER_TEMPLATES: Omit<EmailTemplate, "id" | "createdAt" | "updatedAt">[]
 
 /* ── Rich text toolbar ─────────────────────────────────────────────────── */
 
+/**
+ * Every merge code the automation/campaign sender understands, with a sample
+ * value used for the live preview. Keep in sync with applyVars() usage in the
+ * marketing automation scheduler.
+ */
+const QUICK_CODES: { code: string; sample: string }[] = [
+  { code: "{{first_name}}",     sample: "Sarah" },
+  { code: "{{last_name}}",      sample: "Johnson" },
+  { code: "{{business_name}}",  sample: "Your Business" },
+  { code: "{{loyalty_points}}", sample: "240" },
+  { code: "{{product_name}}",   sample: "Sample Product" },
+  { code: "{{product_price}}",  sample: "$49.00" },
+  { code: "{{invoice_number}}", sample: "KI00042" },
+  { code: "{{due_date}}",       sample: "1 Jul 2026" },
+  { code: "{{total}}",          sample: "$120.00" },
+  { code: "{{job_number}}",     sample: "SJ00017" },
+  { code: "{{device}}",         sample: "iPhone 14" },
+  { code: "{{status}}",         sample: "In Progress" },
+  { code: "{{years}}",          sample: "3" },
+  { code: "{{days}}",           sample: "7" },
+];
+
 function RichToolbar({ editorRef }: { editorRef: React.RefObject<HTMLDivElement | null> }) {
   const exec = useCallback((cmd: string, val?: string) => {
     editorRef.current?.focus();
@@ -136,7 +158,7 @@ function RichToolbar({ editorRef }: { editorRef: React.RefObject<HTMLDivElement 
       </button>
       <div className="w-px h-4 bg-border mx-1" />
       <span className="text-[10px] text-muted-foreground px-1">Codes:</span>
-      {["{{first_name}}", "{{business_name}}", "{{loyalty_points}}"].map((code) => (
+      {QUICK_CODES.map(({ code }) => (
         <button key={code} type="button" title={`Insert ${code}`}
           onMouseDown={(e) => { e.preventDefault(); exec("insertText", code); }}
           className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-muted hover:bg-primary/10 hover:text-primary transition-colors">
@@ -181,11 +203,8 @@ function TemplateEditorDialog({
     if (editorRef.current) setBody(editorRef.current.innerHTML);
   };
 
-  const previewBody = body
-    .replace(/\{\{first_name\}\}/g, "Sarah")
-    .replace(/\{\{last_name\}\}/g, "Johnson")
-    .replace(/\{\{business_name\}\}/g, "Your Business")
-    .replace(/\{\{loyalty_points\}\}/g, "240")
+  const previewBody = QUICK_CODES
+    .reduce((acc, { code, sample }) => acc.split(code).join(sample), body)
     .replace(/\{\{unsubscribe_link\}\}/g, "#");
 
   const handleSave = () => {
@@ -417,7 +436,7 @@ export default function MarketingEmailTemplatesPage() {
             </p>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
-            <Link href="/marketing">
+            <Link href="/marketing/overview">
               <Button variant="outline" size="sm" className="gap-1.5 text-xs">
                 <Megaphone className="w-3.5 h-3.5" /> Overview
               </Button>

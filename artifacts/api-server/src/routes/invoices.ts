@@ -1,10 +1,13 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable } from "@workspace/db";
 import { eq, and, desc, asc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
+import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
+import crypto from "node:crypto";
 import {
   RecordInvoicePaymentBody,
   AddInvoiceEventBody,
@@ -30,6 +33,40 @@ import {
 import type * as zod from "zod";
 
 const router: IRouter = Router();
+
+// 1×1 transparent GIF — returned by the email tracking pixel endpoint
+const TRANSPARENT_GIF = Buffer.from("R0lGODlhAQABAIAAAAAAAP///yH5BAEAAAAALAAAAAABAAEAAAIBRAA7", "base64");
+
+const VIEW_PING_SECRET = process.env.SESSION_SECRET ?? "koapos-dev-secret";
+
+function makeViewKey(invoiceId: number, merchantId: number): string {
+  return crypto.createHmac("sha256", VIEW_PING_SECRET).update(`${invoiceId}:${merchantId}`).digest("hex").slice(0, 24);
+}
+
+// GET /invoices/:id/ping-view?key=:key — public tracking pixel called by email open
+router.get("/invoices/:id/ping-view", async (req, res): Promise<void> => {
+  const id = parseInt(req.params.id, 10);
+  const key = typeof req.query.key === "string" ? req.query.key : "";
+  if (!Number.isFinite(id) || !key) {
+    res.set("Content-Type", "image/gif").send(TRANSPARENT_GIF);
+    return;
+  }
+
+  const [row] = await db
+    .select({ merchantId: invoicesTable.merchantId, viewedAt: invoicesTable.viewedAt, events: invoicesTable.events })
+    .from(invoicesTable)
+    .where(eq(invoicesTable.id, id));
+
+  if (row && key === makeViewKey(id, row.merchantId) && !row.viewedAt) {
+    const events: InvoiceEvent[] = [
+      ...((row.events as InvoiceEvent[] | null) ?? []),
+      { type: "viewed", timestamp: new Date().toISOString(), detail: "email-open" },
+    ];
+    await db.update(invoicesTable).set({ viewedAt: new Date(), events }).where(eq(invoicesTable.id, id));
+  }
+
+  res.set("Content-Type", "image/gif").send(TRANSPARENT_GIF);
+});
 
 /**
  * Validate an invoice API response body against its declared OpenAPI/Zod schema
@@ -67,14 +104,13 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; idempotencyKey?: string };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; amount?: number; idempotencyKey?: string };
 
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
-function customerName(first: string | null, last: string | null): string | null {
-  const n = [first, last].filter(Boolean).join(" ");
-  return n || null;
-}
+/* Personal name first; business-only contacts fall back to their company
+   name so invoices/quotes never show a blank or "Unknown" customer. */
+const customerName = customerDisplayName;
 
 function fmt(
   inv: typeof invoicesTable.$inferSelect,
@@ -104,6 +140,8 @@ function fmt(
     taxTotal: parseFloat(inv.taxTotal),
     total: parseFloat(inv.total),
     amountPaid: parseFloat(inv.amountPaid ?? "0"),
+    serviceJobId: inv.serviceJobId ?? null,
+    appointmentId: inv.appointmentId ?? null,
     discountType:  inv.discountType  ?? null,
     discountValue: inv.discountValue  ? parseFloat(inv.discountValue)  : null,
     discountTotal: inv.discountTotal  ? parseFloat(inv.discountTotal)  : null,
@@ -119,7 +157,7 @@ function fmt(
     nextSendDate,
     createdAt: inv.createdAt.toISOString(),
     updatedAt: inv.updatedAt.toISOString(),
-    customerName: customerName(cFirst ?? null, cLast ?? null),
+    customerName: customerName(cFirst ?? null, cLast ?? null, cCompany ?? null),
     customerEmail: cEmail ?? null,
     customerPhone: cPhone ?? null,
     customerAddress,
@@ -135,6 +173,24 @@ async function appendInvoiceEvent(id: number, merchantId: number, event: Invoice
   if (!row) return;
   const events: InvoiceEvent[] = [...((row.events as InvoiceEvent[] | null) ?? []), event];
   await db.update(invoicesTable).set({ events }).where(eq(invoicesTable.id, id));
+}
+
+/**
+ * When an invoice is linked to a service job or appointment, that work has been
+ * billed, so flip the linked record to "completed" (mirrors how a POS sale
+ * completes its linked service/appointment). Safe to call with nulls.
+ */
+async function completeLinkedRecords(merchantId: number, serviceJobId?: number | null, appointmentId?: number | null): Promise<void> {
+  if (serviceJobId != null) {
+    await db.update(serviceJobsTable)
+      .set({ status: "completed" })
+      .where(and(eq(serviceJobsTable.id, serviceJobId), eq(serviceJobsTable.merchantId, merchantId)));
+  }
+  if (appointmentId != null) {
+    await db.update(appointmentsTable)
+      .set({ status: "completed" })
+      .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
+  }
 }
 
 /** Credit loyalty points/value to a customer when an invoice is fully settled. */
@@ -185,6 +241,56 @@ async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: num
       .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
       .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
   }
+}
+
+/* ── Invoice stock + customer-spend side effects ─────────────────────────────
+ * Invoices are treated like POS sales: a paid invoice deducts stock for any
+ * product-linked line item (mirroring POS) and rolls the total into the
+ * customer's lifetime spend + visit count. Both are reversed when an invoice
+ * leaves the paid state (un-paid / voided / deleted) so the figures never drift.
+ * Only line items carrying a real productId for an inventory-tracked product
+ * move stock; free-text lines are financial-only, exactly as on the POS. */
+interface StockLine { productId?: number | null; quantity?: number | null }
+
+function aggregateQtyByProduct(items: unknown): Map<number, number> {
+  const map = new Map<number, number>();
+  if (!Array.isArray(items)) return map;
+  for (const it of items as StockLine[]) {
+    const pid = it?.productId;
+    if (typeof pid === "number" && pid > 0) {
+      map.set(pid, (map.get(pid) ?? 0) + (Number(it.quantity) || 0));
+    }
+  }
+  return map;
+}
+
+/** Apply a stock movement for an invoice's line items. `direction` is -1 to
+ *  deduct (invoice became paid) or +1 to restore (invoice left paid). */
+async function applyInvoiceStock(tx: DbExecutor, merchantId: number, items: unknown, direction: -1 | 1): Promise<void> {
+  for (const [productId, qty] of aggregateQtyByProduct(items)) {
+    if (qty <= 0) continue;
+    const [product] = await tx
+      .select({ stockQuantity: productsTable.stockQuantity, trackInventory: productsTable.trackInventory })
+      .from(productsTable)
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)))
+      .for("update");
+    if (product?.trackInventory !== "true") continue;
+    const newQty = Math.max(0, product.stockQuantity + direction * qty);
+    await tx.update(productsTable).set({ stockQuantity: newQty }).where(eq(productsTable.id, productId));
+  }
+}
+
+/** Roll an invoice total into (or back out of) a customer's lifetime spend.
+ *  `sign` is +1 when the invoice becomes paid, -1 when it leaves paid. */
+async function applyInvoiceCustomerSpend(tx: DbExecutor, merchantId: number, customerId: number | null, total: number, sign: 1 | -1): Promise<void> {
+  if (!customerId || total <= 0) return;
+  await tx
+    .update(customersTable)
+    .set({
+      totalSpent: sql`GREATEST(0, ${customersTable.totalSpent} + ${sign * total})`,
+      visitCount: sql`GREATEST(0, ${customersTable.visitCount} + ${sign})`,
+    })
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
 }
 
 // GET /invoices
@@ -267,6 +373,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const {
     customerId,
+    staffId,
     dueDate,
     notes,
     items: lineItems,
@@ -274,6 +381,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     invoiceDigits,
     recurring,
     discount: discountInput,
+    serviceJobId,
+    appointmentId,
   } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
@@ -292,6 +401,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   const [inv] = await db.insert(invoicesTable).values({
     merchantId,
     customerId: customerId ?? null,
+    staffId: staffId ?? null,
     invoiceNumber: invNumber,
     status: "draft",
     subtotal: String(subtotal),
@@ -301,12 +411,16 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     discountValue: discountInput?.value != null ? String(discountInput.value) : null,
     discountTotal: discountAmount > 0 ? String(discountAmount) : null,
     items: lines.length ? lines : null,
-    dueDate: dueDate ?? null,
+    // dueDate / recurringStartDate columns are timestamps — they must be Date
+    // objects, not the raw "YYYY-MM-DD" strings from the client.
+    dueDate: dueDate ? new Date(dueDate) : null,
     notes: notes ?? null,
+    serviceJobId: serviceJobId ?? null,
+    appointmentId: appointmentId ?? null,
     isRecurring: recurring ? "true" : "false",
     recurringFrequency: recurring?.frequency ?? null,
     recurringOccurrences: recurring?.occurrences ?? null,
-    recurringStartDate: recurring?.startDate ?? null,
+    recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
   }).returning();
 
   // Fetch with full customer details
@@ -387,7 +501,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const { id } = paramsResult.data;
   const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
-  const { status, notes, dueDate, customerId, items, recurring, discount } = bodyParsed.data;
+  const { status, notes, dueDate, customerId, items, recurring, discount, serviceJobId, appointmentId } = bodyParsed.data;
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
@@ -400,8 +514,10 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     }
   }
   if (notes !== undefined) updates.notes = notes;
-  if (dueDate !== undefined) updates.dueDate = dueDate ?? null;
+  if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
   if (customerId !== undefined) updates.customerId = customerId ?? null;
+  if (serviceJobId !== undefined) updates.serviceJobId = serviceJobId ?? null;
+  if (appointmentId !== undefined) updates.appointmentId = appointmentId ?? null;
   if (items !== undefined || discount !== undefined) {
     // Fetch existing items/discount if only one was sent
     const [existing] = await db
@@ -434,36 +550,75 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   // in one transaction so two concurrent status="paid" updates can't both read
   // a non-paid state and double-credit loyalty.
   let inv: typeof invoicesTable.$inferSelect | undefined;
+  const mId = req.session.merchantId!;
   await db.transaction(async (tx) => {
-    let preInv: { status: string | null; customerId: number | null; total: string | null } | undefined;
-    if (status === "paid") {
-      const [cur] = await tx
-        .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total })
-        .from(invoicesTable)
-        .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)))
-        .for("update");
-      preInv = cur ?? undefined;
-    }
+    // Always read the current row under lock so paid-state transitions (which
+    // drive stock + customer spend, treating invoices like POS sales) are
+    // computed atomically against the pre-update state.
+    const [preInv] = await tx
+      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, mId)))
+      .for("update");
+    if (!preInv) return;
 
     const [updated] = await tx
       .update(invoicesTable)
       .set(updates)
-      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)))
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, mId)))
       .returning();
     inv = updated;
     if (!updated) return;
 
+    const wasPaid = preInv.status === "paid";
+    const isPaid  = updated.status === "paid";
+    const itemsChanged = JSON.stringify(preInv.items ?? null) !== JSON.stringify(updated.items ?? null);
+    const oldTotal = parseFloat(preInv.total ?? "0");
+    const newTotal = parseFloat(updated.total ?? "0");
+
+    // ── Stock: deduct on entering paid, restore on leaving, re-sync on edit ──
+    if (!wasPaid && isPaid) {
+      await applyInvoiceStock(tx, mId, updated.items, -1);
+      // Marking paid via PATCH records no payment event, so stamp the invoice as
+      // settled in full. The per-method reporting (view_invoice_payment_legs)
+      // derives a remainder leg from amount_paid; without this the invoice would
+      // appear in gross sales but contribute nothing to the payment breakdown.
+      if (parseFloat(updated.amountPaid ?? "0") < newTotal) {
+        const [resynced] = await tx
+          .update(invoicesTable)
+          .set({ amountPaid: updated.total })
+          .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, mId)))
+          .returning();
+        inv = resynced;
+      }
+    } else if (wasPaid && !isPaid) {
+      await applyInvoiceStock(tx, mId, preInv.items, 1);
+    } else if (wasPaid && isPaid && itemsChanged) {
+      await applyInvoiceStock(tx, mId, preInv.items, 1);
+      await applyInvoiceStock(tx, mId, updated.items, -1);
+    }
+
+    // ── Customer lifetime spend + visit count (mirrors POS) ──
+    if (!wasPaid && isPaid) {
+      await applyInvoiceCustomerSpend(tx, mId, updated.customerId, newTotal, 1);
+    } else if (wasPaid && !isPaid) {
+      await applyInvoiceCustomerSpend(tx, mId, preInv.customerId, oldTotal, -1);
+    } else if (wasPaid && isPaid && (oldTotal !== newTotal || preInv.customerId !== updated.customerId)) {
+      await applyInvoiceCustomerSpend(tx, mId, preInv.customerId, oldTotal, -1);
+      await applyInvoiceCustomerSpend(tx, mId, updated.customerId, newTotal, 1);
+    }
+
     // ── Credit loyalty when an invoice transitions to paid for the first time ──
-    if (
-      status === "paid" &&
-      preInv &&
-      preInv.status !== "paid" &&
-      preInv.customerId
-    ) {
-      await creditLoyaltyForPaidInvoice(tx, req.session.merchantId!, preInv.customerId, parseFloat(preInv.total ?? "0"));
+    if (!wasPaid && isPaid && preInv.customerId) {
+      await creditLoyaltyForPaidInvoice(tx, mId, preInv.customerId, parseFloat(preInv.total ?? "0"));
     }
   });
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
+
+  // When this update marks the invoice Paid, complete any linked service job / appointment.
+  if (status === "paid") {
+    await completeLinkedRecords(req.session.merchantId!, inv.serviceJobId, inv.appointmentId);
+  }
 
   const [row] = await db
     .select({
@@ -494,12 +649,28 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     res.status(400).json({ error: bodyParsed.error.message });
     return;
   }
-  const { amount, method, giftCardPayment, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
+  const { amount, method, payments, giftCardPayment, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
       : undefined;
-  const payInput = Number(amount);
+
+  // Normalise to a list of payment legs. A split payment supplies `payments`
+  // (each method + amount, recorded as its own event so reporting can attribute
+  // each leg to its method); a single payment is one leg of `amount`/`method`.
+  const isSplit = Array.isArray(payments) && payments.length > 0;
+  if (isSplit && giftCardPayment) {
+    res.status(400).json({ error: "Split payments cannot be combined with a gift card payment" });
+    return;
+  }
+  const legs: { amount: number; method?: string }[] = isSplit
+    ? payments!.map((p) => ({ amount: round2(Number(p.amount)), method: p.method }))
+    : [{ amount: round2(Number(amount)), method }];
+  if (legs.some((l) => !Number.isFinite(l.amount) || l.amount <= 0)) {
+    res.status(400).json({ error: "Every payment amount must be positive" });
+    return;
+  }
+  const payInput = round2(legs.reduce((s, l) => s + l.amount, 0));
   if (!Number.isFinite(payInput) || payInput <= 0) {
     res.status(400).json({ error: "A positive payment amount is required" });
     return;
@@ -511,6 +682,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   let notFound = false;
   let payErrorStatus = 0;
   let payErrorMessage = "";
+  // Captured for after-commit completion of any linked service job / appointment.
+  let settledServiceJobId: number | null = null;
+  let settledAppointmentId: number | null = null;
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -519,6 +693,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
         status: invoicesTable.status,
         customerId: invoicesTable.customerId,
         events: invoicesTable.events,
+        items: invoicesTable.items,
+        serviceJobId: invoicesTable.serviceJobId,
+        appointmentId: invoicesTable.appointmentId,
       })
       .from(invoicesTable)
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
@@ -580,17 +757,25 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       });
     }
 
+    // One payment event per leg, each carrying its own amount + method so the
+    // per-method reporting can attribute each leg correctly. The settlement
+    // summary (paid in full / balance remaining) is noted on the first leg, and
+    // the idempotency key is stamped on the first leg only.
+    const ts = new Date().toISOString();
+    const settleNote = fullyPaid
+      ? `— paid in full`
+      : `— balance $${balance.toFixed(2)} remaining`;
+    const legEvents: InvoiceEvent[] = legs.map((leg, i) => ({
+      type: "payment",
+      timestamp: ts,
+      detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}`,
+      amount: leg.amount,
+      ...(leg.method ? { method: leg.method } : {}),
+      ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
+    }));
     const events: InvoiceEvent[] = [
       ...((cur.events as InvoiceEvent[] | null) ?? []),
-      {
-        type: "payment",
-        timestamp: new Date().toISOString(),
-        detail: fullyPaid
-          ? `Payment of $${pay.toFixed(2)} recorded — paid in full`
-          : `Payment of $${pay.toFixed(2)} recorded — balance $${balance.toFixed(2)} remaining`,
-        ...(method ? { method } : {}),
-        ...(idempotencyKey ? { idempotencyKey } : {}),
-      },
+      ...legEvents,
     ];
 
     await tx
@@ -603,14 +788,28 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       })
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
-    // Credit loyalty only when this payment settles the invoice in full for the first time.
-    if (fullyPaid && cur.status !== "paid" && cur.customerId) {
-      await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total);
+    // Settling in full for the first time treats the invoice like a POS sale:
+    // deduct stock, roll into customer spend, and credit loyalty — exactly once.
+    if (fullyPaid && cur.status !== "paid") {
+      await applyInvoiceStock(tx, merchantId, cur.items, -1);
+      await applyInvoiceCustomerSpend(tx, merchantId, cur.customerId, total, 1);
+      if (cur.customerId) {
+        await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total);
+      }
+    }
+    // When this payment settles the invoice in full for the first time, complete
+    // any linked service job / appointment (done after commit, below).
+    if (fullyPaid && cur.status !== "paid") {
+      settledServiceJobId = cur.serviceJobId;
+      settledAppointmentId = cur.appointmentId;
     }
   });
 
   if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
   if (payErrorStatus) { res.status(payErrorStatus).json({ error: payErrorMessage }); return; }
+  if (settledServiceJobId != null || settledAppointmentId != null) {
+    await completeLinkedRecords(merchantId, settledServiceJobId, settledAppointmentId);
+  }
   // An already-applied idempotent payment falls through and returns the
   // current (unchanged) invoice below.
 
@@ -642,7 +841,21 @@ router.delete("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const paramsResult = DeleteInvoiceParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
-  await db.delete(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
+  const merchantId = req.session.merchantId!;
+  await db.transaction(async (tx) => {
+    const [existing] = await tx
+      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
+      .for("update");
+    if (!existing) return;
+    // Deleting a paid invoice reverses its stock + spend effects (mirrors POS).
+    if (existing.status === "paid") {
+      await applyInvoiceStock(tx, merchantId, existing.items, 1);
+      await applyInvoiceCustomerSpend(tx, merchantId, existing.customerId, parseFloat(existing.total ?? "0"), -1);
+    }
+    await tx.delete(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  });
   res.sendStatus(204);
 });
 
@@ -787,7 +1000,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
   const inv = row.invoice;
-  const cName = customerName(row.customerFirstName, row.customerLastName);
+  const cName = customerName(row.customerFirstName, row.customerLastName, row.customerCompany);
   const lines = (inv.items as LineItem[] | null) ?? [];
 
   /* ── Resolve template options (with sensible defaults) ── */
@@ -928,10 +1141,15 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     styleVariant:           emailTplRow?.selectedStyle || null,
   });
 
+  // Embed a 1×1 tracking pixel so viewedAt is set when the customer opens the email
+  const baseUrl = publicOrigin(req);
+  const pingUrl = `${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}`;
+  const htmlWithPixel = html + `\n<img src="${pingUrl}" width="1" height="1" alt="" style="display:none" />`;
+
   const result = await sendEmail(merchantId, {
     to: email,
     subject,
-    html,
+    html: htmlWithPixel,
     text: `${greeting}\n\nInvoice ${inv.invoiceNumber} from ${bizName}\nTotal: ${totalStr}\n\n${cMsg}\n\n${signOff}\n${thankYou}`,
     attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
   });

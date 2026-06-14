@@ -5,6 +5,7 @@ import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { publicOrigin } from "./lib/publicUrl";
 
 const PgSession = connectPgSimple(session);
 
@@ -35,17 +36,27 @@ app.use(
 const isProduction = process.env.NODE_ENV === "production";
 
 if (isProduction && !process.env.SESSION_SECRET) {
-  logger.warn("SESSION_SECRET env var is not set — using insecure default. Set a strong random value in production.");
+  // Fail fast: the hardcoded fallback secret is public (it's in the repo), so
+  // running production with it would let anyone forge session cookies and
+  // impersonate any merchant. Mirror the VAULT_ENCRYPTION_KEY boot guard.
+  throw new Error(
+    "Fatal: SESSION_SECRET environment variable is required in production mode.",
+  );
 }
 if (isProduction && !process.env.UNSUBSCRIBE_SECRET) {
   logger.warn("UNSUBSCRIBE_SECRET env var is not set — unsubscribe tokens fall back to SESSION_SECRET or an insecure default. Set a strong random value in production.");
 }
 
 const allowedOrigins: Set<string> = new Set();
-if (isProduction && process.env.REPLIT_DOMAINS) {
-  for (const domain of process.env.REPLIT_DOMAINS.split(",")) {
-    const d = domain.trim();
-    if (d) allowedOrigins.add(`https://${d}`);
+if (isProduction) {
+  // The app's public origin (koapos.com.au, or APP_BASE_URL/PUBLIC_DOMAIN override).
+  allowedOrigins.add(publicOrigin());
+  // The internal hosting domain, so same-host requests keep working post-deploy.
+  if (process.env.REPLIT_DOMAINS) {
+    for (const domain of process.env.REPLIT_DOMAINS.split(",")) {
+      const d = domain.trim();
+      if (d) allowedOrigins.add(`https://${d}`);
+    }
   }
 }
 

@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   Package, User, RotateCcw, Wrench, MapPin, DollarSign, LayoutGrid,
 } from "lucide-react";
+import JsBarcode from "jsbarcode";
 import { useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 
@@ -188,6 +189,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showLoyaltyNo",    label: "Loyalty Number", defaultValue: "true", type: "toggle" },
       { key: "showPhone",        label: "Phone",          defaultValue: "true", type: "toggle" },
       { key: "showGroup",        label: "Group",          defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",      label: "Barcode",        defaultValue: "false", type: "toggle" },
       { key: "showBizName",      label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
@@ -205,6 +207,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showReason",    label: "Reason",         defaultValue: "true", type: "toggle" },
       { key: "showStatus",    label: "Status",         defaultValue: "true", type: "toggle" },
       { key: "showCustomer",  label: "Customer",       defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",   label: "Barcode",        defaultValue: "false", type: "toggle" },
       { key: "showBizName",   label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
@@ -222,6 +225,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" },
       { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" },
       { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",  label: "Barcode",       defaultValue: "false", type: "toggle" },
       { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" },
     ],
   },
@@ -237,6 +241,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showCompany", label: "Company",                   defaultValue: "true", type: "toggle" },
       { key: "showStreet",  label: "Street",                    defaultValue: "true", type: "toggle" },
       { key: "showSuburb",  label: "Suburb / State / Postcode", defaultValue: "true", type: "toggle" },
+      { key: "showBarcode", label: "Barcode",                   defaultValue: "false", type: "toggle" },
       { key: "showBizName", label: "Business Name",             defaultValue: "true", type: "toggle" },
     ],
   },
@@ -252,6 +257,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showPrice",       label: "Price",        defaultValue: "true",  type: "toggle" },
       { key: "showWasPrice",    label: "Was Price",    defaultValue: "false", type: "toggle" },
       { key: "showSku",         label: "SKU",          defaultValue: "true",  type: "toggle" },
+      { key: "showBarcode",     label: "Barcode",      defaultValue: "true",  type: "toggle" },
     ],
   },
   {
@@ -266,9 +272,21 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showPrice",       label: "Price",        defaultValue: "true", type: "toggle" },
       { key: "showUnitPrice",   label: "Unit Price",   defaultValue: "true", type: "toggle" },
       { key: "showSku",         label: "SKU",          defaultValue: "true", type: "toggle" },
+      { key: "showBarcode",     label: "Barcode",      defaultValue: "true", type: "toggle" },
     ],
   },
 ];
+
+/* ─── Common fields on every label ───────────────────────────────────────────
+ * Business logo and a free-text section are available on every sticker type, so
+ * they're appended to each type's fields here rather than repeated in all seven
+ * definitions above. The logo toggle shows the business profile logo; the custom
+ * text field prints whatever the user types (e.g. a promo line or care note). */
+export const COMMON_STICKER_FIELDS: StickerField[] = [
+  { key: "showLogo",   label: "Business Logo", defaultValue: "false", type: "toggle" },
+  { key: "customText", label: "Custom Text",   defaultValue: "",      type: "text"   },
+];
+STICKER_TYPES.forEach((t) => t.fields.push(...COMMON_STICKER_FIELDS));
 
 /* ─── Recommended sizes per type ─────────────────────────────────────────── */
 
@@ -282,21 +300,76 @@ export const RECOMMENDED_SIZES: Record<string, string[]> = {
   shelf:    ["S0722520", "30321", "LW-2.5x1", "11355"],
 };
 
+/* ─── Barcode helpers ────────────────────────────────────────────────────── */
+
+/**
+ * The value each sticker type encodes into its barcode. Any plain text works —
+ * CODE128 encodes the full ASCII range — so a value typed straight onto the
+ * product (SKU, loyalty no, job no, …) is turned into a scannable barcode.
+ */
+export function stickerBarcodeValue(typeId: string, f: (k: string) => string): string {
+  switch (typeId) {
+    case "product":  return f("barcode") || f("sku");
+    case "pricetag": return f("barcode") || f("sku");
+    case "shelf":    return f("barcode") || f("sku");
+    case "customer": return f("loyaltyNo") || f("customerId");
+    case "return":   return f("returnNo");
+    case "repair":   return f("jobNo");
+    case "address":  return f("name");
+    default:         return f("barcode") || "";
+  }
+}
+
+/**
+ * Render a scannable CODE128 barcode as a PNG data URL. Returns "" when there's
+ * no value or no DOM (SSR). Drawn at a fixed module width/height; callers stretch
+ * the resulting <img> to the full sticker width — only the relative bar widths
+ * matter to a scanner, and those are preserved under horizontal scaling.
+ *
+ * CODE128 is the format DYMO LabelWriters print and retail scanners read. Pure
+ * black (#000) bars on white at a wide module width keep the bars crisp at the
+ * printer's 300dpi so the print is scannable (callers also set image-rendering
+ * so the upscale to full-width stays hard-edged rather than blurred).
+ */
+export function barcodeDataUrl(value: string): string {
+  if (typeof document === "undefined" || !value) return "";
+  try {
+    const canvas = document.createElement("canvas");
+    JsBarcode(canvas, String(value), {
+      format: "CODE128",
+      displayValue: false,
+      margin: 0,
+      width: 4,
+      height: 160,
+      background: "#ffffff",
+      lineColor: "#000000",
+    });
+    return canvas.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+}
+
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
 export function LabelPreview({
-  type, fields, size, businessName, brandColor,
+  type, fields, size, businessName, brandColor, logoUrl,
   fillWidth, fillHeight,
   orientation = "horizontal",
+  barcodePosition = "bottom",
+  colorMode = "bw",
 }: {
   type: StickerType;
   fields: Record<string, string>;
   size: DymoSize;
   businessName: string;
   brandColor: string;
+  logoUrl?: string;
   fillWidth?: number;
   fillHeight?: number;
   orientation?: "horizontal" | "vertical";
+  barcodePosition?: "top" | "bottom";
+  colorMode?: "bw" | "color";
 }) {
   const isHoriz    = orientation === "horizontal";
   const natPortrait = size.widthMm <= size.heightMm;
@@ -326,6 +399,17 @@ export function LabelPreview({
   // Show helpers — default "true" unless explicitly "false"
   const show = (k: string) => f(k) !== "false";
 
+  // Colour mode — black & white by default. In B&W every accent prints black so
+  // the label renders cleanly on a thermal/mono printer; "color" keeps the brand
+  // and status colours.
+  const accent = colorMode === "color" ? brandColor : "#000";
+  const danger = colorMode === "color" ? "#ef4444" : "#000";
+
+  // Scannable barcode strip (spans the full sticker width, sits at the bottom).
+  // Falls back to a sample value so the editor preview always shows one.
+  const barcodeValue = stickerBarcodeValue(type.id, f) || "1234567890";
+  const barcodeUrl   = show("showBarcode") ? barcodeDataUrl(barcodeValue) : "";
+
   const labelW = rotated ? finalH : finalW;
   const labelH = rotated ? finalW : finalH;
 
@@ -337,15 +421,60 @@ export function LabelPreview({
     flexShrink: 0,
   };
 
+  const barcodeImg = barcodeUrl ? (
+    <img
+      src={barcodeUrl}
+      alt="barcode"
+      style={{
+        display: "block",
+        width: "100%",
+        height: Math.max(9, finalScale * 4),
+        imageRendering: "pixelated",
+      }}
+    />
+  ) : null;
+
+  // Business logo header — rendered above the type-specific content when enabled
+  // and a logo is configured in the business profile.
+  const logoEl = show("showLogo") && logoUrl ? (
+    <div className="mb-[3%] flex">
+      <img
+        src={logoUrl}
+        alt="logo"
+        style={{
+          height: Math.max(12, finalScale * 6),
+          maxWidth: "60%",
+          objectFit: "contain",
+          objectPosition: "left center",
+        }}
+      />
+    </div>
+  ) : null;
+
+  // Free-text footer line — prints whatever the user typed (promo line, care
+  // note, etc). Hidden when blank.
+  const customText = f("customText").trim();
+  const customTextEl = customText ? (
+    <div
+      className="text-gray-500 mt-[3%] break-words"
+      style={{ fontSize: Math.max(6, finalScale * 2.4), lineHeight: 1.2 }}
+    >
+      {customText}
+    </div>
+  ) : null;
+
   const labelEl = (
     <div
       className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
       style={baseStyle}
     >
-      {type.id !== "repair" && (
-        <div className="absolute top-0 left-0 right-0" style={{ height: Math.max(2, finalScale * 1.5), background: brandColor }} />
+      <div className="absolute inset-0 flex flex-col">
+      {barcodeImg && barcodePosition === "top" && (
+        <div className="px-[6%] pt-[6%]">{barcodeImg}</div>
       )}
-      <div className="absolute inset-0 p-[6%] pt-[8%] flex flex-col justify-between">
+      <div className="flex-1 min-h-0 overflow-hidden px-[9%] py-[4%] flex flex-col">
+        {logoEl}
+        <div className="flex-1 min-h-0 flex flex-col justify-between">
 
         {type.id === "product" && (
           <>
@@ -359,19 +488,12 @@ export function LabelPreview({
                 <div className="text-gray-400 truncate">{f("category") || "Beverages"}</div>
               )}
               {show("showSku") && (
-                <div className="text-gray-400">SKU: {f("sku") || "BEV-001"}</div>
+                <div className="text-gray-400">{f("sku") || "BEV-001"}</div>
               )}
             </div>
             <div>
-              {show("showBarcode") && (
-                <div className="flex items-center gap-0.5 mb-0.5 opacity-60">
-                  {Array.from({ length: 20 }).map((_, i) => (
-                    <div key={i} className="bg-black" style={{ width: i % 3 === 0 ? 1.5 : 1, height: Math.max(8, finalScale * 3) }} />
-                  ))}
-                </div>
-              )}
               {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: brandColor }}>
+                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: accent }}>
                   {f("price") || "$5.50"}
                 </div>
               )}
@@ -390,7 +512,7 @@ export function LabelPreview({
               </div>
             )}
             {show("showGroup") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: brandColor, fontSize: Math.max(6, finalScale * 2.2) }}>
+              <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: Math.max(6, finalScale * 2.2) }}>
                 {f("group") || "VIP Member"}
               </div>
             )}
@@ -412,7 +534,7 @@ export function LabelPreview({
         {type.id === "return" && (
           <>
             {show("showReturnNo") && (
-              <div className="font-bold" style={{ color: "#ef4444", fontSize: Math.max(7, finalScale * 2.8) }}>
+              <div className="font-bold" style={{ color: danger, fontSize: Math.max(7, finalScale * 2.8) }}>
                 RETURN {f("returnNo") || "RTN-0089"}
               </div>
             )}
@@ -423,7 +545,7 @@ export function LabelPreview({
               <div className="text-gray-500 truncate">{f("reason") || "Not as described"}</div>
             )}
             {show("showStatus") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: "#ef4444", fontSize: Math.max(6, finalScale * 2.2) }}>
+              <div className="px-1 rounded text-white truncate" style={{ background: danger, fontSize: Math.max(6, finalScale * 2.2) }}>
                 {f("status") || "Awaiting Inspection"}
               </div>
             )}
@@ -502,7 +624,7 @@ export function LabelPreview({
                 <div className="line-through text-gray-400">{f("wasPrice") || "$18.99"}</div>
               )}
               {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>
+                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: accent }}>
                   {f("price") || "$12.99"}
                 </div>
               )}
@@ -519,16 +641,22 @@ export function LabelPreview({
               <div className="text-gray-400 truncate">{f("unitPrice") || "$2.20/100g"}</div>
             )}
             {show("showSku") && (
-              <div className="text-gray-400">SKU {f("sku") || "GR-250"}</div>
+              <div className="text-gray-400">{f("sku") || "GR-250"}</div>
             )}
             {show("showPrice") && (
-              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: brandColor }}>
+              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: accent }}>
                 {f("price") || "$5.50"}
               </div>
             )}
           </>
         )}
 
+        </div>
+        {customTextEl}
+      </div>
+      {barcodeImg && barcodePosition === "bottom" && (
+        <div className="px-[6%] pb-[6%]">{barcodeImg}</div>
+      )}
       </div>
     </div>
   );
@@ -636,12 +764,29 @@ export interface BuildLabelHtmlArgs {
   fields: Record<string, string>;
   businessName: string;
   brandColor: string;
+  /** Business logo (URL or data URL) printed when the showLogo toggle is on. */
+  logoUrl?: string;
   orientation: "horizontal" | "vertical";
   quantity: number;
+  barcodePosition?: "top" | "bottom";
+  colorMode?: "bw" | "color";
+}
+
+/** Escape user-entered text before interpolating it into the print HTML string. */
+function escapeHtml(s: string): string {
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
 }
 
 export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
-  const { typeId, size, fields, businessName, brandColor, orientation, quantity } = args;
+  const { typeId, size, fields, businessName, brandColor, logoUrl, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
+  // B&W (default) prints every accent in black; "color" keeps brand/status hues.
+  const accent = colorMode === "color" ? brandColor : "#000";
+  const danger = colorMode === "color" ? "#ef4444" : "#000";
   const isHoriz = orientation === "horizontal";
   const pageW = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
   const pageH = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
@@ -653,9 +798,9 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const shorter = Math.min(pageW, pageH);
   const bp      = Math.max(4.5, shorter * 0.36);
 
-  const barsBars = Array.from({ length: 20 }).map((_, i) =>
-    `<div style="background:#000;width:${i % 3 === 0 ? "0.8" : "0.5"}mm;height:3mm;display:inline-block;"></div>`
-  ).join("");
+  // Scannable CODE128 barcode, generated from whatever value the type encodes
+  // (plain text included). Rendered full-width at the bottom of the label.
+  const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
 
   const inner = (() => {
     switch (typeId) {
@@ -663,27 +808,26 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         <div>
           ${show("showProductName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
           ${show("showCategory") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
-          ${show("showSku") ? `<div style="color:#888">SKU: ${f("sku")||"BEV-001"}</div>` : ""}
+          ${show("showSku") ? `<div style="color:#888">${f("sku")||"BEV-001"}</div>` : ""}
         </div>
         <div>
-          ${show("showBarcode")&&f("barcode") ? `<div style="display:flex;gap:.3mm;margin-bottom:.5mm;opacity:.6">${barsBars}</div><div style="color:#888;font-size:${(bp*.8).toFixed(1)}pt">${f("barcode")}</div>` : ""}
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
 
       case "customer": return `
         ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
-        ${show("showGroup") ? `<div style="background:${brandColor};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
+        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
         ${show("showCustomerId") ? `<div style="color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
         ${show("showLoyaltyNo") ? `<div style="color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
         ${show("showPhone") ? `<div style="color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "return": return `
-        ${show("showReturnNo") ? `<div style="font-weight:700;color:#ef4444;font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
+        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
         ${show("showItem") ? `<div style="font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")||"Defective Keyboard"}</div>` : ""}
         ${show("showReason") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("reason")||"Not as described"}</div>` : ""}
-        ${show("showStatus") ? `<div style="background:#ef4444;color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
+        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
         ${show("showDate") ? `<div style="color:#888">${f("date")||"18/05/2026"}</div>` : ""}
         ${show("showCustomer") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
@@ -709,18 +853,37 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         ${show("showSku") ? `<div style="color:#888">#${f("sku")||"HW-042"}</div>` : ""}
         <div>
           ${show("showWasPrice") ? `<div style="text-decoration:line-through;color:#aaa">${f("wasPrice")||"$18.99"}</div>` : ""}
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$12.99"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${accent}">${f("price")||"$12.99"}</div>` : ""}
         </div>`;
 
       case "shelf": return `
         ${show("showProductName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Flat White 250g"}</div>` : ""}
         ${show("showUnitPrice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")||"$2.20/100g"}</div>` : ""}
-        ${show("showSku") ? `<div style="color:#888">SKU ${f("sku")||"GR-250"}</div>` : ""}
-        ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${brandColor}">${f("price")||"$5.50"}</div>` : ""}`;
+        ${show("showSku") ? `<div style="color:#888">${f("sku")||"GR-250"}</div>` : ""}
+        ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}`;
 
       default: return "";
     }
   })();
+
+  // Barcode height scales with the short edge of the label (3.5–7mm).
+  const bcH = Math.max(3.5, Math.min(7, shorter * 0.22));
+
+  const barcodeBlock = (pad: string) =>
+    barcodeUrl ? `<div style="padding:${pad}"><img src="${barcodeUrl}" alt="barcode" style="display:block;width:100%;height:${bcH.toFixed(1)}mm;image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;image-rendering:pixelated"/></div>` : "";
+
+  // Business logo header — sized to the short edge, capped so it never crowds out
+  // the content. Only printed when the toggle is on and a logo is configured.
+  const logoH = Math.max(3.5, Math.min(8, shorter * 0.32));
+  const logoBlock = show("showLogo") && logoUrl
+    ? `<div style="margin-bottom:1mm"><img src="${logoUrl}" alt="logo" style="display:block;height:${logoH.toFixed(1)}mm;max-width:60%;object-fit:contain;object-position:left center"/></div>`
+    : "";
+
+  // Free-text footer line — prints the user's custom text. Hidden when blank.
+  const customText = f("customText").trim();
+  const customTextBlock = customText
+    ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;margin-top:1mm;line-height:1.2;word-break:break-word">${escapeHtml(customText)}</div>`
+    : "";
 
   const labelBlock = `
     <div style="
@@ -729,15 +892,21 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       position:relative;
       font-family:Arial,Helvetica,sans-serif;
       font-size:${bp.toFixed(1)}pt;line-height:1.25;
-      padding:1.5mm 1.5mm 1.5mm 1.5mm;padding-top:2mm;
-      display:flex;flex-direction:column;justify-content:space-between;
+      display:flex;flex-direction:column;
       background:#fff;
       writing-mode:horizontal-tb;
       page-break-after:always;break-after:page;
       page-break-inside:avoid;break-inside:avoid;
     ">
-      ${typeId !== "repair" ? `<div style="position:absolute;top:0;left:0;right:0;height:1.5mm;background:${brandColor}"></div>` : ""}
-      ${inner}
+      ${barcodePosition === "top" ? barcodeBlock("1.5mm 2mm 0 2mm") : ""}
+      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:1mm 3mm">
+        ${logoBlock}
+        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between">
+          ${inner}
+        </div>
+        ${customTextBlock}
+      </div>
+      ${barcodePosition === "bottom" ? barcodeBlock("0 2mm 1.5mm 2mm") : ""}
     </div>`;
 
   return `<!DOCTYPE html>
@@ -746,14 +915,19 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 <meta charset="utf-8">
 <title>Label Print</title>
 <style>
-  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+  *,*::before,*::after{
+    box-sizing:border-box;margin:0;padding:0;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
   @page{size:${pageW}mm ${pageH}mm;margin:0}
   html,body{
     margin:0;padding:0;
     width:${pageW}mm;
     background:#fff;
     writing-mode:horizontal-tb;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
+  img{image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;image-rendering:pixelated}
 </style>
 </head>
 <body>
@@ -778,11 +952,38 @@ function printLabelHtmlViaIframe(html: string): boolean {
   let removed = false;
   const cleanup = () => { if (!removed) { removed = true; setTimeout(() => iframe.remove(), 1000); } };
   win.onafterprint = cleanup;
-  setTimeout(() => {
-    try { win.focus(); win.print(); } catch { iframe.remove(); }
+
+  let printed = false;
+  const triggerPrint = () => {
+    if (printed) return;
+    printed = true;
+    try { win.focus(); win.print(); } catch { iframe.remove(); return; }
     // Safety net: some browsers never fire afterprint.
     setTimeout(cleanup, 60_000);
-  }, 300);
+  };
+
+  // The barcode is a base64 PNG <img>. If we print before it has decoded, the
+  // label prints with a blank barcode (visible on screen but missing on paper),
+  // so wait for every image to finish loading before invoking print().
+  const waitForImagesThenPrint = () => {
+    const imgs = Array.from(doc.images);
+    const pending = imgs.filter((img) => !img.complete || img.naturalWidth === 0);
+    if (pending.length === 0) { triggerPrint(); return; }
+    let settled = 0;
+    const onSettled = () => {
+      settled += 1;
+      if (settled >= pending.length) triggerPrint();
+    };
+    pending.forEach((img) => {
+      img.addEventListener("load", onSettled, { once: true });
+      img.addEventListener("error", onSettled, { once: true });
+    });
+    // Fallback: print anyway if an image never reports load/error.
+    setTimeout(triggerPrint, 3000);
+  };
+
+  // Let the written document parse, then wait on its images.
+  setTimeout(waitForImagesThenPrint, 50);
   return true;
 }
 
@@ -796,6 +997,8 @@ export interface PrintStickersArgs {
   sizeOverride?: string;
   quantity?: number;
   orientation?: "horizontal" | "vertical";
+  barcodePosition?: "top" | "bottom";
+  colorMode?: "bw" | "color";
   /** Literal field values merged AFTER quick-code resolution (escape hatch for
    *  type-specific keys like returnNo / street that aren't in QUICK_CODES). */
   fieldsOverride?: Record<string, string>;
@@ -813,6 +1016,7 @@ export function useStickerPrinter() {
   const { profile } = useBusinessProfile();
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
+  const logoUrl      = profile.logo || "";
 
   const defaultTemplateFor = (typeId: string): StickerTemplate | undefined =>
     templates.find((t) => t.typeId === typeId && t.isDefault) ?? templates.find((t) => t.typeId === typeId);
@@ -835,11 +1039,14 @@ export function useStickerPrinter() {
       fields,
       businessName,
       brandColor,
+      logoUrl,
       orientation: args.orientation ?? "horizontal",
       quantity: args.quantity ?? 1,
+      barcodePosition: args.barcodePosition ?? "bottom",
+      colorMode: args.colorMode ?? "bw",
     });
     return printLabelHtmlViaIframe(html);
   };
 
-  return { printStickers, defaultTemplateFor, businessName, brandColor };
+  return { printStickers, defaultTemplateFor, businessName, brandColor, logoUrl };
 }

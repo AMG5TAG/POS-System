@@ -82,7 +82,7 @@ export default function POSParkedPage() {
            the parked sale from the DB at this point, so this is the only copy. */
         setPendingCart(data);
         toast.success(`${reference} restored — loading POS…`);
-        navigate("/pos");
+        navigate("/pos/sell");
       },
       onError: () => toast.error("Failed to restore sale"),
     });

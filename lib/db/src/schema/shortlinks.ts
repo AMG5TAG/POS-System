@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const shortlinksTable = pgTable("shortlinks", {
@@ -12,7 +12,11 @@ export const shortlinksTable = pgTable("shortlinks", {
   clicks:     integer("clicks").notNull().default(0),
   tags:       text("tags").notNull().default(""),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (table) => [
+  // A shortlink ending is unique per merchant — enforced at the DB level so
+  // concurrent create/update requests can't race past the application check.
+  uniqueIndex("shortlinks_merchant_slug_unique").on(table.merchantId, table.slug),
+]);
 
 export type Shortlink = typeof shortlinksTable.$inferSelect;
 export type InsertShortlink = typeof shortlinksTable.$inferInsert;

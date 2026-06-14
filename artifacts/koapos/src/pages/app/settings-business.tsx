@@ -7,6 +7,7 @@ import {
 } from "@workspace/api-client-react";
 import { useAuth } from "@/lib/use-auth";
 import { useBusinessProfile, DAYS, type BusinessProfile, type CustomLink } from "@/lib/business-profile";
+import { validateABN } from "@/lib/abn";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -166,8 +167,6 @@ const REG_DEFAULT: RegExtSettings = {
 function loadRegExt(): RegExtSettings {
   return { ...REG_DEFAULT };
 }
-
-function saveRegExt(_s: RegExtSettings) { /* no-op */ }
 
 function RegSegmentToggle<T extends string>({ options, value, onChange }: {
   options: { value: T; label: string }[]; value: T; onChange: (v: T) => void;
@@ -521,7 +520,15 @@ export default function SettingsBusinessPage() {
               </div>
               <div>
                 <Label>ABN</Label>
-                <Input value={ext.abn} onChange={(e) => setExtField("abn", e.target.value)} placeholder="12 345 678 901" />
+                <Input
+                  value={ext.abn}
+                  onChange={(e) => setExtField("abn", e.target.value)}
+                  placeholder="12 345 678 901"
+                  className={ext.abn && !validateABN(ext.abn) ? "border-destructive focus-visible:ring-destructive" : ""}
+                />
+                {ext.abn && !validateABN(ext.abn) && (
+                  <p className="text-xs text-destructive mt-1">Invalid ABN — must be 11 digits with a valid checksum.</p>
+                )}
               </div>
               <div>
                 <Label>Tagline</Label>

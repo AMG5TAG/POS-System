@@ -1,0 +1,1 @@
+- [Tenant isolation: child mutations](tenant-isolation-child-mutations.md) — verify parent ownership by (id, merchantId) before touching child tables keyed on parentId

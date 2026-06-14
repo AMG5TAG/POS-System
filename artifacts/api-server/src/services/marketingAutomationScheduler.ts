@@ -4,15 +4,19 @@ import {
   productsTable,
   serviceJobsTable,
   invoicesTable,
+  transactionsTable,
   merchantsTable,
   businessProfileTable,
   marketingAutomationRulesTable,
   marketingAutomationLogTable,
+  socialPostsTable,
+  socialAccountsTable,
 } from "@workspace/db";
 import { eq, and, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
+import { runPublish } from "../routes/social-media";
 import type { Logger } from "pino";
 
 type Rule = typeof marketingAutomationRulesTable.$inferSelect;
@@ -120,30 +124,48 @@ async function dispatchMessage(
   isMarketing: boolean,
   toPhone?: string | null,
 ): Promise<{ success: boolean; error?: string }> {
-  if (rule.channel === "sms") {
-    if (!toPhone) return { success: false, error: "No phone number on file" };
-    // Spam Act 2003 / ACMA: marketing SMS must include opt-out instruction
-    const body = isMarketing ? `${text}\nReply STOP to unsubscribe.` : text;
-    const result = await sendSms({ to: toPhone, body });
-    return { success: result.success, error: result.error };
+  // "both" sends via email AND SMS; success if at least one channel goes out.
+  const wantEmail = rule.channel === "email" || rule.channel === "both";
+  const wantSms = rule.channel === "sms" || rule.channel === "both";
+
+  let anySuccess = false;
+  const errors: string[] = [];
+
+  if (wantSms) {
+    if (!toPhone) {
+      errors.push("No phone number on file");
+    } else {
+      // Spam Act 2003 / ACMA: marketing SMS must include opt-out instruction
+      const body = isMarketing ? `${text}\nReply STOP to unsubscribe.` : text;
+      const result = await sendSms({ to: toPhone, body }, merchantId);
+      if (result.success) anySuccess = true;
+      else if (result.error) errors.push(result.error);
+    }
   }
-  if (!toEmail) {
-    return { success: false, error: "No email address on file" };
+
+  if (wantEmail) {
+    if (!toEmail) {
+      errors.push("No email address on file");
+    } else {
+      // Spam Act 2003: marketing emails must include sender identity + unsubscribe link
+      let finalHtml = html;
+      let finalText = text;
+      if (isMarketing && customerId != null) {
+        const unsub = unsubscribeUrl(merchantId, customerId);
+        finalHtml = html + legalEmailFooter(biz.name, biz.address, unsub);
+        finalText = text + legalEmailFooterText(biz.name, biz.address, unsub);
+      } else if (isMarketing) {
+        // No customer ID — still append business identity
+        finalHtml = html + legalEmailFooter(biz.name, biz.address, "#");
+        finalText = text + legalEmailFooterText(biz.name, biz.address, "");
+      }
+      const result = await sendEmail(merchantId, { to: toEmail, subject, html: finalHtml, text: finalText });
+      if (result.success) anySuccess = true;
+      else if (result.error) errors.push(result.error);
+    }
   }
-  // Spam Act 2003: marketing emails must include sender identity + unsubscribe link
-  let finalHtml = html;
-  let finalText = text;
-  if (isMarketing && customerId != null) {
-    const unsub = unsubscribeUrl(merchantId, customerId);
-    finalHtml = html + legalEmailFooter(biz.name, biz.address, unsub);
-    finalText = text + legalEmailFooterText(biz.name, biz.address, unsub);
-  } else if (isMarketing) {
-    // No customer ID — still append business identity
-    finalHtml = html + legalEmailFooter(biz.name, biz.address, "#");
-    finalText = text + legalEmailFooterText(biz.name, biz.address, "");
-  }
-  const result = await sendEmail(merchantId, { to: toEmail, subject, html: finalHtml, text: finalText });
-  return { success: result.success, error: result.error };
+
+  return { success: anySuccess, error: anySuccess ? undefined : (errors.join("; ") || "No channel sent") };
 }
 
 // ─── Trigger: Birthday ────────────────────────────────────────────────────────
@@ -383,6 +405,140 @@ async function runInvoiceOverdue(
   return sent;
 }
 
+// ─── Trigger: X days after sale ───────────────────────────────────────────────
+
+/** Plain-text version of a template body for SMS / email text part. */
+function bodyToText(html: string | null, fallback: string): string {
+  if (!html) return fallback;
+  const stripped = html.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  return stripped || fallback;
+}
+
+async function runDaysAfterSale(
+  merchantId: number,
+  rule: Rule,
+  biz: BizInfo,
+  logger: Logger,
+): Promise<number> {
+  const delayDays = rule.delayDays ?? 0;
+  if (delayDays <= 0) return 0;
+  const dayMs = 24 * 3600 * 1000;
+  // The sale must be at least `delayDays` old. Look back a couple of weeks beyond
+  // that so a missed daily run still catches up; per-sale dedup prevents resends.
+  const target = new Date(Date.now() - delayDays * dayMs);
+  const windowStart = new Date(Date.now() - (delayDays + 14) * dayMs);
+
+  const rows = await db
+    .select({
+      txId: transactionsTable.id,
+      firstName: customersTable.firstName,
+      lastName: customersTable.lastName,
+      email: customersTable.email,
+      phone: customersTable.phone,
+      agreedToMarketing: customersTable.agreedToMarketing,
+      customerId: customersTable.id,
+    })
+    .from(transactionsTable)
+    .innerJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+    .where(
+      and(
+        eq(transactionsTable.merchantId, merchantId),
+        gte(transactionsTable.createdAt, windowStart),
+        lte(transactionsTable.createdAt, target),
+      ),
+    );
+
+  let sent = 0;
+  for (const row of rows) {
+    // Marketing message → require explicit opt-in (Spam Act 2003 s 16)
+    if (row.agreedToMarketing !== "true") continue;
+    if (!row.email && !row.phone) continue;
+    const dedupeKey = `sale-${row.txId}`;
+    if (await alreadySent(rule.id, dedupeKey, 120 * dayMs)) continue;
+    const firstName = row.firstName ?? "Valued Customer";
+    const vars = { first_name: firstName, last_name: row.lastName ?? "", business_name: biz.name, days: String(delayDays) };
+    const subject = applyVars(rule.templateSubject ?? `Thanks for shopping with ${biz.name}`, vars);
+    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thanks for your recent purchase at {{business_name}}. We hope you're enjoying it!</p>`, vars);
+    const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, thanks for your recent purchase at {{business_name}}!`), vars);
+    const result = await dispatchMessage(merchantId, rule, row.email ?? null, subject, html, text, biz, row.customerId, true, row.phone ?? null);
+    await logDispatch({ merchantId, ruleId: rule.id, customerId: row.customerId, recordType: "transaction", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
+    if (result.success) sent++;
+  }
+  if (sent > 0) logger.info({ ruleId: rule.id, delayDays, sent, trigger: "days_after_sale" }, "Automation: days-after-sale dispatched");
+  return sent;
+}
+
+// ─── Trigger: After a set time (one-off scheduled broadcast) ───────────────────
+
+async function runScheduledTime(
+  merchantId: number,
+  rule: Rule,
+  biz: BizInfo,
+  logger: Logger,
+): Promise<number> {
+  if (!rule.scheduledAt) return 0;
+  // Not yet time — wait for a run on/after the configured moment.
+  if (Date.now() < new Date(rule.scheduledAt).getTime()) return 0;
+
+  const customers = await db
+    .select()
+    .from(customersTable)
+    .where(eq(customersTable.merchantId, merchantId));
+
+  let sent = 0;
+  for (const c of customers) {
+    // Broadcast marketing message → require explicit opt-in (Spam Act 2003 s 16)
+    if (c.agreedToMarketing !== "true") continue;
+    if (!c.email && !c.phone) continue;
+    // One send per customer, ever, for this scheduled rule.
+    const dedupeKey = `sched-${rule.id}-${c.id}`;
+    if (await alreadySent(rule.id, dedupeKey, 3650 * 24 * 3600 * 1000)) continue;
+    const firstName = c.firstName ?? "Valued Customer";
+    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name };
+    const subject = applyVars(rule.templateSubject ?? `A message from ${biz.name}`, vars);
+    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p>`, vars);
+    const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, a message from {{business_name}}.`), vars);
+    const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
+    await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "scheduled", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
+    if (result.success) sent++;
+  }
+  if (sent > 0) logger.info({ ruleId: rule.id, sent, trigger: "scheduled_time" }, "Automation: scheduled broadcast dispatched");
+  return sent;
+}
+
+/* ── Social broadcast automation ─────────────────────────────────────────────
+ * Social rules don't message individual customers — they publish a single post
+ * to every active connected account. `scheduled_time` rules fire once at their
+ * configured moment; other triggers fire at most once per day. The post body is
+ * the rule's templateBody (rendered to plain text). */
+async function runSocialAutomation(merchantId: number, rule: Rule, logger: Logger): Promise<number> {
+  if (rule.triggerEvent === "scheduled_time") {
+    if (!rule.scheduledAt) return 0;
+    if (Date.now() < new Date(rule.scheduledAt).getTime()) return 0;
+  }
+  const dedupeKey = `social-${rule.id}-${rule.triggerEvent}`;
+  const windowMs = rule.triggerEvent === "scheduled_time" ? 3650 * 24 * 3600 * 1000 : 24 * 3600 * 1000;
+  if (await alreadySent(rule.id, dedupeKey, windowMs)) return 0;
+
+  const accounts = await db.select().from(socialAccountsTable)
+    .where(and(eq(socialAccountsTable.merchantId, merchantId), eq(socialAccountsTable.status, "active")));
+  if (accounts.length === 0) {
+    await logDispatch({ merchantId, ruleId: rule.id, customerId: null, recordType: "social", recordId: dedupeKey, channel: "social", status: "failed", error: "No connected social accounts" });
+    return 0;
+  }
+
+  const content = bodyToText(rule.templateBody, "");
+  const targets = accounts.map((a) => ({ platform: a.platform, accountId: a.externalId }));
+  const [post] = await db.insert(socialPostsTable).values({
+    merchantId, content, media: [], targets, status: "publishing", automationRuleId: rule.id,
+  }).returning();
+  const published = await runPublish(merchantId, post!.id);
+  const ok = published?.status === "published" || published?.status === "partial";
+  await logDispatch({ merchantId, ruleId: rule.id, customerId: null, recordType: "social", recordId: dedupeKey, channel: "social", status: ok ? "sent" : "failed", error: ok ? undefined : "Publish failed — check connected accounts" });
+  logger.info({ ruleId: rule.id, postId: post!.id }, "Automation: social post published");
+  return ok ? 1 : 0;
+}
+
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function runAutomationRule(
@@ -394,6 +550,19 @@ export async function runAutomationRule(
     return { dispatched: 0, trigger: rule.triggerEvent, error: "No template body configured" };
   }
   const biz = await getBizInfo(merchantId);
+
+  // Social rules broadcast a post rather than messaging each customer.
+  if (rule.channel === "social") {
+    try {
+      const dispatched = await runSocialAutomation(merchantId, rule, logger);
+      await db.update(marketingAutomationRulesTable).set({ lastRunAt: new Date() }).where(eq(marketingAutomationRulesTable.id, rule.id));
+      return { dispatched, trigger: rule.triggerEvent };
+    } catch (err) {
+      logger.error({ ruleId: rule.id, err }, "Social automation error");
+      return { dispatched: 0, trigger: rule.triggerEvent, error: String(err) };
+    }
+  }
+
   try {
     let dispatched = 0;
     switch (rule.triggerEvent) {
@@ -402,6 +571,8 @@ export async function runAutomationRule(
       case "new_product":      dispatched = await runNewProduct(merchantId, rule, biz, logger); break;
       case "new_service_job":  dispatched = await runNewServiceJob(merchantId, rule, biz, logger); break;
       case "invoice_overdue":  dispatched = await runInvoiceOverdue(merchantId, rule, biz, logger); break;
+      case "days_after_sale":  dispatched = await runDaysAfterSale(merchantId, rule, biz, logger); break;
+      case "scheduled_time":   dispatched = await runScheduledTime(merchantId, rule, biz, logger); break;
       default:
         return { dispatched: 0, trigger: rule.triggerEvent, error: `Unknown trigger: ${rule.triggerEvent}` };
     }
@@ -437,12 +608,13 @@ export function scheduleMarketingAutomation(logger: Logger): void {
   processAllMerchantAutomations(logger).catch((err) =>
     logger.error({ err }, "Marketing automation startup run error"),
   );
-  // Then every 24 hours
+  // Then hourly — frequent enough that "after a set time" sends land within the
+  // hour, while per-record dedup keeps daily/event triggers idempotent.
   setInterval(
     () =>
       processAllMerchantAutomations(logger).catch((err) =>
         logger.error({ err }, "Marketing automation scheduled run error"),
       ),
-    24 * 60 * 60 * 1000,
+    60 * 60 * 1000,
   );
 }

@@ -8,6 +8,7 @@ import {
   useUpsertSalesTemplate,
   useGetRegionalExtSettings,
   useUpdateRegionalExtSettings,
+  useListPartnerReferrals,
   type SalesTemplate,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -113,6 +114,7 @@ export interface TplOpts {
   jobNoFontSize:        string;
   showLogins:           boolean;
   showFormsFiles:       boolean;
+  defaultPrintCopies:   string;
   // Customer PDF section toggles
   showTransactions:     boolean;
   showAppointments:     boolean;
@@ -121,6 +123,9 @@ export interface TplOpts {
   showFormSubmissions:  boolean;
   showWarningNote:      boolean;
   showInternalNotes:    boolean;
+  // Referral link
+  showReferralLink:     boolean;
+  referralLinkText:     string;
   // Font
   fontFamily:           string;
 }
@@ -141,9 +146,10 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
-  showLogins: false, showFormsFiles: false,
+  showLogins: false, showFormsFiles: false, defaultPrintCopies: "1",
   showTransactions: true, showAppointments: true, showServiceJobs: true,
   showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
+  showReferralLink: false, referralLinkText: "",
   fontFamily: "inter",
 };
 
@@ -244,7 +250,9 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Returns within 30 days", quickCodes: true },
       { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
-      { section: "Print",  key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
+      { section: "Print",   key: "printCustomerCopy",  label: "Print Customer Copy", type: "toggle", hint: "Prints a duplicate copy for the customer" },
+      { section: "Referral", key: "showReferralLink",  label: "Show Platform Referral Link", type: "toggle", hint: "Adds your KoaPOS referral link to earn rewards" },
+      { section: "Referral", key: "referralLinkText",  label: "Referral Label",              type: "text",   placeholder: "Refer a friend and earn rewards!" },
     ];
     case "A4_Receipt":
     case "Invoice": return [
@@ -260,8 +268,8 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",       type: "toggle" },
       { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",         type: "toggle", hint: "Scannable barcode to retrieve this sale" },
       { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",     type: "toggle", hint: "Shows methods enabled in POS Registers" },
-      { section: "Payment",  key: "paymentSectionHeading",   label: "Payment Heading",           type: "text",     placeholder: "PAYMENT DETAILS" },
-      { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",     type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #" },
+      { section: "Payment",  key: "paymentSectionHeading",   label: "Payment Heading",           type: "text",     placeholder: "PAYMENT DETAILS", quickCodes: true },
+      { section: "Payment",  key: "bankDetails",             label: "Bank Transfer Details",     type: "textarea", placeholder: "Bank: ANZ\nBSB: 012-345\nAccount: 123456789\nRef: Invoice #", quickCodes: true },
       { section: "Footer",   key: "thankYouMsg",             label: "Thank You Message",         type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Return policy, loyalty info, special offers…", quickCodes: true },
       { section: "Footer",   key: "showSocialLinks",         label: "Show Business Socials",     type: "toggle", hint: "Pulls social links from Business Info" },
@@ -270,6 +278,8 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "showWebsite",             label: "Show Website",              type: "toggle" },
       { section: "Terms",    key: "paymentTerms",            label: "Payment Terms",             type: "text",     placeholder: "Payment due within 30 days.", quickCodes: true },
       { section: "Terms",    key: "invoiceNotes",            label: "Invoice Notes",             type: "textarea", placeholder: "e.g. Thank you for your business. Late fees apply.", quickCodes: true },
+      { section: "Referral", key: "showReferralLink",        label: "Show Platform Referral Link", type: "toggle", hint: "Adds your KoaPOS referral link to earn rewards" },
+      { section: "Referral", key: "referralLinkText",        label: "Referral Label",              type: "text",   placeholder: "Refer a friend and earn rewards!" },
     ];
     case "Quote": return [
       { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
@@ -286,11 +296,13 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "socialIconBrandColors",   label: "Social Icon Brand Colors",  type: "toggle", hint: "Renders each platform icon in its official brand color (Facebook blue, Instagram pink, etc.)" },
       { section: "Terms",    key: "paymentTerms",            label: "Quote Validity",            type: "text",     placeholder: "This quote is valid for 30 days.", quickCodes: true },
       { section: "Terms",    key: "invoiceNotes",            label: "Quote Notes",               type: "textarea", placeholder: "e.g. Prices subject to change after validity period.", quickCodes: true },
+      { section: "Referral", key: "showReferralLink",        label: "Show Platform Referral Link", type: "toggle", hint: "Adds your KoaPOS referral link to earn rewards" },
+      { section: "Referral", key: "referralLinkText",        label: "Referral Label",              type: "text",   placeholder: "Refer a friend and earn rewards!" },
     ];
     case "Service_Ticket": return [
       { section: "Header",   key: "showLogo",             label: "Show Business Logo",       type: "toggle" },
       { section: "Header",   key: "showAbn",              label: "Show ABN",                 type: "toggle" },
-      { section: "Header",   key: "headerText",           label: "Custom Header HTML",       type: "textarea", placeholder: "SERVICE JOB SHEET" },
+      { section: "Header",   key: "headerText",           label: "Custom Header HTML",       type: "textarea", placeholder: "SERVICE JOB SHEET", quickCodes: true },
       { section: "Body",     key: "fontFamily",           label: "Font Family",              type: "fontpicker" },
       { section: "Job No",   key: "jobNoFontSize",        label: "Job No Font Size",         type: "select",   options: [{ value: "normal", label: "Normal" }, { value: "large", label: "Large" }, { value: "xlarge", label: "X-Large" }] },
       { section: "Sections", key: "showCustomerDetails",  label: "Show Customer Details",    type: "toggle" },
@@ -304,8 +316,11 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
       { section: "Footer",   key: "showSocialLinks",      label: "Show Business Socials",    type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
-      { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss." },
+      { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss.", quickCodes: true },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Print",    key: "defaultPrintCopies",   label: "Default Print Copies",     type: "text",     placeholder: "1", hint: "Number of copies pre-filled in the print dialog" },
+      { section: "Referral", key: "showReferralLink",     label: "Show Platform Referral Link", type: "toggle", hint: "Adds your KoaPOS referral link to earn rewards" },
+      { section: "Referral", key: "referralLinkText",     label: "Referral Label",              type: "text",   placeholder: "Refer a friend and earn rewards!" },
     ];
     case "Customer_PDF": return [
       { section: "Header", key: "showLogo",            label: "Show Business Logo",     type: "toggle", hint: "Renders your logo in the PDF header" },
@@ -329,19 +344,21 @@ function getOptionsConfig(category: Category): FieldDef[] {
 interface QuickCode   { code: string; label: string; example: string }
 interface QuickCodeGroup { id: string; label: string; icon: React.ElementType; color: string; chipBg: string; codes: QuickCode[] }
 
-function buildQuickCodeGroups(businessName: string, abn: string, email: string, website: string, tagline: string, address: string): QuickCodeGroup[] {
+function buildQuickCodeGroups(businessName: string, abn: string, email: string, website: string, tagline: string, address: string, partnerReferralCode: string, partnerReferralUrl: string): QuickCodeGroup[] {
   return [
     {
       id: "business", label: "Business Details", icon: Building2,
       color: "text-blue-700", chipBg: "bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700",
       codes: [
-        { code: "{{business.name}}",    label: "Business Name", example: businessName || "Your Business"      },
-        { code: "{{business.abn}}",     label: "ABN",           example: abn          || "12 345 678 901"     },
-        { code: "{{business.email}}",   label: "Email",         example: email        || "hello@biz.com.au"   },
-        { code: "{{business.phone}}",   label: "Phone",         example: "(03) 9000 0000"                     },
-        { code: "{{business.website}}", label: "Website",       example: website      || "www.yourbiz.com.au" },
-        { code: "{{business.tagline}}", label: "Tagline",       example: tagline      || "Quality you trust"  },
-        { code: "{{business.address}}", label: "Address",       example: address      || "Melbourne VIC 3000" },
+        { code: "{{business.name}}",                   label: "Business Name",          example: businessName       || "Your Business"           },
+        { code: "{{business.abn}}",                    label: "ABN",                    example: abn                || "12 345 678 901"          },
+        { code: "{{business.email}}",                  label: "Email",                  example: email              || "hello@biz.com.au"        },
+        { code: "{{business.phone}}",                  label: "Phone",                  example: "(03) 9000 0000"                                },
+        { code: "{{business.website}}",                label: "Website",                example: website            || "www.yourbiz.com.au"      },
+        { code: "{{business.tagline}}",                label: "Tagline",                example: tagline            || "Quality you trust"       },
+        { code: "{{business.address}}",                label: "Address",                example: address            || "Melbourne VIC 3000"      },
+        { code: "{{business.partner_referral_code}}", label: "KoaPOS Referral Code",   example: partnerReferralCode || "KOAPOS-XXXX"             },
+        { code: "{{business.partner_referral_url}}",  label: "KoaPOS Referral URL",    example: partnerReferralUrl  || "koapos.com/join?ref=XXXX" },
       ],
     },
     {
@@ -871,22 +888,26 @@ interface PreviewProps {
   email: string; address: string; brandColor: string; logo?: string;
   socialLinks?: Record<string, string>;
   paymentTypes?: string[];
+  referralCode?: string;
+  referralUrl?: string;
   opts: TplOpts;
 }
 
-export function resolveCode(text: string, businessName: string, abn: string, website: string, email: string): string {
+export function resolveCode(text: string, businessName: string, abn: string, website: string, email: string, partnerReferralCode = "", partnerReferralUrl = ""): string {
   return text
-    .replace(/{{business\.name}}/g,    businessName)
-    .replace(/{{business\.abn}}/g,     abn)
-    .replace(/{{business\.email}}/g,   email)
-    .replace(/{{business\.website}}/g, website)
-    .replace(/{{business\.phone}}/g,   "(03) 9000 0000")
-    .replace(/{{customer\.name}}/g,    "Sarah Johnson")
-    .replace(/{{customer\.first_name}}/g, "Sarah")
-    .replace(/{{transaction\.total}}/g, "$19.50")
-    .replace(/{{transaction\.date}}/g,  "18/05/2026")
-    .replace(/{{transaction\.number}}/g,"#TXN-1042")
-    .replace(/{{[^}]+}}/g,             "…");
+    .replace(/{{business\.name}}/g,                   businessName)
+    .replace(/{{business\.abn}}/g,                    abn)
+    .replace(/{{business\.email}}/g,                  email)
+    .replace(/{{business\.website}}/g,                website)
+    .replace(/{{business\.phone}}/g,                  "(03) 9000 0000")
+    .replace(/{{business\.partner_referral_code}}/g,  partnerReferralCode || "KOAPOS-XXXX")
+    .replace(/{{business\.partner_referral_url}}/g,   partnerReferralUrl  || "koapos.com/join?ref=KOAPOS-XXXX")
+    .replace(/{{customer\.name}}/g,                   "Sarah Johnson")
+    .replace(/{{customer\.first_name}}/g,             "Sarah")
+    .replace(/{{transaction\.total}}/g,               "$19.50")
+    .replace(/{{transaction\.date}}/g,                "18/05/2026")
+    .replace(/{{transaction\.number}}/g,              "#TXN-1042")
+    .replace(/{{[^}]+}}/g,                            "…");
 }
 
 /* ─── Visual QR Code (CSS grid pattern, preview only) ────────────────────── */
@@ -919,7 +940,7 @@ function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?
   );
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, socialLinks, paymentTypes, opts }: PreviewProps) {
+function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, socialLinks, paymentTypes, referralCode, referralUrl, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
@@ -953,6 +974,14 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
     </div>
   ) : null;
 
+  const ReferralBlock = () => opts.showReferralLink ? (
+    <div className="border-t pt-1.5 mt-1 text-center space-y-0.5">
+      {opts.referralLinkText && <p className="text-[9px] text-gray-600">{opts.referralLinkText}</p>}
+      <p className="text-[8px] text-gray-400 font-mono">{referralUrl || "koapos.com/join?ref=KOAPOS-XXXX"}</p>
+      <p className="text-[8px] text-gray-400">Code: <strong>{referralCode || "KOAPOS-XXXX"}</strong></p>
+    </div>
+  ) : null;
+
   const LoyaltyBlock = () => opts.showLoyaltyEarned ? (
     <div className="flex justify-between text-[9px] text-emerald-700 bg-emerald-50 rounded px-1.5 py-0.5 mt-1">
       <span>★ Loyalty Earned</span><span>+19 pts</span>
@@ -980,6 +1009,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
         <SocialsBlock />
         <BarcodeBlock />
+        <ReferralBlock />
       </div>
     );
   }
@@ -1012,6 +1042,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           <SocialsBlock />
         </div>
         <BarcodeBlock />
+        <ReferralBlock />
       </div>
     );
   }
@@ -1044,11 +1075,12 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <SocialsBlock />
       </div>
       <BarcodeBlock />
+      <ReferralBlock />
     </div>
   );
 }
 
-function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, tagline, logo, socialLinks, paymentTypes, opts }: PreviewProps) {
+function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, tagline, logo, socialLinks, paymentTypes, referralCode, referralUrl, opts }: PreviewProps) {
   const items = [{ name: "Product Design Services", qty: 3, price: 150 }, { name: "Logo Package", qty: 1, price: 450 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal * 0.1;
@@ -1133,6 +1165,14 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
     </div>
   ) : null;
 
+  const ReferralBlock = () => opts.showReferralLink ? (
+    <div className="border-t pt-1.5 mt-1.5 text-center space-y-0.5">
+      {opts.referralLinkText && <p className="text-[9px] text-gray-600">{opts.referralLinkText}</p>}
+      <p className="text-[8px] text-gray-400 font-mono">{referralUrl || "koapos.com/join?ref=KOAPOS-XXXX"}</p>
+      <p className="text-[8px] text-gray-400">Code: <strong>{referralCode || "KOAPOS-XXXX"}</strong></p>
+    </div>
+  ) : null;
+
   const NotesBlock = ({ className }: { className?: string }) => notes ? (
     <div className={className}>
       {notes.split("\n").map((line, i) => (
@@ -1174,6 +1214,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
         <SocialsBlock />
         <BarcodeBlock />
+        <ReferralBlock />
       </div>
     );
   }
@@ -1226,6 +1267,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <MessagesBlock />
         <SocialsBlock />
         <BarcodeBlock />
+        <ReferralBlock />
       </div>
     );
   }
@@ -1274,6 +1316,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <SocialsBlock />
       </div>
       <BarcodeBlock />
+      <ReferralBlock />
     </div>
   );
 }
@@ -1365,7 +1408,7 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
 
 /* ─── Service Sheet Preview ─────────────────────────────────────────────── */
 
-function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, opts }: PreviewProps) {
+function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, referralCode, referralUrl, opts }: PreviewProps) {
   const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
   const compact = templateId === "ss-compact";
   const socialEntries = formatSocialEntries(socialLinks);
@@ -1513,6 +1556,15 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
           {socialEntries.map(({ label, handle, key }) => (
             <span key={label} className="inline-flex items-center gap-0.5"><SocialIcon platform={key} size={8} useBrandColor={opts.socialIconBrandColors} /><strong>{label}</strong> {handle}</span>
           ))}
+        </div>
+      )}
+
+      {/* Referral link */}
+      {opts.showReferralLink && (
+        <div className="border-t pt-1 mt-1 text-center space-y-0.5">
+          {opts.referralLinkText && <p className="text-[8px] text-gray-600">{opts.referralLinkText}</p>}
+          <p className="text-[7px] text-gray-400 font-mono">{referralUrl || "koapos.com/join?ref=KOAPOS-XXXX"}</p>
+          <p className="text-[7px] text-gray-400">Code: <strong>{referralCode || "KOAPOS-XXXX"}</strong></p>
         </div>
       )}
     </div>
@@ -1689,6 +1741,9 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
+  const { data: partnerData } = useListPartnerReferrals({ query: { queryKey: ["partner-referrals"] } });
+  const partnerReferralCode = (partnerData as { referralCode?: string } | undefined)?.referralCode ?? "";
+  const partnerReferralUrl  = (partnerData as { referralUrl?: string }  | undefined)?.referralUrl  ?? "";
 
   const { data: tplData, isLoading: tplLoading } = useListSalesTemplates({
     query: { queryKey: ["sales-templates"] },
@@ -1725,6 +1780,8 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
     logo: profile.logo || "",
     socialLinks: profile.socialLinks,
     paymentTypes: profile.paymentTypes,
+    referralCode: partnerReferralCode,
+    referralUrl:  partnerReferralUrl,
     opts,
   };
 
@@ -1736,6 +1793,8 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       (merchant as { city?: string } | undefined)?.city,
       profile.state, profile.postcode,
     ].filter(Boolean).join(", "),
+    partnerReferralCode,
+    partnerReferralUrl,
   );
 
   const currentTemplates = TEMPLATES[activeCategory];

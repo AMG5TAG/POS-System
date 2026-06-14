@@ -59,12 +59,10 @@ const DEFAULTS: Settings3D = {
   roundingValue: 0.5,
 };
 
+/** Default 3D-printing settings. The merchant's saved settings come from the
+    API (useGetPrint3dSettings); this is only the fallback before they load. */
 export function load3DSettings(): Settings3D {
   return DEFAULTS;
-}
-
-function save3DSettings(_s: Settings3D) {
-  /* no-op */
 }
 
 /* ─── Printer data ───────────────────────────────────────────────────────── */

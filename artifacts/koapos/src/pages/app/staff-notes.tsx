@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,10 +62,11 @@ const VISIBILITY_META: Record<NoteVisibility, { label: string; cls: string }> = 
 /* ─── Note Card ──────────────────────────────────────────────────────────── */
 
 function NoteCard({
-  note, role, onEdit, onDelete, onTogglePin, onToggleImportant,
+  note, role, onView, onEdit, onDelete, onTogglePin, onToggleImportant,
 }: {
   note: StaffNoteItem;
   role: StaffRole;
+  onView: () => void;
   onEdit: () => void;
   onDelete: () => void;
   onTogglePin: () => void;
@@ -86,7 +87,11 @@ function NoteCard({
         </div>
       )}
 
-      <div className="flex items-start gap-3 pr-5">
+      <button
+        type="button"
+        onClick={onView}
+        className="flex items-start gap-3 pr-5 text-left w-full hover:opacity-80 transition-opacity cursor-pointer"
+      >
         <div className={cn(
           "p-2 rounded-lg shrink-0",
           note.isImportant ? "bg-amber-100 text-amber-600 dark:bg-amber-900/30" : "bg-muted text-muted-foreground"
@@ -97,7 +102,7 @@ function NoteCard({
           <p className="font-semibold text-sm leading-tight">{note.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5 whitespace-pre-wrap line-clamp-4">{note.content}</p>
         </div>
-      </div>
+      </button>
 
       <div className="flex flex-wrap items-center gap-1.5">
         {note.isImportant && (
@@ -152,11 +157,19 @@ function NoteDialog({
   authorName: string;
   onSave: (n: NoteFormValues) => void;
 }) {
-  const [form, setForm] = useState<NoteFormValues>(
-    initial
-      ? { title: initial.title, content: initial.content, isImportant: initial.isImportant, isPinned: initial.isPinned, visibleTo: initial.visibleTo }
-      : { ...BLANK }
-  );
+  const [form, setForm] = useState<NoteFormValues>({ ...BLANK });
+
+  // Re-sync the form whenever the dialog opens, so editing loads the note's
+  // values and creating starts blank (the dialog is always mounted, so the
+  // useState initializer alone would otherwise hold stale data).
+  useEffect(() => {
+    if (!open) return;
+    setForm(
+      initial
+        ? { title: initial.title, content: initial.content, isImportant: initial.isImportant, isPinned: initial.isPinned, visibleTo: initial.visibleTo }
+        : { ...BLANK },
+    );
+  }, [open, initial]);
 
   const setField = <K extends keyof NoteFormValues>(k: K, v: NoteFormValues[K]) => setForm((p) => ({ ...p, [k]: v }));
 
@@ -219,6 +232,64 @@ function NoteDialog({
   );
 }
 
+/* ─── Detail Dialog (read-only) ──────────────────────────────────────────── */
+
+function NoteDetailDialog({
+  open, onOpenChange, note,
+}: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  note: StaffNoteItem | null;
+}) {
+  const vis = note ? (VISIBILITY_META[note.visibleTo as NoteVisibility] ?? VISIBILITY_META.all) : null;
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+        {note && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 pr-6">
+                {note.isImportant
+                  ? <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" />
+                  : <StickyNote className="w-4 h-4 text-muted-foreground shrink-0" />}
+                <span className="break-words">{note.title}</span>
+              </DialogTitle>
+              <DialogDescription>
+                {note.createdBy} · {new Date(note.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-1">
+              <p className="text-sm whitespace-pre-wrap break-words">{note.content}</p>
+              <Separator />
+              <div className="flex flex-wrap items-center gap-1.5">
+                {note.isImportant && (
+                  <Badge className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                    <Star className="w-3 h-3 mr-1 fill-current" />Important
+                  </Badge>
+                )}
+                {note.isPinned && (
+                  <Badge className="text-xs bg-primary/10 text-primary">
+                    <Pin className="w-3 h-3 mr-1 fill-current" />Pinned
+                  </Badge>
+                )}
+                {vis && (
+                  <Badge className={cn("text-xs", vis.cls)}>
+                    <Eye className="w-3 h-3 mr-1" />{vis.label}
+                  </Badge>
+                )}
+              </div>
+            </div>
+            <DialogFooter>
+              <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffNotesPage() {
@@ -234,6 +305,8 @@ export default function StaffNotesPage() {
   const role: StaffRole = (user?.staffRole as StaffRole) ?? "staff";
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing]       = useState<StaffNoteItem | null>(null);
+  const [viewOpen, setViewOpen]     = useState(false);
+  const [viewing, setViewing]       = useState<StaffNoteItem | null>(null);
   const [filterImportant, setFilterImportant] = useState(false);
 
   const canManage = canManageNotes(role);
@@ -341,6 +414,7 @@ export default function StaffNotesPage() {
                 key={note.id}
                 note={note}
                 role={role}
+                onView={() => { setViewing(note); setViewOpen(true); }}
                 onEdit={() => { setEditing(note); setDialogOpen(true); }}
                 onDelete={() => handleDelete(note.id)}
                 onTogglePin={() => togglePin(note)}
@@ -357,6 +431,12 @@ export default function StaffNotesPage() {
         initial={editing}
         authorName={ROLE_LABELS[role]}
         onSave={handleSave}
+      />
+
+      <NoteDetailDialog
+        open={viewOpen}
+        onOpenChange={(v) => { setViewOpen(v); if (!v) setViewing(null); }}
+        note={viewing}
       />
     </AppLayout>
   );

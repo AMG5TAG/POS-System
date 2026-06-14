@@ -4,6 +4,7 @@ import {
   useUpdateCustomerSettings,
   getGetCustomerSettingsQueryKey,
 } from "@workspace/api-client-react";
+import type { GroupPricingRule } from "@/lib/group-pricing";
 
 export interface CustomerGroup {
   id: string;
@@ -36,6 +37,8 @@ export interface CustomerSettings {
   heardFromSources: HeardFromSource[];
   weeklyDigestOptIn: boolean;
   weeklyDigestSendDay: number;
+  /** Automatic per-group default pricing rules (see group-pricing.ts). */
+  groupPricing: GroupPricingRule[];
 }
 
 export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
@@ -49,6 +52,7 @@ export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
 export const DEFAULT_HEARD_FROM_SOURCES: HeardFromSource[] = [
   { id: "google",       name: "Google",       requiresDetails: false },
   { id: "social-media", name: "Social Media", requiresDetails: false },
+  { id: "local",        name: "Local",        requiresDetails: false },
   { id: "friend",       name: "Friend",       requiresDetails: true  },
   { id: "other",        name: "Other",        requiresDetails: true  },
 ];
@@ -69,6 +73,7 @@ const DEFAULT_SETTINGS: CustomerSettings = {
   heardFromSources: DEFAULT_HEARD_FROM_SOURCES,
   weeklyDigestOptIn: false,
   weeklyDigestSendDay: 1,
+  groupPricing: [],
 };
 
 export function useCustomerSettings() {
@@ -83,6 +88,7 @@ export function useCustomerSettings() {
         requiredFields: { ...DEFAULT_SETTINGS.requiredFields, ...(raw.requiredFields ?? {}) },
         groups: (raw.groups as CustomerGroup[]) ?? DEFAULT_CUSTOMER_GROUPS,
         heardFromSources: (raw.heardFromSources as HeardFromSource[]) ?? DEFAULT_HEARD_FROM_SOURCES,
+        groupPricing: (raw.groupPricing as GroupPricingRule[]) ?? [],
       }
     : DEFAULT_SETTINGS;
 

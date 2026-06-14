@@ -1,4 +1,6 @@
 export * from "./generated/api";
 export * from "./generated/api.schemas";
-export { setBaseUrl, setAuthTokenGetter, setOnUnauthorized, ApiError } from "./custom-fetch";
+export { setBaseUrl, setAuthTokenGetter, setOnUnauthorized, ApiError, customFetch } from "./custom-fetch";
 export type { AuthTokenGetter } from "./custom-fetch";
+export * from './generated-payroll/api';
+export * from './generated-payroll/api.schemas';

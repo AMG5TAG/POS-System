@@ -74,6 +74,14 @@ function AppleSvg({ className }: { className?: string }) {
   );
 }
 
+function TyroSvg({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M3 3.5h18v4H14v13h-4v-13H3z" />
+    </svg>
+  );
+}
+
 type LogoCfg =
   | { type: "img";  src: string; bg: string; pad?: boolean }
   | { type: "text"; bg: string; color: string; label: string; cls?: string }
@@ -101,12 +109,12 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   amazon:               { type: "img",  bg: "bg-[#232F3E]",     src: SI("amazon",        "FF9900") },
   woocommerce:          { type: "img",  bg: "bg-[#96588A]",     src: SI("woocommerce",   "ffffff") },
   australia_post:       { type: "img",  bg: "bg-[#DC1928]",     src: SI("australiapost", "ffffff"), pad: true },
-  sendle:               { type: "text", bg: "bg-[#00BFA5]",     color: "text-white",   label: "SND",  cls: "text-[10px] font-black tracking-tight" },
+  sendle:               { type: "img",  bg: "bg-[#00BFA5]",     src: SI("sendle",            "ffffff") },
   /* Payments & Terminals */
-  stripe_own:           { type: "img",  bg: "bg-[#635BFF]",     src: SI("stripe",        "ffffff") },
-  commbank_eftpos:      { type: "text", bg: "bg-[#FFD200]",     color: "text-black",   label: "CBA",  cls: "text-[11px] font-black tracking-tight" },
-  square_terminal:      { type: "img",  bg: "bg-black",          src: SI("square",        "ffffff") },
-  tyro_eftpos:          { type: "text", bg: "bg-[#00B9E4]",     color: "text-white",   label: "TYRO", cls: "text-[10px] font-black tracking-tight" },
+  stripe_own:           { type: "img",  bg: "bg-[#635BFF]",     src: SI("stripe",            "ffffff") },
+  commbank_eftpos:      { type: "img",  bg: "bg-[#FFD200]",     src: SI("commonwealthbank",  "000000"), pad: true },
+  square_terminal:      { type: "img",  bg: "bg-black",          src: SI("square",            "ffffff") },
+  tyro_eftpos:          { type: "svg",  bg: "bg-[#00B9E4]",     color: "text-white",    component: TyroSvg },
   paypal:               { type: "img",  bg: "bg-[#003087]",     src: SI("paypal",        "ffffff") },
   wechat_alipay:        { type: "img",  bg: "bg-[#07C160]",     src: SI("wechat",        "ffffff") },
   afterpay:             { type: "img",  bg: "bg-[#B2FCE4]",     src: SI("afterpay",      "000000") },
@@ -311,7 +319,7 @@ function IntegrationCard({
                     variant="ghost"
                     size="sm"
                     className="gap-1.5 text-xs h-7 px-2"
-                    onClick={() => onNavigate("/management/tyro-eftpos")}
+                    onClick={() => onNavigate("/management/settings-integrations/integrations/tyro-eftpos")}
                     title="Terminal settings"
                   >
                     <Settings className="w-3 h-3" /> Settings
@@ -488,6 +496,13 @@ const ALL_SECTIONS = [
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+// Cloud-storage and account/contacts integrations now live on the consolidated
+// Sync page (Management → Settings & Integrations → Sync), so they are hidden here.
+export const SYNC_INTEGRATION_KEYS = new Set([
+  "google_drive", "onedrive", "dropbox", "proton_drive",
+  "google_contacts", "microsoft_contacts", "apple_account",
+]);
+
 interface VaultStatus {
   total: number;
   current: number;
@@ -508,7 +523,7 @@ export default function ManagementIntegrationsPage() {
   const [syncingContacts,    setSyncingContacts]     = useState(false);
 
   const { data: integrationsRaw, isLoading: loading, refetch: refetchIntegrations } = useListIntegrations({ query: { queryKey: ["integrations"] } });
-  const integrations = (integrationsRaw ?? []) as unknown as Integration[];
+  const integrations = ((integrationsRaw ?? []) as unknown as Integration[]).filter((i) => !SYNC_INTEGRATION_KEYS.has(i.key));
   const { data: vaultStatus } = useGetVaultStatus({ query: { queryKey: ["vault-status"] } });
 
   const disconnectMutation = useDisconnectIntegration();

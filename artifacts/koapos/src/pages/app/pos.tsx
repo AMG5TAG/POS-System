@@ -1,11 +1,15 @@
-import { useState, useMemo, useEffect, useRef } from "react";
+import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
 import { useLocation } from "wouter";
+import { useCustomerSettings } from "@/lib/customer-settings";
+import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
+import { computeGroupPrice } from "@/lib/group-pricing";
 import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useOfflineQueue } from "@/hooks/use-offline-queue";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
+import { warrantyLabel } from "@/lib/warranty";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
 import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
@@ -15,19 +19,22 @@ import {
   useListCustomers, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
-  useGetMerchant, useListPosRegisters, useListProductTypes,
-  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings,
+  useGetMerchant, useListPosRegisters,
+  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useVerifyStaffPin,
+  useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
-  GiftCardValidateResponse,
+  GiftCardValidateResponse, customFetch,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { useButtonStyle } from "@/lib/button-style";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
+import { customerDisplayName } from "@/lib/customer-name";
 import {
   ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
   getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
@@ -36,9 +43,13 @@ import {
   type StaffLoginMessage,
 } from "@/pages/app/management-registers";
 import {
-  loadRegisterSession, saveRegisterSession, clearRegisterSession,
+  loadRegisterSession, saveRegisterSession, clearRegisterSession, getOrCreateDeviceId,
+  ACTIVE_REGISTER_ID_KEY, parseStaffPosPrefs,
   type RegisterSession,
 } from "@/lib/pos-local-settings";
+import { useStaffSession } from "@/lib/staff-day-session";
+import { loyaltyUnitName, loyaltyProgramName } from "@/lib/loyalty-naming";
+import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -51,7 +62,7 @@ import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import {
-  Search, Plus, Minus, Trash2, Receipt, CreditCard,
+  Search, Plus, Minus, Trash2, Receipt, CreditCard, ChevronRight,
   X, AlertTriangle, UserSearch, ShoppingCart,
   Gift, Eye, EyeOff, Link as LinkIcon, CalendarDays, UserRound, Percent,
   Footprints, NotebookPen,
@@ -59,7 +70,7 @@ import {
   CheckCircle2, Printer, Mail, MessageSquare, Loader2,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
-  WifiOff, ShieldCheck, ArrowBigUp,
+  WifiOff, ShieldCheck, ArrowBigUp, MonitorX,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -91,6 +102,30 @@ function openDenomTotal(counts: Record<number, string>): number {
   );
 }
 
+/* ─── POS layout class maps (account settings + per-staff overrides) ─────── */
+
+const TILE_SIZE_CLASSES: Record<"compact" | "normal" | "large", { image: string; body: string; name: string; price: string }> = {
+  compact: { image: "h-[110px]", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
+  normal:  { image: "h-[150px]", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
+  large:   { image: "h-[190px]", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
+};
+
+/* Minimum tile width per size — drives how many columns fit. The grid fills as
+   many columns as the available width allows (down to 1 on a phone), capped at
+   the staff/account preferred column count on wide screens. */
+const TILE_MIN_WIDTH: Record<"compact" | "normal" | "large", number> = {
+  compact: 116,
+  normal:  150,
+  large:   190,
+};
+
+/* A responsive grid-template-columns that adds/removes columns with the
+   container width: each column is at least `minPx`, but never more than
+   `maxCols` columns (gap = 0.75rem to match `gap-3`). */
+function responsiveGridColumns(minPx: number, maxCols: number): string {
+  return `repeat(auto-fill, minmax(max(${minPx}px, (100% - ${maxCols - 1} * 0.75rem) / ${maxCols}), 1fr))`;
+}
+
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 type PricingRule = {
@@ -120,6 +155,8 @@ type CartItem = {
   pricingRuleDiscount?: number;
   pricingRuleLabel?: string;
   modifiers?: Modifier[];
+  /** Serial numbers for warranty products — one per unit sold. */
+  serials?: string[];
 };
 
 type WalkIn = { firstName: string; lastName: string };
@@ -165,6 +202,18 @@ type RecoveryDraft = {
 };
 
 
+/* Map a customer's saved group (stored as either the group id or its name) to
+ * the group id used as the key in product.groupPrices. */
+function resolveCustomerGroupId(
+  customerGroup: string | null | undefined,
+  groups: { id: string; name: string }[],
+): string | null {
+  if (!customerGroup) return null;
+  const cg = customerGroup.trim().toLowerCase();
+  const g = groups.find((x) => x.id.toLowerCase() === cg || x.name.toLowerCase() === cg);
+  return g ? g.id : null;
+}
+
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
   const sign = profit < 0 ? "-" : "";
@@ -179,8 +228,11 @@ export default function POSPage() {
   const [search, setSearch] = useState("");
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
-  const [typeFilter, setTypeFilter]     = useState<string | null>(null);
-  const [activeRegisterId] = useState<string>("default");
+  /* Which register THIS device operates — persisted per device so each
+     terminal's till is independent of the others. */
+  const [activeRegisterId, setActiveRegisterId] = useState<string>(() => {
+    try { return localStorage.getItem(ACTIVE_REGISTER_ID_KEY) || "default"; } catch { return "default"; }
+  });
 
   const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
 
@@ -222,6 +274,49 @@ export default function POSPage() {
 
   /* pos settings — used for role discount limits */
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+
+  /* staff — fetched early because the signed-in staff drives role limits below */
+  const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
+  /* server-side PIN verification (one-sale switch + discount approvals) */
+  const verifyPinMutation = useVerifyStaffPin();
+
+  /* ── Staff identity ──
+     dayStaff      — the day's login from the universal top bar (persisted per device).
+     saleStaff     — temporary one-sale override from the POS staff button;
+                     reverts to the day staff as soon as the sale finishes.
+     currentStaff  — whoever the next transaction will be recorded under. */
+  const { dayStaff, signOutForDay } = useStaffSession();
+  const [saleStaff, setSaleStaff] = useState<Staff | null>(null);
+  const dayStaffMember = useMemo((): Staff | null => {
+    if (!dayStaff) return null;
+    const fromList = (staffList as Staff[] | undefined)?.find(s => s.id === dayStaff.staffId);
+    /* Fall back to the persisted snapshot so the name/role still resolve while
+       the staff list is loading. */
+    return fromList ?? ({ id: dayStaff.staffId, name: dayStaff.staffName, role: dayStaff.role } as Staff);
+  }, [dayStaff, staffList]);
+  const currentStaff = saleStaff ?? dayStaffMember;
+
+  /* ── Effective POS layout ──
+     Account-level grid settings (Management → Registers) form the base; the
+     day staff member's personal preferences (staff.posPrefs) override them on
+     this terminal for the day. */
+  const posLayout = useMemo(() => {
+    const cols = posSettingsData?.gridColumns;
+    const tile = posSettingsData?.gridTileSize;
+    const base = {
+      columns: (cols && [2, 3, 4, 5].includes(cols) ? cols : 3) as 2 | 3 | 4 | 5,
+      tileSize: (tile && ["compact", "normal", "large"].includes(tile) ? tile : "normal") as "compact" | "normal" | "large",
+      showPrices: posSettingsData ? posSettingsData.gridShowPrices === "true" : true,
+      showStockBadges: posSettingsData?.gridShowStockBadges === "true",
+      cartPosition: (posSettingsData?.gridCartPosition === "left" ? "left" : "right") as "left" | "right",
+    };
+    return { ...base, ...parseStaffPosPrefs(dayStaffMember?.posPrefs) };
+  }, [posSettingsData, dayStaffMember]);
+  // Use the global button-style context for bare <button> elements in the POS cart row.
+  // The <Button> component (capitalised) reads the same context automatically.
+  const { showIcon: pbShowIcon, showText: pbShowText } = useButtonStyle();
+  const pbPadding = pbShowText ? "px-2 py-1.5" : "p-1.5";
+
   const parsedRoleLimits = useMemo((): Record<string, { hardCap: number | null; approvalThreshold: number | null }> => {
     try {
       if (posSettingsData?.roleDiscountLimits) {
@@ -279,10 +374,21 @@ export default function POSPage() {
   const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
   const [zeroPriceDiscardConfirmOpen, setZeroPriceDiscardConfirmOpen] = useState(false);
 
+  /* warranty serial-number collection at checkout */
+  const [serialPrompt, setSerialPrompt] = useState<null | {
+    method: TransactionInputPaymentMethod; amountTendered: number;
+    extraNote?: string; giftCardPayment?: { cardId: number; amount: number };
+  }>(null);
+  const [serialInputs, setSerialInputs] = useState<Record<number, string[]>>({});
+  const [serialAvail, setSerialAvail] = useState<Record<number, string[]>>({});
+  const latestCheckout = useRef<((m: TransactionInputPaymentMethod, a: number, n?: string, g?: { cardId: number; amount: number }) => void) | null>(null);
+
   /* modifiers */
   const [modPickerOpen, setModPickerOpen] = useState(false);
   const [modPickerProduct, setModPickerProduct] = useState<Product | null>(null);
   const [modPickerGroups, setModPickerGroups] = useState<ModifierGroup[]>([]);
+  // Quick-view: inspect a product without adding it to the sale.
+  const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
   const [modPickerSelected, setModPickerSelected] = useState<Record<number, number[]>>({});
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
@@ -358,8 +464,10 @@ export default function POSPage() {
   const [walkInForm, setWalkInForm] = useState({ firstName: "", lastName: "" });
   const [notesOpen, setNotesOpen] = useState(false);
   const [noteShake, setNoteShake] = useState(false);
-  const [pendingPaymentAfterPin, setPendingPaymentAfterPin] = useState(false);
-  const forceStaffLogin = false;
+  /* Forced start-of-day staff login — managed in Management → POS Settings.
+     The top-bar StaffLoginButton auto-opens the PIN dialog; this flag also
+     blocks charging until somebody has signed in for the day. */
+  const forceStaffLogin = posSettingsData?.forceStaffLogin === "true";
   const [warningCustomer, setWarningCustomer] = useState<Customer | null>(null);
 
   /* kode */
@@ -368,19 +476,21 @@ export default function POSPage() {
   /* $0 price product */
   const [zeroPricePending, setZeroPricePending] = useState<Product | null>(null);
   const [zeroPriceForm, setZeroPriceForm] = useState({ price: "", note: "" });
+  // Per-product sale notification (set in product Settings) — popped up on add.
+  const [notifyPending, setNotifyPending] = useState<Product | null>(null);
 
   /* service / appointment link */
   const [linkedService, setLinkedService] = useState<ServiceJob | null>(null);
   const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null);
   const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
+  const [linkSearch, setLinkSearch] = useState("");
 
   /* AI upsell coach */
   const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
   const [upsellLoading, setUpsellLoading] = useState(false);
   const [upsellOpen, setUpsellOpen] = useState(false);
 
-  /* staff PIN */
-  const [currentStaff, setCurrentStaff] = useState<Staff | null>(null);
+  /* staff PIN (one-sale switch dialog) */
   const [pinCapsLockOn, setPinCapsLockOn] = useState(false);
   const [approvalCapsLockOn, setApprovalCapsLockOn] = useState(false);
 
@@ -422,19 +532,34 @@ export default function POSPage() {
   const [openDenomCounts, setOpenDenomCounts] = useState<Record<number, string>>({});
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
+
+  /* Device locking — tracks the server-side session ID for the local till and
+     whether another device has an open till for this register. */
+  const [serverSessionId, setServerSessionId] = useState<number | null>(null);
+  const [deviceConflict, setDeviceConflict] = useState<{ openedBy: string; openedAt: string; deviceId: string } | null>(null);
   const [sessionSnap, setSessionSnap] = useState<RegisterSession | null>(null);
 
   const getSession = (): RegisterSession | null => sessionSnap;
 
   const handleOpenRegister = () => {
+    /* Hard per-terminal lock — this register's till is already open on another
+       device, so this machine cannot open a second session for it. */
+    if (deviceConflict) {
+      const who = deviceConflict.openedBy ? ` by ${deviceConflict.openedBy}` : "";
+      toast.error(`This till is already open on another device${who}. Close it there first.`);
+      setOpenRegisterDialogOpen(false);
+      return;
+    }
+    const deviceId = getOrCreateDeviceId();
     const float = openDenomTotal(openDenomCounts);
     const session: RegisterSession = {
       openedAt: new Date().toISOString(),
-      openedBy: currentStaff?.name ?? null,
+      openedBy: dayStaffMember?.name ?? currentStaff?.name ?? null,
       openingFloat: float,
       openingNotes: openNotes,
       sales: {},
       txCount: 0,
+      deviceId,
     };
     setSessionSnap(session);
     saveRegisterSession(session);
@@ -444,6 +569,22 @@ export default function POSPage() {
     setOpenNotes("");
     setCashMovementPrintOpen(true);
     toast.success("Register opened");
+
+    /* Sync to server so other devices can detect this till is in use. */
+    createServerSession.mutate(
+      { data: { registerId: activeRegisterId, openedBy: session.openedBy ?? "", openingFloat: String(float), openingNotes: openNotes, deviceId } },
+      {
+        onSuccess: (row) => {
+          const id = (row as { id?: number })?.id;
+          if (id) {
+            setServerSessionId(id);
+            const updated = { ...session, serverSessionId: id };
+            setSessionSnap(updated);
+            saveRegisterSession(updated);
+          }
+        },
+      }
+    );
   };
 
   const printCashMovement = () => {
@@ -494,20 +635,45 @@ export default function POSPage() {
 
   const handleCloseRegister = () => {
     const session = getSession();
+    const closedAt = new Date().toISOString();
     const zReport = {
       ...(session ?? {}),
-      closedAt: new Date().toISOString(),
+      closedAt,
       cashCounted: parseFloat(closeFormData.cashCounted) || 0,
       eftposDeclared: parseFloat(closeFormData.eftposDeclared) || 0,
       closingNotes: closeFormData.notes,
     };
+    const sid = serverSessionId;
     setRegisterOpen(false);
     clearRegisterSession();
+    setServerSessionId(null);
+    setDeviceConflict(null);
     setCloseRegisterDialogOpen(false);
     setCloseFormData({ cashCounted: "", eftposDeclared: "", notes: "" });
     setLastZReport(zReport as RegisterSession & { closedAt: string; cashCounted: number; eftposDeclared: number; closingNotes: string });
     setEodPrintOpen(true);
-    toast.success("Register closed — Z-report saved");
+
+    /* Close Till ends the day — clear any one-sale override and sign the
+       day's staff member out so tomorrow starts with a fresh PIN login. */
+    setSaleStaff(null);
+    if (dayStaff) {
+      signOutForDay();
+      toast.success(`Register closed — Z-report saved. ${dayStaff.staffName} signed out.`);
+    } else {
+      toast.success("Register closed — Z-report saved");
+    }
+
+    /* Sync close to server so other devices see the till is now free. */
+    if (sid) {
+      updateServerSession.mutate({ id: sid, data: {
+        closedAt,
+        cashCounted: String(zReport.cashCounted),
+        eftposDeclared: String(zReport.eftposDeclared),
+        closingNotes: closeFormData.notes || "",
+        sales: JSON.stringify(session?.sales ?? {}),
+        txCount: session?.txCount ?? 0,
+      }});
+    }
   };
 
   const printEodReport = () => {
@@ -615,12 +781,19 @@ export default function POSPage() {
   const { data: registersData } = useListPosRegisters();
   const activeRegister = (registersData?.items ?? []).find((r) => r.registerId === activeRegisterId);
 
+  /* Server-side session hooks for device locking */
+  const createServerSession = useCreatePosRegisterSession();
+  const updateServerSession = useUpdatePosRegisterSession();
+  const { data: openSessionsData } = useListPosRegisterSessions(
+    { registerId: activeRegisterId },
+    { query: { queryKey: ["pos-open-sessions", activeRegisterId], refetchInterval: 30_000 } }
+  );
+
   const { data: productsData } = useListProducts(
     { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
     { query: { queryKey: ["products", search, effectiveCategoryId] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
-  const { data: productTypesData } = useListProductTypes({ query: { queryKey: ["product-types-pos"] } });
   const { data: pricingRulesData } = useQuery<{ rules: PricingRule[] }>({
     queryKey: ["pricing-rules-pos"],
     queryFn: async () => {
@@ -636,9 +809,27 @@ export default function POSPage() {
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
-  const { data: staffList } = useListStaff({ query: { queryKey: ["staff-pos"] } });
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
+
+  /* Filter the full service-job / appointment lists by the link-dialog search. */
+  const linkQuery = linkSearch.trim().toLowerCase();
+  const filteredServiceJobs = useMemo(() => {
+    const all = (serviceJobs as ServiceJob[] | undefined) ?? [];
+    if (!linkQuery) return all;
+    return all.filter((sj) =>
+      [sj.jobNumber, sj.deviceType, sj.deviceDescription, sj.status, sj.customerName]
+        .some((f) => f?.toString().toLowerCase().includes(linkQuery))
+    );
+  }, [serviceJobs, linkQuery]);
+  const filteredAppointments = useMemo(() => {
+    const all = (appointments as Appointment[] | undefined) ?? [];
+    if (!linkQuery) return all;
+    return all.filter((apt) =>
+      [apt.id, apt.title, apt.customerName, apt.scheduledAt && new Date(apt.scheduledAt).toLocaleString()]
+        .some((f) => f?.toString().toLowerCase().includes(linkQuery))
+    );
+  }, [appointments, linkQuery]);
   const createTransactionMutation      = useCreateTransaction();
   const validateGiftCardMutation       = useValidateGiftCard();
   const recordInvoicePaymentMutation   = useRecordInvoicePayment();
@@ -653,39 +844,14 @@ export default function POSPage() {
   const activeCatId   = categoryPath.length > 0 ? categoryPath[categoryPath.length - 1] : null;
   const subCats       = activeCatId ? getChildren(activeCatId) : [];
 
-  /* Derive unique product type names visible in the current product set.
-     Uses productTypeName from the API response (reflects live type renames). */
-  const visibleTypeNames = useMemo(() => {
-    const names = new Set<string>();
-    for (const p of allProducts) {
-      const ep = p as Product & { productTypeName?: string | null };
-      if (ep.productTypeName) names.add(ep.productTypeName);
-    }
-    const activeTypes = productTypesData?.items ?? [];
-    const ordered: string[] = [];
-    for (const t of activeTypes) {
-      if (names.has(t.name)) ordered.push(t.name);
-    }
-    for (const n of names) {
-      if (!ordered.includes(n)) ordered.push(n);
-    }
-    return ordered;
-  }, [allProducts, productTypesData]);
-
   /* Filter products: favourites mode → client-side filter by pinned IDs.
      When a search is active, always show all products regardless of tab
-     so the cashier can find items without switching tabs first.
-     typeFilter narrows further by productTypeName. */
+     so the cashier can find items without switching tabs first. */
   const products = useMemo(() => {
-    const base = (posTab === "favourites" && !search)
+    return (posTab === "favourites" && !search)
       ? allProducts.filter(p => favouriteIds.has(p.id))
       : allProducts;
-    if (!typeFilter) return base;
-    return base.filter(p => {
-      const ep = p as Product & { productTypeName?: string | null };
-      return ep.productTypeName === typeFilter;
-    });
-  }, [posTab, search, allProducts, favouriteIds, typeFilter]);
+  }, [posTab, search, allProducts, favouriteIds]);
 
   /* All products for barcode lookup (loaded once, unfiltered) */
   const { data: allProductsBarcodeData } = useListProducts(
@@ -708,6 +874,45 @@ export default function POSPage() {
     }) ?? tiers[tiers.length - 1] ?? null;
   }, [loyaltySettings, selectedCustomer]);
 
+  /* ── Customer-group pricing ──────────────────────────────────────────────
+   * When a customer in a pricing group is selected, the register charges that
+   * group's price for each product by default (its product.groupPrices entry),
+   * unless the line has a manual custom price. unitPriceFor is the single source
+   * of truth for a line's unit price — used by every total, receipt and payload.
+   * It reads the current group via a ref so it stays correct inside unmount /
+   * beacon closures; memos that use it list customerGroupId in their deps. */
+  const { settings: customerSettings } = useCustomerSettings();
+  const defaultProductImage = useDefaultProductImage();
+  const customerGroupId = useMemo(
+    () => resolveCustomerGroupId(selectedCustomer?.customerGroup, customerSettings.groups),
+    [selectedCustomer?.customerGroup, customerSettings.groups],
+  );
+  const customerGroupIdRef = useRef<string | null>(null);
+  customerGroupIdRef.current = customerGroupId;
+  // Pricing rules, via a ref so unitPriceFor stays stable but always current.
+  const groupPricingRef = useRef(customerSettings.groupPricing);
+  groupPricingRef.current = customerSettings.groupPricing;
+
+  const unitPriceFor = useCallback((i: CartItem): number => {
+    if (i.customPrice != null) return i.customPrice;
+    const gid = customerGroupIdRef.current;
+    if (gid) {
+      // Stored group price wins; otherwise fall back to the group's rule so the
+      // charged price matches what the product list / margins show.
+      const stored = (i.product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[gid];
+      if (stored != null) return stored;
+      const rule = (groupPricingRef.current ?? []).find((r) => r.groupId === gid);
+      const computed = rule
+        ? computeGroupPrice(
+            { price: i.product.price ?? 0, costPrice: (i.product as Product & { costPrice?: number | null }).costPrice ?? 0, taxRate: i.product.taxRate ?? 10, categoryId: i.product.categoryId ?? null },
+            rule,
+          )
+        : null;
+      if (computed != null) return computed;
+    }
+    return i.product.price ?? 0;
+  }, []);
+
   /* ── Re-evaluate pricing rules on cart items when rules change ── */
   useEffect(() => {
     if (cart.length === 0 || activePricingRules.length === 0) return;
@@ -728,7 +933,7 @@ export default function POSPage() {
     discountTotal, subtotal, taxTotal, total, kodeProfit,
     tierDiscountAmt,
   } = useMemo(() => {
-    const cartSubtotal       = cart.reduce((s, i) => s + (i.customPrice ?? i.product.price) * i.quantity, 0);
+    const cartSubtotal       = cart.reduce((s, i) => s + (unitPriceFor(i)) * i.quantity, 0);
     const modifierTotal      = cart.reduce((s, i) => s + (i.modifiers ?? []).reduce((ms, m) => ms + (m.priceAdjustment ?? 0), 0) * i.quantity, 0);
     const itemDiscountTotal  = cart.reduce((s, i) => s + i.itemDiscount + (i.pricingRuleDiscount ?? 0), 0);
     const overallDiscountAmt = Math.min(Math.max(parseFloat(overallDiscount) || 0, 0), Math.max(cartSubtotal - itemDiscountTotal, 0));
@@ -741,14 +946,14 @@ export default function POSPage() {
     const total              = subtotal;                 // Prices already include GST
     const kodeProfit         = Math.floor(
       cart.reduce((s, i) => {
-        const price = i.customPrice ?? i.product.price;
+        const price = unitPriceFor(i);
         const cost  = (i.product as Product & { costPrice?: number }).costPrice ?? 0;
         const modCost = (i.modifiers ?? []).reduce((ms, m) => ms + (m.priceAdjustment ?? 0), 0);
         return s + (price + modCost - cost) * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0);
       }, 0) - overallDiscountAmt - tierDiscountAmt,
     );
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
-  }, [cart, overallDiscount, customerTier]);
+  }, [cart, overallDiscount, customerTier, customerGroupId]);
 
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
      the locked remaining balance; otherwise it's the cart total. */
@@ -756,7 +961,7 @@ export default function POSPage() {
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
-    (i) => i.quantity < 1 || (i.customPrice ?? i.product.price) < 0,
+    (i) => i.quantity < 1 || (unitPriceFor(i)) < 0,
   );
   const cartBlocksCheckout = !invoicePay && (cart.length === 0 || cartHasInvalidItems || total < 0);
 
@@ -772,7 +977,7 @@ export default function POSPage() {
     /* eligible total after exclusions + discounts */
     const eligible = cart.reduce((s, i) => {
       if (i.product.excludeFromLoyalty) return s;
-      return s + (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount;
+      return s + (unitPriceFor(i)) * i.quantity - i.itemDiscount;
     }, 0) - overallDiscountAmt;
     if (eligible <= 0) return { loyaltyAmount: 0, loyaltyLabel: "", loyaltyUnit: "" };
 
@@ -828,9 +1033,10 @@ export default function POSPage() {
       }
       case "points": {
         const pts = Math.floor(eligible * (loyaltySettings.pointsPerDollar ?? 1));
+        const unitName = loyaltyUnitName(loyaltySettings);
         baseAmount = pts;
-        label = `${pts} pts earned`;
-        unit = "pts";
+        label = `${pts} ${unitName} earned`;
+        unit = unitName;
         break;
       }
       case "tiered": {
@@ -843,7 +1049,11 @@ export default function POSPage() {
         unit = "$";
         break;
       }
-      case "stamp": baseAmount = 1; label = "1 stamp earned"; unit = "stamp"; break;
+      case "stamp": {
+        const unitName = loyaltyUnitName(loyaltySettings);
+        baseAmount = 1; label = `1 ${unitName} earned`; unit = unitName;
+        break;
+      }
       case "custom": {
         const r = loyaltySettings.customValue ?? 0.01;
         baseAmount = eligible * r;
@@ -864,7 +1074,7 @@ export default function POSPage() {
       loyaltyLabel: promoLabel ? `${label} — ${promoLabel}` : label,
       loyaltyUnit: unit,
     };
-  }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt]);
+  }, [cart, loyaltySettings, selectedCustomer, walkIn, overallDiscountAmt, customerGroupId]);
 
   /* Quick cash amounts */
   const quickAmounts = useMemo(() => {
@@ -904,9 +1114,59 @@ export default function POSPage() {
     if (saved) {
       setSessionSnap(saved);
       setRegisterOpen(true);
+      if (saved.serverSessionId) setServerSessionId(saved.serverSessionId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  /* Apply the day staff member's default register to THIS device when they
+     sign in — but never mid-session, so an open till is left untouched. */
+  useEffect(() => {
+    if (!dayStaff?.defaultRegisterType || registerOpen) return;
+    const reg = (registersData?.items ?? []).find(r => String(r.id) === dayStaff.defaultRegisterType);
+    if (!reg?.registerId || reg.registerId === activeRegisterId) return;
+    setActiveRegisterId(reg.registerId);
+    try { localStorage.setItem(ACTIVE_REGISTER_ID_KEY, reg.registerId); } catch { /* ignore */ }
+    toast.info(`Register set to ${reg.name ?? reg.registerId} (${dayStaff.staffName}'s default)`);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayStaff, registersData, registerOpen]);
+
+  /* Show the staff login message once per day login (the sign-in itself now
+     happens in the universal top bar, so it's surfaced here on the POS). */
+  useEffect(() => {
+    if (!dayStaff) return;
+    const msg = getStaffLoginMessage();
+    if (!msg?.enabled || !msg.text.trim()) return;
+    const shownKey = `koapos_login_msg_shown_${dayStaff.staffId}_${dayStaff.loggedInAt}`;
+    try { if (sessionStorage.getItem(shownKey)) return; } catch { /* ignore */ }
+    const merchantId = merchantData?.id ?? 0;
+    const alreadyAcked = msg.requireAck ? hasStaffAcknowledged(merchantId, dayStaff.staffId, msg) : false;
+    if (!alreadyAcked) {
+      setLoginMsg(msg);
+      setMsgAckChecked(false);
+      setLoginMsgOpen(true);
+    }
+    /* Ack-required messages re-show until acknowledged (tracked by
+       hasStaffAcknowledged); informational ones show once per login. */
+    if (!msg.requireAck) {
+      try { sessionStorage.setItem(shownKey, "1"); } catch { /* ignore */ }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [dayStaff, merchantData?.id]);
+
+  /* Detect open sessions on OTHER devices for this register. */
+  useEffect(() => {
+    const myDeviceId = getOrCreateDeviceId();
+    const sessions = (openSessionsData as { items?: Array<{ closedAt?: string | null; deviceId?: string | null; openedBy?: string; openedAt?: string }> })?.items ?? [];
+    const conflict = sessions.find(
+      s => !s.closedAt && s.deviceId && s.deviceId !== myDeviceId
+    );
+    setDeviceConflict(
+      conflict
+        ? { openedBy: conflict.openedBy ?? "", openedAt: conflict.openedAt ?? "", deviceId: conflict.deviceId! }
+        : null
+    );
+  }, [openSessionsData]);
 
   /* Invoice Payment Mode — the invoices page parks the remaining balance +
      linked customer in a module store and navigates here. Take it on mount and
@@ -1112,13 +1372,13 @@ export default function POSPage() {
         productId: i.product.id,
         name: i.product.name ?? "",
         quantity: i.quantity,
-        price: i.customPrice ?? (i.product.price ?? 0),
+        price: unitPriceFor(i),
         itemDiscount: i.itemDiscount ?? 0,
         customPrice: i.customPrice ?? null,
         itemNote: i.itemNote ?? null,
       }));
       const rawTotal = c.reduce((sum, i) => {
-        const price = i.customPrice ?? (i.product.price ?? 0);
+        const price = unitPriceFor(i);
         return sum + price * i.quantity * (1 - (i.itemDiscount ?? 0) / 100);
       }, 0);
       const payload = {
@@ -1290,15 +1550,15 @@ export default function POSPage() {
     const customerName = walkIn
       ? `${walkIn.firstName} ${walkIn.lastName}`.trim()
       : selectedCustomer
-      ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ")
+      ? customerDisplayName(selectedCustomer, "")
       : null;
     const payload = {
       items: cart.map(i => ({
         name: i.product.name,
         qty: i.quantity,
-        unitPrice: i.customPrice ?? i.product.price,
+        unitPrice: unitPriceFor(i),
         itemDiscount: i.itemDiscount,
-        lineTotal: (i.customPrice ?? i.product.price) * i.quantity - i.itemDiscount,
+        lineTotal: (unitPriceFor(i)) * i.quantity - i.itemDiscount,
       })),
       cartSubtotal, discountTotal, subtotal, taxTotal, total,
       tierDiscountAmt: tierDiscountAmt > 0 ? tierDiscountAmt : undefined,
@@ -1312,7 +1572,7 @@ export default function POSPage() {
       localStorage.setItem(DISPLAY_KEY, json);
       window.dispatchEvent(new StorageEvent("storage", { key: DISPLAY_KEY, newValue: json }));
     } catch { /* ignore */ }
-  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier]);
+  }, [cart, total, subtotal, taxTotal, discountTotal, cartSubtotal, loyaltyAmount, loyaltyLabel, loyaltyUnit, selectedCustomer, walkIn, tierDiscountAmt, customerTier, customerGroupId]);
 
   /* AI Upsell Coach — refresh suggestions when cart items or customer changes */
   useEffect(() => {
@@ -1392,7 +1652,8 @@ export default function POSPage() {
     const q = customerSearch.toLowerCase();
     return (customers).filter(c => {
       const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-      return !q || name.includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
+      const company = (c.company ?? "").toLowerCase();
+      return !q || name.includes(q) || company.includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
     });
   }, [customers, customerSearch]);
 
@@ -1456,6 +1717,10 @@ export default function POSPage() {
       };
       return [...prev, newItem];
     });
+    // Surface the product's sale notification, if any, once it's in the cart.
+    if ((product as Product & { notification?: string | null }).notification?.trim()) {
+      setNotifyPending(product);
+    }
   };
 
   const fetchModifiersAndShow = async (product: Product) => {
@@ -1531,8 +1796,12 @@ export default function POSPage() {
       if (existing) return prev.map(i => i.product.id === zeroPricePending!.id ? { ...i, quantity: i.quantity + 1, customPrice: price, itemNote: zeroPriceForm.note || i.itemNote } : i);
       return [...prev, { product: zeroPricePending!, quantity: 1, itemDiscount: 0, customPrice: price, itemNote: zeroPriceForm.note || undefined }];
     });
+    const justAdded = zeroPricePending;
     setZeroPricePending(null);
     setFormTouched(false);
+    if ((justAdded as Product & { notification?: string | null }).notification?.trim()) {
+      setNotifyPending(justAdded);
+    }
   };
 
   const updateQuantity = (productId: number, delta: number) => {
@@ -1546,7 +1815,7 @@ export default function POSPage() {
             productId: item.product.id,
             productName: item.product.name,
             quantity: item.quantity,
-            unitPrice: item.customPrice ?? item.product.price,
+            unitPrice: unitPriceFor(item),
             action: "void",
             staffId: currentStaff?.id ?? null,
             staffName: currentStaff?.name ?? null,
@@ -1561,7 +1830,7 @@ export default function POSPage() {
     const amt = parseFloat(value) || 0;
     setCart(prev => prev.map(i => {
       if (i.product.id !== productId) return i;
-      const linePrice = (i.customPrice ?? i.product.price) * i.quantity;
+      const linePrice = (unitPriceFor(i)) * i.quantity;
       const maxByCart = linePrice;
       const maxByRole = (!bypassRoleLimit && maxDiscountPct != null) ? (maxDiscountPct / 100) * linePrice : Infinity;
       const clamped = Math.min(Math.max(0, amt), maxByCart, maxByRole);
@@ -1586,13 +1855,13 @@ export default function POSPage() {
     const customerLabel = walkIn
       ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
       : selectedCustomer
-        ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+        ? customerDisplayName(selectedCustomer, "Customer")
         : undefined;
     const items = cart.map(i => ({
       productId: i.product.id,
       name: i.product.name ?? "",
       quantity: i.quantity,
-      price: i.customPrice ?? (i.product.price ?? 0),
+      price: unitPriceFor(i),
       itemDiscount: i.itemDiscount,
       customPrice: i.customPrice ?? null,
       itemNote: i.itemNote ?? null,
@@ -1614,6 +1883,7 @@ export default function POSPage() {
       setCart([]); setOverallDiscount(""); setSaleNotes("");
       setSelectedCustomer(null); setWalkIn(null);
       setDiscountExcessAmount(0);
+      setSaleStaff(null); /* parked — revert any one-sale staff switch */
       toast.success("Sale parked");
     } catch {
       toast.error("Failed to park sale");
@@ -1637,13 +1907,13 @@ export default function POSPage() {
         const currentLabel = walkIn
           ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
           : selectedCustomer
-            ? `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim() || "Customer"
+            ? customerDisplayName(selectedCustomer, "Customer")
             : undefined;
         const currentItems = cart.map(i => ({
           productId: i.product.id,
           name: i.product.name ?? "",
           quantity: i.quantity,
-          price: i.customPrice ?? (i.product.price ?? 0),
+          price: unitPriceFor(i),
           itemDiscount: i.itemDiscount,
           customPrice: i.customPrice ?? null,
           itemNote: i.itemNote ?? null,
@@ -1735,6 +2005,14 @@ export default function POSPage() {
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
     idempotencyKeyRef.current = null;
     setDiscountExcessAmount(0);
+    /* Sale is over — clear any payment-entry state so the navigation guard
+       doesn't keep reporting "Payment in progress" after a completed sale. */
+    setNumpadInput("");
+    setGcPayCardNumber("");
+    setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
+    paymentModalInitialMethodRef.current = null;
+    /* Sale is over — any one-sale staff switch reverts to the day's staff. */
+    setSaleStaff(null);
   };
 
   const printPosReceipt = async () => {
@@ -1782,11 +2060,14 @@ export default function POSPage() {
     const pmLabel   = completedPaymentMethod.toUpperCase();
 
     const itemRows = completedCart.map((i) => {
-      const price     = i.customPrice ?? i.product.price;
+      const price     = unitPriceFor(i);
       const lineTotal = price * i.quantity;
       const rawName   = i.itemNote ? `${i.product.name} (${i.itemNote})` : i.product.name;
       const name      = esc(rawName);
-      return { name, qty: i.quantity, lineTotal };
+      const wd        = (i.product as { warrantyDuration?: number }).warrantyDuration ?? 0;
+      const warranty  = wd > 0 ? esc(warrantyLabel(wd, (i.product as { warrantyUnit?: string }).warrantyUnit)) : "";
+      const serials   = (i.serials ?? []).filter(Boolean);
+      return { name, qty: i.quantity, lineTotal, warranty, serials };
     });
 
     let body = "";
@@ -1805,7 +2086,7 @@ export default function POSPage() {
         <table>
           <thead><tr><th class="left">Item</th><th class="tcenter">Qty</th><th class="right">Amt</th></tr></thead>
           <tbody>
-            ${itemRows.map((i) => `<tr><td>${i.name}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
+            ${itemRows.map((i) => `<tr><td>${i.name}${i.warranty ? `<div class="gray" style="font-size:10px">🛡 ${i.warranty}</div>` : ""}${i.serials.length ? `<div class="gray" style="font-size:10px">S/N: ${esc(i.serials.join(", "))}</div>` : ""}</td><td class="tcenter">${i.qty}</td><td class="right">$${i.lineTotal.toFixed(2)}</td></tr>`).join("")}
           </tbody>
         </table>
         <div class="bdr-t pt small">
@@ -1867,13 +2148,14 @@ export default function POSPage() {
     const customerForReceipt = completedCustomer;
     const earnedAmt   = completedLoyaltyAmount;
     const earnedUnit  = completedLoyaltyUnit;
+    /* earnedUnit is "$" for dollar-value programs, otherwise the merchant's
+       configured unit name (e.g. "Points", "Stamps"). */
     const earnedDisplay =
-      earnedUnit === "$"     ? `+${formatCurrency(earnedAmt)}` :
-      earnedUnit === "pts"   ? `+${Math.round(earnedAmt)} pts` :
-      earnedUnit === "stamp" ? `+${Math.round(earnedAmt)} stamp${earnedAmt === 1 ? "" : "s"}` :
+      earnedUnit === "$" ? `+${formatCurrency(earnedAmt)}` :
+      earnedUnit        ? `+${Math.round(earnedAmt)} ${earnedUnit}` :
       `+${earnedAmt}`;
     const loyaltyHtml = (opts.showLoyaltyEarned && customerForReceipt && earnedAmt > 0)
-      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ Loyalty Earned</span><span>${earnedDisplay}</span></div>`
+      ? `<div class="row" style="background:#ecfdf5;color:#065f46;border-radius:4px;padding:4px 8px;margin:4px 0;font-weight:600"><span>★ ${esc(loyaltyProgramName(loyaltySettings))} Earned</span><span>${earnedDisplay}</span></div>`
       : "";
 
     /* Generate actual scannable QR code image (same as invoice template) */
@@ -1972,36 +2254,61 @@ export default function POSPage() {
     setSelectedCustomer(null); setWalkInDialogOpen(false); setWalkInForm({ firstName: "", lastName: "" }); setFormTouched(false);
   };
 
-  const handlePinSubmit = () => {
-    const staff = (staffList as Staff[] ?? []).find(s => s.pin && s.pin === pinInput && s.isActive);
-    if (!staff) { setPinError("Incorrect PIN. Try again."); setPinInput(""); return; }
-    setCurrentStaff(staff);
-    /* staff no longer persisted to localStorage */
-    setPinDialogOpen(false); setPinInput(""); setPinError("");
-    toast.success(`Signed in as ${staff.name}`);
-
-    /* staff login message */
-    const msg = getStaffLoginMessage();
-    if (msg?.enabled && msg.text.trim()) {
-      const merchantId = merchantData?.id ?? 0;
-      const alreadyAcked = msg.requireAck ? hasStaffAcknowledged(merchantId, staff.id, msg) : false;
-      if (!alreadyAcked) {
-        setLoginMsg(msg);
-        setMsgAckChecked(false);
-        setLoginMsgOpen(true);
+  /* One-sale staff switch — the POS staff button stamps a different staff
+     member on the CURRENT sale only; the moment the sale finishes (completed,
+     parked, or cleared) the terminal reverts to the day's signed-in staff.
+     PINs are verified server-side — raw PINs never reach the browser. */
+  const handlePinSubmit = async () => {
+    if (!pinInput || verifyPinMutation.isPending) return;
+    let staff: Staff;
+    try {
+      const res = await verifyPinMutation.mutateAsync({ data: { pin: pinInput } });
+      if (!res.ok || !res.staff) {
+        setPinError(res.reason === "rate_limited"
+          ? "Too many attempts — wait a minute and try again."
+          : "Incorrect PIN. Try again.");
+        setPinInput("");
+        return;
       }
+      staff = res.staff;
+    } catch {
+      setPinError("Couldn't verify PIN — check your connection and try again.");
+      return;
     }
-
-    if (pendingPaymentAfterPin) { setPendingPaymentAfterPin(false); setPaymentModalOpen(true); }
+    setPinDialogOpen(false); setPinInput(""); setPinError("");
+    if (dayStaffMember && staff.id === dayStaffMember.id) {
+      /* The day's staff member entered their own PIN — just drop any override. */
+      setSaleStaff(null);
+      toast.success(`Back to ${staff.name}`);
+      return;
+    }
+    setSaleStaff(staff);
+    toast.success(
+      dayStaffMember
+        ? `${staff.name} — this sale only, then back to ${dayStaffMember.name}`
+        : `${staff.name} — this sale only`,
+    );
   };
 
   const handleDiscountApprovalSubmit = async () => {
-    const authoriser = (staffList as Staff[] ?? []).find(
-      s => s.pin && s.pin === approvalPin && s.isActive && (s.role === "manager" || s.role === "owner"),
-    );
-    if (!authoriser) {
-      setApprovalPinError("Incorrect PIN or staff not authorised to approve discounts.");
-      setApprovalPin("");
+    if (!approvalPin || verifyPinMutation.isPending) return;
+    let authoriser: Staff;
+    try {
+      const res = await verifyPinMutation.mutateAsync({ data: { pin: approvalPin, requireManager: true } });
+      if (!res.ok || !res.staff) {
+        setApprovalPinError(
+          res.reason === "role"
+            ? "That staff member is not authorised to approve discounts."
+            : res.reason === "rate_limited"
+              ? "Too many attempts — wait a minute and try again."
+              : "Incorrect PIN. Try again.",
+        );
+        setApprovalPin("");
+        return;
+      }
+      authoriser = res.staff;
+    } catch {
+      setApprovalPinError("Couldn't verify PIN — check your connection and try again.");
       return;
     }
     if (!pendingApproval) return;
@@ -2063,12 +2370,21 @@ export default function POSPage() {
       if (invoicePayPending) return;
       const inv = invoicePay;
       const amount = inv.balance;
+      // When settling via split, send structured legs so each method is recorded
+      // and reported separately (gift cards use the single-payment path).
+      const invoiceSplitLegs = paymentMethod === "split"
+        ? splitLegs
+            .map(l => ({ method: l.method as string, amount: parseFloat(l.amount) || 0 }))
+            .filter(l => l.amount > 0)
+        : [];
       setInvoicePayPending(true);
       void (async () => {
         try {
           await recordInvoicePaymentMutation.mutateAsync({
             id: inv.invoiceId,
-            data: { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
+            data: invoiceSplitLegs.length > 0 && !giftCardPayment
+              ? { amount, payments: invoiceSplitLegs, idempotencyKey }
+              : { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
           });
           idempotencyKeyRef.current = null;
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
@@ -2084,7 +2400,7 @@ export default function POSPage() {
           setCompletedTaxTotal(0);
           setCompletedCustomer(
             inv.customerId != null
-              ? ({ id: inv.customerId, firstName: inv.customerName ?? "Customer", lastName: "" } as Customer)
+              ? ({ id: inv.customerId, firstName: inv.customerName ?? "Customer", lastName: "", email: inv.customerEmail ?? "", phone: inv.customerPhone ?? "" } as Customer)
               : null,
           );
           setCompletedLoyaltyAmount(0);
@@ -2100,16 +2416,23 @@ export default function POSPage() {
             items: [{ productId: inv.invoiceId, productName: `Invoice ${inv.invoiceNumber} Payment`, quantity: 1, unitPrice: amount, totalPrice: amount }],
             createdAt: new Date().toISOString(),
             customer: inv.customerId != null
-              ? { id: inv.customerId, merchantId: merchantData?.id ?? 0, firstName: inv.customerName ?? "Customer", lastName: "" } as Customer
+              ? { id: inv.customerId, merchantId: merchantData?.id ?? 0, firstName: inv.customerName ?? "Customer", lastName: "", email: inv.customerEmail ?? "", phone: inv.customerPhone ?? "" } as Customer
               : undefined,
           } as Transaction);
           setCompletedTotal(amount);
-          setReceiptEmail("");
-          setReceiptPhone("");
+          /* Prefill from the invoiced customer so Email / SMS receipt works
+             without retyping (mirrors the cart-sale path below). */
+          setReceiptEmail(inv.customerEmail ?? "");
+          setReceiptPhone(inv.customerPhone ?? "");
           setReceiptMode("idle");
           setInvoicePay(null);
           setNumpadInput("");
           setPaymentModalOpen(false);
+          setSaleStaff(null); /* payment done — revert any one-sale staff switch */
+          /* A paid invoice counts toward revenue KPIs — refresh every KPI /
+             dashboard surface so the numbers move immediately. */
+          invalidateSalesKpiQueries(queryClient);
+          queryClient.invalidateQueries({ queryKey: ["/api/invoices"] });
           toast.success(`Payment recorded for invoice ${inv.invoiceNumber} via ${methodLabel}`);
           setTimeout(() => setReceiptOpen(true), 250);
         } catch {
@@ -2120,6 +2443,30 @@ export default function POSPage() {
       })();
       return;
     }
+
+    // Warranty products require a serial number per unit. If any warranty line is
+    // missing serials, open the serial-collection prompt and abort this attempt;
+    // the modal re-runs handleCheckout once serials are entered.
+    const needSerials = cart.filter((i) => {
+      const wd = (i.product as { warrantyDuration?: number }).warrantyDuration ?? 0;
+      return wd > 0 && (i.serials?.filter(Boolean).length ?? 0) < i.quantity;
+    });
+    if (needSerials.length > 0) {
+      const init: Record<number, string[]> = {};
+      for (const i of needSerials) {
+        init[i.product.id] = Array.from({ length: i.quantity }, (_, k) => i.serials?.[k] ?? "");
+      }
+      setSerialInputs(init);
+      setSerialAvail({});
+      setSerialPrompt({ method: paymentMethod, amountTendered, extraNote, giftCardPayment });
+      needSerials.forEach((i) => {
+        void customFetch<{ items: Array<{ serial: string }> }>(`/api/products/${i.product.id}/serials`, { method: "GET" })
+          .then((r) => setSerialAvail((prev) => ({ ...prev, [i.product.id]: (r.items ?? []).map((x) => x.serial) })))
+          .catch(() => {});
+      });
+      return;
+    }
+
     // Distribute cart-level (overall) and tier discounts proportionally across
     // all items so the server's recomputed total matches the client total.
     // Without this, the server ignores the overall discount and rejects with 409.
@@ -2128,7 +2475,7 @@ export default function POSPage() {
     let _allocated = 0;
     const txItems = cart.map((i, idx) => {
       const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
-      const lineGross = (i.customPrice ?? i.product.price) * i.quantity;
+      const lineGross = (unitPriceFor(i)) * i.quantity;
       const lineAfterItemDisc = Math.max(0, lineGross + modAdj * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
       let proportional: number;
       if (idx === cart.length - 1) {
@@ -2149,12 +2496,13 @@ export default function POSPage() {
         productId: i.giftCardNumber ? 0 : i.product.id,
         productName: i.product.name,
         quantity: i.quantity,
-        unitPrice: i.customPrice ?? i.product.price,
+        unitPrice: unitPriceFor(i),
         totalPrice: lineTotal,
         taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
         discount: totalDiscount > 0 ? totalDiscount : undefined,
         ...(i.modifiers?.length ? { modifiers: i.modifiers.map(m => m.id) } : {}),
         ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
+        ...(i.serials?.length ? { serials: i.serials } : {}),
       };
     });
     const notesParts = [
@@ -2195,6 +2543,8 @@ export default function POSPage() {
     }, {
       onSuccess: (data) => {
         idempotencyKeyRef.current = null;
+        /* Completed sales drive the KPI / dashboard numbers — refresh them. */
+        invalidateSalesKpiQueries(queryClient);
         // Track session sales by payment method (in-memory only)
         try {
           if (sessionSnap) {
@@ -2270,18 +2620,36 @@ export default function POSPage() {
       },
     });
   };
+  // Keep a ref to the latest handleCheckout closure so the serial modal can
+  // resume the sale after cart serials are applied (next render).
+  latestCheckout.current = handleCheckout;
+
+  const confirmSerials = () => {
+    for (const arr of Object.values(serialInputs)) {
+      if (arr.some((s) => !s.trim())) { toast.error("Enter a serial number for every warranty unit"); return; }
+    }
+    const all = Object.values(serialInputs).flat().map((s) => s.trim());
+    if (new Set(all).size !== all.length) { toast.error("Serial numbers must be unique"); return; }
+    setCart((prev) => prev.map((i) =>
+      serialInputs[i.product.id] ? { ...i, serials: serialInputs[i.product.id].map((s) => s.trim()) } : i,
+    ));
+    const args = serialPrompt;
+    setSerialPrompt(null);
+    // Resume on the next tick so handleCheckout sees the updated cart.
+    setTimeout(() => { if (args) latestCheckout.current?.(args.method, args.amountTendered, args.extraNote, args.giftCardPayment); }, 0);
+  };
 
   const activeCustomerName = walkIn
     ? `${walkIn.firstName} ${walkIn.lastName}`.trim()
     : selectedCustomer
-    ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Customer"
+    ? customerDisplayName(selectedCustomer, "Customer")
     : null;
 
   /* ── Render ── */
   return (
     <AppLayout hideSidebar>
       <POSPageExpander>
-      <div className="flex w-full overflow-hidden" style={{ height: "calc(100dvh - 3.5rem)" }}>
+      <div className={cn("flex w-full overflow-hidden", posLayout.cartPosition === "left" && "flex-row-reverse")} style={{ height: "calc(100dvh - 3.5rem)" }}>
 
         {/* ─── Product browser ─── */}
         <div className="flex-1 flex flex-col min-w-0 bg-background">
@@ -2291,6 +2659,12 @@ export default function POSPage() {
               {!isOnline
                 ? `Offline — ${pendingCount} sale${pendingCount !== 1 ? "s" : ""} queued`
                 : `Syncing ${pendingCount} queued sale${pendingCount !== 1 ? "s" : ""}…`}
+            </div>
+          )}
+          {deviceConflict && !registerOpen && (
+            <div className="flex items-center gap-2 px-3 py-1.5 text-xs font-medium bg-orange-500 text-white">
+              <MonitorX className="w-3 h-3 shrink-0" />
+              Till is open on another device{deviceConflict.openedBy ? ` (${deviceConflict.openedBy})` : ""}. Close it there before opening a new session on this device.
             </div>
           )}
           <div className="p-3 border-b space-y-3">
@@ -2311,8 +2685,8 @@ export default function POSPage() {
                 onClick={() => { setTempItemOpen(true); setTempItemForm({ name: "", price: "", cost: "" }); }}
                 title="Add a one-off custom item to the cart"
               >
-                <Package className="w-4 h-4" />
-                <span className="hidden sm:inline">Custom</span>
+                {pbShowIcon && <Package className="w-4 h-4" />}
+                {pbShowText && <span>Custom</span>}
               </Button>
               <Button
                 variant="outline"
@@ -2321,8 +2695,8 @@ export default function POSPage() {
                 onClick={() => { setGcIssueForm({ cardNumber: "", amount: "" }); setGcIssueOpen(true); }}
                 title="Sell a new gift card"
               >
-                <Gift className="w-4 h-4" />
-                <span className="hidden sm:inline">Gift Card</span>
+                {pbShowIcon && <Gift className="w-4 h-4" />}
+                {pbShowText && <span>Gift Card</span>}
               </Button>
             </div>
             <ScrollArea className="w-full whitespace-nowrap">
@@ -2364,15 +2738,23 @@ export default function POSPage() {
                     {categoryPath.slice(0, -1).map((catId, idx) => {
                       const cat = categories.find(c => c.id === catId);
                       return cat ? (
-                        <Button key={catId} variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0"
-                          onClick={() => setCategoryPath(prev => prev.slice(0, idx + 1))}
-                        >{cat.name}</Button>
+                        <Fragment key={catId}>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                          <Button variant="outline" size="sm" className="rounded-full h-7 text-xs shrink-0"
+                            onClick={() => setCategoryPath(prev => prev.slice(0, idx + 1))}
+                          >{cat.name}</Button>
+                        </Fragment>
                       ) : null;
                     })}
                     {/* Current category (selected) */}
                     {(() => {
                       const cur = categories.find(c => c.id === categoryPath[categoryPath.length - 1]);
-                      return cur ? <Button variant="default" size="sm" className="rounded-full h-7 text-xs shrink-0">{cur.name}</Button> : null;
+                      return cur ? (
+                        <>
+                          <ChevronRight className="w-3 h-3 text-muted-foreground/60 shrink-0" />
+                          <Button variant="default" size="sm" className="rounded-full h-7 text-xs shrink-0">{cur.name}</Button>
+                        </>
+                      ) : null;
                     })()}
                     {/* Children of current category */}
                     {subCats.map(child => (
@@ -2386,33 +2768,12 @@ export default function POSPage() {
             </ScrollArea>
           </div>
 
-          {/* ─ Type filter row — only rendered when there are multiple types ─ */}
-          {visibleTypeNames.length > 1 && (
-            <div className="px-3 pb-2 border-b">
-              <ScrollArea className="w-full whitespace-nowrap">
-                <div className="flex w-max space-x-1.5 pt-2">
-                  <Button
-                    variant={typeFilter === null ? "secondary" : "ghost"}
-                    size="sm"
-                    className="rounded-full h-6 text-[11px] px-2.5 shrink-0"
-                    onClick={() => setTypeFilter(null)}
-                  >All types</Button>
-                  {visibleTypeNames.map(name => (
-                    <Button
-                      key={name}
-                      variant={typeFilter === name ? "secondary" : "ghost"}
-                      size="sm"
-                      className="rounded-full h-6 text-[11px] px-2.5 shrink-0"
-                      onClick={() => setTypeFilter(prev => prev === name ? null : name)}
-                    >{name}</Button>
-                  ))}
-                </div>
-              </ScrollArea>
-            </div>
-          )}
 
           <ScrollArea className="flex-1 p-3">
-            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 2xl:grid-cols-6 gap-3">
+            <div
+              className="grid gap-3"
+              style={{ gridTemplateColumns: responsiveGridColumns(TILE_MIN_WIDTH[posLayout.tileSize], posLayout.columns) }}
+            >
               {products.map(product => (
                 <div
                   key={product.id}
@@ -2422,13 +2783,18 @@ export default function POSPage() {
                   onKeyDown={(e) => e.key === "Enter" && fetchModifiersAndShow(product)}
                   className="group flex flex-col text-left border rounded-xl overflow-hidden hover:border-primary focus:outline-none focus:ring-2 focus:ring-primary focus:ring-offset-2 transition-all active:scale-[0.97] bg-card hover:shadow-md cursor-pointer"
                 >
-                  <div className="w-full h-[150px] bg-muted flex items-center justify-center relative overflow-hidden">
-                    {product.imageUrl
-                      ? <img src={product.imageUrl} alt={product.name} className="w-full h-full object-contain" />
-                      : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>
-                    }
-                    {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && (
+                  <div className={cn("w-full bg-muted flex items-center justify-center relative overflow-hidden", TILE_SIZE_CLASSES[posLayout.tileSize].image)}>
+                    {(() => {
+                      const imgSrc = productImageSrc(product.imageUrl, defaultProductImage);
+                      return imgSrc
+                        ? <img src={imgSrc} alt={product.name} className="w-full h-full object-contain" />
+                        : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
+                    })()}
+                    {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
+                    )}
+                    {posLayout.showStockBadges && product.trackInventory && product.stockQuantity != null && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
+                      <Badge variant="secondary" className="absolute bottom-1.5 right-1.5 text-[10px] px-1 py-0 tabular-nums">{product.stockQuantity}</Badge>
                     )}
                     {/* Pin to Favourites */}
                     <button
@@ -2444,14 +2810,31 @@ export default function POSPage() {
                     >
                       <Star className={cn("w-3 h-3", favouriteIds.has(product.id) && "fill-current")} />
                     </button>
+                    {/* Quick view — inspect without adding to the sale */}
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setQuickViewProduct(product); }}
+                      title="Quick view"
+                      className={cn(
+                        "absolute top-1.5 w-6 h-6 rounded-full flex items-center justify-center transition-all",
+                        "opacity-0 group-hover:opacity-100 bg-black/30 text-white hover:bg-primary",
+                        // Sit left of the "Low" badge when it's present so they don't overlap.
+                        (product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? ""))
+                          ? "right-9"
+                          : "right-1.5",
+                      )}
+                    >
+                      <Eye className="w-3 h-3" />
+                    </button>
                   </div>
-                  <div className="p-2.5">
-                    <p className="font-semibold text-xs line-clamp-2 leading-snug min-h-[2rem]">{product.name}</p>
-                    <p className="font-bold text-primary text-sm mt-1">
-                      {(product.price ?? 0) === 0
-                        ? <span className="text-muted-foreground text-[11px] font-normal">Enter price</span>
-                        : formatCurrency(product.price)}
-                    </p>
+                  <div className={TILE_SIZE_CLASSES[posLayout.tileSize].body}>
+                    <p className={cn("font-semibold line-clamp-2 leading-snug", TILE_SIZE_CLASSES[posLayout.tileSize].name)}>{product.name}</p>
+                    {posLayout.showPrices && (
+                      <p className={cn("font-bold text-primary mt-1", TILE_SIZE_CLASSES[posLayout.tileSize].price)}>
+                        {(product.price ?? 0) === 0
+                          ? <span className="text-muted-foreground text-[11px] font-normal">Enter price</span>
+                          : formatCurrency(product.price)}
+                      </p>
+                    )}
                   </div>
                 </div>
               ))}
@@ -2473,7 +2856,7 @@ export default function POSPage() {
         </div>
 
         {/* ─── Cart sidebar ─── */}
-        <div className="w-[22rem] border-l bg-card flex flex-col shrink-0 overflow-x-hidden">
+        <div className={cn("w-[22rem] bg-card flex flex-col shrink-0 overflow-x-hidden", posLayout.cartPosition === "left" ? "border-r" : "border-l")}>
 
           {/* Header */}
           <div className="h-12 flex items-center justify-between px-3 border-b shrink-0 gap-2">
@@ -2482,10 +2865,21 @@ export default function POSPage() {
                 <ShoppingCart className="w-4 h-4" /> Current Sale
               </h2>
               {currentStaff && (
-                <span className="text-[10px] text-primary ml-6 leading-none mt-0.5">{currentStaff.name}</span>
+                <span className={cn("text-[10px] ml-6 leading-none mt-0.5", saleStaff ? "text-amber-600 dark:text-amber-400 font-semibold" : "text-primary")}>
+                  {currentStaff.name}{saleStaff ? " · this sale" : ""}
+                </span>
               )}
             </div>
             <div className="flex items-center gap-0.5 shrink-0 ml-auto">
+              {/* One-sale staff switch */}
+              <button
+                onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
+                title={saleStaff ? `This sale: ${saleStaff.name}` : "Switch staff for this sale"}
+                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", saleStaff ? "text-amber-500" : currentStaff && "text-primary")}
+              >
+                <User className="w-4 h-4" />
+              </button>
+              {/* Till */}
               <button
                 onClick={() => {
                   if (registerOpen) {
@@ -2501,10 +2895,7 @@ export default function POSPage() {
               >
                 {registerOpen ? <DoorOpen className="w-4 h-4" /> : <DoorClosed className="w-4 h-4" />}
               </button>
-              <PosWebcamCapture
-                enabled={activeRegister?.posCameraEnabled === "true"}
-                deviceId={activeRegister?.posCameraDeviceId}
-              />
+              {/* Customer Facing Screen */}
               <button
                 onClick={() => window.open("/customer-display", "_blank")}
                 title="Open customer-facing display"
@@ -2512,13 +2903,10 @@ export default function POSPage() {
               >
                 <Monitor className="w-4 h-4" />
               </button>
-              <button
-                onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(true); }}
-                title={currentStaff ? `Staff: ${currentStaff.name}` : "Staff PIN"}
-                className={cn("p-1.5 rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors", currentStaff && "text-primary")}
-              >
-                <User className="w-4 h-4" />
-              </button>
+              <PosWebcamCapture
+                enabled={activeRegister?.posCameraEnabled === "true"}
+                deviceId={activeRegister?.posCameraDeviceId}
+              />
               {/* Parked sales badge */}
               {parkedSalesData.length > 0 && (
                 <button
@@ -2537,9 +2925,6 @@ export default function POSPage() {
                   </span>
                 </button>
               )}
-              <Button variant="ghost" size="icon" className="w-8 h-8 shrink-0" onClick={() => { if (saleNotes.trim()) { setClearCartConfirmOpen(true); } else { clearCart(); } }} disabled={cart.length === 0} title="Clear cart">
-                <Trash2 className="w-4 h-4 text-destructive" />
-              </Button>
             </div>
           </div>
 
@@ -2608,40 +2993,55 @@ export default function POSPage() {
                   <button onClick={() => { setSelectedCustomer(null); setWalkIn(null); }} className="text-muted-foreground hover:text-foreground shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <>
-                  <button
-                    onClick={() => setCustomerOpen(o => !o)}
-                    className={cn(
-                      "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
-                      customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
-                    )}
-                  >
-                    <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
-                    <Search className="w-3 h-3 text-muted-foreground shrink-0" />
-                  </button>
-                  <button
-                    onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
-                    className="p-1.5 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0"
-                    title="Walk-in customer"
-                  >
-                    <Footprints className="w-3.5 h-3.5" />
-                  </button>
-                </>
+                <button
+                  onClick={() => setCustomerOpen(o => !o)}
+                  className={cn(
+                    "flex-1 flex items-center justify-between text-[11px] border rounded-lg px-2.5 py-1.5 transition-colors bg-background hover:bg-muted/30",
+                    customerOpen ? "border-primary text-foreground" : "border-dashed text-muted-foreground hover:border-primary hover:text-foreground"
+                  )}
+                >
+                  <span className="flex items-center gap-1.5"><UserSearch className="w-3.5 h-3.5 shrink-0" /> Add Customer</span>
+                  <Search className="w-3 h-3 text-muted-foreground shrink-0" />
+                </button>
               )}
-              {/* Link and Notes — always visible */}
+              {/* Walk In — only when no customer selected */}
+              {!activeCustomerName && (
+                <button
+                  onClick={() => { setWalkInForm({ firstName: "", lastName: "" }); setWalkInDialogOpen(true); }}
+                  className={cn("flex items-center gap-1 text-muted-foreground hover:text-amber-500 border border-dashed rounded-lg transition-colors hover:border-amber-400 shrink-0", pbPadding)}
+                  title="Walk-in customer"
+                >
+                  {pbShowIcon && <Footprints className="w-3.5 h-3.5" />}
+                  {pbShowText && <span className="text-xs">Walk-in</span>}
+                </button>
+              )}
+              {/* Link */}
               <button
                 onClick={() => setServiceLinkOpen(true)}
                 title="Link to service or appointment"
-                className={cn("p-1.5 border rounded-lg transition-colors shrink-0", (linkedService || linkedAppointment) ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
+                className={cn("flex items-center gap-1 border rounded-lg transition-colors shrink-0", pbPadding, (linkedService || linkedAppointment) ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
               >
-                <LinkIcon className="w-3.5 h-3.5" />
+                {pbShowIcon && <LinkIcon className="w-3.5 h-3.5" />}
+                {pbShowText && <span className="text-xs">Link</span>}
               </button>
+              {/* Notes */}
               <button
                 onClick={() => setNotesOpen(true)}
-                className={cn("p-1.5 border rounded-lg transition-colors shrink-0", notesOpen || saleNotes ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
+                className={cn("flex items-center gap-1 border rounded-lg transition-colors shrink-0", pbPadding, notesOpen || saleNotes ? "text-primary border-primary" : "border-dashed text-muted-foreground hover:text-foreground hover:border-foreground")}
                 title="Sale notes"
               >
-                <NotebookPen className="w-3.5 h-3.5" />
+                {pbShowIcon && <NotebookPen className="w-3.5 h-3.5" />}
+                {pbShowText && <span className="text-xs">Notes</span>}
+              </button>
+              {/* Clear Cart */}
+              <button
+                onClick={() => { if (saleNotes.trim()) { setClearCartConfirmOpen(true); } else { clearCart(); } }}
+                disabled={cart.length === 0}
+                title="Clear cart"
+                className={cn("flex items-center gap-1 border border-dashed rounded-lg transition-colors shrink-0 text-muted-foreground hover:text-destructive hover:border-destructive disabled:opacity-30 disabled:cursor-not-allowed", pbPadding)}
+              >
+                {pbShowIcon && <Trash2 className="w-3.5 h-3.5" />}
+                {pbShowText && <span className="text-xs">Clear</span>}
               </button>
             </div>
             {/* Inline customer dropdown */}
@@ -2672,8 +3072,8 @@ export default function POSPage() {
                     </div>
                   ) : (
                     filteredCustomers.map(c => {
-                      const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
-                      const initials = ((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")).toUpperCase() || "?";
+                      const name = customerDisplayName(c);
+                      const initials = (((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")) || c.company?.[0] || "?").toUpperCase();
                       return (
                         <button
                           key={c.id}
@@ -2759,18 +3159,18 @@ export default function POSPage() {
               <div className="p-2.5 space-y-1.5 w-full overflow-x-hidden">
                 {cart.map((item) => {
                   const modAdj = (item.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
-                  const linePrice = (item.customPrice ?? item.product.price) * item.quantity;
+                  const linePrice = (unitPriceFor(item)) * item.quantity;
                   const lineTotal = linePrice + modAdj * item.quantity - item.itemDiscount - (item.pricingRuleDiscount ?? 0);
                   const discExpanded = expandedDiscounts.has(item.product.id);
                   const isInvalidItem =
-                    item.quantity < 1 || (item.customPrice ?? item.product.price) < 0;
+                    item.quantity < 1 || (unitPriceFor(item)) < 0;
                   return (
                     <div key={item.product.id} className={cn("border rounded-xl overflow-hidden bg-background", isInvalidItem && "border-destructive border-l-[3px]")}>
                       <div className="flex items-center gap-2 px-2.5 py-2">
                         <div className="flex-1 min-w-0">
                           <p className="font-medium text-xs leading-snug truncate">{item.product.name}</p>
                           <p className="text-muted-foreground text-[11px]">
-                            {formatCurrency(item.customPrice ?? item.product.price)}
+                            {formatCurrency(unitPriceFor(item))}
                             {item.itemNote && <span className="ml-1 italic text-muted-foreground/60">· {item.itemNote}</span>}
                             {item.pricingRuleLabel && <span className="ml-1 text-[10px] font-medium text-emerald-600 dark:text-emerald-400">· {item.pricingRuleLabel}</span>}
                           </p>
@@ -3128,8 +3528,8 @@ export default function POSPage() {
                 onClick={parkSale}
                 title="Park this sale and start a new one"
               >
-                <PauseCircle className="w-4 h-4" />
-                Park
+                {pbShowIcon && <PauseCircle className="w-4 h-4" />}
+                {pbShowText && <span>Park</span>}
               </Button>
               <Button
                 className="flex-1 h-12 text-base font-bold"
@@ -3140,8 +3540,8 @@ export default function POSPage() {
                     return;
                   }
                   if (forceStaffLogin && !currentStaff) {
-                    setPendingPaymentAfterPin(true);
-                    setPinInput(""); setPinError(""); setPinDialogOpen(true);
+                    toast.error("Sign in for the day before charging a sale.");
+                    window.dispatchEvent(new CustomEvent("koapos:open-day-staff-login"));
                     return;
                   }
                   setPaymentModalOpen(true);
@@ -3610,7 +4010,7 @@ export default function POSPage() {
                   if (payMethod === "laybuy") {
                     toast.info("Laybuy uses its own ledger — opening the Laybuys module.");
                     setPaymentModalOpen(false);
-                    setLocation("/pos/laybuys");
+                    setLocation("/pos/laybys");
                     return;
                   }
                   if (payMethod === "split") {
@@ -3715,21 +4115,25 @@ export default function POSPage() {
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => { setReceiptMode("print"); }}
               >
-                <Printer className="w-4 h-4" /> Print Receipt
+                {pbShowIcon && <Printer className="w-4 h-4" />}
+                {/* Completion actions always show their label, even in icon-only mode. */}
+                <span>Print Receipt</span>
               </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => { setReceiptMode("email"); }}
               >
-                <Mail className="w-4 h-4" /> Email Receipt
+                {pbShowIcon && <Mail className="w-4 h-4" />}
+                <span>Email Receipt</span>
               </Button>
               <Button
                 variant="outline"
                 className="w-full justify-start gap-3 h-11"
                 onClick={() => { setReceiptMode("sms"); }}
               >
-                <MessageSquare className="w-4 h-4" /> SMS Receipt
+                {pbShowIcon && <MessageSquare className="w-4 h-4" />}
+                <span>SMS Receipt</span>
               </Button>
             </div>
           )}
@@ -3744,7 +4148,8 @@ export default function POSPage() {
                   printPosReceipt();
                 }}
               >
-                <Printer className="w-4 h-4" /> Thermal Receipt (80mm)
+                {pbShowIcon && <Printer className="w-4 h-4" />}
+                <span>Thermal Receipt (80mm)</span>
               </Button>
               <Button
                 variant="outline"
@@ -3755,7 +4160,8 @@ export default function POSPage() {
                   }
                 }}
               >
-                <FileText className="w-4 h-4" /> A4 Receipt
+                {pbShowIcon && <FileText className="w-4 h-4" />}
+                <span>A4 Receipt</span>
               </Button>
               <div className="flex gap-2 pt-1">
                 <Button variant="outline" className="flex-1" onClick={() => setReceiptMode("idle")}>Back</Button>
@@ -3867,7 +4273,7 @@ export default function POSPage() {
         <DialogContent className="sm:max-w-sm">
           <DialogHeader><DialogTitle className="flex items-center gap-2 text-destructive"><AlertTriangle className="w-5 h-5" /> Customer Warning</DialogTitle></DialogHeader>
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4 space-y-2">
-            <p className="font-semibold text-sm">{warningCustomer ? [warningCustomer.firstName, warningCustomer.lastName].filter(Boolean).join(" ") : ""}</p>
+            <p className="font-semibold text-sm">{warningCustomer ? customerDisplayName(warningCustomer, "") : ""}</p>
             <p className="text-sm text-destructive">{warningCustomer?.warningNote}</p>
           </div>
           <p className="text-sm text-muted-foreground">Please review this warning before proceeding with the sale.</p>
@@ -3894,17 +4300,100 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Product sale notification (configured in product Settings) ── */}
+      <Dialog open={!!notifyPending} onOpenChange={o => { if (!o) setNotifyPending(null); }}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-amber-500" /> {notifyPending?.name}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="rounded-lg border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 p-4">
+            <p className="text-sm whitespace-pre-wrap break-words">
+              {(notifyPending as (Product & { notification?: string | null }) | null)?.notification}
+            </p>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => setNotifyPending(null)} autoFocus>Got it</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Product quick view (inspect without adding to the sale) ─── */}
+      <Dialog open={!!quickViewProduct} onOpenChange={o => { if (!o) setQuickViewProduct(null); }}>
+        <DialogContent className="sm:max-w-md">
+          {quickViewProduct && (() => {
+            const p = quickViewProduct;
+            const typeName = (p as Product & { productTypeName?: string | null }).productTypeName ?? "";
+            const stockEligible = p.trackInventory && p.stockQuantity != null && !["Service", "Digital", "Digital Code"].includes(typeName);
+            const isLow = stockEligible && (p.stockQuantity ?? 0) <= (p.lowStockThreshold || 5);
+            const imgSrc = productImageSrc(p.imageUrl, defaultProductImage);
+            const tags = Array.isArray(p.tags) ? p.tags : [];
+            return (
+              <>
+                <DialogHeader><DialogTitle className="pr-6">{p.name}</DialogTitle></DialogHeader>
+                <div className="flex gap-4">
+                  <div className="w-28 h-28 shrink-0 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
+                    {imgSrc
+                      ? <img src={imgSrc} alt={p.name} className="w-full h-full object-contain" />
+                      : <span className="text-4xl font-bold text-muted-foreground/20">{p.name.charAt(0)}</span>}
+                  </div>
+                  <div className="flex-1 min-w-0 space-y-1.5">
+                    <p className="text-xl font-bold text-primary">
+                      {(p.price ?? 0) === 0 ? <span className="text-sm text-muted-foreground font-normal">No price set</span> : formatCurrency(p.price)}
+                    </p>
+                    <div className="flex flex-wrap gap-1">
+                      {typeName && <Badge variant="secondary" className="text-[10px]">{typeName}</Badge>}
+                      {stockEligible && (
+                        <Badge variant={isLow ? "destructive" : "outline"} className="text-[10px] tabular-nums">
+                          {p.stockQuantity} in stock{isLow ? " · Low" : ""}
+                        </Badge>
+                      )}
+                    </div>
+                    <dl className="text-xs text-muted-foreground space-y-0.5 pt-1">
+                      {p.sku && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">SKU</dt><dd className="truncate">{p.sku}</dd></div>}
+                      {p.barcode && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Barcode</dt><dd className="truncate">{p.barcode}</dd></div>}
+                      {p.supplier && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Supplier</dt><dd className="truncate">{p.supplier}</dd></div>}
+                    </dl>
+                  </div>
+                </div>
+                {p.description && <p className="text-sm text-muted-foreground whitespace-pre-wrap line-clamp-4">{p.description}</p>}
+                {tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1">
+                    {tags.map(t => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
+                  </div>
+                )}
+                <DialogFooter>
+                  <Button variant="outline" onClick={() => setQuickViewProduct(null)}>Close</Button>
+                  <Button onClick={() => { setQuickViewProduct(null); fetchModifiersAndShow(p); }}>Add to sale</Button>
+                </DialogFooter>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* ─── Service / Appointment link ─── */}
-      <Dialog open={serviceLinkOpen} onOpenChange={setServiceLinkOpen}>
+      <Dialog open={serviceLinkOpen} onOpenChange={(open) => { setServiceLinkOpen(open); if (!open) setLinkSearch(""); }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader><DialogTitle className="flex items-center gap-2"><LinkIcon className="w-4 h-4" /> Link to Service or Appointment</DialogTitle></DialogHeader>
           <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                autoFocus
+                placeholder="Search services and appointments..."
+                value={linkSearch}
+                onChange={(e) => setLinkSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
               <ScrollArea className="max-h-44 border rounded-lg">
-                {(serviceJobs as ServiceJob[] ?? []).length === 0
-                  ? <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
-                  : <div className="divide-y">{(serviceJobs as ServiceJob[] ?? []).slice(0, 15).map(sj => (
+                {filteredServiceJobs.length === 0
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No service jobs match your search." : "No service jobs found."}</div>
+                  : <div className="divide-y">{filteredServiceJobs.map(sj => (
                       <button key={sj.id} onClick={() => { setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false); }}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
                         <LinkIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -3920,9 +4409,9 @@ export default function POSPage() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
               <ScrollArea className="max-h-44 border rounded-lg">
-                {(appointments as Appointment[] ?? []).length === 0
-                  ? <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
-                  : <div className="divide-y">{(appointments as Appointment[] ?? []).slice(0, 15).map(apt => (
+                {filteredAppointments.length === 0
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No appointments match your search." : "No appointments found."}</div>
+                  : <div className="divide-y">{filteredAppointments.map(apt => (
                       <button key={apt.id} onClick={() => { setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false); }}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedAppointment?.id === apt.id && "bg-primary/10 text-primary")}>
                         <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -4000,11 +4489,68 @@ export default function POSPage() {
         prefillName={customerSearch}
       />
 
-      {/* ─── Staff PIN dialog ─── */}
+      {/* ─── Warranty serial-number collection ─── */}
+      <Dialog open={!!serialPrompt} onOpenChange={(o) => { if (!o) setSerialPrompt(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial Numbers Required</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">These warranty items need a serial number per unit. Pick an in-stock serial or type one in.</p>
+          <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
+            {Object.entries(serialInputs).map(([pidStr, arr]) => {
+              const pid = Number(pidStr);
+              const line = cart.find((i) => i.product.id === pid);
+              const avail = serialAvail[pid] ?? [];
+              return (
+                <div key={pid} className="border rounded-lg p-3 space-y-2">
+                  <p className="font-medium text-sm">{line?.product.name ?? `Product ${pid}`}</p>
+                  {arr.map((val, k) => {
+                    const usedElsewhere = new Set(arr.filter((_, j) => j !== k).map((s) => s.trim()).filter(Boolean));
+                    const options = avail.filter((s) => !usedElsewhere.has(s));
+                    return (
+                      <div key={k} className="flex items-center gap-2">
+                        <span className="text-xs text-muted-foreground w-10 shrink-0">#{k + 1}</span>
+                        <Input
+                          list={`serials-${pid}`}
+                          value={val}
+                          onChange={(e) => setSerialInputs((prev) => {
+                            const next = { ...prev, [pid]: [...prev[pid]] };
+                            next[pid][k] = e.target.value;
+                            return next;
+                          })}
+                          placeholder="Serial number"
+                          className="h-8 font-mono text-sm"
+                        />
+                        <datalist id={`serials-${pid}`}>
+                          {options.map((s) => <option key={s} value={s} />)}
+                        </datalist>
+                      </div>
+                    );
+                  })}
+                  <p className="text-[11px] text-muted-foreground">
+                    {avail.length > 0 ? `${avail.length} in stock — start typing to pick one.` : "No serials in stock for this item; enter one to record it."}
+                  </p>
+                </div>
+              );
+            })}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setSerialPrompt(null)}>Cancel</Button>
+            <Button onClick={confirmSerials}>Confirm &amp; Complete Sale</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── One-sale staff switch dialog ─── */}
       <Dialog open={pinDialogOpen} onOpenChange={o => { if (!o) { setPinInput(""); setPinError(""); setPinCapsLockOn(false); setPinDialogOpen(false); } }}>
         <DialogContent className="sm:max-w-xs">
-          <DialogHeader><DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Staff Login</DialogTitle></DialogHeader>
-          {currentStaff && <p className="text-sm text-muted-foreground text-center">Currently: <span className="font-semibold text-foreground">{currentStaff.name}</span></p>}
+          <DialogHeader><DialogTitle className="flex items-center gap-2"><Lock className="w-4 h-4" /> Switch Staff — This Sale Only</DialogTitle></DialogHeader>
+          <p className="text-sm text-muted-foreground text-center">
+            {dayStaffMember
+              ? <>The next sale is recorded under whoever enters their PIN, then the terminal reverts to <span className="font-semibold text-foreground">{dayStaffMember.name}</span>.</>
+              : <>The next sale is recorded under whoever enters their PIN. Use the staff button in the top bar to sign in for the whole day.</>}
+          </p>
+          {saleStaff && <p className="text-sm text-amber-600 dark:text-amber-400 text-center">This sale: <span className="font-semibold">{saleStaff.name}</span></p>}
           <div className="space-y-3">
             <div>
               <Label className="text-xs">Enter PIN</Label>
@@ -4029,7 +4575,7 @@ export default function POSPage() {
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={() => { setPinInput(""); setPinError(""); setPinDialogOpen(false); }}>Cancel</Button>
-            <Button onClick={handlePinSubmit} disabled={!pinInput}>Sign In</Button>
+            <Button onClick={handlePinSubmit} disabled={!pinInput}>Switch</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -4129,8 +4675,8 @@ export default function POSPage() {
                   toast.error("Please tick the acknowledgment box to continue.");
                   return;
                 }
-                if (loginMsg && currentStaff && merchantData) {
-                  setStaffAcknowledged(merchantData.id, currentStaff.id, loginMsg);
+                if (loginMsg && dayStaffMember && merchantData) {
+                  setStaffAcknowledged(merchantData.id, dayStaffMember.id, loginMsg);
                 }
                 setLoginMsgOpen(false);
                 setMsgAckChecked(false);
@@ -4159,7 +4705,7 @@ export default function POSPage() {
               </div>
               <div className="flex justify-between text-muted-foreground">
                 <span>Staff</span>
-                <span className="font-medium text-foreground">{currentStaff?.name ?? "— not signed in —"}</span>
+                <span className="font-medium text-foreground">{dayStaffMember?.name ?? "— not signed in —"}</span>
               </div>
             </div>
 
@@ -4234,8 +4780,14 @@ export default function POSPage() {
             </div>
           </div>
           <DialogFooter>
+            {deviceConflict && (
+              <p className="text-xs text-destructive flex items-center gap-1.5 mr-auto">
+                <MonitorX className="w-3.5 h-3.5 shrink-0" />
+                Till already open on another device{deviceConflict.openedBy ? ` (${deviceConflict.openedBy})` : ""}.
+              </p>
+            )}
             <Button variant="outline" onClick={() => setOpenRegisterDialogOpen(false)}>Cancel</Button>
-            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleOpenRegister}>
+            <Button className="bg-green-600 hover:bg-green-700 text-white" onClick={handleOpenRegister} disabled={!!deviceConflict}>
               <DoorOpen className="w-4 h-4 mr-1.5" /> Open Register
             </Button>
           </DialogFooter>

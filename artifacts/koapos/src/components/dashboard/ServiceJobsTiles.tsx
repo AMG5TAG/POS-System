@@ -1,7 +1,6 @@
-import { useListServiceJobs, useListCustomers, useListAppointments, ServiceJob } from "@workspace/api-client-react";
-import { useGetDashboardSummary } from "@workspace/api-client-react";
+import { useListServiceJobs, useListAppointments, useGetDashboardSummary, useGetDashboardKpi, type ServiceJob } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Truck, Users2, Receipt, Clock } from "lucide-react";
+import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Truck, Receipt, Clock, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -18,12 +17,13 @@ function statusLabel(status: string): string {
   switch (status) {
     case "pending": return "Pending";
     case "in-progress": return "In Progress";
+    case "awaiting-parts": return "Awaiting Parts";
+    case "awaiting-stock": return "Awaiting Stock";
     case "at-repairer": return "At Repairer";
     case "awaiting-partner-approval": return "Awaiting Partner Approval";
-    case "awaiting-stock": return "Awaiting Stock";
+    case "partner-replacement": return "Partner Replacement";
     case "awaiting-customer": return "Awaiting Customer";
     case "completed": return "Completed";
-    case "partner-replacement": return "Partner Replacement";
     case "cancelled": return "Cancelled";
     default: return status.charAt(0).toUpperCase() + status.slice(1);
   }
@@ -33,12 +33,13 @@ function statusColor(status: string) {
   switch (status) {
     case "pending": return "bg-yellow-100 text-yellow-700 border-yellow-200";
     case "in-progress": return "bg-blue-100 text-blue-700 border-blue-200";
+    case "awaiting-parts": return "bg-rose-100 text-rose-700 border-rose-200";
+    case "awaiting-stock": return "bg-purple-100 text-purple-700 border-purple-200";
     case "at-repairer": return "bg-yellow-50 text-yellow-700 border-yellow-300";
     case "awaiting-partner-approval": return "bg-indigo-100 text-indigo-700 border-indigo-200";
-    case "awaiting-stock": return "bg-purple-100 text-purple-700 border-purple-200";
+    case "partner-replacement": return "bg-teal-100 text-teal-700 border-teal-200";
     case "awaiting-customer": return "bg-orange-100 text-orange-700 border-orange-200";
     case "completed": return "bg-emerald-100 text-emerald-700 border-emerald-200";
-    case "partner-replacement": return "bg-teal-100 text-teal-700 border-teal-200";
     case "cancelled": return "bg-gray-100 text-gray-500 border-gray-200";
     default: return "bg-muted text-muted-foreground border-border";
   }
@@ -87,7 +88,7 @@ function MetricTile({ icon, value, label, iconColor, valueColor, sub, href }: Me
   return (
     <Wrapper
       onClick={clickable ? () => {
-        if (href === "/online/delivery-orders") {
+        if (href === "/online/deliveries") {
           sessionStorage.setItem("koapos_deliveries_preselect", "new");
         }
         navigate(href);
@@ -137,7 +138,98 @@ function OverdueBanner({ jobs }: { jobs: ServiceJob[] }) {
   );
 }
 
-// ─── Main export ─────────────────────────────────────────────────────────────
+/* ── KPI Dashboard Tile ──────────────────────────────────────────────────── */
+
+type KpiMeta = { label: string; isCurrency: boolean; isInverse?: boolean };
+const KPI_META: Record<string, KpiMeta> = {
+  revenue:               { label: "Revenue",          isCurrency: true  },
+  transactions:          { label: "Transactions",     isCurrency: false },
+  avg_transaction:       { label: "Avg Transaction",  isCurrency: true  },
+  items_per_transaction: { label: "Items / Txn",      isCurrency: false },
+  new_customers:         { label: "New Customers",    isCurrency: false },
+  loyalty_signups:       { label: "Loyalty Signups",  isCurrency: false },
+  category_revenue:      { label: "Category Revenue", isCurrency: true  },
+  appointments:          { label: "Appointments",     isCurrency: false },
+  services:              { label: "Services",         isCurrency: false },
+  refund_rate:           { label: "Refund Rate",      isCurrency: false, isInverse: true },
+  gross_margin:          { label: "Gross Margin",     isCurrency: false },
+  upsell_rate:           { label: "Upsell Rate",      isCurrency: false },
+  net_profit:            { label: "Net Profit",       isCurrency: true  },
+};
+
+function formatKpiValue(metric: string, value: number): string {
+  const m = KPI_META[metric];
+  if (!m) return String(value);
+  if (m.isCurrency) return formatCurrency(value);
+  if (metric === "refund_rate" || metric === "gross_margin" || metric === "upsell_rate") return `${value}%`;
+  return value.toLocaleString("en-AU");
+}
+
+function KpiDashboardTile({ href }: { href?: string }) {
+  const { data: result } = useGetDashboardKpi({ query: { queryKey: ["dashboard-kpi"], staleTime: 60_000, refetchInterval: 120_000 } });
+  const [, navigate] = useLocation();
+
+  if (!result?.kpi) {
+    return (
+      <div
+        onClick={() => navigate("/management/marketing-reports/kpis-targets")}
+        className="rounded-2xl border border-dashed bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
+      >
+        <Target className="w-5 h-5 text-muted-foreground/50" />
+        <span className="text-xs text-muted-foreground text-center leading-snug">No KPI set<br /><span className="text-primary">Set up</span></span>
+      </div>
+    );
+  }
+
+  const { kpi, actual } = result;
+  const meta = KPI_META[kpi.metric] ?? { label: kpi.name, isCurrency: false };
+  const target = kpi.target;
+  const pctRaw = actual !== null && target > 0 ? (actual / target) * 100 : null;
+  const pct = pctRaw !== null ? Math.min(pctRaw, 100) : null;
+
+  // For inverse metrics (refund_rate), lower actual = better
+  const isInverse = meta.isInverse ?? false;
+  const effectivePct = pct !== null ? (isInverse ? 100 - pct : pct) : null;
+
+  const statusColor = effectivePct === null
+    ? { bg: "bg-card", border: "border", value: "text-foreground", badge: "", bar: "bg-muted-foreground/40" }
+    : effectivePct >= 100
+    ? { bg: "bg-green-50 dark:bg-green-950/30", border: "border-green-200 dark:border-green-800", value: "text-green-700 dark:text-green-400", badge: "bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300", bar: "bg-green-500" }
+    : effectivePct >= 70
+    ? { bg: "bg-yellow-50 dark:bg-yellow-950/30", border: "border-yellow-200 dark:border-yellow-800", value: "text-yellow-700 dark:text-yellow-400", badge: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900/50 dark:text-yellow-300", bar: "bg-yellow-500" }
+    : { bg: "bg-red-50 dark:bg-red-950/30", border: "border-red-200 dark:border-red-800", value: "text-red-700 dark:text-red-400", badge: "bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300", bar: "bg-red-500" };
+
+  return (
+    <div
+      onClick={() => navigate(href ?? "/management/marketing-reports/kpis-targets")}
+      className={cn("rounded-2xl border p-4 flex flex-col gap-1.5 min-h-[100px] w-full cursor-pointer hover:shadow-sm transition-all", statusColor.bg, statusColor.border)}
+    >
+      <div className="flex items-center justify-between gap-1">
+        <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground truncate">{kpi.name}</span>
+        <Target className={cn("w-3.5 h-3.5 shrink-0", statusColor.value)} />
+      </div>
+      <span className={cn("text-2xl font-bold tabular-nums leading-none", statusColor.value)}>
+        {actual !== null ? formatKpiValue(kpi.metric, actual) : "—"}
+      </span>
+      <span className="text-[10px] text-muted-foreground">
+        Target: {formatKpiValue(kpi.metric, target)}
+      </span>
+      {/* Progress bar */}
+      {pct !== null && (
+        <div className="mt-auto pt-1">
+          <div className="h-1 rounded-full bg-black/10 dark:bg-white/10 overflow-hidden">
+            <div className={cn("h-full rounded-full transition-all", statusColor.bar)} style={{ width: `${Math.min(pct, 100)}%` }} />
+          </div>
+          <span className={cn("text-[10px] font-medium mt-0.5 block", statusColor.value)}>
+            {Math.round(isInverse ? 100 - pct : pct)}% of target
+          </span>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* ── Main export ────────────────────────────────────────────────────────────── */
 
 export function ServiceJobsTiles({
   showStatusTiles = true,
@@ -149,7 +241,6 @@ export function ServiceJobsTiles({
   showOverdueBanner?: boolean;
 }) {
   const { data: jobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-dash"] } });
-  const { data: customersData } = useListCustomers({ limit: 1 }, { query: { queryKey: ["customers-dash"] } });
   const { data: appointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appts-dash"] } });
   const { data: todaySummary } = useGetDashboardSummary({ period: "today" }, { query: { queryKey: ["dashboard-summary-today"] } });
 
@@ -159,7 +250,6 @@ export function ServiceJobsTiles({
   const awaitingCustomer = jobs.filter((j) => (j.status as string) === "awaiting-customer").length;
   const pending = jobs.filter((j) => (j.status as string) === "pending").length;
   const critical = jobs.filter((j) => j.isCritical).length;
-  const totalCustomers = customersData?.total ?? 0;
 
   const now = new Date();
   const upcomingAppts = (appointmentsData ?? []).filter(
@@ -241,15 +331,9 @@ export function ServiceJobsTiles({
             label="Pending Deliveries"
             iconColor="text-teal-500"
             valueColor="text-foreground"
-            href="/online/delivery-orders"
+            href="/online/deliveries"
           />
-          <MetricTile
-            icon={<Users2 className="w-5 h-5" />}
-            value={totalCustomers}
-            label="Total Customers"
-            iconColor="text-emerald-500"
-            valueColor="text-foreground"
-          />
+          <KpiDashboardTile />
           <MetricTile
             icon={<Clock className="w-5 h-5" />}
             value={formatCurrency(todaySales)}

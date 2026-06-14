@@ -5,6 +5,151 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+export interface SmsTemplate {
+  id: number;
+  merchantId: number;
+  templateId: string;
+  name: string;
+  category: string;
+  body: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SmsTemplateInput {
+  templateId: string;
+  name: string;
+  category?: string;
+  body?: string;
+}
+
+export interface SmsTemplateListResponse {
+  items: SmsTemplate[];
+  total: number;
+}
+
+export interface SmsCampaign {
+  id: number;
+  merchantId: number;
+  campaignId: string;
+  name: string;
+  audience: string;
+  audienceLabel: string;
+  body: string;
+  linkUrl: string;
+  scheduled: string;
+  scheduledAt: string;
+  status: string;
+  sentAt: string;
+  delivered: number;
+  failed: number;
+  recipientCount: number;
+  customerId?: number | null;
+  createdAt: string;
+}
+
+export interface SmsCampaignInput {
+  campaignId: string;
+  name: string;
+  audience?: string;
+  audienceLabel?: string;
+  body?: string;
+  linkUrl?: string;
+  scheduled?: string;
+  scheduledAt?: string;
+  status?: string;
+  sentAt?: string;
+  delivered?: number;
+  failed?: number;
+  recipientCount?: number;
+  customerId?: number;
+}
+
+export interface SmsCampaignListResponse {
+  items: SmsCampaign[];
+  total: number;
+}
+
+export interface StaffTimesheetEntry {
+  id: number;
+  staffId: number;
+  staffName: string;
+  date: string;
+  clockIn: string;
+  clockOut: string | null;
+  note: string | null;
+  createdAt: string;
+}
+
+export interface StaffTimesheetList {
+  items: StaffTimesheetEntry[];
+}
+
+export interface CreateStaffTimesheetInput {
+  staffId: number;
+  staffName: string;
+  date: string;
+  clockIn: string;
+  clockOut?: string | null;
+}
+
+export interface StaffClockStatus {
+  staffId: number;
+  staffName: string;
+  clockedIn: boolean;
+  openEntryId: number | null;
+  clockInTime: string | null;
+}
+
+export interface ClockInInput {
+  pin: string;
+}
+
+export interface ClockOutInput {
+  pin: string;
+}
+
+export interface PaymentTotalsResult {[key: string]: {
+  total: number;
+  txCount: number;
+}}
+
+export interface KpiTarget {
+  id: number;
+  merchantId: number;
+  targetId: string;
+  name: string;
+  metric: string;
+  categoryId?: string;
+  period: string;
+  target: number;
+  staffIds: string;
+  reward?: string;
+  notes: string;
+  startDate?: string | null;
+  endDate?: string | null;
+  isActive: string;
+  showOnDashboard?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardKpiResult {
+  kpi: KpiTarget;
+  actual: number | null;
+}
+
+export interface KpiProgress {
+  id: number;
+  targetId: string;
+  actual: number | null;
+}
+
+export interface KpiProgressResponse {
+  items: KpiProgress[];
+  total: number;
+}
+
 export type BackupLocationsItem = {
   type: string;
   ref: string;
@@ -37,6 +182,7 @@ export const BackupStorageDestinationType = {
   s3: 's3',
   gcs: 'gcs',
   sftp: 'sftp',
+  onedrive: 'onedrive',
 } as const;
 
 export interface BackupStorageDestination {
@@ -55,6 +201,7 @@ export interface BackupStorageDestination {
   username?: string | null;
   remotePath?: string | null;
   passwordSet?: boolean;
+  folder?: string | null;
 }
 
 export type BackupConfigFrequency = typeof BackupConfigFrequency[keyof typeof BackupConfigFrequency];
@@ -82,6 +229,7 @@ export const BackupStorageDestinationInputType = {
   s3: 's3',
   gcs: 'gcs',
   sftp: 'sftp',
+  onedrive: 'onedrive',
 } as const;
 
 export interface BackupStorageDestinationInput {
@@ -100,6 +248,7 @@ export interface BackupStorageDestinationInput {
   username?: string;
   remotePath?: string;
   password?: string;
+  folder?: string;
 }
 
 export type BackupConfigInputFrequency = typeof BackupConfigInputFrequency[keyof typeof BackupConfigInputFrequency];
@@ -245,6 +394,9 @@ export interface Merchant {
   passwordChangeAlertEmail?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
+  emailVerified?: boolean;
+  onboardingCompleted?: boolean;
+  isDemoAccount?: boolean;
 }
 
 export interface MerchantUpdate {
@@ -429,12 +581,15 @@ export interface Product {
   /** @nullable */
   supplierCode?: string | null;
   isEpay?: boolean;
+  isRefurbished?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   /** @nullable */
   stockLocation?: string | null;
   /** @nullable */
   overflowLocation?: string | null;
+  /** @nullable */
+  notification?: string | null;
   /** @nullable */
   digitalCodesCount?: number | null;
   createdAt: string;
@@ -498,6 +653,7 @@ export interface ProductInput {
   isEpay?: boolean;
   /** @maxItems 5 */
   tags?: string[];
+  notification?: string;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -532,6 +688,8 @@ export interface ProductUpdate {
   tags?: string[];
   stockLocation?: string;
   overflowLocation?: string;
+  /** @nullable */
+  notification?: string | null;
 }
 
 export interface ProductList {
@@ -893,11 +1051,19 @@ export interface Staff {
   /** @nullable */
   postalAddress?: string | null;
   role: StaffRole;
-  /** @nullable */
+  /**
+     * Masked in responses ("****" when a PIN is set, null otherwise) — raw PINs are never returned.
+     * @nullable
+     */
   pin?: string | null;
   isActive: boolean;
   /** @nullable */
   defaultRegisterType?: string | null;
+  /**
+     * JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).
+     * @nullable
+     */
+  posPrefs?: string | null;
   /** @nullable */
   payRate?: string | null;
   /** @nullable */
@@ -931,6 +1097,7 @@ export interface StaffInput {
   role: StaffInputRole;
   pin?: string;
   defaultRegisterType?: string;
+  posPrefs?: string;
   payRate?: string;
   loadingRate?: string;
   superRate?: string;
@@ -960,9 +1127,38 @@ export interface StaffUpdate {
   pin?: string;
   isActive?: boolean;
   defaultRegisterType?: string;
+  posPrefs?: string;
   payRate?: string;
   loadingRate?: string;
   superRate?: string;
+}
+
+export interface VerifyStaffPinBody {
+  /** @minLength 1 */
+  pin: string;
+  /** When true, only manager/owner staff PINs are accepted (e.g. discount approvals). */
+  requireManager?: boolean;
+  /** When true, a successful verification records the matched staff as the day-staff on the server session (req.session.staffId), so server-side attribution (daily closes, stock takes, customer merges) credits the verified staff member. Only the day-login PIN flow sets this; per-sale switches and approval prompts leave it unset. */
+  establishDaySession?: boolean;
+}
+
+/**
+ * Present when ok is false.
+ */
+export type VerifyStaffPinResponseReason = typeof VerifyStaffPinResponseReason[keyof typeof VerifyStaffPinResponseReason];
+
+
+export const VerifyStaffPinResponseReason = {
+  invalid: 'invalid',
+  role: 'role',
+  rate_limited: 'rate_limited',
+} as const;
+
+export interface VerifyStaffPinResponse {
+  ok: boolean;
+  /** Present when ok is false. */
+  reason?: VerifyStaffPinResponseReason;
+  staff?: Staff;
 }
 
 export interface StaffSalesReportRow {
@@ -1097,6 +1293,10 @@ export interface CalendarAppointment {
   /** @nullable */
   customerName?: string | null;
   /** @nullable */
+  customerPhone?: string | null;
+  /** @nullable */
+  customerAddress?: string | null;
+  /** @nullable */
   notes?: string | null;
 }
 
@@ -1134,11 +1334,25 @@ export type ServiceJobStatus = typeof ServiceJobStatus[keyof typeof ServiceJobSt
 export const ServiceJobStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
-  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'awaiting-parts': 'awaiting-parts',
   'awaiting-stock': 'awaiting-stock',
+  'at-repairer': 'at-repairer',
+  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
   cancelled: 'cancelled',
+} as const;
+
+/**
+ * @nullable
+ */
+export type ServiceJobEstimateApprovedVia = typeof ServiceJobEstimateApprovedVia[keyof typeof ServiceJobEstimateApprovedVia] | null;
+
+
+export const ServiceJobEstimateApprovedVia = {
+  portal: 'portal',
+  'in-store': 'in-store',
 } as const;
 
 export interface ServiceJob {
@@ -1183,10 +1397,42 @@ export interface ServiceJob {
   photos?: string[];
   /** @nullable */
   estimatedCost?: number | null;
+  repairWarrantyDays?: number;
+  /** @nullable */
+  completedAt?: string | null;
+  /** @nullable */
+  reworkOfJobId?: number | null;
+  /** @nullable */
+  estimateApprovedAt?: string | null;
+  /** @nullable */
+  estimateApprovedVia?: ServiceJobEstimateApprovedVia;
+  /** @nullable */
+  depositRequired?: number | null;
+  depositPaid?: number;
+  isMailIn?: boolean;
+  /** @nullable */
+  shippingCarrier?: string | null;
+  /** @nullable */
+  inboundTracking?: string | null;
+  /** @nullable */
+  returnTracking?: string | null;
+  /** @nullable */
+  returnAddress?: string | null;
   /** @nullable */
   notes?: string | null;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface ServiceJobDepositInput {
+  amount: number;
+  method?: string | null;
+}
+
+export interface ServiceJobDepositResult {
+  /** @nullable */
+  depositRequired?: number | null;
+  depositPaid: number;
 }
 
 export type ServiceJobInputStatus = typeof ServiceJobInputStatus[keyof typeof ServiceJobInputStatus];
@@ -1195,8 +1441,11 @@ export type ServiceJobInputStatus = typeof ServiceJobInputStatus[keyof typeof Se
 export const ServiceJobInputStatus = {
   pending: 'pending',
   'in-progress': 'in-progress',
-  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'awaiting-parts': 'awaiting-parts',
   'awaiting-stock': 'awaiting-stock',
+  'at-repairer': 'at-repairer',
+  'awaiting-partner-approval': 'awaiting-partner-approval',
+  'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
   completed: 'completed',
   cancelled: 'cancelled',
@@ -1235,6 +1484,16 @@ export interface ServiceJobInput {
   photos?: string[];
   /** @nullable */
   estimatedCost?: number | null;
+  repairWarrantyDays?: number;
+  isMailIn?: boolean;
+  /** @nullable */
+  shippingCarrier?: string | null;
+  /** @nullable */
+  inboundTracking?: string | null;
+  /** @nullable */
+  returnTracking?: string | null;
+  /** @nullable */
+  returnAddress?: string | null;
   /** @nullable */
   notes?: string | null;
   /** @nullable */
@@ -1243,6 +1502,554 @@ export interface ServiceJobInput {
   heardFromDetails?: string | null;
   /** @nullable */
   referredByCustomerId?: number | null;
+}
+
+export type ServiceJobLineKind = typeof ServiceJobLineKind[keyof typeof ServiceJobLineKind];
+
+
+export const ServiceJobLineKind = {
+  part: 'part',
+  labour: 'labour',
+  misc: 'misc',
+} as const;
+
+export interface ServiceJobLine {
+  id: number;
+  serviceJobId: number;
+  kind: ServiceJobLineKind;
+  /** @nullable */
+  productId?: number | null;
+  description: string;
+  quantity: number;
+  unitPrice: number;
+  unitCost: number;
+  taxRate: number;
+  lineTotal: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ServiceJobLineInputKind = typeof ServiceJobLineInputKind[keyof typeof ServiceJobLineInputKind];
+
+
+export const ServiceJobLineInputKind = {
+  part: 'part',
+  labour: 'labour',
+  misc: 'misc',
+} as const;
+
+export interface ServiceJobLineInput {
+  kind?: ServiceJobLineInputKind;
+  /** @nullable */
+  productId?: number | null;
+  description?: string;
+  quantity?: number;
+  unitPrice?: number;
+  unitCost?: number;
+  taxRate?: number;
+}
+
+export interface ServiceJobTotals {
+  partsTotal: number;
+  labourTotal: number;
+  miscTotal: number;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  costTotal: number;
+  profit: number;
+}
+
+export interface ServiceJobLinesResult {
+  lines: ServiceJobLine[];
+  totals: ServiceJobTotals;
+}
+
+export type StoreCreditEntryType = typeof StoreCreditEntryType[keyof typeof StoreCreditEntryType];
+
+
+export const StoreCreditEntryType = {
+  issue: 'issue',
+  redeem: 'redeem',
+  adjust: 'adjust',
+  refund: 'refund',
+  expire: 'expire',
+} as const;
+
+export interface StoreCreditEntry {
+  id: number;
+  customerId: number;
+  type: StoreCreditEntryType;
+  amount: number;
+  balanceAfter: number;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  transactionId?: number | null;
+  /** @nullable */
+  staffId?: number | null;
+  createdAt: string;
+}
+
+export type StoreCreditInputType = typeof StoreCreditInputType[keyof typeof StoreCreditInputType];
+
+
+export const StoreCreditInputType = {
+  issue: 'issue',
+  redeem: 'redeem',
+  adjust: 'adjust',
+  refund: 'refund',
+  expire: 'expire',
+} as const;
+
+export interface StoreCreditInput {
+  type: StoreCreditInputType;
+  amount: number;
+  /** @nullable */
+  note?: string | null;
+  /** @nullable */
+  transactionId?: number | null;
+}
+
+export interface StoreCreditResult {
+  balance: number;
+  entries: StoreCreditEntry[];
+}
+
+export interface DeviceHistoryJob {
+  id: number;
+  jobNumber: string;
+  status: string;
+  /** @nullable */
+  deviceType?: string | null;
+  /** @nullable */
+  deviceDescription?: string | null;
+  /** @nullable */
+  condition?: string | null;
+  bookInDate: string;
+  /** @nullable */
+  customerName?: string | null;
+  createdAt: string;
+}
+
+export interface DeviceHistorySale {
+  id: number;
+  productId: number;
+  /** @nullable */
+  productName?: string | null;
+  status: string;
+  /** @nullable */
+  transactionId?: number | null;
+  /** @nullable */
+  soldAt?: string | null;
+  createdAt: string;
+}
+
+export interface DeviceHistoryResult {
+  serial: string;
+  serviceJobs: DeviceHistoryJob[];
+  sales: DeviceHistorySale[];
+}
+
+export type ServiceJobChecklistItemResult = typeof ServiceJobChecklistItemResult[keyof typeof ServiceJobChecklistItemResult];
+
+
+export const ServiceJobChecklistItemResult = {
+  pending: 'pending',
+  pass: 'pass',
+  fail: 'fail',
+  na: 'na',
+} as const;
+
+export type ServiceJobChecklistItemPhase = typeof ServiceJobChecklistItemPhase[keyof typeof ServiceJobChecklistItemPhase];
+
+
+export const ServiceJobChecklistItemPhase = {
+  intake: 'intake',
+  outgoing: 'outgoing',
+} as const;
+
+export interface ServiceJobChecklistItem {
+  id: number;
+  serviceJobId: number;
+  label: string;
+  result: ServiceJobChecklistItemResult;
+  phase: ServiceJobChecklistItemPhase;
+  /** @nullable */
+  note?: string | null;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ServiceJobChecklistItemInputResult = typeof ServiceJobChecklistItemInputResult[keyof typeof ServiceJobChecklistItemInputResult];
+
+
+export const ServiceJobChecklistItemInputResult = {
+  pending: 'pending',
+  pass: 'pass',
+  fail: 'fail',
+  na: 'na',
+} as const;
+
+export type ServiceJobChecklistItemInputPhase = typeof ServiceJobChecklistItemInputPhase[keyof typeof ServiceJobChecklistItemInputPhase];
+
+
+export const ServiceJobChecklistItemInputPhase = {
+  intake: 'intake',
+  outgoing: 'outgoing',
+} as const;
+
+export interface ServiceJobChecklistItemInput {
+  label?: string;
+  result?: ServiceJobChecklistItemInputResult;
+  phase?: ServiceJobChecklistItemInputPhase;
+  /** @nullable */
+  note?: string | null;
+}
+
+export type ServiceJobChecklistInputResult = typeof ServiceJobChecklistInputResult[keyof typeof ServiceJobChecklistInputResult];
+
+
+export const ServiceJobChecklistInputResult = {
+  pending: 'pending',
+  pass: 'pass',
+  fail: 'fail',
+  na: 'na',
+} as const;
+
+export type ServiceJobChecklistInputPhase = typeof ServiceJobChecklistInputPhase[keyof typeof ServiceJobChecklistInputPhase];
+
+
+export const ServiceJobChecklistInputPhase = {
+  intake: 'intake',
+  outgoing: 'outgoing',
+} as const;
+
+export interface ServiceJobChecklistInput {
+  label?: string;
+  result?: ServiceJobChecklistInputResult;
+  phase?: ServiceJobChecklistInputPhase;
+  /** @nullable */
+  note?: string | null;
+  items?: ServiceJobChecklistItemInput[];
+}
+
+export interface ServiceJobChecklistResult {
+  items: ServiceJobChecklistItem[];
+}
+
+export type LoanerDeviceStatus = typeof LoanerDeviceStatus[keyof typeof LoanerDeviceStatus];
+
+
+export const LoanerDeviceStatus = {
+  available: 'available',
+  on_loan: 'on_loan',
+  retired: 'retired',
+} as const;
+
+export interface LoanerDevice {
+  id: number;
+  name: string;
+  /** @nullable */
+  identifier?: string | null;
+  status: LoanerDeviceStatus;
+  /** @nullable */
+  assignedCustomerId?: number | null;
+  /** @nullable */
+  assignedCustomerName?: string | null;
+  /** @nullable */
+  assignedServiceJobId?: number | null;
+  /** @nullable */
+  assignedAt?: string | null;
+  /** @nullable */
+  dueBackAt?: string | null;
+  /** @nullable */
+  conditionOut?: string | null;
+  /** @nullable */
+  conditionIn?: string | null;
+  /** @nullable */
+  returnedAt?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type LoanerDeviceInputAction = typeof LoanerDeviceInputAction[keyof typeof LoanerDeviceInputAction];
+
+
+export const LoanerDeviceInputAction = {
+  issue: 'issue',
+  return: 'return',
+} as const;
+
+export type LoanerDeviceInputStatus = typeof LoanerDeviceInputStatus[keyof typeof LoanerDeviceInputStatus];
+
+
+export const LoanerDeviceInputStatus = {
+  available: 'available',
+  on_loan: 'on_loan',
+  retired: 'retired',
+} as const;
+
+export interface LoanerDeviceInput {
+  action?: LoanerDeviceInputAction;
+  name?: string;
+  /** @nullable */
+  identifier?: string | null;
+  status?: LoanerDeviceInputStatus;
+  /** @nullable */
+  assignedCustomerId?: number | null;
+  /** @nullable */
+  assignedServiceJobId?: number | null;
+  /** @nullable */
+  dueBackAt?: string | null;
+  /** @nullable */
+  conditionOut?: string | null;
+  /** @nullable */
+  conditionIn?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface LoanerDeviceList {
+  items: LoanerDevice[];
+}
+
+export interface ServiceJobTimeEntry {
+  id: number;
+  /** @nullable */
+  staffId?: number | null;
+  /** @nullable */
+  staffName?: string | null;
+  startedAt: string;
+  /** @nullable */
+  endedAt?: string | null;
+  durationMinutes: number;
+  running: boolean;
+  /** @nullable */
+  note?: string | null;
+}
+
+export type ServiceJobTimeInputAction = typeof ServiceJobTimeInputAction[keyof typeof ServiceJobTimeInputAction];
+
+
+export const ServiceJobTimeInputAction = {
+  start: 'start',
+  stop: 'stop',
+  manual: 'manual',
+} as const;
+
+export interface ServiceJobTimeInput {
+  action: ServiceJobTimeInputAction;
+  /** @nullable */
+  staffId?: number | null;
+  /** @nullable */
+  entryId?: number | null;
+  /** @nullable */
+  minutes?: number | null;
+  /** @nullable */
+  note?: string | null;
+}
+
+export interface ServiceJobTimeResult {
+  entries: ServiceJobTimeEntry[];
+  totalMinutes: number;
+  running?: ServiceJobTimeEntry | null;
+}
+
+export interface PartLookupItem {
+  productId: number;
+  name: string;
+  /** @nullable */
+  sku?: string | null;
+  price: number;
+  /** @nullable */
+  stockQuantity?: number | null;
+  matchedModel: string;
+}
+
+export interface PartsLookupResult {
+  model: string;
+  parts: PartLookupItem[];
+}
+
+export interface PartCompatibilityItem {
+  id: number;
+  model: string;
+}
+
+export interface PartCompatibilityInput {
+  model?: string;
+  models?: string[];
+}
+
+export interface PartCompatibilityResult {
+  items: PartCompatibilityItem[];
+}
+
+export type TradeInConditionGrade = typeof TradeInConditionGrade[keyof typeof TradeInConditionGrade];
+
+
+export const TradeInConditionGrade = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+} as const;
+
+export type TradeInStatus = typeof TradeInStatus[keyof typeof TradeInStatus];
+
+
+export const TradeInStatus = {
+  quoted: 'quoted',
+  accepted: 'accepted',
+  listed: 'listed',
+} as const;
+
+export interface TradeIn {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  deviceName: string;
+  /** @nullable */
+  identifier?: string | null;
+  conditionGrade: TradeInConditionGrade;
+  /** @nullable */
+  notes?: string | null;
+  valuationAmount: number;
+  status: TradeInStatus;
+  /** @nullable */
+  payoutMethod?: string | null;
+  /** @nullable */
+  acceptedAt?: string | null;
+  /** @nullable */
+  createdProductId?: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type TradeInInputConditionGrade = typeof TradeInInputConditionGrade[keyof typeof TradeInInputConditionGrade];
+
+
+export const TradeInInputConditionGrade = {
+  A: 'A',
+  B: 'B',
+  C: 'C',
+  D: 'D',
+} as const;
+
+export interface TradeInInput {
+  /** @nullable */
+  customerId?: number | null;
+  deviceName: string;
+  /** @nullable */
+  identifier?: string | null;
+  conditionGrade?: TradeInInputConditionGrade;
+  /** @nullable */
+  notes?: string | null;
+  valuationAmount?: number;
+}
+
+export interface TradeInList {
+  items: TradeIn[];
+}
+
+export interface TradeInListAsStockResult {
+  items: TradeIn[];
+  productId?: number;
+}
+
+export type ServicePlanBillingCycle = typeof ServicePlanBillingCycle[keyof typeof ServicePlanBillingCycle];
+
+
+export const ServicePlanBillingCycle = {
+  weekly: 'weekly',
+  fortnightly: 'fortnightly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  yearly: 'yearly',
+} as const;
+
+export type ServicePlanStatus = typeof ServicePlanStatus[keyof typeof ServicePlanStatus];
+
+
+export const ServicePlanStatus = {
+  active: 'active',
+  paused: 'paused',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ServicePlan {
+  id: number;
+  /** @nullable */
+  customerId?: number | null;
+  /** @nullable */
+  customerName?: string | null;
+  name: string;
+  feeAmount: number;
+  billingCycle: ServicePlanBillingCycle;
+  status: ServicePlanStatus;
+  /** @nullable */
+  slaHours?: number | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  nextBillDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type ServicePlanInputBillingCycle = typeof ServicePlanInputBillingCycle[keyof typeof ServicePlanInputBillingCycle];
+
+
+export const ServicePlanInputBillingCycle = {
+  weekly: 'weekly',
+  fortnightly: 'fortnightly',
+  monthly: 'monthly',
+  quarterly: 'quarterly',
+  yearly: 'yearly',
+} as const;
+
+export type ServicePlanInputStatus = typeof ServicePlanInputStatus[keyof typeof ServicePlanInputStatus];
+
+
+export const ServicePlanInputStatus = {
+  active: 'active',
+  paused: 'paused',
+  cancelled: 'cancelled',
+} as const;
+
+export interface ServicePlanInput {
+  /** @nullable */
+  customerId?: number | null;
+  name?: string;
+  feeAmount?: number;
+  billingCycle?: ServicePlanInputBillingCycle;
+  status?: ServicePlanInputStatus;
+  /** @nullable */
+  slaHours?: number | null;
+  /** @nullable */
+  startDate?: string | null;
+  /** @nullable */
+  nextBillDate?: string | null;
+  /** @nullable */
+  notes?: string | null;
+}
+
+export interface ServicePlanList {
+  items: ServicePlan[];
+}
+
+export interface ServicePlanBillResult {
+  items: ServicePlan[];
+  invoiceId?: number;
+  invoiceNumber?: string;
 }
 
 export type AppointmentStatus = typeof AppointmentStatus[keyof typeof AppointmentStatus];
@@ -1262,6 +2069,10 @@ export interface Appointment {
   customerId?: number | null;
   /** @nullable */
   staffId?: number | null;
+  /** @nullable */
+  serviceJobId?: number | null;
+  /** @nullable */
+  serviceJobNumber?: string | null;
   title: string;
   /** @nullable */
   description?: string | null;
@@ -1299,12 +2110,16 @@ export interface AppointmentInput {
   customerId?: number | null;
   /** @nullable */
   staffId?: number | null;
+  /** @nullable */
+  serviceJobId?: number | null;
   title?: string;
   scheduledAt: string;
   endAt: string;
   status: AppointmentInputStatus;
   /** @nullable */
   notes?: string | null;
+  sendSms?: boolean;
+  sendEmail?: boolean;
 }
 
 export interface DashboardConfigResponse {
@@ -1423,10 +2238,81 @@ export interface TopProduct {
   revenue: number;
 }
 
+export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
+
+
+export const InvoiceStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  partial: 'partial',
+  paid: 'paid',
+  overdue: 'overdue',
+  cancelled: 'cancelled',
+} as const;
+
+export interface InvoiceLineItem {
+  description: string;
+  /** @minimum 0.0001 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxRate: number;
+  productId?: number | null;
+  /** @minimum 0 */
+  costPrice?: number | null;
+}
+
+export interface InvoiceEvent {
+  type: string;
+  timestamp: string;
+  detail?: string | null;
+  method?: string | null;
+  amount?: number | null;
+  idempotencyKey?: string | null;
+}
+
+export interface Invoice {
+  id: number;
+  merchantId: number;
+  customerId?: number | null;
+  invoiceNumber: string;
+  status: InvoiceStatus;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  amountPaid: number;
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountTotal?: number | null;
+  items: InvoiceLineItem[];
+  events: InvoiceEvent[];
+  notes?: string | null;
+  dueDate?: string | null;
+  paidAt?: string | null;
+  viewedAt?: string | null;
+  isRecurring: boolean;
+  recurringFrequency?: string | null;
+  recurringOccurrences?: number | null;
+  recurringStartDate?: string | null;
+  nextSendDate?: string | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  customerCompany?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface CustomerHistory {
   transactions: Transaction[];
   appointments: Appointment[];
   serviceJobs: ServiceJob[];
+  invoices: Invoice[];
 }
 
 export interface CustomerNote {
@@ -1750,6 +2636,7 @@ export interface PurchaseOrder {
   totalCost: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
   receipts?: POReceiptLog[];
   createdAt: string;
@@ -1769,6 +2656,7 @@ export interface PurchaseOrderInput {
   totalCost?: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
 }
 
@@ -1811,6 +2699,7 @@ export interface Discount {
   applicableTo?: string;
   productIds?: number[];
   categoryIds?: number[];
+  excludedProductIds?: number[];
   startDate?: string | null;
   endDate?: string | null;
   isActive: string;
@@ -1827,6 +2716,7 @@ export interface DiscountInput {
   applicableTo?: string;
   productIds?: number[];
   categoryIds?: number[];
+  excludedProductIds?: number[];
   startDate?: string;
   endDate?: string;
   isActive?: string;
@@ -1919,6 +2809,31 @@ export interface SendServiceJobEmailRequest {
   email?: string;
 }
 
+export interface ComposeEmailRequest {
+  to: string;
+  subject: string;
+  body: string;
+}
+
+export interface SmsSettings {
+  smsEnabled: boolean;
+  autoNotifyOnStatus: boolean;
+  connected: boolean;
+  fromNumber?: string | null;
+  accountSidPrefix?: string | null;
+}
+
+export interface SmsSettingsInput {
+  smsEnabled?: boolean;
+  autoNotifyOnStatus?: boolean;
+}
+
+export interface TwilioConnectInput {
+  accountSid: string;
+  authToken: string;
+  fromNumber: string;
+}
+
 export interface EmailSettings {
   provider: string;
   fromName?: string | null;
@@ -1961,6 +2876,7 @@ export interface Layby {
   reference: string;
   customerId?: number | null;
   customerName?: string | null;
+  staffId?: number | null;
   items: LaybyItemsItem[];
   totalAmount: number;
   depositAmount: number;
@@ -1970,6 +2886,7 @@ export interface Layby {
   dueDate?: string | null;
   notes?: string | null;
   cancelReason?: string | null;
+  completedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -1992,6 +2909,7 @@ export type CreateLaybyBodyItemsItem = {
 
 export interface CreateLaybyBody {
   customerId?: number;
+  staffId?: number | null;
   items: CreateLaybyBodyItemsItem[];
   totalAmount: number;
   depositAmount: number;
@@ -2006,9 +2924,16 @@ export interface UpdateLaybyBody {
   status?: string;
 }
 
+export interface PaymentLeg {
+  method: string;
+  /** @minimum 0 */
+  amount: number;
+}
+
 export interface AddLaybyPaymentBody {
   amount: number;
   paymentMethod?: string;
+  payments?: PaymentLeg[];
   note?: string;
 }
 
@@ -2444,6 +3369,7 @@ export interface PosSettings {
   defaultSkuPrefix: string;
   mapProvider: string;
   roleDiscountLimits: string;
+  buttonStyle: string;
   updatedAt: string;
 }
 
@@ -2463,6 +3389,7 @@ export interface PosSettingsInput {
   defaultSkuPrefix?: string;
   mapProvider?: string;
   roleDiscountLimits?: string;
+  buttonStyle?: string;
 }
 
 export interface LaybySettings {
@@ -2492,6 +3419,122 @@ export interface LaybySettingsInput {
   termsAndConditions?: string;
 }
 
+export type SalesSettingsOverviewDefaultSalesPeriod = typeof SalesSettingsOverviewDefaultSalesPeriod[keyof typeof SalesSettingsOverviewDefaultSalesPeriod];
+
+
+export const SalesSettingsOverviewDefaultSalesPeriod = {
+  today: 'today',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsOverviewDefaultActivityPeriod = typeof SalesSettingsOverviewDefaultActivityPeriod[keyof typeof SalesSettingsOverviewDefaultActivityPeriod];
+
+
+export const SalesSettingsOverviewDefaultActivityPeriod = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsOverviewMonthMode = typeof SalesSettingsOverviewMonthMode[keyof typeof SalesSettingsOverviewMonthMode];
+
+
+export const SalesSettingsOverviewMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
+} as const;
+
+export interface SalesSettings {
+  id: number;
+  merchantId: number;
+  saleRequireCustomer: string;
+  saleReceiptDelivery: string;
+  saleRoundCashTo5c: string;
+  saleRequireDiscountReason: string;
+  saleAllowOutOfStock: string;
+  saleDefaultNote: string;
+  invoiceDueDays: number;
+  invoiceDefaultTaxRate: number;
+  invoiceAutoEmail: string;
+  invoiceTerms: string;
+  refundWindowDays: number;
+  refundRequireReason: string;
+  refundRequireApproval: string;
+  refundRestockingFeePct: number;
+  refundOriginalMethodOnly: string;
+  refundDefaultNote: string;
+  quoteExpiryDays: number;
+  quoteDefaultTaxRate: number;
+  quoteAutoEmail: string;
+  quoteTerms: string;
+  quotePrefix: string;
+  quoteDigits: number;
+  quoteDepositPercent?: number;
+  overviewDefaultSalesPeriod: SalesSettingsOverviewDefaultSalesPeriod;
+  overviewDefaultActivityPeriod: SalesSettingsOverviewDefaultActivityPeriod;
+  overviewMonthMode: SalesSettingsOverviewMonthMode;
+  createdAt?: string;
+  updatedAt: string;
+}
+
+export type SalesSettingsUpdateOverviewDefaultSalesPeriod = typeof SalesSettingsUpdateOverviewDefaultSalesPeriod[keyof typeof SalesSettingsUpdateOverviewDefaultSalesPeriod];
+
+
+export const SalesSettingsUpdateOverviewDefaultSalesPeriod = {
+  today: 'today',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsUpdateOverviewDefaultActivityPeriod = typeof SalesSettingsUpdateOverviewDefaultActivityPeriod[keyof typeof SalesSettingsUpdateOverviewDefaultActivityPeriod];
+
+
+export const SalesSettingsUpdateOverviewDefaultActivityPeriod = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsUpdateOverviewMonthMode = typeof SalesSettingsUpdateOverviewMonthMode[keyof typeof SalesSettingsUpdateOverviewMonthMode];
+
+
+export const SalesSettingsUpdateOverviewMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
+} as const;
+
+export interface SalesSettingsUpdate {
+  saleRequireCustomer?: string;
+  saleReceiptDelivery?: string;
+  saleRoundCashTo5c?: string;
+  saleRequireDiscountReason?: string;
+  saleAllowOutOfStock?: string;
+  saleDefaultNote?: string;
+  invoiceDueDays?: number;
+  invoiceDefaultTaxRate?: number;
+  invoiceAutoEmail?: string;
+  invoiceTerms?: string;
+  refundWindowDays?: number;
+  refundRequireReason?: string;
+  refundRequireApproval?: string;
+  refundRestockingFeePct?: number;
+  refundOriginalMethodOnly?: string;
+  refundDefaultNote?: string;
+  quoteExpiryDays?: number;
+  quoteDefaultTaxRate?: number;
+  quoteAutoEmail?: string;
+  quoteTerms?: string;
+  quotePrefix?: string;
+  quoteDigits?: number;
+  quoteDepositPercent?: number;
+  overviewDefaultSalesPeriod?: SalesSettingsUpdateOverviewDefaultSalesPeriod;
+  overviewDefaultActivityPeriod?: SalesSettingsUpdateOverviewDefaultActivityPeriod;
+  overviewMonthMode?: SalesSettingsUpdateOverviewMonthMode;
+}
+
 export interface KpiSettings {
   id: number;
   merchantId: number;
@@ -2500,6 +3543,7 @@ export interface KpiSettings {
   trackServices: string;
   trackSuppliers: string;
   trackWastage: string;
+  weekStartDay: string;
   updatedAt: string;
 }
 
@@ -2509,23 +3553,7 @@ export interface KpiSettingsInput {
   trackServices?: string;
   trackSuppliers?: string;
   trackWastage?: string;
-}
-
-export interface KpiTarget {
-  id: number;
-  merchantId: number;
-  targetId: string;
-  name: string;
-  metric: string;
-  categoryId?: string;
-  period: string;
-  target: number;
-  staffIds: string;
-  reward?: string;
-  notes: string;
-  isActive: string;
-  createdAt: string;
-  updatedAt: string;
+  weekStartDay?: string;
 }
 
 export interface KpiTargetInput {
@@ -2538,7 +3566,10 @@ export interface KpiTargetInput {
   staffIds?: string;
   reward?: string;
   notes?: string;
+  startDate?: string | null;
+  endDate?: string | null;
   isActive?: string;
+  showOnDashboard?: string;
 }
 
 export interface KpiTargetListResponse {
@@ -3041,7 +4072,9 @@ export interface PosRegisterSessionInput {
   closedAt?: string | null;
   cashCounted?: string | null;
   eftposDeclared?: string | null;
+  paymentTotals?: string | null;
   closingNotes?: string | null;
+  deviceId?: string | null;
 }
 
 export interface PosRegisterSessionListResponse {
@@ -3196,12 +4229,14 @@ export interface InventorySettings {
   skuPrefix: string;
   showCosts: string;
   groupPricing: string;
+  defaultImageUrl?: string | null;
 }
 
 export interface InventorySettingsInput {
   skuPrefix?: string;
   showCosts?: string;
   groupPricing?: string;
+  defaultImageUrl?: string | null;
 }
 
 export interface RegionalExtSettings {
@@ -3399,6 +4434,155 @@ export interface PaymentMethodSummary {
   avgTransactionValue: number;
 }
 
+export type ScheduledReportFrequency = typeof ScheduledReportFrequency[keyof typeof ScheduledReportFrequency];
+
+
+export const ScheduledReportFrequency = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export type ScheduledReportFormat = typeof ScheduledReportFormat[keyof typeof ScheduledReportFormat];
+
+
+export const ScheduledReportFormat = {
+  pdf: 'pdf',
+  csv: 'csv',
+} as const;
+
+export interface ScheduledReport {
+  id: number;
+  name: string;
+  reportType: string;
+  frequency: ScheduledReportFrequency;
+  format: ScheduledReportFormat;
+  email: string;
+  enabled: boolean;
+  /** @nullable */
+  lastRunAt?: string | null;
+  createdAt: string;
+}
+
+export type ScheduledReportInputFrequency = typeof ScheduledReportInputFrequency[keyof typeof ScheduledReportInputFrequency];
+
+
+export const ScheduledReportInputFrequency = {
+  daily: 'daily',
+  weekly: 'weekly',
+  monthly: 'monthly',
+} as const;
+
+export type ScheduledReportInputFormat = typeof ScheduledReportInputFormat[keyof typeof ScheduledReportInputFormat];
+
+
+export const ScheduledReportInputFormat = {
+  pdf: 'pdf',
+  csv: 'csv',
+} as const;
+
+export interface ScheduledReportInput {
+  name?: string;
+  reportType?: string;
+  frequency?: ScheduledReportInputFrequency;
+  format?: ScheduledReportInputFormat;
+  email?: string;
+  enabled?: boolean;
+}
+
+export interface ScheduledReportList {
+  items: ScheduledReport[];
+}
+
+export interface Location {
+  id: number;
+  name: string;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  isDefault: boolean;
+  isActive: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface LocationInput {
+  name?: string;
+  /** @nullable */
+  code?: string | null;
+  /** @nullable */
+  address?: string | null;
+  /** @nullable */
+  phone?: string | null;
+  isDefault?: boolean;
+  isActive?: boolean;
+}
+
+export interface LocationList {
+  items: Location[];
+  activeLocationId: number;
+}
+
+export interface LocationStock {
+  locationId: number;
+  name: string;
+  isDefault: boolean;
+  quantity: number;
+}
+
+export interface StockByLocationResult {
+  productId: number;
+  total: number;
+  locations: LocationStock[];
+}
+
+export type RunReportInputGroupBy = typeof RunReportInputGroupBy[keyof typeof RunReportInputGroupBy];
+
+
+export const RunReportInputGroupBy = {
+  date: 'date',
+  week: 'week',
+  month: 'month',
+  payment: 'payment',
+  staff: 'staff',
+  product: 'product',
+} as const;
+
+export interface RunReportInput {
+  startDate: string;
+  endDate: string;
+  groupBy: RunReportInputGroupBy;
+}
+
+export type ReportColumnType = typeof ReportColumnType[keyof typeof ReportColumnType];
+
+
+export const ReportColumnType = {
+  text: 'text',
+  number: 'number',
+  currency: 'currency',
+  percent: 'percent',
+} as const;
+
+export interface ReportColumn {
+  key: string;
+  label: string;
+  type: ReportColumnType;
+}
+
+export type ReportRunResultRowsItem = { [key: string]: unknown };
+
+export interface ReportRunResult {
+  groupBy: string;
+  startDate: string;
+  endDate: string;
+  columns: ReportColumn[];
+  rows: ReportRunResultRowsItem[];
+}
+
 export interface SalesSummaryReport {
   startDate: string;
   endDate: string;
@@ -3547,6 +4731,24 @@ export interface Print3dSettingsInput {
   coolingFactor?: number;
   roundingMode?: string;
   roundingValue?: number;
+}
+
+export interface DashboardNoteItem {
+  id: number;
+  merchantId: number;
+  text: string;
+  isCritical: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DashboardNoteInput {
+  text: string;
+  isCritical?: boolean;
+}
+
+export interface DashboardNoteList {
+  items: DashboardNoteItem[];
 }
 
 export interface StaffNoteItem {
@@ -3948,19 +5150,6 @@ export interface IntegrationConnectInput {
   credentials?: IntegrationConnectInputCredentials;
 }
 
-export interface InvoiceLineItem {
-  description: string;
-  /** @minimum 0.0001 */
-  quantity: number;
-  /** @minimum 0 */
-  unitPrice: number;
-  /**
-     * @minimum 0
-     * @maximum 100
-     */
-  taxRate: number;
-}
-
 export type InvoiceDiscountInputType = typeof InvoiceDiscountInputType[keyof typeof InvoiceDiscountInputType];
 
 
@@ -3972,59 +5161,6 @@ export const InvoiceDiscountInputType = {
 export interface InvoiceDiscountInput {
   type: InvoiceDiscountInputType;
   value: number;
-}
-
-export interface InvoiceEvent {
-  type: string;
-  timestamp: string;
-  detail?: string | null;
-  method?: string | null;
-  idempotencyKey?: string | null;
-}
-
-export type InvoiceStatus = typeof InvoiceStatus[keyof typeof InvoiceStatus];
-
-
-export const InvoiceStatus = {
-  draft: 'draft',
-  sent: 'sent',
-  partial: 'partial',
-  paid: 'paid',
-  overdue: 'overdue',
-  cancelled: 'cancelled',
-} as const;
-
-export interface Invoice {
-  id: number;
-  merchantId: number;
-  customerId?: number | null;
-  invoiceNumber: string;
-  status: InvoiceStatus;
-  subtotal: number;
-  taxTotal: number;
-  total: number;
-  amountPaid: number;
-  discountType?: string | null;
-  discountValue?: number | null;
-  discountTotal?: number | null;
-  items: InvoiceLineItem[];
-  events: InvoiceEvent[];
-  notes?: string | null;
-  dueDate?: string | null;
-  paidAt?: string | null;
-  viewedAt?: string | null;
-  isRecurring: boolean;
-  recurringFrequency?: string | null;
-  recurringOccurrences?: number | null;
-  recurringStartDate?: string | null;
-  nextSendDate?: string | null;
-  customerName?: string | null;
-  customerEmail?: string | null;
-  customerPhone?: string | null;
-  customerAddress?: string | null;
-  customerCompany?: string | null;
-  createdAt: string;
-  updatedAt: string;
 }
 
 export interface InvoiceList {
@@ -4051,6 +5187,7 @@ export interface InvoiceRecurringInput {
 
 export interface InvoiceInput {
   customerId?: number;
+  staffId?: number | null;
   dueDate?: string;
   notes?: string;
   items?: InvoiceLineItem[];
@@ -4058,6 +5195,8 @@ export interface InvoiceInput {
   invoicePrefix?: string;
   invoiceDigits?: number;
   recurring?: InvoiceRecurringInput;
+  serviceJobId?: number | null;
+  appointmentId?: number | null;
 }
 
 export interface InvoiceRecurringUpdate {
@@ -4087,6 +5226,8 @@ export interface InvoiceUpdate {
   items?: InvoiceLineItem[];
   discount?: InvoiceDiscountInput;
   recurring?: InvoiceRecurringUpdate | null;
+  serviceJobId?: number | null;
+  appointmentId?: number | null;
 }
 
 export interface GiftCardPaymentRef {
@@ -4097,6 +5238,7 @@ export interface GiftCardPaymentRef {
 export interface InvoicePaymentInput {
   amount: number;
   method?: string;
+  payments?: PaymentLeg[];
   giftCardPayment?: GiftCardPaymentRef;
   idempotencyKey?: string;
 }
@@ -4152,6 +5294,139 @@ export interface InvoiceEventInput {
   detail?: string;
   method?: string;
   idempotencyKey?: string;
+}
+
+export interface QuoteLineItem {
+  description: string;
+  /** @minimum 0.0001 */
+  quantity: number;
+  /** @minimum 0 */
+  unitPrice: number;
+  /**
+     * @minimum 0
+     * @maximum 100
+     */
+  taxRate: number;
+}
+
+export type QuoteDiscountInputType = typeof QuoteDiscountInputType[keyof typeof QuoteDiscountInputType];
+
+
+export const QuoteDiscountInputType = {
+  fixed: 'fixed',
+  percent: 'percent',
+} as const;
+
+export interface QuoteDiscountInput {
+  type: QuoteDiscountInputType;
+  value: number;
+}
+
+export interface QuoteEvent {
+  type: string;
+  timestamp: string;
+  detail?: string | null;
+  method?: string | null;
+}
+
+export type QuoteStatus = typeof QuoteStatus[keyof typeof QuoteStatus];
+
+
+export const QuoteStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  declined: 'declined',
+  expired: 'expired',
+  converted: 'converted',
+} as const;
+
+export interface Quote {
+  id: number;
+  merchantId: number;
+  customerId?: number | null;
+  serviceJobId?: number | null;
+  quoteNumber: string;
+  status: QuoteStatus;
+  subtotal: number;
+  taxTotal: number;
+  total: number;
+  discountType?: string | null;
+  discountValue?: number | null;
+  discountTotal?: number | null;
+  depositRequired?: number | null;
+  items: QuoteLineItem[];
+  events: QuoteEvent[];
+  notes?: string | null;
+  expiryDate?: string | null;
+  convertedTransactionId?: number | null;
+  customerName?: string | null;
+  customerEmail?: string | null;
+  customerPhone?: string | null;
+  customerAddress?: string | null;
+  customerCompany?: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface QuoteList {
+  items: Quote[];
+  total: number;
+}
+
+export interface QuoteInput {
+  customerId?: number;
+  serviceJobId?: number | null;
+  expiryDate?: string;
+  notes?: string;
+  items?: QuoteLineItem[];
+  discount?: QuoteDiscountInput;
+  quotePrefix?: string;
+  quoteDigits?: number;
+  depositRequired?: number | null;
+}
+
+export type QuoteUpdateStatus = typeof QuoteUpdateStatus[keyof typeof QuoteUpdateStatus];
+
+
+export const QuoteUpdateStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  declined: 'declined',
+  expired: 'expired',
+  converted: 'converted',
+} as const;
+
+export interface QuoteUpdate {
+  status?: QuoteUpdateStatus;
+  notes?: string;
+  expiryDate?: string | null;
+  customerId?: number | null;
+  items?: QuoteLineItem[];
+  discount?: QuoteDiscountInput;
+  depositRequired?: number | null;
+}
+
+export interface ConvertQuoteInput {
+  transactionId?: number;
+}
+
+/**
+ * Optional email template overrides
+ */
+export type SendQuoteEmailInputTemplate = { [key: string]: unknown };
+
+export interface SendQuoteEmailInput {
+  email: string;
+  /** Optional email template overrides */
+  template?: SendQuoteEmailInputTemplate;
+}
+
+export interface QuoteEventInput {
+  type: string;
+  detail?: string;
+  method?: string;
 }
 
 export interface ProductTagItem {
@@ -4350,6 +5625,32 @@ export interface SyncContactsResult {
   message: string;
 }
 
+/**
+ * Connected cloud storage provider to mirror files to
+ */
+export type CustomerFilesCloudSettingsInputStorageKey = typeof CustomerFilesCloudSettingsInputStorageKey[keyof typeof CustomerFilesCloudSettingsInputStorageKey];
+
+
+export const CustomerFilesCloudSettingsInputStorageKey = {
+  onedrive: 'onedrive',
+  google_drive: 'google_drive',
+  dropbox: 'dropbox',
+} as const;
+
+export interface CustomerFilesCloudSettingsInput {
+  /** When true, customer file uploads are mirrored to the cloud */
+  enabled: boolean;
+  /** Connected cloud storage provider to mirror files to */
+  storageKey: CustomerFilesCloudSettingsInputStorageKey;
+  /** Destination folder path on that provider (set by the platform user) */
+  folder: string;
+}
+
+export type CustomerFilesCloudSettings = CustomerFilesCloudSettingsInput & {
+  /** Storage providers that can receive mirrored customer files */
+  supportedStorageKeys: string[];
+};
+
 export interface XeroSyncResult {
   ok: boolean;
   synced: number;
@@ -4484,6 +5785,11 @@ from?: string;
 to?: string;
 };
 
+export type VoidTransactionBody = {
+  /** @nullable */
+  reason?: string | null;
+};
+
 export type GetStaffSalesReportParams = {
 /**
  * Start date ISO string (YYYY-MM-DD)
@@ -4504,6 +5810,10 @@ offset?: number;
 
 export type GetDashboardSummaryParams = {
 period?: GetDashboardSummaryPeriod;
+/**
+ * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+ */
+monthMode?: GetDashboardSummaryMonthMode;
 };
 
 export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof typeof GetDashboardSummaryPeriod];
@@ -4517,8 +5827,20 @@ export const GetDashboardSummaryPeriod = {
   year: 'year',
 } as const;
 
+export type GetDashboardSummaryMonthMode = typeof GetDashboardSummaryMonthMode[keyof typeof GetDashboardSummaryMonthMode];
+
+
+export const GetDashboardSummaryMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
+} as const;
+
 export type GetDashboardActivityParams = {
 period?: GetDashboardActivityPeriod;
+/**
+ * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+ */
+monthMode?: GetDashboardActivityMonthMode;
 };
 
 export type GetDashboardActivityPeriod = typeof GetDashboardActivityPeriod[keyof typeof GetDashboardActivityPeriod];
@@ -4529,6 +5851,14 @@ export const GetDashboardActivityPeriod = {
   week: 'week',
   month: 'month',
   year: 'year',
+} as const;
+
+export type GetDashboardActivityMonthMode = typeof GetDashboardActivityMonthMode[keyof typeof GetDashboardActivityMonthMode];
+
+
+export const GetDashboardActivityMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
 } as const;
 
 export type GetRecentTransactionsParams = {
@@ -4569,6 +5899,53 @@ month?: number;
 };
 
 export type SendServiceJobEmail200 = {
+  success?: boolean;
+  provider?: string;
+  error?: string | null;
+};
+
+export type GetDeviceHistoryParams = {
+serial: string;
+};
+
+export type PartsLookupParams = {
+model: string;
+};
+
+export type AcceptTradeInBodyPayoutMethod = typeof AcceptTradeInBodyPayoutMethod[keyof typeof AcceptTradeInBodyPayoutMethod];
+
+
+export const AcceptTradeInBodyPayoutMethod = {
+  cash: 'cash',
+  store_credit: 'store_credit',
+} as const;
+
+export type AcceptTradeInBody = {
+  payoutMethod: AcceptTradeInBodyPayoutMethod;
+};
+
+export type ListTradeInAsStockBody = {
+  price: number;
+  /** @nullable */
+  sku?: string | null;
+};
+
+export type SetActiveLocationBody = {
+  locationId: number;
+};
+
+export type SetActiveLocation200 = {
+  activeLocationId: number;
+};
+
+export type CreateStockTransferBody = {
+  productId: number;
+  fromLocationId: number;
+  toLocationId: number;
+  quantity: number;
+};
+
+export type ComposeEmail200 = {
   success?: boolean;
   provider?: string;
   error?: string | null;
@@ -4636,6 +6013,16 @@ export type DeleteWastageEntry200 = {
 
 export type DeletePriceTier200 = {
   success?: boolean;
+};
+
+export type TestSmsBody = {
+  to: string;
+};
+
+export type TestSms200 = {
+  success?: boolean;
+  provider?: string;
+  error?: string;
 };
 
 export type TestEmailSettings200 = {
@@ -4787,6 +6174,25 @@ export const ListInvoicesStatus = {
   cancelled: 'cancelled',
 } as const;
 
+export type ListQuotesParams = {
+status?: ListQuotesStatus;
+customerId?: number;
+search?: string;
+limit?: number;
+offset?: number;
+};
+
+export type ListQuotesStatus = typeof ListQuotesStatus[keyof typeof ListQuotesStatus];
+
+
+export const ListQuotesStatus = {
+  draft: 'draft',
+  sent: 'sent',
+  accepted: 'accepted',
+  expired: 'expired',
+  converted: 'converted',
+} as const;
+
 export type ListBackupsParams = {
 limit?: number;
 offset?: number;
@@ -4794,5 +6200,18 @@ offset?: number;
 
 export type RestoreBackup200 = {
   ok: boolean;
+};
+
+export type ListStaffTimesheetsParams = {
+startDate?: string;
+endDate?: string;
+};
+
+export type GetStaffClockStatusParams = {
+pin: string;
+};
+
+export type GetPaymentTotalsParams = {
+date?: string;
 };
 

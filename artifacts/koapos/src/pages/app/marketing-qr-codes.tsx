@@ -7,15 +7,18 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { DropdownMenu, DropdownMenuTrigger, DropdownMenuContent, DropdownMenuItem } from "@/components/ui/dropdown-menu";
 import QRCodeStyling, { type Options as QROptions, type DotType, type CornerSquareType, type CornerDotType } from "qr-code-styling";
 import {
   QrCode, Download, Trash2, Copy, Clock, Plus, ExternalLink, Save,
   ChevronDown, ChevronUp, Globe, FileText, RefreshCcw, User, Share2,
   File, Wifi, Calendar, Mail, MessageSquare, Minimize2, LayoutTemplate,
-  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check,
+  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check, Building2, Rocket, Link2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { useBusinessProfile } from "@/lib/business-profile";
+import { publicOrigin } from "@/lib/public-url";
 import {
   useListQrCodes,
   useCreateQrCode,
@@ -25,6 +28,10 @@ import {
   useListQrSavedTemplates,
   useCreateQrSavedTemplate,
   useDeleteQrSavedTemplate,
+  useListLandingPages,
+  useListShortlinks,
+  useGetShortlinkSettings,
+  useGetMerchant,
 } from "@workspace/api-client-react";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
@@ -48,15 +55,18 @@ interface QRSettings {
   size: number;
   level: "L" | "M" | "Q" | "H";
   logoUrl: string;
+  logoSize: number;
 }
 
 type QRCodeType =
-  | "website" | "static" | "dynamic" | "vcard" | "social" | "document"
+  | "website" | "landing" | "shortlink" | "static" | "dynamic" | "vcard" | "social" | "document"
   | "wifi" | "event" | "email" | "sms" | "micro" | "frame" | "sqrc" | "iqr";
 
 interface QRTypeContent {
   url?: string;
   text?: string;
+  landingId?: string;
+  shortlinkId?: string;
   vcName?: string; vcPhone?: string; vcEmail?: string; vcOrg?: string; vcUrl?: string; vcAddress?: string;
   socialPlatform?: string; socialHandle?: string;
   wifiSsid?: string; wifiPass?: string; wifiSec?: "WPA" | "WEP" | "nopass";
@@ -89,10 +99,34 @@ const DEFAULT_SETTINGS: QRSettings = {
   size: 256,
   level: "M",
   logoUrl: "",
+  logoSize: 0.35,
 };
 
 const DARK_SWATCHES  = ["#000000", "#166534", "#1d4ed8", "#4338ca", "#7e22ce", "#be185d", "#b91c1c", "#c2410c"];
 const LIGHT_SWATCHES = ["transparent", "#ffffff", "#e8e4f7", "#fde8e8", "#fef3c7", "#e9d5ff", "#dcfce7", "#bae6fd"];
+
+const DEFAULT_FONT_STACK = "system-ui, sans-serif";
+
+/* Resolve the merchant's brand font into a CSS font-family stack (with fallback). */
+function brandFontStack(brandFont?: string): string {
+  return brandFont ? `'${brandFont}', ${DEFAULT_FONT_STACK}` : DEFAULT_FONT_STACK;
+}
+
+/* Lazily pull the brand font in from Google Fonts so the preview/export render it. */
+const loadedBrandFonts = new Set<string>();
+function loadBrandFont(name?: string) {
+  if (!name || loadedBrandFonts.has(name)) return;
+  loadedBrandFonts.add(name);
+  const link = document.createElement("link");
+  link.rel = "stylesheet";
+  link.href = `https://fonts.googleapis.com/css2?family=${name.replace(/ /g, "+")}:wght@400;600;700&display=swap`;
+  document.head.appendChild(link);
+}
+
+/* De-duplicate swatches while preserving order (brand colours lead the palette). */
+function mergeSwatches(brand: string[], base: string[]): string[] {
+  return Array.from(new Set([...brand.filter(Boolean), ...base]));
+}
 
 const DOT_STYLES: { value: DotType; label: string }[] = [
   { value: "square",         label: "Square"  },
@@ -131,6 +165,8 @@ const ECC_LEVELS = [
 
 const QR_TYPES: { id: QRCodeType; label: string; icon: React.ComponentType<{ className?: string }>; desc: string }[] = [
   { id: "website",  label: "Website URL",    icon: Globe,          desc: "Link to any webpage"          },
+  { id: "landing",  label: "Landing Page",   icon: Rocket,         desc: "Link to a landing page"       },
+  { id: "shortlink",label: "Shortlink",      icon: Link2,          desc: "Link to a shortlink"          },
   { id: "static",   label: "Static",         icon: FileText,       desc: "Plain text or custom data"    },
   { id: "dynamic",  label: "Dynamic",        icon: RefreshCcw,     desc: "Editable redirect URL"        },
   { id: "vcard",    label: "vCard / meCard", icon: User,           desc: "Shareable contact card"       },
@@ -186,19 +222,20 @@ function apiToTemplate(r: Record<string, unknown>): SavedQRTemplate {
   };
 }
 
-function apiToSettings(r: Record<string, unknown>): QRSettings {
+function apiToSettings(r: Record<string, unknown>, defaults: QRSettings = DEFAULT_SETTINGS): QRSettings {
   return {
-    patternColor:       String(r.patternColor       ?? DEFAULT_SETTINGS.patternColor),
-    eyeColor:           String(r.eyeColor           ?? DEFAULT_SETTINGS.eyeColor),
-    eyeDotColor:        String(r.eyeDotColor        ?? DEFAULT_SETTINGS.eyeDotColor),
-    bgColor:            String(r.bgColor            ?? DEFAULT_SETTINGS.bgColor),
-    dotStyle:           (String(r.dotStyle          ?? DEFAULT_SETTINGS.dotStyle)) as QRSettings["dotStyle"],
-    cornerSquareStyle:  (String(r.cornerSquareStyle ?? DEFAULT_SETTINGS.cornerSquareStyle)) as QRSettings["cornerSquareStyle"],
-    cornerDotStyle:     (String(r.cornerDotStyle    ?? DEFAULT_SETTINGS.cornerDotStyle)) as QRSettings["cornerDotStyle"],
-    template:           String(r.template           ?? DEFAULT_SETTINGS.template),
-    size:               Number(r.size               ?? DEFAULT_SETTINGS.size),
-    level:              (String(r.level             ?? DEFAULT_SETTINGS.level)) as QRSettings["level"],
-    logoUrl:            String(r.logoUrl            ?? DEFAULT_SETTINGS.logoUrl),
+    patternColor:       String(r.patternColor       ?? defaults.patternColor),
+    eyeColor:           String(r.eyeColor           ?? defaults.eyeColor),
+    eyeDotColor:        String(r.eyeDotColor        ?? defaults.eyeDotColor),
+    bgColor:            String(r.bgColor            ?? defaults.bgColor),
+    dotStyle:           (String(r.dotStyle          ?? defaults.dotStyle)) as QRSettings["dotStyle"],
+    cornerSquareStyle:  (String(r.cornerSquareStyle ?? defaults.cornerSquareStyle)) as QRSettings["cornerSquareStyle"],
+    cornerDotStyle:     (String(r.cornerDotStyle    ?? defaults.cornerDotStyle)) as QRSettings["cornerDotStyle"],
+    template:           String(r.template           ?? defaults.template),
+    size:               Number(r.size               ?? defaults.size),
+    level:              (String(r.level             ?? defaults.level)) as QRSettings["level"],
+    logoUrl:            String(r.logoUrl            ?? defaults.logoUrl),
+    logoSize:           Number(r.logoSize           ?? defaults.logoSize),
   };
 }
 
@@ -210,6 +247,8 @@ function buildQRDataString(type: QRCodeType, content: QRTypeContent): string {
     case "document":
     case "frame":
     case "dynamic":
+    case "landing":
+    case "shortlink":
       return (content.url ?? "").trim() || "https://koapos.com";
 
     case "static":
@@ -292,18 +331,165 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
     backgroundOptions: { color: settings.bgColor === "transparent" ? "rgba(0,0,0,0)" : settings.bgColor },
     ...(settings.logoUrl ? {
       image: settings.logoUrl,
-      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize: 0.35, margin: 4 },
+      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize: settings.logoSize, margin: 4 },
     } : {}),
     qrOptions: { errorCorrectionLevel: settings.level },
   };
 }
 
+/* Render the bare QR to an SVG string. getRawData() loads the embedded logo with
+   crossOrigin="anonymous" so the result is canvas-safe; if that load fails (most
+   commonly a CORS-blocked or unreachable remote logo) it rejects, taking down both
+   the PNG and SVG export. The live preview uses append() and never hits this path,
+   so a QR can look fine on screen yet fail to download. When a logo is set and the
+   render rejects, retry once without it so the QR itself still exports, reporting
+   whether the logo had to be dropped. */
+async function renderQrSvgText(settings: QRSettings, data: string, qrSize: number): Promise<{ qrSvg: string; droppedLogo: boolean }> {
+  const render = async (opts: QROptions) => {
+    const blob = await new QRCodeStyling(opts).getRawData("svg");
+    if (!blob) throw new Error("QR render failed");
+    return (await (blob as Blob).text())
+      .replace(/<\?xml[^>]*\?>/i, "")
+      .replace(/<!DOCTYPE[^>]*>/i, "")
+      .trim();
+  };
+  const safeData = data || "https://koapos.com";
+  try {
+    return { qrSvg: await render(buildQROptions(settings, safeData, qrSize)), droppedLogo: false };
+  } catch (err) {
+    if (!settings.logoUrl) throw err;
+    const qrSvg = await render(buildQROptions({ ...settings, logoUrl: "" }, safeData, qrSize));
+    return { qrSvg, droppedLogo: true };
+  }
+}
+
+/* ── Framed SVG export ─────────────────────────────────────────────────────
+   Composes the QR together with its template frame into a single vector SVG so
+   downloads match the live preview (PNG export rasterises this same SVG). This
+   mirrors the visual logic of <TemplateWrapper> in vector primitives. */
+async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: number): Promise<{ svg: string; width: number; height: number; droppedLogo: boolean }> {
+  const { qrSvg, droppedLogo } = await renderQrSvgText(settings, data, qrSize);
+
+  // Embed the QR as a nested <svg> at (x, y); force width/height so it renders
+  // at qrSize regardless of how qr-code-styling emitted its root attributes.
+  const place = (x: number, y: number) =>
+    qrSvg.replace(/^<svg\s/i, `<svg x="${x}" y="${y}" width="${qrSize}" height="${qrSize}" `);
+
+  const tpl     = settings.template;
+  const pattern = settings.patternColor;
+  const bg      = settings.bgColor === "transparent" ? "#ffffff" : settings.bgColor;
+  const textOn  = settings.bgColor === "transparent" ? "#ffffff" : settings.bgColor;
+  const font    = "system-ui, sans-serif";
+
+  // Frame metrics scale with the QR so proportions match the on-screen preview.
+  const s      = qrSize / 240;
+  const pad    = Math.round(8 * s);
+  const radius = Math.round(16 * s);
+  const bw     = Math.max(1, Math.round(3 * s));
+  const fs     = Math.round(11 * s);
+  const gap    = Math.round(4 * s);
+  const innerR = Math.round(8 * s);
+
+  const wrap = (w: number, h: number, body: string) => ({
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`,
+    width: w, height: h, droppedLogo,
+  });
+  const clip = (id: string, shape: string, inner: string, extra = "") =>
+    `<defs><clipPath id="${id}">${shape}</clipPath></defs><g clip-path="url(#${id})"${extra}>${inner}</g>`;
+  const text = (x: number, y: number, fill: string, ls: number, str: string) =>
+    `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="${fill}" font-family="${font}" font-size="${fs}" font-weight="700" letter-spacing="${ls}">${str}</text>`;
+
+  if (tpl === "border") {
+    const W = qrSize + 2 * (pad + bw);
+    return wrap(W, W,
+      `<rect x="${bw / 2}" y="${bw / 2}" width="${W - bw}" height="${W - bw}" rx="${radius}" fill="${bg}" stroke="${pattern}" stroke-width="${bw}"/>` +
+      place(pad + bw, pad + bw));
+  }
+
+  if (tpl === "scan-me-dark") {
+    const barH = Math.round(fs * 1.35) + 2 * Math.round(5 * s);
+    const H = qrSize + barH;
+    const body = place(0, 0) +
+      `<rect x="0" y="${qrSize}" width="${qrSize}" height="${barH}" fill="${pattern}"/>` +
+      text(qrSize / 2, qrSize + barH / 2, textOn, 0.15 * fs, "SCAN ME ▲");
+    return wrap(qrSize, H, clip("fclip", `<rect width="${qrSize}" height="${H}" rx="${radius}"/>`, body));
+  }
+
+  if (tpl === "scan-me-light") {
+    const textH = Math.round(fs * 1.35);
+    const W = qrSize + 2 * (pad + bw);
+    const H = bw * 2 + pad * 2 + qrSize + gap + textH;
+    const qrX = (W - qrSize) / 2, qrY = bw + pad;
+    return wrap(W, H,
+      `<rect x="${bw / 2}" y="${bw / 2}" width="${W - bw}" height="${H - bw}" rx="${radius}" fill="${bg}" stroke="${pattern}" stroke-width="${bw}"/>` +
+      clip("fclip", `<rect x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" rx="${innerR}"/>`, place(qrX, qrY)) +
+      text(W / 2, qrY + qrSize + gap + textH / 2, pattern, 0.12 * fs, "▲ SCAN ME"));
+  }
+
+  if (tpl === "circle") {
+    const r = qrSize / 2;
+    return wrap(qrSize, qrSize, clip("fclip", `<circle cx="${r}" cy="${r}" r="${r}"/>`, place(0, 0)));
+  }
+
+  if (tpl === "circle-dashed" || tpl === "circle-dots") {
+    const pad6 = Math.round(6 * s), bwc = Math.max(2, Math.round(3 * s));
+    const W = qrSize + 2 * (pad6 + bwc), c = W / 2;
+    const dash = tpl === "circle-dots"
+      ? `stroke-dasharray="${bwc} ${bwc * 1.8}" stroke-linecap="round"`
+      : `stroke-dasharray="${bwc * 3} ${bwc * 2}"`;
+    return wrap(W, W,
+      clip("fclip", `<circle cx="${c}" cy="${c}" r="${qrSize / 2}"/>`, place(pad6 + bwc, pad6 + bwc)) +
+      `<circle cx="${c}" cy="${c}" r="${(W - bwc) / 2}" fill="none" stroke="${pattern}" stroke-width="${bwc}" ${dash}/>`);
+  }
+
+  if (tpl === "dark-circle") {
+    const pad4 = Math.round(4 * s);
+    const W = qrSize + 2 * pad4, c = W / 2;
+    return wrap(W, W,
+      `<circle cx="${c}" cy="${c}" r="${c}" fill="${pattern}"/>` +
+      clip("fclip", `<circle cx="${c}" cy="${c}" r="${qrSize / 2}"/>`, place(pad4, pad4), ` opacity="0.85"`));
+  }
+
+  if (tpl === "circle-ring") {
+    const pad6 = Math.round(6 * s), bwr = Math.max(2, Math.round(2 * s)), off = Math.round(4 * s);
+    const borderBox = qrSize + 2 * pad6 + 2 * bwr;
+    const W = borderBox + 2 * (off + bwr), c = W / 2;
+    return wrap(W, W,
+      clip("fclip", `<circle cx="${c}" cy="${c}" r="${qrSize / 2}"/>`, place(c - qrSize / 2, c - qrSize / 2)) +
+      `<circle cx="${c}" cy="${c}" r="${(borderBox - bwr) / 2}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>` +
+      `<circle cx="${c}" cy="${c}" r="${borderBox / 2 + off + bwr / 2}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>`);
+  }
+
+  // standard (and any unknown template): rounded-corner clip only.
+  return wrap(qrSize, qrSize, clip("fclip", `<rect width="${qrSize}" height="${qrSize}" rx="${radius}"/>`, place(0, 0)));
+}
+
+/* Rasterise a framed SVG string to a PNG blob, or return it verbatim as SVG. */
+async function svgToImageBlob(svg: string, format: "png" | "svg", width: number, height: number): Promise<Blob> {
+  if (format === "svg") return new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const img = new Image();
+  img.decoding = "async";
+  await new Promise<void>((resolve, reject) => {
+    img.onload = () => resolve();
+    img.onerror = () => reject(new Error("Failed to rasterise SVG"));
+    img.src = "data:image/svg+xml;charset=utf-8," + encodeURIComponent(svg);
+  });
+  const canvas = document.createElement("canvas");
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext("2d");
+  if (!ctx) throw new Error("Canvas unavailable");
+  ctx.drawImage(img, 0, 0, width, height);
+  return await new Promise<Blob>((resolve, reject) =>
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Failed to encode PNG"))), "image/png"));
+}
+
 /* ── Template wrapper ──────────────────────────────────────────────────── */
 
 function TemplateWrapper({
-  template, bgColor, patternColor, children, scale = 1,
+  template, bgColor, patternColor, children, scale = 1, fontFamily = DEFAULT_FONT_STACK,
 }: {
-  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number;
+  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number; fontFamily?: string;
 }) {
   const isCircle = TEMPLATES.find((t) => t.id === template)?.circle ?? false;
   const p  = Math.round(8 * scale);
@@ -326,13 +512,13 @@ function TemplateWrapper({
   if (template === "scan-me-dark") return (
     <div style={{ display: "inline-flex", flexDirection: "column", borderRadius: br, overflow: "hidden" }}>
       {children}
-      <div style={{ background: patternColor, color: bgColor === "transparent" ? "white" : bgColor, textAlign: "center", fontSize: fs, fontWeight: 700, letterSpacing: "0.15em", padding: `${Math.round(5 * scale)}px 0`, fontFamily: "system-ui, sans-serif" }}>SCAN ME ▲</div>
+      <div style={{ background: patternColor, color: bgColor === "transparent" ? "white" : bgColor, textAlign: "center", fontSize: fs, fontWeight: 700, letterSpacing: "0.15em", padding: `${Math.round(5 * scale)}px 0`, fontFamily }}>SCAN ME ▲</div>
     </div>
   );
   if (template === "scan-me-light") return (
     <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: Math.round(4 * scale), border: `${bw}px solid ${patternColor}`, borderRadius: br, padding: p, background: bgColor === "transparent" ? "white" : bgColor }}>
       <div style={{ lineHeight: 0, borderRadius: Math.round(8 * scale), overflow: "hidden" }}>{children}</div>
-      <div style={{ fontSize: fs, fontWeight: 700, letterSpacing: "0.12em", color: patternColor, fontFamily: "system-ui, sans-serif" }}>▲ SCAN ME</div>
+      <div style={{ fontSize: fs, fontWeight: 700, letterSpacing: "0.12em", color: patternColor, fontFamily }}>▲ SCAN ME</div>
     </div>
   );
   if (template === "circle")        return <div style={{ borderRadius: "50%", overflow: "hidden", lineHeight: 0 }}>{inner}</div>;
@@ -455,8 +641,8 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
 
 /* ── Template mini preview ─────────────────────────────────────────────── */
 
-function TemplateMini({ template, settings, data, selected, onClick }: {
-  template: typeof TEMPLATES[number]; settings: QRSettings; data: string; selected: boolean; onClick: () => void;
+function TemplateMini({ template, settings, data, selected, onClick, fontFamily }: {
+  template: typeof TEMPLATES[number]; settings: QRSettings; data: string; selected: boolean; onClick: () => void; fontFamily?: string;
 }) {
   const previewSettings = { ...settings, template: template.id };
   return (
@@ -465,7 +651,7 @@ function TemplateMini({ template, settings, data, selected, onClick }: {
         selected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/40 hover:bg-muted/40")}
       style={{ width: 100 }}>
       <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
-        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6}>
+        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6} fontFamily={fontFamily}>
           <StyledQR settings={previewSettings} data={data || "https://koapos.com"} size={72} />
         </TemplateWrapper>
       </div>
@@ -485,8 +671,11 @@ function SpecialtyNote({ title, desc }: { title: string; desc: string }) {
   );
 }
 
-function QRContentEditor({ type, content, onChange }: {
+interface LinkOption { id: string; label: string; url: string; }
+
+function QRContentEditor({ type, content, onChange, landingPages = [], shortlinks = [] }: {
   type: QRCodeType; content: QRTypeContent; onChange: (c: QRTypeContent) => void;
+  landingPages?: LinkOption[]; shortlinks?: LinkOption[];
 }) {
   const set = <K extends keyof QRTypeContent>(k: K, v: QRTypeContent[K]) => onChange({ ...content, [k]: v });
 
@@ -515,6 +704,54 @@ function QRContentEditor({ type, content, onChange }: {
         <p className="text-[11px] text-muted-foreground flex items-center gap-1.5">
           <Info className="w-3 h-3 shrink-0" /> Select a Scan Me template below to add a frame with a call-to-action.
         </p>
+      </div>
+    );
+  }
+
+  if (type === "landing") {
+    return (
+      <div className="space-y-2">
+        {landingPages.length === 0 ? (
+          <SpecialtyNote title="No landing pages yet" desc="Create one under Marketing → Landing Pages, then return here to generate its QR code." />
+        ) : (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Choose a landing page</Label>
+            <Select value={content.landingId ?? ""} onValueChange={(v) => {
+              const p = landingPages.find((x) => x.id === v);
+              onChange({ ...content, landingId: v, url: p?.url ?? "" });
+            }}>
+              <SelectTrigger><SelectValue placeholder="Select a landing page…" /></SelectTrigger>
+              <SelectContent>
+                {landingPages.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {content.url && <p className="text-[11px] text-muted-foreground font-mono break-all">{content.url}</p>}
+      </div>
+    );
+  }
+
+  if (type === "shortlink") {
+    return (
+      <div className="space-y-2">
+        {shortlinks.length === 0 ? (
+          <SpecialtyNote title="No shortlinks yet" desc="Create one under Marketing → Shortlinks, then return here to generate its QR code." />
+        ) : (
+          <div className="space-y-1.5">
+            <Label className="text-xs">Choose a shortlink</Label>
+            <Select value={content.shortlinkId ?? ""} onValueChange={(v) => {
+              const s = shortlinks.find((x) => x.id === v);
+              onChange({ ...content, shortlinkId: v, url: s?.url ?? "" });
+            }}>
+              <SelectTrigger><SelectValue placeholder="Select a shortlink…" /></SelectTrigger>
+              <SelectContent>
+                {shortlinks.map((s) => <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>)}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+        {content.url && <p className="text-[11px] text-muted-foreground font-mono break-all">{content.url}</p>}
       </div>
     );
   }
@@ -729,8 +966,38 @@ function QRContentEditor({ type, content, onChange }: {
 
 export default function MarketingQRCodesPage() {
   const { data: codesResponse,     refetch: refetchCodes }     = useListQrCodes({ query: { queryKey: ["qr-codes"] } });
-  const { data: rawSettings }                                   = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
+  const { data: rawSettings, isFetched: settingsFetched }       = useGetQrSettings({ query: { queryKey: ["qr-settings"] } });
   const { data: templatesResponse, refetch: refetchTemplates }  = useListQrSavedTemplates({ query: { queryKey: ["qr-saved-templates"] } });
+
+  // Landing pages & shortlinks the merchant has already created — selectable as QR targets.
+  const { data: landingResponse }   = useListLandingPages({ query: { queryKey: ["landing-pages"] } });
+  const { data: shortlinksResponse } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
+  const { data: merchant }           = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: shortlinkSettings }  = useGetShortlinkSettings({ query: { queryKey: ["shortlink-settings"] } });
+
+  // Brand colours & font from Management > Settings & Integrations > Business Details
+  const { profile, isLoading: profileLoading } = useBusinessProfile();
+
+  // Brand-aware default QR settings: primary brand colour drives the QR, the
+  // lightest brand background drives the canvas. These seed the colour pickers.
+  const brandDefaults = useMemo<QRSettings>(() => {
+    const primary = profile.brandColors?.[0];
+    const bg      = profile.bgColors?.[0];
+    return {
+      ...DEFAULT_SETTINGS,
+      patternColor: primary || DEFAULT_SETTINGS.patternColor,
+      eyeColor:     primary || DEFAULT_SETTINGS.eyeColor,
+      eyeDotColor:  primary || DEFAULT_SETTINGS.eyeDotColor,
+      bgColor:      bg      || DEFAULT_SETTINGS.bgColor,
+    };
+  }, [profile.brandColors, profile.bgColors]);
+
+  // Surface brand colours as the leading swatches in each picker.
+  const darkSwatches  = useMemo(() => mergeSwatches(profile.brandColors ?? [], DARK_SWATCHES),  [profile.brandColors]);
+  const lightSwatches = useMemo(() => mergeSwatches(profile.bgColors    ?? [], LIGHT_SWATCHES), [profile.bgColors]);
+
+  const brandFontFamily = useMemo(() => brandFontStack(profile.brandFont), [profile.brandFont]);
+  useEffect(() => { loadBrandFont(profile.brandFont); }, [profile.brandFont]);
 
   const createCode     = useCreateQrCode();
   const deleteCode     = useDeleteQrCode();
@@ -738,8 +1005,35 @@ export default function MarketingQRCodesPage() {
   const createTemplate = useCreateQrSavedTemplate();
   const deleteTemplate = useDeleteQrSavedTemplate();
 
-  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as Record<string, unknown>[]).map(apiToEntry);
-  const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as Record<string, unknown>[]).map(apiToTemplate);
+  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as unknown as Record<string, unknown>[]).map(apiToEntry);
+  const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToTemplate);
+
+  // Resolve the merchant's landing pages and shortlinks into selectable QR targets.
+  const landingOptions = useMemo<LinkOption[]>(() => {
+    const username = String((merchant as Record<string, unknown> | undefined)?.username ?? "").toLowerCase();
+    return ((landingResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((p) => {
+      const slug = String(p.slug ?? "");
+      return {
+        id:    String(p.id ?? slug),
+        label: String(p.title || slug || "Untitled page"),
+        url:   `${publicOrigin()}/b/${username || "your-username"}/a/${slug}`,
+      };
+    });
+  }, [landingResponse, merchant]);
+
+  const shortlinkOptions = useMemo<LinkOption[]>(() => {
+    const sl = shortlinkSettings as Record<string, unknown> | undefined;
+    const fallbackBase = `${String(sl?.baseDomain ?? "go.koapos.com")}/${String(sl?.prefix ?? "s")}`;
+    return ((shortlinksResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((s) => {
+      const slug = String(s.slug ?? s.linkId ?? "");
+      const base = String(s.baseDomain ?? fallbackBase);
+      return {
+        id:    String(s.linkId ?? s.id ?? slug),
+        label: String(s.label || s.longUrl || slug || "Shortlink"),
+        url:   `https://${base}/${slug}`,
+      };
+    });
+  }, [shortlinksResponse, shortlinkSettings]);
 
   const [qrType,       setQrType]       = useState<QRCodeType>("website");
   const [content,      setContent]      = useState<QRTypeContent>({ url: "https://" });
@@ -756,12 +1050,14 @@ export default function MarketingQRCodesPage() {
   const templateNameRef  = useRef<HTMLInputElement>(null);
   const saveTimerRef     = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Load settings from API on mount
+  // Hydrate settings once both the saved QR settings and the business profile
+  // have loaded: saved values win, otherwise the brand colours/font defaults apply.
+  const hydratedRef = useRef(false);
   useEffect(() => {
-    if (rawSettings) {
-      setSettings(apiToSettings(rawSettings as unknown as Record<string, unknown>));
-    }
-  }, [rawSettings]);
+    if (hydratedRef.current || !settingsFetched || profileLoading) return;
+    hydratedRef.current = true;
+    setSettings(apiToSettings((rawSettings ?? {}) as unknown as Record<string, unknown>, brandDefaults));
+  }, [settingsFetched, profileLoading, rawSettings, brandDefaults]);
 
   // Debounce settings save to API
   const scheduleSettingsSave = useCallback((next: QRSettings) => {
@@ -787,6 +1083,8 @@ export default function MarketingQRCodesPage() {
     if (qrType === "website" || qrType === "dynamic" || qrType === "document" || qrType === "frame") {
       return (content.url ?? "").trim().length > 5;
     }
+    if (qrType === "landing")   return !!(content.landingId && (content.url ?? "").trim());
+    if (qrType === "shortlink") return !!(content.shortlinkId && (content.url ?? "").trim());
     if (qrType === "vcard")  return !!(content.vcName?.trim());
     if (qrType === "wifi")   return !!(content.wifiSsid?.trim());
     if (qrType === "event")  return !!(content.evTitle?.trim());
@@ -815,6 +1113,17 @@ export default function MarketingQRCodesPage() {
     e.target.value = "";
   }, [settings.level]);
 
+  /* Import the logo from Management > Business Details */
+  const importBusinessLogo = useCallback(() => {
+    if (!profile.logo) {
+      toast.error("No business logo found. Add one in Business Details first.");
+      return;
+    }
+    set("logoUrl", profile.logo);
+    if (settings.level === "L" || settings.level === "M") set("level", "Q");
+    toast.success("Business logo imported");
+  }, [profile.logo, settings.level]);
+
   /* Save to history via API */
   const saveToHistory = useCallback(() => {
     if (!hasValidContent) { toast.error("Enter valid content first"); return; }
@@ -838,29 +1147,43 @@ export default function MarketingQRCodesPage() {
     });
   }, [qrData, label, settings, hasValidContent, qrType, content, createCode, refetchCodes]);
 
-  /* Download helpers */
-  const downloadBlob = useCallback((blob: Blob, name: string) => {
+  /* Download helpers — export the framed SVG so the file matches the preview. */
+  const downloadFile = useCallback((blob: Blob, name: string, ext: string) => {
+    // The anchor must be in the DOM for click() to trigger a download in Firefox,
+    // and the object URL must stay alive until the download starts — revoking it
+    // synchronously after click() aborts the download in Chrome/Safari, which is
+    // why downloads were silently failing. Defer cleanup to a later tick.
+    const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = `${name.replace(/\s+/g, "_")}.png`;
+    a.href = url;
+    a.download = `${name.replace(/\s+/g, "_") || "qrcode"}.${ext}`;
+    a.rel = "noopener";
+    a.style.display = "none";
+    document.body.appendChild(a);
     a.click();
-    URL.revokeObjectURL(a.href);
+    setTimeout(() => { a.remove(); URL.revokeObjectURL(url); }, 1500);
     toast.success("Downloaded");
   }, []);
 
-  const downloadLive = useCallback(async () => {
-    const qr = new QRCodeStyling(buildQROptions(settings, qrData || "https://koapos.com", settings.size));
-    const raw = await qr.getRawData("png");
-    if (!raw) { toast.error("Download failed"); return; }
-    downloadBlob(raw as Blob, label || "qrcode");
-  }, [settings, qrData, label, downloadBlob]);
+  const downloadFramed = useCallback(async (s: QRSettings, data: string, name: string, format: "png" | "svg") => {
+    try {
+      const { svg, width, height, droppedLogo } = await buildFramedQrSvg(s, data, s.size);
+      const blob = await svgToImageBlob(svg, format, width, height);
+      downloadFile(blob, name, format);
+      if (droppedLogo) toast.warning("Logo couldn't be loaded — exported without it.");
+    } catch (err) {
+      console.error("QR download failed", err);
+      toast.error("Download failed");
+    }
+  }, [downloadFile]);
 
-  const downloadEntry = useCallback(async (entry: QREntry) => {
-    const qr = new QRCodeStyling(buildQROptions(entry.settings, entry.url, entry.settings.size));
-    const raw = await qr.getRawData("png");
-    if (!raw) { toast.error("Download failed"); return; }
-    downloadBlob(raw as Blob, entry.label || "qrcode");
-  }, [downloadBlob]);
+  const downloadLive = useCallback((format: "png" | "svg" = "png") =>
+    downloadFramed(settings, qrData || "https://koapos.com", label || "qrcode", format),
+    [settings, qrData, label, downloadFramed]);
+
+  const downloadEntry = useCallback((entry: QREntry, format: "png" | "svg" = "png") =>
+    downloadFramed(entry.settings, entry.url, entry.label || "qrcode", format),
+    [downloadFramed]);
 
   const deleteEntry = (id: string) => {
     deleteCode.mutate({ id: Number(id) }, {
@@ -932,25 +1255,28 @@ export default function MarketingQRCodesPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
+        {/* ── Content + Live Preview side by side ── */}
+        {/* items-stretch keeps both columns the same height, so the Content card
+            grows to match the Live Preview column dynamically. */}
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6 items-stretch">
 
-          {/* ── Left: Config ── */}
-          <div className="space-y-4">
+          {/* ── Content ── */}
+          <div className="space-y-4 flex flex-col">
 
             {/* QR Type + Content */}
-            <Card>
+            <Card className="flex-1 flex flex-col">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   {activeTypeMeta && <activeTypeMeta.icon className="w-4 h-4" />}
                   Content
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent className="space-y-4 flex-1">
 
                 {/* Type selector */}
                 <div className="space-y-2">
                   <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">QR Code Type</Label>
-                  <div className="grid grid-cols-7 gap-1">
+                  <div className="grid grid-cols-4 sm:grid-cols-8 gap-1">
                     {QR_TYPES.map((t) => {
                       const Icon = t.icon;
                       return (
@@ -970,7 +1296,8 @@ export default function MarketingQRCodesPage() {
                 </div>
 
                 <div className="border-t pt-4">
-                  <QRContentEditor type={qrType} content={content} onChange={setContent} />
+                  <QRContentEditor type={qrType} content={content} onChange={setContent}
+                    landingPages={landingOptions} shortlinks={shortlinkOptions} />
                 </div>
 
                 {/* Label */}
@@ -980,56 +1307,87 @@ export default function MarketingQRCodesPage() {
                 </div>
               </CardContent>
             </Card>
+          </div>
 
+          {/* ── Live Preview (beside Content) ── */}
+          <div className="md:sticky md:top-4 space-y-4">
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex flex-col items-center gap-4 py-2">
+                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily}>
+                    <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
+                  </TemplateWrapper>
+                  <div className="text-center space-y-1">
+                    <p className="text-xs font-medium">{label || <span className="text-muted-foreground italic">No label</span>}</p>
+                    <p className="text-[10px] text-muted-foreground break-all max-w-[260px] line-clamp-2">{qrData}</p>
+                    <div className="flex flex-wrap gap-1 justify-center">
+                      <Badge variant="secondary" className="text-[10px]">{activeTypeMeta?.label}</Badge>
+                      <Badge variant="outline" className="text-[10px]">ECC {settings.level} · {settings.size}px</Badge>
+                    </div>
+                  </div>
+                </div>
+                <div className="grid grid-cols-2 gap-2">
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="outline" className="gap-1.5" disabled={!hasValidContent}>
+                        <Download className="w-4 h-4" /> Download <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem onClick={() => downloadLive("png")}>
+                        <File className="w-3.5 h-3.5 mr-2" /> PNG image
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => downloadLive("svg")}>
+                        <FileText className="w-3.5 h-3.5 mr-2" /> SVG vector
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                  <Button className="gap-1.5" onClick={saveToHistory} disabled={!hasValidContent || createCode.isPending}>
+                    <Save className="w-4 h-4" /> Save
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {activeEntry && (
+              <Card>
+                <CardContent className="p-4 space-y-2">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Selected</p>
+                  <p className="text-sm font-medium truncate">{activeEntry.label}</p>
+                  <p className="text-[10px] text-muted-foreground break-all line-clamp-2">{activeEntry.url}</p>
+                  <div className="flex gap-1.5 pt-1">
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => downloadEntry(activeEntry)}>
+                      <Download className="w-3 h-3" /> PNG
+                    </Button>
+                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => copyUrl(activeEntry.url)}>
+                      <Copy className="w-3 h-3" /> Copy
+                    </Button>
+                    <Button size="sm" variant="outline" className="h-7 w-7 text-xs p-0" onClick={() => window.open(activeEntry.url, "_blank")}>
+                      <ExternalLink className="w-3 h-3" />
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </div>
+        </div>
+
+        {/* ── Styling controls ── */}
+        <div className="space-y-4">
+
+          {/* Colours + Template side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
             {/* Colors */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Colours</CardTitle></CardHeader>
               <CardContent className="space-y-4">
-                <ColourRow label="Pattern color" value={settings.patternColor} swatches={DARK_SWATCHES} onChange={(v) => set("patternColor", v)} />
-                <ColourRow label="Eye color" value={settings.eyeColor} swatches={DARK_SWATCHES} onChange={(v) => set("eyeColor", v)}
+                <ColourRow label="Pattern color" value={settings.patternColor} swatches={darkSwatches} onChange={(v) => set("patternColor", v)} />
+                <ColourRow label="Eye color" value={settings.eyeColor} swatches={darkSwatches} onChange={(v) => set("eyeColor", v)}
                   onCopy={() => set("eyeColor", settings.patternColor)} copyLabel="Copy pattern color" />
-                <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={DARK_SWATCHES} onChange={(v) => set("eyeDotColor", v)}
+                <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={darkSwatches} onChange={(v) => set("eyeDotColor", v)}
                   onCopy={() => set("eyeDotColor", settings.patternColor)} copyLabel="Copy pattern color" />
-                <ColourRow label="Background color" value={settings.bgColor} swatches={LIGHT_SWATCHES} onChange={(v) => set("bgColor", v)} />
-              </CardContent>
-            </Card>
-
-            {/* Pattern */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Pattern</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
-                  {DOT_STYLES.map((s) => (
-                    <button key={s.value} type="button" onClick={() => set("dotStyle", s.value)}
-                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
-                        settings.dotStyle === s.value
-                          ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
-                      <DotIcon style={s.value} />
-                      <span className="text-[10px] font-medium">{s.label}</span>
-                    </button>
-                  ))}
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* Eye style */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Eye Style</CardTitle></CardHeader>
-              <CardContent>
-                <div className="grid grid-cols-4 gap-2">
-                  {EYE_STYLES.map((s) => (
-                    <button key={`${s.csStyle}-${s.cdStyle}`} type="button"
-                      onClick={() => { set("cornerSquareStyle", s.csStyle); set("cornerDotStyle", s.cdStyle); }}
-                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
-                        settings.cornerSquareStyle === s.csStyle && settings.cornerDotStyle === s.cdStyle
-                          ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
-                      <EyeIcon csStyle={s.csStyle} cdStyle={s.cdStyle} />
-                      <span className="text-[10px] font-medium">{s.label}</span>
-                    </button>
-                  ))}
-                </div>
+                <ColourRow label="Background color" value={settings.bgColor} swatches={lightSwatches} onChange={(v) => set("bgColor", v)} />
               </CardContent>
             </Card>
 
@@ -1110,11 +1468,54 @@ export default function MarketingQRCodesPage() {
                 <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
                   {TEMPLATES.map((t) => (
                     <TemplateMini key={t.id} template={t} settings={settings} data={qrData || "https://koapos.com"}
-                      selected={settings.template === t.id} onClick={() => set("template", t.id)} />
+                      selected={settings.template === t.id} onClick={() => set("template", t.id)} fontFamily={brandFontFamily} />
                   ))}
                 </div>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Pattern + Eye Style side by side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+            {/* Pattern */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Pattern</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 sm:grid-cols-6 gap-2">
+                  {DOT_STYLES.map((s) => (
+                    <button key={s.value} type="button" onClick={() => set("dotStyle", s.value)}
+                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
+                        settings.dotStyle === s.value
+                          ? "border-primary bg-primary/5 text-primary shadow-sm"
+                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
+                      <DotIcon style={s.value} />
+                      <span className="text-[10px] font-medium">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Eye style */}
+            <Card>
+              <CardHeader className="pb-3"><CardTitle className="text-base">Eye Style</CardTitle></CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-4 gap-2">
+                  {EYE_STYLES.map((s) => (
+                    <button key={`${s.csStyle}-${s.cdStyle}`} type="button"
+                      onClick={() => { set("cornerSquareStyle", s.csStyle); set("cornerDotStyle", s.cdStyle); }}
+                      className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
+                        settings.cornerSquareStyle === s.csStyle && settings.cornerDotStyle === s.cdStyle
+                          ? "border-primary bg-primary/5 text-primary shadow-sm"
+                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
+                      <EyeIcon csStyle={s.csStyle} cdStyle={s.cdStyle} />
+                      <span className="text-[10px] font-medium">{s.label}</span>
+                    </button>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          </div>
 
             {/* Advanced */}
             <Card>
@@ -1153,11 +1554,18 @@ export default function MarketingQRCodesPage() {
                   {/* Logo upload */}
                   <div className="space-y-2">
                     <Label className="text-xs">Centre Logo <span className="text-muted-foreground font-normal">(optional)</span></Label>
-                    <div className="flex gap-2">
+                    <div className="flex flex-wrap gap-2">
                       <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0"
                         onClick={() => logoFileRef.current?.click()}>
                         <Upload className="w-3.5 h-3.5" /> Upload image
                       </Button>
+                      <Button type="button" variant="outline" size="sm" className="gap-1.5 shrink-0"
+                        onClick={importBusinessLogo} disabled={!profile.logo}
+                        title={profile.logo ? "Use the logo from Business Details" : "Add a logo in Business Details first"}>
+                        <Building2 className="w-3.5 h-3.5" /> Use business logo
+                      </Button>
+                    </div>
+                    <div className="flex gap-2">
                       <Input placeholder="…or paste image URL" value={settings.logoUrl.startsWith("data:") ? "" : settings.logoUrl}
                         onChange={(e) => set("logoUrl", e.target.value)}
                         className="font-mono text-xs flex-1 min-w-0" />
@@ -1170,72 +1578,32 @@ export default function MarketingQRCodesPage() {
                     </div>
                     <input ref={logoFileRef} type="file" accept="image/*" className="hidden" onChange={handleLogoUpload} />
                     {settings.logoUrl && (
-                      <div className="flex items-center gap-2.5 mt-1 p-2 rounded-lg bg-muted/40 border">
-                        <img src={settings.logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded border bg-white" />
-                        <p className="text-[10px] text-muted-foreground">
-                          Logo active · {settings.level === "L" || settings.level === "M"
-                            ? <span className="text-amber-600">Switch to ECC Q or H for best results</span>
-                            : "ECC level is good"}
-                        </p>
-                      </div>
+                      <>
+                        <div className="flex items-center gap-2.5 mt-1 p-2 rounded-lg bg-muted/40 border">
+                          <img src={settings.logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded border bg-white" />
+                          <p className="text-[10px] text-muted-foreground">
+                            Logo active · {settings.level === "L" || settings.level === "M"
+                              ? <span className="text-amber-600">Switch to ECC Q or H for best results</span>
+                              : "ECC level is good"}
+                          </p>
+                        </div>
+                        <div className="space-y-1.5 pt-1">
+                          <div className="flex items-center justify-between">
+                            <Label className="text-xs">Logo size</Label>
+                            <span className="text-[10px] text-muted-foreground font-mono">{Math.round(settings.logoSize * 100)}%</span>
+                          </div>
+                          <input type="range" min={0.15} max={0.5} step={0.01} value={settings.logoSize}
+                            onChange={(e) => set("logoSize", parseFloat(e.target.value))}
+                            className="w-full accent-primary cursor-pointer" />
+                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code — keep ECC at Q or H so it still scans.</p>
+                        </div>
+                      </>
                     )}
                     <p className="text-[10px] text-muted-foreground">Use Error Correction Q or H when adding a logo.</p>
                   </div>
                 </CardContent>
               )}
             </Card>
-          </div>
-
-          {/* ── Right: Live Preview ── */}
-          <div className="lg:sticky lg:top-4 space-y-4">
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <div className="flex flex-col items-center gap-4 py-2">
-                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor}>
-                    <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
-                  </TemplateWrapper>
-                  <div className="text-center space-y-1">
-                    <p className="text-xs font-medium">{label || <span className="text-muted-foreground italic">No label</span>}</p>
-                    <p className="text-[10px] text-muted-foreground break-all max-w-[260px] line-clamp-2">{qrData}</p>
-                    <div className="flex flex-wrap gap-1 justify-center">
-                      <Badge variant="secondary" className="text-[10px]">{activeTypeMeta?.label}</Badge>
-                      <Badge variant="outline" className="text-[10px]">ECC {settings.level} · {settings.size}px</Badge>
-                    </div>
-                  </div>
-                </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <Button variant="outline" className="gap-1.5" onClick={downloadLive} disabled={!hasValidContent}>
-                    <Download className="w-4 h-4" /> Download
-                  </Button>
-                  <Button className="gap-1.5" onClick={saveToHistory} disabled={!hasValidContent || createCode.isPending}>
-                    <Save className="w-4 h-4" /> Save
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-
-            {activeEntry && (
-              <Card>
-                <CardContent className="p-4 space-y-2">
-                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Selected</p>
-                  <p className="text-sm font-medium truncate">{activeEntry.label}</p>
-                  <p className="text-[10px] text-muted-foreground break-all line-clamp-2">{activeEntry.url}</p>
-                  <div className="flex gap-1.5 pt-1">
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => downloadEntry(activeEntry)}>
-                      <Download className="w-3 h-3" /> PNG
-                    </Button>
-                    <Button size="sm" variant="outline" className="gap-1 h-7 text-xs flex-1" onClick={() => copyUrl(activeEntry.url)}>
-                      <Copy className="w-3 h-3" /> Copy
-                    </Button>
-                    <Button size="sm" variant="outline" className="h-7 w-7 text-xs p-0" onClick={() => window.open(activeEntry.url, "_blank")}>
-                      <ExternalLink className="w-3 h-3" />
-                    </Button>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
         </div>
 
         {/* ── History ── */}

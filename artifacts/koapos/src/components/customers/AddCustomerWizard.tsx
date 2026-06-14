@@ -8,6 +8,7 @@ import {
   Customer,
 } from "@workspace/api-client-react";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { validateABN } from "@/lib/abn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -23,7 +24,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { User, MapPin, Settings2, CheckCircle2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch } from "lucide-react";
+import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch } from "lucide-react";
+import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -59,17 +61,11 @@ const defaultForm: CustomerForm = {
   heardFrom: "", heardFromDetails: "", referredByCustomerId: "",
 };
 
-function StepPill({ label, icon, active, done }: { label: string; icon: React.ReactNode; active: boolean; done: boolean }) {
-  return (
-    <div className={cn(
-      "flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-      active ? "bg-primary text-primary-foreground" : done ? "bg-muted text-muted-foreground" : "text-muted-foreground",
-    )}>
-      {done && !active ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <span className="shrink-0">{icon}</span>}
-      {label}
-    </div>
-  );
-}
+const WIZARD_STEPS: StepperStep[] = [
+  { label: "Personal Info",    icon: User      },
+  { label: "Address",          icon: MapPin    },
+  { label: "Account Settings", icon: Settings2 },
+];
 
 function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>;
@@ -236,13 +232,7 @@ export function AddCustomerWizard({
               {editingCustomer ? "Edit Customer" : "Add New Customer"}
             </DialogTitle>
           </DialogHeader>
-          <div className="flex items-center gap-2 flex-wrap mt-3">
-            <StepPill label="Personal Info" icon={<User className="w-4 h-4" />} active={step === "personal"} done={currentIndex > 0} />
-            <span className="text-muted-foreground text-xs">›</span>
-            <StepPill label="Address" icon={<MapPin className="w-4 h-4" />} active={step === "address"} done={currentIndex > 1} />
-            <span className="text-muted-foreground text-xs">›</span>
-            <StepPill label="Account Settings" icon={<Settings2 className="w-4 h-4" />} active={step === "account"} done={false} />
-          </div>
+          <Stepper steps={WIZARD_STEPS} current={currentIndex} className="mt-3" />
         </div>
 
         {/* Scrollable step content — min-h keeps the window rigid across all steps */}
@@ -285,7 +275,15 @@ export function AddCustomerWizard({
               </FieldRow>
               <FieldRow>
                 <Field label="ABN">
-                  <Input value={form.abn} onChange={(e) => setField("abn", e.target.value)} placeholder="12 345 678 901" />
+                  <Input
+                    value={form.abn}
+                    onChange={(e) => setField("abn", e.target.value)}
+                    placeholder="12 345 678 901"
+                    className={form.abn && !validateABN(form.abn) ? "border-destructive focus-visible:ring-destructive" : ""}
+                  />
+                  {form.abn && !validateABN(form.abn) && (
+                    <p className="text-xs text-destructive mt-1">Invalid ABN</p>
+                  )}
                 </Field>
                 <Field label="Heard From">
                   <Select value={form.heardFrom} onValueChange={(v) => { setField("heardFrom", v); setField("heardFromDetails", ""); }}>

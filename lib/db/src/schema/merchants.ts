@@ -26,6 +26,11 @@ export const merchantsTable = pgTable("merchants", {
   lastAuthEventsViewedAt: timestamp("last_auth_events_viewed_at", { withTimezone: true }),
   status: text("status").notNull().default("active"),
   partnerReferralCode: text("partner_referral_code").unique(),
+  tosAcceptedAt: timestamp("tos_accepted_at", { withTimezone: true }),
+  tosAcceptedIp: text("tos_accepted_ip"),
+  emailVerifiedAt: timestamp("email_verified_at", { withTimezone: true }),
+  onboardingCompletedAt: timestamp("onboarding_completed_at", { withTimezone: true }),
+  isDemoAccount: text("is_demo_account").notNull().default("false"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

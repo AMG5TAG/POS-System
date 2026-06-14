@@ -3,11 +3,18 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
 import { customersTable } from "./customers";
+import { serviceJobsTable } from "./service-jobs";
+import { appointmentsTable } from "./appointments";
+import { staffTable } from "./staff";
 
 export const invoicesTable = pgTable("invoices", {
   id: serial("id").primaryKey(),
   merchantId: integer("merchant_id").notNull().references(() => merchantsTable.id),
   customerId: integer("customer_id").references(() => customersTable.id),
+  // Staff member credited with the invoice (defaults to the creator), so
+  // invoice revenue/profit can be attributed in staff leaderboards + KPIs the
+  // same way POS transactions are.
+  staffId: integer("staff_id").references(() => staffTable.id),
   invoiceNumber: text("invoice_number").notNull(),
   status: text("status").notNull().default("draft"),
   subtotal: numeric("subtotal", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -28,6 +35,8 @@ export const invoicesTable = pgTable("invoices", {
   recurringOccurrences: integer("recurring_occurrences"),
   recurringStartDate: timestamp("recurring_start_date", { withTimezone: true }),
   parentInvoiceId: integer("parent_invoice_id").references((): AnyPgColumn => invoicesTable.id),
+  serviceJobId: integer("service_job_id").references(() => serviceJobsTable.id),
+  appointmentId: integer("appointment_id").references(() => appointmentsTable.id),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { customerDisplayName } from "@/lib/customer-name";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -40,7 +41,7 @@ function ProgressBar({ value, max }: { value: number; max: number }) {
 }
 
 function nameOf(c: Customer) {
-  return [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
+  return customerDisplayName(c);
 }
 
 function daysSince(d?: string | null) {

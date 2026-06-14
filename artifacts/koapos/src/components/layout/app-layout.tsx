@@ -2,13 +2,14 @@ import { useState, useRef, useEffect } from "react";
 import { createPortal } from "react-dom";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/use-auth";
+import { customerDisplayName } from "@/lib/customer-name";
 import { useTheme } from "@/lib/theme";
 import { useNavLayout, type NavLayoutMode } from "@/lib/nav-layout";
 import { useAccessibility } from "@/lib/accessibility";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, Receipt,
-  Boxes, UserSquare2, Settings, Blocks, LogOut, CalendarClock,
+  Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock, Wallet,
   Wrench, ChevronDown, LayoutGrid, Layers, ClipboardList, Clock,
   RotateCcw, Truck, Bookmark, Tag, Hash, AlertTriangle, History,
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
@@ -18,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -27,28 +28,47 @@ import {
   useListCustomers,
   useListServiceJobs,
   useListAppointments,
+  useListProducts,
   useGetAuthEventsUnreadCount,
+  useGetStaffClockStatus,
+  useClockIn,
+  useClockOut,
+  useListStaff,
+  useVerifyStaffPin,
+  useGetPosSettings,
   type Customer,
   type Appointment,
   type ServiceJob,
+  type Product,
+  type Staff,
 } from "@workspace/api-client-react";
+import { useStaffSession } from "@/lib/staff-day-session";
 import {
   Sidebar, SidebarContent, SidebarHeader, SidebarMenu, SidebarMenuItem,
   SidebarMenuButton, SidebarProvider, SidebarTrigger, SidebarFooter,
   SidebarMenuSub, SidebarMenuSubItem, SidebarMenuSubButton,
   useSidebar,
 } from "@/components/ui/sidebar";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { toast } from "sonner";
+import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
+import { LocationSwitcher } from "@/components/layout/location-switcher";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
 
 const POS_SUBNAV = [
-  { name: "Sell",      href: "/pos",            icon: ShoppingCart },
+  { name: "Sell",      href: "/pos/sell",            icon: ShoppingCart },
   { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
   { name: "PC Builder", href: "/pos/pc-builder", icon: HardDrive },
   { name: "History",   href: "/pos/history",    icon: History },
   { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
-  { name: "Laybys",    href: "/pos/laybuys",    icon: Package2 },
+  { name: "Quotes",    href: "/pos/quotes",     icon: ClipboardList },
+  { name: "Laybys",    href: "/pos/laybys",    icon: Package2 },
   { name: "Parked",    href: "/pos/parked",     icon: ParkingCircle },
   { name: "Refund",    href: "/pos/refund",     icon: RotateCcw },
   { name: "Cash",      href: "/pos/cash",       icon: Coins },
@@ -62,6 +82,7 @@ const CUSTOMERS_SUBNAV = [
 const STAFF_SUBNAV: NavItem[] = [
   { name: "Overview",    href: "/staff/overview",     icon: LayoutGrid    },
   { name: "Rostering",   href: "/staff/rostering",    icon: CalendarClock },
+  { name: "Payroll",     href: "/staff/payroll",      icon: Wallet        },
   { name: "Notes",       href: "/staff/notes",        icon: StickyNote    },
   { name: "KPIs",        href: "/staff/kpis",         icon: Target        },
   { name: "Links",       href: "/staff/links",        icon: Link2         },
@@ -69,36 +90,38 @@ const STAFF_SUBNAV: NavItem[] = [
 ];
 
 const ONLINE_SUBNAV: NavItem[] = [
-  { name: "Deliveries", href: "/online/delivery-orders", icon: Package2    },
+  { name: "Deliveries", href: "/online/deliveries", icon: Package2    },
   { name: "Shipping",        href: "/online/shipping",        icon: Truck       },
   { name: "Marketplace",     href: "/online/marketplace",     icon: ShoppingBag },
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
-  { name: "Overview",      href: "/marketing",                      icon: BarChart2 },
-  { name: "Landing Pages", href: "/marketing/landing-pages",        icon: LayoutTemplate },
+  { name: "Overview",      href: "/marketing/overview",                      icon: BarChart2 },
   {
     name: "Email",
     icon: Mail,
+    href: "/marketing/email/campaigns",
     children: [
       { name: "Campaigns", href: "/marketing/email/campaigns", icon: Send },
       { name: "Templates",       href: "/marketing/email/templates",  icon: FileText },
     ],
   },
   {
-    name: "Generators",
-    icon: QrCode,
+    name: "SMS",
+    icon: MessageSquare,
+    href: "/marketing/sms/campaigns",
     children: [
-      { name: "QR Codes",   href: "/marketing/generators/qr-codes",   icon: QrCode },
-      { name: "Shortlinks", href: "/marketing/generators/shortlinks",  icon: Link2  },
+      { name: "Campaigns", href: "/marketing/sms/campaigns", icon: Send },
+      { name: "Templates", href: "/marketing/sms/templates",  icon: FileText },
     ],
   },
+  { name: "Social Media",  href: "/marketing/social",               icon: Share2 },
   {
     name: "Loyalty",
     icon: Gift,
     children: [
-      { name: "Promos",  href: "/marketing/loyalty/promotions",  icon: Zap   },
-      { name: "Leaders", href: "/marketing/loyalty/leaderboard", icon: Trophy },
+      { name: "Promos",  href: "/marketing/loyalty/promos",  icon: Zap   },
+      { name: "Leaders", href: "/marketing/loyalty/leaders", icon: Trophy },
     ],
   },
   { name: "Automation",    href: "/marketing/automation",       icon: Zap },
@@ -106,18 +129,19 @@ const MARKETING_SUBNAV: NavItem[] = [
 ];
 
 const INVENTORY_SUBNAV = [
-  { name: "Overview",        href: "/products/overview",        icon: LayoutGrid },
-  { name: "Products",        href: "/products",                 icon: Package },
-  { name: "Bundles",         href: "/products/bundles",         icon: Layers },
-  { name: "Stocktake",       href: "/products/stocktake",       icon: ClipboardList },
-  { name: "Purchase Orders", href: "/products/purchase-orders", icon: ShoppingCart },
-  { name: "Pre-Orders",      href: "/products/pre-orders",      icon: Clock },
-  { name: "Return Auth.",    href: "/products/return-auth",     icon: RotateCcw },
-  { name: "Suppliers",       href: "/products/suppliers",       icon: Truck },
-  { name: "Brands",          href: "/products/brands",          icon: Bookmark },
-  { name: "Categories",      href: "/products/categories",      icon: Tag },
-  { name: "Tags",            href: "/products/tags",            icon: Hash },
-  { name: "Recalls",         href: "/products/recalls",         icon: AlertTriangle },
+  { name: "Overview",        href: "/inventory/overview",        icon: LayoutGrid },
+  { name: "Products",        href: "/inventory/products",                 icon: Package },
+  { name: "Bundles",         href: "/inventory/bundles",         icon: Layers },
+  { name: "Stocktake",       href: "/inventory/stocktake",       icon: ClipboardList },
+  { name: "Purchase Orders", href: "/inventory/purchase-orders", icon: ShoppingCart },
+  { name: "Pre-Orders",      href: "/inventory/pre-orders",      icon: Clock },
+  { name: "Return Auth.",    href: "/inventory/return-auth",     icon: RotateCcw },
+  { name: "Suppliers",       href: "/inventory/suppliers",       icon: Truck },
+  { name: "Brands",          href: "/inventory/brands",          icon: Bookmark },
+  { name: "Categories",      href: "/inventory/categories",      icon: Tag },
+  { name: "Tags",            href: "/inventory/tags",            icon: Hash },
+  { name: "Recalls",         href: "/inventory/recalls",         icon: AlertTriangle },
+  { name: "Warranty",        href: "/inventory/warranty",        icon: ShieldCheck },
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
@@ -129,75 +153,107 @@ type NavItem     = NavLeaf | NavGroup;
 const MANAGEMENT_SUBNAV: NavItem[] = [
   { name: "Overview", href: "/management/overview", icon: LayoutDashboard },
   {
-    name: "Customers", icon: Users, defaultHref: "/management/customers",
+    name: "Customers", icon: Users, defaultHref: "/management/customers/settings",
     children: [
-      { name: "Settings",            href: "/management/customers",            icon: Users         },
+      { name: "Settings",            href: "/management/customers/settings",            icon: Users         },
       { name: "Heard From",          href: "/management/customers/heard-from", icon: Radio         },
       { name: "Portal",              href: "/management/customers/portal",     icon: Link2         },
-      { name: "Loyalty",             href: "/management/loyalty",              icon: Gift,
-        matchPaths: ["/management/loyalty/leaderboard"] },
-      { name: "Gift Cards",          href: "/management/gift-cards",           icon: Gift          },
-      { name: "Discounts & Pricing", href: "/management/discounts",            icon: Percent,
-        matchPaths: ["/management/pricing-rules", "/management/layby"] },
+      { name: "Loyalty",             href: "/management/customers/loyalty",              icon: Gift,
+        matchPaths: ["/management/customers/loyalty/leaderboard"] },
+      { name: "Gift Cards",          href: "/management/customers/gift-cards",           icon: Gift          },
+      { name: "Discounts & Pricing", href: "/management/customers/discounts-pricing",            icon: Percent,
+        matchPaths: ["/management/customers/discounts-pricing/pricing-rules", "/management/customers/discounts-pricing/layby"] },
     ],
   },
   {
-    name: "Products & Inventory", icon: Boxes, defaultHref: "/management/inventory",
+    name: "Products & Inventory", icon: Boxes, defaultHref: "/management/products-inventory/inventory",
     children: [
-      { name: "Inventory",       href: "/management/inventory",       icon: Boxes    },
-      { name: "Product Types",   href: "/management/product-types",   icon: Tag      },
-      { name: "Modifier Groups", href: "/management/modifier-groups", icon: Layers   },
-      { name: "Calculators",     href: "/management/calculators",     icon: Calculator },
+      { name: "Inventory",       href: "/management/products-inventory/inventory",       icon: Boxes    },
+      { name: "Product Types",   href: "/management/products-inventory/product-types",   icon: Tag      },
+      { name: "Modifier Groups", href: "/management/products-inventory/modifier-groups", icon: Layers   },
+      {
+        name: "Calculators", icon: Calculator,
+        children: [
+          { name: "3D Prints",  href: "/management/products-inventory/3d-prints", icon: Cpu       },
+          { name: "PC Builder", href: "/management/products-inventory/pc-builder",  icon: HardDrive },
+        ],
+      },
     ],
   },
   {
-    name: "Staff & Operations", icon: UserSquare2, defaultHref: "/management/staff",
+    name: "Staff & Operations", icon: UserSquare2, defaultHref: "/management/staff-operations/employees",
     children: [
-      { name: "Employees",     href: "/management/staff",              icon: UserSquare2 },
-      { name: "Timesheets",    href: "/management/staff/timesheet",    icon: Clock       },
-      { name: "Cost Summary",  href: "/management/staff/cost-summary", icon: Coins       },
-      { name: "POS Registers", href: "/management/registers",          icon: Monitor     },
-      { name: "Floor Plan",    href: "/management/floor-plan",         icon: Map         },
-      { name: "Cameras",       href: "/management/cameras",            icon: Camera      },
+      { name: "Employees",     href: "/management/staff-operations/employees",              icon: UserSquare2 },
+      { name: "Timesheets",    href: "/management/staff-operations/timesheets",    icon: Clock       },
+      { name: "Cost Summary",  href: "/management/staff-operations/cost-summary", icon: Coins       },
+      { name: "POS Registers", href: "/management/staff-operations/pos-registers",          icon: Monitor     },
+      { name: "Sales Settings", href: "/management/sales-settings",    icon: Receipt     },
+      { name: "Floor Plan",    href: "/management/staff-operations/floor-plan",         icon: Map         },
+      { name: "Cameras",       href: "/management/staff-operations/cameras",            icon: Camera      },
+      {
+        name: "Apps", icon: LayoutGrid,
+        children: [
+          { name: "Tech App",  href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
+          { name: "Dashboard", href: "/management/staff-operations/dashboard", icon: LayoutDashboard  },
+        ],
+      },
+      { name: "Legal",         href: "/management/staff-operations/legal",              icon: Scale       },
     ],
   },
   {
-    name: "Marketing & Reports", icon: TrendingUp, defaultHref: "/management/sales-overview",
+    name: "Marketing & Reports", icon: TrendingUp, defaultHref: "/management/marketing-reports/sales-overview",
     children: [
-      { name: "Sales Overview", href: "/management/sales-overview",       icon: BarChart2  },
-      { name: "Reports",        href: "/management/reports",              icon: TrendingUp,
-        matchPaths: ["/management/daily-reports"] },
-      { name: "KPIs & Targets", href: "/management/kpis",                 icon: Target     },
-      { name: "Referrals",      href: "/management/marketing/referrals",  icon: UserPlus   },
-      { name: "Social Feed",    href: "/management/marketing/social-feed",icon: Share2     },
-      { name: "Online Store",   href: "/management/online-store",         icon: Globe      },
-      { name: "Email",          href: "/management/email",                icon: Mail       },
-      { name: "Forms & Files",  href: "/management/forms",                icon: FileText   },
-      { name: "AI Assistant",   href: "/management/ai",                   icon: Brain      },
+      { name: "Sales Overview", href: "/management/marketing-reports/sales-overview",       icon: BarChart2  },
+      { name: "Reports",        href: "/management/marketing-reports/reports", icon: TrendingUp,
+        matchPaths: ["/management/marketing-reports/reports/daily"] },
+      { name: "KPIs & Targets", href: "/management/marketing-reports/kpis-targets",                 icon: Target     },
+      { name: "Referrals",      href: "/management/marketing-reports/referrals",  icon: UserPlus   },
+      { name: "Social Feed",    href: "/management/marketing-reports/social-feed",icon: Share2     },
+      {
+        name: "Landing Pages", icon: LayoutTemplate,
+        children: [
+          { name: "Pages",         href: "/management/marketing-reports/landing-pages/pages",          icon: Globe },
+          { name: "Templates",     href: "/management/marketing-reports/landing-pages/templates", icon: LayoutTemplate },
+        ],
+      },
+      {
+        name: "Generators", icon: QrCode,
+        children: [
+          { name: "QR Codes",   href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode },
+          { name: "Shortlinks", href: "/management/marketing-reports/generators/shortlinks", icon: Link2  },
+        ],
+      },
+      { name: "Online Store",   href: "/management/marketing-reports/online-store",         icon: Globe      },
+      { name: "Forms & Files",  href: "/management/marketing-reports/forms-files",                icon: FileText   },
+      { name: "AI Assistant",   href: "/management/marketing-reports/ai-assistant",                   icon: Brain      },
     ],
   },
   {
-    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/account",
+    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/settings-integrations/account",
     children: [
-      { name: "Account",           href: "/management/account",       icon: UserCircle     },
-      { name: "Business Details",  href: "/management/business",      icon: Building2,
-        matchPaths: ["/management/regional"] },
-      { name: "Tax",               href: "/management/tax",           icon: Receipt        },
+      { name: "Account",           href: "/management/settings-integrations/account",       icon: UserCircle     },
+      { name: "Business Details",  href: "/management/settings-integrations/business-details",      icon: Building2,
+        matchPaths: ["/management/settings-integrations/business-details/regional"] },
+      { name: "Tax",               href: "/management/settings-integrations/tax",           icon: Receipt        },
       {
         name: "Templates", icon: LayoutTemplate,
         children: [
-          { name: "Sales",             href: "/management/templates",        icon: LayoutTemplate },
-          { name: "Stickers",          href: "/management/stickers",         icon: Printer,
-            matchPaths: ["/management/sticker-templates"] },
-          { name: "Misc",              href: "/management/misc-templates",   icon: FileText },
+          { name: "Sales",             href: "/management/products-inventory/sales",        icon: LayoutTemplate },
+          { name: "Stickers",          href: "/management/products-inventory/stickers",         icon: Printer,
+            matchPaths: ["/management/sticker-templates"] }, // legacy path → redirects to /management/stickers
+          { name: "Misc",              href: "/management/templates/misc",   icon: FileText },
         ],
       },
-      { name: "Integrations",      href: "/management/integrations",  icon: Plug,
-        matchPaths: ["/management/tyro-eftpos", "/management/xero"] },
-      { name: "Import / Export",   href: "/management/import-export", icon: ArrowLeftRight },
-      { name: "Feedback",          href: "/management/feedback",      icon: MessageSquare  },
-      { name: "Misc",              href: "/management/misc",          icon: MoreHorizontal },
-      { name: "System",            href: "/management/koapos",        icon: Sparkles       },
+      { name: "SMS",               href: "/management/settings-integrations/sms",           icon: MessageSquare  },
+      { name: "Emails",            href: "/management/marketing-reports/email",         icon: Mail           },
+      { name: "Integrations",      href: "/management/settings-integrations/integrations",  icon: Plug,
+        matchPaths: ["/management/settings-integrations/integrations/tyro-eftpos", "/management/settings-integrations/integrations/xero"] },
+      { name: "Sync",              href: "/management/settings-integrations/sync",          icon: FolderSync,
+        matchPaths: ["/management/settings-integrations/sync/backup"] },
+      { name: "Import / Export",   href: "/management/settings-integrations/import-export", icon: ArrowLeftRight },
+      { name: "Misc",              href: "/management/settings-integrations/system/misc",          icon: MoreHorizontal },
+      { name: "System",            href: "/management/settings-integrations/system",        icon: Sparkles       },
+      { name: "Feedback",          href: "/management/settings-integrations/feedback",      icon: MessageSquare  },
     ],
   },
 ];
@@ -206,25 +262,26 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
 
 const SEARCH_INDEX = [
   { label: "Dashboard",          href: "/dashboard",                   icon: LayoutDashboard, group: "Pages" },
-  { label: "POS · Sell",         href: "/pos",                         icon: ShoppingCart,    group: "POS" },
+  { label: "POS · Sell",         href: "/pos/sell",                         icon: ShoppingCart,    group: "POS" },
   { label: "POS · History",      href: "/pos/history",                 icon: History,         group: "POS" },
   { label: "POS · Invoices",     href: "/pos/invoices",                icon: FileText,        group: "POS" },
-  { label: "POS · Laybys",       href: "/pos/laybuys",                 icon: Package2,        group: "POS" },
+  { label: "POS · Quotes",       href: "/pos/quotes",                  icon: ClipboardList,   group: "POS" },
+  { label: "POS · Laybys",       href: "/pos/laybys",                 icon: Package2,        group: "POS" },
   { label: "POS · Parked",       href: "/pos/parked",                  icon: ParkingCircle,   group: "POS" },
   { label: "POS · Refund",       href: "/pos/refund",                  icon: RotateCcw,       group: "POS" },
-  { label: "Services",           href: "/service-jobs",                icon: Wrench,          group: "Pages" },
+  { label: "Services",           href: "/services",                icon: Wrench,          group: "Pages" },
   { label: "Appointments",       href: "/appointments",                icon: CalendarClock,   group: "Pages" },
   { label: "Customers",          href: "/customers",                   icon: Users,           group: "Pages" },
   { label: "Customers · Forms", href: "/customers/forms",             icon: FileText,        group: "Customers" },
-  { label: "Products",           href: "/products",                    icon: Package,         group: "Inventory" },
-  { label: "Inventory Overview", href: "/products/overview",           icon: LayoutGrid,      group: "Inventory" },
-  { label: "Stocktake",          href: "/products/stocktake",          icon: ClipboardList,   group: "Inventory" },
-  { label: "Suppliers",          href: "/products/suppliers",          icon: Truck,           group: "Inventory" },
-  { label: "Categories",         href: "/products/categories",         icon: Tag,             group: "Inventory" },
-  { label: "Staff · Employees",  href: "/staff",                       icon: UserSquare2,     group: "Staff" },
+  { label: "Products",           href: "/inventory/products",                    icon: Package,         group: "Inventory" },
+  { label: "Inventory Overview", href: "/inventory/overview",           icon: LayoutGrid,      group: "Inventory" },
+  { label: "Stocktake",          href: "/inventory/stocktake",          icon: ClipboardList,   group: "Inventory" },
+  { label: "Suppliers",          href: "/inventory/suppliers",          icon: Truck,           group: "Inventory" },
+  { label: "Categories",         href: "/inventory/categories",         icon: Tag,             group: "Inventory" },
+  { label: "Staff · Employees",  href: "/staff/employees",                       icon: UserSquare2,     group: "Staff" },
   { label: "Staff · Timesheet",  href: "/staff/timesheet",             icon: Clock,           group: "Staff" },
   { label: "Staff · Rostering",  href: "/staff/rostering",             icon: CalendarClock,   group: "Staff" },
-  { label: "Staff · Costs",      href: "/staff/cost-summary",          icon: Coins,           group: "Staff" },
+  { label: "Staff · Costs",      href: "/staff/costs",          icon: Coins,           group: "Staff" },
   { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
   { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
   { label: "Staff · Links",        href: "/staff/links",                        icon: Link2,    group: "Staff" },
@@ -233,242 +290,431 @@ const SEARCH_INDEX = [
   { label: "PC Builder",             href: "/pos/pc-builder",                      icon: HardDrive,   group: "POS" },
   { label: "POS · End of Day",            href: "/pos/eod",                                       icon: Moon,          group: "POS"        },
   { label: "Overview",            href: "/management/overview",         icon: LayoutDashboard, group: "Management" },
-  { label: "Account",            href: "/management/account",          icon: UserCircle,      group: "Management" },
-  { label: "Modules",            href: "/modules",                     icon: Blocks,          group: "Management" },
-  { label: "AI Assistant",       href: "/management/ai",             icon: Brain,          group: "Management" },
-  { label: "Business Details",   href: "/management/business",         icon: Building2,       group: "Management" },
-  { label: "Regional Settings",  href: "/management/regional",         icon: Globe,           group: "Management" },
-  { label: "Calculators · 3D",       href: "/management/calculators/3d-printing",  icon: Calculator,  group: "Management" },
-  { label: "Calculators · PC Builder", href: "/management/calculators/pc-builder", icon: HardDrive,   group: "Management" },
-  { label: "Camera Management",             href: "/management/cameras",                    icon: Camera,         group: "Management"  },
-  { label: "Customers",          href: "/management/customers",        icon: Users,           group: "Management" },
+  { label: "Account",            href: "/management/settings-integrations/account",          icon: UserCircle,      group: "Management" },
+  { label: "Modules",            href: "/management/settings-integrations/account/modules",                     icon: Blocks,          group: "Management" },
+  { label: "AI Assistant",       href: "/management/marketing-reports/ai-assistant",             icon: Brain,          group: "Management" },
+  { label: "Business Details",   href: "/management/settings-integrations/business-details",         icon: Building2,       group: "Management" },
+  { label: "Regional Settings",  href: "/management/settings-integrations/business-details/regional",         icon: Globe,           group: "Management" },
+  { label: "Calculators · 3D",       href: "/management/products-inventory/3d-prints",  icon: Calculator,  group: "Management" },
+  { label: "Calculators · PC Builder", href: "/management/products-inventory/pc-builder", icon: HardDrive,   group: "Management" },
+  { label: "Camera Management",             href: "/management/staff-operations/cameras",                    icon: Camera,         group: "Management"  },
+  { label: "Customers",          href: "/management/customers/settings",        icon: Users,           group: "Management" },
   { label: "Customers · Heard From", href: "/management/customers/heard-from", icon: Radio,         group: "Management" },
   { label: "Customers · Portal",    href: "/management/customers/portal",     icon: Link2,         group: "Management" },
-  { label: "Discounts",          href: "/management/discounts",        icon: Percent,         group: "Management" },
-  { label: "Email Settings",      href: "/management/email",                      icon: Mail,         group: "Management" },
-  { label: "Feedback",                      href: "/management/feedback",                   icon: MessageSquare,  group: "Management" },
-  { label: "Floor Plan",         href: "/management/floor-plan",       icon: Map,             group: "Management" },
-  { label: "Forms & Files",     href: "/management/forms",            icon: FileText,        group: "Management" },
-  { label: "Gift Cards",        href: "/management/gift-cards",       icon: Gift,            group: "Management" },
-  { label: "Import / Export",   href: "/management/import-export",    icon: ArrowLeftRight,  group: "Management" },
-  { label: "Integrations",       href: "/management/integrations",     icon: Receipt,         group: "Management" },
-  { label: "Integrations · Tyro EFTPOS", href: "/management/tyro-eftpos", icon: CreditCard,   group: "Management" },
-  { label: "Inventory Settings",       href: "/management/inventory",         icon: Boxes,           group: "Management" },
-  { label: "Inventory · Modifier Groups", href: "/management/modifier-groups",   icon: Layers,          group: "Management" },
-  { label: "Inventory · Product Types",   href: "/management/product-types",     icon: Tag,             group: "Management" },
-  { label: "KPIs & Targets",     href: "/management/kpis",             icon: Target,          group: "Management" },
-  { label: "KoaPOS Partner Referrals",     href: "/management/koapos",                    icon: Sparkles,  group: "Management" },
-  { label: "Layby",              href: "/management/layby",            icon: Package2,        group: "Management" },
-  { label: "Labels",             href: "/management/stickers",         icon: Tag,             group: "Management" },
-  { label: "Sticker Templates",  href: "/management/sticker-templates",icon: LayoutTemplate,  group: "Management" },
-  { label: "Loyalty",            href: "/management/loyalty",          icon: Gift,            group: "Management" },
-  { label: "Marketing · Referral Settings", href: "/management/marketing/referrals",       icon: UserPlus, group: "Management" },
-  { label: "Marketing · Social Feed Settings", href: "/management/marketing/social-feed", icon: Share2, group: "Management" },
-  { label: "Misc",                          href: "/management/misc",                       icon: MoreHorizontal, group: "Management" },
-  { label: "Online Store",              href: "/management/online-store",  icon: Globe,        group: "Management" },
-  { label: "POS Registers",      href: "/management/registers",        icon: Monitor,         group: "Management" },
-  { label: "Sales",               href: "/management/templates",        icon: LayoutTemplate,  group: "Management" },
-  { label: "Customer PDF Template", href: "/management/misc-templates",  icon: FileText,        group: "Management" },
+  { label: "Discounts",          href: "/management/customers/discounts-pricing",        icon: Percent,         group: "Management" },
+  { label: "Emails",              href: "/management/marketing-reports/email",                      icon: Mail,         group: "Management" },
+  { label: "SMS Settings",        href: "/management/settings-integrations/sms",                        icon: MessageSquare, group: "Management" },
+  { label: "Feedback",                      href: "/management/settings-integrations/feedback",                   icon: MessageSquare,  group: "Management" },
+  { label: "Floor Plan",         href: "/management/staff-operations/floor-plan",       icon: Map,             group: "Management" },
+  { label: "Forms & Files",     href: "/management/marketing-reports/forms-files",            icon: FileText,        group: "Management" },
+  { label: "Gift Cards",        href: "/management/customers/gift-cards",       icon: Gift,            group: "Management" },
+  { label: "Import / Export",   href: "/management/settings-integrations/import-export",    icon: ArrowLeftRight,  group: "Management" },
+  { label: "Integrations",       href: "/management/settings-integrations/integrations",     icon: Receipt,         group: "Management" },
+  { label: "Integrations · Tyro EFTPOS", href: "/management/settings-integrations/integrations/tyro-eftpos", icon: CreditCard,   group: "Management" },
+  { label: "Inventory Settings",       href: "/management/products-inventory/inventory",         icon: Boxes,           group: "Management" },
+  { label: "Inventory · Modifier Groups", href: "/management/products-inventory/modifier-groups",   icon: Layers,          group: "Management" },
+  { label: "Inventory · Product Types",   href: "/management/products-inventory/product-types",     icon: Tag,             group: "Management" },
+  { label: "KPIs & Targets",     href: "/management/marketing-reports/kpis-targets",             icon: Target,          group: "Management" },
+  { label: "KoaPOS Partner Referrals",     href: "/management/settings-integrations/system",                    icon: Sparkles,  group: "Management" },
+  { label: "Layby",              href: "/management/customers/discounts-pricing/layby",            icon: Package2,        group: "Management" },
+  { label: "Labels",             href: "/management/products-inventory/stickers",         icon: Tag,             group: "Management" },
+  { label: "Sticker Templates",  href: "/management/products-inventory/stickers",         icon: LayoutTemplate,  group: "Management" },
+  { label: "Loyalty",            href: "/management/customers/loyalty",          icon: Gift,            group: "Management" },
+  { label: "Marketing · Referral Settings", href: "/management/marketing-reports/referrals",       icon: UserPlus, group: "Management" },
+  { label: "Marketing · Social Feed Settings", href: "/management/marketing-reports/social-feed", icon: Share2, group: "Management" },
+  { label: "Misc",                          href: "/management/settings-integrations/system/misc",                       icon: MoreHorizontal, group: "Management" },
+  { label: "Online Store",              href: "/management/marketing-reports/online-store",  icon: Globe,        group: "Management" },
+  { label: "POS Registers",      href: "/management/staff-operations/pos-registers",        icon: Monitor,         group: "Management" },
+  { label: "Sales Settings",     href: "/management/sales-settings",   icon: Receipt,         group: "Management" },
+  { label: "Sales",               href: "/management/products-inventory/sales",        icon: LayoutTemplate,  group: "Management" },
+  { label: "Customer PDF Template", href: "/management/templates/misc",  icon: FileText,        group: "Management" },
   /* moved under Inventory */
-  { label: "Tax Settings",       href: "/management/tax",                        icon: Receipt,      group: "Management" },
-  { label: "Reports",             href: "/management/sales-overview",   icon: TrendingUp,      group: "Management" },
+  { label: "Tax Settings",       href: "/management/settings-integrations/tax",                        icon: Receipt,      group: "Management" },
+  { label: "Reports",             href: "/management/marketing-reports/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
-  { label: "Marketing · Overview",             href: "/marketing",                          icon: BarChart2,  group: "Marketing" },
-  { label: "Marketing · Campaigns",            href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
+  { label: "Marketing · Overview",             href: "/marketing/overview",                          icon: BarChart2,  group: "Marketing" },
+  { label: "Marketing · Email Campaigns",       href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
-  { label: "Marketing · QR Codes",             href: "/marketing/generators/qr-codes",      icon: QrCode,     group: "Marketing" },
-  { label: "Marketing · Shortlinks",           href: "/marketing/generators/shortlinks",    icon: Link2,      group: "Marketing" },
-  { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promotions",  icon: Zap,    group: "Marketing" },
-  { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaderboard", icon: Trophy, group: "Marketing" },
+  { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },
+  { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
+  { label: "Marketing · Social Media",         href: "/marketing/social",                   icon: Share2,     group: "Marketing" },
+  { label: "Marketing · QR Codes",             href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode,     group: "Management" },
+  { label: "Marketing · Shortlinks",           href: "/management/marketing-reports/generators/shortlinks", icon: Link2,      group: "Management" },
+  { label: "Marketing · Landing Pages",        href: "/management/marketing-reports/landing-pages/pages",         icon: LayoutTemplate, group: "Management" },
+  { label: "Marketing · Landing Page Templates", href: "/management/marketing-reports/landing-pages/templates", icon: LayoutTemplate, group: "Management" },
+  { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promos",  icon: Zap,    group: "Marketing" },
+  { label: "Marketing · Loyalty Leaders",  href: "/marketing/loyalty/leaders", icon: Trophy, group: "Marketing" },
   { label: "Cameras",                       href: "/cameras",                               icon: Camera,         group: "Pages"       },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
-  { label: "Online · Deliveries",     href: "/online/delivery-orders",   icon: Package2,     group: "Online"     },
+  { label: "Online · Deliveries",     href: "/online/deliveries",   icon: Package2,     group: "Online"     },
   { label: "Online · Shipping",         href: "/online/shipping",          icon: Truck,        group: "Online"     },
   { label: "Online · Marketplace",      href: "/online/marketplace",       icon: ShoppingBag,  group: "Online"     },
-  { label: "Registers · POS Settings",   href: "/management/registers#pos-settings",            icon: Monitor,       group: "Registers"  },
-  { label: "Registers · Hardware",        href: "/management/registers#hardware",                icon: HardDrive,     group: "Registers"  },
-  { label: "Registers · Shortcuts",       href: "/management/registers#shortcuts",               icon: Keyboard,      group: "Registers"  },
-  { label: "Reports · Payments",          href: "/management/sales-overview#payments",           icon: Receipt,       group: "Reports"    },
-  { label: "Reports · Inventory",         href: "/management/sales-overview#inventory",          icon: Package,       group: "Reports"    },
-  { label: "Reports · Profit & Loss",     href: "/management/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
-  { label: "Reports · Top Products",      href: "/management/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
-  { label: "Reports · Register Closures", href: "/management/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
-  { label: "Reports · BAS / GST",         href: "/management/reports/bas",                        icon: Receipt,       group: "Reports"    },
-  { label: "Reports · Margin & Profit",   href: "/management/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
-  { label: "Reports · Daily Closes",      href: "/management/daily-reports",                        icon: ReceiptText,   group: "Reports"    },
-  { label: "Reports · Customer Insights", href: "/management/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
-  { label: "Reports · GST / BAS",         href: "/management/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
-  { label: "Reports · Cash Movements",    href: "/management/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },
-  { label: "Reports · Report Builder",    href: "/management/sales-overview#report-builder",     icon: LayoutGrid,    group: "Reports"    },
-  { label: "Reports · Gift Cards",        href: "/management/sales-overview#gift-cards",         icon: Gift,          group: "Reports"    },
-  { label: "Reports · Scheduled",         href: "/management/sales-overview#scheduled",          icon: CalendarClock, group: "Reports"    },
-  { label: "Reports · User Activity",     href: "/management/sales-overview#user-activity",      icon: Users,         group: "Reports"    },
+  { label: "Registers · POS Settings",   href: "/management/staff-operations/pos-registers#pos-settings",            icon: Monitor,       group: "Registers"  },
+  { label: "Registers · Hardware",        href: "/management/staff-operations/pos-registers#hardware",                icon: HardDrive,     group: "Registers"  },
+  { label: "Registers · Shortcuts",       href: "/management/staff-operations/pos-registers#shortcuts",               icon: Keyboard,      group: "Registers"  },
+  { label: "Reports · Payments",          href: "/management/marketing-reports/sales-overview#payments",           icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Inventory",         href: "/management/marketing-reports/sales-overview#inventory",          icon: Package,       group: "Reports"    },
+  { label: "Reports · Profit & Loss",     href: "/management/marketing-reports/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
+  { label: "Reports · Top Products",      href: "/management/marketing-reports/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
+  { label: "Reports · Register Closures", href: "/management/marketing-reports/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
+  { label: "Reports · BAS / GST",         href: "/management/marketing-reports/reports",                        icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Margin & Profit",   href: "/management/marketing-reports/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
+  { label: "Reports · Daily Closes",      href: "/management/marketing-reports/reports/daily",                        icon: ReceiptText,   group: "Reports"    },
+  { label: "Reports · Customer Insights", href: "/management/marketing-reports/sales-overview#customer-insights",  icon: Users,         group: "Reports"    },
+  { label: "Reports · GST / BAS",         href: "/management/marketing-reports/sales-overview#gst-bas",            icon: Receipt,       group: "Reports"    },
+  { label: "Reports · Cash Movements",    href: "/management/marketing-reports/sales-overview#cash-movements",     icon: Coins,         group: "Reports"    },
+  { label: "Reports · Report Builder",    href: "/management/marketing-reports/sales-overview#report-builder",     icon: LayoutGrid,    group: "Reports"    },
+  { label: "Reports · Gift Cards",        href: "/management/marketing-reports/sales-overview#gift-cards",         icon: Gift,          group: "Reports"    },
+  { label: "Reports · Scheduled",         href: "/management/marketing-reports/sales-overview#scheduled",          icon: CalendarClock, group: "Reports"    },
+  { label: "Reports · User Activity",     href: "/management/marketing-reports/sales-overview#user-activity",      icon: Users,         group: "Reports"    },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
 
-const ROUTE_LABEL: Record<string, string[]> = {
-  "/dashboard":                   ["Dashboard"],
-  "/pos":                         ["POS", "Sell"],
-  "/pos/history":                 ["POS", "History"],
-  "/pos/invoices":                ["POS", "Invoices"],
-  "/pos/laybuys":                 ["POS", "Laybys"],
-  "/management/gift-cards":       ["Management", "Gift Cards"],
-  "/management/layby":            ["Management", "Layby"],
-  "/pos/parked":                  ["POS", "Parked"],
-  "/pos/refund":                  ["POS", "Refund"],
-  "/pos/cash":                    ["POS", "Cash"],
-  "/pos/3d-prints":               ["POS", "3D Prints"],
-  "/service-jobs":                ["Services"],
-  "/service-jobs/new":            ["Services", "New Job"],
-  "/appointments":                ["Appointments"],
-  "/customers":                   ["Customers"],
-  "/customers/forms":            ["Customers", "Forms"],
-  "/transactions":                ["Transactions"],
-  "/inventory":                   ["Inventory"],
-  "/products":                    ["Inventory", "Products"],
-  "/products/overview":           ["Inventory", "Overview"],
-  "/products/bundles":            ["Inventory", "Bundles"],
-  "/products/stocktake":          ["Inventory", "Stocktake"],
-  "/products/purchase-orders":    ["Inventory", "Purchase Orders"],
-  "/products/pre-orders":         ["Inventory", "Pre-Orders"],
-  "/products/return-auth":        ["Inventory", "Return Auth"],
-  "/products/suppliers":          ["Inventory", "Suppliers"],
-  "/products/brands":             ["Inventory", "Brands"],
-  "/products/categories":         ["Inventory", "Categories"],
-  "/products/tags":               ["Inventory", "Tags"],
-  "/products/recalls":            ["Inventory", "Recalls"],
-  "/staff":                       ["Staff", "Employees"],
-  "/staff/timesheet":             ["Staff", "Timesheet"],
-  "/staff/rostering":             ["Staff", "Rostering"],
-  "/staff/leave-requests":        ["Staff", "Leave"],
-  "/staff/cost-summary":          ["Staff", "Costs"],
-  "/staff/notes":                 ["Staff", "Notes"],
-  "/staff/kpis":                  ["Staff", "KPIs"],
-  "/staff/links":                          ["Staff", "Links"],
-  "/staff/social-feed":                    ["Staff", "Social Feed"],
-  "/management/marketing/social-feed":     ["Management", "Marketing", "Social Feed"],
-  "/modules":                              ["Management", "Account", "Modules"],
-  "/management/staff":              ["Management", "Staff", "Employees"],
-  "/management/staff/timesheet":    ["Management", "Staff", "Timesheet"],
-  "/management/staff/cost-summary": ["Management", "Staff", "Costs"],
-  "/settings":                    ["Settings"],
-  "/management/customers":        ["Management", "Customers"],
-  "/management/customers/heard-from": ["Management", "Customers", "Heard From"],
-  "/management/customers/portal":     ["Management", "Customers", "Portal"],
-  "/management/registers":        ["Management", "POS Registers"],
-  "/management/business":         ["Management", "Business Info"],
-  "/management/regional":         ["Management", "Regional Settings"],
-  "/management/account":          ["Management", "Account"],
-  "/management/overview":         ["Management", "Overview"],
-  "/management/sales-overview":   ["Management", "Reports"],
-  "/management/kpis":             ["Management", "KPIs & Targets"],
-  "/management/integrations":     ["Management", "Integrations", "Integrations"],
-  "/management/tyro-eftpos":      ["Management", "Integrations", "Tyro EFTPOS"],
-  "/management/import-export":    ["Management", "Import / Export"],
-  "/management/loyalty":              ["Management", "Loyalty"],
-  "/management/inventory":        ["Management", "Inventory"],
-  "/management/floor-plan":      ["Management", "Floor Plan"],
-  "/management/discounts":        ["Management", "Discounts"],
-  "/inventory/wastage":           ["Inventory", "Wastage"],
-  "/settings/tax":                ["Management", "Tax Settings"],
-  "/management/product-types":    ["Management", "Inventory", "Product Types"],
-  "/management/modifier-groups":  ["Management", "Inventory", "Modifier Groups"],
-  "/management/tax":              ["Management", "Tax Settings"],
-  "/management/email":            ["Management", "Email"],
-  "/management/templates":        ["Management", "Templates", "Sales"],
-  "/management/misc-templates":   ["Management", "Templates", "Misc"],
-  "/management/calculators/3d-printing": ["Management", "Calculators", "3D Printing"],
-  "/management/calculators/pc-builder":  ["Management", "Calculators", "PC Builder"],
-  "/pos/pc-builder":                     ["POS", "PC Builder"],
-  "/management/stickers":          ["Management", "Templates", "Stickers"],
-  "/management/sticker-templates": ["Management", "Templates", "Sticker Templates"],
-  "/marketing":                            ["Marketing", "Overview"],
-  "/marketing/email/campaigns":            ["Marketing", "Campaigns"],
-  "/marketing/email/templates":            ["Marketing", "Email Templates"],
-  "/marketing/landing-pages":              ["Marketing", "Landing Pages"],
-  "/marketing/generators/qr-codes":        ["Marketing", "QR Codes"],
-  "/marketing/generators/shortlinks":      ["Marketing", "Shortlinks"],
-  "/marketing/loyalty/promotions":         ["Marketing", "Loyalty", "Promos"],
-  "/marketing/loyalty/leaderboard":        ["Marketing", "Loyalty", "Leaders"],
-  "/management/koapos":                    ["Management", "KoaPOS"],
-  "/marketing/referrals":                  ["Marketing", "Referrals"],
-  "/marketing/automation":                 ["Marketing", "Automation"],
-  "/management/online-store":              ["Management", "Online Store"],
-  "/online/delivery-orders":               ["Online", "Deliveries"],
-  "/online/shipping":                      ["Online", "Shipping"],
-  "/online/marketplace":                   ["Online", "Marketplace"],
-  "/management/marketing/referrals":       ["Management", "Marketing", "Referrals"],
-  "/management/misc":                      ["Management", "Misc"],
-  "/cameras":                              ["Cameras"],
-  "/management/cameras":                   ["Management", "Cameras"],
+const SEGMENT_LABEL: Record<string, string> = {
+  "pos": "POS",
+  "sms": "SMS",
+  "kpis": "KPIs",
+  "kpis-targets": "KPIs & Targets",
+  "qr-codes": "QR Codes",
+  "pc-builder": "PC Builder",
+  "pre-orders": "Pre-Orders",
+  "3d-prints": "3D Prints",
+  "ai-assistant": "AI Assistant",
+  "pos-registers": "POS Registers",
+  "import-export": "Import / Export",
+  "forms-files": "Forms & Files",
+  "discounts-pricing": "Discounts & Pricing",
+  "marketing-reports": "Marketing & Reports",
+  "staff-operations": "Staff & Operations",
+  "products-inventory": "Products & Inventory",
+  "settings-integrations": "Settings & Integrations",
 };
 
+function inMarketingSection(loc: string): boolean {
+  return loc === "/marketing" || loc.startsWith("/marketing/");
+}
+function inManagementSection(loc: string): boolean {
+  return loc.startsWith("/management/") || loc === "/modules" || loc.startsWith("/settings/");
+}
+
+
+/** Title-case a raw path segment, e.g. "purchase-orders" → "Purchase Orders". */
+function titleCaseSegment(seg: string): string {
+  return seg
+    .replace(/-/g, " ")
+    .replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
+/** Breadcrumb labels for a route, falling back to a title-cased path trail. */
+/** Breadcrumb labels for a route, derived from its URL segments. */
+function routeLabels(location: string): string[] {
+  const segments = location.split("/").filter(Boolean);
+  if (!segments.length) return ["Home"];
+  return segments.map((seg) => SEGMENT_LABEL[seg] ?? titleCaseSegment(seg));
+}
+
+/* ─── Staff clock in/out dialog ──────────────────────────────────────────── */
+
+type ClockStep = "pin" | "confirm" | "done";
+
+function StaffClockDialog({ open, onOpenChange }: { open: boolean; onOpenChange: (v: boolean) => void }) {
+  const [pin, setPin] = useState("");
+  const [submitted, setSubmitted] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  const reset = () => { setPin(""); setSubmitted(false); };
+
+  const { data: status, isFetching, error } = useGetStaffClockStatus({ pin }, {
+    query: {
+      queryKey: ["/api/staff-timesheets/status", pin],
+      enabled: submitted && pin.length >= 4,
+      retry: false,
+      staleTime: 0,
+    },
+  });
+
+  const clockInMutation  = useClockIn();
+  const clockOutMutation = useClockOut();
+
+  const handleClose = (v: boolean) => { if (!v) reset(); onOpenChange(v); };
+
+  const handleSubmitPin = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (pin.length < 4) { toast.error("Enter your 4-digit PIN"); return; }
+    setSubmitted(true);
+  };
+
+  const handleClockIn = () => {
+    clockInMutation.mutate({ data: { pin } }, {
+      onSuccess: (entry) => {
+        toast.success(`${entry.staffName} clocked in at ${entry.clockIn}`);
+        handleClose(false);
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { message?: string })?.message ?? "Clock-in failed";
+        toast.error(msg);
+      },
+    });
+  };
+
+  const handleClockOut = () => {
+    clockOutMutation.mutate({ data: { pin } }, {
+      onSuccess: (entry) => {
+        const hours = entry.clockOut && entry.clockIn
+          ? (() => {
+              const [ih, im] = entry.clockIn.split(":").map(Number);
+              const [oh, om] = (entry.clockOut as string).split(":").map(Number);
+              const mins = (oh! * 60 + om!) - (ih! * 60 + im!);
+              const h = Math.floor(mins / 60);
+              const m = mins % 60;
+              return m > 0 ? `${h}h ${m}m` : `${h}h`;
+            })()
+          : "";
+        toast.success(`${entry.staffName} clocked out${hours ? ` — ${hours} worked` : ""}`);
+        handleClose(false);
+      },
+      onError: (err: unknown) => {
+        const msg = (err as { message?: string })?.message ?? "Clock-out failed";
+        toast.error(msg);
+      },
+    });
+  };
+
+  const isPending = clockInMutation.isPending || clockOutMutation.isPending;
+  const apiError  = (error as { message?: string } | null)?.message;
+  const showConfirm = submitted && !isFetching && status && !apiError;
+
+  return (
+    <Dialog open={open} onOpenChange={handleClose}>
+      <DialogContent className="max-w-xs">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Clock className="w-4 h-4" /> Staff Clock In / Out
+          </DialogTitle>
+          <DialogDescription>Enter your PIN to clock in or out for today.</DialogDescription>
+        </DialogHeader>
+
+        {!showConfirm ? (
+          <form onSubmit={handleSubmitPin} className="space-y-4 py-1">
+            <Input
+              ref={inputRef}
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              maxLength={6}
+              value={pin}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setSubmitted(false); }}
+              placeholder="Enter PIN"
+              className="text-center text-2xl tracking-widest h-12"
+              autoFocus
+            />
+            {apiError && (
+              <p className="text-sm text-destructive text-center">{apiError}</p>
+            )}
+            <Button type="submit" className="w-full" disabled={isFetching || pin.length < 4}>
+              {isFetching ? "Looking up…" : "Continue"}
+            </Button>
+          </form>
+        ) : (
+          <div className="space-y-4 py-1">
+            <div className="rounded-lg bg-muted px-4 py-3 text-center">
+              <p className="font-semibold text-base">{status.staffName}</p>
+              <p className="text-sm text-muted-foreground mt-0.5">
+                {status.clockedIn
+                  ? `Clocked in since ${status.clockInTime}`
+                  : "Not clocked in today"}
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" className="flex-1" onClick={() => { reset(); }}>
+                Back
+              </Button>
+              {status.clockedIn ? (
+                <Button className="flex-1 gap-1.5" onClick={handleClockOut} disabled={isPending}>
+                  <LogOut className="w-4 h-4" />
+                  {clockOutMutation.isPending ? "Clocking out…" : "Clock Out"}
+                </Button>
+              ) : (
+                <Button className="flex-1 gap-1.5" onClick={handleClockIn} disabled={isPending}>
+                  <LogIn className="w-4 h-4" />
+                  {clockInMutation.isPending ? "Clocking in…" : "Clock In"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Global search ──────────────────────────────────────────────────────── */
+
+type SearchResultItem = {
+  label: string;
+  sub?: string;
+  href: string;
+  icon: React.ComponentType<{ className?: string }>;
+  group: string;
+  action?: () => void;
+};
 
 function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void }) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
+  const [activeIdx, setActiveIdx] = useState(0);
+  const [debouncedQ, setDebouncedQ] = useState("");
+  const [clockOpen, setClockOpen] = useState(false);
   const [, navigate] = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const listRef = useRef<HTMLDivElement>(null);
 
   const setOpenWithCallback = (val: boolean) => { setOpen(val); onOpenChange?.(val); };
 
-  const liveEnabled = query.trim().length >= 2;
-  const { data: custData }  = useListCustomers(undefined, { query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["customers-search", liveEnabled] } });
-  const { data: svcData }   = useListServiceJobs({ query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["service-jobs-search", liveEnabled] } });
-  const { data: apptData }  = useListAppointments(undefined, { query: { enabled: liveEnabled, staleTime: 30000, queryKey: ["appointments-search", liveEnabled] } });
+  // Debounce query for API calls
+  useEffect(() => {
+    const t = setTimeout(() => setDebouncedQ(query.trim()), 200);
+    return () => clearTimeout(t);
+  }, [query]);
 
-  const q = query.trim().toLowerCase();
+  // Reset active index when query changes
+  useEffect(() => { setActiveIdx(0); }, [debouncedQ]);
 
-  const staticResults = q.length === 0
-    ? SEARCH_INDEX.slice(0, 8)
-    : SEARCH_INDEX.filter((item) =>
-        item.label.toLowerCase().includes(q) ||
-        item.group.toLowerCase().includes(q)
-      ).slice(0, 6);
+  const q = debouncedQ.toLowerCase();
+  const liveEnabled = q.length >= 2;
 
-  const liveItems: typeof SEARCH_INDEX = [];
-  if (q.length >= 2) {
-    ((custData as { items?: Customer[] } | undefined)?.items ?? [])
-      .filter((c) => `${c.firstName ?? ""} ${c.lastName ?? ""} ${c.email ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach((c) => liveItems.push({
-        label: `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || (c.email ?? "Customer"),
+  // Server-side search: customers and products support a search param
+  const { data: custData, isFetching: custFetching } = useListCustomers(
+    { search: debouncedQ, limit: 5 },
+    { query: { enabled: liveEnabled, staleTime: 15000, queryKey: ["gs-customers", debouncedQ] } },
+  );
+  const { data: prodData, isFetching: prodFetching } = useListProducts(
+    { search: debouncedQ, limit: 5 },
+    { query: { enabled: liveEnabled, staleTime: 15000, queryKey: ["gs-products", debouncedQ] } },
+  );
+  // Client-side filter: service jobs and appointments (no server search param)
+  const { data: svcData } = useListServiceJobs(
+    { query: { enabled: liveEnabled, staleTime: 60000, queryKey: ["gs-service-jobs"] } },
+  );
+  const { data: apptData } = useListAppointments(
+    undefined,
+    { query: { enabled: liveEnabled, staleTime: 60000, queryKey: ["gs-appointments"] } },
+  );
+
+  const isSearching = liveEnabled && (custFetching || prodFetching);
+
+  const CLOCK_QUICK_ACTION: SearchResultItem = {
+    label: "Staff Clock In / Out",
+    sub: "Record shift start or end with PIN",
+    href: "#staff-clock",
+    icon: Clock,
+    group: "Quick Actions",
+    action: () => setClockOpen(true),
+  };
+
+  // Build sections
+  const sections: { title: string; items: SearchResultItem[] }[] = [];
+
+  if (liveEnabled) {
+    const customers = ((custData as { items?: Customer[] } | undefined)?.items ?? [])
+      .slice(0, 5)
+      .map((c): SearchResultItem => ({
+        label: customerDisplayName(c, "") || c.email || "Customer",
+        sub: c.email ?? c.phone ?? undefined,
         href: "/customers",
         icon: Users,
         group: "Customer",
+        action: () => {
+          sessionStorage.setItem("koapos_open_customer", String(c.id));
+          navigate("/customers");
+        },
       }));
+    if (customers.length) sections.push({ title: "Customers", items: customers });
 
-    const jobs = (svcData as ServiceJob[] | { items?: ServiceJob[] } | undefined);
-    (Array.isArray(jobs) ? jobs : (jobs as { items?: ServiceJob[] } | undefined)?.items ?? [])
-      .filter((j) => `${j.jobNumber ?? ""} ${(j as ServiceJob & { deviceDescription?: string | null }).deviceDescription ?? ""} ${j.customerName ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach((j) => liveItems.push({
-        label: `#${j.jobNumber} — ${(j as ServiceJob & { deviceDescription?: string | null }).deviceDescription ?? (j as ServiceJob & { deviceType?: string | null }).deviceType ?? "Service Job"}`,
-        href: `/service-jobs/${j.id}`,
+    const products = ((prodData as { items?: Product[] } | undefined)?.items ?? [])
+      .slice(0, 5)
+      .map((p): SearchResultItem => ({
+        label: p.name,
+        sub: p.sku ? `${formatCurrency(p.price)} · ${p.sku}` : formatCurrency(p.price),
+        href: "/inventory/products",
+        icon: Package,
+        group: "Product",
+      }));
+    if (products.length) sections.push({ title: "Products", items: products });
+
+    const rawJobs = svcData as ServiceJob[] | { items?: ServiceJob[] } | undefined;
+    const jobs = (Array.isArray(rawJobs) ? rawJobs : (rawJobs as { items?: ServiceJob[] })?.items ?? [])
+      .filter((j) => {
+        const haystack = [j.jobNumber, (j as ServiceJob & { deviceDescription?: string }).deviceDescription, (j as ServiceJob & { deviceType?: string }).deviceType, j.customerName].filter(Boolean).join(" ").toLowerCase();
+        return haystack.includes(q);
+      })
+      .slice(0, 5)
+      .map((j): SearchResultItem => ({
+        label: `#${j.jobNumber ?? j.id} — ${(j as ServiceJob & { deviceDescription?: string }).deviceDescription ?? (j as ServiceJob & { deviceType?: string }).deviceType ?? "Service Job"}`,
+        sub: j.customerName ?? undefined,
+        href: `/services/${j.id}`,
         icon: Wrench,
-        group: "Service Job",
+        group: "Service",
       }));
+    if (jobs.length) sections.push({ title: "Services", items: jobs });
 
-    (Array.isArray(apptData) ? apptData as Appointment[] : [])
+    const appts = (Array.isArray(apptData) ? apptData as Appointment[] : [])
       .filter((a) => `${a.title} ${a.customerName ?? ""}`.toLowerCase().includes(q))
-      .slice(0, 3)
-      .forEach((a) => liveItems.push({
+      .slice(0, 5)
+      .map((a): SearchResultItem => ({
         label: a.title,
+        sub: a.customerName ?? undefined,
         href: "/appointments",
         icon: CalendarClock,
         group: "Appointment",
       }));
+    if (appts.length) sections.push({ title: "Appointments", items: appts });
   }
 
-  const results = [...staticResults, ...liveItems].slice(0, 12);
+  const navItems = q.length === 0
+    ? SEARCH_INDEX.slice(0, 6)
+    : SEARCH_INDEX.filter((item) =>
+        item.label.toLowerCase().includes(q) || item.group.toLowerCase().includes(q)
+      ).slice(0, 5);
+  if (navItems.length) sections.push({ title: q ? "Navigation" : "Quick Navigation", items: navItems });
+
+  // Staff clock action — always show when no query; show when query matches
+  const clockMatches = q.length === 0 || ["clock", "staff", "login", "shift", "in", "out"].some(kw => kw.includes(q) || q.includes(kw));
+  if (clockMatches) {
+    sections.push({ title: "Quick Actions", items: [CLOCK_QUICK_ACTION] });
+  }
+
+  // Flat indexed list for keyboard nav
+  const allItems = sections.flatMap((s) => s.items);
+  const totalItems = allItems.length;
+
+  // Build flat entries (headers + items) for rendering
+  const flatEntries: ({ kind: "header"; title: string } | { kind: "item"; item: SearchResultItem; idx: number })[] = [];
+  let itemCounter = 0;
+  for (const section of sections) {
+    flatEntries.push({ kind: "header", title: section.title });
+    for (const item of section.items) {
+      flatEntries.push({ kind: "item", item, idx: itemCounter++ });
+    }
+  }
+
+  // Scroll active item into view
+  useEffect(() => {
+    if (!listRef.current) return;
+    const active = listRef.current.querySelector<HTMLElement>("[data-active='true']");
+    active?.scrollIntoView({ block: "nearest" });
+  }, [activeIdx]);
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
-      if ((e.metaKey || e.ctrlKey) && e.key === "k") { e.preventDefault(); setOpenWithCallback(true); setTimeout(() => inputRef.current?.focus(), 50); }
+      if ((e.metaKey || e.ctrlKey) && e.key === "k") {
+        e.preventDefault();
+        setOpenWithCallback(true);
+        setTimeout(() => inputRef.current?.focus(), 50);
+      }
       if (e.key === "Escape") setOpenWithCallback(false);
     }
     window.addEventListener("keydown", onKey);
@@ -483,12 +729,19 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
     return () => document.removeEventListener("mousedown", onClickOutside);
   }, []);
 
-  const go = (href: string) => { navigate(href); setOpenWithCallback(false); setQuery(""); };
+  const go = (item: SearchResultItem) => {
+    if (item.action) { item.action(); }
+    else { navigate(item.href); }
+    setOpenWithCallback(false);
+    setQuery("");
+    setDebouncedQ("");
+    inputRef.current?.blur();
+  };
 
   return (
     <div ref={containerRef} className="relative flex-1">
       <div className="relative">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+        <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors", isSearching ? "text-primary animate-pulse" : "text-muted-foreground")} />
         <input
           ref={inputRef}
           type="text"
@@ -496,31 +749,57 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
           onFocus={() => setOpenWithCallback(true)}
           onChange={(e) => { setQuery(e.target.value); setOpenWithCallback(true); }}
           onKeyDown={(e) => {
-            if (e.key === "Enter" && results.length > 0) go(results[0].href);
+            if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, totalItems - 1)); }
+            if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+            if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx]); }
             if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
           }}
-          placeholder="Search everything..."
+          placeholder="Search customers, products, services…"
           className="w-full h-9 pl-9 pr-14 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all"
         />
         <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground font-mono border rounded px-1 py-0.5">⌘K</kbd>
       </div>
       {open && (
-        <div className="absolute top-full mt-2 left-0 right-0 bg-popover border rounded-xl shadow-xl z-50 overflow-hidden">
-          {results.length === 0 ? (
-            <div className="px-4 py-8 text-sm text-muted-foreground text-center">No results found.</div>
+        <div className="absolute top-full mt-2 left-0 right-0 bg-popover border rounded-xl shadow-xl z-50 overflow-hidden min-w-[320px]">
+          {flatEntries.length === 0 ? (
+            <div className="px-4 py-8 text-sm text-muted-foreground text-center">
+              {isSearching ? "Searching…" : "No results found."}
+            </div>
           ) : (
-            <div className="py-1 max-h-80 overflow-y-auto">
-              {results.map((item) => (
-                <button key={item.href} onMouseDown={() => go(item.href)} className="w-full flex items-center gap-3 px-4 py-2.5 text-sm hover:bg-muted transition-colors text-left">
-                  <item.icon className="w-4 h-4 text-muted-foreground shrink-0" />
-                  <span className="flex-1 font-medium">{item.label}</span>
-                  <span className="text-xs text-muted-foreground">{item.group}</span>
-                </button>
-              ))}
+            <div ref={listRef} className="py-1 max-h-[420px] overflow-y-auto">
+              {flatEntries.map((entry, i) =>
+                entry.kind === "header" ? (
+                  <div key={`h-${i}`} className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
+                    {entry.title}
+                  </div>
+                ) : (
+                  <button
+                    key={`item-${entry.idx}`}
+                    data-active={entry.idx === activeIdx}
+                    onMouseDown={() => go(entry.item)}
+                    onMouseEnter={() => setActiveIdx(entry.idx)}
+                    className={cn(
+                      "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left group",
+                      entry.idx === activeIdx
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted",
+                    )}
+                  >
+                    <entry.item.icon className={cn("w-4 h-4 shrink-0", entry.idx === activeIdx ? "text-primary-foreground/80" : "text-muted-foreground")} />
+                    <span className="flex-1 font-medium truncate">{entry.item.label}</span>
+                    {entry.item.sub && (
+                      <span className={cn("text-xs shrink-0 max-w-[140px] truncate", entry.idx === activeIdx ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                        {entry.item.sub}
+                      </span>
+                    )}
+                  </button>
+                )
+              )}
             </div>
           )}
         </div>
       )}
+      <StaffClockDialog open={clockOpen} onOpenChange={setClockOpen} />
     </div>
   );
 }
@@ -528,7 +807,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
 /* ─── Breadcrumbs ────────────────────────────────────────────────────────── */
 
 function Breadcrumbs({ location }: { location: string }) {
-  const labels = ROUTE_LABEL[location] || [location.split("/").filter(Boolean).join(" / ") || "Home"];
+  const labels = routeLabels(location);
   return (
     <nav className="flex items-center gap-1.5 text-sm flex-wrap">
       <Link href="/dashboard" className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted transition-colors shrink-0 text-muted-foreground hover:text-foreground">
@@ -1005,6 +1284,156 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
   );
 }
 
+/* ─── Staff day login (universal top bar) ────────────────────────────────── */
+
+/**
+ * The day's staff login for THIS device. A staff member signs in here with
+ * their PIN at the start of the day; their session persists until Close Till
+ * or an explicit sign-out. The POS cart-header staff button is, by contrast,
+ * only a temporary one-sale switch that reverts back to this day login.
+ */
+function StaffLoginButton({ location }: { location: string }) {
+  const { dayStaff, signInForDay, signOutForDay } = useStaffSession();
+  const [open, setOpen] = useState(false);
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  const isPosPage = location === "/pos" || location.startsWith("/pos/");
+  const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const forceStaffLogin = posSettingsData?.forceStaffLogin === "true";
+
+  /* The staff list only reveals whether a forced login is even possible
+     (PIN values are masked by the server); verification happens server-side. */
+  const needStaffList = open || (isPosPage && forceStaffLogin && !dayStaff);
+  const { data: staffListData } = useListStaff({ query: { queryKey: ["staff-pos"], enabled: needStaffList } });
+  const staffList = (staffListData as Staff[] | undefined) ?? [];
+  const pinStaffExists = staffList.some((s) => s.pin && s.isActive);
+  const verifyPin = useVerifyStaffPin();
+
+  /* Forced start-of-day login — on the POS with nobody signed in for the day,
+     the PIN dialog opens instantly and cannot be dismissed. */
+  const forced = isPosPage && forceStaffLogin && !dayStaff && pinStaffExists;
+  useEffect(() => {
+    if (forced) { setPin(""); setError(""); setOpen(true); }
+  }, [forced]);
+
+  /* The POS "Charge" guard dispatches this when a sale is attempted with no
+     day staff while forced login is on. */
+  useEffect(() => {
+    const handler = () => { setPin(""); setError(""); setOpen(true); };
+    window.addEventListener("koapos:open-day-staff-login", handler);
+    return () => window.removeEventListener("koapos:open-day-staff-login", handler);
+  }, []);
+
+  const handleSubmit = () => {
+    if (!pin || verifyPin.isPending) return;
+    // establishDaySession: record this staff as the server session's day-staff so
+    // server-side attribution (daily closes, stock takes, customer merges) credits them.
+    verifyPin.mutate({ data: { pin, establishDaySession: true } }, {
+      onSuccess: (res) => {
+        if (!res.ok || !res.staff) {
+          setError(res.reason === "rate_limited"
+            ? "Too many attempts — wait a minute and try again."
+            : "Incorrect PIN. Try again.");
+          setPin("");
+          return;
+        }
+        signInForDay(res.staff);
+        setOpen(false); setPin(""); setError("");
+        toast.success(`${res.staff.name} signed in for the day`);
+      },
+      onError: () => setError("Couldn't verify PIN — check your connection and try again."),
+    });
+  };
+
+  const handleSignOut = () => {
+    const name = dayStaff?.staffName;
+    signOutForDay();
+    setPin(""); setError("");
+    toast.success(`${name ?? "Staff"} signed out`);
+  };
+
+  const handleOpenChange = (v: boolean) => {
+    if (!v && forced) return; /* must sign in before the dialog can close */
+    if (!v) { setPin(""); setError(""); }
+    setOpen(v);
+  };
+
+  return (
+    <>
+      <button
+        onClick={() => { setPin(""); setError(""); setOpen(true); }}
+        title={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
+        aria-label={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
+        className={cn(
+          "h-8 rounded-lg flex items-center justify-center gap-1.5 px-2 transition-colors",
+          dayStaff ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
+        )}
+      >
+        <UserCircle className="w-4 h-4 shrink-0" />
+        {dayStaff && (
+          <span className="hidden md:inline text-xs font-semibold max-w-[90px] truncate">
+            {dayStaff.staffName.split(" ")[0]}
+          </span>
+        )}
+      </button>
+
+      <Dialog open={open} onOpenChange={handleOpenChange}>
+        <DialogContent className={cn("sm:max-w-xs", forced && "[&>button.absolute]:hidden")}>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Lock className="w-4 h-4" /> Staff Login
+            </DialogTitle>
+            <DialogDescription>
+              {dayStaff
+                ? <>Signed in for the day: <span className="font-semibold text-foreground">{dayStaff.staffName}</span></>
+                : forced
+                  ? "Enter your PIN to start the day on this register."
+                  : "Enter your PIN to sign in for the day on this device."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-3">
+            <Input
+              type="password"
+              inputMode="numeric"
+              pattern="[0-9]*"
+              value={pin}
+              onChange={(e) => { setPin(e.target.value.replace(/\D/g, "")); setError(""); }}
+              placeholder="••••"
+              className="text-center tracking-widest text-lg"
+              autoFocus
+              onKeyDown={(e) => { if (e.key === "Enter") handleSubmit(); }}
+            />
+            <div className="grid grid-cols-3 gap-2">
+              {["1","2","3","4","5","6","7","8","9","","0","⌫"].map((k, ki) => (
+                <button
+                  key={ki} disabled={!k}
+                  onClick={() => { if (k === "⌫") setPin((p) => p.slice(0, -1)); else if (k) { setPin((p) => p + k); setError(""); } }}
+                  className={cn("h-11 rounded-xl border font-semibold text-base transition-colors", k ? "hover:bg-muted active:bg-muted/80" : "opacity-0 pointer-events-none", k === "⌫" && "text-destructive text-sm")}
+                >{k}</button>
+              ))}
+            </div>
+            {error && <p className="text-xs text-destructive text-center">{error}</p>}
+          </div>
+          <DialogFooter className="gap-2 sm:gap-0">
+            {dayStaff && (
+              <Button variant="outline" className="text-destructive hover:text-destructive" onClick={handleSignOut}>
+                <LogOut className="w-3.5 h-3.5 mr-1.5" /> Sign Out
+              </Button>
+            )}
+            {!forced && (
+              <Button variant="outline" onClick={() => handleOpenChange(false)}>Cancel</Button>
+            )}
+            <Button onClick={handleSubmit} disabled={!pin || verifyPin.isPending}>
+              {verifyPin.isPending ? "Verifying…" : "Sign In"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
 function useHeaderScrollShadow() {
   const [scrolled, setScrolled] = useState(false);
   useEffect(() => {
@@ -1018,12 +1447,12 @@ function useHeaderScrollShadow() {
   return scrolled;
 }
 
-function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
+function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending, canManage }: LayoutSharedProps) {
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
-  const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
+  const isManagementSection = inManagementSection(location);
+  const isMarketingSection  = inMarketingSection(location);
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
   const isCamerasSection    = location === "/cameras";
 
@@ -1058,7 +1487,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavBtn icon={LayoutDashboard} label="Dashboard" isActive={location === "/dashboard"} onClick={() => navigate("/dashboard")} />
           <TopNavDropdown label="POS" icon={ShoppingCart} items={POS_SUBNAV} isActive={isPOSSection}
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
-          <TopNavBtn icon={Wrench} label="Services" isActive={location === "/service-jobs" || location.startsWith("/service-jobs/")} onClick={() => navigate("/service-jobs")} />
+          <TopNavBtn icon={Wrench} label="Services" isActive={location === "/services" || location.startsWith("/services/")} onClick={() => navigate("/services")} />
           <TopNavBtn icon={CalendarClock} label="Appts" isActive={location === "/appointments"} onClick={() => navigate("/appointments")} />
           <TopNavDropdown label="Inventory" icon={Boxes} items={INVENTORY_SUBNAV} isActive={isInventorySection}
             isOpen={openDropdown === "inventory"} onToggle={() => toggle("inventory")} location={location} navigate={navigate} />
@@ -1066,12 +1495,14 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <TopNavDropdown label="Staff" icon={UserSquare2} items={STAFF_SUBNAV} isActive={isStaffSection}
             isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
           <TopNavDropdown label="Marketing" icon={Megaphone} items={MARKETING_SUBNAV} isActive={isMarketingSection}
-            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing" />
+            isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing/overview" />
           <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
-            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/delivery-orders" />
+            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/deliveries" />
           <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
-          <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
-            isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
+          {canManage && (
+            <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
+              isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
+          )}
         </nav>
 
         {/* Flex spacer */}
@@ -1083,14 +1514,16 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </div>
 
         {/* Right actions */}
+        <LocationSwitcher />
         <LayoutPicker />
         <AccessibilityPicker />
         <div className={cn("flex items-center gap-1.5 shrink-0 overflow-hidden transition-all duration-300", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <Link href="/pos">
+          <Link href="/pos/sell">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold h-8 px-3">
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
           </Link>
+          <StaffLoginButton location={location} />
           <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1104,10 +1537,10 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
 /* ─── Bottom nav components ──────────────────────────────────────────────── */
 
-function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, logoutPending }: {
+function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, logoutPending, canManage }: {
   open: boolean; onClose: () => void; location: string; navigate: (href: string) => void;
   user: { ownerName?: string | null; email?: string } | null;
-  onLogout: () => void; logoutPending: boolean;
+  onLogout: () => void; logoutPending: boolean; canManage: boolean;
 }) {
   if (!open) return null;
 
@@ -1127,7 +1560,8 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
     { label: "Marketing",  items: flattenNavItems(MARKETING_SUBNAV) },
     { label: "Online",     items: flattenNavItems(ONLINE_SUBNAV) },
     { label: "Cameras",    items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
-    { label: "Management", items: flattenNavItems(MANAGEMENT_SUBNAV) },
+    // Management menus are restricted to Owner/Manager roles.
+    ...(canManage ? [{ label: "Management", items: flattenNavItems(MANAGEMENT_SUBNAV) }] : []),
   ];
 
   return (
@@ -1146,7 +1580,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
         <div className="p-3 space-y-4">
           <div className="space-y-0.5">
-            <button onClick={() => go("/service-jobs")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location.startsWith("/service-jobs") && "bg-secondary/60 font-medium")}>
+            <button onClick={() => go("/services")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location.startsWith("/services") && "bg-secondary/60 font-medium")}>
               <Wrench className="w-4 h-4 shrink-0 text-muted-foreground" /><span>Services</span>
             </button>
             <button onClick={() => go("/appointments")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location === "/appointments" && "bg-secondary/60 font-medium")}>
@@ -1184,11 +1618,11 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
   );
 }
 
-function BottomNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending }: LayoutSharedProps) {
+function BottomNavLayout({ children, location, navigate, user, theme, toggleTheme, handleLogout, logoutPending, canManage }: LayoutSharedProps) {
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
   const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isManagementSection = location.startsWith("/management/") || location === "/modules" || location.startsWith("/settings/");
+  const isManagementSection = inManagementSection(location);
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
@@ -1220,11 +1654,12 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         <LayoutPicker />
         <AccessibilityPicker />
         <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <Link href="/pos">
+          <Link href="/pos/sell">
             <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
               <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
             </Button>
           </Link>
+          <StaffLoginButton location={location} />
           <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
             {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
           </button>
@@ -1236,8 +1671,8 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
       {/* Fixed bottom bar */}
       <nav className="fixed bottom-0 left-0 right-0 h-16 border-t bg-background flex items-center justify-around px-2 z-30" aria-label="Main navigation">
         <BottomTab href="/dashboard"        icon={LayoutDashboard} label="Dashboard" active={location === "/dashboard"} />
-        <BottomTab href="/pos"              icon={ShoppingCart}    label="POS"       active={isPOSSection} />
-        <BottomTab href="/products/overview"icon={Boxes}           label="Inventory" active={isInventorySection} />
+        <BottomTab href="/pos/sell"              icon={ShoppingCart}    label="POS"       active={isPOSSection} />
+        <BottomTab href="/inventory/overview"icon={Boxes}           label="Inventory" active={isInventorySection} />
         <BottomTab href="/customers"        icon={Users}           label="Customers" active={location === "/customers"} />
         <BottomTab icon={Menu} label="More" active={isManagementSection || isOnlineSection || moreOpen} onClick={() => setMoreOpen(true)} />
       </nav>
@@ -1245,7 +1680,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
       <BottomMoreSheet
         open={moreOpen} onClose={() => setMoreOpen(false)}
         location={location} navigate={navigate} user={user}
-        onLogout={handleLogout} logoutPending={logoutPending}
+        onLogout={handleLogout} logoutPending={logoutPending} canManage={canManage}
       />
     </div>
   );
@@ -1264,6 +1699,8 @@ interface LayoutSharedProps {
   toggleTheme: () => void;
   handleLogout: () => void;
   logoutPending: boolean;
+  /** Owner/Manager — controls visibility of the Management section menus. */
+  canManage: boolean;
 }
 
 /* ─── Main AppLayout ─────────────────────────────────────────────────────── */
@@ -1277,9 +1714,24 @@ export function AppLayout({ children, hideSidebar }: { children: React.ReactNode
 function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const [location, navigate] = useLocation();
   const { user, logout } = useAuth();
+  const { dayStaff, signOutForDay } = useStaffSession();
   const { theme, toggleTheme } = useTheme();
   const { navLayout } = useNavLayout();
   const logoutMutation = useLogout();
+
+  /* When the platform user logs in, immediately prompt for a staff PIN so a till
+     is bound to whoever is operating this device for the duration of the session.
+     The day-staff session is hydrated from localStorage, so a plain refresh (where
+     dayStaff is already set) never re-opens the dialog — only a genuine new login
+     with nobody signed in for the day. The binding is released on logout below. */
+  const wasAuthedRef = useRef(false);
+  useEffect(() => {
+    const authed = !!user;
+    if (authed && !wasAuthedRef.current && !dayStaff) {
+      window.dispatchEvent(new CustomEvent("koapos:open-day-staff-login"));
+    }
+    wasAuthedRef.current = authed;
+  }, [user, dayStaff]);
 
   // Scroll only the main content area to the top when the pathname changes — ignore hash/query
   const scrollPathRef = useRef("");
@@ -1321,12 +1773,10 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   }, [navigate]);
 
   const isPOSSection        = location === "/pos" || location.startsWith("/pos/");
-  const isInventorySection  = location === "/products" || location.startsWith("/products/");
+  const isInventorySection  = location === "/products" || location.startsWith("/products/") || location === "/inventory" || location.startsWith("/inventory/");
   const isStaffSection      = location === "/staff" || location.startsWith("/staff/");
-  const isMarketingSection  = location === "/marketing" || location.startsWith("/marketing/");
-  const isManagementSection =
-    location.startsWith("/management/") ||
-    location === "/modules" || location.startsWith("/settings/");
+  const isMarketingSection  = inMarketingSection(location);
+  const isManagementSection = inManagementSection(location);
   const isCustomersSection  = location === "/customers" || location.startsWith("/customers/");
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
 
@@ -1335,7 +1785,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   });
   const unreadSecurityCount = unreadData?.count ?? 0;
   const mgmtBadgeByHref: Record<string, number> = unreadSecurityCount > 0
-    ? { "/management/account": unreadSecurityCount }
+    ? { "/management/settings-integrations/account": unreadSecurityCount }
     : {};
 
   const [posOpen,      setPosOpen]      = useState(isPOSSection);
@@ -1347,14 +1797,23 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const [custsOpen,    setCustsOpen]    = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
 
-  const canManage = !!user;
+  // Management menus & routes are restricted to Owner and Manager staff roles.
+  const canManage = ["owner", "manager"].includes(user?.staffRole ?? "");
 
-  const handleLogout = () => logoutMutation.mutate(undefined, { onSuccess: () => logout() });
+  const handleLogout = () => logoutMutation.mutate(undefined, { onSuccess: () => { signOutForDay(); logout(); } });
   const logoutPending = logoutMutation.isPending;
 
+  const wrappedChildren = (
+    <>
+      {user && !user.emailVerified && <EmailVerificationBanner />}
+      {user && !user.onboardingCompleted && <OnboardingWizard />}
+      {children}
+    </>
+  );
+
   const sharedProps: LayoutSharedProps = {
-    children, location, navigate: navigate as (href: string) => void,
-    user: user as MerchantUser, theme, toggleTheme, handleLogout, logoutPending,
+    children: wrappedChildren, location, navigate: navigate as (href: string) => void,
+    user: user as MerchantUser, theme, toggleTheme, handleLogout, logoutPending, canManage,
   };
 
   /* ── Top nav layout ─────────────────────────────────────────────────── */
@@ -1465,12 +1924,12 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
             onToggle={() => { setPosOpen((o) => !o); setInvOpen(false); setMgmtOpen(false); }}
             items={POS_SUBNAV}
           />
-          <NavLink href="/service-jobs"  icon={Wrench}        name="Services" />
+          <NavLink href="/services"  icon={Wrench}        name="Services" />
           <NavLink href="/appointments"  icon={CalendarClock} name="Appointments" />
           <CollapsibleSection
             label="Inventory" icon={Boxes} isActive={isInventorySection} isOpen={invOpen}
             onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}
-            items={INVENTORY_SUBNAV} defaultHref="/products/overview"
+            items={INVENTORY_SUBNAV} defaultHref="/inventory/overview"
           />
           <CollapsibleSection
             label="Customers" icon={Users} isActive={isCustomersSection} isOpen={custsOpen}
@@ -1485,12 +1944,12 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
           <CollapsibleSection
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
             onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setOnlineOpen(false); setMgmtOpen(false); }}
-            items={MARKETING_SUBNAV} defaultHref="/marketing"
+            items={MARKETING_SUBNAV} defaultHref="/marketing/overview"
           />
           <CollapsibleSection
             label="Online" icon={Globe} isActive={isOnlineSection} isOpen={onlineOpen}
             onToggle={() => { setOnlineOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMarketingOpen(false); setMgmtOpen(false); }}
-            items={ONLINE_SUBNAV} defaultHref="/online/delivery-orders"
+            items={ONLINE_SUBNAV} defaultHref="/online/deliveries"
           />
           <NavLink href="/cameras"       icon={Camera}        name="Cameras" />
           {canManage && (
@@ -1527,11 +1986,12 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
             <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
 
             <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-              <Link href="/pos">
+              <Link href="/pos/sell">
                 <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
                   <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
                 </Button>
               </Link>
+              <StaffLoginButton location={location} />
               <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
                 {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
               </button>

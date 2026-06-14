@@ -8,8 +8,11 @@
     "seed-calendar": "tsx ./src/seed-calendar.ts",
     "seed-product-types": "tsx ./src/seed-product-types.ts",
     "seed-default-register": "tsx ./src/seed-default-register.ts",
+    "backfill-cost-prices": "tsx ./src/backfill-cost-prices.ts",
     "setup-login-cleanup": "tsx ./src/setup-login-cleanup.ts",
+    "setup-report-views": "tsx ./src/setup-report-views.ts",
     "protect-merchant-accounts": "tsx ./src/protect-merchant-accounts.ts",
+    "add-invoice-link-columns": "tsx ./src/add-invoice-link-columns.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

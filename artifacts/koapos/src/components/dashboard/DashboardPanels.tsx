@@ -2,7 +2,12 @@ import { useState } from "react";
 import {
   useListServiceJobs,
   ServiceJob,
+  useListDashboardNotes,
+  useCreateDashboardNote,
+  useDeleteDashboardNote,
+  getListDashboardNotesQueryKey,
 } from "@workspace/api-client-react";
+import { useQueryClient } from "@tanstack/react-query";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -18,12 +23,13 @@ import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDeta
 const ALL_STATUSES: { value: string; label: string }[] = [
   { value: "pending",                     label: "Pending" },
   { value: "in-progress",                 label: "In Progress" },
+  { value: "awaiting-parts",              label: "Awaiting Parts" },
+  { value: "awaiting-stock",              label: "Awaiting Stock" },
   { value: "at-repairer",                 label: "At Repairer" },
   { value: "awaiting-partner-approval",   label: "Awaiting Partner Approval" },
-  { value: "awaiting-stock",              label: "Awaiting Stock" },
+  { value: "partner-replacement",         label: "Partner Replacement" },
   { value: "awaiting-customer",           label: "Awaiting Customer" },
   { value: "completed",                   label: "Completed" },
-  { value: "partner-replacement",         label: "Partner Replacement" },
   { value: "cancelled",                   label: "Cancelled" },
 ];
 
@@ -36,12 +42,13 @@ function statusColor(status: string): string {
   switch (status) {
     case "pending":                     return "bg-yellow-100 text-yellow-700 border-yellow-200";
     case "in-progress":                 return "bg-blue-100 text-blue-700 border-blue-200";
+    case "awaiting-parts":              return "bg-rose-100 text-rose-700 border-rose-200";
+    case "awaiting-stock":              return "bg-purple-100 text-purple-700 border-purple-200";
     case "at-repairer":                 return "bg-yellow-50 text-yellow-700 border-yellow-300";
     case "awaiting-partner-approval":   return "bg-indigo-100 text-indigo-700 border-indigo-200";
-    case "awaiting-stock":              return "bg-purple-100 text-purple-700 border-purple-200";
+    case "partner-replacement":         return "bg-teal-100 text-teal-700 border-teal-200";
     case "awaiting-customer":           return "bg-orange-100 text-orange-700 border-orange-200";
     case "completed":                   return "bg-emerald-100 text-emerald-700 border-emerald-200";
-    case "partner-replacement":         return "bg-teal-100 text-teal-700 border-teal-200";
     case "cancelled":                   return "bg-gray-100 text-gray-500 border-gray-200";
     default:                            return "bg-muted text-muted-foreground border-border";
   }
@@ -51,12 +58,13 @@ function statusIconColor(status: string): string {
   switch (status) {
     case "pending":                     return "text-yellow-500";
     case "in-progress":                 return "text-blue-500";
+    case "awaiting-parts":              return "text-rose-500";
+    case "awaiting-stock":              return "text-purple-500";
     case "at-repairer":                 return "text-yellow-600";
     case "awaiting-partner-approval":   return "text-indigo-500";
-    case "awaiting-stock":              return "text-purple-500";
+    case "partner-replacement":         return "text-teal-500";
     case "awaiting-customer":           return "text-orange-500";
     case "completed":                   return "text-emerald-500";
-    case "partner-replacement":         return "text-teal-500";
     case "cancelled":                   return "text-gray-400";
     default:                            return "text-muted-foreground";
   }
@@ -170,32 +178,37 @@ function AllServiceJobsPanel() {
 
 // ─── Notifications Panel ──────────────────────────────────────────────────────
 
-interface Notification {
-  id: number;
-  text: string;
-  isCritical: boolean;
-  createdAt: string;
-}
-
 function NotificationsPanel() {
-  const [notes, setNotes] = useState<Notification[]>([]);
+  const queryClient = useQueryClient();
   const [adding, setAdding] = useState(false);
   const [draft, setDraft] = useState("");
   const [draftCritical, setDraftCritical] = useState(false);
 
-  const save = () => {
+  const { data, isLoading } = useListDashboardNotes({
+    query: { queryKey: getListDashboardNotesQueryKey() },
+  });
+  const createMutation = useCreateDashboardNote({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListDashboardNotesQueryKey() }),
+    },
+  });
+  const deleteMutation = useDeleteDashboardNote({
+    mutation: {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: getListDashboardNotesQueryKey() }),
+    },
+  });
+
+  const save = async () => {
     if (!draft.trim()) return;
-    setNotes((prev) => [
-      ...prev,
-      { id: Date.now(), text: draft.trim(), isCritical: draftCritical, createdAt: new Date().toISOString() },
-    ]);
+    await createMutation.mutateAsync({ data: { text: draft.trim(), isCritical: draftCritical } });
     setDraft("");
     setDraftCritical(false);
     setAdding(false);
   };
 
-  const remove = (id: number) => setNotes((prev) => prev.filter((n) => n.id !== id));
+  const remove = (id: number) => deleteMutation.mutate({ id });
 
+  const notes = data?.items ?? [];
   // Critical notes first, then the rest
   const sorted = [
     ...notes.filter((n) => n.isCritical),
@@ -211,7 +224,10 @@ function NotificationsPanel() {
         </CardTitle>
       </CardHeader>
       <CardContent className="flex-1 flex flex-col gap-2.5">
-        {sorted.length === 0 && !adding && (
+        {isLoading && (
+          <p className="text-sm text-muted-foreground text-center py-4">Loading...</p>
+        )}
+        {!isLoading && sorted.length === 0 && !adding && (
           <p className="text-sm text-muted-foreground text-center py-4">No notes yet.</p>
         )}
 
@@ -269,7 +285,9 @@ function NotificationsPanel() {
               {draftCritical && <span className="ml-auto text-xs text-red-600 font-semibold">Will appear at top ↑</span>}
             </div>
             <div className="flex gap-2">
-              <Button size="sm" onClick={save} className="flex-1">Save</Button>
+              <Button size="sm" onClick={save} disabled={createMutation.isPending} className="flex-1">
+                {createMutation.isPending ? "Saving..." : "Save"}
+              </Button>
               <Button size="sm" variant="outline" onClick={() => { setAdding(false); setDraft(""); setDraftCritical(false); }}>Cancel</Button>
             </div>
           </div>

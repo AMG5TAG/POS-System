@@ -368,7 +368,7 @@ function ForceStaffLoginToggle() {
     <div className="flex items-center justify-between p-4">
       <div>
         <p className="text-sm font-medium">Force Staff Login</p>
-        <p className="text-xs text-muted-foreground mt-0.5">Require a staff PIN before every sale is processed.</p>
+        <p className="text-xs text-muted-foreground mt-0.5">Show the staff PIN popup as soon as the POS opens — a staff member must sign in for the day before sales can be processed.</p>
       </div>
       <Switch checked={enabled} onCheckedChange={toggle} />
     </div>

@@ -1,6 +1,8 @@
-import type { CSSProperties } from "react";
+import { useMemo, type CSSProperties } from "react";
+import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
+import { publicOrigin } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
 
 /**
@@ -27,6 +29,9 @@ export interface ServiceSheetBranding {
   logo?: string;
   /** Configured social links (e.g. { facebook: "...", instagram: "..." }). */
   socialLinks?: Record<string, string>;
+  /** Business username — forms the Tech App address (/b/:username/t/webapp).
+      When present, the sheet QR deep-links into the Tech App for this job. */
+  techAppUsername?: string;
 }
 
 export interface ServiceSheetFormFile {
@@ -38,9 +43,11 @@ export interface ServiceSheetFormFile {
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   "in-progress": "In Progress",
+  "awaiting-parts": "Awaiting Parts",
+  "awaiting-stock": "Awaiting Stock",
+  "at-repairer": "At Repairer",
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement": "Partner Replacement",
-  "awaiting-stock": "Awaiting Stock",
   "awaiting-customer": "Awaiting Customer",
   completed: "Completed",
   cancelled: "Cancelled",
@@ -52,6 +59,10 @@ function humanizeStatus(s: string): string {
 }
 
 export interface ServiceSheetData {
+  /** Database id — drives the bottom-left QR code that deep-links into the
+      Tech App for this job (/b/:username/t/webapp?job=:id). Omit to print
+      without a QR. */
+  jobId?: number | null;
   jobNumber: string;
   date?: string | number | Date | null;
   /** Raw status code (e.g. "awaiting-partner-approval"); humanized for display. */
@@ -107,6 +118,25 @@ const wrapStyle: CSSProperties = {
   wordBreak: "break-word",
 };
 
+/** Build a QR as an SVG path synchronously (QRCode.create is sync, unlike
+    toDataURL) so the code is always in the DOM before window.print() fires. */
+function buildQr(text: string): { path: string; size: number } | null {
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel: "M" });
+    const size = qr.modules.size;
+    const cells = qr.modules.data;
+    let path = "";
+    for (let y = 0; y < size; y++) {
+      for (let x = 0; x < size; x++) {
+        if (cells[y * size + x]) path += `M${x} ${y}h1v1h-1z`;
+      }
+    }
+    return { path, size };
+  } catch {
+    return null;
+  }
+}
+
 function mergeCredentials(accounts?: string, logins?: string): string[] {
   const accts = (accounts ?? "").split("\n").map((s) => s.trim());
   const pins = (logins ?? "").split("\n").map((s) => s.trim());
@@ -147,6 +177,20 @@ export function ServiceJobSheet({
 
   const showCustomer = opts.showCustomerDetails;
   const showDevice = opts.showDeviceDetails;
+
+  /* Bottom-left QR — scanning opens the job in the Tech App
+     (/b/:username/t/webapp?job=:id). Falls back to the staff Service View only
+     when no business username is configured (the Tech App can't exist without
+     one). The `?job=` deep link is also understood by the Tech App's in-app
+     scanner. */
+  const qrTarget = useMemo(() => {
+    if (data.jobId == null) return null;
+    if (branding.techAppUsername) {
+      return `${publicOrigin()}/b/${encodeURIComponent(branding.techAppUsername)}/t/webapp?job=${data.jobId}`;
+    }
+    return `${publicOrigin()}/service-jobs/${data.jobId}`;
+  }, [data.jobId, branding.techAppUsername]);
+  const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   return (
     <div
@@ -376,6 +420,29 @@ export function ServiceJobSheet({
           {socialEntries.map(({ label, handle, key }) => (
             <span key={label} style={{ display: "inline-flex", alignItems: "center", gap: "3px", ...wrapStyle }}><SocialIcon platform={key} size={10} /><strong>{label}</strong> {handle}</span>
           ))}
+        </div>
+      )}
+
+      {/* ── Tech App QR — bottom-left corner ───────────────────── */}
+      {qr && (
+        <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-start", alignItems: "flex-end", gap: "8px" }}>
+          <div style={{ border: `1px solid ${BORDER}`, borderRadius: "4px", padding: "5px", background: "white" }}>
+            <svg
+              width="72"
+              height="72"
+              viewBox={`0 0 ${qr.size} ${qr.size}`}
+              shapeRendering="crispEdges"
+              role="img"
+              aria-label={`QR code for job ${data.jobNumber}`}
+            >
+              <rect width={qr.size} height={qr.size} fill="#ffffff" />
+              <path d={qr.path} fill="#000000" />
+            </svg>
+          </div>
+          <div style={{ fontSize: "9px", color: MUTED, lineHeight: 1.4, paddingBottom: "2px" }}>
+            Scan to open in the<br />
+            <strong>Tech App</strong> — {data.jobNumber}
+          </div>
         </div>
       )}
     </div>

@@ -6,6 +6,7 @@ import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput"
 import {
   useCreateServiceJob,
   useGetMerchant,
+  useSendServiceJobEmail,
   type ServiceJob,
   type Customer,
 } from "@workspace/api-client-react";
@@ -48,6 +49,8 @@ import {
   Printer,
   Tag,
   AlertTriangle,
+  Loader2,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -212,6 +215,7 @@ export default function ServiceJobNewPage() {
   const [, navigate] = useLocation();
   const queryClient = useQueryClient();
   const createMutation = useCreateServiceJob();
+  const sendJobEmailMutation = useSendServiceJobEmail();
 
   const { data: merchant } = useGetMerchant();
   const { templates: stickerTemplates } = useStickerTemplates();
@@ -314,7 +318,7 @@ export default function ServiceJobNewPage() {
       {
         data: {
           customerId: customerId ? Number(customerId) : null,
-          status: status as "pending" | "in-progress" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-stock" | "awaiting-customer" | "completed" | "cancelled",
+          status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "completed" | "cancelled",
           bookInDate,
           isPartnerRepair,
           isCritical,
@@ -357,7 +361,7 @@ export default function ServiceJobNewPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0"
-            onClick={() => navigate("/service-jobs")}
+            onClick={() => navigate("/services")}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
@@ -647,7 +651,7 @@ export default function ServiceJobNewPage() {
     </AppLayout>
 
     {/* Success dialog */}
-    <Dialog open={!!successJob} onOpenChange={(open) => { if (!open) { setSuccessJob(null); navigate("/service-jobs"); } }}>
+    <Dialog open={!!successJob} onOpenChange={(open) => { if (!open) { setSuccessJob(null); navigate("/services"); } }}>
       <DialogContent className="max-w-sm">
         <DialogHeader>
           <div className="flex flex-col items-center gap-3 pt-2 pb-1">
@@ -663,30 +667,23 @@ export default function ServiceJobNewPage() {
           </div>
         </DialogHeader>
         <DialogFooter className="flex-col gap-2 sm:flex-col mt-2">
-          {selectedCustomer?.email && (
-            <Button className="w-full gap-2" variant="outline" asChild>
-              <a
-                href={(() => {
-                  const jobRef = successJob?.jobNumber ?? `SVC-${successJob?.id}`;
-                  const custName = `${selectedCustomer.firstName ?? ""} ${selectedCustomer.lastName ?? ""}`.trim();
-                  const defaultBody = `Hi ${custName},\n\nYour device has been booked in for service. Your job number is #${jobRef}.\n\nWe will be in touch with an update shortly.\n\nThank you!`;
-                  const subject = encodeURIComponent(
-                    svcOpts.subjectLine || `Service Job Confirmation #${jobRef}`,
-                  );
-                  const body = encodeURIComponent(
-                    (svcOpts.messageText || defaultBody)
-                      .replace(/\{jobNumber\}/g, jobRef)
-                      .replace(/\{customerName\}/g, custName)
-                      .replace(/\{businessName\}/g, businessName),
-                  );
-                  return `mailto:${selectedCustomer.email}?subject=${subject}&body=${body}`;
-                })()}
-                target="_blank"
-                rel="noreferrer"
-              >
-                <Mail className="w-4 h-4" />
-                Email Customer
-              </a>
+          {selectedCustomer?.email && successJob && (
+            <Button
+              className="w-full gap-2"
+              variant="outline"
+              disabled={sendJobEmailMutation.isPending}
+              onClick={() => {
+                sendJobEmailMutation.mutate(
+                  { id: successJob.id },
+                  {
+                    onSuccess: () => toast.success(`Service report emailed to ${selectedCustomer.email}`),
+                    onError: () => toast.error("Failed to send email — check your email settings in Management"),
+                  },
+                );
+              }}
+            >
+              {sendJobEmailMutation.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}
+              Email Customer
             </Button>
           )}
           {selectedCustomer?.phone && (
@@ -743,7 +740,7 @@ export default function ServiceJobNewPage() {
           <Button
             variant="ghost"
             className="w-full"
-            onClick={() => { setSuccessJob(null); navigate("/service-jobs"); }}
+            onClick={() => { setSuccessJob(null); navigate("/services"); }}
           >
             Done
           </Button>
@@ -867,8 +864,10 @@ export default function ServiceJobNewPage() {
         brandColor,
         logo: bizProfile?.logo,
         socialLinks: bizProfile?.socialLinks,
+        techAppUsername: merchant?.username ?? undefined,
       }}
       data={{
+        jobId: successJob?.id ?? null,
         jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
         date: bookInDate || Date.now(),
         status,

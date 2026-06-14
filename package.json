@@ -7,7 +7,7 @@
     "build": "pnpm run typecheck && pnpm -r --if-present run build",
     "typecheck:libs": "tsc --build",
     "typecheck": "pnpm run typecheck:libs && pnpm -r --filter \"./artifacts/**\" --filter \"./scripts\" --if-present run typecheck",
-    "db:push": "pnpm --filter @workspace/db run push && pnpm --filter @workspace/scripts run setup-login-cleanup && pnpm --filter @workspace/scripts run seed-default-register && pnpm --filter @workspace/scripts run protect-merchant-accounts"
+    "db:push": "pnpm --filter @workspace/scripts run backfill-cost-prices && pnpm --filter @workspace/db run push && pnpm --filter @workspace/scripts run add-invoice-link-columns && pnpm --filter @workspace/scripts run setup-login-cleanup && pnpm --filter @workspace/scripts run setup-report-views && pnpm --filter @workspace/scripts run seed-default-register && pnpm --filter @workspace/scripts run protect-merchant-accounts"
   },
   "private": true,
   "devDependencies": {

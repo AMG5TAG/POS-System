@@ -11,6 +11,8 @@ import {
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
+import { customerDisplayName } from "@/lib/customer-name";
+import { useStaffSession } from "@/lib/staff-day-session";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -69,6 +71,9 @@ const STATUS_BADGE: Record<string, { label: string; variant: "default" | "second
 
 export default function POSLaybuysPage() {
   const queryClient = useQueryClient();
+  /* Staff member signed in for the day — credited with laybys they create so a
+     completed layby attributes revenue in staff leaderboards + KPIs. */
+  const { dayStaff } = useStaffSession();
 
   const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
   const [search, setSearch] = useState("");
@@ -107,6 +112,14 @@ export default function POSLaybuysPage() {
   const [selectedItems, setSelectedItems] = useState<LaybyItem[]>([]);
 
   const [paymentForm, setPaymentForm] = useState({ amount: "", paymentMethod: "cash", note: "" });
+  // Split payment: settle one payment across several methods. Legs sum to the
+  // payment amount; each is recorded separately so reporting is per-method.
+  const [paymentSplit, setPaymentSplit] = useState(false);
+  const [paymentLegs, setPaymentLegs] = useState<{ method: string; amount: string }[]>([
+    { method: "cash", amount: "" },
+    { method: "card", amount: "" },
+  ]);
+  const paymentLegsTotal = paymentLegs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const [cancelReason, setCancelReason] = useState("");
 
   const { data: productsData } = useListProducts({ limit: 500 });
@@ -149,6 +162,7 @@ export default function POSLaybuysPage() {
       await createMutation.mutateAsync({
         data: {
           customerId: form.customerId ? parseInt(form.customerId) : undefined,
+          staffId: dayStaff?.staffId ?? null,
           items: selectedItems,
           totalAmount: total,
           depositAmount: deposit,
@@ -166,11 +180,26 @@ export default function POSLaybuysPage() {
     }
   }
 
+  function closePaymentDialog() {
+    setPaymentLayby(null);
+    setPaymentForm({ amount: "", paymentMethod: "cash", note: "" });
+    setPaymentSplit(false);
+    setPaymentLegs([{ method: "cash", amount: "" }, { method: "card", amount: "" }]);
+  }
+
   async function handlePayment() {
     if (!paymentLayby) return;
-    const amount = parseFloat(paymentForm.amount);
-    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return; }
     const balance = paymentLayby.balance ?? 0;
+    // Build the request: a split payment sends per-method legs, a single payment
+    // sends one method. Either way `amount` carries the total tendered.
+    const legs = paymentSplit
+      ? paymentLegs
+          .map((l) => ({ method: l.method, amount: parseFloat(l.amount) || 0 }))
+          .filter((l) => l.amount > 0)
+      : [];
+    const amount = paymentSplit ? legs.reduce((s, l) => s + l.amount, 0) : parseFloat(paymentForm.amount);
+    if (!amount || amount <= 0) { toast.error("Enter a valid amount"); return; }
+    if (paymentSplit && legs.length === 0) { toast.error("Add at least one payment method"); return; }
     if (amount > balance + 0.01) { toast.error(`Amount exceeds remaining balance of ${formatCurrency(balance)}`); return; }
 
     try {
@@ -178,14 +207,15 @@ export default function POSLaybuysPage() {
         id: paymentLayby.id,
         data: {
           amount,
-          paymentMethod: paymentForm.paymentMethod,
+          ...(paymentSplit
+            ? { payments: legs }
+            : { paymentMethod: paymentForm.paymentMethod }),
           note: paymentForm.note || undefined,
-        },
+        } as Parameters<typeof paymentMutation.mutateAsync>[0]["data"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/laybys"] });
       toast.success("Payment recorded");
-      setPaymentLayby(null);
-      setPaymentForm({ amount: "", paymentMethod: "cash", note: "" });
+      closePaymentDialog();
     } catch {
       toast.error("Failed to record payment");
     }
@@ -389,7 +419,7 @@ export default function POSLaybuysPage() {
                   setForm({
                     ...form,
                     customerId: id,
-                    customerName: c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "",
+                    customerName: c ? customerDisplayName(c, "") : "",
                   })
                 }
                 placeholder="Select customer"
@@ -516,7 +546,7 @@ export default function POSLaybuysPage() {
       </Dialog>
 
       {/* Add Payment Dialog */}
-      <Dialog open={!!paymentLayby} onOpenChange={(open) => { if (!open) setPaymentLayby(null); }}>
+      <Dialog open={!!paymentLayby} onOpenChange={(open) => { if (!open) closePaymentDialog(); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Record Payment</DialogTitle>
@@ -525,39 +555,97 @@ export default function POSLaybuysPage() {
             </p>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="space-y-1.5">
-              <Label>Amount ($)</Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0.01"
-                max={paymentLayby?.balance ?? undefined}
-                value={paymentForm.amount}
-                onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
-                placeholder="0.00"
-                autoFocus
-              />
-              {paymentLayby && paymentForm.amount && (
-                <p className="text-xs text-muted-foreground">
-                  Remaining after payment:{" "}
-                  {formatCurrency(Math.max(0, (paymentLayby.balance ?? 0) - parseFloat(paymentForm.amount || "0")))}
-                </p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label>Payment Method</Label>
-              <Select
-                value={paymentForm.paymentMethod}
-                onValueChange={(v) => setPaymentForm({ ...paymentForm, paymentMethod: v })}
+            <div className="flex items-center justify-between">
+              <Label>Split across methods</Label>
+              <button
+                type="button"
+                onClick={() => setPaymentSplit((v) => !v)}
+                className={`text-xs font-medium px-2 py-1 rounded ${paymentSplit ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}
               >
-                <SelectTrigger><SelectValue /></SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="cash">Cash</SelectItem>
-                  <SelectItem value="card">Card</SelectItem>
-                  <SelectItem value="eftpos">EFTPOS</SelectItem>
-                </SelectContent>
-              </Select>
+                {paymentSplit ? "On" : "Off"}
+              </button>
             </div>
+
+            {!paymentSplit ? (
+              <>
+                <div className="space-y-1.5">
+                  <Label>Amount ($)</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0.01"
+                    max={paymentLayby?.balance ?? undefined}
+                    value={paymentForm.amount}
+                    onChange={(e) => setPaymentForm({ ...paymentForm, amount: e.target.value })}
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                  {paymentLayby && paymentForm.amount && (
+                    <p className="text-xs text-muted-foreground">
+                      Remaining after payment:{" "}
+                      {formatCurrency(Math.max(0, (paymentLayby.balance ?? 0) - parseFloat(paymentForm.amount || "0")))}
+                    </p>
+                  )}
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Payment Method</Label>
+                  <Select
+                    value={paymentForm.paymentMethod}
+                    onValueChange={(v) => setPaymentForm({ ...paymentForm, paymentMethod: v })}
+                  >
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="cash">Cash</SelectItem>
+                      <SelectItem value="card">Card</SelectItem>
+                      <SelectItem value="eftpos">EFTPOS</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </>
+            ) : (
+              <div className="space-y-2">
+                {paymentLegs.map((leg, i) => (
+                  <div key={i} className="flex items-center gap-2">
+                    <Select
+                      value={leg.method}
+                      onValueChange={(v) => setPaymentLegs((p) => p.map((l, idx) => idx === i ? { ...l, method: v } : l))}
+                    >
+                      <SelectTrigger className="w-28"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cash">Cash</SelectItem>
+                        <SelectItem value="card">Card</SelectItem>
+                        <SelectItem value="eftpos">EFTPOS</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input
+                      type="number" step="0.01" min="0"
+                      className="flex-1"
+                      value={leg.amount}
+                      onChange={(e) => setPaymentLegs((p) => p.map((l, idx) => idx === i ? { ...l, amount: e.target.value } : l))}
+                      placeholder="0.00"
+                    />
+                    {paymentLegs.length > 2 && (
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0"
+                        onClick={() => setPaymentLegs((p) => p.filter((_, idx) => idx !== i))}>×</Button>
+                    )}
+                  </div>
+                ))}
+                {paymentLegs.length < 4 && (
+                  <Button variant="outline" size="sm" className="w-full"
+                    onClick={() => setPaymentLegs((p) => [...p, { method: "cash", amount: "" }])}>
+                    + Add method
+                  </Button>
+                )}
+                <div className="flex justify-between text-sm pt-1">
+                  <span className="text-muted-foreground">Total</span>
+                  <span className="font-medium">{formatCurrency(paymentLegsTotal)}</span>
+                </div>
+                {paymentLegsTotal > (paymentLayby?.balance ?? 0) + 0.01 && (
+                  <p className="text-xs text-destructive">Exceeds remaining balance of {formatCurrency(paymentLayby?.balance ?? 0)}</p>
+                )}
+              </div>
+            )}
+
             <div className="space-y-1.5">
               <Label>Note <span className="text-muted-foreground text-xs">(optional)</span></Label>
               <Input
@@ -568,8 +656,8 @@ export default function POSLaybuysPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setPaymentLayby(null)}>Cancel</Button>
-            <Button onClick={handlePayment} disabled={paymentMutation.isPending || !paymentForm.amount}>
+            <Button variant="outline" onClick={closePaymentDialog}>Cancel</Button>
+            <Button onClick={handlePayment} disabled={paymentMutation.isPending || (paymentSplit ? paymentLegsTotal <= 0 : !paymentForm.amount)}>
               {paymentMutation.isPending && <Loader2 className="w-4 h-4 mr-2 animate-spin" />}
               Record Payment
             </Button>

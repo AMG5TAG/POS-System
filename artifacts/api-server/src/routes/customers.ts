@@ -13,6 +13,7 @@ import crypto from "node:crypto";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { publicOrigin } from "../lib/publicUrl";
 import {
   ListCustomersQueryParams,
   CreateCustomerBody,
@@ -32,6 +33,7 @@ import {
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
+import { mirrorCustomerFileToCloud, getCustomerFilesCloudConfig } from "../services/cloudFileMirror";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -552,7 +554,7 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
   const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
 
-  const [txRows, apptRows, jobRows] = await Promise.all([
+  const [txRows, apptRows, jobRows, invRows] = await Promise.all([
     db.select().from(transactionsTable)
       .where(and(eq(transactionsTable.merchantId, merchantId), eq(transactionsTable.customerId, customerId)))
       .orderBy(desc(transactionsTable.createdAt))
@@ -564,6 +566,10 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
     db.select().from(serviceJobsTable)
       .where(and(eq(serviceJobsTable.merchantId, merchantId), eq(serviceJobsTable.customerId, customerId)))
       .orderBy(desc(serviceJobsTable.createdAt))
+      .limit(50),
+    db.select().from(invoicesTable)
+      .where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.customerId, customerId)))
+      .orderBy(desc(invoicesTable.createdAt))
       .limit(50),
   ]);
 
@@ -596,7 +602,17 @@ router.get("/customers/:id/history", requireAuth, async (req, res): Promise<void
     createdAt: j.createdAt.toISOString(),
   }));
 
-  res.json({ transactions, appointments, serviceJobs });
+  const invoices = invRows.map((inv) => ({
+    id: inv.id, invoiceNumber: inv.invoiceNumber, status: inv.status,
+    subtotal: parseFloat(inv.subtotal),
+    taxTotal: parseFloat(inv.taxTotal),
+    total: parseFloat(inv.total),
+    amountPaid: parseFloat(inv.amountPaid ?? "0"),
+    dueDate: inv.dueDate?.toISOString() ?? null,
+    createdAt: inv.createdAt.toISOString(),
+  }));
+
+  res.json({ transactions, appointments, serviceJobs, invoices });
 });
 
 /* ── Notes ─────────────────────────────────────────────────────────────────── */
@@ -674,11 +690,25 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
   const [record] = await db.insert(customerFilesTable)
     .values({ merchantId, customerId, filename, fileKey, contentType, sizeBytes: sizeBytes ?? 0 })
     .returning();
+
+  // If the merchant opted into "Save all customer files to the cloud" (Sync →
+  // Cloud Files & Folders), mirror the file to their chosen storage folder.
+  // Fire-and-forget: never block or fail the upload on the external provider.
+  const cloud = await getCustomerFilesCloudConfig(merchantId);
+  if (cloud.enabled) {
+    void mirrorCustomerFileToCloud(merchantId, {
+      fileKey: record.fileKey,
+      filename: record.filename,
+      contentType: record.contentType,
+    });
+  }
+
   res.status(201).json({
     id: record.id, merchantId: record.merchantId, customerId: record.customerId,
     filename: record.filename, fileKey: record.fileKey, contentType: record.contentType,
     sizeBytes: record.sizeBytes, url: fileUrl(record.fileKey),
     createdAt: record.createdAt.toISOString(),
+    cloudSync: cloud.enabled ? { provider: cloud.storageKey, folder: cloud.folder } : null,
   });
 });
 
@@ -707,8 +737,7 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
   const [merchant] = await db.select({ username: merchantsTable.username })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, req.session.merchantId!));
-  const domain = process.env.REPLIT_DOMAINS?.split(",")[0]?.trim() ?? req.hostname;
-  const origin = `https://${domain}`;
+  const origin = publicOrigin(req);
   const username = merchant?.username;
   const portalPath = username ? `/b/${username}/c/${token}` : `/portal/${token}`;
   res.json({ token, portalUrl: `${origin}${portalPath}` });

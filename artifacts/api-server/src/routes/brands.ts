@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, brandsTable, productsTable, productTypesTable } from "@workspace/db";
-import { eq, and, ilike, count, sql, or, notInArray } from "drizzle-orm";
+import { eq, and, ilike, count, sql, or, notInArray, gt } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateBrandParams, DeleteBrandParams } from "@workspace/api-zod";
 
@@ -38,6 +38,7 @@ router.get("/brands", requireAuth, async (req, res): Promise<void> => {
         eq(productsTable.brandId, brandsTable.id),
         eq(productsTable.merchantId, req.session.merchantId!),
         eq(productsTable.isActive, "true"),
+        gt(productsTable.stockQuantity, 0),
         excludedIds.length > 0 ? notInArray(productsTable.productTypeId, excludedIds) : undefined,
       ),
     )

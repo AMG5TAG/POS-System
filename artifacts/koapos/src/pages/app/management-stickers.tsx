@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
+import { Popover, PopoverTrigger, PopoverContent } from "@/components/ui/popover";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Printer, Tag, Info, Barcode, Search, X, ChevronRight, LayoutTemplate, Check,
+  Save, Star, Copy, Trash2, Plus,
 } from "lucide-react";
 import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
@@ -62,15 +64,48 @@ function FieldPill({
   );
 }
 
+/* ─── Free-text field input ───────────────────────────────────────────────── */
+
+function FieldTextInput({
+  label,
+  value,
+  placeholder,
+  onChange,
+}: {
+  label: string;
+  value: string;
+  placeholder?: string;
+  onChange: (v: string) => void;
+}) {
+  return (
+    <div className="py-2.5 border-b last:border-b-0 space-y-1.5">
+      <span className="text-sm font-medium leading-none">{label}</span>
+      <Input
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        placeholder={placeholder}
+        className="h-8 text-sm"
+      />
+    </div>
+  );
+}
+
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
 export default function ManagementStickersPage() {
   const [selectedTypeId, setSelectedTypeId] = useState<string>("product");
   const [selectedSizeId, setSelectedSizeId] = useState<string>("S0722520");
   const [orientation,   setOrientation]     = useState<"horizontal" | "vertical">("horizontal");
+  const [barcodePosition, setBarcodePosition] = useState<"top" | "bottom">("bottom");
+  const [colorMode,     setColorMode]       = useState<"bw" | "color">("bw");
   const [quantity,      setQuantity]        = useState(1);
   const [showTplPicker, setShowTplPicker]   = useState(false);
-  const tplPickerRef = useRef<HTMLDivElement>(null);
+
+  // Template save/manage (folded in from the former Sticker Templates page)
+  const [editingTemplateId, setEditingTemplateId] = useState<string | null>(null);
+  const [showSaveForm, setShowSaveForm] = useState(false);
+  const [tplName, setTplName] = useState("");
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
   // Product search
   const [productQuery,     setProductQuery]     = useState("");
@@ -96,7 +131,7 @@ export default function ManagementStickersPage() {
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile }        = useBusinessProfile();
-  const { templates }      = useStickerTemplates();
+  const { templates, create, update, remove, setDefault } = useStickerTemplates();
   const { printStickers }  = useStickerPrinter();
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
@@ -124,9 +159,14 @@ export default function ManagementStickersPage() {
     }
     setProductQuery("");
     setShowProdDropdown(false);
+    // Switching type detaches any template currently loaded for editing.
+    setEditingTemplateId(null);
+    setTplName("");
   };
 
-  const applyTemplate = (tpl: { typeId: string; sizeId: string; fields: Record<string, string> }) => {
+  const applyTemplate = (
+    tpl: { id?: string; name?: string; typeId: string; sizeId: string; fields: Record<string, string> },
+  ) => {
     const type     = STICKER_TYPES.find((t) => t.id === tpl.typeId);
     const defaults = type ? Object.fromEntries(type.fields.map((f) => [f.key, f.defaultValue])) : {};
     setSelectedTypeId(tpl.typeId);
@@ -134,6 +174,56 @@ export default function ManagementStickersPage() {
     setFields((prev) => ({ ...prev, [tpl.typeId]: { ...defaults, ...tpl.fields } }));
     setProductQuery("");
     setShowTplPicker(false);
+    setEditingTemplateId(tpl.id ?? null);
+    setTplName(tpl.name ?? "");
+  };
+
+  /* ── Template save / manage (in-page, replacing the old Templates screen) ── */
+
+  // Templates only persist the configurable on/off fields for a type — not the
+  // transient product auto-fill text (which is filled per-print), matching the
+  // original template semantics.
+  const templateFieldsForSave = () =>
+    Object.fromEntries(selectedType.fields.map((f) => [f.key, currentFields[f.key] ?? f.defaultValue]));
+
+  const startNewTemplate = () => {
+    setEditingTemplateId(null);
+    setTplName("");
+    setShowSaveForm(true);
+  };
+
+  const saveTemplate = () => {
+    const name = tplName.trim();
+    if (!name) { toast.error("Please enter a template name."); return; }
+    const data = {
+      name,
+      typeId: selectedTypeId,
+      sizeId: selectedSizeId,
+      fields: templateFieldsForSave(),
+    };
+    if (editingTemplateId) {
+      update(editingTemplateId, data);
+      toast.success("Template updated.");
+    } else {
+      const tpl = create(data);
+      setEditingTemplateId(tpl.id);
+      toast.success("Template saved.");
+    }
+    setShowSaveForm(false);
+  };
+
+  const duplicateTemplate = (tpl: { name: string; typeId: string; sizeId: string; fields: Record<string, string> }) => {
+    const copy = create({ name: `${tpl.name} (copy)`, typeId: tpl.typeId, sizeId: tpl.sizeId, fields: { ...tpl.fields } });
+    setEditingTemplateId(copy.id);
+    setTplName(copy.name);
+    toast.success("Template duplicated.");
+  };
+
+  const deleteTemplate = (id: string) => {
+    remove(id);
+    if (editingTemplateId === id) { setEditingTemplateId(null); setTplName(""); }
+    setConfirmDeleteId(null);
+    toast.success("Template deleted.");
   };
 
   const fillFromProduct = (p: Product) => {
@@ -185,17 +275,6 @@ export default function ManagementStickersPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  useEffect(() => {
-    if (!showTplPicker) return;
-    const handler = (e: MouseEvent) => {
-      if (tplPickerRef.current && !tplPickerRef.current.contains(e.target as Node)) {
-        setShowTplPicker(false);
-      }
-    };
-    document.addEventListener("mousedown", handler);
-    return () => document.removeEventListener("mousedown", handler);
-  }, [showTplPicker]);
-
   const sizeGroups = DYMO_SIZES.reduce<Record<string, DymoSize[]>>((acc, s) => {
     (acc[s.series] ??= []).push(s);
     return acc;
@@ -211,6 +290,8 @@ export default function ManagementStickersPage() {
       typeId: selectedTypeId,
       sizeOverride: selectedSizeId,
       orientation,
+      barcodePosition,
+      colorMode,
       quantity,
       fieldsOverride: currentFields,
     });
@@ -228,58 +309,135 @@ export default function ManagementStickersPage() {
             <Tag className="w-6 h-6 text-primary" />
             <div>
               <h1 className="text-2xl font-bold">Labels</h1>
-              <p className="text-sm text-muted-foreground">Design and print labels on DYMO LabelWriter printers</p>
+              <p className="text-sm text-muted-foreground">Design, save reusable templates and print labels on DYMO LabelWriter printers</p>
             </div>
           </div>
           <div className="flex items-center gap-3 flex-wrap">
-            {/* Load Template button */}
-            <div className="relative" ref={tplPickerRef}>
-              <Button variant="outline" size="sm" className="gap-1.5"
-                onClick={() => setShowTplPicker((p) => !p)}
-              >
-                <LayoutTemplate className="w-3.5 h-3.5" />
-                Load Template
-                {templates.length > 0 && (
-                  <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">{templates.length}</Badge>
-                )}
-              </Button>
-              {showTplPicker && (
-                <div className="absolute right-0 top-full mt-1 z-50 w-72 bg-popover border rounded-xl shadow-xl overflow-hidden">
-                  <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between">
-                    <span className="text-xs font-semibold">Saved Templates</span>
-                    <a href="/management/sticker-templates" className="text-[10px] text-primary hover:underline">Manage →</a>
+            {/* Templates: load / set-default / duplicate / delete */}
+            <Popover open={showTplPicker} onOpenChange={(o) => { setShowTplPicker(o); if (!o) setConfirmDeleteId(null); }}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <LayoutTemplate className="w-3.5 h-3.5" />
+                  Templates
+                  {templates.length > 0 && (
+                    <Badge variant="secondary" className="ml-0.5 h-4 px-1 text-[10px]">{templates.length}</Badge>
+                  )}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={6} className="w-80 max-w-[calc(100vw-2rem)] p-0 overflow-hidden z-[100]">
+                <div className="px-3 py-2 border-b bg-muted/30 flex items-center justify-between">
+                  <span className="text-xs font-semibold">Saved Templates</span>
+                  <span className="text-[10px] text-muted-foreground">Tap to load</span>
+                </div>
+                {templates.length === 0 ? (
+                  <div className="px-4 py-5 text-center text-sm text-muted-foreground">
+                    <LayoutTemplate className="w-6 h-6 mx-auto mb-1 opacity-30" />
+                    <p>No templates saved yet.</p>
+                    <p className="text-xs mt-0.5">Configure a label, then <strong>Save as Template</strong>.</p>
                   </div>
-                  {templates.length === 0 ? (
-                    <div className="px-4 py-5 text-center text-sm text-muted-foreground">
-                      <LayoutTemplate className="w-6 h-6 mx-auto mb-1 opacity-30" />
-                      <p>No templates saved yet.</p>
-                      <a href="/management/sticker-templates" className="text-xs text-primary hover:underline">Create one →</a>
-                    </div>
-                  ) : (
-                    <div className="max-h-64 overflow-y-auto divide-y">
-                      {templates.map((tpl) => {
-                        const type = STICKER_TYPES.find((t) => t.id === tpl.typeId);
-                        const Icon = type?.icon ?? Tag;
-                        return (
+                ) : (
+                  <div className="max-h-80 overflow-y-auto divide-y">
+                    {templates.map((tpl) => {
+                      const type = STICKER_TYPES.find((t) => t.id === tpl.typeId);
+                      const Icon = type?.icon ?? Tag;
+                      const isActive = editingTemplateId === tpl.id;
+                      return (
+                        <div key={tpl.id} className={cn("px-3 py-2.5", isActive && "bg-primary/5")}>
                           <button
-                            key={tpl.id}
                             onClick={() => applyTemplate(tpl)}
-                            className="w-full flex items-center gap-3 px-3 py-2.5 hover:bg-muted/60 text-left transition-colors"
+                            className="w-full flex items-center gap-2.5 text-left"
                           >
                             <Icon className={cn("w-4 h-4 shrink-0", type?.color ?? "text-muted-foreground")} />
                             <div className="min-w-0 flex-1">
-                              <p className="text-sm font-medium truncate">{tpl.name}</p>
+                              <p className="text-sm font-medium truncate flex items-center gap-1.5">
+                                {tpl.name}
+                                {tpl.isDefault && (
+                                  <Badge className="h-4 px-1 text-[9px] gap-0.5 bg-amber-100 text-amber-700 border-amber-200 hover:bg-amber-100">
+                                    <Star className="w-2.5 h-2.5 fill-amber-500 text-amber-500" />Default
+                                  </Badge>
+                                )}
+                                {isActive && <Check className="w-3 h-3 text-primary shrink-0" />}
+                              </p>
                               <p className="text-[10px] text-muted-foreground">{type?.label} · {tpl.sizeId}</p>
                             </div>
-                            <Check className="w-3.5 h-3.5 text-primary opacity-0 group-hover:opacity-100" />
                           </button>
-                        );
-                      })}
-                    </div>
-                  )}
+                          {/* Row actions — labelled so each is obvious */}
+                          <div className="flex items-center gap-1.5 mt-2">
+                            <button onClick={() => setDefault(tpl.id)}
+                              title={tpl.isDefault ? "Remove as default for this type" : "Set as default for this type"}
+                              className={cn(
+                                "flex items-center gap-1 text-[11px] px-2 py-1 rounded border transition-colors",
+                                tpl.isDefault
+                                  ? "border-amber-300 text-amber-700 bg-amber-50 hover:bg-amber-100"
+                                  : "border-border text-muted-foreground hover:bg-muted hover:text-foreground",
+                              )}
+                            >
+                              <Star className={cn("w-3 h-3", tpl.isDefault && "fill-amber-500 text-amber-500")} />
+                              {tpl.isDefault ? "Default" : "Set default"}
+                            </button>
+                            <button onClick={() => duplicateTemplate(tpl)}
+                              className="flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:bg-muted hover:text-foreground transition-colors">
+                              <Copy className="w-3 h-3" /> Copy
+                            </button>
+                            {confirmDeleteId === tpl.id ? (
+                              <div className="ml-auto flex items-center gap-1">
+                                <button onClick={() => deleteTemplate(tpl.id)}
+                                  className="text-[11px] px-2 py-1 rounded border border-destructive bg-destructive text-destructive-foreground">
+                                  Delete?
+                                </button>
+                                <button onClick={() => setConfirmDeleteId(null)}
+                                  className="text-[11px] px-2 py-1 rounded border border-border text-muted-foreground hover:bg-muted">
+                                  Cancel
+                                </button>
+                              </div>
+                            ) : (
+                              <button onClick={() => setConfirmDeleteId(tpl.id)} title="Delete template"
+                                className="ml-auto flex items-center gap-1 text-[11px] px-2 py-1 rounded border border-destructive/30 text-destructive hover:bg-destructive/10 transition-colors">
+                                <Trash2 className="w-3 h-3" /> Delete
+                              </button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
+            {/* Save current label as a (new or updated) template */}
+            <Popover open={showSaveForm} onOpenChange={(o) => { if (o && !editingTemplateId) setTplName(""); setShowSaveForm(o); }}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <Save className="w-3.5 h-3.5" />
+                  {editingTemplateId ? "Update Template" : "Save as Template"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent align="end" sideOffset={6} className="w-72 max-w-[calc(100vw-2rem)] p-3 space-y-2.5 z-[100]">
+                <p className="text-xs font-semibold">
+                  {editingTemplateId ? "Update template" : "Save current label as a template"}
+                </p>
+                <Input
+                  autoFocus
+                  value={tplName}
+                  onChange={(e) => setTplName(e.target.value)}
+                  onKeyDown={(e) => { if (e.key === "Enter") saveTemplate(); }}
+                  placeholder="Template name…"
+                  className="h-8 text-sm"
+                />
+                <div className="flex items-center justify-between gap-2">
+                  {editingTemplateId ? (
+                    <button onClick={() => { setEditingTemplateId(null); setTplName(""); }}
+                      className="text-[11px] text-muted-foreground hover:underline inline-flex items-center gap-0.5">
+                      <Plus className="w-3 h-3" /> Save as new
+                    </button>
+                  ) : <span />}
+                  <Button size="sm" className="gap-1.5 h-8" onClick={saveTemplate}>
+                    <Save className="w-3.5 h-3.5" /> {editingTemplateId ? "Update" : "Save"}
+                  </Button>
                 </div>
-              )}
-            </div>
+              </PopoverContent>
+            </Popover>
 
             <div className="flex items-center gap-2">
               <Label className="text-sm">Qty</Label>
@@ -383,6 +541,65 @@ export default function ManagementStickersPage() {
                   </div>
                 </div>
 
+                {/* Colour mode — black & white by default */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Colour</Label>
+                  <div className="flex rounded-lg border overflow-hidden w-fit">
+                    <button
+                      onClick={() => setColorMode("bw")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                        colorMode === "bw" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      <span className="w-3 h-3 rounded-full border border-current bg-black shrink-0" />
+                      Black & White
+                    </button>
+                    <button
+                      onClick={() => setColorMode("color")}
+                      className={cn(
+                        "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
+                        colorMode === "color" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      <span
+                        className="w-3 h-3 rounded-full border border-current shrink-0"
+                        style={{ background: brandColor }}
+                      />
+                      Colour
+                    </button>
+                  </div>
+                </div>
+
+                {/* Barcode position — only for types that can show a barcode */}
+                {selectedType.fields.some((fld) => fld.key === "showBarcode") && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Barcode Position</Label>
+                    <div className="flex rounded-lg border overflow-hidden w-fit">
+                      <button
+                        onClick={() => setBarcodePosition("top")}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
+                          barcodePosition === "top" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <Barcode className="w-3.5 h-3.5 shrink-0" />
+                        Top
+                      </button>
+                      <button
+                        onClick={() => setBarcodePosition("bottom")}
+                        className={cn(
+                          "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
+                          barcodePosition === "bottom" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        )}
+                      >
+                        <Barcode className="w-3.5 h-3.5 shrink-0" />
+                        Bottom
+                      </button>
+                    </div>
+                  </div>
+                )}
+
                 {/* DYMO info */}
                 <div className="rounded-lg border border-blue-200 bg-blue-50 p-3 text-xs text-blue-700 flex gap-2">
                   <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
@@ -392,10 +609,10 @@ export default function ManagementStickersPage() {
                   </div>
                 </div>
 
-                {(selectedType.id === "product" || selectedType.id === "shelf") && (
+                {selectedType.fields.some((fld) => fld.key === "showBarcode") && (
                   <div className="flex items-center gap-2 text-xs text-muted-foreground">
                     <Barcode className="w-3.5 h-3.5 shrink-0" />
-                    <span>Barcode renders from the scanned/entered barcode value.</span>
+                    <span>A scannable barcode prints full-width along the {barcodePosition} — any text value is encoded automatically.</span>
                   </div>
                 )}
               </CardContent>
@@ -422,7 +639,10 @@ export default function ManagementStickersPage() {
                     size={selectedSize}
                     businessName={businessName}
                     brandColor={brandColor}
+                    logoUrl={profile.logo}
                     orientation={orientation}
+                    barcodePosition={barcodePosition}
+                    colorMode={colorMode}
                   />
                 </div>
 
@@ -518,16 +738,37 @@ export default function ManagementStickersPage() {
                   </div>
                 )}
 
-                {/* On/Off pill toggles for every field */}
+                {/* Field controls — text inputs for free-text fields, On/Off pills
+                    for toggles. The Business Logo toggle pulls from the logo set in
+                    Business settings, so it shows a hint when none is configured. */}
                 <div className="flex-1">
-                  {selectedType.fields.map((field) => (
-                    <FieldPill
-                      key={field.key}
-                      label={field.label}
-                      isOn={currentFields[field.key] !== "false"}
-                      onToggle={(v) => setField(field.key, v ? "true" : "false")}
-                    />
-                  ))}
+                  {selectedType.fields.map((field) =>
+                    field.type === "text" ? (
+                      <FieldTextInput
+                        key={field.key}
+                        label={field.label}
+                        value={currentFields[field.key] ?? ""}
+                        placeholder={field.key === "customText" ? "e.g. Handle with care" : ""}
+                        onChange={(v) => setField(field.key, v)}
+                      />
+                    ) : (
+                      <div key={field.key}>
+                        <FieldPill
+                          label={field.label}
+                          isOn={(currentFields[field.key] ?? field.defaultValue) !== "false"}
+                          onToggle={(v) => setField(field.key, v ? "true" : "false")}
+                        />
+                        {field.key === "showLogo"
+                          && (currentFields[field.key] ?? field.defaultValue) !== "false"
+                          && !profile.logo && (
+                          <p className="text-[11px] text-amber-600 -mt-1.5 pb-2 flex items-center gap-1">
+                            <Info className="w-3 h-3 shrink-0" />
+                            No business logo set — add one in Business settings.
+                          </p>
+                        )}
+                      </div>
+                    )
+                  )}
                 </div>
 
               </CardContent>

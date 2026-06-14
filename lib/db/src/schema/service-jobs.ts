@@ -23,6 +23,26 @@ export const serviceJobsTable = pgTable("service_jobs", {
   isPartnerRepair: text("is_partner_repair").notNull().default("false"),
   isCritical: text("is_critical").notNull().default("false"),
   isUnderWarranty: text("is_under_warranty").notNull().default("false"),
+  // Repair/labour warranty (distinct from product warranty): days from completion.
+  repairWarrantyDays: integer("repair_warranty_days").notNull().default(0),
+  // When the repair was marked completed (anchors the repair-warranty window).
+  completedAt: timestamp("completed_at", { withTimezone: true }),
+  // If this job is a no-charge rework, the original job it redoes.
+  reworkOfJobId: integer("rework_of_job_id"),
+  // Estimate approval (customer authorised the quoted work before it begins).
+  // Set when a linked quote is accepted via the portal or recorded in-store.
+  estimateApprovedAt: timestamp("estimate_approved_at", { withTimezone: true }),
+  estimateApprovedVia: text("estimate_approved_via"), // "portal" | "in-store"
+  // Deposit tracking (soft/advisory): required is copied from the approved quote,
+  // paid accumulates deposits collected in-store. Balance = job total − depositPaid.
+  depositRequired: numeric("deposit_required", { precision: 10, scale: 2 }),
+  depositPaid: numeric("deposit_paid", { precision: 10, scale: 2 }).notNull().default("0"),
+  // Mail-in / postal repair tracking.
+  isMailIn: text("is_mail_in").notNull().default("false"),
+  shippingCarrier: text("shipping_carrier"),
+  inboundTracking: text("inbound_tracking"),
+  returnTracking: text("return_tracking"),
+  returnAddress: text("return_address"),
   // Work detail
   workDescription: text("work_description"),
   additionalEquipment: text("additional_equipment"),

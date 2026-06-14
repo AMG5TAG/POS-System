@@ -6,6 +6,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Stepper } from "@/components/ui/stepper";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent } from "@/components/ui/card";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -104,42 +105,7 @@ const STEPS = [
   { label: "Credit Acc.",    short: "Credit Acc.", icon: CreditCard },
 ] as const;
 
-/* ─── Step nav ───────────────────────────────────────────────────────────── */
-
 type StepDef = typeof STEPS[number];
-
-function StepNav({ current, steps }: { current: number; steps: readonly StepDef[] }) {
-  const navRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    const el = navRef.current?.querySelectorAll("[data-step]")[current] as HTMLElement | null;
-    el?.scrollIntoView({ inline: "center", block: "nearest", behavior: "smooth" });
-  }, [current]);
-
-  return (
-    <div ref={navRef} className="flex items-center gap-1 flex-nowrap overflow-x-auto pb-0.5 scrollbar-none">
-      {steps.map((step, i) => {
-        const Icon   = step.icon;
-        const done   = i < current;
-        const active = i === current;
-        return (
-          <div key={step.label} className="flex items-center gap-1 shrink-0" data-step={i}>
-            <div className={cn(
-              "flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-medium transition-all whitespace-nowrap",
-              active && "bg-primary text-primary-foreground",
-              done   && "bg-background border border-primary/40 text-primary",
-              !active && !done && "text-muted-foreground",
-            )}>
-              {done ? <Check className="w-3 h-3" /> : <Icon className="w-3 h-3 shrink-0" />}
-              <span>{i + 1} {step.short}</span>
-            </div>
-            {i < steps.length - 1 && <ChevronRight className="w-3 h-3 text-muted-foreground shrink-0" />}
-          </div>
-        );
-      })}
-    </div>
-  );
-}
 
 /* ─── Pill input ─────────────────────────────────────────────────────────── */
 
@@ -468,7 +434,7 @@ function WizardDialog({
         </DialogHeader>
 
         <div className="shrink-0 mt-1 mb-2">
-          <StepNav current={step} steps={visibleSteps} />
+          <Stepper current={step} steps={visibleSteps} numbered alwaysShowLabel scrollActiveIntoView />
         </div>
 
         <div className="flex-1 overflow-y-auto pr-1 -mr-1">

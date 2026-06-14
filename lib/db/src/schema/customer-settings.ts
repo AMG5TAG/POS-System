@@ -12,6 +12,7 @@ export const customerSettingsTable = pgTable("customer_settings", {
   enableLoyalty:           text("enable_loyalty").notNull().default("true"),
   weeklyDigestOptIn:       text("weekly_digest_opt_in").notNull().default("false"),
   weeklyDigestSendDay:     integer("weekly_digest_send_day").notNull().default(1),
+  referralSettings:        text("referral_settings").notNull().default("{}"),
   updatedAt:               timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

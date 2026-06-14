@@ -6,6 +6,7 @@ import {
   useListBackups,
   useTriggerBackup,
   useRestoreBackup,
+  useListIntegrations,
   getGetBackupConfigQueryKey,
   getListBackupsQueryKey,
   type BackupConfig,
@@ -64,11 +65,16 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
+import { OneDriveIcon } from "@/components/provider-icons";
 
-type StorageType = "local" | "s3" | "gcs" | "sftp";
+type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive";
 
 const STORAGE_META: Record<
   StorageType,
@@ -78,6 +84,7 @@ const STORAGE_META: Record<
   s3: { label: "Amazon S3", icon: Cloud },
   gcs: { label: "Google Cloud Storage", icon: Cloud },
   sftp: { label: "SFTP server", icon: Server },
+  onedrive: { label: "OneDrive", icon: OneDriveIcon },
 };
 
 const FREQUENCY_OPTIONS = [
@@ -108,6 +115,7 @@ interface DestDraft {
   remotePath: string;
   password: string;
   passwordSet: boolean;
+  folder: string;
 }
 
 function emptyDraft(type: StorageType): DestDraft {
@@ -130,6 +138,7 @@ function emptyDraft(type: StorageType): DestDraft {
     remotePath: "",
     password: "",
     passwordSet: false,
+    folder: "",
   };
 }
 
@@ -153,6 +162,7 @@ function toDraft(d: BackupStorageDestination): DestDraft {
     remotePath: d.remotePath ?? "",
     password: "",
     passwordSet: d.passwordSet ?? false,
+    folder: d.folder ?? "",
   };
 }
 
@@ -175,6 +185,8 @@ function draftToInput(d: DestDraft): BackupStorageDestinationInput {
     if (d.username) base.username = d.username;
     if (d.remotePath) base.remotePath = d.remotePath;
     if (d.password) base.password = d.password;
+  } else if (d.type === "onedrive") {
+    if (d.folder) base.folder = d.folder;
   }
   return base;
 }
@@ -217,7 +229,12 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
-export default function ManagementBackupPage() {
+/**
+ * The full Backup & Restore settings UI, without an AppLayout wrapper, so it can
+ * be embedded inside the consolidated Sync page (Management → Settings &
+ * Integrations → Sync) as well as rendered as its own page.
+ */
+export function BackupSettingsPanel() {
   const qc = useQueryClient();
   const configQuery = useGetBackupConfig();
   const backupsQuery = useListBackups(
@@ -238,6 +255,17 @@ export default function ManagementBackupPage() {
   const triggerBackup = useTriggerBackup();
   const restoreBackup = useRestoreBackup();
 
+  // OneDrive backups reuse the OneDrive integration connected on the Sync page.
+  const { data: integrationsRaw } = useListIntegrations({
+    query: { queryKey: ["integrations"] },
+  });
+  const oneDrive = ((integrationsRaw ?? []) as unknown as Array<{
+    key: string;
+    status: string;
+    accountHandle: string | null;
+  }>).find((i) => i.key === "onedrive");
+  const oneDriveConnected = oneDrive?.status === "connected";
+
   const [frequency, setFrequency] = useState<string>("disabled");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -246,6 +274,7 @@ export default function ManagementBackupPage() {
 
   const [restoreTarget, setRestoreTarget] = useState<Backup | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
+  const [logTarget, setLogTarget] = useState<Backup | null>(null);
 
   const config = configQuery.data as BackupConfig | undefined;
 
@@ -350,17 +379,15 @@ export default function ManagementBackupPage() {
 
   if (configQuery.isLoading) {
     return (
-      <AppLayout>
-        <div className="space-y-4 p-2">
-          <Skeleton className="h-10 w-64" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      </AppLayout>
+      <div className="space-y-4 p-2">
+        <Skeleton className="h-10 w-64" />
+        <Skeleton className="h-64 w-full" />
+      </div>
     );
   }
 
   return (
-    <AppLayout>
+    <>
       <div className="space-y-6">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div>
@@ -657,6 +684,50 @@ export default function ManagementBackupPage() {
                         </div>
                       </div>
                     )}
+
+                    {d.type === "onedrive" && (
+                      <div className="space-y-3">
+                        {oneDriveConnected ? (
+                          <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>
+                              Using your connected OneDrive
+                              {oneDrive?.accountHandle
+                                ? ` (${oneDrive.accountHandle})`
+                                : ""}
+                              . Archives upload to its app folder.
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            <span>
+                              OneDrive isn't connected. Connect it to back up
+                              here.
+                            </span>
+                            <Link
+                              href="/management/settings-integrations/sync"
+                              className="font-medium underline shrink-0"
+                            >
+                              Connect
+                            </Link>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Sub-folder (optional)</Label>
+                          <Input
+                            placeholder="koapos-backups"
+                            value={d.folder}
+                            onChange={(e) =>
+                              updateDraft(d.id, { folder: e.target.value })
+                            }
+                          />
+                          <p className="text-muted-foreground text-[11px]">
+                            A folder inside the KoaPOS app folder in your
+                            OneDrive. Leave blank to use the app folder root.
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -736,17 +807,45 @@ export default function ManagementBackupPage() {
                       </TableCell>
                       <TableCell>{formatBytes(b.fileSizeBytes)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={b.status !== "completed"}
-                          onClick={() => {
-                            setRestoreTarget(b);
-                            setRestorePassword("");
-                          }}
-                        >
-                          <RotateCcw className="mr-1 h-3 w-3" /> Restore
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "h-8 w-8",
+                              b.status === "failed" &&
+                                "text-destructive hover:text-destructive",
+                            )}
+                            title={
+                              b.status === "failed"
+                                ? "Backup failed — view log"
+                                : "View backup log"
+                            }
+                            aria-label={
+                              b.status === "failed"
+                                ? "Backup failed — view log"
+                                : "View backup log"
+                            }
+                            onClick={() => setLogTarget(b)}
+                          >
+                            {b.status === "failed" ? (
+                              <AlertTriangle className="h-4 w-4" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={b.status !== "completed"}
+                            onClick={() => {
+                              setRestoreTarget(b);
+                              setRestorePassword("");
+                            }}
+                          >
+                            <RotateCcw className="mr-1 h-3 w-3" /> Restore
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -808,6 +907,91 @@ export default function ManagementBackupPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Backup log / details dialog */}
+      <Dialog
+        open={logTarget !== null}
+        onOpenChange={(open) => { if (!open) setLogTarget(null); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {logTarget?.status === "failed" ? (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              ) : (
+                <FileText className="h-5 w-5" />
+              )}
+              Backup log
+            </DialogTitle>
+            <DialogDescription>
+              {logTarget ? `Started ${formatDate(logTarget.startedAt)}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {logTarget && (
+            <div className="space-y-4">
+              {logTarget.status === "failed" && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <AlertTriangle className="h-4 w-4" /> This backup failed
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-destructive/90">
+                    {logTarget.errorMessage?.trim()
+                      ? logTarget.errorMessage
+                      : "No error detail was recorded. Check the destination credentials and that the encryption password is set, then run the backup again."}
+                  </p>
+                </div>
+              )}
+              {logTarget.status === "pending" && (
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> This backup is still
+                    running.
+                  </p>
+                </div>
+              )}
+
+              <dl className="grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="col-span-2"><StatusBadge status={logTarget.status} /></dd>
+
+                <dt className="text-muted-foreground">Trigger</dt>
+                <dd className="col-span-2 capitalize">{logTarget.trigger}</dd>
+
+                <dt className="text-muted-foreground">Started</dt>
+                <dd className="col-span-2">{formatDate(logTarget.startedAt)}</dd>
+
+                <dt className="text-muted-foreground">Completed</dt>
+                <dd className="col-span-2">
+                  {logTarget.completedAt ? formatDate(logTarget.completedAt) : "—"}
+                </dd>
+
+                <dt className="text-muted-foreground">Destinations</dt>
+                <dd className="col-span-2">
+                  {logTarget.locations.length > 0
+                    ? logTarget.locations.map((l) => l.type).join(", ")
+                    : logTarget.storageType ?? "—"}
+                </dd>
+
+                <dt className="text-muted-foreground">Size</dt>
+                <dd className="col-span-2">{formatBytes(logTarget.fileSizeBytes)}</dd>
+              </dl>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogTarget(null)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+export default function ManagementBackupPage() {
+  return (
+    <AppLayout>
+      <BackupSettingsPanel />
     </AppLayout>
   );
 }

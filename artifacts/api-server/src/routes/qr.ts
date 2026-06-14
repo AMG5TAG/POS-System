@@ -19,6 +19,31 @@ router.post("/qr-codes", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
+router.get("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.select().from(qrCodesTable).where(and(eq(qrCodesTable.id, id), eq(qrCodesTable.merchantId, merchantId))).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
+router.patch("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { label, url, qrType, content, settings } = req.body as Partial<{ label: string; url: string; qrType: string; content: string; settings: string }>;
+  const update: Partial<{ label: string; url: string; qrType: string; content: string; settings: string }> = {};
+  if (label !== undefined) update.label = label;
+  if (url !== undefined) update.url = url;
+  if (qrType !== undefined) update.qrType = qrType;
+  if (content !== undefined) update.content = content;
+  if (settings !== undefined) update.settings = settings;
+  const [row] = await db.update(qrCodesTable).set(update).where(and(eq(qrCodesTable.id, id), eq(qrCodesTable.merchantId, merchantId))).returning();
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
 router.delete("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
@@ -61,6 +86,28 @@ router.post("/qr-saved-templates", requireAuth, async (req, res): Promise<void> 
   if (!templateId || !name) { res.status(400).json({ error: "templateId and name are required" }); return; }
   const [row] = await db.insert(qrSavedTemplatesTable).values({ merchantId, templateId, name, settings }).returning();
   res.status(201).json(row);
+});
+
+router.get("/qr-saved-templates/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [row] = await db.select().from(qrSavedTemplatesTable).where(and(eq(qrSavedTemplatesTable.id, id), eq(qrSavedTemplatesTable.merchantId, merchantId))).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
+router.patch("/qr-saved-templates/:id", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = parseInt(req.params.id as string, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const { name, settings } = req.body as Partial<{ name: string; settings: string }>;
+  const update: Partial<{ name: string; settings: string }> = {};
+  if (name !== undefined) update.name = name;
+  if (settings !== undefined) update.settings = settings;
+  const [row] = await db.update(qrSavedTemplatesTable).set(update).where(and(eq(qrSavedTemplatesTable.id, id), eq(qrSavedTemplatesTable.merchantId, merchantId))).returning();
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
 });
 
 router.delete("/qr-saved-templates/:id", requireAuth, async (req, res): Promise<void> => {

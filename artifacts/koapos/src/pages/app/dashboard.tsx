@@ -3,12 +3,10 @@ import { BirthdayBanner } from "@/components/birthday-banner";
 import { SecurityAlertBanner } from "@/components/security-alert-banner";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DashboardClockBar } from "@/components/dashboard/DashboardClockBar";
-import { CloseDayDialog } from "@/components/dashboard/CloseDayDialog";
 import { ServiceJobsTiles } from "@/components/dashboard/ServiceJobsTiles";
 import { DashboardPanels } from "@/components/dashboard/DashboardPanels";
 import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
 import { useDashboardConfig, DashboardConfig } from "@/lib/dashboard-config";
-import { useAuth } from "@/lib/use-auth";
 import {
   Sheet,
   SheetContent,
@@ -80,8 +78,6 @@ const WIDGETS: {
 export default function DashboardPage() {
   const { config, toggle, reset, isLoading } = useDashboardConfig();
   const [customiseOpen, setCustomiseOpen] = useState(false);
-  const [closeDayOpen, setCloseDayOpen] = useState(false);
-  const { user } = useAuth();
 
   const showPanels = config.showNotifications || config.showServiceJobsPanel;
 
@@ -92,7 +88,6 @@ export default function DashboardPage() {
         <SecurityAlertBanner />
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}
-          onCloseDay={() => setCloseDayOpen(true)}
         />
 
         {isLoading ? (
@@ -131,11 +126,6 @@ export default function DashboardPage() {
           </>
         )}
       </div>
-
-      <CloseDayDialog
-        open={closeDayOpen}
-        onOpenChange={setCloseDayOpen}
-      />
 
       {/* Customise Sheet */}
       <Sheet open={customiseOpen} onOpenChange={setCustomiseOpen}>

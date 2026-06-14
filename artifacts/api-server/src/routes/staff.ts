@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, staffTable, transactionsTable } from "@workspace/db";
+import { db, staffTable, transactionsTable, merchantsTable } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -8,7 +8,9 @@ import {
   UpdateStaffParams,
   UpdateStaffBody,
   DeleteStaffParams,
+  VerifyStaffPinBody,
 } from "@workspace/api-zod";
+import { sendEmail } from "../services/email";
 
 const router: IRouter = Router();
 
@@ -27,14 +29,40 @@ function formatStaff(s: typeof staffTable.$inferSelect) {
     billingAddress: s.billingAddress ?? null,
     postalAddress: s.postalAddress ?? null,
     role: s.role,
-    pin: s.pin ?? null,
+    /* Raw PINs never leave the server — masked so clients can only tell
+       whether a PIN is set. Verification goes through POST /staff/verify-pin. */
+    pin: s.pin ? "****" : null,
     isActive: s.isActive === "true",
     defaultRegisterType: s.defaultRegisterType ?? null,
+    posPrefs: s.posPrefs ?? null,
     payRate: s.payRate ?? null,
     loadingRate: s.loadingRate ?? null,
     superRate: s.superRate ?? null,
     createdAt: s.createdAt.toISOString(),
   };
+}
+
+/* ── PIN verification rate limiter ──
+   In-memory failed-attempt counter per merchant: after MAX_FAILS wrong PINs
+   within WINDOW_MS, verification is refused until the window expires. */
+const PIN_MAX_FAILS = 10;
+const PIN_WINDOW_MS = 60_000;
+const pinFailures = new Map<number, { fails: number; resetAt: number }>();
+
+function pinRateLimited(merchantId: number): boolean {
+  const entry = pinFailures.get(merchantId);
+  if (!entry || Date.now() > entry.resetAt) return false;
+  return entry.fails >= PIN_MAX_FAILS;
+}
+
+function recordPinFailure(merchantId: number): void {
+  const now = Date.now();
+  const entry = pinFailures.get(merchantId);
+  if (!entry || now > entry.resetAt) {
+    pinFailures.set(merchantId, { fails: 1, resetAt: now + PIN_WINDOW_MS });
+  } else {
+    entry.fails += 1;
+  }
 }
 
 router.get("/staff", requireAuth, async (req, res): Promise<void> => {
@@ -67,7 +95,77 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
       merchantId: req.session.merchantId!,
     })
     .returning();
+
+  if (member.email && parsed.data.pin) {
+    const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, req.session.merchantId!)).limit(1);
+    const businessName = merchant?.businessName ?? "Your employer";
+    const pin = parsed.data.pin;
+    const firstName = member.firstName ?? member.name.split(" ")[0];
+    await sendEmail(req.session.merchantId!, {
+      to: member.email,
+      subject: `Welcome to ${businessName} — your POS login PIN`,
+      html: `
+        <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111">
+          <h2 style="margin-bottom:4px">Welcome, ${firstName}!</h2>
+          <p style="color:#555;margin-top:0">You've been added as a staff member at <strong>${businessName}</strong>.</p>
+          <p>Your PIN to sign into the POS system is:</p>
+          <div style="font-size:32px;font-weight:700;letter-spacing:12px;text-align:center;background:#f4f4f5;border-radius:8px;padding:20px 0;margin:16px 0">${pin}</div>
+          <p style="color:#555;font-size:13px">Use this PIN when prompted at the POS register to switch to your account. Keep it private.</p>
+          <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0"/>
+          <p style="color:#999;font-size:12px">This message was sent by ${businessName} via KoaPOS. If you were not expecting this email, please disregard it.</p>
+        </div>
+      `,
+      text: `Welcome, ${firstName}!\n\nYou've been added as a staff member at ${businessName}.\n\nYour POS PIN is: ${pin}\n\nUse this PIN at the register to switch to your account. Keep it private.`,
+    }).catch(() => { /* non-fatal — staff record is already saved */ });
+  }
+
   res.status(201).json(formatStaff(member));
+});
+
+// POST /staff/verify-pin — must be defined BEFORE /staff/:id to avoid param conflict
+router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = VerifyStaffPinBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  if (pinRateLimited(merchantId)) {
+    res.json({ ok: false, reason: "rate_limited" });
+    return;
+  }
+  const { pin, requireManager, establishDaySession } = parsed.data as typeof parsed.data & { establishDaySession?: boolean };
+  const staff = await db
+    .select()
+    .from(staffTable)
+    .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.isActive, "true")));
+  const match = staff.find((s) => s.pin && s.pin === pin);
+  if (!match) {
+    recordPinFailure(merchantId);
+    res.json({ ok: false, reason: "invalid" });
+    return;
+  }
+  if (requireManager && match.role !== "manager" && match.role !== "owner") {
+    res.json({ ok: false, reason: "role" });
+    return;
+  }
+  // Day-login: record the server-verified staff as the session's day-staff so
+  // server-side attribution (daily closes, stock takes, customer merges) credits
+  // them. Only the day-login flow sets establishDaySession; per-sale staff
+  // switches and approval prompts verify a PIN without claiming the day session.
+  if (establishDaySession) {
+    req.session.staffId = match.id;
+  }
+  res.json({ ok: true, staff: formatStaff(match) });
+});
+
+// POST /staff/end-day-session — clear the session's day-staff (day sign-out /
+// close till), the counterpart to verify-pin's establishDaySession. After this,
+// server-side attribution (daily closes, stock takes, customer merges) falls
+// back to the merchant owner until another staff signs in for the day.
+router.post("/staff/end-day-session", requireAuth, async (req, res): Promise<void> => {
+  delete req.session.staffId;
+  res.json({ ok: true });
 });
 
 // GET /staff/sales-report — must be defined BEFORE /staff/:id to avoid param conflict
@@ -242,6 +340,8 @@ router.patch("/staff/:id", requireAuth, async (req, res): Promise<void> => {
     lastName?: string;
   };
   const updates: Record<string, unknown> = { ...rest };
+  /* "****" is the masked placeholder clients receive — never persist it. */
+  if (updates.pin === "****") delete updates.pin;
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (firstName !== undefined) updates.firstName = firstName;
   if (lastName !== undefined) updates.lastName = lastName;

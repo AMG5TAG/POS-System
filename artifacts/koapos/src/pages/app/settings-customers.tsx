@@ -32,8 +32,23 @@ import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
-  Download, FileSpreadsheet, FileText, ChevronDown,
+  Download, FileSpreadsheet, FileText, ChevronDown, EyeOff, RotateCcw,
 } from "lucide-react";
+
+const IGNORED_BUCKETS_KEY = "koapos_ignored_duplicate_buckets";
+
+function loadIgnoredBuckets(): Set<string> {
+  try {
+    const raw = localStorage.getItem(IGNORED_BUCKETS_KEY);
+    return new Set(raw ? (JSON.parse(raw) as string[]) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function saveIgnoredBuckets(keys: Set<string>) {
+  localStorage.setItem(IGNORED_BUCKETS_KEY, JSON.stringify([...keys]));
+}
 
 const CUSTOMER_TABS = [
   { href: "#customer-groups", label: "Customer Groups", icon: Users },
@@ -99,6 +114,7 @@ export default function SettingsCustomersPage() {
   const [buckets, setBuckets]           = useState<DuplicateBucket[] | null>(null);
   const [scanTotal, setScanTotal]       = useState(0);
   const [selectedKeys, setSelectedKeys] = useState<Set<string>>(new Set());
+  const [ignoredBuckets, setIgnoredBuckets] = useState<Set<string>>(() => loadIgnoredBuckets());
   const [mergeProgress, setMergeProgress] = useState<MergeProgress>({
     total: 0, current: 0, running: false, done: false, failed: 0,
   });
@@ -164,11 +180,29 @@ export default function SettingsCustomersPage() {
     setMergeProgress({ total: 0, current: 0, running: false, done: false, failed: 0 });
     scanMutation.mutate(undefined, {
       onSuccess: (data) => {
-        setBuckets(data.buckets);
+        const ignored = loadIgnoredBuckets();
+        setBuckets(data.buckets.filter((b) => !ignored.has(b.bucketKey)));
         setScanTotal(data.scannedTotal);
       },
       onError: () => toast.error("Scan failed — please try again"),
     });
+  };
+
+  const ignoreBucket = (key: string) => {
+    setIgnoredBuckets((prev) => {
+      const next = new Set(prev).add(key);
+      saveIgnoredBuckets(next);
+      return next;
+    });
+    setBuckets((prev) => prev ? prev.filter((b) => b.bucketKey !== key) : prev);
+    setSelectedKeys((prev) => { const next = new Set(prev); next.delete(key); return next; });
+    toast.success("Duplicate ignored — won't appear in future scans");
+  };
+
+  const resetIgnored = () => {
+    setIgnoredBuckets(new Set());
+    saveIgnoredBuckets(new Set());
+    toast.success("Ignored list cleared — re-scan to see all duplicates");
   };
 
   const toggleBucket = (key: string, checked: boolean) => {
@@ -514,14 +548,25 @@ export default function SettingsCustomersPage() {
             {buckets && buckets.length > 0 && !mergeProgress.running && !mergeProgress.done && (
               <>
                 {/* Toolbar */}
-                <div className="flex items-center justify-between mb-4 gap-4">
-                  <p className="text-sm text-muted-foreground">
-                    Found{" "}
-                    <span className="font-semibold text-foreground">{buckets.length}</span>{" "}
-                    duplicate cluster{buckets.length !== 1 ? "s" : ""} across{" "}
-                    <span className="font-semibold text-foreground">{scanTotal.toLocaleString()}</span>{" "}
-                    customers.
-                  </p>
+                <div className="flex items-center justify-between mb-4 gap-4 flex-wrap">
+                  <div className="space-y-0.5">
+                    <p className="text-sm text-muted-foreground">
+                      Found{" "}
+                      <span className="font-semibold text-foreground">{buckets.length}</span>{" "}
+                      duplicate cluster{buckets.length !== 1 ? "s" : ""} across{" "}
+                      <span className="font-semibold text-foreground">{scanTotal.toLocaleString()}</span>{" "}
+                      customers.
+                    </p>
+                    {ignoredBuckets.size > 0 && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <EyeOff className="w-3 h-3" />
+                        {ignoredBuckets.size} ignored —{" "}
+                        <button onClick={resetIgnored} className="underline hover:text-foreground transition-colors">
+                          reset ignored list
+                        </button>
+                      </p>
+                    )}
+                  </div>
                   <div className="flex items-center gap-2 shrink-0">
                     <Button
                       size="sm" variant="ghost"
@@ -626,6 +671,13 @@ export default function SettingsCustomersPage() {
                               record with most activity — all others will be absorbed and removed.
                             </p>
                           </div>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); ignoreBucket(bucket.bucketKey); }}
+                            title="Ignore this duplicate — won't appear in future scans"
+                            className="shrink-0 p-1.5 rounded text-muted-foreground hover:text-foreground hover:bg-muted transition-colors self-start mt-0.5"
+                          >
+                            <EyeOff className="w-3.5 h-3.5" />
+                          </button>
                         </div>
                       </div>
                     );
@@ -633,12 +685,17 @@ export default function SettingsCustomersPage() {
                 </div>
 
                 {/* Action bar */}
-                <div className="flex items-center justify-between mt-4 pt-4 border-t gap-4">
+                <div className="flex items-center justify-between mt-4 pt-4 border-t gap-4 flex-wrap">
                   <p className="text-sm text-muted-foreground">
                     <span className="font-semibold text-foreground">{selectedKeys.size}</span>{" "}
                     cluster{selectedKeys.size !== 1 ? "s" : ""} selected
                   </p>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {ignoredBuckets.size > 0 && (
+                      <Button size="sm" variant="ghost" onClick={resetIgnored} className="gap-1.5 text-muted-foreground">
+                        <RotateCcw className="w-3.5 h-3.5" /> Reset {ignoredBuckets.size} ignored
+                      </Button>
+                    )}
                     <Button size="sm" variant="ghost" onClick={runScan}>
                       <ScanSearch className="w-3.5 h-3.5 mr-1.5" /> Re-scan
                     </Button>

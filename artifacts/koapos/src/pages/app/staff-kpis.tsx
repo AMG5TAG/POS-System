@@ -1,6 +1,6 @@
 import { useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListStaff, useListTransactions, useListKpiTargets } from "@workspace/api-client-react";
+import { useListStaff, useListKpiTargets, useGetKpiProgress } from "@workspace/api-client-react";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,7 +9,7 @@ import {
   Target, Trophy, BarChart3, Store, Users, Medal,
   UserSquare2, Clock, CalendarClock, ClipboardList, Coins, StickyNote, Link2,
   DollarSign, ShoppingCart, TrendingUp, UserPlus, Star, Tag, Zap, Wrench, AlertCircle, Layers,
-  CheckCircle2,
+  CheckCircle2, Banknote,
 } from "lucide-react";
 
 /* ─── Tabs ───────────────────────────────────────────────────────────────── */
@@ -19,7 +19,8 @@ import {
 type KpiMetric =
   | "revenue" | "transactions" | "avg_transaction" | "items_per_transaction"
   | "new_customers" | "loyalty_signups" | "category_revenue"
-  | "appointments" | "services" | "refund_rate" | "gross_margin" | "upsell_rate";
+  | "appointments" | "services" | "refund_rate" | "gross_margin" | "upsell_rate"
+  | "net_profit";
 
 type KpiPeriod = "daily" | "weekly" | "monthly" | "quarterly" | "annual";
 type RewardType = "cash" | "percent" | "voucher" | "time_off" | "badge" | "custom";
@@ -29,11 +30,13 @@ interface KpiTarget {
   id: string; name: string; metric: KpiMetric; categoryId: string;
   period: KpiPeriod; target: number; staffIds: string[];
   reward: KpiReward | null; notes: string; isActive: boolean;
+  startDate: string | null;
 }
 
 function mapKpiTarget(r: {
   id: number; targetId: string; name: string; metric: string; categoryId: string;
   period: string; target: number; staffIds: string; reward: string; notes: string; isActive: string;
+  startDate?: string | null;
 }): KpiTarget {
   let staffIds: string[] = [];
   let reward: KpiReward | null = null;
@@ -45,6 +48,7 @@ function mapKpiTarget(r: {
     period: r.period as KpiPeriod, target: r.target,
     staffIds, reward, notes: r.notes ?? "",
     isActive: String(r.isActive) !== "false",
+    startDate: r.startDate ?? null,
   };
 }
 
@@ -63,6 +67,7 @@ const METRIC_META: Record<KpiMetric, { label: string; icon: React.ElementType; i
   refund_rate:          { label: "Refund Rate",           icon: AlertCircle,   isCurrency: false, isInverse: true },
   gross_margin:         { label: "Gross Margin",          icon: BarChart3,     isCurrency: false },
   upsell_rate:          { label: "Upsell Rate",           icon: Zap,           isCurrency: false },
+  net_profit:           { label: "Net Profit",            icon: Banknote,      isCurrency: true  },
 };
 
 const PERIOD_LABELS: Record<KpiPeriod, string> = {
@@ -98,12 +103,13 @@ function RankMedal({ rank }: { rank: number }) {
 
 /* ─── KPI progress row ───────────────────────────────────────────────────── */
 
-function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
+function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number | null }) {
   const meta = METRIC_META[kpi.metric];
   const Icon = meta.icon;
-  const pct = kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
-  const color = pctColor(pct, meta.isInverse);
-  const hit = pct >= 100;
+  const unavailable = current === null;
+  const pct = !unavailable && kpi.target > 0 ? Math.min(Math.round((current / kpi.target) * 100), 100) : 0;
+  const color = unavailable ? "text-muted-foreground" : pctColor(pct, meta.isInverse);
+  const hit = !unavailable && pct >= 100;
 
   return (
     <div className="py-3 border-b last:border-0 space-y-1.5">
@@ -114,12 +120,12 @@ function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
           {hit && <CheckCircle2 className="w-3.5 h-3.5 text-green-500 shrink-0" />}
         </div>
         <span className={cn("text-sm font-semibold shrink-0 tabular-nums", color)}>
-          {fmtVal(kpi.metric, current)} / {fmtVal(kpi.metric, kpi.target)}
+          {unavailable ? "—" : fmtVal(kpi.metric, current)} / {fmtVal(kpi.metric, kpi.target)}
         </span>
       </div>
       <Progress value={pct} className="h-1.5" />
       <div className="flex justify-between text-xs text-muted-foreground">
-        <span>{pct}% of target</span>
+        <span>{unavailable ? "Not available yet" : `${pct}% of target`}</span>
         <div className="flex items-center gap-2">
           <Badge variant="secondary" className="text-xs py-0 h-5">{PERIOD_LABELS[kpi.period]}</Badge>
           {kpi.reward && (
@@ -137,47 +143,48 @@ function KpiRow({ kpi, current }: { kpi: KpiTarget; current: number }) {
 
 export default function StaffKpisPage() {
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff"] } });
-  const { data: txData } = useListTransactions(undefined, { query: { queryKey: ["transactions"] } });
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; role?: string }[];
-  const txList = (Array.isArray(txData) ? txData : []) as { total?: number; status?: string }[];
 
   const { data: kpiData } = useListKpiTargets({ query: { queryKey: ["kpi-targets"] } });
   const rawTargets = (kpiData as { items?: unknown[] } | undefined)?.items ?? [];
   const targets = useMemo(
-    () => (rawTargets as Parameters<typeof mapKpiTarget>[0][]).map(mapKpiTarget).filter((t) => t.isActive),
+    () => (rawTargets as Parameters<typeof mapKpiTarget>[0][]).map(mapKpiTarget).filter((t) => t.isActive && t.metric in METRIC_META),
     [rawTargets],
   );
 
-  /* Compute actual store-level values */
-  const completedTx = txList.filter((t) => t.status === "completed");
-  const totalRevenue = completedTx.reduce((s, t) => s + (t.total ?? 0), 0);
-  const txCount      = completedTx.length;
-  const avgTx        = txCount > 0 ? totalRevenue / txCount : 0;
-
-  const actualValues: Partial<Record<KpiMetric, number>> = {
-    revenue: totalRevenue, transactions: txCount, avg_transaction: avgTx,
-  };
+  /* Actuals are computed server-side, scoped to each target's period and (where
+     supported) its assigned staff, so per-staff figures and the leaderboard are
+     real rather than the whole store's totals. */
+  const { data: progressData } = useGetKpiProgress({ query: { queryKey: ["kpi-progress"] } });
+  const actualByKpiId = useMemo(() => {
+    const map: Record<string, number | null> = {};
+    for (const p of (progressData?.items ?? [])) map[String(p.id)] = p.actual ?? null;
+    return map;
+  }, [progressData]);
 
   const storeKpis = targets.filter((t) => t.staffIds.length === 0);
   const staffKpis = targets.filter((t) => t.staffIds.length > 0);
 
-  /* Build per-staff summary for leaderboard */
+  /* Build per-staff summary for leaderboard. A target only counts toward the
+     ranking once its actual is known; a null actual (not computable) is neither
+     a hit nor a miss. */
   const leaderboard = useMemo(() => {
     return staffList.map((member) => {
       const myKpis = staffKpis.filter((k) => k.staffIds.includes(String(member.id)));
-      const hitCount = myKpis.filter((k) => {
-        const actual = actualValues[k.metric] ?? 0;
+      const scorable = myKpis.filter((k) => actualByKpiId[k.id] != null);
+      const hitCount = scorable.filter((k) => {
+        const actual = actualByKpiId[k.id] as number;
         const pct = k.target > 0 ? (actual / k.target) * 100 : 0;
         return METRIC_META[k.metric].isInverse ? pct <= 100 : pct >= 100;
       }).length;
-      const totalTargets = myKpis.length;
+      const totalTargets = scorable.length;
       const score = totalTargets > 0 ? Math.round((hitCount / totalTargets) * 100) : 0;
       return { ...member, myKpis, hitCount, totalTargets, score };
     })
     .filter((m) => m.totalTargets > 0)
     .sort((a, b) => b.score - a.score || b.hitCount - a.hitCount);
-  }, [staffList, staffKpis]);
+  }, [staffList, staffKpis, actualByKpiId]);
 
   /* Group staff KPIs by staff member */
   const staffGroups = useMemo(() => {
@@ -229,7 +236,7 @@ export default function StaffKpisPage() {
                 <Card>
                   <CardContent className="pt-4">
                     {storeKpis.map((kpi) => (
-                      <KpiRow key={kpi.id} kpi={kpi} current={actualValues[kpi.metric] ?? 0} />
+                      <KpiRow key={kpi.id} kpi={kpi} current={actualByKpiId[kpi.id] ?? null} />
                     ))}
                   </CardContent>
                 </Card>
@@ -261,7 +268,7 @@ export default function StaffKpisPage() {
                       </div>
                       <div className="px-4">
                         {group.kpis.map((kpi) => (
-                          <KpiRow key={kpi.id} kpi={kpi} current={actualValues[kpi.metric] ?? 0} />
+                          <KpiRow key={kpi.id} kpi={kpi} current={actualByKpiId[kpi.id] ?? null} />
                         ))}
                       </div>
                     </div>

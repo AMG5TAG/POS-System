@@ -13,5 +13,7 @@ declare module "express-session" {
     merchantId?: number;
     staffRole?: "owner" | "manager" | "cashier";
     staffId?: number;
+    /** Active store/branch for multi-location merchants (defaults to the merchant's default location). */
+    locationId?: number;
   }
 }

@@ -16,7 +16,7 @@ import { merchantsTable } from "./merchants";
  */
 export interface BackupStorageDestination {
   id: string;
-  type: "local" | "s3" | "gcs" | "sftp";
+  type: "local" | "s3" | "gcs" | "sftp" | "onedrive";
   // local
   directory?: string;
   // s3
@@ -34,11 +34,13 @@ export interface BackupStorageDestination {
   username?: string;
   remotePath?: string;
   passwordEnc?: string;
+  // onedrive — uploads use the merchant's connected OneDrive integration token.
+  folder?: string;
 }
 
 /** Where a completed backup archive landed, per destination. */
 export interface BackupLocation {
-  type: "local" | "s3" | "gcs" | "sftp";
+  type: "local" | "s3" | "gcs" | "sftp" | "onedrive";
   ref: string;
 }
 

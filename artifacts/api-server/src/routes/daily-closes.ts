@@ -1,10 +1,11 @@
 import { Router } from "express";
-import { eq, and, gte, lt, desc } from "drizzle-orm";
+import { eq, and, gte, lt, desc, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
-import { db, dailyClosesTable, transactionsTable, merchantsTable } from "@workspace/db";
+import { db, dailyClosesTable, transactionsTable, merchantsTable, invoicesTable } from "@workspace/db";
 import type { DailyClose } from "@workspace/db";
+import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
 
 const router = Router();
 
@@ -98,6 +99,61 @@ router.get("/daily-closes/current", requireAuth, requireManagerOrOwner, async (r
       discountTotal += discount;
       transactionCount += 1;
       byMethod[method] = (byMethod[method] ?? 0) + total;
+    }
+  }
+
+  // Invoices settled today count as takings too (parity with POS). Gross/tax/
+  // count come from the invoice rows; the per-method split comes from the
+  // payment-legs view so split payments land under each method tendered.
+  const paidInvoices = await db
+    .select({ total: invoicesTable.total, taxTotal: invoicesTable.taxTotal, discountTotal: invoicesTable.discountTotal })
+    .from(invoicesTable)
+    .where(and(
+      eq(invoicesTable.merchantId, merchantId),
+      eq(invoicesTable.status, "paid"),
+      gte(invoicesTable.paidAt, start),
+      lt(invoicesTable.paidAt, end),
+    ));
+  for (const invRow of paidInvoices) {
+    grossSales += parseFloat(invRow.total ?? "0");
+    taxTotal += parseFloat(invRow.taxTotal ?? "0");
+    discountTotal += parseFloat(invRow.discountTotal ?? "0");
+    transactionCount += 1;
+  }
+  const invLegs = await db.execute<{ method: string; total: number }>(sql`
+    SELECT method, COALESCE(SUM(amount), 0)::float AS total
+    FROM view_invoice_payment_legs
+    WHERE merchant_id = ${merchantId} AND paid_at >= ${start} AND paid_at < ${end}
+    GROUP BY method
+  `);
+  for (const leg of invLegs.rows) {
+    byMethod[leg.method || "invoice"] = (byMethod[leg.method || "invoice"] ?? 0) + Number(leg.total);
+  }
+
+  // Laybys completed today count as takings too (parity with POS). Laybys carry
+  // no GST split, so derive it; per-method split comes from the legs view.
+  const completedLaybys = await db.execute<{ total: number }>(sql`
+    SELECT COALESCE(SUM(total_amount::numeric), 0)::float AS total, COUNT(*)::int AS cnt
+    FROM laybys l
+    WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+      AND COALESCE(l.completed_at, l.updated_at) >= ${start}
+      AND COALESCE(l.completed_at, l.updated_at) < ${end}
+  `);
+  const layRow = completedLaybys.rows[0] as { total: number; cnt: number } | undefined;
+  const layGross = Number(layRow?.total ?? 0);
+  if (layGross > 0) {
+    const rate = await getDefaultTaxRate(merchantId);
+    grossSales += layGross;
+    taxTotal += splitGstInclusive(layGross, rate).gst;
+    transactionCount += Number(layRow?.cnt ?? 0);
+    const layLegs = await db.execute<{ method: string; total: number }>(sql`
+      SELECT method, COALESCE(SUM(amount), 0)::float AS total
+      FROM view_layby_payment_legs
+      WHERE merchant_id = ${merchantId} AND completed_at >= ${start} AND completed_at < ${end}
+      GROUP BY method
+    `);
+    for (const leg of layLegs.rows) {
+      byMethod[leg.method || "layby"] = (byMethod[leg.method || "layby"] ?? 0) + Number(leg.total);
     }
   }
 

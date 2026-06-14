@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetDashboardSummary,
@@ -6,16 +7,26 @@ import {
   useGetTaxSettings,
   useGetLoyaltySettings,
   useListCustomers,
+  useGetSalesSettings,
+  useUpdateSalesSettings,
+  getGetSalesSettingsQueryKey,
   GetDashboardSummaryPeriod,
   GetDashboardActivityPeriod,
+  GetDashboardSummaryMonthMode,
+  SalesSettings,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
+import { Label } from "@/components/ui/label";
+import {
+  Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter,
+} from "@/components/ui/dialog";
+import { toast } from "sonner";
 import { formatCurrency, cn } from "@/lib/utils";
 import {
-  DollarSign, ShoppingCart, TrendingUp, Users, Gift, TrendingDown,
+  DollarSign, ShoppingCart, TrendingUp, Gift, TrendingDown,
   Mail, Activity, MapPin, Monitor, AlertCircle,
-  RotateCcw, Receipt, Package, Percent, Package2, Calendar,
-  ArrowUp, ArrowDown, Minus,
+  RotateCcw, Receipt, Percent, Package2, Calendar,
+  ArrowUp, ArrowDown, Minus, Settings,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
@@ -112,18 +123,167 @@ function ActivityTile({
   );
 }
 
+/* ─── Overview defaults dialog ────────────────────────────────────────────── */
+
+/** Small segmented selector matching the period-tab look. */
+function Segmented<T extends string>({
+  value, onChange, options,
+}: { value: T; onChange: (v: T) => void; options: { id: T; label: string }[] }) {
+  return (
+    <div className="flex rounded-lg border overflow-hidden w-full">
+      {options.map((o) => (
+        <button
+          key={o.id}
+          type="button"
+          onClick={() => onChange(o.id)}
+          className={cn(
+            "flex-1 px-3 py-1.5 text-sm font-medium transition-colors",
+            value === o.id
+              ? "bg-primary text-primary-foreground"
+              : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+          )}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function OverviewSettingsDialog({
+  open, onOpenChange, settings,
+}: { open: boolean; onOpenChange: (o: boolean) => void; settings: SalesSettings | undefined }) {
+  const queryClient = useQueryClient();
+  const update = useUpdateSalesSettings();
+
+  const [salesPeriod, setSalesPeriod]       = useState<Period>("today");
+  const [activityPeriod, setActivityPeriod] = useState<ActivityPeriod>("week");
+  const [monthMode, setMonthMode]           = useState<GetDashboardSummaryMonthMode>("rolling30");
+
+  // Re-seed the form whenever the dialog opens with the latest saved values.
+  useEffect(() => {
+    if (!open || !settings) return;
+    const sp = settings.overviewDefaultSalesPeriod;
+    setSalesPeriod(sp === "month" || sp === "year" ? sp : "today");
+    const ap = settings.overviewDefaultActivityPeriod;
+    setActivityPeriod(ap === "day" || ap === "month" || ap === "year" ? ap : "week");
+    setMonthMode(settings.overviewMonthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30");
+  }, [open, settings]);
+
+  function handleSave() {
+    update.mutate(
+      {
+        data: {
+          overviewDefaultSalesPeriod: salesPeriod,
+          overviewDefaultActivityPeriod: activityPeriod,
+          overviewMonthMode: monthMode,
+        },
+      },
+      {
+        onSuccess: () => {
+          // Refetch settings so the page's monthMode (and queryKeys) update live.
+          queryClient.invalidateQueries({ queryKey: getGetSalesSettingsQueryKey() });
+          toast.success("Overview defaults saved");
+          onOpenChange(false);
+        },
+        onError: () => toast.error("Could not save overview defaults"),
+      },
+    );
+  }
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle>Overview Defaults</DialogTitle>
+          <DialogDescription>
+            Choose which period opens first and how “Month” is calculated. Saved to this business.
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-5 py-2">
+          <div className="space-y-2">
+            <Label>Sales Overview opens on</Label>
+            <Segmented<Period>
+              value={salesPeriod}
+              onChange={setSalesPeriod}
+              options={PERIOD_TABS.map((t) => ({ id: t.id, label: t.label }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>Activity Overview opens on</Label>
+            <Segmented<ActivityPeriod>
+              value={activityPeriod}
+              onChange={setActivityPeriod}
+              options={ACTIVITY_TABS.map((t) => ({ id: t.id, label: t.label }))}
+            />
+          </div>
+
+          <div className="space-y-2">
+            <Label>“Month” means</Label>
+            <Segmented<GetDashboardSummaryMonthMode>
+              value={monthMode}
+              onChange={setMonthMode}
+              options={[
+                { id: "rolling30", label: "Last 30 days" },
+                { id: "calendar_mtd", label: "This month to date" },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              {monthMode === "calendar_mtd"
+                ? "Month tabs cover the 1st of the current month up to today."
+                : "Month tabs cover a rolling window of the last 30 days."}
+            </p>
+          </div>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Cancel</Button>
+          <Button onClick={handleSave} disabled={update.isPending}>
+            {update.isPending ? "Saving…" : "Save defaults"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Page ────────────────────────────────────────────────────────────────── */
 
 export default function ManagementOverviewPage() {
   const [period, setPeriod]       = useState<Period>("today");
   const [actPeriod, setActPeriod] = useState<ActivityPeriod>("week");
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [, navigate] = useLocation();
+
+  /* Per-merchant overview preferences (default tabs + Month definition) */
+  const { data: salesSettings } = useGetSalesSettings();
+  const monthMode: GetDashboardSummaryMonthMode =
+    salesSettings?.overviewMonthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
+
+  /* Apply the saved default tabs once, the first time settings load. After that
+     the user's manual tab clicks win and aren't overridden on refetch. */
+  const defaultsApplied = useRef(false);
+  useEffect(() => {
+    if (defaultsApplied.current || !salesSettings) return;
+    defaultsApplied.current = true;
+    const sp = salesSettings.overviewDefaultSalesPeriod;
+    if (sp === "today" || sp === "month" || sp === "year") setPeriod(sp);
+    const ap = salesSettings.overviewDefaultActivityPeriod;
+    if (ap === "day" || ap === "week" || ap === "month" || ap === "year") setActPeriod(ap);
+  }, [salesSettings]);
 
   const api = PERIOD_TABS.find((t) => t.id === period)!.api;
 
+  /* Only the "month" period is affected by monthMode; send it so the server can
+     switch between rolling-30-days and calendar month-to-date. */
+  const summaryMonthMode = period === "month" ? monthMode : undefined;
+  const activityMonthMode = actPeriod === "month" ? monthMode : undefined;
+
   const { data: summary, isLoading } = useGetDashboardSummary(
-    { period: api },
-    { query: { queryKey: ["mgmt-overview", api] } },
+    { period: api, ...(summaryMonthMode ? { monthMode: summaryMonthMode } : {}) },
+    { query: { queryKey: ["mgmt-overview", api, summaryMonthMode ?? "default"] } },
   );
 
   /* Always fetch "yesterday" for the VS Yesterday comparison bar */
@@ -134,8 +294,8 @@ export default function ManagementOverviewPage() {
 
   /* Activity section */
   const { data: activity, isLoading: actLoading } = useGetDashboardActivity(
-    { period: actPeriod as GetDashboardActivityPeriod },
-    { query: { queryKey: ["mgmt-activity", actPeriod] } },
+    { period: actPeriod as GetDashboardActivityPeriod, ...(activityMonthMode ? { monthMode: activityMonthMode } : {}) },
+    { query: { queryKey: ["mgmt-activity", actPeriod, activityMonthMode ?? "default"] } },
   );
 
   /* Tax & loyalty settings */
@@ -150,7 +310,6 @@ export default function ManagementOverviewPage() {
   const newCustomers  = summary?.newCustomers     ?? 0;
   const refundTotal   = summary?.refundTotal      ?? 0;
   const discountTotal = summary?.discountTotal    ?? 0;
-  const itemsSold     = summary?.itemsSold        ?? 0;
 
   /* GST — use stored tax_total from transactions (accurate for mixed-rate merchants).
      Falls back to rate-based estimate only when no stored figure is available. */
@@ -181,7 +340,11 @@ export default function ManagementOverviewPage() {
   const yCustomers = yesterday?.newCustomers     ?? 0;
 
   /* Period label text */
-  const periodLabel = period === "today" ? "today" : period === "month" ? "this month" : "this year";
+  const periodLabel = period === "today"
+    ? "today"
+    : period === "month"
+      ? (monthMode === "calendar_mtd" ? "this month" : "in the last 30 days")
+      : "this year";
 
   /* Activity data */
   const actServices     = activity?.services       ?? 0;
@@ -215,6 +378,16 @@ export default function ManagementOverviewPage() {
                 <Mail className="w-3.5 h-3.5" />
                 Email Summary
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="gap-1.5 text-sm"
+                onClick={() => setSettingsOpen(true)}
+                title="Set default period & Month definition"
+              >
+                <Settings className="w-3.5 h-3.5" />
+                Defaults
+              </Button>
               <div className="flex rounded-lg border overflow-hidden">
                 {PERIOD_TABS.map((t) => (
                   <button
@@ -235,7 +408,7 @@ export default function ManagementOverviewPage() {
           </div>
 
           {/* Row 1 — core financial KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
               title="Revenue"
               icon={DollarSign}
@@ -243,7 +416,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(totalSales)}
               sub={`${txCount} sale${txCount !== 1 ? "s" : ""} ${periodLabel}`}
               valueClass="text-emerald-600"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Revenue ex-GST"
@@ -252,7 +425,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(revenueExGst)}
               sub={`${gstRateStr} GST removed from revenue`}
               valueClass="text-teal-600"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Sales"
@@ -260,7 +433,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-blue-100 dark:bg-blue-900/30 text-blue-600"
               value={isLoading ? "—" : txCount.toString()}
               sub={`Transactions ${periodLabel}`}
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Avg Sale"
@@ -268,15 +441,7 @@ export default function ManagementOverviewPage() {
               iconBg="bg-violet-100 dark:bg-violet-900/30 text-violet-600"
               value={isLoading ? "—" : formatCurrency(avgSale)}
               sub="Average transaction value"
-              href="/management/sales-overview"
-            />
-            <KpiCard
-              title="New Customers"
-              icon={Users}
-              iconBg="bg-cyan-100 dark:bg-cyan-900/30 text-cyan-600"
-              value={isLoading ? "—" : newCustomers.toString()}
-              sub={`Joined ${periodLabel}`}
-              href="/management/customers"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Loyalty Liability"
@@ -284,12 +449,12 @@ export default function ManagementOverviewPage() {
               iconBg="bg-pink-100 dark:bg-pink-900/30 text-pink-600"
               value={formatCurrency(loyaltyDollarValue)}
               sub={loyaltyEnabled ? `${totalPoints.toLocaleString()} pts across ${customers.filter((c) => (c.loyaltyPoints ?? 0) > 0).length} customers` : "Loyalty programme inactive"}
-              href="/management/loyalty"
+              href="/management/customers/loyalty"
             />
           </div>
 
           {/* Row 2 — cost / adjustment KPIs */}
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
             <KpiCard
               title="Discounts"
               icon={TrendingDown}
@@ -297,7 +462,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(discountTotal)}
               sub="Total discounts given"
               valueClass={discountTotal > 0 ? "text-orange-500" : ""}
-              href="/management/discounts"
+              href="/management/customers/discounts-pricing"
             />
             <KpiCard
               title="Refunds"
@@ -306,7 +471,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(refundTotal)}
               sub="Total refunded"
               valueClass={refundTotal > 0 ? "text-red-500" : ""}
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="GST Collected"
@@ -315,15 +480,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(gstCollected)}
               sub={storedTax != null ? "From transaction records" : `Estimated at ${gstRateStr} of revenue`}
               valueClass="text-amber-600"
-              href="/management/tax"
-            />
-            <KpiCard
-              title="Items Sold"
-              icon={Package}
-              iconBg="bg-indigo-100 dark:bg-indigo-900/30 text-indigo-600"
-              value={isLoading ? "—" : itemsSold.toString()}
-              sub={`Units sold ${periodLabel}`}
-              href="/management/sales-overview"
+              href="/management/settings-integrations/tax"
             />
             <KpiCard
               title="Net Profit"
@@ -332,7 +489,7 @@ export default function ManagementOverviewPage() {
               value={isLoading ? "—" : formatCurrency(revenueExGst - discountTotal - refundTotal - costTotal)}
               sub="Revenue ex-GST, less COGS, discounts & refunds"
               valueClass="text-emerald-600"
-              href="/management/sales-overview"
+              href="/management/marketing-reports/sales-overview"
             />
             <KpiCard
               title="Cost"
@@ -494,6 +651,8 @@ export default function ManagementOverviewPage() {
         </section>
 
       </div>
+
+      <OverviewSettingsDialog open={settingsOpen} onOpenChange={setSettingsOpen} settings={salesSettings} />
     </AppLayout>
   );
 }

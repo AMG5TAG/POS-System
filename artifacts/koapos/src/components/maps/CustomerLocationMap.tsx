@@ -158,7 +158,7 @@ function FitBounds({ positions }: { positions: [number, number][] }) {
 /* ── Component ──────────────────────────────────────────────────────────── */
 
 export function CustomerLocationMap() {
-  const { data, isLoading } = useListCustomers();
+  const { data, isLoading } = useListCustomers({ limit: 10000 });
   const customers: Customer[] = (data as { items?: Customer[] } | undefined)?.items ?? [];
 
   /* resolve positions */

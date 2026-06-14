@@ -71,6 +71,7 @@ async function performBackup(
       destinations,
       canonicalPath,
       fileName,
+      merchantId,
     );
     if (errors.length > 0) {
       logger.warn({ merchantId, errors }, "Some backup destinations failed");

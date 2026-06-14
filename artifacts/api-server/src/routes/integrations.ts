@@ -139,6 +139,17 @@ function cbUrl(key: string, req: import("express").Request): string {
   return `${proto}://${host}/api/integrations/oauth/${key}/callback`;
 }
 
+// Cloud-storage and account/contacts integrations are managed on the Sync page;
+// everything else on the Integrations page. OAuth redirects land the user back
+// on whichever page the integration lives.
+const SYNC_INTEGRATION_KEYS = new Set([
+  "google_drive", "onedrive", "dropbox", "proton_drive",
+  "google_contacts", "microsoft_contacts", "apple_account",
+]);
+function manageUrl(key: string): string {
+  return SYNC_INTEGRATION_KEYS.has(key) ? "/management/sync" : "/management/integrations";
+}
+
 function buildOAuthStartUrl(key: string, req: import("express").Request): string | null {
   const cb = cbUrl(key, req);
   const state = String(req.session.merchantId);
@@ -399,7 +410,7 @@ router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void>
 
 router.get("/integrations/oauth/apple/start", requireAuth, (req, res): void => {
   const url = buildOAuthStartUrl("apple_account", req);
-  if (!url) { res.redirect("/management/integrations?error=apple_oauth_not_configured"); return; }
+  if (!url) { res.redirect("/management/sync?error=apple_oauth_not_configured"); return; }
   res.redirect(url);
 });
 
@@ -420,13 +431,13 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
   const { code, id_token, state, error } = body;
 
   if (error || !code || !state) {
-    res.redirect(`/management/integrations?error=apple_oauth_denied`);
+    res.redirect(`/management/sync?error=apple_oauth_denied`);
     return;
   }
 
   const merchantId = parseInt(state, 10);
   if (isNaN(merchantId)) {
-    res.redirect("/management/integrations?error=apple_invalid_state");
+    res.redirect("/management/sync?error=apple_invalid_state");
     return;
   }
 
@@ -448,7 +459,7 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
     }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; id_token?: string; expires_in?: number; error?: string };
 
     if (tokenRes.error) {
-      res.redirect(`/management/integrations?error=apple_token_exchange_failed`);
+      res.redirect(`/management/sync?error=apple_token_exchange_failed`);
       return;
     }
 
@@ -499,9 +510,9 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
         .values({ merchantId, integrationKey: "apple_account", status: "connected", connectedAt: new Date() });
     }
 
-    res.redirect("/management/integrations?success=apple_account");
+    res.redirect("/management/sync?success=apple_account");
   } catch {
-    res.redirect("/management/integrations?error=apple_token_exchange_failed");
+    res.redirect("/management/sync?error=apple_token_exchange_failed");
   }
 });
 
@@ -510,7 +521,7 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
 router.get("/integrations/oauth/:key/start", requireAuth, (req, res): void => {
   const key = String(req.params.key);
   const url = buildOAuthStartUrl(key, req);
-  if (!url) { res.redirect(`/management/integrations?error=${key}_oauth_not_configured`); return; }
+  if (!url) { res.redirect(`${manageUrl(key)}?error=${key}_oauth_not_configured`); return; }
   res.redirect(url);
 });
 
@@ -519,9 +530,9 @@ router.get("/integrations/oauth/:key/start", requireAuth, (req, res): void => {
 router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> => {
   const { key } = req.params;
   const { code, state, error, realmId } = req.query as Record<string, string>;
-  if (error || !code || !state) { res.redirect(`/management/integrations?error=${key}_oauth_denied`); return; }
+  if (error || !code || !state) { res.redirect(`${manageUrl(key)}?error=${key}_oauth_denied`); return; }
   const merchantId = parseInt(state, 10);
-  if (isNaN(merchantId)) { res.redirect(`/management/integrations?error=${key}_invalid_state`); return; }
+  if (isNaN(merchantId)) { res.redirect(`${manageUrl(key)}?error=${key}_invalid_state`); return; }
   // Xero has a dedicated route with full tenant-selection flow — hand off there
   if (key === "xero") { res.redirect(`/api/xero/auth/start`); return; }
 
@@ -539,9 +550,9 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
     if (existing) { await db.update(merchantIntegrationsTable).set({ status: "connected", ...(!intg?.useVault ? { accessToken, refreshToken, tokenExpiresAt: expiresAt } : {}), connectedAt: new Date() }).where(eq(merchantIntegrationsTable.id, existing.id)); }
     else { await db.insert(merchantIntegrationsTable).values({ merchantId, integrationKey: key, status: "connected", ...(!intg?.useVault ? { accessToken, refreshToken, tokenExpiresAt: expiresAt } : {}), connectedAt: new Date() }); }
 
-    res.redirect(`/management/integrations?success=${key}`);
+    res.redirect(`${manageUrl(key)}?success=${key}`);
   } catch {
-    res.redirect(`/management/integrations?error=${key}_token_exchange_failed`);
+    res.redirect(`${manageUrl(key)}?error=${key}_token_exchange_failed`);
   }
 });
 

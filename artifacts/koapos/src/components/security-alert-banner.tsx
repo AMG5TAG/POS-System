@@ -32,7 +32,7 @@ export function SecurityAlertBanner() {
           ? "1 sign-in has been flagged as suspicious and needs your attention."
           : `${count} sign-ins have been flagged as suspicious and need your attention.`}
       </p>
-      <Link href="/management/account#recent-sign-ins" asChild>
+      <Link href="/management/settings-integrations/account#recent-sign-ins" asChild>
         <Button
           size="sm"
           variant="outline"

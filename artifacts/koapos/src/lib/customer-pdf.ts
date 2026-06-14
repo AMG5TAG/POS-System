@@ -1,4 +1,5 @@
 import jsPDF from "jspdf";
+import { customerDisplayName } from "@/lib/customer-name";
 import type { Customer, CustomerNote, Transaction, Appointment, ServiceJob } from "@workspace/api-client-react";
 import type { FormSubmission, FormTemplate } from "@/lib/forms-api";
 
@@ -259,7 +260,7 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
 
   sectionHeading("Customer Information");
 
-  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
+  const fullName = customerDisplayName(customer);
 
   // Name avatar circle
   const avatarY = y;

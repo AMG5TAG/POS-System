@@ -11,6 +11,15 @@ router.get("/marketplace-connections", requireAuth, async (req, res): Promise<vo
   res.json({ items, total: items.length });
 });
 
+router.get("/marketplace-connections/:marketplaceId", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const marketplaceId = req.params.marketplaceId as string;
+  const [row] = await db.select().from(marketplaceConnectionsTable)
+    .where(and(eq(marketplaceConnectionsTable.merchantId, merchantId), eq(marketplaceConnectionsTable.marketplaceId, marketplaceId))).limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  res.json(row);
+});
+
 router.put("/marketplace-connections/:marketplaceId", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const marketplaceId = req.params.marketplaceId as string;
@@ -26,6 +35,14 @@ router.put("/marketplace-connections/:marketplaceId", requireAuth, async (req, r
   const [created] = await db.insert(marketplaceConnectionsTable)
     .values({ merchantId, marketplaceId, connected, connectedAt, lastSync, productsCount, ordersCount, config }).returning();
   res.json(created);
+});
+
+router.delete("/marketplace-connections/:marketplaceId", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const marketplaceId = req.params.marketplaceId as string;
+  await db.delete(marketplaceConnectionsTable)
+    .where(and(eq(marketplaceConnectionsTable.merchantId, merchantId), eq(marketplaceConnectionsTable.marketplaceId, marketplaceId)));
+  res.status(204).end();
 });
 
 export default router;

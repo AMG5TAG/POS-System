@@ -429,7 +429,7 @@ export default function POSPCBuilderPage() {
           </div>
           <div className="flex items-center gap-2 shrink-0">
             <Button variant="outline" size="sm" className="gap-1.5"
-              onClick={() => navigate("/management/calculators/pc-builder")}>
+              onClick={() => navigate("/management/products-inventory/pc-builder")}>
               <Settings className="w-3.5 h-3.5" /> Settings
             </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={handleClear}>
@@ -545,7 +545,7 @@ export default function POSPCBuilderPage() {
             <p className="text-xs text-muted-foreground px-1">
               {products.filter((p) => Object.keys(compatMap).includes(p.id.toString())).length} of {products.length} products have PC compatibility set.{" "}
               <button type="button" className="text-primary hover:underline"
-                onClick={() => navigate("/products")}>
+                onClick={() => navigate("/inventory/products")}>
                 Configure in Products
               </button>
             </p>

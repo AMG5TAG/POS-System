@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect, useRef } from "react";
+import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
@@ -25,6 +25,7 @@ import {
   useDeleteProductVariant,
   useUpdateProductVariant,
   getListProductVariantsQueryKey,
+  getListCategoriesQueryKey,
   Product,
   ProductType,
   useListBrands,
@@ -34,6 +35,7 @@ import {
   useDeleteDigitalCode,
   useListSuppliers,
   useBulkUpdateProducts,
+  useGetInventorySettings,
 } from "@workspace/api-client-react";
 import {
   useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
@@ -49,6 +51,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { TreeCategorySelect } from "@/components/ui/tree-category-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -56,9 +59,10 @@ import { formatCurrency } from "@/lib/utils";
 import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
+import { computeAllGroupPrices } from "@/lib/group-pricing";
 import {
   Search, Plus, Pencil, Trash2, Package, Check,
-  ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight,
+  ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
@@ -104,6 +108,11 @@ type ProductForm = {
   tags: string[];
   /* notes */
   internalNotes: string;
+  /* pops up at POS when this item is added to a sale */
+  notification: string;
+  /* warranty offered from sale date — duration is a number, unit is months/years */
+  warrantyDuration: string;
+  warrantyUnit: string;
   /* group pricing */
   groupPrices: Record<string, string>;
   /* digital code */
@@ -126,17 +135,20 @@ const defaultForm: ProductForm = {
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
   tags: [],
   internalNotes: "",
+  notification: "",
+  warrantyDuration: "",
+  warrantyUnit: "months",
   groupPrices: {},
   isEpay: false,
   stockLocationDisplay: "",
   stockLocationOverflow: "",
 };
 
-const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "media",         label: "Media"         },
   { key: "pricing",       label: "Pricing"       },
-  { key: "stock",         label: "Stock"         },
+  { key: "stock",         label: "Stock",         hideForDigitalCode: true },
   { key: "compatibility", label: "Compatibility", hideForService: true },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
@@ -161,6 +173,26 @@ const NO_STOCK_TYPES = new Set(["service", "digital", "digital_code"]);
 function generateSKU(prefix: string) {
   const n = Math.floor(Math.random() * 90000) + 10000;
   return `${prefix.toUpperCase().replace(/[^A-Z0-9]/g, "")}-${n}`;
+}
+
+/* Derive a scannable EAN-13 barcode deterministically from a SKU, so the same
+ * SKU always yields the same barcode. Builds 12 digits from the SKU's character
+ * codes, then appends the EAN-13 check digit. */
+function generateBarcodeFromSku(sku: string): string {
+  const s = sku.trim().toUpperCase();
+  let base = "";
+  for (let i = 0; i < s.length && base.length < 12; i++) {
+    base += (s.charCodeAt(i) % 10).toString();
+  }
+  while (base.length < 12) base += ((base.length * 7 + 3) % 10).toString();
+  base = base.slice(0, 12);
+  let sum = 0;
+  for (let i = 0; i < 12; i++) {
+    const d = base.charCodeAt(i) - 48;
+    sum += i % 2 === 0 ? d : d * 3;
+  }
+  const check = (10 - (sum % 10)) % 10;
+  return base + check.toString();
 }
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
@@ -208,119 +240,195 @@ function SectionHeader({ label }: { label: string }) {
   );
 }
 
-/* ─── Category tree selector ─────────────────────────────────────────────── */
+/* ─── Supplier selector ──────────────────────────────────────────────────── */
 
-type CatNode = { id: number; name: string; parentId: number | null; children: CatNode[] };
-
-function buildCatTree(cats: { id: number; name: string; parentId?: number | null }[]): CatNode[] {
-  const map = new Map<number, CatNode>();
-  cats.forEach((c) => map.set(c.id, { id: c.id, name: c.name, parentId: c.parentId ?? null, children: [] }));
-  const roots: CatNode[] = [];
-  map.forEach((node) => {
-    if (node.parentId != null && map.has(node.parentId)) {
-      map.get(node.parentId)!.children.push(node);
-    } else {
-      roots.push(node);
-    }
-  });
-  return roots;
-}
-
-function TreeCategorySelect({
-  categories, value, onChange, placeholder = "No Category", triggerClass, onCreateCategory,
+function SupplierSelect({
+  suppliers, value, onChange,
 }: {
-  categories: { id: number; name: string; parentId?: number | null }[];
+  suppliers: { id: number; name: string }[];
   value: string;
-  onChange: (v: string) => void;
-  placeholder?: string;
-  triggerClass?: string;
-  onCreateCategory?: (name: string, onCreated: (id: number) => void) => void;
+  onChange: (name: string) => void;
 }) {
   const [open, setOpen] = useState(false);
-  const [creatingInline, setCreatingInline] = useState(false);
-  const [newCatNameInline, setNewCatNameInline] = useState("");
-  const tree = buildCatTree(categories);
-  const selected = categories.find((c) => c.id.toString() === value);
+  const [search, setSearch] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  const renderNodes = (nodes: CatNode[], depth = 0): React.ReactNode =>
-    nodes.map((node) => (
-      <div key={node.id}>
-        <button
-          type="button"
-          onClick={() => { onChange(node.id.toString()); setOpen(false); }}
-          className={cn(
-            "w-full text-left py-1.5 text-sm rounded hover:bg-muted transition-colors flex items-center gap-1",
-            value === node.id.toString() && "bg-primary/10 text-primary font-medium",
-          )}
-          style={{ paddingLeft: `${8 + depth * 16}px`, paddingRight: "8px" }}
-        >
-          {depth > 0 && <span className="text-muted-foreground/40 text-xs shrink-0">└</span>}
-          {node.name}
-        </button>
-        {node.children.length > 0 && renderNodes(node.children, depth + 1)}
-      </div>
-    ));
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
 
-  const commitNewCat = () => {
-    if (!newCatNameInline.trim() || !onCreateCategory) return;
-    onCreateCategory(newCatNameInline.trim(), (id) => {
-      onChange(id.toString());
-      setOpen(false);
-    });
-    setCreatingInline(false);
-    setNewCatNameInline("");
-  };
+  const filtered = search.trim()
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(search.toLowerCase()))
+    : [...suppliers].sort((a, b) => a.name.localeCompare(b.name));
 
   return (
-    <Popover open={open} onOpenChange={(o) => { if (!o) { setCreatingInline(false); setNewCatNameInline(""); } setOpen(o); }}>
+    <Popover open={open} onOpenChange={setOpen}>
       <PopoverTrigger asChild>
         <button
           type="button"
-          className={cn(
-            "flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
-            triggerClass,
-          )}
+          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
         >
-          <span className={cn("truncate", !selected && "text-muted-foreground")}>{selected?.name ?? placeholder}</span>
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {value || "No supplier"}
+          </span>
           <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </button>
       </PopoverTrigger>
-      <PopoverContent className="p-1.5 max-h-72 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
+      <PopoverContent className="p-0 w-56" align="start">
+        <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search suppliers…"
+            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} className="text-muted-foreground/50 hover:text-foreground">
+              <XIcon className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        <div className="overflow-y-auto max-h-[240px] p-1.5">
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !value && "bg-primary/10 text-primary font-medium")}
+          >
+            No supplier
+          </button>
+          {filtered.map((s) => (
+            <button
+              key={s.id}
+              type="button"
+              onClick={() => { onChange(s.name); setOpen(false); }}
+              className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", value === s.name && "bg-primary/10 text-primary font-medium")}
+            >
+              {s.name}
+            </button>
+          ))}
+          {filtered.length === 0 && search.trim() && (
+            <p className="px-2 py-3 text-xs text-muted-foreground text-center">No suppliers found</p>
+          )}
+        </div>
+      </PopoverContent>
+    </Popover>
+  );
+}
+
+/* ─── Brand selector ─────────────────────────────────────────────────────── */
+
+function BrandSelect({
+  brands, value, onChange, onCreateBrand,
+}: {
+  brands: { id: number; name: string }[];
+  value: string;
+  onChange: (v: string) => void;
+  onCreateBrand?: (name: string, onCreated: (id: number) => void) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
+  const [creating, setCreating] = useState(false);
+  const [newName, setNewName] = useState("");
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (open) setTimeout(() => searchRef.current?.focus(), 50);
+    else setSearch("");
+  }, [open]);
+
+  const commitCreate = () => {
+    if (!newName.trim() || !onCreateBrand) return;
+    onCreateBrand(newName.trim(), (id) => { onChange(id.toString()); setOpen(false); });
+    setCreating(false);
+    setNewName("");
+  };
+
+  const filtered = search.trim()
+    ? brands.filter((b) => b.name.toLowerCase().includes(search.toLowerCase()))
+    : brands;
+  const selected = brands.find((b) => b.id.toString() === value);
+
+  return (
+    <Popover open={open} onOpenChange={(o) => { if (!o) { setCreating(false); setNewName(""); } setOpen(o); }}>
+      <PopoverTrigger asChild>
         <button
           type="button"
-          onClick={() => { onChange(""); setOpen(false); }}
-          className={cn(
-            "w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors",
-            !value && "bg-primary/10 text-primary font-medium",
-          )}
+          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
         >
-          {placeholder}
+          <span className={cn("truncate", !value && "text-muted-foreground")}>
+            {selected?.name ?? "No Brand"}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
         </button>
-        {renderNodes(tree)}
-        {onCreateCategory && (
-          creatingInline ? (
-            <div className="border-t mt-1 pt-1.5 px-1 flex items-center gap-1.5">
+      </PopoverTrigger>
+      <PopoverContent className="p-0 w-52" align="start">
+        {/* Search bar */}
+        <div className="flex items-center gap-1.5 border-b px-2 py-1.5">
+          <Search className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+          <input
+            ref={searchRef}
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search brands…"
+            className="flex-1 text-sm bg-transparent outline-none placeholder:text-muted-foreground/60"
+          />
+          {search && (
+            <button type="button" onClick={() => setSearch("")} className="text-muted-foreground/50 hover:text-foreground">
+              <XIcon className="w-3 h-3" />
+            </button>
+          )}
+        </div>
+        {/* Scrollable list */}
+        <div className="overflow-y-auto max-h-[240px] p-1.5">
+          <button
+            type="button"
+            onClick={() => { onChange(""); setOpen(false); }}
+            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !value && "bg-primary/10 text-primary font-medium")}
+          >
+            No Brand
+          </button>
+          {filtered.map((b) => (
+            <button
+              key={b.id}
+              type="button"
+              onClick={() => { onChange(b.id.toString()); setOpen(false); }}
+              className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", value === b.id.toString() && "bg-primary/10 text-primary font-medium")}
+            >
+              {b.name}
+            </button>
+          ))}
+          {filtered.length === 0 && search.trim() && (
+            <p className="px-2 py-3 text-xs text-muted-foreground text-center">No brands found</p>
+          )}
+        </div>
+        {/* Add new brand */}
+        {onCreateBrand && (
+          creating ? (
+            <div className="border-t p-1.5 flex items-center gap-1.5">
               <input
                 autoFocus
-                value={newCatNameInline}
-                onChange={(e) => setNewCatNameInline(e.target.value)}
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === "Enter") { e.preventDefault(); commitNewCat(); }
-                  if (e.key === "Escape") { setCreatingInline(false); setNewCatNameInline(""); }
+                  if (e.key === "Enter") { e.preventDefault(); commitCreate(); }
+                  if (e.key === "Escape") { setCreating(false); setNewName(""); }
                 }}
-                placeholder="Category name…"
+                placeholder="Brand name…"
                 className="flex-1 text-sm border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring bg-background"
               />
-              <button type="button" onClick={commitNewCat} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
-              <button type="button" onClick={() => { setCreatingInline(false); setNewCatNameInline(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
+              <button type="button" onClick={commitCreate} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
+              <button type="button" onClick={() => { setCreating(false); setNewName(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
             </div>
           ) : (
             <button
               type="button"
-              onClick={() => setCreatingInline(true)}
-              className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t mt-1 flex items-center gap-1.5 hover:bg-muted/50 rounded transition-colors"
+              onClick={() => setCreating(true)}
+              className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t flex items-center gap-1.5 hover:bg-muted/50 transition-colors"
             >
-              <Plus className="w-3 h-3" /> Add New Category
+              <Plus className="w-3 h-3" /> Add New Brand
             </button>
           )
         )}
@@ -383,16 +491,21 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   const type = defaultTpl ? (STICKER_TYPES.find((t) => t.id === defaultTpl.typeId) ?? STICKER_TYPES[0]) : STICKER_TYPES[0];
   const size = defaultTpl ? (DYMO_SIZES.find((s) => s.id === defaultTpl.sizeId) ?? DYMO_SIZES[2]) : DYMO_SIZES[2];
 
-  const resolvedFields = defaultTpl ? resolveQuickCodes(defaultTpl.fields, {
-    product: {
-      name:     product.name,
-      sku:      product.sku      ?? "",
-      price:    product.price,
-      barcode:  product.barcode  ?? "",
-      category: product.category?.name ?? "",
-    },
-    merchant: { name: businessName },
-  }) : {};
+  // The real product values, keyed by the data fields buildLabelHtml / LabelPreview
+  // read. Saved templates only persist on/off toggles (not product data), so these
+  // must be supplied per-print — otherwise the label falls back to the sample
+  // placeholder text baked into the renderer ("Product Name", "Beverages", "$5.50").
+  const productFields: Record<string, string> = {
+    productName: product.name,
+    sku:         product.sku     ?? "",
+    price:       product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
+    barcode:     product.barcode ?? "",
+    category:    product.category?.name ?? "",
+  };
+
+  const resolvedFields = defaultTpl
+    ? { ...resolveQuickCodes(defaultTpl.fields, { merchant: { name: businessName } }), ...productFields }
+    : {};
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -408,12 +521,12 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
             <LayoutTemplate className="w-10 h-10 text-muted-foreground/30 mx-auto" />
             <p className="font-medium">No product template found</p>
             <p className="text-sm text-muted-foreground">
-              Create a product template in Sticker Templates and mark it as the default
+              Create a product template on the Labels page and mark it as the default
               <Star className="w-3 h-3 text-amber-500 inline mb-0.5 mx-1" />
               to enable one-click printing here.
             </p>
-            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/sticker-templates"); }}>
-              Open Sticker Templates
+            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/products-inventory/stickers"); }}>
+              Open Labels
             </Button>
           </div>
         ) : (
@@ -452,16 +565,11 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
                   typeId: "product",
                   template: defaultTpl,
                   quantity,
-                  context: {
-                    product: {
-                      name:     product.name,
-                      sku:      product.sku      ?? "",
-                      price:    product.price,
-                      barcode:  product.barcode  ?? "",
-                      category: product.category?.name ?? "",
-                    },
-                    merchant: { name: businessName },
-                  },
+                  context: { merchant: { name: businessName } },
+                  // Pass the actual product data as literal field overrides; the
+                  // template only carries toggles, so without this the renderer
+                  // prints its built-in sample placeholders instead of the product.
+                  fieldsOverride: productFields,
                 });
                 if (!ok) toast.error("Couldn't open the print dialog — please try again");
               }}>
@@ -470,7 +578,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
               </Button>
 
               <Button variant="outline" size="sm" className="w-full gap-1.5"
-                onClick={() => { onOpenChange(false); navigate("/management/sticker-templates"); }}>
+                onClick={() => { onOpenChange(false); navigate("/management/products-inventory/stickers"); }}>
                 <LayoutTemplate className="w-3.5 h-3.5" /> Manage Templates
               </Button>
 
@@ -821,6 +929,10 @@ export default function ProductsPage() {
   const queryClient = useQueryClient();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const initialProductFormRef = useRef<ProductForm>(defaultForm);
+  // Customer groups whose price the user has typed manually — these are left
+  // alone by the auto pre-fill; every other group is kept filled from its rule
+  // (or the sell price when no rule applies).
+  const manualGroupsRef = useRef<Set<string>>(new Set());
   const [search, setSearch]             = useState("");
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
@@ -855,8 +967,9 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter]       = useState("");
   const [hideCosts, setHideCosts]       = useState(true);
-  const [showHideCostsBtn]              = useState(false);
-  const [enableGroupPricing]            = useState(false);
+  const { data: inventorySettings } = useGetInventorySettings();
+  const showHideCostsBtn  = inventorySettings?.showCosts  !== "false";
+  const enableGroupPricing = inventorySettings?.groupPricing !== "false";
 
   /* ── Digital codes state ── */
   type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
@@ -872,24 +985,18 @@ export default function ProductsPage() {
   const [bulkInvPopover, setBulkInvPopover]       = useState(false);
 
   /* ── Brands state ── */
-  const [brandPopoverOpen, setBrandPopoverOpen] = useState(false);
-  const [brandCreatingInline, setBrandCreatingInline] = useState(false);
   const [tagInput, setTagInput] = useState("");
-  const [newBrandName, setNewBrandName] = useState("");
 
   const { data: brandsListData } = useListBrands(undefined, { query: { queryKey: ["brands"] } });
   const brandsList = ((brandsListData?.items ?? []) as { id: number; name: string }[]);
   const createBrandMutation = useCreateBrand();
 
-  const createBrandInline = async (onCreated: (id: number) => void) => {
-    if (!newBrandName.trim()) return;
+  const createBrandInline = async (name: string, onCreated: (id: number) => void) => {
+    if (!name.trim()) return;
     try {
-      const brand = await createBrandMutation.mutateAsync({ data: { name: newBrandName.trim() } }) as { id: number; name: string };
+      const brand = await createBrandMutation.mutateAsync({ data: { name: name.trim() } }) as { id: number; name: string };
       queryClient.invalidateQueries({ queryKey: ["brands"] });
       onCreated(brand.id);
-      setNewBrandName("");
-      setBrandCreatingInline(false);
-      setBrandPopoverOpen(false);
     } catch {
       toast.error("Failed to create brand");
     }
@@ -1003,6 +1110,54 @@ export default function ProductsPage() {
   const { settings: customerSettings }  = useCustomerSettings();
   const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
 
+  // Automatic group prices derived from the rules in Customers › Discounts &
+  // Pricing, for the product currently being edited. Used as the form
+  // placeholders and merged into the save payload (manual entries win).
+  const ruleGroupDefaults = useMemo(
+    () => computeAllGroupPrices(
+      {
+        price: parseFloat(form.price) || 0,
+        costPrice: form.costPrice ? parseFloat(form.costPrice) : 0,
+        taxRate: parseFloat(form.taxRate) || 10,
+        categoryId: form.categoryId ? parseInt(form.categoryId) : null,
+      },
+      customerSettings.groupPricing,
+    ),
+    [form.price, form.costPrice, form.taxRate, form.categoryId, customerSettings.groupPricing],
+  );
+
+  // Keep Customer Group Pricing pre-filled while the dialog is open: each group
+  // that hasn't been manually edited shows its rule price, or the sell price
+  // when no rule applies. Uses setForm directly so it doesn't mark the form
+  // dirty. Manual entries (tracked in manualGroupsRef) are never overwritten.
+  useEffect(() => {
+    if (!dialogOpen) return;
+    const sell = parseFloat(form.price);
+    const fallback = isNaN(sell) ? "" : sell.toFixed(2);
+    setForm((prev) => {
+      let changed = false;
+      const next = { ...prev.groupPrices };
+      for (const g of customerGroups) {
+        if (manualGroupsRef.current.has(g.id)) continue;
+        const ruleVal = ruleGroupDefaults[g.id];
+        const desired = ruleVal != null ? ruleVal.toFixed(2) : fallback;
+        if (desired !== "" && next[g.id] !== desired) { next[g.id] = desired; changed = true; }
+      }
+      return changed ? { ...prev, groupPrices: next } : prev;
+    });
+  }, [dialogOpen, ruleGroupDefaults, form.price, customerGroups]);
+
+  // Default a new product to the Physical / Standard product type once the type
+  // list has loaded (the fallback icon grid already defaults to "standard").
+  useEffect(() => {
+    if (!dialogOpen || editingProduct || form.productTypeId || productTypesList.length === 0) return;
+    const phys =
+      productTypesList.find((t) => t.isActive && /physical|standard/i.test(`${t.slug} ${t.name}`)) ??
+      productTypesList.find((t) => t.isActive) ??
+      productTypesList[0];
+    if (phys) setForm((prev) => ({ ...prev, productTypeId: phys.id.toString(), productType: phys.slug }));
+  }, [dialogOpen, editingProduct, productTypesList, form.productTypeId]);
+
   const { data: productsData, isLoading } = useListProducts(
     { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
     { query: { queryKey: ["products", search, categoryFilter] } }
@@ -1071,6 +1226,7 @@ export default function ProductsPage() {
 
   const openCreate = () => {
     initialProductFormRef.current = defaultForm;
+    manualGroupsRef.current = new Set();
     setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
@@ -1098,6 +1254,12 @@ export default function ProductsPage() {
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
       tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
+      notification: (ep as Product & { notification?: string | null }).notification ?? "",
+      warrantyDuration: (() => {
+        const d = (ep as Product & { warrantyDuration?: number | null }).warrantyDuration;
+        return d ? String(d) : "";
+      })(),
+      warrantyUnit: (ep as Product & { warrantyUnit?: string | null }).warrantyUnit ?? "months",
       groupPrices: Object.fromEntries(
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
@@ -1106,6 +1268,9 @@ export default function ProductsPage() {
       stockLocationOverflow: (ep as Product & { overflowLocation?: string | null }).overflowLocation ?? "",
     };
     initialProductFormRef.current = editForm;
+    // Treat any price already stored on the product as a manual entry to keep,
+    // and pre-fill the rest from rules / sell price.
+    manualGroupsRef.current = new Set(Object.keys(ep.groupPrices ?? {}));
     setForm(editForm);
     const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
     setPcPartType(_c?.partType || "");
@@ -1141,11 +1306,25 @@ export default function ProductsPage() {
       tags: form.tags,
       stockLocation: form.stockLocationDisplay || undefined,
       overflowLocation: form.stockLocationOverflow || undefined,
-      groupPrices: Object.fromEntries(
-        Object.entries(form.groupPrices)
-          .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
-          .map(([k, v]) => [k, parseFloat(v)])
-      ),
+      notification: form.notification,
+      warrantyDuration: form.warrantyDuration ? parseInt(form.warrantyDuration) || 0 : 0,
+      warrantyUnit: form.warrantyUnit === "years" ? "years" : "months",
+      // Every customer group always gets a price so downstream features never
+      // see a blank: a manually-typed value wins, otherwise the group's rule
+      // price, otherwise the standard sell price.
+      groupPrices: (() => {
+        const sell = parseFloat(form.price) || 0;
+        const manual = Object.fromEntries(
+          Object.entries(form.groupPrices)
+            .filter(([, v]) => v !== "" && !isNaN(parseFloat(v)))
+            .map(([k, v]) => [k, parseFloat(v)])
+        );
+        const full: Record<string, number> = {};
+        for (const g of customerGroups) {
+          full[g.id] = manual[g.id] ?? ruleGroupDefaults[g.id] ?? sell;
+        }
+        return full;
+      })(),
     };
     const inv = () => queryClient.invalidateQueries({ queryKey: ["products"] });
     if (editingProduct) {
@@ -1279,7 +1458,15 @@ export default function ProductsPage() {
   const handleCreateCategory = () => {
     if (!newCategoryName) return;
     createCategoryMutation.mutate({ data: { name: newCategoryName } }, {
-      onSuccess: () => { toast.success("Category created"); setCategoryDialogOpen(false); setNewCategoryName(""); queryClient.invalidateQueries({ queryKey: ["categories"] }); },
+      onSuccess: () => {
+        toast.success("Category created");
+        setCategoryDialogOpen(false);
+        setNewCategoryName("");
+        // Invalidate both keys so the new category shows instantly here and on
+        // the Categories page / dashboards (which read the default query key).
+        queryClient.invalidateQueries({ queryKey: ["categories"] });
+        queryClient.invalidateQueries({ queryKey: getListCategoriesQueryKey() });
+      },
       onError: () => toast.error("Failed to create category"),
     });
   };
@@ -1288,11 +1475,35 @@ export default function ProductsPage() {
     label, sortKey: key, active: sortKey, dir: sortDir, onSort: handleSort, className,
   });
 
+  /* The tabs applicable to the current product type — the single source of
+     truth for both the tab bar and Next/Previous navigation, so navigation can
+     never land on a tab that isn't shown. */
+  const visibleFormTabs = FORM_TABS.filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode }) =>
+    (!digitalCodeOnly   || form.productType === "digital_code") &&
+    (!variantOnly       || form.productType === "variant") &&
+    (!hideForService    || form.productType !== "service") &&
+    (!hideForDigitalCode || form.productType !== "digital_code")
+  );
+
+  /* If the active tab stops being applicable (e.g. after changing the product
+     type), fall back to the first visible tab so content + bar stay in sync. */
+  useEffect(() => {
+    if (!visibleFormTabs.some((t) => t.key === formTab)) {
+      setFormTab(visibleFormTabs[0]?.key ?? "details");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [form.productType]);
+
   const goNextTab = () => {
-    const idx = FORM_TABS.findIndex((t) => t.key === formTab);
-    if (idx < FORM_TABS.length - 1) setFormTab(FORM_TABS[idx + 1].key);
+    const idx = visibleFormTabs.findIndex((t) => t.key === formTab);
+    if (idx > -1 && idx < visibleFormTabs.length - 1) setFormTab(visibleFormTabs[idx + 1].key);
   };
-  const isLastTab = formTab === FORM_TABS[FORM_TABS.length - 1].key;
+  const goPrevTab = () => {
+    const idx = visibleFormTabs.findIndex((t) => t.key === formTab);
+    if (idx > 0) setFormTab(visibleFormTabs[idx - 1].key);
+  };
+  const isFirstTab = visibleFormTabs[0]?.key === formTab;
+  const isLastTab = visibleFormTabs[visibleFormTabs.length - 1]?.key === formTab;
 
   const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) => {
     setFormTouched(true);
@@ -1301,6 +1512,12 @@ export default function ProductsPage() {
 
   const handleGenerateSKU = () => {
     setField("sku", generateSKU(skuPrefix));
+  };
+
+  const handleGenerateBarcode = () => {
+    const sku = form.sku.trim();
+    if (!sku) { toast.error("Enter a SKU code first to generate a barcode"); return; }
+    setField("barcode", generateBarcodeFromSku(sku));
   };
 
   const handleSkuPrefixChange = (v: string) => {
@@ -1616,8 +1833,11 @@ export default function ProductsPage() {
                     {!hideCosts && (
                       <>
                         <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Margin</th>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Reseller Margin</th>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">WL Margin</th>
+                        {customerGroups.map((group) => (
+                          <th key={group.id} className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">
+                            {group.name} Margin
+                          </th>
+                        ))}
                       </>
                     )}
                     <SortTh {...sh("Stock", "stock")} />
@@ -1633,6 +1853,14 @@ export default function ProductsPage() {
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
                     const marginPct = cost !== null && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
+                    // Effective group prices for the margin columns: a value stored
+                    // on the product wins, otherwise the price its group rule would
+                    // produce, otherwise the standard sell price — so the columns
+                    // reflect the pricing rules even before "Apply to existing".
+                    const ruleGroupPrices = computeAllGroupPrices(
+                      { price: sell, costPrice: cost ?? 0, taxRate: product.taxRate ?? 10, categoryId: product.categoryId ?? null },
+                      customerSettings.groupPricing,
+                    );
                     return (
                       <tr key={product.id}
                         className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
@@ -1672,16 +1900,26 @@ export default function ProductsPage() {
                                 ? <span className="text-[#16a34a] font-medium">{marginPct}%</span>
                                 : <span className="text-muted-foreground/50">—</span>}
                             </td>
-                            <td className="p-3 text-right text-muted-foreground/50">—</td>
-                            <td className="p-3 text-right text-muted-foreground/50">—</td>
+                            {customerGroups.map((group) => {
+                              const stored = (product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[group.id];
+                              const groupPrice = stored ?? ruleGroupPrices[group.id] ?? sell;
+                              const groupMarginPct = cost !== null && groupPrice > 0
+                                ? Math.round(((groupPrice - cost) / groupPrice) * 100)
+                                : null;
+                              return (
+                                <td key={group.id} className="p-3 text-right">
+                                  {groupMarginPct != null
+                                    ? <span className={cn("font-medium", groupMarginPct < 0 ? "text-red-500" : "text-[#16a34a]")}>{groupMarginPct}%</span>
+                                    : <span className="text-muted-foreground/50">—</span>}
+                                </td>
+                              );
+                            })}
                           </>
                         )}
                         <td className="p-3">
-                          {isService
-                            ? <span className="text-muted-foreground">—</span>
-                            : product.trackInventory
-                              ? <span className={isLowStock ? "text-amber-600 font-medium" : ""}>{product.stockQuantity}</span>
-                              : <span className="text-muted-foreground">∞</span>}
+                          {!isService && product.trackInventory
+                            ? <span className={cn("font-medium", isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]")}>{product.stockQuantity}</span>
+                            : <span className="text-[#16a34a] font-medium">∞</span>}
                         </td>
                         <td className="p-3">
                           <Badge variant={product.isActive !== false ? "default" : "secondary"} className="text-xs">
@@ -1831,13 +2069,8 @@ export default function ProductsPage() {
           </DialogHeader>
 
           {/* Tab nav */}
-          <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
-            {FORM_TABS
-              .filter(({ digitalCodeOnly, variantOnly, hideForService }) =>
-                (!digitalCodeOnly || form.productType === "digital_code") &&
-                (!variantOnly || form.productType === "variant") &&
-                (!hideForService || form.productType !== "service")
-              )
+          <div className="flex border-b px-6 gap-0 shrink-0 mt-3 overflow-x-auto scrollbar-none">
+            {visibleFormTabs
               .map(({ key, label }) => (
                 <button
                   key={key}
@@ -1911,27 +2144,29 @@ export default function ProductsPage() {
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Product Type</Label>
                     {productTypesList.length > 0 ? (
-                      <Select
-                        value={form.productTypeId || ""}
-                        onValueChange={(v) => {
-                          const pt = productTypesList.find((t) => t.id.toString() === v);
-                          if (pt) { setField("productTypeId", v); setField("productType", pt.slug); }
-                        }}
-                      >
-                        <SelectTrigger className="mt-1.5">
-                          <SelectValue placeholder="Select type…" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {productTypesList.filter((t) => t.isActive).map((t) => (
-                            <SelectItem key={t.id} value={t.id.toString()}>
-                              <div className="flex flex-col">
-                                <span>{t.name}</span>
-                                {t.description && <span className="text-xs text-muted-foreground">{t.description}</span>}
-                              </div>
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
+                      <div className="grid grid-cols-3 gap-2 mt-1.5">
+                        {productTypesList.filter((t) => t.isActive).map((t) => {
+                          const Icon = PRODUCT_TYPES.find((pt) => pt.value === t.slug)?.icon ?? Package;
+                          const active = form.productTypeId === t.id.toString();
+                          return (
+                            <button
+                              key={t.id}
+                              type="button"
+                              onClick={() => { setField("productTypeId", t.id.toString()); setField("productType", t.slug); }}
+                              title={t.description || t.name}
+                              className={cn(
+                                "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
+                                active
+                                  ? "border-primary bg-primary/5 text-primary"
+                                  : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                              )}
+                            >
+                              <Icon className="w-4 h-4" />
+                              <span className="text-[11px] font-medium leading-tight">{t.name}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
                     ) : (
                       <div className="grid grid-cols-3 gap-2 mt-1.5">
                         {PRODUCT_TYPES.map(({ value, label, icon: Icon }) => (
@@ -1963,7 +2198,7 @@ export default function ProductsPage() {
                         className="flex-1"
                       />
                       <Button
-                        type="button" variant="outline" size="icon" className="shrink-0 h-9 w-9"
+                        type="button" variant="outline" size="icon" className="shrink-0 h-10 w-10"
                         onClick={handleGenerateSKU} title="Generate SKU"
                       >
                         <Shuffle className="w-3.5 h-3.5" />
@@ -1972,12 +2207,20 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Barcode</Label>
-                    <Input
-                      value={form.barcode}
-                      onChange={(e) => setField("barcode", e.target.value)}
-                      placeholder="Scan or type barcode"
-                      className="mt-1.5"
-                    />
+                    <div className="flex gap-1.5 mt-1.5">
+                      <Input
+                        value={form.barcode}
+                        onChange={(e) => setField("barcode", e.target.value)}
+                        placeholder="Scan or type barcode"
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button" variant="outline" size="icon" className="shrink-0 h-10 w-10"
+                        onClick={handleGenerateBarcode} title="Generate barcode from SKU"
+                      >
+                        <Shuffle className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Category</Label>
@@ -1992,59 +2235,12 @@ export default function ProductsPage() {
                   </div>
                   <div>
                     <Label className="text-xs text-muted-foreground">Brand</Label>
-                    <Popover open={brandPopoverOpen} onOpenChange={(o) => { if (!o) { setBrandCreatingInline(false); setNewBrandName(""); } setBrandPopoverOpen(o); }}>
-                      <PopoverTrigger asChild>
-                        <button
-                          type="button"
-                          className="flex h-10 w-full items-center justify-between rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2 mt-1.5"
-                        >
-                          <span className={cn("truncate", !form.brandId && "text-muted-foreground")}>
-                            {brandsList.find((b) => b.id.toString() === form.brandId)?.name ?? "No Brand"}
-                          </span>
-                          <ChevronDown className="h-4 w-4 shrink-0 opacity-50 ml-2" />
-                        </button>
-                      </PopoverTrigger>
-                      <PopoverContent className="p-1.5 max-h-64 overflow-y-auto" align="start" style={{ minWidth: "180px" }}>
-                        <button
-                          type="button"
-                          onClick={() => { setField("brandId", ""); setBrandPopoverOpen(false); }}
-                          className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", !form.brandId && "bg-primary/10 text-primary font-medium")}
-                        >No Brand</button>
-                        {brandsList.map((b) => (
-                          <button
-                            key={b.id}
-                            type="button"
-                            onClick={() => { setField("brandId", b.id.toString()); setBrandPopoverOpen(false); }}
-                            className={cn("w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors", form.brandId === b.id.toString() && "bg-primary/10 text-primary font-medium")}
-                          >{b.name}</button>
-                        ))}
-                        {brandCreatingInline ? (
-                          <div className="border-t mt-1 pt-1.5 px-1 flex items-center gap-1.5">
-                            <input
-                              autoFocus
-                              value={newBrandName}
-                              onChange={(e) => setNewBrandName(e.target.value)}
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") { e.preventDefault(); void createBrandInline((id) => setField("brandId", id.toString())); }
-                                if (e.key === "Escape") { setBrandCreatingInline(false); setNewBrandName(""); }
-                              }}
-                              placeholder="Brand name…"
-                              className="flex-1 text-sm border rounded px-2 py-1 outline-none focus:ring-1 focus:ring-ring bg-background"
-                            />
-                            <button type="button" onClick={() => void createBrandInline((id) => setField("brandId", id.toString()))} className="text-xs text-primary font-medium hover:underline whitespace-nowrap">Add</button>
-                            <button type="button" onClick={() => { setBrandCreatingInline(false); setNewBrandName(""); }} className="text-xs text-muted-foreground hover:text-foreground">✕</button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setBrandCreatingInline(true)}
-                            className="w-full text-left px-2 py-1.5 text-xs text-primary font-medium border-t mt-1 flex items-center gap-1.5 hover:bg-muted/50 rounded transition-colors"
-                          >
-                            <Plus className="w-3 h-3" /> Add New Brand
-                          </button>
-                        )}
-                      </PopoverContent>
-                    </Popover>
+                    <BrandSelect
+                      brands={brandsList}
+                      value={form.brandId}
+                      onChange={(v) => setField("brandId", v)}
+                      onCreateBrand={createBrandInline}
+                    />
                   </div>
                   <div className="col-span-2 grid grid-cols-2 gap-4 items-start">
                     {/* Tags input */}
@@ -2086,23 +2282,24 @@ export default function ProductsPage() {
                         )}
                       </div>
                     </div>
-                    {/* Suggested tags based on selected category */}
+                    {/* Suggested tags: previously used first, then category suggestions, max 8 */}
                     {(() => {
                       const selectedCat = form.categoryId
                         ? categories.find((c) => c.id.toString() === form.categoryId)
                         : null;
-                      if (!selectedCat) return (
+                      const usedFirst = allTags.filter((t) => !form.tags.includes(t));
+                      const catSuggestions = selectedCat
+                        ? getSuggestedTags(selectedCat.name).filter((s) => !form.tags.includes(s) && !usedFirst.includes(s))
+                        : [];
+                      const suggestions = [...usedFirst, ...catSuggestions].slice(0, 8);
+                      if (suggestions.length === 0) return (
                         <div className="flex items-center justify-center h-full min-h-[48px]">
                           <p className="text-xs text-muted-foreground/50 italic">Select a category to see suggested tags</p>
                         </div>
                       );
-                      const suggestions = getSuggestedTags(selectedCat.name).filter((s) => !form.tags.includes(s));
-                      if (suggestions.length === 0) return null;
                       return (
                         <div>
-                          <p className="text-xs text-muted-foreground mb-1.5">
-                            Suggested for <span className="font-medium text-foreground">{selectedCat.name}</span>
-                          </p>
+                          <p className="text-xs text-muted-foreground mb-1.5">Suggested tags</p>
                           <div className="flex flex-wrap gap-1.5">
                             {suggestions.map((s) => (
                               <button
@@ -2136,6 +2333,31 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 )}
+
+                {/* Warranty — printed on receipts/invoices and tracked under Products > Warranty */}
+                <div className="border-t pt-4">
+                  <SectionHeader label="Warranty" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    How long this item is covered from the date of sale. Printed on receipts and invoices, and tracked under Products &gt; Warranty. Leave as 0 for no warranty.
+                  </p>
+                  <div className="mt-3 flex items-center gap-2">
+                    <Input
+                      type="number"
+                      min={0}
+                      value={form.warrantyDuration}
+                      onChange={(e) => setField("warrantyDuration", e.target.value.replace(/[^0-9]/g, ""))}
+                      placeholder="0"
+                      className="w-28"
+                    />
+                    <Select value={form.warrantyUnit} onValueChange={(v) => setField("warrantyUnit", v)}>
+                      <SelectTrigger className="w-36"><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="months">Months</SelectItem>
+                        <SelectItem value="years">Years</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
 
                 {/* Physical details — only for standard products */}
                 {form.productType === "standard" && (
@@ -2190,22 +2412,11 @@ export default function ProductsPage() {
                   <div className="mt-3 grid grid-cols-2 gap-4">
                     <div>
                       <Label className="text-xs text-muted-foreground">Primary Supplier</Label>
-                      {suppliersList.length > 0 ? (
-                        <Select value={form.supplier || "__none__"} onValueChange={(v) => setField("supplier", v === "__none__" ? "" : v)}>
-                          <SelectTrigger className="mt-1.5"><SelectValue placeholder="No supplier" /></SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="__none__">No supplier</SelectItem>
-                            {[...suppliersList].sort((a, b) => a.name.localeCompare(b.name)).map((s) => <SelectItem key={s.id} value={s.name}>{s.name}</SelectItem>)}
-                          </SelectContent>
-                        </Select>
-                      ) : (
-                        <Input
-                          value={form.supplier}
-                          onChange={(e) => setField("supplier", e.target.value)}
-                          placeholder="No supplier"
-                          className="mt-1.5"
-                        />
-                      )}
+                      <SupplierSelect
+                        suppliers={suppliersList}
+                        value={form.supplier}
+                        onChange={(name) => setField("supplier", name)}
+                      />
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">Supplier Code</Label>
@@ -2276,7 +2487,7 @@ export default function ProductsPage() {
                   <div className="border-t pt-5">
                     <div className="flex items-center justify-between mb-3">
                       <SectionHeader label="Customer Group Pricing" />
-                      <span className="text-xs text-muted-foreground">Leave blank to use standard price</span>
+                      <span className="text-xs text-muted-foreground">Blank uses the group's automatic rule, or the standard price</span>
                     </div>
                     <div className="space-y-2">
                       {customerGroups.map((group) => (
@@ -2290,11 +2501,21 @@ export default function ProductsPage() {
                             <Input
                               type="number" step="0.01" min="0"
                               value={form.groupPrices[group.id] ?? ""}
-                              onChange={(e) => setField("groupPrices", { ...form.groupPrices, [group.id]: e.target.value })}
-                              placeholder={form.price || "0.00"}
+                              onChange={(e) => {
+                                const v = e.target.value;
+                                if (v === "") manualGroupsRef.current.delete(group.id);
+                                else manualGroupsRef.current.add(group.id);
+                                setField("groupPrices", { ...form.groupPrices, [group.id]: v });
+                              }}
+                              placeholder={ruleGroupDefaults[group.id] != null ? ruleGroupDefaults[group.id].toFixed(2) : (form.price || "0.00")}
                               className="pl-7 text-sm"
                             />
                           </div>
+                          {!form.groupPrices[group.id] && ruleGroupDefaults[group.id] != null && (
+                            <span className="text-xs text-muted-foreground whitespace-nowrap" title="Automatic price from this group's pricing rule">
+                              auto ${ruleGroupDefaults[group.id].toFixed(2)}
+                            </span>
+                          )}
                           {form.groupPrices[group.id] && form.price && parseFloat(form.groupPrices[group.id]) < parseFloat(form.price) && (
                             <span className="text-xs text-amber-600 whitespace-nowrap">
                               -{Math.round((1 - parseFloat(form.groupPrices[group.id]) / parseFloat(form.price)) * 100)}%
@@ -2456,35 +2677,36 @@ export default function ProductsPage() {
             {formTab === "settings" && (
               <div className="py-5 space-y-5">
 
-                {/* Availability — only shown when editing an existing product */}
-                {editingProduct && (
-                  <div className="border-t pt-5">
-                    <SectionHeader label="Availability" />
+                {/* Availability + Loyalty — same line (Availability only when editing) */}
+                <div className={cn("border-t pt-5 grid gap-4", editingProduct ? "md:grid-cols-2" : "grid-cols-1")}>
+                  {editingProduct && (
+                    <div>
+                      <SectionHeader label="Availability" />
+                      <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
+                        <div>
+                          <p className="text-sm font-medium">Active</p>
+                          <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                        </div>
+                        <Switch
+                          checked={form.isActive}
+                          onCheckedChange={(v) => setField("isActive", v)}
+                        />
+                      </div>
+                    </div>
+                  )}
+
+                  <div>
+                    <SectionHeader label="Loyalty" />
                     <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
                       <div>
-                        <p className="text-sm font-medium">Active</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Visible and available for sale in the POS</p>
+                        <p className="text-sm font-medium">No Loyalty Points</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
                       </div>
                       <Switch
-                        checked={form.isActive}
-                        onCheckedChange={(v) => setField("isActive", v)}
+                        checked={form.excludeFromLoyalty}
+                        onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
                       />
                     </div>
-                  </div>
-                )}
-
-                {/* No Loyalty Points */}
-                <div className="border-t pt-5">
-                  <SectionHeader label="Loyalty" />
-                  <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
-                    <div>
-                      <p className="text-sm font-medium">No Loyalty Points</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">Exclude from loyalty program</p>
-                    </div>
-                    <Switch
-                      checked={form.excludeFromLoyalty}
-                      onCheckedChange={(v) => setField("excludeFromLoyalty", v)}
-                    />
                   </div>
                 </div>
 
@@ -2495,7 +2717,22 @@ export default function ProductsPage() {
                     value={form.internalNotes}
                     onChange={(e) => setField("internalNotes", e.target.value)}
                     placeholder="Internal notes, specifications, special handling..."
-                    rows={4}
+                    rows={2}
+                    className="mt-3 resize-none"
+                  />
+                </div>
+
+                {/* Sale Notification — pops up at the POS when this item is added to a sale */}
+                <div className="border-t pt-5">
+                  <SectionHeader label="Sale Notification" />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Shown as a pop-up at the register whenever this product is added to a sale (e.g. age check, warranty reminder, handling note). Leave blank for none.
+                  </p>
+                  <Textarea
+                    value={form.notification}
+                    onChange={(e) => setField("notification", e.target.value)}
+                    placeholder="e.g. Check ID — must be 18+"
+                    rows={2}
                     className="mt-3 resize-none"
                   />
                 </div>
@@ -2882,13 +3119,18 @@ export default function ProductsPage() {
 
           {/* Footer */}
           <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/10 shrink-0">
-            {!isLastTab ? (
-              <Button variant="outline" onClick={goNextTab} className="gap-1.5">
-                Next Tab <ChevronRight className="w-4 h-4" />
-              </Button>
-            ) : (
-              <div />
-            )}
+            <div className="flex gap-2">
+              {!isFirstTab && (
+                <Button variant="outline" onClick={goPrevTab} className="gap-1.5">
+                  <ChevronLeft className="w-4 h-4" /> Previous
+                </Button>
+              )}
+              {!isLastTab && (
+                <Button variant="outline" onClick={goNextTab} className="gap-1.5">
+                  Next Tab <ChevronRight className="w-4 h-4" />
+                </Button>
+              )}
+            </div>
             <div className="flex gap-2">
               <Button variant="outline" onClick={() => {
                 if (isDirtyProduct) { setPendingProductClose(true); return; }

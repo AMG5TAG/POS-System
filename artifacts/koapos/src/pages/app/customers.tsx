@@ -1,6 +1,7 @@
-import { useState, useCallback, useRef, useEffect, useMemo } from "react";
+import { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { customerDisplayName } from "@/lib/customer-name";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -21,6 +22,7 @@ import {
   useGetLoyaltySettings,
   useSendTransactionReceipt,
   useSendServiceJobEmail,
+  useComposeEmail,
   getListCustomersQueryKey,
   Customer,
   CustomerNote,
@@ -29,7 +31,10 @@ import {
   Appointment,
   ServiceJob,
 } from "@workspace/api-client-react";
+import { useMapUrl } from "@/lib/map-provider";
+import { loadCustomerFilesCloudSettings } from "@/lib/cloud-files-settings";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
+import { CustomerStoreCreditPanel } from "@/components/customers/CustomerStoreCreditPanel";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,7 +75,7 @@ import {
 
 type SortKey = "name" | "email" | "company" | "loyaltyPoints" | "visitCount";
 type SortDir  = "asc" | "desc";
-type DetailTab = "overview" | "address" | "account" | "history" | "notes" | "files" | "qr";
+type DetailTab = "overview" | "address" | "account" | "credit" | "history" | "notes" | "files" | "qr";
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
 
@@ -270,13 +275,20 @@ function MergeWizardModal({
   const handleMerge = async () => {
     setPending(true);
     try {
-      // 1. Apply the operator-chosen contact-detail values to the primary record
+      // 1. Apply the operator-chosen contact-detail values to the primary record.
+      // Only include fields that have an actual value — null means no data to set,
+      // so omit them rather than sending null (which fails schema validation).
       const contactPatch: Record<string, unknown> = {};
       for (const { key } of MERGE_TEXT_FIELDS) {
         const src = selected[key as string] === "a" ? a : b;
-        contactPatch[key as string] = (src as unknown as Record<string, unknown>)[key as string] ?? null;
+        const val = (src as unknown as Record<string, unknown>)[key as string];
+        if (val !== null && val !== undefined) {
+          contactPatch[key as string] = val;
+        }
       }
-      await updateMutation.mutateAsync({ id: primary.id, data: contactPatch as any });
+      if (Object.keys(contactPatch).length > 0) {
+        await updateMutation.mutateAsync({ id: primary.id, data: contactPatch as any });
+      }
 
       // 2. Transactional merge: cascade FKs, aggregate loyalty, audit note, delete secondary
       await mergeMutation.mutateAsync({
@@ -296,8 +308,8 @@ function MergeWizardModal({
     }
   };
 
-  const primaryName   = [primary.firstName,   primary.lastName].filter(Boolean).join(" ")   || "Unknown";
-  const secondaryName = [secondary.firstName, secondary.lastName].filter(Boolean).join(" ") || "Unknown";
+  const primaryName   = customerDisplayName(primary);
+  const secondaryName = customerDisplayName(secondary);
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -332,7 +344,7 @@ function MergeWizardModal({
               {(["a", "b"] as const).map((side) => {
                 const cust      = side === "a" ? a : b;
                 const isPrimary = primarySide === side;
-                const name      = [cust.firstName, cust.lastName].filter(Boolean).join(" ") || "Unknown";
+                const name      = customerDisplayName(cust);
                 return (
                   <button
                     key={side}
@@ -581,7 +593,7 @@ function MultiMergeModal({
   const survivor    = customers.find((c) => c.id === survivorId);
   const secondaries = customers.filter((c) => c.id !== survivorId);
   const displayName = (c: Customer) =>
-    [c.firstName, c.lastName].filter(Boolean).join(" ") || `Customer #${c.id}`;
+    customerDisplayName(c, "") || `Customer #${c.id}`;
 
   const handleMerge = async () => {
     if (!survivorId) return;
@@ -755,8 +767,8 @@ function ManualMergePickerDialog({
               </div>
             ) : (
               results.map((c) => {
-                const name = [c.firstName, c.lastName].filter(Boolean).join(" ") || "Unknown";
-                const initials = [c.firstName?.[0], c.lastName?.[0]].filter(Boolean).join("").toUpperCase() || "?";
+                const name = customerDisplayName(c);
+                const initials = ([c.firstName?.[0], c.lastName?.[0]].filter(Boolean).join("") || c.company?.[0] || "?").toUpperCase();
                 return (
                   <button
                     key={c.id}
@@ -815,8 +827,8 @@ function DuplicateModal({
         <div className="space-y-3 mt-1">
           {pairs.map((pair) => {
             const { a, b, reason } = pair;
-            const nameA = [a.firstName, a.lastName].filter(Boolean).join(" ") || "Unknown";
-            const nameB = [b.firstName, b.lastName].filter(Boolean).join(" ") || "Unknown";
+            const nameA = customerDisplayName(a);
+            const nameB = customerDisplayName(b);
             return (
               <div key={pair.key} className="rounded-lg border overflow-hidden">
                 {/* Reason badge row */}
@@ -925,17 +937,6 @@ function ServiceJobPhotoStrip({ photos }: { photos: string[] }) {
   );
 }
 
-function StepPill({ label, icon, active, done }: { label: string; icon: React.ReactNode; active: boolean; done: boolean }) {
-  return (
-    <div className={cn("flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium transition-colors",
-      active ? "bg-primary text-primary-foreground" : done ? "bg-muted text-muted-foreground" : "text-muted-foreground",
-    )}>
-      {done && !active ? <CheckCircle2 className="w-4 h-4 shrink-0" /> : <span className="shrink-0">{icon}</span>}
-      {label}
-    </div>
-  );
-}
-
 function FieldRow({ children }: { children: React.ReactNode }) {
   return <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">{children}</div>;
 }
@@ -949,11 +950,12 @@ function Field({ label, children, full }: { label: string; children: React.React
   );
 }
 
-function InfoRow({ icon: Icon, label, value, href, className }: {
+function InfoRow({ icon: Icon, label, value, href, onClick, className }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value?: string | number | null;
   href?: string;
+  onClick?: () => void;
   className?: string;
 }) {
   if (!value && value !== 0) return null;
@@ -966,19 +968,16 @@ function InfoRow({ icon: Icon, label, value, href, className }: {
           <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium truncate flex items-center gap-1 text-primary hover:underline">
             {value} <ExternalLink className="w-3 h-3 shrink-0" />
           </a>
+        ) : onClick ? (
+          <button type="button" onClick={onClick} className="font-medium truncate flex items-center gap-1 text-primary hover:underline text-left">
+            {value}
+          </button>
         ) : (
           <p className="font-medium truncate">{value}</p>
         )}
       </div>
     </div>
   );
-}
-
-function mapsUrl(addr: string) {
-  const q = encodeURIComponent(addr);
-  const ua = navigator.userAgent;
-  if (/iPhone|iPad|Mac/.test(ua)) return `maps://maps.apple.com/?q=${q}`;
-  return `https://maps.google.com/?q=${q}`;
 }
 
 /* ─── Sort header ────────────────────────────────────────────────────────── */
@@ -1019,6 +1018,7 @@ function CustomerDetailInner({
   onMerge?: (a: Customer, b: Customer) => void;
 }) {
   const queryClient = useQueryClient();
+  const mapUrl = useMapUrl();
   const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
   const { printStickers } = useStickerPrinter();
   const [tab, setTab] = useState<DetailTab>("overview");
@@ -1027,7 +1027,7 @@ function CustomerDetailInner({
    * values are passed as overrides; toggles for missing data are turned off so
    * the label never shows sample placeholder text. */
   const printCustomerLabel = () => {
-    const name = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "";
+    const name = customerDisplayName(customer, "") || customer.email || "";
     const group = customer.customerGroup || customer.tierName || "";
     const ok = printStickers({
       typeId: "customer",
@@ -1049,8 +1049,12 @@ function CustomerDetailInner({
   const [emailAddr, setEmailAddr] = useState("");
   const [emailDialogJob, setEmailDialogJob] = useState<ServiceJob | null>(null);
   const [jobEmailAddr, setJobEmailAddr] = useState("");
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
   const sendReceiptMutation = useSendTransactionReceipt();
   const sendJobEmailMutation = useSendServiceJobEmail();
+  const composeEmailMutation = useComposeEmail();
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
@@ -1195,7 +1199,7 @@ function CustomerDetailInner({
     );
   };
 
-  const fullName = [customer.firstName, customer.lastName].filter(Boolean).join(" ") || "Unknown";
+  const fullName = customerDisplayName(customer);
   const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
   const mergeNoteCount = notes.filter((n: CustomerNote) => isMergeNote(n.note)).length;
   const displayedNotes = showMergeOnly
@@ -1216,6 +1220,7 @@ function CustomerDetailInner({
     { key: "overview", label: "Overview" },
     { key: "address",  label: "Address"  },
     { key: "account",  label: "Account"  },
+    { key: "credit",   label: "Credit"   },
     { key: "history",  label: "History"  },
     { key: "notes",    label: "Notes"    },
     { key: "files",    label: "Files"    },
@@ -1274,7 +1279,14 @@ function CustomerDetailInner({
           { onSuccess: () => resolve(), onError: reject }
         );
       });
-      toast.success("File uploaded");
+      // If the platform user has opted in (Sync → Cloud Files & Folders), every
+      // customer file is also routed to their chosen cloud storage folder.
+      const cloud = loadCustomerFilesCloudSettings();
+      if (cloud.enabled && cloud.storageKey && cloud.folder.trim()) {
+        toast.success(`File uploaded · syncing to cloud (${cloud.folder.trim()})`);
+      } else {
+        toast.success("File uploaded");
+      }
       invalidateFiles();
     } catch {
       toast.error("Upload failed");
@@ -1366,7 +1378,7 @@ function CustomerDetailInner({
             </div>
           )}
           <div className="rounded-xl border bg-muted/20 divide-y">
-            <InfoRow icon={Mail}      label="Email"   value={customer.email} href={customer.email ? `mailto:${customer.email}` : undefined} />
+            <InfoRow icon={Mail}      label="Email"   value={customer.email} onClick={customer.email ? () => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); } : undefined} />
             <InfoRow icon={Phone}     label="Phone"   value={customer.phone} href={customer.phone ? `tel:${customer.phone.replace(/\s/g, "")}` : undefined} />
             <InfoRow icon={Building2} label="Company" value={customer.company} />
           </div>
@@ -1395,13 +1407,13 @@ function CustomerDetailInner({
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
             {billingAddr
-              ? <InfoRow icon={MapPin} label="" value={billingAddr} href={mapsUrl(billingAddr)} />
+              ? <InfoRow icon={MapPin} label="" value={billingAddr} href={mapUrl(billingAddr)} />
               : <p className="px-4 pb-3 text-sm text-muted-foreground">No billing address on file.</p>}
           </div>
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Shipping Address</p>
             {shippingAddr
-              ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapsUrl(shippingAddr)} />
+              ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapUrl(shippingAddr)} />
               : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
           </div>
         </div>
@@ -1498,6 +1510,11 @@ function CustomerDetailInner({
         </div>
       )}
 
+      {/* ── Store Credit ── */}
+      {tab === "credit" && (
+        <CustomerStoreCreditPanel customerId={customer.id} />
+      )}
+
       {/* ── History ── */}
       {tab === "history" && (
         <div className="space-y-4">
@@ -1565,6 +1582,40 @@ function CustomerDetailInner({
                 )}
               </div>
 
+              {/* Invoices */}
+              <div>
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+                  <FileText className="w-3.5 h-3.5" /> Invoices ({history?.invoices?.length ?? 0})
+                </p>
+                {!history?.invoices?.length ? (
+                  <p className="text-sm text-muted-foreground pl-1">No invoices recorded.</p>
+                ) : (
+                  <div className="rounded-xl border divide-y bg-muted/20">
+                    {history.invoices.map((inv) => {
+                      const outstanding = inv.total - (inv.amountPaid ?? 0);
+                      return (
+                        <div key={inv.id} className="flex items-center justify-between px-4 py-2.5 text-sm">
+                          <div className="min-w-0">
+                            <p className="font-medium">{inv.invoiceNumber}</p>
+                            <p className="text-xs text-muted-foreground">
+                              {new Date(inv.createdAt).toLocaleDateString("en-AU")}
+                              {inv.dueDate ? ` · Due ${new Date(inv.dueDate).toLocaleDateString("en-AU")}` : ""}
+                            </p>
+                          </div>
+                          <div className="text-right space-y-0.5 ml-2 shrink-0">
+                            <p className="font-bold">{formatCurrency(inv.total)}</p>
+                            <Badge variant="outline" className="text-xs capitalize">{inv.status}</Badge>
+                            {outstanding > 0.005 && inv.status !== "cancelled" && (
+                              <p className="text-[11px] text-amber-600">{formatCurrency(outstanding)} outstanding</p>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
               {/* Appointments */}
               <div>
                 <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
@@ -1598,7 +1649,7 @@ function CustomerDetailInner({
                   <div className="rounded-xl border divide-y bg-muted/20">
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
-                      const custOverride = { name: [customer.firstName, customer.lastName].filter(Boolean).join(" ") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
+                      const custOverride = { name: customerDisplayName(customer, "") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
                       return (
                         <div key={j.id} className="px-4 py-2.5 text-sm space-y-2 hover:bg-muted/40 transition-colors group">
                           <div className="flex items-center justify-between">
@@ -2346,6 +2397,51 @@ function CustomerDetailInner({
         </DialogContent>
       </Dialog>
 
+      {/* ── Compose email dialog ── */}
+      <Dialog open={composeOpen} onOpenChange={(open) => { if (!open) setComposeOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Mail className="h-4 w-4 text-primary" />
+              Email Customer
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">Sending to <strong>{customer.email}</strong></p>
+            <Input
+              placeholder="Subject"
+              value={composeSubject}
+              onChange={(e) => setComposeSubject(e.target.value)}
+            />
+            <Textarea
+              placeholder="Message"
+              rows={5}
+              value={composeBody}
+              onChange={(e) => setComposeBody(e.target.value)}
+            />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setComposeOpen(false)}>Cancel</Button>
+            <Button
+              size="sm"
+              disabled={composeEmailMutation.isPending || !composeSubject.trim() || !customer.email}
+              onClick={() => {
+                composeEmailMutation.mutate(
+                  { data: { to: customer.email!, subject: composeSubject, body: composeBody } },
+                  {
+                    onSuccess: () => { toast.success(`Email sent to ${customer.email}`); setComposeOpen(false); },
+                    onError: () => toast.error("Failed to send email — check your email settings in Management"),
+                  },
+                );
+              }}
+            >
+              {composeEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+              Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* ── Email service job dialog ── */}
       <Dialog open={!!emailDialogJob} onOpenChange={(open) => { if (!open) setEmailDialogJob(null); }}>
         <DialogContent className="max-w-sm">
@@ -2487,6 +2583,17 @@ export default function CustomersPage() {
   const deleteMutation = useDeleteCustomer();
 
   const customers = customersData?.items || [];
+
+  /* ── Open customer from global search ── */
+  useLayoutEffect(() => {
+    const id = sessionStorage.getItem("koapos_open_customer");
+    if (!id || !customers.length) return;
+    const found = customers.find((c) => String(c.id) === id);
+    if (found) {
+      sessionStorage.removeItem("koapos_open_customer");
+      setSelectedCustomer(found);
+    }
+  }, [customers]);
 
   /* ── Full customer list (no search) for duplicate scanning ── */
   const { data: allCustomersRaw } = useListCustomers({ limit: 1000 });

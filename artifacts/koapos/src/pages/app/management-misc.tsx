@@ -6,58 +6,22 @@ import { Input } from "@/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Map, ExternalLink, Hash } from "lucide-react";
+import { Separator } from "@/components/ui/separator";
+import { Map, ExternalLink, Hash, Shuffle, LayoutPanelLeft, Type, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetPosSettings, useUpsertPosSettings,
   useGetPosCodePrefixes, useUpdatePosCodePrefixes,
+  useGetInventorySettings, useUpdateInventorySettings,
 } from "@workspace/api-client-react";
 
-export const MAP_PROVIDER_KEY = "koapos_map_provider";
+// Map provider preference now lives in @/lib/map-provider so every address link
+// across the app can share it. Re-exported here for backwards-compatibility.
+import { MAP_PROVIDER_KEY, MAP_PROVIDERS, buildMapUrl, type MapProvider } from "@/lib/map-provider";
+export { MAP_PROVIDER_KEY, MAP_PROVIDERS, buildMapUrl, type MapProvider };
 
-export type MapProvider = "google" | "apple" | "openstreetmap" | "waze";
-
-export const MAP_PROVIDERS: { id: MapProvider; label: string; description: string; testUrl: string }[] = [
-  {
-    id: "google",
-    label: "Google Maps",
-    description: "Opens addresses in Google Maps (works on all devices).",
-    testUrl: "https://maps.google.com/maps?q=Sydney+Opera+House",
-  },
-  {
-    id: "apple",
-    label: "Apple Maps",
-    description: "Opens addresses in Apple Maps (best on iPhone, iPad, and Mac).",
-    testUrl: "https://maps.apple.com/?q=Sydney+Opera+House",
-  },
-  {
-    id: "openstreetmap",
-    label: "OpenStreetMap",
-    description: "Opens addresses in OpenStreetMap — free and open-source.",
-    testUrl: "https://www.openstreetmap.org/search?query=Sydney+Opera+House",
-  },
-  {
-    id: "waze",
-    label: "Waze",
-    description: "Opens addresses in Waze for navigation with live traffic.",
-    testUrl: "https://waze.com/ul?q=Sydney+Opera+House",
-  },
-];
-
-export function buildMapUrl(address: string, provider?: MapProvider): string {
-  const p = provider ?? "google";
-  const q = encodeURIComponent(address);
-  switch (p) {
-    case "apple":          return `https://maps.apple.com/?q=${q}`;
-    case "openstreetmap":  return `https://www.openstreetmap.org/search?query=${q}`;
-    case "waze":           return `https://waze.com/ul?q=${q}`;
-    case "google":
-    default:               return `https://maps.google.com/maps?q=${q}`;
-  }
-}
-
-/* ─── Document Code Prefixes ─────────────────────────────────────────────── */
+/* ─── Code Prefixes ──────────────────────────────────────────────────────── */
 
 export const CODE_PREFIX_KEY = "koapos_code_prefixes";
 
@@ -89,18 +53,28 @@ export function previewCode(prefix: string, digits: number) {
   return `${prefix}${"0".repeat(Math.max(1, digits - 1))}1`;
 }
 
+function previewSKU(prefix: string) {
+  return `${prefix || "KP"}-${Math.floor(10000 + Math.random() * 90000)}`;
+}
+
 export default function ManagementMiscPage() {
   const queryClient = useQueryClient();
   const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
   const { data: prefixesData } = useGetPosCodePrefixes({ query: { queryKey: ["pos-code-prefixes"] } });
+  const { data: invSettings } = useGetInventorySettings({ query: { queryKey: ["inventory-settings"] } });
   const upsertPosSettings = useUpsertPosSettings();
   const updatePrefixes = useUpdatePosCodePrefixes();
+  const updateInventory = useUpdateInventorySettings();
 
   const [provider, setProvider] = useState<MapProvider>("google");
+  const [buttonStyle, setButtonStyle] = useState<"icon" | "icon_text" | "text">("icon");
   const [codePrefixes, setCodePrefixes] = useState<CodePrefixSettings>(CODE_PREFIX_DEFAULTS);
+  const [skuPrefix, setSkuPrefix] = useState("KP");
+  const [skuPreview, setSkuPreview] = useState(() => previewSKU("KP"));
 
   useEffect(() => {
     if (posSettings?.mapProvider) setProvider(posSettings.mapProvider as MapProvider);
+    if (posSettings?.buttonStyle) setButtonStyle(posSettings.buttonStyle as "icon" | "icon_text" | "text");
   }, [posSettings]);
 
   useEffect(() => {
@@ -115,6 +89,23 @@ export default function ManagementMiscPage() {
     }
   }, [prefixesData]);
 
+  useEffect(() => {
+    if (invSettings?.skuPrefix) {
+      setSkuPrefix(invSettings.skuPrefix);
+      setSkuPreview(previewSKU(invSettings.skuPrefix));
+    }
+  }, [invSettings]);
+
+  function handleSkuPrefixChange(v: string) {
+    const clean = v.toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 6);
+    setSkuPrefix(clean);
+    setSkuPreview(previewSKU(clean));
+    updateInventory.mutate({ data: { skuPrefix: clean } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["inventory-settings"] }),
+      onError: () => toast.error("Failed to save SKU prefix"),
+    });
+  }
+
   const updatePrefix = <K extends keyof CodePrefixSettings>(key: K, value: CodePrefixSettings[K]) =>
     setCodePrefixes((prev) => ({ ...prev, [key]: value }));
 
@@ -125,6 +116,14 @@ export default function ManagementMiscPage() {
         toast.success("Map provider saved");
       },
       onError: () => toast.error("Failed to save map provider"),
+    });
+  }
+
+  function saveButtonStyle(style: "icon" | "icon_text" | "text") {
+    setButtonStyle(style);
+    upsertPosSettings.mutate({ data: { buttonStyle: style } }, {
+      onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pos-settings"] }),
+      onError: () => toast.error("Failed to save button style"),
     });
   }
 
@@ -146,7 +145,13 @@ export default function ManagementMiscPage() {
           <p className="text-muted-foreground mt-1">Miscellaneous preferences for your KoaPOS system.</p>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+
+        {/* Left column: Maps Provider + POS Button Style each keep their natural
+            height. The Code Prefixes card on the right stretches to match the
+            combined height of these two, rather than Maps Provider stretching to
+            match Code Prefixes. */}
+        <div className="space-y-6">
 
         <Card>
           <CardHeader>
@@ -192,11 +197,93 @@ export default function ManagementMiscPage() {
           </CardContent>
         </Card>
 
-        {/* Document Code Prefixes */}
-        <Card id="code-prefixes">
+        {/* POS Button Style */}
+        <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
-              <Hash className="w-5 h-5" /> Document Code Prefixes
+              <LayoutPanelLeft className="w-5 h-5" />
+              POS Button Style
+            </CardTitle>
+            <CardDescription>
+              Choose how action buttons are displayed throughout KoaPOS — icon only, icon with text, or text only.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <RadioGroup
+              value={buttonStyle}
+              onValueChange={(v) => saveButtonStyle(v as "icon" | "icon_text" | "text")}
+              className="grid grid-cols-3 gap-3"
+            >
+              {([
+                {
+                  value: "icon",
+                  label: "Icon",
+                  Icon: LayoutTemplate,
+                  description: "Icon only",
+                  preview: (
+                    <div className="flex items-center gap-1.5 mt-2">
+                      {["🗑", "📝", "🔗"].map((e, i) => (
+                        <span key={i} className="w-7 h-7 rounded border flex items-center justify-center text-sm bg-muted/50">{e}</span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  value: "icon_text",
+                  label: "Icon + Text",
+                  Icon: LayoutPanelLeft,
+                  description: "Icon with label",
+                  preview: (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {[["🗑", "Clear"], ["📝", "Notes"]].map(([e, t], i) => (
+                        <span key={i} className="flex items-center gap-1 px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">
+                          <span>{e}</span><span>{t}</span>
+                        </span>
+                      ))}
+                    </div>
+                  ),
+                },
+                {
+                  value: "text",
+                  label: "Text",
+                  Icon: Type,
+                  description: "Text only",
+                  preview: (
+                    <div className="flex flex-col gap-1 mt-2">
+                      {["Clear", "Notes", "Link"].map((t, i) => (
+                        <span key={i} className="px-1.5 py-0.5 rounded border bg-muted/50 text-[10px] w-fit">{t}</span>
+                      ))}
+                    </div>
+                  ),
+                },
+              ] as const).map(({ value, label, description, preview }) => (
+                <label
+                  key={value}
+                  htmlFor={`btn-style-${value}`}
+                  className={`cursor-pointer rounded-xl border-2 p-3 transition-colors flex flex-col ${
+                    buttonStyle === value ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/40"
+                  }`}
+                >
+                  <div className="flex items-center gap-2">
+                    <RadioGroupItem value={value} id={`btn-style-${value}`} />
+                    <span className="text-sm font-medium">{label}</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 ml-5">{description}</p>
+                  <div className="ml-5">{preview}</div>
+                </label>
+              ))}
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
+        </div>
+
+        {/* Code Prefixes — fills the right column so it dynamically matches the
+            combined height of Maps Provider + POS Button Style on the left. */}
+        <Card id="code-prefixes" className="h-full">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Hash className="w-5 h-5" /> Code Prefixes
             </CardTitle>
             <CardDescription>
               Set the prefix and number length for receipts, invoices, service jobs, appointments and purchase orders.
@@ -245,6 +332,34 @@ export default function ManagementMiscPage() {
             </div>
             <div className="flex justify-end">
               <Button size="sm" onClick={saveCodePrefixesHandler}>Save Code Prefixes</Button>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-3">
+              <div className="flex items-center gap-2">
+                <Shuffle className="w-4 h-4 text-muted-foreground" />
+                <p className="text-sm font-medium">SKU Generator</p>
+              </div>
+              <p className="text-xs text-muted-foreground">Set the prefix used when auto-generating SKU codes for products.</p>
+              <div className="flex items-end gap-3 flex-wrap">
+                <div className="w-[160px] space-y-1">
+                  <Label className="text-xs text-muted-foreground">SKU Prefix</Label>
+                  <Input
+                    value={skuPrefix}
+                    onChange={(e) => handleSkuPrefixChange(e.target.value)}
+                    placeholder="KP"
+                    maxLength={6}
+                    className="font-mono uppercase"
+                  />
+                </div>
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 mb-0.5"
+                  onClick={() => setSkuPreview(previewSKU(skuPrefix))}>
+                  <Shuffle className="w-3.5 h-3.5" /> Preview
+                </Button>
+                <span className="text-sm text-muted-foreground mb-1 font-mono">{skuPreview}</span>
+              </div>
+              <p className="text-xs text-muted-foreground">Format: <span className="font-mono">{skuPrefix || "KP"}-NNNNN</span></p>
             </div>
           </CardContent>
         </Card>

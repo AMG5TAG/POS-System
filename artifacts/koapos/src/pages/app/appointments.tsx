@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
-import { buildMapUrl } from "@/pages/app/management-misc";
+import { useMapUrl } from "@/lib/map-provider";
 import { AppLayout } from "@/components/layout/app-layout";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
@@ -9,6 +9,8 @@ import {
   useDeleteAppointment,
   useUpdateAppointment,
   useListStaff,
+  useComposeEmail,
+  useListServiceJobs,
   Appointment,
   AppointmentInputStatus,
   Staff,
@@ -24,12 +26,14 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import {
   CalendarClock, Plus, Trash2, Pencil, Clock, User, StickyNote,
   ChevronUp, ChevronDown, ChevronsUpDown, SlidersHorizontal, Eye, CheckCircle,
-  ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin,
+  ChevronLeft, ChevronRight, CalendarDays, Phone, Mail, MapPin, Send, Loader2,
+  Printer, MessageSquare, CheckCircle2, Bell, History, Wrench,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -161,6 +165,51 @@ function SortableHeader({ label, sortKey, activeSortKey, dir, onSort, className 
   );
 }
 
+/* ─── Print helper ───────────────────────────────────────────────────────── */
+
+function apptRefCode(id: number): string {
+  return `KA${String(id).padStart(5, "0")}`;
+}
+
+function printAppointment(appt: Appointment) {
+  const win = window.open("", "_blank", "width=600,height=700");
+  if (!win) return;
+  const fmt = (iso: string) => new Date(iso).toLocaleString("en-AU", {
+    weekday: "long", day: "numeric", month: "long", year: "numeric",
+    hour: "numeric", minute: "2-digit", hour12: true,
+  });
+  win.document.write(`
+    <html><head><title>Appointment — ${apptRefCode(appt.id)}</title>
+    <style>
+      body { font-family: sans-serif; max-width: 480px; margin: 32px auto; color: #111; }
+      h1 { font-size: 18px; margin-bottom: 4px; }
+      .ref { color: #777; font-size: 12px; margin-bottom: 20px; }
+      .block { border: 1px solid #e5e5e5; border-radius: 8px; padding: 14px 16px; margin-bottom: 12px; }
+      .label { font-size: 11px; color: #888; margin-bottom: 2px; }
+      .value { font-size: 14px; font-weight: 500; }
+      .sub   { font-size: 12px; color: #666; margin-top: 2px; }
+      @media print { body { margin: 0; } }
+    </style></head><body>
+    <h1>${appt.title || "Appointment"}</h1>
+    <p class="ref">${apptRefCode(appt.id)} · ${appt.status ?? "Scheduled"}</p>
+    <div class="block">
+      <div class="label">Start</div><div class="value">${fmt(appt.scheduledAt)}</div>
+      ${appt.endAt ? `<div class="label" style="margin-top:8px">End</div><div class="value">${fmt(appt.endAt)}</div>` : ""}
+      ${appt.durationMinutes ? `<div class="sub">Duration: ${formatDuration(appt.durationMinutes)}</div>` : ""}
+    </div>
+    ${appt.customerName ? `<div class="block">
+      <div class="label">Customer</div><div class="value">${appt.customerName}</div>
+      ${appt.customerPhone ? `<div class="sub">${appt.customerPhone}</div>` : ""}
+      ${appt.customerEmail ? `<div class="sub">${appt.customerEmail}</div>` : ""}
+    </div>` : ""}
+    ${appt.staffName ? `<div class="block"><div class="label">Staff</div><div class="value">${appt.staffName}</div></div>` : ""}
+    ${appt.notes ? `<div class="block"><div class="label">Notes</div><div class="value" style="font-weight:normal">${appt.notes}</div></div>` : ""}
+    <script>window.onload=()=>{window.print();}</script>
+    </body></html>
+  `);
+  win.document.close();
+}
+
 /* ─── Detail dialog ──────────────────────────────────────────────────────── */
 
 interface DetailDialogProps {
@@ -171,12 +220,13 @@ interface DetailDialogProps {
   deleteIsPending: boolean;
 }
 
-function apptRefCode(id: number): string {
-  return `KA${String(id).padStart(5, "0")}`;
-}
-
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
+  const composeEmailMutation = useComposeEmail();
+  const mapUrl = useMapUrl();
   if (!appt) return null;
   const { label, className } = getStatus(appt.status);
 
@@ -236,17 +286,18 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                       </a>
                     )}
                     {appt.customerEmail && (
-                      <a
-                        href={`mailto:${appt.customerEmail}`}
-                        className="flex items-center gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
+                      <button
+                        type="button"
+                        onClick={() => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); }}
+                        className="flex items-center gap-1.5 mt-0.5 text-xs text-primary hover:underline transition-colors"
                       >
                         <Mail className="w-3 h-3 shrink-0" />
                         {appt.customerEmail}
-                      </a>
+                      </button>
                     )}
                     {appt.customerAddress && (
                       <a
-                        href={buildMapUrl(appt.customerAddress)}
+                        href={mapUrl(appt.customerAddress)}
                         target="_blank"
                         rel="noopener noreferrer"
                         className="flex items-start gap-1.5 mt-0.5 text-xs text-muted-foreground hover:text-foreground transition-colors"
@@ -267,6 +318,17 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                   </div>
                 </div>
               )}
+            </div>
+          )}
+
+          {/* Linked repair job */}
+          {appt.serviceJobNumber && (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-3">
+              <Wrench className="w-4 h-4 text-muted-foreground shrink-0" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground">Linked repair job</p>
+                <p className="font-medium font-mono">{appt.serviceJobNumber}</p>
+              </div>
             </div>
           )}
 
@@ -298,11 +360,28 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           >
             <Trash2 className="w-3.5 h-3.5" /> Delete
           </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
-            <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
-              <Pencil className="w-3.5 h-3.5" /> Edit
+          <div className="flex flex-wrap gap-2 justify-end">
+            {appt.customerPhone && (
+              <a href={`sms:${appt.customerPhone}`}>
+                <Button variant="outline" size="sm" className="gap-1.5">
+                  <MessageSquare className="w-3.5 h-3.5" /> SMS
+                </Button>
+              </a>
+            )}
+            {appt.customerEmail && (
+              <Button variant="outline" size="sm" className="gap-1.5"
+                onClick={() => { setComposeSubject(`Appointment — ${formatDateShort(appt.scheduledAt)}`); setComposeBody(""); setComposeOpen(true); }}>
+                <Mail className="w-3.5 h-3.5" /> Email
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt)}>
+              <Printer className="w-3.5 h-3.5" /> Print
             </Button>
+            {appt.status === "scheduled" && (
+              <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
+                <Pencil className="w-3.5 h-3.5" /> Edit
+              </Button>
+            )}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -325,6 +404,49 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
+    <Dialog open={composeOpen} onOpenChange={(open) => { if (!open) setComposeOpen(false); }}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <Mail className="h-4 w-4 text-primary" />
+            Email Customer
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-3 py-1">
+          <p className="text-sm text-muted-foreground">Sending to <strong>{appt.customerEmail}</strong></p>
+          <Input
+            placeholder="Subject"
+            value={composeSubject}
+            onChange={(e) => setComposeSubject(e.target.value)}
+          />
+          <Textarea
+            placeholder="Message"
+            rows={5}
+            value={composeBody}
+            onChange={(e) => setComposeBody(e.target.value)}
+          />
+        </div>
+        <DialogFooter className="gap-2">
+          <Button variant="outline" size="sm" onClick={() => setComposeOpen(false)}>Cancel</Button>
+          <Button
+            size="sm"
+            disabled={composeEmailMutation.isPending || !composeSubject.trim()}
+            onClick={() => {
+              composeEmailMutation.mutate(
+                { data: { to: appt.customerEmail!, subject: composeSubject, body: composeBody } },
+                {
+                  onSuccess: () => { toast.success(`Email sent to ${appt.customerEmail}`); setComposeOpen(false); },
+                  onError: () => toast.error("Failed to send email — check your email settings in Management"),
+                },
+              );
+            }}
+          >
+            {composeEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}
+            Send
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
@@ -334,16 +456,19 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
 type FormState = {
   customerId: string;
   staffId: string;
+  serviceJobId: string;
   startTime: string;
   endTime: string;
   status: AppointmentInputStatus;
   notes: string;
   selectedFormIds: number[];
+  sendSms: boolean;
+  sendEmail: boolean;
 };
 
 function makeDefaultForm(): FormState {
   const start = defaultStartTime();
-  return { customerId: "", staffId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [] };
+  return { customerId: "", staffId: "", serviceJobId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
 }
 
 interface BookingDialogProps {
@@ -355,20 +480,31 @@ interface BookingDialogProps {
 
 function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
+  const [bookedAppt, setBookedAppt]   = useState<Appointment | null>(null);
+  const [notificationsSent, setNotificationsSent] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false });
+  const [composeOpen, setComposeOpen] = useState(false);
+  const [composeSubject, setComposeSubject] = useState("");
+  const [composeBody, setComposeBody] = useState("");
   const queryClient = useQueryClient();
   const createMutation = useCreateAppointment();
   const updateMutation = useUpdateAppointment();
+  const composeEmailMutation = useComposeEmail();
+  const { data: serviceJobs } = useListServiceJobs();
 
   useEffect(() => {
     if (open) {
+      setBookedAppt(null);
       setForm(editing ? {
         customerId: editing.customerId ? String(editing.customerId) : "",
         staffId:    editing.staffId    ? String(editing.staffId)    : "",
+        serviceJobId: editing.serviceJobId ? String(editing.serviceJobId) : "",
         startTime:  toLocalDatetimeValue(new Date(editing.scheduledAt)),
         endTime:    toLocalDatetimeValue(new Date(editing.endAt!)),
         status:     editing.status as AppointmentInputStatus,
         notes:      editing.notes ?? "",
         selectedFormIds: [],
+        sendSms: false,
+        sendEmail: false,
       } : makeDefaultForm());
     }
   }, [open, editing]);
@@ -384,10 +520,13 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
       staffId:    form.staffId    ? Number(form.staffId)    : null,
+      serviceJobId: form.serviceJobId ? Number(form.serviceJobId) : null,
       scheduledAt: new Date(form.startTime).toISOString(),
       endAt:       new Date(form.endTime).toISOString(),
       status: form.status,
       notes:  form.notes || null,
+      sendSms: form.sendSms,
+      sendEmail: form.sendEmail,
     };
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
     if (editing) {
@@ -397,13 +536,109 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       });
     } else {
       createMutation.mutate({ data: payload }, {
-        onSuccess: () => { toast.success("Appointment booked"); invalidate(); onClose(); },
+        onSuccess: (data) => {
+          invalidate();
+          setNotificationsSent({ sms: form.sendSms, email: form.sendEmail });
+          setBookedAppt(data as unknown as Appointment);
+        },
         onError:   () => toast.error("Failed to book appointment"),
       });
     }
   };
 
   const isPending = createMutation.isPending || updateMutation.isPending;
+
+  if (bookedAppt) {
+    const anySent = notificationsSent.sms || notificationsSent.email;
+    const canSendSms   = !!bookedAppt.customerPhone && !notificationsSent.sms;
+    const canSendEmail = !!bookedAppt.customerEmail && !notificationsSent.email;
+
+    return (
+      <>
+      <Dialog open={open} onOpenChange={() => { setBookedAppt(null); onClose(); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="w-5 h-5 text-green-600" />
+              Appointment Booked
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-1.5 text-sm">
+              <p className="font-semibold">{bookedAppt.customerName ?? "Customer"}</p>
+              <p className="text-muted-foreground">{formatDateTime(bookedAppt.scheduledAt)}</p>
+              {bookedAppt.staffName && <p className="text-muted-foreground">with {bookedAppt.staffName}</p>}
+            </div>
+
+            {/* Sent confirmations */}
+            {anySent && (
+              <div className="rounded-xl border bg-green-50 dark:bg-green-950/30 p-3 space-y-1.5">
+                <p className="text-xs font-medium text-green-700 dark:text-green-400">Confirmations sent</p>
+                {notificationsSent.sms && (
+                  <p className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> SMS sent to {bookedAppt.customerPhone}
+                  </p>
+                )}
+                {notificationsSent.email && (
+                  <p className="flex items-center gap-1.5 text-xs text-green-700 dark:text-green-400">
+                    <CheckCircle2 className="w-3.5 h-3.5" /> Email + calendar invite sent to {bookedAppt.customerEmail}
+                  </p>
+                )}
+              </div>
+            )}
+
+            {/* Manual options — always show print; show SMS/email if not already sent */}
+            <p className="text-xs text-muted-foreground">{anySent ? "Also notify via:" : "Notify the customer:"}</p>
+            <div className="flex gap-2 flex-wrap">
+              {canSendSms && (
+                <a href={`sms:${bookedAppt.customerPhone}`}>
+                  <Button variant="outline" size="sm" className="gap-1.5">
+                    <MessageSquare className="w-3.5 h-3.5" /> SMS
+                  </Button>
+                </a>
+              )}
+              {canSendEmail && (
+                <Button variant="outline" size="sm" className="gap-1.5"
+                  onClick={() => { setComposeSubject(`Appointment — ${formatDateShort(bookedAppt.scheduledAt)}`); setComposeBody(""); setComposeOpen(true); }}>
+                  <Mail className="w-3.5 h-3.5" /> Email
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(bookedAppt)}>
+                <Printer className="w-3.5 h-3.5" /> Print
+              </Button>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button onClick={() => { setBookedAppt(null); onClose(); }}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      <Dialog open={composeOpen} onOpenChange={(v) => { if (!v) setComposeOpen(false); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Mail className="h-4 w-4 text-primary" />Email Customer</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3 py-1">
+            <p className="text-sm text-muted-foreground">Sending to <strong>{bookedAppt.customerEmail}</strong></p>
+            <Input placeholder="Subject" value={composeSubject} onChange={(e) => setComposeSubject(e.target.value)} />
+            <Textarea placeholder="Message" rows={5} value={composeBody} onChange={(e) => setComposeBody(e.target.value)} />
+          </div>
+          <DialogFooter className="gap-2">
+            <Button variant="outline" size="sm" onClick={() => setComposeOpen(false)}>Cancel</Button>
+            <Button size="sm" disabled={composeEmailMutation.isPending || !composeSubject.trim()}
+              onClick={() => composeEmailMutation.mutate(
+                { data: { to: bookedAppt.customerEmail!, subject: composeSubject, body: composeBody } },
+                { onSuccess: () => { toast.success(`Email sent to ${bookedAppt.customerEmail}`); setComposeOpen(false); },
+                  onError: () => toast.error("Failed to send email — check your email settings in Management") },
+              )}>
+              {composeEmailMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <Send className="h-4 w-4 mr-1.5" />}Send
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+      </>
+    );
+  }
 
   return (
     <Dialog open={open} onOpenChange={onClose}>
@@ -431,6 +666,26 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             {!form.customerId && (
               <p className="text-xs text-muted-foreground">A customer is required to book an appointment.</p>
             )}
+          </div>
+
+          {/* Linked repair job (drop-off / collection booking) */}
+          <div className="space-y-1.5">
+            <Label className="flex items-center gap-1.5"><Wrench className="w-3.5 h-3.5 text-muted-foreground" /> Linked repair job <span className="text-muted-foreground text-xs font-normal">(optional)</span></Label>
+            <Select value={form.serviceJobId || "__none__"} onValueChange={(v) => setField("serviceJobId", v === "__none__" ? "" : v)}>
+              <SelectTrigger className="text-sm"><SelectValue placeholder="No linked job" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No linked job</SelectItem>
+                {(serviceJobs ?? [])
+                  .filter((j) => j.status !== "completed" && j.status !== "cancelled")
+                  .filter((j) => !form.customerId || String(j.customerId ?? "") === form.customerId)
+                  .slice(0, 50)
+                  .map((j) => (
+                    <SelectItem key={j.id} value={String(j.id)}>
+                      {j.jobNumber} — {j.deviceDescription || j.deviceType || j.customerName || "Job"}
+                    </SelectItem>
+                  ))}
+              </SelectContent>
+            </Select>
           </div>
 
           {/* Time */}
@@ -491,6 +746,44 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             <Textarea placeholder="Any additional details..." value={form.notes}
               onChange={(e) => setField("notes", e.target.value)} rows={3} className="text-sm resize-none" />
           </div>
+
+          {/* Notifications — only shown for new bookings */}
+          {!editing && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+                <Bell className="w-3.5 h-3.5" /> Send Confirmation To Customer
+              </p>
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                <label className="flex items-center gap-3 px-4 py-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.sendSms}
+                    onChange={(e) => setForm((f) => ({ ...f, sendSms: e.target.checked }))}
+                    className="rounded border-muted-foreground/40 accent-primary"
+                  />
+                  <div className="flex items-center gap-2 text-sm">
+                    <MessageSquare className="w-4 h-4 text-muted-foreground shrink-0" />
+                    <span>Send SMS confirmation</span>
+                  </div>
+                </label>
+                <label className="flex items-start gap-3 px-4 py-3 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={form.sendEmail}
+                    onChange={(e) => setForm((f) => ({ ...f, sendEmail: e.target.checked }))}
+                    className="rounded border-muted-foreground/40 accent-primary mt-0.5"
+                  />
+                  <div className="flex flex-col gap-0.5 text-sm">
+                    <span className="flex items-center gap-2">
+                      <Mail className="w-4 h-4 text-muted-foreground shrink-0" />
+                      Send email confirmation
+                    </span>
+                    <span className="text-xs text-muted-foreground ml-6">Includes a calendar invitation (.ics) with automatic reminders</span>
+                  </div>
+                </label>
+              </div>
+            </div>
+          )}
         </div>
         </div>
 
@@ -684,6 +977,7 @@ function AppointmentsCalendar({
 
 export default function AppointmentsPage() {
   const [collapsed, setCollapsed]     = useState(false);
+  const [tab, setTab]                 = useState<"active" | "history">("active");
   const [statusFilter, setStatusFilter] = useState("all");
   const [activeSortKey, setSortKey]   = useState<SortKey>("scheduledAt");
   const [sortDir, setSortDir]         = useState<SortDir>("asc");
@@ -703,8 +997,25 @@ export default function AppointmentsPage() {
 
   const upcoming = appts.filter((a) => a.status === "scheduled").length;
 
+  /* History holds finished appointments — marking one complete moves it there. */
+  const isFinished = (a: Appointment) =>
+    a.status === "completed" || a.status === "cancelled" || a.status === "no-show";
+  const historyAppts = appts.filter(isFinished);
+  const activeAppts  = appts.filter((a) => !isFinished(a));
+  const tabAppts     = tab === "history" ? historyAppts : activeAppts;
+
+  /* Switching tabs resets the filter/selection and flips to the natural sort
+     (next upcoming first vs most recent history first). */
+  const switchTab = (t: "active" | "history") => {
+    setTab(t);
+    setStatusFilter("all");
+    setSelected(new Set());
+    setSortKey("scheduledAt");
+    setSortDir(t === "history" ? "desc" : "asc");
+  };
+
   /* Filter */
-  const filtered = appts.filter((a) => statusFilter === "all" || a.status === statusFilter);
+  const filtered = tabAppts.filter((a) => statusFilter === "all" || a.status === statusFilter);
 
   /* Sort — completed/cancelled pinned to bottom */
   const sorted = sortAppointments(filtered, activeSortKey, sortDir);
@@ -755,7 +1066,7 @@ export default function AppointmentsPage() {
       },
       {
         onSuccess: () => {
-          toast.success("Appointment marked as completed");
+          toast.success("Appointment completed — moved to Appointment History");
           queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
         },
         onError: () => toast.error("Failed to update appointment"),
@@ -778,12 +1089,31 @@ export default function AppointmentsPage() {
           <h1 className="text-2xl font-bold">Appointments</h1>
           <p className="text-sm text-muted-foreground">Schedule and manage customer appointments and service bookings.</p>
         </div>
+
+        {/* Active / History tabs */}
+        <Tabs value={tab} onValueChange={(v) => switchTab(v as "active" | "history")}>
+          <TabsList>
+            <TabsTrigger value="active" className="gap-1.5">
+              <CalendarClock className="w-3.5 h-3.5" />
+              Appointments
+              <span className="text-xs text-muted-foreground tabular-nums">({activeAppts.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="history" className="gap-1.5">
+              <History className="w-3.5 h-3.5" />
+              Appointment History
+              <span className="text-xs text-muted-foreground tabular-nums">({historyAppts.length})</span>
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+
         {/* Panel header */}
         <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
           <h2 className="text-base font-semibold">
-            All Appointments{" "}
+            {tab === "history" ? "Appointment History" : "All Appointments"}{" "}
             <span className="font-normal text-muted-foreground text-sm">
-              ({upcoming} upcoming)
+              {tab === "history"
+                ? `(${historyAppts.length} past)`
+                : `(${upcoming} upcoming)`}
             </span>
           </h2>
           <div className="flex items-center gap-3">
@@ -812,14 +1142,19 @@ export default function AppointmentsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    <SelectItem value="scheduled">Scheduled</SelectItem>
-                    <SelectItem value="completed">Completed</SelectItem>
-                    <SelectItem value="cancelled">Cancelled</SelectItem>
-                    <SelectItem value="no-show">No Show</SelectItem>
+                    {tab === "active" ? (
+                      <SelectItem value="scheduled">Scheduled</SelectItem>
+                    ) : (
+                      <>
+                        <SelectItem value="completed">Completed</SelectItem>
+                        <SelectItem value="cancelled">Cancelled</SelectItem>
+                        <SelectItem value="no-show">No Show</SelectItem>
+                      </>
+                    )}
                   </SelectContent>
                 </Select>
               </div>
-              <span className="text-sm text-muted-foreground">{sorted.length} of {appts.length}</span>
+              <span className="text-sm text-muted-foreground">{sorted.length} of {tabAppts.length}</span>
             </div>
 
             {/* Table */}
@@ -828,7 +1163,13 @@ export default function AppointmentsPage() {
                 <div className="py-16 text-center text-sm text-muted-foreground">Loading appointments...</div>
               ) : sorted.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
-                  {appts.length === 0 ? 'No appointments yet. Click "New Appointment" to book one.' : "No appointments match the current filter."}
+                  {tab === "history"
+                    ? (historyAppts.length === 0
+                        ? "No past appointments yet. When an appointment is marked complete it moves here."
+                        : "No past appointments match the current filter.")
+                    : (activeAppts.length === 0
+                        ? 'No appointments yet. Click "New Appointment" to book one.'
+                        : "No appointments match the current filter.")}
                 </div>
               ) : (
                 <div className="overflow-x-auto">
@@ -864,7 +1205,9 @@ export default function AppointmentsPage() {
                             className={cn(
                               "hover:bg-muted/30 transition-colors cursor-pointer",
                               isChecked && "bg-primary/5",
-                              isDone    && "opacity-60",
+                              /* In the active tab finished rows are dimmed; in the
+                                 History tab everything is past, so keep full contrast. */
+                              isDone && tab === "active" && "opacity-60",
                             )}
                             onClick={() => setViewing(appt)}
                           >
@@ -919,12 +1262,14 @@ export default function AppointmentsPage() {
                                 >
                                   <Eye className="w-3 h-3" /> View
                                 </button>
-                                <button
-                                  onClick={() => openEdit(appt)}
-                                  className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
-                                >
-                                  <Pencil className="w-3 h-3" /> Edit
-                                </button>
+                                {!isFinished(appt) && (
+                                  <button
+                                    onClick={() => openEdit(appt)}
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                  >
+                                    <Pencil className="w-3 h-3" /> Edit
+                                  </button>
+                                )}
                                 {appt.status === "scheduled" && (
                                   <button
                                     onClick={() => handleComplete(appt)}

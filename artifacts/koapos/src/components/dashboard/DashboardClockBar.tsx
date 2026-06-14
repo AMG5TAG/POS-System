@@ -1,7 +1,6 @@
 import { useState, useEffect } from "react";
 import { useAuth } from "@/lib/use-auth";
-import { Settings2, LogOut } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { Settings2 } from "lucide-react";
 
 const OPEN_HOUR  = 9;
 const OPEN_MIN   = 0;
@@ -48,10 +47,8 @@ function isOpenInTz(d: Date, tz: string) {
 
 export function DashboardClockBar({
   onCustomize,
-  onCloseDay,
 }: {
   onCustomize?: () => void;
-  onCloseDay?: () => void;
 }) {
   const { user } = useAuth();
   const [now, setNow] = useState(() => new Date());
@@ -67,7 +64,6 @@ export function DashboardClockBar({
   const open = isOpenInTz(now, tz);
 
   const displayName = user?.ownerName || user?.businessName || "there";
-  const canCloseDay = user?.staffRole !== "cashier";
 
   return (
     <div className="rounded-2xl border bg-card px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
@@ -103,18 +99,6 @@ export function DashboardClockBar({
       </div>
 
       <div className="flex items-center gap-2 self-start sm:self-auto">
-        {canCloseDay && onCloseDay && (
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCloseDay}
-            className="gap-1.5 text-xs h-8"
-          >
-            <LogOut className="w-3.5 h-3.5" />
-            Close Day
-          </Button>
-        )}
-
         <button
           onClick={onCustomize}
           className="shrink-0 w-8 h-8 flex items-center justify-center rounded-lg text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"

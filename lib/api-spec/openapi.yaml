@@ -1501,6 +1501,33 @@ paths:
               schema:
                 $ref: "#/components/schemas/Transaction"
 
+  /transactions/{id}/void:
+    post:
+      operationId: voidTransaction
+      tags: [transactions]
+      summary: Void a transaction (cancel a mistaken sale)
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                reason: { type: ["string", "null"] }
+      responses:
+        "200":
+          description: Voided
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+
   # ── Staff ─────────────────────────────────────────────────────────────────
   /staff:
     get:
@@ -1533,6 +1560,34 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Staff"
+
+  /staff/verify-pin:
+    post:
+      operationId: verifyStaffPin
+      tags: [staff]
+      summary: Verify a staff PIN server-side (rate-limited; raw PINs never leave the server)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerifyStaffPinBody"
+      responses:
+        "200":
+          description: Verification result
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/VerifyStaffPinResponse"
+
+  /staff/end-day-session:
+    post:
+      operationId: endStaffDaySession
+      tags: [staff]
+      summary: Clear the server session's day-staff (called on day sign-out / close till)
+      responses:
+        "200":
+          description: Day-staff cleared from the session
 
   /staff/sales-report:
     get:
@@ -1840,6 +1895,12 @@ paths:
           schema:
             type: string
             enum: [today, yesterday, week, month, year]
+        - name: monthMode
+          in: query
+          description: How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+          schema:
+            type: string
+            enum: [rolling30, calendar_mtd]
       responses:
         "200":
           description: Dashboard summary
@@ -1859,6 +1920,12 @@ paths:
           schema:
             type: string
             enum: [day, week, month, year]
+        - name: monthMode
+          in: query
+          description: How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+          schema:
+            type: string
+            enum: [rolling30, calendar_mtd]
       responses:
         "200":
           description: Activity summary
@@ -2101,6 +2168,952 @@ paths:
           application/json:
             schema:
               $ref: "#/components/schemas/SendServiceJobEmailRequest"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+                  error: { type: string, nullable: true }
+
+  /service-jobs/{id}/rework:
+    post:
+      operationId: createServiceJobRework
+      tags: [service-jobs]
+      summary: Open a no-charge rework job linked to the original
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: Rework job created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJob"
+
+  /service-jobs/{id}/deposit:
+    post:
+      operationId: recordServiceJobDeposit
+      tags: [service-jobs]
+      summary: Record a deposit collected against a job (soft/advisory tracking)
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobDepositInput"
+      responses:
+        "200":
+          description: Updated deposit totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobDepositResult"
+        "400":
+          description: Invalid amount
+        "404":
+          description: Service job not found
+
+  /service-jobs/{jobId}/lines:
+    get:
+      operationId: listServiceJobLines
+      tags: [service-jobs]
+      summary: List parts/labour line items and derived totals for a service job
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Line items and totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobLinesResult"
+    post:
+      operationId: addServiceJobLine
+      tags: [service-jobs]
+      summary: Add a part/labour/misc line to a service job
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobLineInput"
+      responses:
+        "200":
+          description: Updated line items and totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobLinesResult"
+
+  /service-jobs/{jobId}/lines/{lineId}:
+    put:
+      operationId: updateServiceJobLine
+      tags: [service-jobs]
+      summary: Update a service job line item
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobLineInput"
+      responses:
+        "200":
+          description: Updated line items and totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobLinesResult"
+    delete:
+      operationId: deleteServiceJobLine
+      tags: [service-jobs]
+      summary: Delete a service job line item
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: lineId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated line items and totals
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobLinesResult"
+
+  /customers/{customerId}/store-credit:
+    get:
+      operationId: getCustomerStoreCredit
+      tags: [customers]
+      summary: Get a customer's store-credit balance and ledger
+      security: [{ session: [] }]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Balance and ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreCreditResult"
+    post:
+      operationId: addCustomerStoreCredit
+      tags: [customers]
+      summary: Record a store-credit movement (issue/redeem/adjust/refund/expire)
+      security: [{ session: [] }]
+      parameters:
+        - name: customerId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StoreCreditInput"
+      responses:
+        "200":
+          description: Updated balance and ledger entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StoreCreditResult"
+
+  /device-history:
+    get:
+      operationId: getDeviceHistory
+      tags: [service-jobs]
+      summary: All repairs and sales tied to a serial / IMEI
+      security: [{ session: [] }]
+      parameters:
+        - name: serial
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Device history
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/DeviceHistoryResult"
+
+  /service-jobs/{jobId}/checklist:
+    get:
+      operationId: listServiceJobChecklist
+      tags: [service-jobs]
+      summary: List diagnostic/QC checklist items for a service job
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Checklist items
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobChecklistResult"
+    post:
+      operationId: addServiceJobChecklistItems
+      tags: [service-jobs]
+      summary: Add one item or apply a template (items[]) to a service job checklist
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobChecklistInput"
+      responses:
+        "200":
+          description: Updated checklist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobChecklistResult"
+
+  /service-jobs/{jobId}/checklist/{itemId}:
+    put:
+      operationId: updateServiceJobChecklistItem
+      tags: [service-jobs]
+      summary: Update a checklist item result/note
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobChecklistItemInput"
+      responses:
+        "200":
+          description: Updated checklist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobChecklistResult"
+    delete:
+      operationId: deleteServiceJobChecklistItem
+      tags: [service-jobs]
+      summary: Delete a checklist item
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: itemId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated checklist
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobChecklistResult"
+
+  /loaner-devices:
+    get:
+      operationId: listLoanerDevices
+      tags: [service-jobs]
+      summary: List loaner / courtesy devices
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Loaner devices
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanerDeviceList"
+    post:
+      operationId: createLoanerDevice
+      tags: [service-jobs]
+      summary: Register a loaner device
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanerDeviceInput"
+      responses:
+        "201":
+          description: Updated loaner list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanerDeviceList"
+
+  /loaner-devices/{id}:
+    put:
+      operationId: updateLoanerDevice
+      tags: [service-jobs]
+      summary: Edit, issue or return a loaner device
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LoanerDeviceInput"
+      responses:
+        "200":
+          description: Updated loaner list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanerDeviceList"
+    delete:
+      operationId: deleteLoanerDevice
+      tags: [service-jobs]
+      summary: Delete a loaner device
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated loaner list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/LoanerDeviceList"
+
+  /service-jobs/{jobId}/time:
+    get:
+      operationId: listServiceJobTime
+      tags: [service-jobs]
+      summary: List technician time entries + totals for a job
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Time entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobTimeResult"
+    post:
+      operationId: serviceJobTimeAction
+      tags: [service-jobs]
+      summary: Start / stop a timer or add a manual time entry
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceJobTimeInput"
+      responses:
+        "200":
+          description: Updated time entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobTimeResult"
+
+  /service-jobs/{jobId}/time/{entryId}:
+    delete:
+      operationId: deleteServiceJobTime
+      tags: [service-jobs]
+      summary: Delete a time entry
+      security: [{ session: [] }]
+      parameters:
+        - name: jobId
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: entryId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated time entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJobTimeResult"
+
+  /parts-lookup:
+    get:
+      operationId: partsLookup
+      tags: [products]
+      summary: Find parts that fit a device model
+      security: [{ session: [] }]
+      parameters:
+        - name: model
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: Matching parts
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartsLookupResult"
+
+  /products/{id}/compatibility:
+    get:
+      operationId: getProductCompatibility
+      tags: [products]
+      summary: List device models a part fits
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Compatibility models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartCompatibilityResult"
+    post:
+      operationId: addProductCompatibility
+      tags: [products]
+      summary: Add device model(s) a part fits
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PartCompatibilityInput"
+      responses:
+        "200":
+          description: Updated compatibility models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartCompatibilityResult"
+
+  /products/{id}/compatibility/{rowId}:
+    delete:
+      operationId: deleteProductCompatibility
+      tags: [products]
+      summary: Remove a compatibility model from a part
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+        - name: rowId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated compatibility models
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PartCompatibilityResult"
+
+  /trade-ins:
+    get:
+      operationId: listTradeIns
+      tags: [products]
+      summary: List trade-ins / buy-backs
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Trade-ins
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeInList"
+    post:
+      operationId: createTradeIn
+      tags: [products]
+      summary: Record a trade-in quote
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TradeInInput"
+      responses:
+        "201":
+          description: Updated trade-in list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeInList"
+
+  /trade-ins/{id}/accept:
+    post:
+      operationId: acceptTradeIn
+      tags: [products]
+      summary: Accept a trade-in and pay the customer (cash or store credit)
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [payoutMethod]
+              properties:
+                payoutMethod: { type: string, enum: [cash, store_credit] }
+      responses:
+        "200":
+          description: Updated trade-in list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeInList"
+
+  /trade-ins/{id}/list-as-stock:
+    post:
+      operationId: listTradeInAsStock
+      tags: [products]
+      summary: Create a refurbished product from a trade-in
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [price]
+              properties:
+                price: { type: number }
+                sku: { type: ["string", "null"] }
+      responses:
+        "200":
+          description: Updated trade-in list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeInListAsStockResult"
+
+  /trade-ins/{id}:
+    delete:
+      operationId: deleteTradeIn
+      tags: [products]
+      summary: Delete a trade-in
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated trade-in list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TradeInList"
+
+  /service-plans:
+    get:
+      operationId: listServicePlans
+      tags: [customers]
+      summary: List managed-service plans / retainers
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Service plans
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlanList"
+    post:
+      operationId: createServicePlan
+      tags: [customers]
+      summary: Create a managed-service plan
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePlanInput"
+      responses:
+        "201":
+          description: Updated plan list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlanList"
+
+  /service-plans/{id}:
+    put:
+      operationId: updateServicePlan
+      tags: [customers]
+      summary: Update a service plan (incl. pause / cancel)
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServicePlanInput"
+      responses:
+        "200":
+          description: Updated plan list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlanList"
+    delete:
+      operationId: deleteServicePlan
+      tags: [customers]
+      summary: Delete a service plan
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated plan list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlanList"
+
+  /service-plans/{id}/bill:
+    post:
+      operationId: billServicePlan
+      tags: [customers]
+      summary: Generate an invoice for the plan fee and advance the billing cycle
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Invoice created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServicePlanBillResult"
+
+  /scheduled-reports:
+    get:
+      operationId: listScheduledReports
+      tags: [reports]
+      summary: List scheduled (recurring emailed) reports
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Scheduled reports
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledReportList" }
+    post:
+      operationId: createScheduledReport
+      tags: [reports]
+      summary: Create a scheduled report
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduledReportInput" }
+      responses:
+        "201":
+          description: Updated list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledReportList" }
+
+  /scheduled-reports/{id}:
+    put:
+      operationId: updateScheduledReport
+      tags: [reports]
+      summary: Update / toggle a scheduled report
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/ScheduledReportInput" }
+      responses:
+        "200":
+          description: Updated list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledReportList" }
+    delete:
+      operationId: deleteScheduledReport
+      tags: [reports]
+      summary: Delete a scheduled report
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ScheduledReportList" }
+
+  /locations:
+    get:
+      operationId: listLocations
+      tags: [settings]
+      summary: List store/branch locations and the active one
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: Locations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LocationList" }
+    post:
+      operationId: createLocation
+      tags: [settings]
+      summary: Add a store/branch location
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LocationInput" }
+      responses:
+        "201":
+          description: Updated locations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LocationList" }
+
+  /locations/active:
+    post:
+      operationId: setActiveLocation
+      tags: [settings]
+      summary: Set the caller's active store/branch for this session
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [locationId]
+              properties:
+                locationId: { type: integer }
+      responses:
+        "200":
+          description: Active location set
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [activeLocationId]
+                properties:
+                  activeLocationId: { type: integer }
+
+  /locations/{id}:
+    put:
+      operationId: updateLocation
+      tags: [settings]
+      summary: Update a location (or set it as default)
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/LocationInput" }
+      responses:
+        "200":
+          description: Updated locations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LocationList" }
+    delete:
+      operationId: deleteLocation
+      tags: [settings]
+      summary: Delete a location (not the default or the last one)
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Updated locations
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/LocationList" }
+
+  /products/{id}/stock-by-location:
+    get:
+      operationId: getStockByLocation
+      tags: [products]
+      summary: Per-location stock breakdown for a product
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Stock breakdown
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockByLocationResult" }
+
+  /stock-transfers:
+    post:
+      operationId: createStockTransfer
+      tags: [products]
+      summary: Transfer stock between two locations
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [productId, fromLocationId, toLocationId, quantity]
+              properties:
+                productId: { type: integer }
+                fromLocationId: { type: integer }
+                toLocationId: { type: integer }
+                quantity: { type: integer }
+      responses:
+        "200":
+          description: Updated breakdown
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StockByLocationResult" }
+
+  /email/compose:
+    post:
+      operationId: composeEmail
+      tags: [email-settings]
+      summary: Send a composed email to any address using the merchant's configured email provider
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ComposeEmailRequest"
       responses:
         "200":
           description: Email sent
@@ -2833,6 +3846,91 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/TaxSettings"
+
+  # ── SMS Settings ─────────────────────────────────────────────────────────────
+  /settings/sms:
+    get:
+      operationId: getSmsSettings
+      summary: Get SMS / Twilio settings
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsSettings"
+    put:
+      operationId: updateSmsSettings
+      summary: Update SMS notification preferences
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsSettingsInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsSettings"
+
+  /settings/sms/connect:
+    post:
+      operationId: connectTwilio
+      summary: Save Twilio credentials to vault
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TwilioConnectInput"
+      responses:
+        "200":
+          description: Connected
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsSettings"
+
+  /settings/sms/disconnect:
+    delete:
+      operationId: disconnectTwilio
+      summary: Remove Twilio credentials from vault
+      security: [{ session: [] }]
+      responses:
+        "204":
+          description: Disconnected
+
+  /settings/sms/test:
+    post:
+      operationId: testSms
+      summary: Send a test SMS to verify Twilio configuration
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [to]
+              properties:
+                to: { type: string }
+      responses:
+        "200":
+          description: Result
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success: { type: boolean }
+                  provider: { type: string }
+                  error: { type: string }
 
   # ── Email Settings ────────────────────────────────────────────────────────────
   /settings/email:
@@ -4052,6 +5150,33 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/LaybySettings" }
+
+  /sales-settings:
+    get:
+      operationId: getSalesSettings
+      summary: Get sales settings (Sales / Invoices / Refunds / Quotes defaults)
+      tags: [Settings]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesSettings" }
+    put:
+      operationId: updateSalesSettings
+      summary: Update sales settings (only provided fields are applied)
+      tags: [Settings]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/SalesSettingsUpdate" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/SalesSettings" }
 
   /kpi-settings:
     get:
@@ -5849,6 +6974,26 @@ paths:
         "401":
           description: Unauthorized
 
+  /reports/run:
+    post:
+      operationId: runReport
+      tags: [reports]
+      summary: Run a custom report grouped by date/week/month/payment/staff/product
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/RunReportInput" }
+      responses:
+        "200":
+          description: Report result
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/ReportRunResult" }
+        "400":
+          description: Validation error
+
   /reports/inventory-valuation:
     get:
       operationId: getInventoryValuation
@@ -6020,6 +7165,47 @@ paths:
     delete:
       operationId: deleteStaffNote
       tags: [Staff]
+      security: [{ sessionAuth: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard-notes:
+    get:
+      operationId: listDashboardNotes
+      tags: [Dashboard]
+      security: [{ sessionAuth: [] }]
+      responses:
+        "200":
+          description: Dashboard notes list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardNoteList" }
+    post:
+      operationId: createDashboardNote
+      tags: [Dashboard]
+      security: [{ sessionAuth: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/DashboardNoteInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/DashboardNoteItem" }
+
+  /dashboard-notes/{id}:
+    delete:
+      operationId: deleteDashboardNote
+      tags: [Dashboard]
       security: [{ sessionAuth: [] }]
       parameters:
         - in: path
@@ -6791,6 +7977,253 @@ paths:
         "404":
           description: Invoice not found
 
+  # ── Quotes ────────────────────────────────────────────────────────────────
+  /quotes:
+    get:
+      operationId: listQuotes
+      tags: [quotes]
+      summary: List quotes for the current merchant
+      parameters:
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [draft, sent, accepted, expired, converted]
+        - name: customerId
+          in: query
+          schema:
+            type: integer
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 50
+        - name: offset
+          in: query
+          schema:
+            type: integer
+            default: 0
+      responses:
+        "200":
+          description: Quote list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/QuoteList"
+    post:
+      operationId: createQuote
+      tags: [quotes]
+      summary: Create a new quote
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+
+  /quotes/{id}:
+    get:
+      operationId: getQuote
+      tags: [quotes]
+      summary: Get a single quote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Not found
+    put:
+      operationId: updateQuote
+      tags: [quotes]
+      summary: Update a quote (status, items, notes, expiry, discount). Only provided fields are applied.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteUpdate"
+      responses:
+        "200":
+          description: Updated quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteQuote
+      tags: [quotes]
+      summary: Delete a quote
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
+  /quotes/{id}/pdf:
+    get:
+      operationId: getQuotePdf
+      tags: [quotes]
+      summary: Download a branded A4 PDF for a quote
+      description: >
+        Generates a server-side PDF for the specified quote, incorporating the
+        merchant's brand colour and logo from their Business Profile. Returns
+        the PDF as an attachment.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: PDF document
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        "401":
+          description: Not authenticated
+        "404":
+          description: Quote not found
+
+  /quotes/{id}/send-email:
+    post:
+      operationId: sendQuoteEmail
+      tags: [quotes]
+      summary: Send the quote by email to the customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendQuoteEmailInput"
+      responses:
+        "200":
+          description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "404":
+          description: Quote not found
+
+  /quotes/{id}/convert:
+    post:
+      operationId: convertQuote
+      tags: [quotes]
+      summary: Mark a quote as converted to a sale
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ConvertQuoteInput"
+      responses:
+        "200":
+          description: Updated quote
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Quote not found
+
+  /quotes/{id}/approve:
+    post:
+      operationId: approveQuote
+      tags: [quotes]
+      summary: Record an in-store estimate approval and drive the linked job forward
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Updated quote (status accepted)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Quote not found
+        "409":
+          description: Quote can no longer be approved
+
+  /quotes/{id}/event:
+    post:
+      operationId: addQuoteEvent
+      tags: [quotes]
+      summary: Append a custom event to a quote's event log
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/QuoteEventInput"
+      responses:
+        "200":
+          description: Updated quote after event appended
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Quote"
+        "404":
+          description: Quote not found
+
   # ── Product Tags ──────────────────────────────────────────────────────────
   /products/tags:
     get:
@@ -7127,6 +8560,45 @@ paths:
         "401":
           description: Provider not connected
 
+  /integrations/customer-files-cloud:
+    get:
+      operationId: getCustomerFilesCloudSettings
+      tags: [integrations]
+      summary: Get the "save all customer files to the cloud" preference
+      description: |
+        Returns whether customer file uploads are mirrored to a folder on a
+        connected cloud storage provider, along with the supported providers.
+      responses:
+        "200":
+          description: Current settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerFilesCloudSettings"
+    put:
+      operationId: updateCustomerFilesCloudSettings
+      tags: [integrations]
+      summary: Update the "save all customer files to the cloud" preference
+      description: |
+        When `enabled` is true, a supported `storageKey` and a non-empty `folder`
+        are required. Once enabled, every file uploaded to a customer is also
+        pushed to that folder on the chosen cloud storage.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerFilesCloudSettingsInput"
+      responses:
+        "200":
+          description: Saved
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerFilesCloudSettingsInput"
+        "400":
+          description: Invalid storageKey or missing folder when enabled
+
   /xero/sync/contacts:
     post:
       operationId: syncXeroContacts
@@ -7333,8 +8805,426 @@ paths:
         "401":
           description: Unauthorized
 
+  /sms-templates:
+    get:
+      operationId: listSmsTemplates
+      tags: [sms-templates]
+      summary: List SMS templates
+      responses:
+        "200":
+          description: SMS templates
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsTemplateListResponse"
+    post:
+      operationId: createSmsTemplate
+      tags: [sms-templates]
+      summary: Create an SMS template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsTemplateInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsTemplate"
+        "400":
+          description: Validation error
+
+  /sms-templates/{id}:
+    patch:
+      operationId: updateSmsTemplate
+      tags: [sms-templates]
+      summary: Update an SMS template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsTemplateInput"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsTemplate"
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteSmsTemplate
+      tags: [sms-templates]
+      summary: Delete an SMS template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /sms-campaigns:
+    get:
+      operationId: listSmsCampaigns
+      tags: [sms-campaigns]
+      summary: List SMS campaigns
+      responses:
+        "200":
+          description: SMS campaigns
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaignListResponse"
+    post:
+      operationId: createSmsCampaign
+      tags: [sms-campaigns]
+      summary: Create an SMS campaign
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SmsCampaignInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SmsCampaign"
+        "400":
+          description: Validation error
+
+  /sms-campaigns/{id}:
+    delete:
+      operationId: deleteSmsCampaign
+      tags: [sms-campaigns]
+      summary: Delete an SMS campaign
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /staff-timesheets:
+    get:
+      operationId: listStaffTimesheets
+      tags: [staff-timesheets]
+      summary: List staff timesheet entries
+      parameters:
+        - { name: startDate, in: query, required: false, schema: { type: string } }
+        - { name: endDate, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Timesheet entries
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetList"
+    post:
+      operationId: createStaffTimesheet
+      tags: [staff-timesheets]
+      summary: Create a staff timesheet entry
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateStaffTimesheetInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetEntry"
+        "400":
+          description: Validation error
+
+  /staff-timesheets/status:
+    get:
+      operationId: getStaffClockStatus
+      tags: [staff-timesheets]
+      summary: Get a staff member's clock-in status by PIN
+      parameters:
+        - { name: pin, in: query, required: true, schema: { type: string } }
+      responses:
+        "200":
+          description: Clock status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffClockStatus"
+
+  /staff-timesheets/clock-in:
+    post:
+      operationId: clockIn
+      tags: [staff-timesheets]
+      summary: Clock a staff member in
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockInInput"
+      responses:
+        "201":
+          description: Clocked in
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetEntry"
+
+  /staff-timesheets/clock-out:
+    post:
+      operationId: clockOut
+      tags: [staff-timesheets]
+      summary: Clock a staff member out
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ClockOutInput"
+      responses:
+        "200":
+          description: Clocked out
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StaffTimesheetEntry"
+
+  /staff-timesheets/{id}:
+    delete:
+      operationId: deleteStaffTimesheet
+      tags: [staff-timesheets]
+      summary: Delete a staff timesheet entry
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+
+  /dashboard/payment-totals:
+    get:
+      operationId: getPaymentTotals
+      tags: [dashboard]
+      summary: Payment method totals for a given day
+      parameters:
+        - { name: date, in: query, required: false, schema: { type: string } }
+      responses:
+        "200":
+          description: Totals keyed by payment method
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PaymentTotalsResult"
+
+  /kpi-targets/progress:
+    get:
+      operationId: getKpiProgress
+      tags: [kpi-targets]
+      summary: Current actual value for every active KPI target, period- and staff-scoped
+      responses:
+        "200":
+          description: Per-target actuals
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiProgressResponse" }
+
+  /kpi-targets/dashboard-kpi:
+    get:
+      operationId: getDashboardKpi
+      tags: [kpi-targets]
+      summary: The single KPI target pinned to the dashboard, with its current actual
+      responses:
+        "200":
+          description: Dashboard KPI, or null when none is pinned
+          content:
+            application/json:
+              schema:
+                oneOf:
+                  - $ref: "#/components/schemas/DashboardKpiResult"
+                  - type: "null"
+
 components:
   schemas:
+    # ── SMS templates & campaigns ─────────────────────────────────────────────
+    SmsTemplate:
+      type: object
+      required: [id, merchantId, templateId, name, category, body, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    SmsTemplateInput:
+      type: object
+      required: [templateId, name]
+      properties:
+        templateId: { type: string }
+        name: { type: string }
+        category: { type: string }
+        body: { type: string }
+
+    SmsTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SmsTemplate" }
+        total: { type: integer }
+
+    SmsCampaign:
+      type: object
+      required: [id, merchantId, campaignId, name, audience, audienceLabel, body, linkUrl, scheduled, scheduledAt, status, sentAt, delivered, failed, recipientCount, createdAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        campaignId: { type: string }
+        name: { type: string }
+        audience: { type: string }
+        audienceLabel: { type: string }
+        body: { type: string }
+        linkUrl: { type: string }
+        scheduled: { type: string }
+        scheduledAt: { type: string }
+        status: { type: string }
+        sentAt: { type: string }
+        delivered: { type: integer }
+        failed: { type: integer }
+        recipientCount: { type: integer }
+        customerId: { type: integer, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    SmsCampaignInput:
+      type: object
+      required: [campaignId, name]
+      properties:
+        campaignId: { type: string }
+        name: { type: string }
+        audience: { type: string }
+        audienceLabel: { type: string }
+        body: { type: string }
+        linkUrl: { type: string }
+        scheduled: { type: string }
+        scheduledAt: { type: string }
+        status: { type: string }
+        sentAt: { type: string }
+        delivered: { type: integer }
+        failed: { type: integer }
+        recipientCount: { type: integer }
+        customerId: { type: integer }
+
+    SmsCampaignListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/SmsCampaign" }
+        total: { type: integer }
+
+    # ── Staff timesheets ──────────────────────────────────────────────────────
+    StaffTimesheetEntry:
+      type: object
+      required: [id, staffId, staffName, date, clockIn, clockOut, note, createdAt]
+      properties:
+        id: { type: integer }
+        staffId: { type: integer }
+        staffName: { type: string }
+        date: { type: string }
+        clockIn: { type: string }
+        clockOut: { type: string, nullable: true }
+        note: { type: string, nullable: true }
+        createdAt: { type: string, format: date-time }
+
+    StaffTimesheetList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/StaffTimesheetEntry" }
+
+    CreateStaffTimesheetInput:
+      type: object
+      required: [staffId, staffName, date, clockIn]
+      properties:
+        staffId: { type: integer }
+        staffName: { type: string }
+        date: { type: string }
+        clockIn: { type: string }
+        clockOut: { type: string, nullable: true }
+
+    StaffClockStatus:
+      type: object
+      required: [staffId, staffName, clockedIn, openEntryId, clockInTime]
+      properties:
+        staffId: { type: integer }
+        staffName: { type: string }
+        clockedIn: { type: boolean }
+        openEntryId: { type: integer, nullable: true }
+        clockInTime: { type: string, nullable: true }
+
+    ClockInInput:
+      type: object
+      required: [pin]
+      properties:
+        pin: { type: string }
+
+    ClockOutInput:
+      type: object
+      required: [pin]
+      properties:
+        pin: { type: string }
+
+    # ── Dashboard KPI & payment totals ────────────────────────────────────────
+    PaymentTotalsResult:
+      type: object
+      additionalProperties:
+        type: object
+        required: [total, txCount]
+        properties:
+          total: { type: number }
+          txCount: { type: integer }
+
+    DashboardKpiResult:
+      type: object
+      required: [kpi, actual]
+      properties:
+        kpi: { $ref: "#/components/schemas/KpiTarget" }
+        actual: { type: number, nullable: true }
+
+    KpiProgress:
+      type: object
+      required: [id, targetId, actual]
+      properties:
+        id:       { type: integer }
+        targetId: { type: string }
+        actual:   { type: number, nullable: true }
+
+    KpiProgressResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/KpiProgress" }
+        total: { type: integer }
+
     # ── Backups ───────────────────────────────────────────────────────────────
     Backup:
       type: object
@@ -7375,7 +9265,7 @@ components:
       required: [id, type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
         directory: { type: string, nullable: true }
         bucket: { type: string, nullable: true }
         region: { type: string, nullable: true }
@@ -7389,6 +9279,7 @@ components:
         username: { type: string, nullable: true }
         remotePath: { type: string, nullable: true }
         passwordSet: { type: boolean }
+        folder: { type: string, nullable: true }
 
     BackupConfig:
       type: object
@@ -7407,7 +9298,7 @@ components:
       required: [type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
         directory: { type: string }
         bucket: { type: string }
         region: { type: string }
@@ -7421,6 +9312,7 @@ components:
         username: { type: string }
         remotePath: { type: string }
         password: { type: string }
+        folder: { type: string }
 
     BackupConfigInput:
       type: object
@@ -7581,6 +9473,12 @@ components:
         staffRole:
           type: string
           enum: [owner, manager, cashier]
+        emailVerified:
+          type: boolean
+        onboardingCompleted:
+          type: boolean
+        isDemoAccount:
+          type: boolean
 
     MerchantUpdate:
       type: object
@@ -7851,6 +9749,8 @@ components:
           type: ["string", "null"]
         isEpay:
           type: boolean
+        isRefurbished:
+          type: boolean
         tags:
           type: array
           items:
@@ -7859,6 +9759,8 @@ components:
         stockLocation:
           type: ["string", "null"]
         overflowLocation:
+          type: ["string", "null"]
+        notification:
           type: ["string", "null"]
         digitalCodesCount:
           type: ["integer", "null"]
@@ -7954,6 +9856,8 @@ components:
           items:
             type: string
           maxItems: 5
+        notification:
+          type: string
 
     ProductUpdate:
       type: object
@@ -8009,6 +9913,8 @@ components:
           type: string
         overflowLocation:
           type: string
+        notification:
+          type: ["string", "null"]
 
     ProductList:
       type: object
@@ -8556,10 +10462,14 @@ components:
           enum: [owner, manager, cashier]
         pin:
           type: ["string", "null"]
+          description: Masked in responses ("****" when a PIN is set, null otherwise) — raw PINs are never returned.
         isActive:
           type: boolean
         defaultRegisterType:
           type: ["string", "null"]
+        posPrefs:
+          type: ["string", "null"]
+          description: JSON-encoded per-staff POS preferences (gridColumns, tileSize, showPrices, showStockBadges, cartPosition).
         payRate:
           type: ["string", "null"]
         loadingRate:
@@ -8602,6 +10512,8 @@ components:
           type: string
         defaultRegisterType:
           type: string
+        posPrefs:
+          type: string
         payRate:
           type: string
         loadingRate:
@@ -8641,12 +10553,46 @@ components:
           type: boolean
         defaultRegisterType:
           type: string
+        posPrefs:
+          type: string
         payRate:
           type: string
         loadingRate:
           type: string
         superRate:
           type: string
+
+    VerifyStaffPinBody:
+      type: object
+      required: [pin]
+      properties:
+        pin:
+          type: string
+          minLength: 1
+        requireManager:
+          type: boolean
+          description: When true, only manager/owner staff PINs are accepted (e.g. discount approvals).
+        establishDaySession:
+          type: boolean
+          description: >-
+            When true, a successful verification records the matched staff as the
+            day-staff on the server session (req.session.staffId), so server-side
+            attribution (daily closes, stock takes, customer merges) credits the
+            verified staff member. Only the day-login PIN flow sets this; per-sale
+            switches and approval prompts leave it unset.
+
+    VerifyStaffPinResponse:
+      type: object
+      required: [ok]
+      properties:
+        ok:
+          type: boolean
+        reason:
+          type: string
+          enum: [invalid, role, rate_limited]
+          description: Present when ok is false.
+        staff:
+          $ref: "#/components/schemas/Staff"
 
     # ── Staff Sales Report ───────────────────────────────────────────────────
     StaffSalesReportRow:
@@ -8843,6 +10789,10 @@ components:
           type: string
         customerName:
           type: ["string", "null"]
+        customerPhone:
+          type: ["string", "null"]
+        customerAddress:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
 
@@ -8920,7 +10870,7 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-partner-approval, awaiting-stock, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -8955,6 +10905,33 @@ components:
             type: string
         estimatedCost:
           type: ["number", "null"]
+        repairWarrantyDays:
+          type: integer
+        completedAt:
+          type: ["string", "null"]
+          format: date-time
+        reworkOfJobId:
+          type: ["integer", "null"]
+        estimateApprovedAt:
+          type: ["string", "null"]
+          format: date-time
+        estimateApprovedVia:
+          type: ["string", "null"]
+          enum: [portal, in-store, null]
+        depositRequired:
+          type: ["number", "null"]
+        depositPaid:
+          type: number
+        isMailIn:
+          type: boolean
+        shippingCarrier:
+          type: ["string", "null"]
+        inboundTracking:
+          type: ["string", "null"]
+        returnTracking:
+          type: ["string", "null"]
+        returnAddress:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         createdAt:
@@ -8963,6 +10940,20 @@ components:
         updatedAt:
           type: string
           format: date-time
+
+    ServiceJobDepositInput:
+      type: object
+      required: [amount]
+      properties:
+        amount: { type: number }
+        method: { type: string, nullable: true }
+
+    ServiceJobDepositResult:
+      type: object
+      required: [depositPaid]
+      properties:
+        depositRequired: { type: ["number", "null"] }
+        depositPaid:     { type: number }
 
     ServiceJobInput:
       type: object
@@ -8973,7 +10964,7 @@ components:
           type: ["integer", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-partner-approval, awaiting-stock, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
@@ -9008,6 +10999,18 @@ components:
             type: string
         estimatedCost:
           type: ["number", "null"]
+        repairWarrantyDays:
+          type: integer
+        isMailIn:
+          type: boolean
+        shippingCarrier:
+          type: ["string", "null"]
+        inboundTracking:
+          type: ["string", "null"]
+        returnTracking:
+          type: ["string", "null"]
+        returnAddress:
+          type: ["string", "null"]
         notes:
           type: ["string", "null"]
         heardFrom:
@@ -9016,6 +11019,492 @@ components:
           type: ["string", "null"]
         referredByCustomerId:
           type: ["integer", "null"]
+
+    ServiceJobLine:
+      type: object
+      required: [id, serviceJobId, kind, description, quantity, unitPrice, unitCost, taxRate, lineTotal, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        serviceJobId:
+          type: integer
+        kind:
+          type: string
+          enum: [part, labour, misc]
+        productId:
+          type: ["integer", "null"]
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        unitCost:
+          type: number
+        taxRate:
+          type: number
+        lineTotal:
+          type: number
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ServiceJobLineInput:
+      type: object
+      properties:
+        kind:
+          type: string
+          enum: [part, labour, misc]
+        productId:
+          type: ["integer", "null"]
+        description:
+          type: string
+        quantity:
+          type: number
+        unitPrice:
+          type: number
+        unitCost:
+          type: number
+        taxRate:
+          type: number
+
+    ServiceJobTotals:
+      type: object
+      required: [partsTotal, labourTotal, miscTotal, subtotal, taxTotal, total, costTotal, profit]
+      properties:
+        partsTotal:
+          type: number
+        labourTotal:
+          type: number
+        miscTotal:
+          type: number
+        subtotal:
+          type: number
+        taxTotal:
+          type: number
+        total:
+          type: number
+        costTotal:
+          type: number
+        profit:
+          type: number
+
+    ServiceJobLinesResult:
+      type: object
+      required: [lines, totals]
+      properties:
+        lines:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceJobLine"
+        totals:
+          $ref: "#/components/schemas/ServiceJobTotals"
+
+    StoreCreditEntry:
+      type: object
+      required: [id, customerId, type, amount, balanceAfter, createdAt]
+      properties:
+        id:
+          type: integer
+        customerId:
+          type: integer
+        type:
+          type: string
+          enum: [issue, redeem, adjust, refund, expire]
+        amount:
+          type: number
+        balanceAfter:
+          type: number
+        note:
+          type: ["string", "null"]
+        transactionId:
+          type: ["integer", "null"]
+        staffId:
+          type: ["integer", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    StoreCreditInput:
+      type: object
+      required: [type, amount]
+      properties:
+        type:
+          type: string
+          enum: [issue, redeem, adjust, refund, expire]
+        amount:
+          type: number
+        note:
+          type: ["string", "null"]
+        transactionId:
+          type: ["integer", "null"]
+
+    StoreCreditResult:
+      type: object
+      required: [balance, entries]
+      properties:
+        balance:
+          type: number
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/StoreCreditEntry"
+
+    DeviceHistoryJob:
+      type: object
+      required: [id, jobNumber, status, bookInDate, createdAt]
+      properties:
+        id:
+          type: integer
+        jobNumber:
+          type: string
+        status:
+          type: string
+        deviceType:
+          type: ["string", "null"]
+        deviceDescription:
+          type: ["string", "null"]
+        condition:
+          type: ["string", "null"]
+        bookInDate:
+          type: string
+        customerName:
+          type: ["string", "null"]
+        createdAt:
+          type: string
+          format: date-time
+
+    DeviceHistorySale:
+      type: object
+      required: [id, productId, status, createdAt]
+      properties:
+        id:
+          type: integer
+        productId:
+          type: integer
+        productName:
+          type: ["string", "null"]
+        status:
+          type: string
+        transactionId:
+          type: ["integer", "null"]
+        soldAt:
+          type: ["string", "null"]
+          format: date-time
+        createdAt:
+          type: string
+          format: date-time
+
+    DeviceHistoryResult:
+      type: object
+      required: [serial, serviceJobs, sales]
+      properties:
+        serial:
+          type: string
+        serviceJobs:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceHistoryJob"
+        sales:
+          type: array
+          items:
+            $ref: "#/components/schemas/DeviceHistorySale"
+
+    ServiceJobChecklistItem:
+      type: object
+      required: [id, serviceJobId, label, result, phase, sortOrder, createdAt, updatedAt]
+      properties:
+        id:
+          type: integer
+        serviceJobId:
+          type: integer
+        label:
+          type: string
+        result:
+          type: string
+          enum: [pending, pass, fail, na]
+        phase:
+          type: string
+          enum: [intake, outgoing]
+        note:
+          type: ["string", "null"]
+        sortOrder:
+          type: integer
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    ServiceJobChecklistItemInput:
+      type: object
+      properties:
+        label:
+          type: string
+        result:
+          type: string
+          enum: [pending, pass, fail, na]
+        phase:
+          type: string
+          enum: [intake, outgoing]
+        note:
+          type: ["string", "null"]
+
+    ServiceJobChecklistInput:
+      type: object
+      properties:
+        label:
+          type: string
+        result:
+          type: string
+          enum: [pending, pass, fail, na]
+        phase:
+          type: string
+          enum: [intake, outgoing]
+        note:
+          type: ["string", "null"]
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceJobChecklistItemInput"
+
+    ServiceJobChecklistResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceJobChecklistItem"
+
+    LoanerDevice:
+      type: object
+      required: [id, name, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        identifier: { type: ["string", "null"] }
+        status: { type: string, enum: [available, on_loan, retired] }
+        assignedCustomerId: { type: ["integer", "null"] }
+        assignedCustomerName: { type: ["string", "null"] }
+        assignedServiceJobId: { type: ["integer", "null"] }
+        assignedAt: { type: ["string", "null"], format: date-time }
+        dueBackAt: { type: ["string", "null"], format: date-time }
+        conditionOut: { type: ["string", "null"] }
+        conditionIn: { type: ["string", "null"] }
+        returnedAt: { type: ["string", "null"], format: date-time }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    LoanerDeviceInput:
+      type: object
+      properties:
+        action: { type: string, enum: [issue, return] }
+        name: { type: string }
+        identifier: { type: ["string", "null"] }
+        status: { type: string, enum: [available, on_loan, retired] }
+        assignedCustomerId: { type: ["integer", "null"] }
+        assignedServiceJobId: { type: ["integer", "null"] }
+        dueBackAt: { type: ["string", "null"], format: date-time }
+        conditionOut: { type: ["string", "null"] }
+        conditionIn: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    LoanerDeviceList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/LoanerDevice"
+
+    ServiceJobTimeEntry:
+      type: object
+      required: [id, startedAt, durationMinutes, running]
+      properties:
+        id: { type: integer }
+        staffId: { type: ["integer", "null"] }
+        staffName: { type: ["string", "null"] }
+        startedAt: { type: string, format: date-time }
+        endedAt: { type: ["string", "null"], format: date-time }
+        durationMinutes: { type: integer }
+        running: { type: boolean }
+        note: { type: ["string", "null"] }
+
+    ServiceJobTimeInput:
+      type: object
+      required: [action]
+      properties:
+        action: { type: string, enum: [start, stop, manual] }
+        staffId: { type: ["integer", "null"] }
+        entryId: { type: ["integer", "null"] }
+        minutes: { type: ["number", "null"] }
+        note: { type: ["string", "null"] }
+
+    ServiceJobTimeResult:
+      type: object
+      required: [entries, totalMinutes]
+      properties:
+        entries:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceJobTimeEntry"
+        totalMinutes: { type: integer }
+        running:
+          oneOf:
+            - $ref: "#/components/schemas/ServiceJobTimeEntry"
+          nullable: true
+
+    PartLookupItem:
+      type: object
+      required: [productId, name, price, matchedModel]
+      properties:
+        productId: { type: integer }
+        name: { type: string }
+        sku: { type: ["string", "null"] }
+        price: { type: number }
+        stockQuantity: { type: ["integer", "null"] }
+        matchedModel: { type: string }
+
+    PartsLookupResult:
+      type: object
+      required: [model, parts]
+      properties:
+        model: { type: string }
+        parts:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartLookupItem"
+
+    PartCompatibilityItem:
+      type: object
+      required: [id, model]
+      properties:
+        id: { type: integer }
+        model: { type: string }
+
+    PartCompatibilityInput:
+      type: object
+      properties:
+        model: { type: string }
+        models:
+          type: array
+          items: { type: string }
+
+    PartCompatibilityResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/PartCompatibilityItem"
+
+    TradeIn:
+      type: object
+      required: [id, deviceName, conditionGrade, valuationAmount, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        deviceName: { type: string }
+        identifier: { type: ["string", "null"] }
+        conditionGrade: { type: string, enum: [A, B, C, D] }
+        notes: { type: ["string", "null"] }
+        valuationAmount: { type: number }
+        status: { type: string, enum: [quoted, accepted, listed] }
+        payoutMethod: { type: ["string", "null"] }
+        acceptedAt: { type: ["string", "null"], format: date-time }
+        createdProductId: { type: ["integer", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    TradeInInput:
+      type: object
+      required: [deviceName]
+      properties:
+        customerId: { type: ["integer", "null"] }
+        deviceName: { type: string }
+        identifier: { type: ["string", "null"] }
+        conditionGrade: { type: string, enum: [A, B, C, D] }
+        notes: { type: ["string", "null"] }
+        valuationAmount: { type: number }
+
+    TradeInList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradeIn"
+
+    TradeInListAsStockResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TradeIn"
+        productId: { type: integer }
+
+    ServicePlan:
+      type: object
+      required: [id, name, feeAmount, billingCycle, status, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        customerId: { type: ["integer", "null"] }
+        customerName: { type: ["string", "null"] }
+        name: { type: string }
+        feeAmount: { type: number }
+        billingCycle: { type: string, enum: [weekly, fortnightly, monthly, quarterly, yearly] }
+        status: { type: string, enum: [active, paused, cancelled] }
+        slaHours: { type: ["integer", "null"] }
+        startDate: { type: ["string", "null"] }
+        nextBillDate: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    ServicePlanInput:
+      type: object
+      properties:
+        customerId: { type: ["integer", "null"] }
+        name: { type: string }
+        feeAmount: { type: number }
+        billingCycle: { type: string, enum: [weekly, fortnightly, monthly, quarterly, yearly] }
+        status: { type: string, enum: [active, paused, cancelled] }
+        slaHours: { type: ["integer", "null"] }
+        startDate: { type: ["string", "null"] }
+        nextBillDate: { type: ["string", "null"] }
+        notes: { type: ["string", "null"] }
+
+    ServicePlanList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePlan"
+
+    ServicePlanBillResult:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServicePlan"
+        invoiceId: { type: integer }
+        invoiceNumber: { type: string }
 
     # ── Appointments ────────────────────────────────────────────────────────
     Appointment:
@@ -9030,6 +11519,10 @@ components:
           type: ["integer", "null"]
         staffId:
           type: ["integer", "null"]
+        serviceJobId:
+          type: ["integer", "null"]
+        serviceJobNumber:
+          type: ["string", "null"]
         title:
           type: string
         description:
@@ -9069,6 +11562,8 @@ components:
           type: ["integer", "null"]
         staffId:
           type: ["integer", "null"]
+        serviceJobId:
+          type: ["integer", "null"]
         title:
           type: string
         scheduledAt:
@@ -9082,6 +11577,10 @@ components:
           enum: [scheduled, completed, cancelled, no-show]
         notes:
           type: ["string", "null"]
+        sendSms:
+          type: boolean
+        sendEmail:
+          type: boolean
 
     DashboardConfigResponse:
       type: object
@@ -9292,7 +11791,7 @@ components:
 
     CustomerHistory:
       type: object
-      required: [transactions, appointments, serviceJobs]
+      required: [transactions, appointments, serviceJobs, invoices]
       properties:
         transactions:
           type: array
@@ -9306,6 +11805,10 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServiceJob"
+        invoices:
+          type: array
+          items:
+            $ref: "#/components/schemas/Invoice"
 
     CustomerNote:
       type: object
@@ -9715,6 +12218,9 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        invoiceUrls:
+          type: array
+          items: { type: string }
         items:
           type: array
           items:
@@ -9741,6 +12247,9 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        invoiceUrls:
+          type: array
+          items: { type: string }
         items:
           type: array
           items:
@@ -9799,6 +12308,7 @@ components:
         applicableTo: { type: string }
         productIds: { type: array, items: { type: integer } }
         categoryIds: { type: array, items: { type: integer } }
+        excludedProductIds: { type: array, items: { type: integer } }
         startDate: { type: string, nullable: true }
         endDate: { type: string, nullable: true }
         isActive: { type: string }
@@ -9816,6 +12326,7 @@ components:
         applicableTo: { type: string }
         productIds: { type: array, items: { type: integer } }
         categoryIds: { type: array, items: { type: integer } }
+        excludedProductIds: { type: array, items: { type: integer } }
         startDate: { type: string }
         endDate: { type: string }
         isActive: { type: string }
@@ -9929,7 +12440,39 @@ components:
       properties:
         email: { type: string }
 
+    ComposeEmailRequest:
+      type: object
+      required: [to, subject, body]
+      properties:
+        to: { type: string }
+        subject: { type: string }
+        body: { type: string }
+
     # ── Email Settings ──────────────────────────────────────────────────────────
+    SmsSettings:
+      type: object
+      required: [smsEnabled, autoNotifyOnStatus, connected]
+      properties:
+        smsEnabled:           { type: boolean }
+        autoNotifyOnStatus:   { type: boolean }
+        connected:            { type: boolean }
+        fromNumber:           { type: string, nullable: true }
+        accountSidPrefix:     { type: string, nullable: true }
+
+    SmsSettingsInput:
+      type: object
+      properties:
+        smsEnabled:         { type: boolean }
+        autoNotifyOnStatus: { type: boolean }
+
+    TwilioConnectInput:
+      type: object
+      required: [accountSid, authToken, fromNumber]
+      properties:
+        accountSid:  { type: string }
+        authToken:   { type: string }
+        fromNumber:  { type: string }
+
     EmailSettings:
       type: object
       required: [provider, smtpSecure, smtpPassSet, apiKeySet, receiptEmailsEnabled]
@@ -9971,6 +12514,7 @@ components:
         reference:     { type: string }
         customerId:    { type: integer, nullable: true }
         customerName:  { type: string, nullable: true }
+        staffId:       { type: integer, nullable: true }
         items:
           type: array
           items:
@@ -9988,6 +12532,7 @@ components:
         dueDate:       { type: string, nullable: true }
         notes:         { type: string, nullable: true }
         cancelReason:  { type: string, nullable: true }
+        completedAt:   { type: string, nullable: true }
         createdAt:     { type: string }
         updatedAt:     { type: string }
 
@@ -10007,6 +12552,9 @@ components:
       required: [items, totalAmount, depositAmount]
       properties:
         customerId:    { type: integer }
+        # Staff member credited with the layby (the POS day-staff), so a
+        # completed layby attributes revenue in staff leaderboards + KPIs.
+        staffId:       { type: integer, nullable: true }
         items:
           type: array
           items:
@@ -10035,6 +12583,11 @@ components:
       properties:
         amount:        { type: number }
         paymentMethod: { type: string }
+        # Optional split payment: each leg carries its own method + amount and the
+        # legs sum to `amount`. When omitted the payment uses a single `paymentMethod`.
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentLeg" }
         note:          { type: string }
 
     Camera:
@@ -10572,7 +13125,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -10591,6 +13144,7 @@ components:
         defaultSkuPrefix:            { type: string }
         mapProvider:                 { type: string }
         roleDiscountLimits:          { type: string }
+        buttonStyle:                 { type: string }
         updatedAt:                   { type: string, format: date-time }
 
     PosSettingsInput:
@@ -10611,6 +13165,7 @@ components:
         defaultSkuPrefix:            { type: string }
         mapProvider:                 { type: string }
         roleDiscountLimits:          { type: string }
+        buttonStyle:                 { type: string }
 
     LaybySettings:
       type: object
@@ -10642,9 +13197,74 @@ components:
         printTermsOnReceipt:  { type: string }
         termsAndConditions:   { type: string }
 
+    SalesSettings:
+      type: object
+      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, overviewDefaultSalesPeriod, overviewDefaultActivityPeriod, overviewMonthMode, updatedAt]
+      properties:
+        id:                        { type: integer }
+        merchantId:                { type: integer }
+        saleRequireCustomer:       { type: string }
+        saleReceiptDelivery:       { type: string }
+        saleRoundCashTo5c:         { type: string }
+        saleRequireDiscountReason: { type: string }
+        saleAllowOutOfStock:       { type: string }
+        saleDefaultNote:           { type: string }
+        invoiceDueDays:            { type: integer }
+        invoiceDefaultTaxRate:     { type: number }
+        invoiceAutoEmail:          { type: string }
+        invoiceTerms:              { type: string }
+        refundWindowDays:          { type: integer }
+        refundRequireReason:       { type: string }
+        refundRequireApproval:     { type: string }
+        refundRestockingFeePct:    { type: number }
+        refundOriginalMethodOnly:  { type: string }
+        refundDefaultNote:         { type: string }
+        quoteExpiryDays:           { type: integer }
+        quoteDefaultTaxRate:       { type: number }
+        quoteAutoEmail:            { type: string }
+        quoteTerms:                { type: string }
+        quotePrefix:               { type: string }
+        quoteDigits:               { type: integer }
+        quoteDepositPercent:       { type: number }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
+        overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
+        createdAt:                 { type: string, format: date-time }
+        updatedAt:                 { type: string, format: date-time }
+
+    SalesSettingsUpdate:
+      type: object
+      properties:
+        saleRequireCustomer:       { type: string }
+        saleReceiptDelivery:       { type: string }
+        saleRoundCashTo5c:         { type: string }
+        saleRequireDiscountReason: { type: string }
+        saleAllowOutOfStock:       { type: string }
+        saleDefaultNote:           { type: string }
+        invoiceDueDays:            { type: integer }
+        invoiceDefaultTaxRate:     { type: number }
+        invoiceAutoEmail:          { type: string }
+        invoiceTerms:              { type: string }
+        refundWindowDays:          { type: integer }
+        refundRequireReason:       { type: string }
+        refundRequireApproval:     { type: string }
+        refundRestockingFeePct:    { type: number }
+        refundOriginalMethodOnly:  { type: string }
+        refundDefaultNote:         { type: string }
+        quoteExpiryDays:           { type: integer }
+        quoteDefaultTaxRate:       { type: number }
+        quoteAutoEmail:            { type: string }
+        quoteTerms:                { type: string }
+        quotePrefix:               { type: string }
+        quoteDigits:               { type: integer }
+        quoteDepositPercent:       { type: number }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
+        overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
+
     KpiSettings:
       type: object
-      required: [id, merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage, updatedAt]
+      required: [id, merchantId, trackCategories, trackAppointments, trackServices, trackSuppliers, trackWastage, weekStartDay, updatedAt]
       properties:
         id:                 { type: integer }
         merchantId:         { type: integer }
@@ -10653,6 +13273,7 @@ components:
         trackServices:      { type: string }
         trackSuppliers:     { type: string }
         trackWastage:       { type: string }
+        weekStartDay:       { type: string }
         updatedAt:          { type: string, format: date-time }
 
     KpiSettingsInput:
@@ -10663,6 +13284,7 @@ components:
         trackServices:      { type: string }
         trackSuppliers:     { type: string }
         trackWastage:       { type: string }
+        weekStartDay:       { type: string }
 
     KpiTarget:
       type: object
@@ -10679,7 +13301,10 @@ components:
         staffIds:    { type: string }
         reward:      { type: string }
         notes:       { type: string }
+        startDate:   { type: string, nullable: true }
+        endDate:     { type: string, nullable: true }
         isActive:    { type: string }
+        showOnDashboard: { type: string }
         createdAt:   { type: string, format: date-time }
         updatedAt:   { type: string, format: date-time }
 
@@ -10696,7 +13321,10 @@ components:
         staffIds:    { type: string }
         reward:      { type: string }
         notes:       { type: string }
+        startDate:   { type: string, nullable: true }
+        endDate:     { type: string, nullable: true }
         isActive:    { type: string }
+        showOnDashboard: { type: string }
 
     KpiTargetListResponse:
       type: object
@@ -11304,7 +13932,9 @@ components:
         closedAt: { type: string, nullable: true }
         cashCounted: { type: string, nullable: true }
         eftposDeclared: { type: string, nullable: true }
+        paymentTotals: { type: string, nullable: true }
         closingNotes: { type: string, nullable: true }
+        deviceId: { type: string, nullable: true }
 
     PosRegisterSessionListResponse:
       type: object
@@ -11495,6 +14125,7 @@ components:
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        defaultImageUrl: { type: string, nullable: true }
 
     InventorySettingsInput:
       type: object
@@ -11502,6 +14133,7 @@ components:
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        defaultImageUrl: { type: string, nullable: true }
 
     RegionalExtSettings:
       type: object
@@ -11737,6 +14369,122 @@ components:
         totalAmount:         { type: number }
         avgTransactionValue: { type: number }
 
+    ScheduledReport:
+      type: object
+      required: [id, name, reportType, frequency, format, email, enabled, createdAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        reportType: { type: string }
+        frequency: { type: string, enum: [daily, weekly, monthly] }
+        format: { type: string, enum: [pdf, csv] }
+        email: { type: string }
+        enabled: { type: boolean }
+        lastRunAt: { type: ["string", "null"], format: date-time }
+        createdAt: { type: string, format: date-time }
+
+    ScheduledReportInput:
+      type: object
+      properties:
+        name: { type: string }
+        reportType: { type: string }
+        frequency: { type: string, enum: [daily, weekly, monthly] }
+        format: { type: string, enum: [pdf, csv] }
+        email: { type: string }
+        enabled: { type: boolean }
+
+    ScheduledReportList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/ScheduledReport" }
+
+    Location:
+      type: object
+      required: [id, name, isDefault, isActive, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        name: { type: string }
+        code: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        isDefault: { type: boolean }
+        isActive: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    LocationInput:
+      type: object
+      properties:
+        name: { type: string }
+        code: { type: ["string", "null"] }
+        address: { type: ["string", "null"] }
+        phone: { type: ["string", "null"] }
+        isDefault: { type: boolean }
+        isActive: { type: boolean }
+
+    LocationList:
+      type: object
+      required: [items, activeLocationId]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Location" }
+        activeLocationId: { type: integer }
+
+    LocationStock:
+      type: object
+      required: [locationId, name, isDefault, quantity]
+      properties:
+        locationId: { type: integer }
+        name: { type: string }
+        isDefault: { type: boolean }
+        quantity: { type: integer }
+
+    StockByLocationResult:
+      type: object
+      required: [productId, total, locations]
+      properties:
+        productId: { type: integer }
+        total: { type: integer }
+        locations:
+          type: array
+          items: { $ref: "#/components/schemas/LocationStock" }
+
+    RunReportInput:
+      type: object
+      required: [startDate, endDate, groupBy]
+      properties:
+        startDate: { type: string, format: date }
+        endDate: { type: string, format: date }
+        groupBy: { type: string, enum: [date, week, month, payment, staff, product] }
+
+    ReportColumn:
+      type: object
+      required: [key, label, type]
+      properties:
+        key: { type: string }
+        label: { type: string }
+        type: { type: string, enum: [text, number, currency, percent] }
+
+    ReportRunResult:
+      type: object
+      required: [groupBy, startDate, endDate, columns, rows]
+      properties:
+        groupBy: { type: string }
+        startDate: { type: string }
+        endDate: { type: string }
+        columns:
+          type: array
+          items: { $ref: "#/components/schemas/ReportColumn" }
+        rows:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
     SalesSummaryReport:
       type: object
       required: [startDate, endDate, totalRevenue, transactionCount, avgOrderValue, paymentBreakdown, dailyBreakdown]
@@ -11918,6 +14666,32 @@ components:
         coolingFactor:         { type: number }
         roundingMode:          { type: string }
         roundingValue:         { type: number }
+
+    DashboardNoteItem:
+      type: object
+      required: [id, merchantId, text, isCritical, createdAt, updatedAt]
+      properties:
+        id:         { type: integer }
+        merchantId: { type: integer }
+        text:       { type: string }
+        isCritical: { type: boolean }
+        createdAt:  { type: string, format: date-time }
+        updatedAt:  { type: string, format: date-time }
+
+    DashboardNoteInput:
+      type: object
+      required: [text]
+      properties:
+        text:       { type: string }
+        isCritical: { type: boolean }
+
+    DashboardNoteList:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/DashboardNoteItem" }
 
     StaffNoteItem:
       type: object
@@ -12353,6 +15127,10 @@ components:
         quantity:    { type: number, minimum: 0.0001 }
         unitPrice:   { type: number, minimum: 0 }
         taxRate:     { type: number, minimum: 0, maximum: 100 }
+        # Optional product linkage + cost snapshot so invoice profit (COGS) can
+        # be derived the same way POS line items are.
+        productId:   { type: integer, nullable: true }
+        costPrice:   { type: number, minimum: 0, nullable: true }
 
     InvoiceDiscountInput:
       type: object
@@ -12369,7 +15147,20 @@ components:
         timestamp:      { type: string, format: date-time }
         detail:         { type: string, nullable: true }
         method:         { type: string, nullable: true }
+        # Per-leg payment amount. One payment event is recorded per method, so a
+        # split payment produces several events whose amounts sum to the payment.
+        amount:         { type: number, nullable: true }
         idempotencyKey: { type: string, nullable: true }
+
+    # A single payment leg — one method and the amount tendered on it. Used to
+    # express split payments (multiple methods settling one payment) on both
+    # invoices and laybys.
+    PaymentLeg:
+      type: object
+      required: [method, amount]
+      properties:
+        method: { type: string }
+        amount: { type: number, minimum: 0 }
 
     Invoice:
       type: object
@@ -12431,6 +15222,9 @@ components:
       type: object
       properties:
         customerId:    { type: integer }
+        # Staff member credited with the sale (the POS day-staff), so invoice
+        # revenue/profit attributes in staff leaderboards + KPIs like POS sales.
+        staffId:       { type: integer, nullable: true }
         dueDate:       { type: string, format: date-time }
         notes:         { type: string }
         items:
@@ -12440,6 +15234,8 @@ components:
         invoicePrefix: { type: string }
         invoiceDigits: { type: integer }
         recurring:     { $ref: "#/components/schemas/InvoiceRecurringInput" }
+        serviceJobId:  { type: integer, nullable: true }
+        appointmentId: { type: integer, nullable: true }
 
     InvoiceRecurringUpdate:
       type: object
@@ -12470,6 +15266,8 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/InvoiceRecurringUpdate"
+        serviceJobId:  { type: integer, nullable: true }
+        appointmentId: { type: integer, nullable: true }
 
     GiftCardPaymentRef:
       type: object
@@ -12484,6 +15282,11 @@ components:
       properties:
         amount:          { type: number }
         method:          { type: string }
+        # Optional split payment: each leg carries its own method + amount and the
+        # legs sum to `amount`. When omitted the payment is a single `method`.
+        payments:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentLeg" }
         giftCardPayment: { $ref: "#/components/schemas/GiftCardPaymentRef" }
         idempotencyKey:  { type: string }
 
@@ -12539,6 +15342,133 @@ components:
         detail:         { type: string }
         method:         { type: string }
         idempotencyKey: { type: string }
+
+    # ── Quotes ──────────────────────────────────────────────────────────────
+    QuoteLineItem:
+      type: object
+      required: [description, quantity, unitPrice, taxRate]
+      properties:
+        description: { type: string }
+        quantity:    { type: number, minimum: 0.0001 }
+        unitPrice:   { type: number, minimum: 0 }
+        taxRate:     { type: number, minimum: 0, maximum: 100 }
+
+    QuoteDiscountInput:
+      type: object
+      required: [type, value]
+      properties:
+        type:  { type: string, enum: [fixed, percent] }
+        value: { type: number }
+
+    QuoteEvent:
+      type: object
+      required: [type, timestamp]
+      properties:
+        type:      { type: string }
+        timestamp: { type: string, format: date-time }
+        detail:    { type: string, nullable: true }
+        method:    { type: string, nullable: true }
+
+    Quote:
+      type: object
+      required: [id, merchantId, quoteNumber, status, subtotal, taxTotal, total, items, events, createdAt, updatedAt]
+      properties:
+        id:                     { type: integer }
+        merchantId:             { type: integer }
+        customerId:             { type: integer, nullable: true }
+        serviceJobId:           { type: integer, nullable: true }
+        quoteNumber:            { type: string }
+        status:                 { type: string, enum: [draft, sent, accepted, declined, expired, converted] }
+        subtotal:               { type: number }
+        taxTotal:               { type: number }
+        total:                  { type: number }
+        discountType:           { type: string, nullable: true }
+        discountValue:          { type: number, nullable: true }
+        discountTotal:          { type: number, nullable: true }
+        depositRequired:        { type: number, nullable: true }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QuoteLineItem" }
+        events:
+          type: array
+          items: { $ref: "#/components/schemas/QuoteEvent" }
+        notes:                  { type: string, nullable: true }
+        expiryDate:             { type: string, format: date-time, nullable: true }
+        convertedTransactionId: { type: integer, nullable: true }
+        customerName:           { type: string, nullable: true }
+        customerEmail:          { type: string, nullable: true }
+        customerPhone:          { type: string, nullable: true }
+        customerAddress:        { type: string, nullable: true }
+        customerCompany:        { type: string, nullable: true }
+        createdAt:              { type: string, format: date-time }
+        updatedAt:              { type: string, format: date-time }
+
+    QuoteList:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/Quote" }
+        total: { type: integer }
+
+    QuoteInput:
+      type: object
+      properties:
+        customerId:  { type: integer }
+        serviceJobId: { type: integer, nullable: true }
+        expiryDate:  { type: string, format: date-time }
+        notes:       { type: string }
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QuoteLineItem" }
+        discount:    { $ref: "#/components/schemas/QuoteDiscountInput" }
+        quotePrefix: { type: string }
+        quoteDigits: { type: integer }
+        depositRequired: { type: number, nullable: true }
+
+    QuoteUpdate:
+      type: object
+      properties:
+        status:     { type: string, enum: [draft, sent, accepted, declined, expired, converted] }
+        notes:      { type: string }
+        expiryDate:
+          type: string
+          format: date-time
+          nullable: true
+        customerId:
+          type: integer
+          nullable: true
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/QuoteLineItem" }
+        discount:   { $ref: "#/components/schemas/QuoteDiscountInput" }
+        depositRequired: { type: number, nullable: true }
+
+    ConvertQuoteInput:
+      type: object
+      properties:
+        transactionId: { type: integer }
+
+    SendQuoteEmailInput:
+      type: object
+      required: [email]
+      properties:
+        email:
+          type: string
+          format: email
+        template:
+          type: object
+          description: Optional email template overrides
+          additionalProperties: true
+
+    QuoteEventInput:
+      type: object
+      required: [type]
+      properties:
+        type:   { type: string }
+        detail: { type: string }
+        method: { type: string }
 
     # ── Product Tags ──────────────────────────────────────────────────────────
     ProductTagItem:
@@ -12737,6 +15667,32 @@ components:
         failed:      { type: integer, description: Number of contacts that failed (logged, not fatal) }
         notesSynced: { type: integer, description: Number of contacts whose notes were included }
         message:     { type: string }
+
+    CustomerFilesCloudSettingsInput:
+      type: object
+      required: [enabled, storageKey, folder]
+      properties:
+        enabled:
+          type: boolean
+          description: When true, customer file uploads are mirrored to the cloud
+        storageKey:
+          type: string
+          enum: [onedrive, google_drive, dropbox]
+          description: Connected cloud storage provider to mirror files to
+        folder:
+          type: string
+          description: Destination folder path on that provider (set by the platform user)
+
+    CustomerFilesCloudSettings:
+      allOf:
+        - $ref: "#/components/schemas/CustomerFilesCloudSettingsInput"
+        - type: object
+          required: [supportedStorageKeys]
+          properties:
+            supportedStorageKeys:
+              type: array
+              items: { type: string }
+              description: Storage providers that can receive mirrored customer files
 
     XeroSyncResult:
       type: object

@@ -1,5 +1,5 @@
 import { Router } from "express";
-import { db, conversations, messages, productsTable, transactionsTable, merchantsTable } from "@workspace/db";
+import { db, conversations, messages, productsTable, transactionsTable, merchantsTable, invoicesTable, laybysTable } from "@workspace/db";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { openai } from "@workspace/integrations-openai-ai-server";
@@ -81,20 +81,43 @@ async function buildSystemPrompt(merchantId: number, mode: string): Promise<stri
 
   if (mode === "budget") {
     const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
-    const salesAgg = await db.select({
-      totalRevenue: sql<number>`COALESCE(SUM(${transactionsTable.total}), 0)`,
-      totalTransactions: sql<number>`COUNT(*)`,
-      avgTransaction: sql<number>`COALESCE(AVG(${transactionsTable.total}), 0)`,
-    }).from(transactionsTable)
-      .where(and(
-        eq(transactionsTable.merchantId, merchantId),
-        gte(transactionsTable.createdAt, thirtyDaysAgo),
-      ));
+    // POS sales + paid invoices + completed laybys all count toward the
+    // advisor's revenue baseline (parity with the rest of the reporting system).
+    const [salesAgg, invAgg, laybyAgg, productCount] = await Promise.all([
+      db.select({
+        totalRevenue: sql<number>`COALESCE(SUM(${transactionsTable.total}), 0)`,
+        totalTransactions: sql<number>`COUNT(*)`,
+      }).from(transactionsTable)
+        .where(and(
+          eq(transactionsTable.merchantId, merchantId),
+          gte(transactionsTable.createdAt, thirtyDaysAgo),
+        )),
+      db.select({
+        totalRevenue: sql<number>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+        totalTransactions: sql<number>`COUNT(*)`,
+      }).from(invoicesTable)
+        .where(and(
+          eq(invoicesTable.merchantId, merchantId),
+          eq(invoicesTable.status, "paid"),
+          gte(invoicesTable.paidAt, thirtyDaysAgo),
+        )),
+      db.execute<{ revenue: number; cnt: number }>(sql`
+        SELECT COALESCE(SUM(total_amount::numeric), 0)::float AS revenue, COUNT(*)::int AS cnt
+        FROM laybys l
+        WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+          AND COALESCE(l.completed_at, l.updated_at) >= ${thirtyDaysAgo}
+      `),
+      db.select({ count: sql<number>`COUNT(*)` })
+        .from(productsTable).where(eq(productsTable.merchantId, merchantId)),
+    ]);
 
-    const productCount = await db.select({ count: sql<number>`COUNT(*)` })
-      .from(productsTable).where(eq(productsTable.merchantId, merchantId));
-
-    const agg = salesAgg[0];
+    const totalRevenue = Number(salesAgg[0]?.totalRevenue ?? 0) + Number(invAgg[0]?.totalRevenue ?? 0) + Number(laybyAgg.rows[0]?.revenue ?? 0);
+    const totalTransactions = Number(salesAgg[0]?.totalTransactions ?? 0) + Number(invAgg[0]?.totalTransactions ?? 0) + Number(laybyAgg.rows[0]?.cnt ?? 0);
+    const agg = {
+      totalRevenue,
+      totalTransactions,
+      avgTransaction: totalTransactions > 0 ? totalRevenue / totalTransactions : 0,
+    };
     return `You are a financial analyst and business advisor for "${businessName}", an Australian retail merchant using KoaPOS.
 
 Business context (last 30 days):

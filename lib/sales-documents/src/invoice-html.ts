@@ -43,6 +43,10 @@ export interface InvoiceDocLineItem {
   unitPrice: number;
   /** Line total (qty × unit, less any line discount). */
   amount: number;
+  /** Optional warranty label, e.g. "2 years warranty", shown under the item. */
+  warranty?: string | null;
+  /** Optional serial numbers for the line, shown under the item. */
+  serials?: string[] | null;
 }
 
 export interface InvoiceDocOptions {
@@ -78,6 +82,8 @@ export interface InvoiceDocInput {
   documentNumber: string;
   dateStr: string;
   dueDateStr?: string | null;
+  /** Label preceding the due/validity date, e.g. "Due" or "Valid until". Defaults to "Due". */
+  dueDateLabel?: string | null;
   paidAtStr?: string | null;
   status?: string | null;
   /** POS receipt path supplies a payment-method label; invoices usually omit it. */
@@ -195,14 +201,20 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
   // ── Right-column meta (number / dates / status) ──
   const metaRight: string[] = [`<div class="inv-num">${esc(input.documentNumber)}</div>`,
     `<div class="inv-date">${esc(input.dateStr)}</div>`];
-  if (input.dueDateStr) metaRight.push(`<div class="inv-date">Due ${esc(input.dueDateStr)}</div>`);
+  if (input.dueDateStr) metaRight.push(`<div class="inv-date">${esc(input.dueDateLabel || "Due")} ${esc(input.dueDateStr)}</div>`);
 
   // ── Line items ──
   const itemRows = input.items.map((item, i) => {
     const bg = i % 2 === 0 ? "#f9fafb" : "#ffffff";
+    const warranty = item.warranty && item.warranty.trim()
+      ? `<div class="td-warranty">🛡 ${esc(item.warranty.trim())}</div>`
+      : "";
+    const serials = item.serials && item.serials.length
+      ? `<div class="td-serial">S/N: ${esc(item.serials.join(", "))}</div>`
+      : "";
     return `
       <tr style="background:${bg}">
-        <td class="td-name">${esc(item.description || "Item")}</td>
+        <td class="td-name">${esc(item.description || "Item")}${warranty}${serials}</td>
         <td class="td-center">${esc(item.quantity)}</td>
         <td class="td-right">${fmtAUD(item.unitPrice)}</td>
         <td class="td-right">${fmtAUD(item.amount)}</td>
@@ -295,6 +307,8 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
     thead th.right { text-align: right; }
     thead th.center { text-align: center; }
     .td-name { padding: 9px 12px; border-bottom: 1px solid #f3f4f6; }
+    .td-warranty { font-size: 10px; color: #059669; margin-top: 2px; }
+    .td-serial { font-size: 10px; color: #6b7280; margin-top: 1px; font-family: 'Courier New', monospace; }
     .td-center { padding: 9px 12px; text-align: center; border-bottom: 1px solid #f3f4f6; }
     .td-right { padding: 9px 12px; text-align: right; border-bottom: 1px solid #f3f4f6; }
     .td-empty { font-style: italic; color: #9ca3af; padding: 16px 12px; }

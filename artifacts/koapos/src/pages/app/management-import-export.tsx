@@ -748,6 +748,8 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     return value.trim() || undefined;
   };
 
+  const MARKETING_TRUTHY = new Set(["true", "1", "yes", "y", "on"]);
+
   const buildPayload = (row: Record<string, string>) => {
     const payload: Record<string, unknown> = {};
     for (const field of entity.fields) {
@@ -757,7 +759,13 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) rawVal = expandCountryValue(rawVal);
         if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   rawVal = expandStateValue(rawVal);
         const val = coerce(rawVal, field.type);
-        if (val !== undefined) payload[field.key] = val;
+        if (val !== undefined) {
+          if (field.key === "agreedToMarketing") {
+            payload[field.key] = MARKETING_TRUTHY.has(String(val).trim().toLowerCase()) ? "true" : "false";
+          } else {
+            payload[field.key] = val;
+          }
+        }
       }
     }
     return payload;
@@ -909,7 +917,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
     .every((f) => !!mapping[f.key]);
 
   return (
-    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4 h-full">
+    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4 h-full max-h-[calc(100vh-12rem)]">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -954,6 +962,8 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         );
       })()}
 
+      {/* Scrollable step body — keeps header & footer pinned so the card never extends past the screen */}
+      <div className="flex-1 min-h-0 overflow-y-auto -mx-1 px-1">
       {/* ── Step 0: Upload ── */}
       {step === 0 && (
         <div
@@ -985,7 +995,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
 
       {/* ── Step 1: Map Columns ── */}
       {step === 1 && (
-        <div className="space-y-3 flex-1 overflow-y-auto max-h-[380px] pr-0.5">
+        <div className="space-y-3">
           <p className="text-xs text-muted-foreground">
             {rows.length} rows detected. Match each system field to the correct column in your CSV.
           </p>
@@ -1182,6 +1192,8 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
           </Button>
         </div>
       )}
+
+      </div>
 
       {/* Footer buttons */}
       {!result && (
