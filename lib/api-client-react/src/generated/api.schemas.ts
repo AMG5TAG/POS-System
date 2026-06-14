@@ -2809,6 +2809,33 @@ export interface LaybySettingsInput {
   termsAndConditions?: string;
 }
 
+export type SalesSettingsOverviewDefaultSalesPeriod = typeof SalesSettingsOverviewDefaultSalesPeriod[keyof typeof SalesSettingsOverviewDefaultSalesPeriod];
+
+
+export const SalesSettingsOverviewDefaultSalesPeriod = {
+  today: 'today',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsOverviewDefaultActivityPeriod = typeof SalesSettingsOverviewDefaultActivityPeriod[keyof typeof SalesSettingsOverviewDefaultActivityPeriod];
+
+
+export const SalesSettingsOverviewDefaultActivityPeriod = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsOverviewMonthMode = typeof SalesSettingsOverviewMonthMode[keyof typeof SalesSettingsOverviewMonthMode];
+
+
+export const SalesSettingsOverviewMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
+} as const;
+
 export interface SalesSettings {
   id: number;
   merchantId: number;
@@ -2834,9 +2861,39 @@ export interface SalesSettings {
   quoteTerms: string;
   quotePrefix: string;
   quoteDigits: number;
+  overviewDefaultSalesPeriod: SalesSettingsOverviewDefaultSalesPeriod;
+  overviewDefaultActivityPeriod: SalesSettingsOverviewDefaultActivityPeriod;
+  overviewMonthMode: SalesSettingsOverviewMonthMode;
   createdAt?: string;
   updatedAt: string;
 }
+
+export type SalesSettingsUpdateOverviewDefaultSalesPeriod = typeof SalesSettingsUpdateOverviewDefaultSalesPeriod[keyof typeof SalesSettingsUpdateOverviewDefaultSalesPeriod];
+
+
+export const SalesSettingsUpdateOverviewDefaultSalesPeriod = {
+  today: 'today',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsUpdateOverviewDefaultActivityPeriod = typeof SalesSettingsUpdateOverviewDefaultActivityPeriod[keyof typeof SalesSettingsUpdateOverviewDefaultActivityPeriod];
+
+
+export const SalesSettingsUpdateOverviewDefaultActivityPeriod = {
+  day: 'day',
+  week: 'week',
+  month: 'month',
+  year: 'year',
+} as const;
+
+export type SalesSettingsUpdateOverviewMonthMode = typeof SalesSettingsUpdateOverviewMonthMode[keyof typeof SalesSettingsUpdateOverviewMonthMode];
+
+
+export const SalesSettingsUpdateOverviewMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
+} as const;
 
 export interface SalesSettingsUpdate {
   saleRequireCustomer?: string;
@@ -2861,6 +2918,9 @@ export interface SalesSettingsUpdate {
   quoteTerms?: string;
   quotePrefix?: string;
   quoteDigits?: number;
+  overviewDefaultSalesPeriod?: SalesSettingsUpdateOverviewDefaultSalesPeriod;
+  overviewDefaultActivityPeriod?: SalesSettingsUpdateOverviewDefaultActivityPeriod;
+  overviewMonthMode?: SalesSettingsUpdateOverviewMonthMode;
 }
 
 export interface KpiSettings {
@@ -4977,6 +5037,10 @@ offset?: number;
 
 export type GetDashboardSummaryParams = {
 period?: GetDashboardSummaryPeriod;
+/**
+ * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+ */
+monthMode?: GetDashboardSummaryMonthMode;
 };
 
 export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof typeof GetDashboardSummaryPeriod];
@@ -4990,8 +5054,20 @@ export const GetDashboardSummaryPeriod = {
   year: 'year',
 } as const;
 
+export type GetDashboardSummaryMonthMode = typeof GetDashboardSummaryMonthMode[keyof typeof GetDashboardSummaryMonthMode];
+
+
+export const GetDashboardSummaryMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
+} as const;
+
 export type GetDashboardActivityParams = {
 period?: GetDashboardActivityPeriod;
+/**
+ * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+ */
+monthMode?: GetDashboardActivityMonthMode;
 };
 
 export type GetDashboardActivityPeriod = typeof GetDashboardActivityPeriod[keyof typeof GetDashboardActivityPeriod];
@@ -5002,6 +5078,14 @@ export const GetDashboardActivityPeriod = {
   week: 'week',
   month: 'month',
   year: 'year',
+} as const;
+
+export type GetDashboardActivityMonthMode = typeof GetDashboardActivityMonthMode[keyof typeof GetDashboardActivityMonthMode];
+
+
+export const GetDashboardActivityMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
 } as const;
 
 export type GetRecentTransactionsParams = {

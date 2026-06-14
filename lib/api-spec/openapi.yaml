@@ -1868,6 +1868,12 @@ paths:
           schema:
             type: string
             enum: [today, yesterday, week, month, year]
+        - name: monthMode
+          in: query
+          description: How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+          schema:
+            type: string
+            enum: [rolling30, calendar_mtd]
       responses:
         "200":
           description: Dashboard summary
@@ -1887,6 +1893,12 @@ paths:
           schema:
             type: string
             enum: [day, week, month, year]
+        - name: monthMode
+          in: query
+          description: How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+          schema:
+            type: string
+            enum: [rolling30, calendar_mtd]
       responses:
         "200":
           description: Activity summary
@@ -11646,7 +11658,7 @@ components:
 
     SalesSettings:
       type: object
-      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, updatedAt]
+      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, overviewDefaultSalesPeriod, overviewDefaultActivityPeriod, overviewMonthMode, updatedAt]
       properties:
         id:                        { type: integer }
         merchantId:                { type: integer }
@@ -11672,6 +11684,9 @@ components:
         quoteTerms:                { type: string }
         quotePrefix:               { type: string }
         quoteDigits:               { type: integer }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
+        overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
         createdAt:                 { type: string, format: date-time }
         updatedAt:                 { type: string, format: date-time }
 
@@ -11700,6 +11715,9 @@ components:
         quoteTerms:                { type: string }
         quotePrefix:               { type: string }
         quoteDigits:               { type: integer }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
+        overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
 
     KpiSettings:
       type: object

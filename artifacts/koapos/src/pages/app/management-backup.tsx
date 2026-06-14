@@ -65,8 +65,11 @@ import {
   CheckCircle2,
   XCircle,
   Loader2,
+  FileText,
+  AlertTriangle,
 } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { OneDriveIcon } from "@/components/provider-icons";
@@ -271,6 +274,7 @@ export function BackupSettingsPanel() {
 
   const [restoreTarget, setRestoreTarget] = useState<Backup | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
+  const [logTarget, setLogTarget] = useState<Backup | null>(null);
 
   const config = configQuery.data as BackupConfig | undefined;
 
@@ -803,17 +807,45 @@ export function BackupSettingsPanel() {
                       </TableCell>
                       <TableCell>{formatBytes(b.fileSizeBytes)}</TableCell>
                       <TableCell className="text-right">
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          disabled={b.status !== "completed"}
-                          onClick={() => {
-                            setRestoreTarget(b);
-                            setRestorePassword("");
-                          }}
-                        >
-                          <RotateCcw className="mr-1 h-3 w-3" /> Restore
-                        </Button>
+                        <div className="flex items-center justify-end gap-2">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className={cn(
+                              "h-8 w-8",
+                              b.status === "failed" &&
+                                "text-destructive hover:text-destructive",
+                            )}
+                            title={
+                              b.status === "failed"
+                                ? "Backup failed — view log"
+                                : "View backup log"
+                            }
+                            aria-label={
+                              b.status === "failed"
+                                ? "Backup failed — view log"
+                                : "View backup log"
+                            }
+                            onClick={() => setLogTarget(b)}
+                          >
+                            {b.status === "failed" ? (
+                              <AlertTriangle className="h-4 w-4" />
+                            ) : (
+                              <FileText className="h-4 w-4" />
+                            )}
+                          </Button>
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            disabled={b.status !== "completed"}
+                            onClick={() => {
+                              setRestoreTarget(b);
+                              setRestorePassword("");
+                            }}
+                          >
+                            <RotateCcw className="mr-1 h-3 w-3" /> Restore
+                          </Button>
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -872,6 +904,83 @@ export function BackupSettingsPanel() {
               )}
               Restore &amp; replace data
             </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Backup log / details dialog */}
+      <Dialog
+        open={logTarget !== null}
+        onOpenChange={(open) => { if (!open) setLogTarget(null); }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              {logTarget?.status === "failed" ? (
+                <AlertTriangle className="h-5 w-5 text-destructive" />
+              ) : (
+                <FileText className="h-5 w-5" />
+              )}
+              Backup log
+            </DialogTitle>
+            <DialogDescription>
+              {logTarget ? `Started ${formatDate(logTarget.startedAt)}` : ""}
+            </DialogDescription>
+          </DialogHeader>
+
+          {logTarget && (
+            <div className="space-y-4">
+              {logTarget.status === "failed" && (
+                <div className="rounded-md border border-destructive/30 bg-destructive/10 p-3">
+                  <p className="flex items-center gap-2 text-sm font-medium text-destructive">
+                    <AlertTriangle className="h-4 w-4" /> This backup failed
+                  </p>
+                  <p className="mt-1 whitespace-pre-wrap break-words text-sm text-destructive/90">
+                    {logTarget.errorMessage?.trim()
+                      ? logTarget.errorMessage
+                      : "No error detail was recorded. Check the destination credentials and that the encryption password is set, then run the backup again."}
+                  </p>
+                </div>
+              )}
+              {logTarget.status === "pending" && (
+                <div className="rounded-md border bg-muted/40 p-3">
+                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> This backup is still
+                    running.
+                  </p>
+                </div>
+              )}
+
+              <dl className="grid grid-cols-3 gap-x-3 gap-y-2 text-sm">
+                <dt className="text-muted-foreground">Status</dt>
+                <dd className="col-span-2"><StatusBadge status={logTarget.status} /></dd>
+
+                <dt className="text-muted-foreground">Trigger</dt>
+                <dd className="col-span-2 capitalize">{logTarget.trigger}</dd>
+
+                <dt className="text-muted-foreground">Started</dt>
+                <dd className="col-span-2">{formatDate(logTarget.startedAt)}</dd>
+
+                <dt className="text-muted-foreground">Completed</dt>
+                <dd className="col-span-2">
+                  {logTarget.completedAt ? formatDate(logTarget.completedAt) : "—"}
+                </dd>
+
+                <dt className="text-muted-foreground">Destinations</dt>
+                <dd className="col-span-2">
+                  {logTarget.locations.length > 0
+                    ? logTarget.locations.map((l) => l.type).join(", ")
+                    : logTarget.storageType ?? "—"}
+                </dd>
+
+                <dt className="text-muted-foreground">Size</dt>
+                <dd className="col-span-2">{formatBytes(logTarget.fileSizeBytes)}</dd>
+              </dl>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setLogTarget(null)}>Close</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

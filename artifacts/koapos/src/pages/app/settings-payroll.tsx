@@ -83,7 +83,7 @@ export default function SettingsPayrollPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6 max-w-3xl">
+      <div className="p-6 md:p-8 space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <Wallet className="h-6 w-6" /> Payroll Settings
@@ -96,9 +96,9 @@ export default function SettingsPayrollPage() {
         {loading ? (
           <Skeleton className="h-48 w-full" />
         ) : (
-          <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
             {/* Connection */}
-            <Card>
+            <Card className="h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base flex items-center gap-2">
                   <Building2 className="h-4 w-4" /> Provider connection
@@ -153,7 +153,7 @@ export default function SettingsPayrollPage() {
             </Card>
 
             {/* Configuration */}
-            <Card>
+            <Card className="h-full">
               <CardHeader className="pb-3">
                 <CardTitle className="text-base">Configuration</CardTitle>
               </CardHeader>
@@ -206,7 +206,7 @@ export default function SettingsPayrollPage() {
                 </div>
               </CardContent>
             </Card>
-          </>
+          </div>
         )}
       </div>
     </AppLayout>

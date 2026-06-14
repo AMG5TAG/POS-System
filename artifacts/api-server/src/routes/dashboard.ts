@@ -41,7 +41,9 @@ function toLocalDateKey(date: Date, tz: string): string {
 
 const router: IRouter = Router();
 
-function getPeriodStart(period: string): Date {
+type MonthMode = "rolling30" | "calendar_mtd";
+
+function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Date {
   const now = new Date();
   switch (period) {
     case "today": {
@@ -61,6 +63,14 @@ function getPeriodStart(period: string): Date {
       return d;
     }
     case "month": {
+      // calendar_mtd: from the 1st of the current month at midnight to now.
+      // rolling30 (default): the trailing 30 days.
+      if (monthMode === "calendar_mtd") {
+        const d = new Date(now);
+        d.setDate(1);
+        d.setHours(0, 0, 0, 0);
+        return d;
+      }
       const d = new Date(now);
       d.setDate(d.getDate() - 30);
       return d;
@@ -89,7 +99,7 @@ function getPeriodEnd(period: string): Date {
 }
 
 /** Returns [currentStart, currentEnd, prevStart, prevEnd] for activity comparison */
-function getActivityWindows(period: string): [Date, Date, Date, Date] {
+function getActivityWindows(period: string, monthMode: MonthMode = "rolling30"): [Date, Date, Date, Date] {
   const now = new Date();
   switch (period) {
     case "day": {
@@ -105,6 +115,14 @@ function getActivityWindows(period: string): [Date, Date, Date, Date] {
       return [start, now, prevStart, prevEnd];
     }
     case "month": {
+      if (monthMode === "calendar_mtd") {
+        // Current: 1st of this month → now. Previous: the equivalent month-to-date
+        // window last month (1st of last month → same elapsed point) for a fair delta.
+        const start = new Date(now); start.setDate(1); start.setHours(0, 0, 0, 0);
+        const prevStart = new Date(start); prevStart.setMonth(prevStart.getMonth() - 1);
+        const prevEnd = new Date(now); prevEnd.setMonth(prevEnd.getMonth() - 1);
+        return [start, now, prevStart, prevEnd];
+      }
       const start = new Date(now); start.setDate(start.getDate() - 30);
       const prevStart = new Date(now); prevStart.setDate(prevStart.getDate() - 60);
       const prevEnd = new Date(start);
@@ -133,7 +151,8 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   }
 
   const period = queryParams.data.period ?? "today";
-  const periodStart = getPeriodStart(period);
+  const monthMode: MonthMode = queryParams.data.monthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
+  const periodStart = getPeriodStart(period, monthMode);
   const periodEnd = getPeriodEnd(period);
   const merchantId = req.session.merchantId!;
 
@@ -288,8 +307,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
 router.get("/dashboard/activity", requireAuth, async (req, res): Promise<void> => {
   const period = (req.query.period as string) ?? "week";
+  const monthMode: MonthMode = (req.query.monthMode as string) === "calendar_mtd" ? "calendar_mtd" : "rolling30";
   const merchantId = req.session.merchantId!;
-  const [curStart, curEnd, prevStart, prevEnd] = getActivityWindows(period);
+  const [curStart, curEnd, prevStart, prevEnd] = getActivityWindows(period, monthMode);
 
   const [curJobByDevice, curApptCount, prevJobCount, prevApptCount, curCustomers, prevCustomers] = await Promise.all([
     // Current-period service jobs grouped by device type (gives count + breakdown in one query)

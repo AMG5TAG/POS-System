@@ -2620,7 +2620,8 @@ export const UpdateInventoryResponse = zod.object({
  * @summary Get dashboard summary stats
  */
 export const GetDashboardSummaryQueryParams = zod.object({
-  "period": zod.enum(['today', 'yesterday', 'week', 'month', 'year']).optional()
+  "period": zod.enum(['today', 'yesterday', 'week', 'month', 'year']).optional(),
+  "monthMode": zod.enum(['rolling30', 'calendar_mtd']).optional().describe('How the \"month\" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.')
 })
 
 export const GetDashboardSummaryResponse = zod.object({
@@ -2647,7 +2648,8 @@ export const GetDashboardSummaryResponse = zod.object({
  * @summary Get activity counts (service jobs, appointments, new customers) for current and previous period
  */
 export const GetDashboardActivityQueryParams = zod.object({
-  "period": zod.enum(['day', 'week', 'month', 'year']).optional()
+  "period": zod.enum(['day', 'week', 'month', 'year']).optional(),
+  "monthMode": zod.enum(['rolling30', 'calendar_mtd']).optional().describe('How the \"month\" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.')
 })
 
 export const GetDashboardActivityResponse = zod.object({
@@ -5458,6 +5460,9 @@ export const GetSalesSettingsResponse = zod.object({
   "quoteTerms": zod.string(),
   "quotePrefix": zod.string(),
   "quoteDigits": zod.number(),
+  "overviewDefaultSalesPeriod": zod.enum(['today', 'month', 'year']),
+  "overviewDefaultActivityPeriod": zod.enum(['day', 'week', 'month', 'year']),
+  "overviewMonthMode": zod.enum(['rolling30', 'calendar_mtd']),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date()
 })
@@ -5488,7 +5493,10 @@ export const UpdateSalesSettingsBody = zod.object({
   "quoteAutoEmail": zod.string().optional(),
   "quoteTerms": zod.string().optional(),
   "quotePrefix": zod.string().optional(),
-  "quoteDigits": zod.number().optional()
+  "quoteDigits": zod.number().optional(),
+  "overviewDefaultSalesPeriod": zod.enum(['today', 'month', 'year']).optional(),
+  "overviewDefaultActivityPeriod": zod.enum(['day', 'week', 'month', 'year']).optional(),
+  "overviewMonthMode": zod.enum(['rolling30', 'calendar_mtd']).optional()
 })
 
 export const UpdateSalesSettingsResponse = zod.object({
@@ -5516,6 +5524,9 @@ export const UpdateSalesSettingsResponse = zod.object({
   "quoteTerms": zod.string(),
   "quotePrefix": zod.string(),
   "quoteDigits": zod.number(),
+  "overviewDefaultSalesPeriod": zod.enum(['today', 'month', 'year']),
+  "overviewDefaultActivityPeriod": zod.enum(['day', 'week', 'month', 'year']),
+  "overviewMonthMode": zod.enum(['rolling30', 'calendar_mtd']),
   "createdAt": zod.coerce.date().optional(),
   "updatedAt": zod.coerce.date()
 })

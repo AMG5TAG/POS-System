@@ -41,6 +41,15 @@ export const salesSettingsTable = pgTable("sales_settings", {
   quotePrefix:           text("quote_prefix").notNull().default("QT-"),
   quoteDigits:           integer("quote_digits").notNull().default(4),
 
+  // ── Sales Overview defaults (Management → Sales Overview) ──
+  // Which period tab opens first for the Sales Overview KPIs (today | month | year)
+  overviewDefaultSalesPeriod:    text("overview_default_sales_period").notNull().default("today"),
+  // Which period tab opens first for the Activity Overview (day | week | month | year)
+  overviewDefaultActivityPeriod: text("overview_default_activity_period").notNull().default("week"),
+  // What "Month" means on the overview: rolling last-30-days, or calendar month-to-date
+  // (rolling30 | calendar_mtd)
+  overviewMonthMode:             text("overview_month_mode").notNull().default("rolling30"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
