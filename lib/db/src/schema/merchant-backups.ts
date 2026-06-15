@@ -38,9 +38,14 @@ export interface BackupStorageDestination {
   folder?: string;
 }
 
-/** Where a completed backup archive landed, per destination. */
+/**
+ * Where a completed backup archive landed, per destination. The `server` type
+ * is the always-on durable copy in the platform's object storage, written for
+ * every backup regardless of the merchant's configured destinations (which are
+ * the user-selectable types). It is not a configurable destination.
+ */
 export interface BackupLocation {
-  type: "local" | "s3" | "gcs" | "sftp" | "onedrive";
+  type: "server" | "local" | "s3" | "gcs" | "sftp" | "onedrive";
   ref: string;
 }
 

@@ -16,7 +16,9 @@ import { collectMerchantData } from "../lib/backup-collector";
 import { createArchive } from "../lib/backup-archive";
 import { decryptToken } from "./tokenVault";
 import { uploadToDestinations } from "../lib/backup-storage";
+import { uploadServer } from "../lib/backup-storage/server";
 import type { StoredDestination } from "../lib/backup-storage/types";
+import type { BackupLocation } from "@workspace/db";
 
 const CANONICAL_ROOT = path.join(process.cwd(), "backups");
 
@@ -66,6 +68,14 @@ async function performBackup(
 
     const { size } = await stat(canonicalPath);
 
+    // ALWAYS persist a durable copy to the platform's object storage (the
+    // "server"), independent of the merchant's configured destinations. The
+    // canonical copy under ./backups is on the deployment's ephemeral
+    // filesystem, so this server copy is the durable source of truth used by
+    // restore. A failure here fails the whole backup — by design, a backup that
+    // isn't durably stored on the server is not a successful backup.
+    const serverRef = await uploadServer(canonicalPath, fileName, merchantId);
+
     const destinations = (config.destinations ?? []) as StoredDestination[];
     const { locations, errors } = await uploadToDestinations(
       destinations,
@@ -77,7 +87,12 @@ async function performBackup(
       logger.warn({ merchantId, errors }, "Some backup destinations failed");
     }
 
-    const storageTypes = [...new Set(locations.map((l) => l.type))];
+    // Record the server copy first, then the user destinations.
+    const allLocations: BackupLocation[] = [
+      { type: "server", ref: serverRef },
+      ...locations,
+    ];
+    const storageTypes = [...new Set(allLocations.map((l) => l.type))];
     await db
       .update(merchantBackupsTable)
       .set({
@@ -85,8 +100,8 @@ async function performBackup(
         completedAt: new Date(),
         filePath: canonicalPath,
         fileSizeBytes: size,
-        locations,
-        storageType: storageTypes.length > 0 ? storageTypes.join(",") : "local",
+        locations: allLocations,
+        storageType: storageTypes.join(","),
       })
       .where(eq(merchantBackupsTable.id, backupId));
 
@@ -156,6 +171,69 @@ export async function startBackup(
 
 export function getCanonicalDir(merchantId: number): string {
   return canonicalDir(merchantId);
+}
+
+/**
+ * Synchronously create one durable backup of a merchant and wait for it to
+ * finish, returning where it landed. Unlike `startBackup` this skips the
+ * config/encryption-password lookup and the in-memory lock, so callers can take
+ * a guaranteed rollback point on demand (e.g. the transfer CLI backs up the
+ * target merchant before overwriting it). The caller supplies the encryption
+ * password directly.
+ *
+ * Flow mirrors the durable core of `performBackup`: snapshot → encrypted
+ * archive (canonical local copy) → upload to the platform object store → record
+ * a `merchant_backups` row. Throws (and marks the row failed) if any step fails,
+ * so a transfer can abort rather than proceed without a rollback point.
+ *
+ * NOTE: records a `merchant_backups` row, whose `merchantId` FKs to `merchants`
+ * — so the merchant must already exist. Callers restoring into a brand-new
+ * merchant (insert mode) have nothing to back up and should skip this.
+ */
+export async function backupMerchantNow(
+  merchantId: number,
+  trigger: string,
+  password: string,
+): Promise<{ serverRef: string; canonicalPath: string; backupId: number }> {
+  const [pending] = await db
+    .insert(merchantBackupsTable)
+    .values({ merchantId, status: "pending", trigger })
+    .returning();
+
+  const fileName = `backup-${merchantId}-${pending.id}-${Date.now()}.koapos.enc`;
+  const dir = canonicalDir(merchantId);
+  const canonicalPath = path.join(dir, fileName);
+
+  try {
+    await mkdir(dir, { recursive: true });
+    const snapshot = await collectMerchantData(merchantId);
+    await createArchive(snapshot, canonicalPath, password);
+    const { size } = await stat(canonicalPath);
+    const serverRef = await uploadServer(canonicalPath, fileName, merchantId);
+
+    await db
+      .update(merchantBackupsTable)
+      .set({
+        status: "completed",
+        completedAt: new Date(),
+        filePath: canonicalPath,
+        fileSizeBytes: size,
+        locations: [{ type: "server", ref: serverRef }],
+        storageType: "server",
+      })
+      .where(eq(merchantBackupsTable.id, pending.id));
+
+    return { serverRef, canonicalPath, backupId: pending.id };
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    logger.error({ merchantId, backupId: pending.id, err }, "On-demand backup failed");
+    await rm(canonicalPath, { force: true }).catch(() => {});
+    await db
+      .update(merchantBackupsTable)
+      .set({ status: "failed", completedAt: new Date(), errorMessage: message })
+      .where(eq(merchantBackupsTable.id, pending.id));
+    throw err;
+  }
 }
 
 export type { MerchantBackupConfig };

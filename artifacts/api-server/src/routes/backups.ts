@@ -22,6 +22,9 @@ import {
   publicDestination,
   type StoredDestination,
 } from "../lib/backup-storage/types";
+import { downloadServerCopy } from "../lib/backup-storage/server";
+import { existsSync } from "fs";
+import type { BackupLocation } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -217,8 +220,33 @@ router.post(
       return;
     }
 
+    // Prefer the local canonical copy; if it's gone (the deployment filesystem
+    // is ephemeral), fall back to the durable server copy in object storage.
+    let archivePath = backup.filePath;
+    let cleanup: (() => Promise<void>) | null = null;
+    if (!existsSync(archivePath)) {
+      const serverLoc = ((backup.locations ?? []) as BackupLocation[]).find(
+        (l) => l.type === "server",
+      );
+      if (!serverLoc) {
+        res.status(410).json({
+          error: "Backup file is no longer available on this server",
+        });
+        return;
+      }
+      try {
+        const dl = await downloadServerCopy(serverLoc.ref);
+        archivePath = dl.path;
+        cleanup = dl.cleanup;
+      } catch (err) {
+        req.log.error({ merchantId, backupId: id, err }, "Server backup fetch failed");
+        res.status(500).json({ error: "Could not retrieve the backup from the server" });
+        return;
+      }
+    }
+
     try {
-      await restoreFromArchive(merchantId, backup.filePath, password);
+      await restoreFromArchive(merchantId, archivePath, password);
       res.json({ ok: true });
     } catch (err) {
       if (err instanceof InvalidBackupPasswordError) {
@@ -229,6 +257,8 @@ router.post(
       res.status(500).json({
         error: err instanceof Error ? err.message : "Restore failed",
       });
+    } finally {
+      if (cleanup) await cleanup();
     }
   },
 );
