@@ -9,6 +9,7 @@
     "seed-product-types": "tsx ./src/seed-product-types.ts",
     "seed-default-register": "tsx ./src/seed-default-register.ts",
     "backfill-cost-prices": "tsx ./src/backfill-cost-prices.ts",
+    "backfill-line-item-costs": "tsx ./src/backfill-line-item-costs.ts",
     "setup-login-cleanup": "tsx ./src/setup-login-cleanup.ts",
     "setup-report-views": "tsx ./src/setup-report-views.ts",
     "protect-merchant-accounts": "tsx ./src/protect-merchant-accounts.ts",

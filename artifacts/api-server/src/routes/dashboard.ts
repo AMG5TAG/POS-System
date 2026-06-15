@@ -164,7 +164,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     ? and(gte(invoicesTable.paidAt, periodStart), lt(invoicesTable.paidAt, periodEnd))
     : gte(invoicesTable.paidAt, periodStart);
 
-  const [txnAgg, invoiceAgg, cogsResult, topPaymentRows, newCustomersResult, lowStockResult, pendingInvoiceResult, laybyAgg, laybyCogsResult, taxRate] = await Promise.all([
+  const [txnAgg, invoiceAgg, cogsResult, invoiceCogsResult, topPaymentRows, newCustomersResult, lowStockResult, pendingInvoiceResult, laybyAgg, laybyCogsResult, taxRate] = await Promise.all([
     // Transaction aggregations: completed revenue, refund total, discount total, completed count
     db.select({
       posSales:      sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
@@ -181,11 +181,13 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       invoiceTax:    sql<string>`COALESCE(SUM(${invoicesTable.taxTotal}::numeric), 0)`,
     }).from(invoicesTable).where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), periodCondInv)),
 
-    // Items sold + COGS via LATERAL JSONB unnest + JOIN to products (single scan)
+    // Items sold + COGS via LATERAL JSONB unnest + JOIN to products (single scan).
+    // COGS prefers the at-sale cost snapshot on the line item, falling back to
+    // the product's current cost — matching the report views and kpi-calc.
     db.execute(sql`
       SELECT
-        COALESCE(SUM((item->>'quantity')::int), 0)::float                                       AS items_sold,
-        COALESCE(SUM((item->>'quantity')::int * COALESCE(p.cost_price::numeric, 0)), 0)::float  AS cost_total
+        COALESCE(SUM((item->>'quantity')::int), 0)::float                                                                       AS items_sold,
+        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0)::float    AS cost_total
       FROM transactions t
       CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
       LEFT JOIN products p
@@ -198,6 +200,19 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         AND jsonb_typeof(t.items) = 'array'
         AND (item->>'productId') IS NOT NULL
         AND (item->>'productId') <> '0'
+    `),
+
+    // Paid-invoice COGS in the period (was previously omitted from costTotal,
+    // even though invoice revenue is counted in totalSales).
+    db.execute(sql`
+      SELECT
+        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0)::float AS cost_total
+      FROM invoices i
+      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
+      LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
+      WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
+        AND i.paid_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND i.paid_at < ${periodEnd}` : sql``}
     `),
 
     // Top payment method by count
@@ -239,11 +254,12 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         ${period === "yesterday" ? sql`AND COALESCE(l.completed_at, l.updated_at) < ${periodEnd}` : sql``}
     `),
 
-    // Completed laybys: items sold + COGS (layby lines carry no cost snapshot)
+    // Completed laybys: items sold + COGS (prefers the at-sale snapshot, falls
+    // back to the product's current cost)
     db.execute(sql`
       SELECT
-        COALESCE(SUM((item->>'quantity')::int), 0)::float                                       AS items_sold,
-        COALESCE(SUM((item->>'quantity')::int * COALESCE(p.cost_price::numeric, 0)), 0)::float  AS cost_total
+        COALESCE(SUM((item->>'quantity')::int), 0)::float                                                                       AS items_sold,
+        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0)::float    AS cost_total
       FROM laybys l
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
@@ -269,9 +285,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const transactionCount = posCount + invoiceCount + laybyCount;
   const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
   const cogsRow         = cogsResult.rows[0] as { items_sold: number; cost_total: number } | undefined;
+  const invoiceCogsRow  = invoiceCogsResult.rows[0] as { cost_total: number } | undefined;
   const laybyCogsRow    = laybyCogsResult.rows[0] as { items_sold: number; cost_total: number } | undefined;
   const itemsSold       = Number(cogsRow?.items_sold ?? 0) + Number(laybyCogsRow?.items_sold ?? 0);
-  const costTotal       = Number(cogsRow?.cost_total ?? 0) + Number(laybyCogsRow?.cost_total ?? 0);
+  const costTotal       = Number(cogsRow?.cost_total ?? 0) + Number(invoiceCogsRow?.cost_total ?? 0) + Number(laybyCogsRow?.cost_total ?? 0);
   // GST collected across all three sale types (POS + invoices carry their split;
   // laybys are GST-inclusive so their GST is derived from the default rate).
   const taxCollected    = parseFloat((txnAgg[0] as { taxCollected?: string })?.taxCollected ?? "0")

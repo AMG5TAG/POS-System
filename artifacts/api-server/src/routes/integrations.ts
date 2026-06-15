@@ -3,7 +3,7 @@ import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, cu
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault, readVault, upsertCredentialVault } from "../services/tokenVault";
+import { upsertVault, deleteVault, readVault, upsertCredentialVault, getOAuthAppCreds, saveOAuthAppCreds } from "../services/tokenVault";
 
 const router: IRouter = Router();
 
@@ -13,9 +13,9 @@ const router: IRouter = Router();
 */
 export const INTEGRATIONS = [
   /* ── ACCOUNTING & FINANCE ──────────────────────────────────────────────── */
-  { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.",               authType: "oauth" as const, oauthProvider: "xero"       as const, useVault: false },
-  { key: "quickbooks",      label: "QuickBooks Online",     section: "accounting", category: "Accounting & Finance", description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online (Intuit).",              authType: "oauth" as const, oauthProvider: "quickbooks"  as const, useVault: true  },
-  { key: "myob",            label: "MYOB",                  section: "accounting", category: "Accounting & Finance", description: "Sync sales data and end-of-day takings directly to MYOB AccountRight or Essentials.",                     authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically. Connect with your own Xero app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: false },
+  { key: "quickbooks",      label: "QuickBooks Online",     section: "accounting", category: "Accounting & Finance", description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online. Connect with your own QuickBooks app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true  },
+  { key: "myob",            label: "MYOB",                  section: "accounting", category: "Accounting & Finance", description: "Sync sales data and end-of-day takings to MYOB AccountRight or Essentials. Connect with your own MYOB app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true },
 
   /* ── E-COMMERCE & MARKETPLACES ─────────────────────────────────────────── */
   { key: "shopify",         label: "Shopify",               section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Sync your Shopify online store inventory, orders, and customer data with KoaPOS.",                    authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
@@ -26,15 +26,15 @@ export const INTEGRATIONS = [
   { key: "sendle",          label: "Sendle",                section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Carbon-neutral door-to-door parcel delivery across Australia — no fixed contracts.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
   /* ── PAYMENTS & TERMINALS ──────────────────────────────────────────────── */
-  { key: "stripe_own",      label: "Stripe Connect",        section: "payments",   category: "Payments & Terminals", description: "Connect your Stripe account to accept card payments and manage payouts.",                                  authType: "oauth" as const, oauthProvider: "stripe"     as const, useVault: true  },
+  { key: "stripe_own",      label: "Stripe",                section: "payments",   category: "Payments & Terminals", description: "Connect your own Stripe account with your API keys to accept card payments and manage payouts.",            authType: "credentials" as const, fields: [{ name: "secretKey", label: "Secret Key", type: "password" }, { name: "publishableKey", label: "Publishable Key", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true  },
   { key: "commbank_eftpos", label: "CommBank EFTPOS",       section: "payments",   category: "Payments & Terminals", description: "Integrate with CommBank Smart terminal for card-present payments.",                                       authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "terminalId", label: "Terminal ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
   { key: "square_terminal", label: "Square",                section: "payments",   category: "Payments & Terminals", description: "Accept in-store card payments via Square Terminal or Square Reader.",                                     authType: "credentials" as const, fields: [{ name: "accessToken", label: "Access Token", type: "password" }, { name: "locationId", label: "Location ID", type: "text" }] as F[], useVault: false },
   { key: "tyro_eftpos",     label: "Tyro EFTPOS",           section: "payments",   category: "Payments & Terminals", description: "Australia's most popular independent EFTPOS provider — contactless, Apple Pay & Google Pay.",             authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "terminalId", label: "Terminal ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
   { key: "paypal",          label: "PayPal",                section: "payments",   category: "Payments & Terminals", description: "Accept PayPal in-store via QR code — customer scans with the PayPal app to pay.",                        authType: "credentials" as const, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }, { name: "merchantId", label: "Merchant ID", type: "text" }] as F[], useVault: false },
   { key: "wechat_alipay",   label: "WeChat Pay & Alipay",   section: "payments",   category: "Payments & Terminals", description: "Display merchant QR codes for WeChat Pay and Alipay in-store.",                                          authType: "credentials" as const, fields: [{ name: "wechatMerchantId", label: "WeChat Merchant ID", type: "text" }, { name: "wechatApiKey", label: "WeChat API Key", type: "password" }, { name: "alipayMerchantId", label: "Alipay Merchant ID", type: "text" }, { name: "alipayApiKey", label: "Alipay API Key", type: "password" }] as F[], useVault: false },
-  { key: "afterpay",        label: "Afterpay",              section: "payments",   category: "Payments & Terminals", description: "Let customers split purchases into 4 fortnightly payments.",                                              authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  { key: "afterpay",        label: "Afterpay",              section: "payments",   category: "Payments & Terminals", description: "Let customers split purchases into 4 fortnightly payments.",                                              authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
-  { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "apple_wallet",    label: "Apple Wallet",          section: "payments",   category: "Payments & Terminals", description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",                  authType: "credentials" as const, fields: [{ name: "passTypeId", label: "Pass Type ID", type: "text" }, { name: "teamId", label: "Apple Team ID", type: "text" }, { name: "certificateBase64", label: "Certificate (Base64)", type: "password" }] as F[], useVault: false },
   { key: "google_pay",      label: "Google Wallet",         section: "payments",   category: "Payments & Terminals", description: "Issue loyalty cards and offers to Google Wallet.",                                                        authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
@@ -77,7 +77,6 @@ function isOAuthConfigured(provider: string): boolean {
     case "google":     return !!process.env.GOOGLE_CLIENT_ID;
     case "microsoft":  return !!process.env.MICROSOFT_CLIENT_ID;
     case "dropbox":    return !!process.env.DROPBOX_APP_KEY;
-    case "stripe":     return !!process.env.STRIPE_CONNECT_CLIENT_ID;
     case "xero":       return !!process.env.XERO_CLIENT_ID;
     case "quickbooks": return !!process.env.QUICKBOOKS_CLIENT_ID;
     case "meta":       return !!process.env.META_APP_ID;
@@ -150,7 +149,7 @@ function manageUrl(key: string): string {
   return SYNC_INTEGRATION_KEYS.has(key) ? "/management/sync" : "/management/integrations";
 }
 
-function buildOAuthStartUrl(key: string, req: import("express").Request): string | null {
+async function buildOAuthStartUrl(key: string, req: import("express").Request, merchantId: number): Promise<string | null> {
   const cb = cbUrl(key, req);
   const state = String(req.session.merchantId);
 
@@ -166,13 +165,18 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
     const k = process.env.DROPBOX_APP_KEY; if (!k) return null;
     return `https://www.dropbox.com/oauth2/authorize?${new URLSearchParams({ client_id: k, redirect_uri: cb, response_type: "code", token_access_type: "offline", state })}`;
   }
-  if (key === "stripe_own") {
-    const cid = process.env.STRIPE_CONNECT_CLIENT_ID; if (!cid) return null;
-    return `https://connect.stripe.com/oauth/authorize?${new URLSearchParams({ response_type: "code", client_id: cid, scope: "read_write", redirect_uri: cb, state })}`;
-  }
   if (key === "quickbooks") {
-    const cid = process.env.QUICKBOOKS_CLIENT_ID; if (!cid) return null;
-    return `https://appcenter.intuit.com/connect/oauth2?${new URLSearchParams({ client_id: cid, redirect_uri: cb, response_type: "code", scope: "com.intuit.quickbooks.accounting", state })}`;
+    // Bring-your-own OAuth app: merchant's own client id (env fallback).
+    const cc = await getOAuthAppCreds(merchantId, "quickbooks")
+      ?? (process.env.QUICKBOOKS_CLIENT_ID ? { clientId: process.env.QUICKBOOKS_CLIENT_ID, clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET ?? "" } : null);
+    if (!cc) return null;
+    return `https://appcenter.intuit.com/connect/oauth2?${new URLSearchParams({ client_id: cc.clientId, redirect_uri: cb, response_type: "code", scope: "com.intuit.quickbooks.accounting", state })}`;
+  }
+  if (key === "myob") {
+    // Bring-your-own OAuth app: merchant supplies their own MYOB app credentials.
+    const cc = await getOAuthAppCreds(merchantId, "myob");
+    if (!cc) return null;
+    return `https://secure.myob.com/oauth2/account/authorize?${new URLSearchParams({ client_id: cc.clientId, redirect_uri: cb, response_type: "code", scope: "CompanyFile", state })}`;
   }
   if (key === "meta_business" || key === "instagram_business") {
     const appId = process.env.META_APP_ID; if (!appId) return null;
@@ -203,7 +207,7 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
 
 /* ── Token exchange ──────────────────────────────────────────────────────────── */
 
-async function exchangeToken(key: string, code: string, cb: string, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
+async function exchangeToken(key: string, code: string, cb: string, merchantId: number, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
   if (key === "google_drive" || key === "google_business" || key === "google_contacts" || key === "youtube_channel" || key === "google_ads") {
     const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     const accessToken = d.access_token ?? "";
@@ -251,18 +255,11 @@ async function exchangeToken(key: string, code: string, cb: string, extra?: Reco
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id, accountHandle };
   }
-  if (key === "stripe_own") {
-    const d = await fetch("https://connect.stripe.com/oauth/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, client_secret: process.env.STRIPE_SECRET_KEY ?? "" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; stripe_user_id?: string };
-    const accessToken = d.access_token ?? "";
-    let accountHandle: string | undefined;
-    if (d.stripe_user_id) {
-      const account = await fetch(`https://api.stripe.com/v1/accounts/${d.stripe_user_id}`, { headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY ?? ""}` } }).then((r) => r.json()).catch(() => ({})) as { email?: string; business_profile?: { name?: string } };
-      accountHandle = account.business_profile?.name ?? account.email;
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.stripe_user_id, accountHandle };
-  }
   if (key === "quickbooks") {
-    const basicCreds = Buffer.from(`${process.env.QUICKBOOKS_CLIENT_ID}:${process.env.QUICKBOOKS_CLIENT_SECRET}`).toString("base64");
+    // Bring-your-own OAuth app: merchant's own client id/secret (env fallback).
+    const cc = await getOAuthAppCreds(merchantId, "quickbooks")
+      ?? { clientId: process.env.QUICKBOOKS_CLIENT_ID ?? "", clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET ?? "" };
+    const basicCreds = Buffer.from(`${cc.clientId}:${cc.clientSecret}`).toString("base64");
     const d = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basicCreds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     const accessToken = d.access_token ?? "";
     let accountHandle: string | undefined;
@@ -271,6 +268,13 @@ async function exchangeToken(key: string, code: string, cb: string, extra?: Reco
       accountHandle = profile.email ?? (profile.givenName ? `${profile.givenName} ${profile.familyName ?? ""}`.trim() : undefined);
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: extra?.realmId, accountHandle };
+  }
+  if (key === "myob") {
+    // Bring-your-own OAuth app: merchant supplies their own MYOB app credentials.
+    const cc = await getOAuthAppCreds(merchantId, "myob");
+    if (!cc) throw new Error("MYOB app credentials not configured for this merchant");
+    const d = await fetch("https://secure.myob.com/oauth2/v1/authorize", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb, client_id: cc.clientId, client_secret: cc.clientSecret, scope: "CompanyFile" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number; user?: { uid?: string; username?: string } };
+    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: d.user?.uid, accountHandle: d.user?.username };
   }
   if (key === "meta_business" || key === "instagram_business") {
     const d = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${new URLSearchParams({ client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "", redirect_uri: cb, code })}`).then((r) => r.json()) as { access_token?: string; expires_in?: number };
@@ -342,6 +346,7 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
     const vaultRow   = vaultMap.get(intg.key);
     const comingSoon = "comingSoon" in intg ? (intg.comingSoon as boolean) : false;
     const oauthProv  = "oauthProvider" in intg ? intg.oauthProvider : null;
+    const byoOAuth   = "byoOAuth" in intg ? !!intg.byoOAuth : false;
 
     let status = "disconnected", connectedAt: string | null = null, accountHandle: string | null = null, accountId: string | null = null;
     let disconnectedReason: string | null = null;
@@ -370,8 +375,11 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
       description: intg.description, authType: intg.authType,
       fields: "fields" in intg ? intg.fields : [],
       comingSoon, useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
-      disconnectedReason, disconnectedAt,
-      oauthConfigured: oauthProv ? isOAuthConfigured(oauthProv) : null,
+      disconnectedReason, disconnectedAt, byoOAuth,
+      // For BYO-OAuth, "configured" means the merchant has saved their own app
+      // credentials (a "<key>__app" vault row exists); otherwise it's the
+      // platform env-var check for classic OAuth integrations.
+      oauthConfigured: byoOAuth ? vaultMap.has(`${intg.key}__app`) : (oauthProv ? isOAuthConfigured(oauthProv) : null),
     };
   });
 
@@ -386,6 +394,7 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   const intg = INTEGRATIONS.find((i) => i.key === key);
   if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
   if ("comingSoon" in intg && intg.comingSoon) { res.status(400).json({ error: "Coming soon" }); return; }
+  if ("byoOAuth" in intg && intg.byoOAuth) { res.status(400).json({ error: "Use the OAuth app connect flow" }); return; }
   if (intg.authType !== "credentials") { res.status(400).json({ error: "Use OAuth flow" }); return; }
   const body = (req.body ?? {}) as Record<string, unknown>;
 
@@ -410,6 +419,23 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   res.json({ status: "connected" });
 });
 
+/* ── POST /integrations/:key/oauth-app ──────────────────────────────────────────
+   Store a merchant's OWN OAuth app credentials (client id + secret) for a
+   bring-your-own-OAuth integration (Xero / QuickBooks / MYOB). The OAuth start
+   flow then uses these instead of any platform-level env vars. After saving, the
+   client redirects the browser to the provider's OAuth start endpoint. */
+router.post("/integrations/:key/oauth-app", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const key = String(req.params.key);
+  const intg = INTEGRATIONS.find((i) => i.key === key);
+  if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
+  if (!("byoOAuth" in intg && intg.byoOAuth)) { res.status(400).json({ error: "Not a bring-your-own-OAuth integration" }); return; }
+  const { clientId, clientSecret } = (req.body ?? {}) as { clientId?: string; clientSecret?: string };
+  if (!clientId || !clientSecret) { res.status(400).json({ error: "clientId and clientSecret are required" }); return; }
+  await saveOAuthAppCreds(merchantId, key, String(clientId).trim(), String(clientSecret).trim());
+  res.json({ ok: true });
+});
+
 /* ── DELETE /integrations/:key ─────────────────────────────────────────────── */
 
 router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void> => {
@@ -424,8 +450,8 @@ router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void>
 
 /* ── GET /integrations/oauth/apple/start ───────────────────────────────────── */
 
-router.get("/integrations/oauth/apple/start", requireAuth, (req, res): void => {
-  const url = buildOAuthStartUrl("apple_account", req);
+router.get("/integrations/oauth/apple/start", requireAuth, async (req, res): Promise<void> => {
+  const url = await buildOAuthStartUrl("apple_account", req, req.session.merchantId!);
   if (!url) { res.redirect("/management/sync?error=apple_oauth_not_configured"); return; }
   res.redirect(url);
 });
@@ -534,9 +560,9 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
 
 /* ── GET /integrations/oauth/:key/start ────────────────────────────────────── */
 
-router.get("/integrations/oauth/:key/start", requireAuth, (req, res): void => {
+router.get("/integrations/oauth/:key/start", requireAuth, async (req, res): Promise<void> => {
   const key = String(req.params.key);
-  const url = buildOAuthStartUrl(key, req);
+  const url = await buildOAuthStartUrl(key, req, req.session.merchantId!);
   if (!url) { res.redirect(`${manageUrl(key)}?error=${key}_oauth_not_configured`); return; }
   res.redirect(url);
 });
@@ -555,7 +581,7 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
   try {
     const cb = cbUrl(key, req);
     const extra = realmId ? { realmId } : undefined;
-    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb, extra);
+    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb, merchantId, extra);
     const intg = INTEGRATIONS.find((i) => i.key === key);
 
     if (intg?.useVault) {

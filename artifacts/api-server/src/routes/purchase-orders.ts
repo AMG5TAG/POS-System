@@ -337,7 +337,7 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
           .where(eq(purchaseOrderItemsTable.id, poItemId));
 
         if (poItem.productId) {
-          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, warrantyDuration: productsTable.warrantyDuration })
+          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, warrantyDuration: productsTable.warrantyDuration, costPrice: productsTable.costPrice, stockQuantity: productsTable.stockQuantity })
             .from(productsTable)
             .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
 
@@ -357,13 +357,30 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
             await tx.update(productsTable)
               .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })
               .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+          }
+
+          // Update cost via a moving (weighted) average: blend the existing
+          // on-hand value with the newly received value. Falls back to the PO
+          // unit cost when there's no prior on-hand stock/cost or the product
+          // doesn't track inventory (last-cost). Applies to ALL received items,
+          // tracked or not, and records a "po"-sourced price-history row.
+          const poUnit = Number(poItem.unitCost);
+          if (product && Number.isFinite(poUnit)) {
+            const onHand  = product.stockQuantity ?? 0;
+            const oldCost = product.costPrice != null ? parseFloat(product.costPrice) : NaN;
+            let newCost = poUnit;
+            if (product.trackInventory === "true" && onHand > 0 && Number.isFinite(oldCost) && (onHand + qty) > 0) {
+              newCost = (onHand * oldCost + qty * poUnit) / (onHand + qty);
+            }
+            newCost = Math.round(newCost * 100) / 100;
             await tx.update(productsTable)
-              .set({ costPrice: String(poItem.unitCost) })
+              .set({ costPrice: String(newCost) })
               .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
             await tx.insert(productPriceHistoryTable).values({
               merchantId,
               productId: poItem.productId,
-              costPrice: String(poItem.unitCost),
+              costPrice: String(newCost),
+              source: "po",
               supplierName: po.supplierName ?? null,
               poNumber: po.poNumber,
               poId: id,

@@ -6,12 +6,19 @@ import { CreateTransactionBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { finalizeSale } from "./transactions";
 import { getPaymentProvider, PaymentProviderNotConfiguredError } from "../services/payments/PaymentProvider";
-import "../services/payments/zip"; // registers the Zip provider
+import "../services/payments/zip";      // registers the Zip provider
+import "../services/payments/afterpay"; // registers the Afterpay provider
+import "../services/payments/klarna";   // registers the Klarna provider
 import { logger } from "../lib/logger";
 
 const router: IRouter = Router();
 
 const TERMINAL: ReadonlySet<PaymentStatus> = new Set(["captured", "declined", "expired", "cancelled", "failed", "refunded"]);
+
+/** Asynchronous (scan-to-pay / approval-then-capture) payment providers. */
+const ASYNC_PAYMENT_PROVIDERS: ReadonlySet<string> = new Set(["zip", "afterpay", "klarna"]);
+const PROVIDER_LABELS: Record<string, string> = { zip: "Zip", afterpay: "Afterpay", klarna: "Klarna" };
+const providerLabel = (key: string) => PROVIDER_LABELS[key] ?? key;
 
 type CreateTransactionInput = Extract<ReturnType<typeof CreateTransactionBody.safeParse>, { success: true }>["data"];
 
@@ -48,11 +55,12 @@ async function settleAttempt(attempt: PaymentAttempt, providerStatus: PaymentSta
 
   const provider = getPaymentProvider(attempt.provider);
   if (!provider) return attempt;
+  const label = providerLabel(attempt.provider);
 
   // Negative outcomes: just record them.
   if (providerStatus === "declined" || providerStatus === "expired" || providerStatus === "cancelled" || providerStatus === "failed") {
     const [updated] = await db.update(paymentAttemptsTable)
-      .set({ status: providerStatus, providerData: providerData as object, failureReason: `Zip reported "${providerStatus}"` })
+      .set({ status: providerStatus, providerData: providerData as object, failureReason: `${label} reported "${providerStatus}"` })
       .where(eq(paymentAttemptsTable.id, attempt.id))
       .returning();
     return updated ?? attempt;
@@ -76,25 +84,25 @@ async function settleAttempt(attempt: PaymentAttempt, providerStatus: PaymentSta
       const [updated] = await db.update(paymentAttemptsTable)
         .set({ status: "failed", providerData: providerData as object, failureReason: result.error })
         .where(eq(paymentAttemptsTable.id, attempt.id)).returning();
-      logger.warn({ attemptId: attempt.id, externalRef: attempt.externalRef, error: result.error }, "Zip: sale finalisation failed after approval — not capturing funds");
+      logger.warn({ attemptId: attempt.id, provider: attempt.provider, externalRef: attempt.externalRef, error: result.error }, `${label}: sale finalisation failed after approval — not capturing funds`);
       return updated ?? attempt;
     }
 
     // Capture funds now that the sale is committed (skip if already captured).
     if (provider.requiresCapture && providerStatus !== "captured" && attempt.externalRef) {
       const cap = await provider.capture(attempt.merchantId, attempt.externalRef).catch((e: unknown) => {
-        logger.error({ attemptId: attempt.id, err: e }, "Zip: capture threw after sale finalisation — manual reconciliation required");
+        logger.error({ attemptId: attempt.id, provider: attempt.provider, err: e }, `${label}: capture threw after sale finalisation — manual reconciliation required`);
         return null;
       });
       if (!cap || cap.status === "failed") {
-        logger.error({ attemptId: attempt.id, transactionId: result.transaction.id }, "Zip: capture failed after sale finalisation — sale stands, funds NOT captured");
+        logger.error({ attemptId: attempt.id, provider: attempt.provider, transactionId: result.transaction.id }, `${label}: capture failed after sale finalisation — sale stands, funds NOT captured`);
       }
     }
 
-    // Stamp the Zip order id onto the sale for receipts & reconciliation.
+    // Stamp the provider order id onto the sale for receipts & reconciliation.
     if (attempt.externalRef) {
       await db.update(transactionsTable)
-        .set({ notes: sql`COALESCE(${transactionsTable.notes}, '') || ${` [Zip ref: ${attempt.externalRef}]`}` })
+        .set({ notes: sql`COALESCE(${transactionsTable.notes}, '') || ${` [${label} ref: ${attempt.externalRef}]`}` })
         .where(eq(transactionsTable.id, result.transaction.id));
     }
 
@@ -107,17 +115,22 @@ async function settleAttempt(attempt: PaymentAttempt, providerStatus: PaymentSta
   return attempt; // still pending
 }
 
-/* ── POST /payments/zip/create ─────────────────────────────────────────────────
-   Park a sale and open a Zip charge. Body is the same CreateTransaction payload
-   used by POST /transactions; the sale is NOT recorded until Zip captures. */
-router.post("/payments/zip/create", requireAuth, async (req, res): Promise<void> => {
+/* ── POST /payments/:provider/create ───────────────────────────────────────────
+   Park a sale and open an async charge with the named provider (zip, afterpay).
+   Body is the same CreateTransaction payload used by POST /transactions; the
+   sale is NOT recorded until the provider captures. */
+router.post("/payments/:provider/create", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
+  const providerKey = String(req.params.provider);
+  if (!ASYNC_PAYMENT_PROVIDERS.has(providerKey)) { res.status(404).json({ error: "Unknown payment provider" }); return; }
+  const label = providerLabel(providerKey);
+
   const parsed = CreateTransactionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   if (parsed.data.items.length === 0) { res.status(400).json({ error: "Sale must include at least one item" }); return; }
 
-  const provider = getPaymentProvider("zip");
-  if (!provider) { res.status(500).json({ error: "Zip provider unavailable" }); return; }
+  const provider = getPaymentProvider(providerKey);
+  if (!provider) { res.status(500).json({ error: `${label} provider unavailable` }); return; }
 
   const amount = parsed.data.total;
   if (!(amount > 0)) { res.status(400).json({ error: "Sale total must be greater than zero" }); return; }
@@ -125,7 +138,7 @@ router.post("/payments/zip/create", requireAuth, async (req, res): Promise<void>
   // Ensure the parked sale carries a stable idempotency key so a webhook and a
   // status poll racing to finalise can never create two transactions.
   const salePayload: CreateTransactionInput = { ...parsed.data };
-  if (!salePayload.idempotencyKey) salePayload.idempotencyKey = `zip_${crypto.randomUUID()}`;
+  if (!salePayload.idempotencyKey) salePayload.idempotencyKey = `${providerKey}_${crypto.randomUUID()}`;
   const orderRef = salePayload.idempotencyKey;
 
   let charge;
@@ -133,17 +146,17 @@ router.post("/payments/zip/create", requireAuth, async (req, res): Promise<void>
     charge = await provider.createCharge(merchantId, { amount, currency: "AUD", orderRef, idempotencyKey: orderRef });
   } catch (e) {
     if (e instanceof PaymentProviderNotConfiguredError) {
-      res.status(400).json({ error: "Zip is not connected. Add your Zip credentials under Management → Integrations." });
+      res.status(400).json({ error: `${label} is not connected. Add your ${label} credentials under Management → Integrations.` });
       return;
     }
-    logger.error({ err: e, merchantId }, "Zip: createCharge failed");
-    res.status(502).json({ error: e instanceof Error ? e.message : "Failed to start Zip payment" });
+    logger.error({ err: e, merchantId, provider: providerKey }, `${label}: createCharge failed`);
+    res.status(502).json({ error: e instanceof Error ? e.message : `Failed to start ${label} payment` });
     return;
   }
 
   const [attempt] = await db.insert(paymentAttemptsTable).values({
     merchantId,
-    provider: "zip",
+    provider: providerKey,
     status: charge.status,
     externalRef: charge.externalRef,
     orderRef,
@@ -179,7 +192,7 @@ router.get("/payments/:id/status", requireAuth, async (req, res): Promise<void> 
   if (!provider) { res.json(publicAttempt(attempt)); return; }
 
   const status = await provider.getStatus(merchantId, attempt.externalRef).catch((e: unknown) => {
-    logger.error({ err: e, attemptId: attempt.id }, "Zip: getStatus failed");
+    logger.error({ err: e, attemptId: attempt.id, provider: attempt.provider }, `${providerLabel(attempt.provider)}: getStatus failed`);
     return null;
   });
   if (!status) { res.json(publicAttempt(attempt)); return; }
@@ -207,11 +220,11 @@ router.post("/payments/:id/refund", requireAuth, async (req, res): Promise<void>
   if (!provider) { res.status(500).json({ error: "Payment provider unavailable" }); return; }
 
   const refund = await provider.refund(merchantId, attempt.externalRef, parseFloat(attempt.amount)).catch((e: unknown) => {
-    logger.error({ err: e, attemptId: attempt.id }, "Zip: refund failed");
+    logger.error({ err: e, attemptId: attempt.id, provider: attempt.provider }, `${providerLabel(attempt.provider)}: refund failed`);
     return null;
   });
   if (!refund || !refund.ok) {
-    res.status(502).json({ error: refund?.error ?? "Zip refund failed" });
+    res.status(502).json({ error: refund?.error ?? `${providerLabel(attempt.provider)} refund failed` });
     return;
   }
 
@@ -219,31 +232,33 @@ router.post("/payments/:id/refund", requireAuth, async (req, res): Promise<void>
     .where(eq(paymentAttemptsTable.id, attempt.id));
   if (attempt.transactionId) {
     await db.update(transactionsTable)
-      .set({ status: "refunded", notes: "Refunded via Zip" })
+      .set({ status: "refunded", notes: `Refunded via ${providerLabel(attempt.provider)}` })
       .where(and(eq(transactionsTable.id, attempt.transactionId), eq(transactionsTable.merchantId, merchantId)));
   }
 
   res.json({ status: "refunded" });
 });
 
-/* ── POST /webhooks/zip ─────────────────────────────────────────────────────────
-   Unauthenticated provider callback. Authenticity is established by HMAC
-   signature over the raw body, not a session. */
-router.post("/webhooks/zip", async (req: Request & { rawBody?: string }, res): Promise<void> => {
-  const provider = getPaymentProvider("zip");
+/* ── POST /webhooks/:provider ───────────────────────────────────────────────────
+   Unauthenticated provider callback (zip, afterpay). Authenticity is established
+   by HMAC signature over the raw body, not a session. */
+router.post("/webhooks/:provider", async (req: Request & { rawBody?: string }, res): Promise<void> => {
+  const providerKey = String(req.params.provider);
+  if (!ASYNC_PAYMENT_PROVIDERS.has(providerKey)) { res.status(404).end(); return; }
+  const provider = getPaymentProvider(providerKey);
   if (!provider) { res.status(503).end(); return; }
 
   const rawBody = req.rawBody ?? JSON.stringify(req.body ?? {});
 
-  // Each merchant has an independent Zip account with its own signing secret, so
-  // resolve the merchant from the (unverified) order ref FIRST, then verify the
-  // signature against that merchant's secret. The unverified parse is only used
-  // to locate the row — trust comes from the signature check below.
+  // Each merchant has an independent provider account with its own signing
+  // secret, so resolve the merchant from the (unverified) order ref FIRST, then
+  // verify the signature against that merchant's secret. The unverified parse is
+  // only used to locate the row — trust comes from the signature check below.
   const ref = provider.extractWebhookRef(rawBody);
   if (!ref) { res.status(400).json({ error: "Unrecognised payload" }); return; }
 
   const [attempt] = await db.select().from(paymentAttemptsTable)
-    .where(and(eq(paymentAttemptsTable.provider, "zip"), eq(paymentAttemptsTable.externalRef, ref)));
+    .where(and(eq(paymentAttemptsTable.provider, providerKey), eq(paymentAttemptsTable.externalRef, ref)));
   // Unknown ref → ack so the provider stops retrying; nothing to do.
   if (!attempt) { res.status(200).json({ received: true }); return; }
 
@@ -253,7 +268,7 @@ router.post("/webhooks/zip", async (req: Request & { rawBody?: string }, res): P
   try {
     await settleAttempt(attempt, event.status, event.raw);
   } catch (e) {
-    logger.error({ err: e, externalRef: event.externalRef }, "Zip webhook: settle failed");
+    logger.error({ err: e, provider: providerKey, externalRef: event.externalRef }, `${providerLabel(providerKey)} webhook: settle failed`);
     res.status(500).json({ error: "Processing error" });
     return;
   }

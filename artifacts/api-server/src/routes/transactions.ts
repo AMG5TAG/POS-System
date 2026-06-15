@@ -293,7 +293,13 @@ export async function finalizeSale(
     const totalPrice = round2(lineGross - discount);
     const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
     const product = i.productId !== 0 ? productMap.get(i.productId) : undefined;
-    const costPrice = product?.costPrice != null ? parseFloat(product.costPrice) : undefined;
+    // Snapshot the product's cost at sale time. Stored whenever the product has
+    // a finite recorded cost — INCLUDING 0 — so a genuine zero-cost item is
+    // distinguished from "cost unknown" and reports don't fall back to the
+    // product's (possibly later-changed) current cost. Custom items (no product)
+    // have no cost to snapshot.
+    const parsedCost = product?.costPrice != null ? parseFloat(product.costPrice) : NaN;
+    const costPrice = product && Number.isFinite(parsedCost) ? parsedCost : undefined;
     // Serials only apply to warranty products.
     const rawSerials = rawItems[idx]?.serials;
     const serials = (product && product.warrantyDuration > 0 && Array.isArray(rawSerials))
@@ -306,7 +312,7 @@ export async function finalizeSale(
       unitPrice,
       totalPrice,
       taxAmount,
-      ...(costPrice != null && costPrice > 0 ? { costPrice } : {}),
+      ...(costPrice != null ? { costPrice } : {}),
       discount: discount > 0 ? discount : undefined,
       giftCardIssue: i.giftCardIssue || undefined,
       // Preserve client-provided number; server will fill in blanks before the DB write

@@ -84,6 +84,7 @@ const ManagementOverviewPage = lazy(() => import("@/pages/app/management-overvie
 const ManagementSalesPage = lazy(() => import("@/pages/app/management-sales"));
 const ManagementRegistersPage = lazy(() => import("@/pages/app/management-registers"));
 const ManagementIntegrationsPage = lazy(() => import("@/pages/app/management-integrations"));
+const ManagementIntegrationsHelpPage = lazy(() => import("@/pages/app/management-integrations-help"));
 const ManagementXeroPage = lazy(() => import("@/pages/app/management-xero"));
 const ManagementImportExportPage = lazy(() => import("@/pages/app/management-import-export"));
 const ManagementLoyaltyPage = lazy(() => import("@/pages/app/management-loyalty"));
@@ -116,6 +117,7 @@ const StaffKpisPage = lazy(() => import("@/pages/app/staff-kpis"));
 const StaffLinksPage = lazy(() => import("@/pages/app/staff-links"));
 const StaffSocialFeedPage = lazy(() => import("@/pages/app/staff-social-feed"));
 const ManagementMarketingSocialFeedPage = lazy(() => import("@/pages/app/management-marketing-social-feed"));
+const ManagementMarketingAnalyticsPage = lazy(() => import("@/pages/app/management-marketing-analytics"));
 const ManagementFloorPlanPage = lazy(() => import("@/pages/app/management-floor-plan"));
 const ManagementAIPage = lazy(() => import("@/pages/app/management-ai"));
 
@@ -570,6 +572,9 @@ function Router() {
       <Route path="/management/marketing-reports/sales-overview">
         <ManagementProtectedRoute component={ManagementSalesPage} />
       </Route>
+      <Route path="/management/marketing-reports/analytics">
+        <ManagementProtectedRoute component={ManagementMarketingAnalyticsPage} />
+      </Route>
       <Route path="/management/reports">
         <Redirect to="/management/marketing-reports/reports" />
       </Route>
@@ -634,6 +639,9 @@ function Router() {
       </Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
+      </Route>
+      <Route path="/management/settings-integrations/integrations/help">
+        <ManagementProtectedRoute component={ManagementIntegrationsHelpPage} />
       </Route>
       <Route path="/management/settings-integrations/integrations/xero">
         <ManagementProtectedRoute component={ManagementXeroPage} />

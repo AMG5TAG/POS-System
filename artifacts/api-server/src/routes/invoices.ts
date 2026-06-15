@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable } from "@workspace/db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
@@ -280,6 +280,27 @@ async function applyInvoiceStock(tx: DbExecutor, merchantId: number, items: unkn
   }
 }
 
+/** Snapshot each product-linked line item's cost price (server-authoritative),
+ *  so invoice COGS in reports reflects the cost at invoicing rather than trusting
+ *  whatever the client sent. Free-text lines (no productId) are left untouched. */
+async function snapshotInvoiceLineCosts(merchantId: number, lines: LineItem[]): Promise<LineItem[]> {
+  const arr = (Array.isArray(lines) ? lines : []) as Array<LineItem & { productId?: number; costPrice?: number }>;
+  const ids = [...new Set(arr.map((l) => l.productId).filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+  if (ids.length === 0) return lines;
+  const rows = await db
+    .select({ id: productsTable.id, costPrice: productsTable.costPrice })
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)));
+  const costById = new Map(rows.map((r) => [r.id, r.costPrice != null ? parseFloat(r.costPrice) : NaN]));
+  return arr.map((l) => {
+    if (typeof l.productId === "number" && costById.has(l.productId)) {
+      const c = costById.get(l.productId)!;
+      if (Number.isFinite(c)) return { ...l, costPrice: c };
+    }
+    return l;
+  });
+}
+
 /** Roll an invoice total into (or back out of) a customer's lifetime spend.
  *  `sign` is +1 when the invoice becomes paid, -1 when it leaves paid. */
 async function applyInvoiceCustomerSpend(tx: DbExecutor, merchantId: number, customerId: number | null, total: number, sign: 1 | -1): Promise<void> {
@@ -386,7 +407,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
-  const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
+  const rawLines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
+  const lines = await snapshotInvoiceLineCosts(merchantId, rawLines);
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
   const [countRow] = await db
@@ -524,7 +546,11 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       .select({ items: invoicesTable.items, discountType: invoicesTable.discountType, discountValue: invoicesTable.discountValue })
       .from(invoicesTable)
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
-    const lines: LineItem[] = items ?? ((existing?.items as LineItem[] | null) ?? []);
+    // Re-snapshot costs only when new line data is supplied; otherwise keep the
+    // existing items' original cost snapshots intact.
+    const lines: LineItem[] = items !== undefined
+      ? await snapshotInvoiceLineCosts(req.session.merchantId!, items as LineItem[])
+      : ((existing?.items as LineItem[] | null) ?? []);
     const discountInput: Discount | null = discount !== undefined ? discount : (
       existing?.discountType && existing?.discountValue
         ? { type: existing.discountType as "fixed" | "percent", value: parseFloat(existing.discountValue) }

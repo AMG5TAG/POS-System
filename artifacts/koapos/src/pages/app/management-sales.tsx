@@ -116,7 +116,6 @@ const REPORT_TABS = [
   { id: "gst-bas",           label: "GST / BAS",         icon: Receipt           },
   { id: "gift-cards",        label: "Gift Cards",        icon: Gift              },
   { id: "store-credit",      label: "Store Credit",      icon: Wallet            },
-  { id: "analytics",         label: "Analytics",         icon: Globe             },
 ] as const;
 
 type ReportTabId = (typeof REPORT_TABS)[number]["id"];
@@ -163,7 +162,7 @@ const ExportBtn = ({ rows, filename, columns }: {
 const PAYMENT_COLORS: Record<string, string> = {
   card: "#6366f1", cash: "#22c55e", split: "#f59e0b",
   voucher: "#ec4899", store_credit: "#8b5cf6", loyalty: "#06b6d4",
-  laybuy: "#f97316", direct_deposit: "#14b8a6", zip: "#7c3aed", other: "#94a3b8",
+  laybuy: "#f97316", direct_deposit: "#14b8a6", zip: "#7c3aed", afterpay: "#00b389", klarna: "#ffb3c7", other: "#94a3b8",
 };
 
 /* ─── Tab: Sales ─────────────────────────────────────────────────────────── */
@@ -553,15 +552,16 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
   const cogsShare  = exGstRevenue > 0 ? (totalCogs / exGstRevenue) * 100 : 0;
   const taxShare   = netRevenue   > 0 ? (taxCollected / netRevenue) * 100 : 0;
 
+  // Accurate P&L waterfall. Gross Revenue is the GST-inclusive amount actually
+  // charged (already net of discounts), so discounts/refunds are NOT subtracted
+  // again here — they're shown separately below for reference. Net Profit ties
+  // exactly to the backend: Revenue (ex-GST) − COGS.
   const plRows = [
-    { label: "Gross Revenue",         value: grossRevenue,   positive: true                    },
-    { label: "Refunds",               value: -refundTotal,   positive: false                   },
-    { label: "Discounts Applied",     value: -discountTotal, positive: false                   },
-    { label: "Net Revenue",           value: netRevenue - discountTotal, positive: true, bold: true },
-    { label: "GST Collected",         value: -taxCollected,  positive: false                   },
-    { label: "Revenue (ex-GST)",      value: exGstRevenue,   positive: true,  bold: true       },
-    { label: "True COGS",             value: -totalCogs,     positive: false                   },
-    { label: "Net Profit",            value: netProfit,      positive: netProfit >= 0, bold: true, accent: true },
+    { label: "Gross Revenue (incl. GST)", value: grossRevenue,  bold: false },
+    { label: "GST Collected",             value: -taxCollected, bold: false },
+    { label: "Revenue (ex-GST)",          value: exGstRevenue,  bold: true  },
+    { label: "True COGS",                 value: -totalCogs,    bold: false },
+    { label: "Net Profit",                value: netProfit,     bold: true, accent: true },
   ];
 
   /* chart: show net profit per day as a bar */
@@ -649,6 +649,21 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
                     ))}
                   </tbody>
                 </table>
+              )}
+              {/* Refunds & discounts are already reflected in the figures above;
+                  shown here for reference, not as part of the profit waterfall. */}
+              {!isLoading && (refundTotal > 0 || discountTotal > 0) && (
+                <div className="px-5 py-3 border-t text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-muted-foreground/80">For reference (already reflected above)</p>
+                  <div className="flex justify-between">
+                    <span>Refunds processed</span>
+                    <span className="tabular-nums">{formatCurrency(refundTotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Discounts given</span>
+                    <span className="tabular-nums">{formatCurrency(discountTotal)}</span>
+                  </div>
+                </div>
               )}
             </div>
 
@@ -1695,7 +1710,7 @@ function _countBy<T>(items: T[], key: (x: T) => string): { name: string; value: 
 
 const _CHART_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#f97316", "#14b8a6"];
 
-function AnalyticsTab() {
+export function AnalyticsTab() {
   const { data: qrResp }    = useListQrCodes();
   const { data: linksResp } = useListShortlinks();
   const { data: pagesResp } = useListLandingPages();
@@ -2081,7 +2096,6 @@ export default function ReportsPage() {
         {activeTab === "gst-bas"           && <GstBasTab summary={summary} summaryLoading={summaryLoading} />}
         {activeTab === "gift-cards"        && <GiftCardsTab />}
         {activeTab === "store-credit"      && <StoreCreditTab />}
-        {activeTab === "analytics"         && <AnalyticsTab />}
 
       </div>
     </AppLayout>

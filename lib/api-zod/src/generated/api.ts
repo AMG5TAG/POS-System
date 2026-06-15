@@ -1261,7 +1261,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -1762,7 +1762,7 @@ export const ListTransactionsResponse = zod.object({
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -1814,7 +1814,7 @@ export const CreateTransactionBody = zod.object({
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
 })),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "subtotal": zod.number(),
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
@@ -1896,7 +1896,7 @@ export const GetTransactionResponse = zod.object({
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -1998,7 +1998,7 @@ export const RefundTransactionResponse = zod.object({
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -2091,7 +2091,7 @@ export const VoidTransactionResponse = zod.object({
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -2838,7 +2838,7 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "taxTotal": zod.number(),
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
-  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip']),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -10595,7 +10595,10 @@ export const ListQuotesResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(listQuotesResponseItemsItemItemsItemQuantityMin),
   "unitPrice": zod.number().min(listQuotesResponseItemsItemItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(listQuotesResponseItemsItemItemsItemTaxRateMin).max(listQuotesResponseItemsItemItemsItemTaxRateMax)
+  "taxRate": zod.number().min(listQuotesResponseItemsItemItemsItemTaxRateMin).max(listQuotesResponseItemsItemItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -10639,7 +10642,10 @@ export const CreateQuoteBody = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(createQuoteBodyItemsItemQuantityMin),
   "unitPrice": zod.number().min(createQuoteBodyItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(createQuoteBodyItemsItemTaxRateMin).max(createQuoteBodyItemsItemTaxRateMax)
+  "taxRate": zod.number().min(createQuoteBodyItemsItemTaxRateMin).max(createQuoteBodyItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })).optional(),
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
@@ -10685,7 +10691,10 @@ export const GetQuoteResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(getQuoteResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(getQuoteResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(getQuoteResponseItemsItemTaxRateMin).max(getQuoteResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(getQuoteResponseItemsItemTaxRateMin).max(getQuoteResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -10731,7 +10740,10 @@ export const UpdateQuoteBody = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateQuoteBodyItemsItemQuantityMin),
   "unitPrice": zod.number().min(updateQuoteBodyItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(updateQuoteBodyItemsItemTaxRateMin).max(updateQuoteBodyItemsItemTaxRateMax)
+  "taxRate": zod.number().min(updateQuoteBodyItemsItemTaxRateMin).max(updateQuoteBodyItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })).optional(),
   "discount": zod.object({
   "type": zod.enum(['fixed', 'percent']),
@@ -10767,7 +10779,10 @@ export const UpdateQuoteResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(updateQuoteResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(updateQuoteResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(updateQuoteResponseItemsItemTaxRateMin).max(updateQuoteResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(updateQuoteResponseItemsItemTaxRateMin).max(updateQuoteResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -10861,7 +10876,10 @@ export const ConvertQuoteResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(convertQuoteResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(convertQuoteResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(convertQuoteResponseItemsItemTaxRateMin).max(convertQuoteResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(convertQuoteResponseItemsItemTaxRateMin).max(convertQuoteResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -10916,7 +10934,10 @@ export const ApproveQuoteResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(approveQuoteResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(approveQuoteResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(approveQuoteResponseItemsItemTaxRateMin).max(approveQuoteResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(approveQuoteResponseItemsItemTaxRateMin).max(approveQuoteResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),
@@ -10977,7 +10998,10 @@ export const AddQuoteEventResponse = zod.object({
   "description": zod.string(),
   "quantity": zod.number().min(addQuoteEventResponseItemsItemQuantityMin),
   "unitPrice": zod.number().min(addQuoteEventResponseItemsItemUnitPriceMin),
-  "taxRate": zod.number().min(addQuoteEventResponseItemsItemTaxRateMin).max(addQuoteEventResponseItemsItemTaxRateMax)
+  "taxRate": zod.number().min(addQuoteEventResponseItemsItemTaxRateMin).max(addQuoteEventResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().nullish(),
+  "costPrice": zod.number().nullish()
 })),
   "events": zod.array(zod.object({
   "type": zod.string(),

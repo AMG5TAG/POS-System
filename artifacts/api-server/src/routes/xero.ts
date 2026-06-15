@@ -11,6 +11,19 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { getOAuthAppCreds } from "../services/tokenVault";
+
+/* Per-merchant Xero OAuth app credentials (the merchant's own developer app),
+   falling back to platform env vars so any existing platform-app setup keeps
+   working. */
+async function getXeroClientCreds(merchantId: number): Promise<{ clientId: string; clientSecret: string } | null> {
+  const own = await getOAuthAppCreds(merchantId, "xero");
+  if (own) return own;
+  const clientId = process.env.XERO_CLIENT_ID;
+  const clientSecret = process.env.XERO_CLIENT_SECRET;
+  if (clientId && clientSecret) return { clientId, clientSecret };
+  return null;
+}
 
 const router = Router();
 
@@ -117,9 +130,9 @@ async function withFreshToken(
     return { accessToken: row.accessToken, tenantId };
   }
 
-  const clientId     = process.env.XERO_CLIENT_ID;
-  const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret || !row.refreshToken) return null;
+  const cc = await getXeroClientCreds(merchantId);
+  if (!cc || !row.refreshToken) return null;
+  const { clientId, clientSecret } = cc;
 
   const r = await fetch(XERO_TOKEN_URL, {
     method: "POST",
@@ -170,7 +183,7 @@ router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const row        = await getRow(merchantId);
 
-  const configured = !!(process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET);
+  const configured = !!(await getXeroClientCreds(merchantId));
 
   if (!row || row.status !== "connected") {
     res.json({ connected: false, configured });
@@ -193,12 +206,13 @@ router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
 
 /* ── GET /api/xero/auth/start ─────────────────────────────────────────────── */
 
-router.get("/xero/auth/start", requireAuth, (req, res): void => {
-  const clientId = process.env.XERO_CLIENT_ID;
-  if (!clientId) {
-    res.redirect("/management/xero?error=not_configured");
+router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
+  const cc = await getXeroClientCreds(req.session.merchantId!);
+  if (!cc) {
+    res.redirect("/management/integrations?error=xero_not_configured");
     return;
   }
+  const clientId = cc.clientId;
 
   const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
   const host  = req.headers.host ?? "";
@@ -229,12 +243,12 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
     return;
   }
 
-  const clientId     = process.env.XERO_CLIENT_ID;
-  const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    res.redirect("/management/xero?error=not_configured");
+  const cc = await getXeroClientCreds(merchantId);
+  if (!cc) {
+    res.redirect("/management/integrations?error=xero_not_configured");
     return;
   }
+  const { clientId, clientSecret } = cc;
 
   const cbProto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
   const cbHost  = req.headers.host ?? "";

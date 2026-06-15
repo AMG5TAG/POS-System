@@ -447,7 +447,7 @@ export async function computeActual(
 
         const laybyCogs = await db.execute<{ total_cogs: number }>(sql`
           SELECT COALESCE(SUM(
-            (item->>'quantity')::numeric * COALESCE(p.cost_price::numeric, 0)
+            (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
           ), 0)::float AS total_cogs
           FROM laybys l
           CROSS JOIN LATERAL jsonb_array_elements(

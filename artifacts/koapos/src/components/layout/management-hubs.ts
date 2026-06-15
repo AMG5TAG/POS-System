@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Users, Radio, Link2, Gift, Percent,
-  BarChart2, TrendingUp, Target, UserPlus, Share2, Globe, Mail, FileText, Brain,
+  BarChart2, TrendingUp, Target, UserPlus, Share2, Globe, Mail, FileText, Brain, Activity,
   UserSquare2, Clock, Coins, Monitor, Map, MapPin, Camera, Scale, TabletSmartphone, LayoutDashboard,
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Repeat,
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, FolderSync, MessageSquare,
@@ -60,6 +60,7 @@ export const MARKETING_HUB_TABS: HubTab[] = [
       "/management/marketing-reports/reports/daily",
     ],
   },
+  { label: "Analytics",       href: "/management/marketing-reports/analytics",     icon: Activity   },
   { label: "KPIs & Targets",  href: "/management/marketing-reports/kpis-targets",                   icon: Target     },
   { label: "Referrals",       href: "/management/marketing-reports/referrals",     icon: UserPlus   },
   { label: "Social Feed",     href: "/management/marketing-reports/social-feed",   icon: Share2     },
@@ -108,7 +109,7 @@ export const SETTINGS_HUB_TABS: HubTab[] = [
     label: "Integrations",
     href: "/management/settings-integrations/integrations",
     icon: Plug,
-    matchPaths: ["/management/settings-integrations/integrations/tyro-eftpos", "/management/settings-integrations/integrations/xero"],
+    matchPaths: ["/management/settings-integrations/integrations/tyro-eftpos", "/management/settings-integrations/integrations/xero", "/management/settings-integrations/integrations/help"],
   },
   {
     label: "Sync",

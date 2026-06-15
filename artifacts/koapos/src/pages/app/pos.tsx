@@ -37,7 +37,7 @@ import { formatCurrency } from "@/lib/utils";
 import { customerDisplayName } from "@/lib/customer-name";
 import {
   ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
-  getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
+  getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS, ASYNC_PAYMENT_PROVIDERS,
   ACTIVE_REGISTER_KEY,
   getStaffLoginMessage, setStaffAcknowledged, hasStaffAcknowledged,
   type StaffLoginMessage,
@@ -450,13 +450,13 @@ export default function POSPage() {
   // succeeds or the cart is cleared, starting a fresh key for the next sale.
   const idempotencyKeyRef = useRef<string | null>(null);
 
-  /* Zip Pay (buy-now-pay-later) — asynchronous, scan-to-pay. The sale is parked
-     server-side and only recorded once Zip captures, so the POS shows a pending
-     dialog (QR + polling) instead of completing instantly. The completion-UI
-     inputs are snapshotted at create time because capture happens later, outside
-     the checkout closure. */
-  const [zipPending, setZipPending] = useState<{ attemptId: number; qrPayload: string | null; expiresAt: string | null; status: string; error: string | null; amount: number } | null>(null);
-  const zipSnapRef = useRef<SaleCompletionSnapshot | null>(null);
+  /* Async buy-now-pay-later providers (Zip, Afterpay) — scan-to-pay. The sale is
+     parked server-side and only recorded once the provider captures, so the POS
+     shows a pending dialog (QR + polling) instead of completing instantly. The
+     completion-UI inputs are snapshotted at create time because capture happens
+     later, outside the checkout closure. */
+  const [payPending, setPayPending] = useState<{ provider: string; label: string; attemptId: number; qrPayload: string | null; expiresAt: string | null; status: string; error: string | null; amount: number } | null>(null);
+  const paySnapRef = useRef<SaleCompletionSnapshot | null>(null);
 
   // Refs kept in sync with state so pagehide / unmount cleanup can read the
   // latest cart without stale closures.
@@ -2408,18 +2408,19 @@ export default function POSPage() {
     setTimeout(() => setReceiptOpen(true), 250);
   };
 
-  /* Park a sale as a Zip charge and open the pending dialog. The server records
-     nothing until Zip captures; polling + the webhook converge via settleAttempt. */
-  const startZipPayment = (data: Record<string, unknown>, snap: SaleCompletionSnapshot) => {
-    zipSnapRef.current = snap;
+  /* Park a sale as an async (BNPL) charge and open the pending dialog. The server
+     records nothing until the provider captures; polling + the webhook converge
+     via settleAttempt. */
+  const startAsyncPayment = (provider: string, label: string, data: Record<string, unknown>, snap: SaleCompletionSnapshot) => {
+    paySnapRef.current = snap;
     void (async () => {
       try {
         const r = await customFetch<{ id: number; qrPayload: string | null; expiresAt: string | null; status: string; amount: number }>(
-          "/api/payments/zip/create", { method: "POST", body: JSON.stringify(data) },
+          `/api/payments/${provider}/create`, { method: "POST", body: JSON.stringify(data) },
         );
-        setZipPending({ attemptId: r.id, qrPayload: r.qrPayload, expiresAt: r.expiresAt, status: r.status, error: null, amount: r.amount });
+        setPayPending({ provider, label, attemptId: r.id, qrPayload: r.qrPayload, expiresAt: r.expiresAt, status: r.status, error: null, amount: r.amount });
       } catch (e) {
-        const msg = e instanceof Error ? e.message : "Failed to start Zip payment";
+        const msg = e instanceof Error ? e.message : `Failed to start ${label} payment`;
         toast.error(msg);
       }
     })();
@@ -2627,10 +2628,11 @@ export default function POSPage() {
         : null,
     };
 
-    // Zip Pay is asynchronous: park the sale and hand off to the pending dialog
-    // rather than recording a completed transaction now.
-    if (paymentMethod === "zip") {
-      startZipPayment(data, completionSnapshot);
+    // Async BNPL providers (Zip, Afterpay): park the sale and hand off to the
+    // pending dialog rather than recording a completed transaction now.
+    if (ASYNC_PAYMENT_PROVIDERS.has(paymentMethod)) {
+      const label = INTEGRATION_PAYMENT_LABELS[paymentMethod] ?? paymentMethod;
+      startAsyncPayment(paymentMethod, label, data, completionSnapshot);
       return;
     }
 
@@ -2660,46 +2662,47 @@ export default function POSPage() {
   // resume the sale after cart serials are applied (next render).
   latestCheckout.current = handleCheckout;
 
-  /* Render the Zip QR. Zip may return a ready image (data:/http) or a raw token;
-     for a token we encode it ourselves so it's always scannable. */
-  const [zipQr, setZipQr] = useState<string | null>(null);
+  /* Render the provider QR. Providers may return a ready image (data:/http) or a
+     raw token; for a token we encode it ourselves so it's always scannable. */
+  const [payQr, setPayQr] = useState<string | null>(null);
   useEffect(() => {
-    const payload = zipPending?.qrPayload;
-    if (!payload) { setZipQr(null); return; }
+    const payload = payPending?.qrPayload;
+    if (!payload) { setPayQr(null); return; }
     if (payload.startsWith("data:") || /^https?:\/\/.*\.(png|svg|gif|jpe?g)(\?|$)/i.test(payload)) {
-      setZipQr(payload);
+      setPayQr(payload);
       return;
     }
     let cancelled = false;
     QRCode.toDataURL(payload, { width: 220, margin: 1 })
-      .then((u) => { if (!cancelled) setZipQr(u); })
-      .catch(() => { if (!cancelled) setZipQr(null); });
+      .then((u) => { if (!cancelled) setPayQr(u); })
+      .catch(() => { if (!cancelled) setPayQr(null); });
     return () => { cancelled = true; };
-  }, [zipPending?.qrPayload]);
+  }, [payPending?.qrPayload]);
 
-  /* Poll the parked Zip attempt until it reaches a terminal state. The webhook
-     is the primary signal; this poll is the fallback so the POS still resolves
-     if the webhook is delayed or undelivered. */
+  /* Poll the parked attempt until it reaches a terminal state. The webhook is
+     the primary signal; this poll is the fallback so the POS still resolves if
+     the webhook is delayed or undelivered. */
   useEffect(() => {
-    if (!zipPending || zipPending.error || zipPending.status === "captured") return;
+    if (!payPending || payPending.error || payPending.status === "captured") return;
+    const label = payPending.label;
     let cancelled = false;
     const poll = async () => {
       try {
         const r = await customFetch<{ status: string; transactionId: number | null; failureReason: string | null }>(
-          `/api/payments/${zipPending.attemptId}/status`, { method: "GET" },
+          `/api/payments/${payPending.attemptId}/status`, { method: "GET" },
         );
         if (cancelled) return;
         if (r.status === "captured" && r.transactionId) {
           const tx = await customFetch<Transaction>(`/api/transactions/${r.transactionId}`, { method: "GET" });
           if (cancelled) return;
-          const snap = zipSnapRef.current;
-          setZipPending(null);
+          const snap = paySnapRef.current;
+          setPayPending(null);
           if (snap) completeSaleUi(tx, snap);
-          toast.success("Zip payment approved");
+          toast.success(`${label} payment approved`);
         } else if (["declined", "expired", "cancelled", "failed"].includes(r.status)) {
-          setZipPending((p) => (p ? { ...p, status: r.status, error: r.failureReason ?? `Zip payment ${r.status}` } : null));
-        } else if (r.status !== zipPending.status) {
-          setZipPending((p) => (p ? { ...p, status: r.status } : null));
+          setPayPending((p) => (p ? { ...p, status: r.status, error: r.failureReason ?? `${label} payment ${r.status}` } : null));
+        } else if (r.status !== payPending.status) {
+          setPayPending((p) => (p ? { ...p, status: r.status } : null));
         }
       } catch { /* transient — keep polling */ }
     };
@@ -2707,7 +2710,7 @@ export default function POSPage() {
     void poll();
     return () => { cancelled = true; clearInterval(iv); };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [zipPending?.attemptId, zipPending?.status, zipPending?.error]);
+  }, [payPending?.attemptId, payPending?.status, payPending?.error]);
 
   const confirmSerials = () => {
     for (const arr of Object.values(serialInputs)) {
@@ -4119,14 +4122,15 @@ export default function POSPage() {
                   // so we don't depend on async setState reaching the payload.
                   const isIntegration = String(payMethod).startsWith("__intg__");
                   const intgKey = isIntegration ? String(payMethod).slice("__intg__".length) : null;
-                  // Zip Pay has a real async payment flow — record it as a
-                  // first-class "zip" tender (handleCheckout routes it to the
-                  // pending dialog). Other integrations are still recorded as a
-                  // generic "other" tender with an audit note.
+                  // Async BNPL integrations (Zip, Afterpay) have a real payment
+                  // flow — recorded as a first-class tender (handleCheckout routes
+                  // them to the pending dialog). Other integrations are still
+                  // recorded as a generic "other" tender with an audit note.
+                  const isAsyncProvider = !!intgKey && ASYNC_PAYMENT_PROVIDERS.has(intgKey);
                   const apiMethod: TransactionInputPaymentMethod =
-                    intgKey === "zip" ? "zip" : isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
+                    isAsyncProvider ? intgKey as TransactionInputPaymentMethod : isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
                   let extraNote: string | undefined;
-                  if (isIntegration && intgKey !== "zip") {
+                  if (isIntegration && !isAsyncProvider) {
                     const label = INTEGRATION_PAYMENT_LABELS[intgKey!] ?? intgKey!;
                     extraNote = `[Payment via ${label} (${intgKey})]`;
                   }
@@ -5333,29 +5337,29 @@ export default function POSPage() {
         </DialogContent>
       </Dialog>
 
-      {/* ── Zip Pay pending dialog ─────────────────────────────────────────── */}
-      <Dialog open={!!zipPending} onOpenChange={(o) => { if (!o) setZipPending(null); }}>
+      {/* ── BNPL (Zip / Afterpay) pending dialog ───────────────────────────── */}
+      <Dialog open={!!payPending} onOpenChange={(o) => { if (!o) setPayPending(null); }}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
-            <DialogTitle>Zip Pay</DialogTitle>
+            <DialogTitle>{payPending?.label ?? "Payment"}</DialogTitle>
           </DialogHeader>
-          {zipPending?.error ? (
+          {payPending?.error ? (
             <div className="py-4 text-center space-y-2">
-              <p className="font-medium text-destructive">{zipPending.error}</p>
+              <p className="font-medium text-destructive">{payPending.error}</p>
               <p className="text-sm text-muted-foreground">No charge was completed — try another payment method.</p>
             </div>
           ) : (
             <div className="py-2 flex flex-col items-center gap-4 text-center">
-              {zipQr ? (
-                <img src={zipQr} alt="Zip payment QR code" className="w-52 h-52 rounded-lg border bg-white p-2" />
+              {payQr ? (
+                <img src={payQr} alt={`${payPending?.label ?? "Payment"} QR code`} className="w-52 h-52 rounded-lg border bg-white p-2" />
               ) : (
                 <div className="w-52 h-52 rounded-lg border flex items-center justify-center">
                   <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
                 </div>
               )}
               <div className="space-y-1">
-                <p className="font-medium">Ask the customer to scan with the Zip app</p>
-                {zipPending && <p className="text-lg font-semibold">{formatCurrency(zipPending.amount)}</p>}
+                <p className="font-medium">Ask the customer to scan with the {payPending?.label} app</p>
+                {payPending && <p className="text-lg font-semibold">{formatCurrency(payPending.amount)}</p>}
                 <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
                   <Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for approval…
                 </p>
@@ -5363,8 +5367,8 @@ export default function POSPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setZipPending(null)}>
-              {zipPending?.error ? "Close" : "Cancel"}
+            <Button variant="outline" onClick={() => setPayPending(null)}>
+              {payPending?.error ? "Close" : "Cancel"}
             </Button>
           </DialogFooter>
         </DialogContent>

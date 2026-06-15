@@ -171,7 +171,17 @@ export default function POSQuotesPage() {
   const addProductLine = (productId: string) => {
     const prod = allProducts.find((p) => String(p.id) === productId);
     if (!prod) return;
-    const line: LineItem = { description: prod.name, quantity: 1, unitPrice: Number(prod.price ?? 0), taxRate: defaultTaxRate };
+    const line: LineItem = {
+      description: prod.name,
+      quantity: 1,
+      unitPrice: Number(prod.price ?? 0),
+      taxRate: defaultTaxRate,
+      // Carry the product linkage so a converted quote rings up as a real
+      // product sale (cost price gets snapshotted at checkout).
+      productId: prod.id,
+      productName: prod.name,
+      costPrice: prod.costPrice ?? null,
+    };
     setLines((p) => {
       const first = p[0];
       // Replace a pristine first blank line, otherwise append.
@@ -195,6 +205,7 @@ export default function POSQuotesPage() {
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
         taxRate: Number(l.taxRate),
+        ...(l.productId != null ? { productId: l.productId, productName: l.productName ?? l.description.trim(), costPrice: l.costPrice ?? null } : {}),
       }));
       const common = {
         customerId: custId ? Number(custId) : undefined,
@@ -297,8 +308,10 @@ export default function POSQuotesPage() {
         note: q.notes ?? null,
         customerId: q.customerId ?? null,
         items: (q.items ?? []).map((l) => ({
-          productId: 0,
-          name: l.description,
+          // Use the real productId when the quote line carries one, so the sale
+          // rings up against the product and snapshots its cost price.
+          productId: l.productId ?? 0,
+          name: l.productName ?? l.description,
           quantity: l.quantity,
           price: l.unitPrice,
         })),

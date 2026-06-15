@@ -92,3 +92,31 @@ describe("POST /api/webhooks/zip", () => {
     expect(res.body).toEqual({ received: true });
   });
 });
+
+describe("provider routing (zip + afterpay)", () => {
+  it("rejects an empty Afterpay cart with 400", async () => {
+    const res = await request(app).post("/api/payments/afterpay/create").send({
+      items: [], paymentMethod: "afterpay", subtotal: 0, taxTotal: 0, total: 0,
+    });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/at least one item/i);
+  });
+
+  it("returns 404 for create with an unsupported provider", async () => {
+    const res = await request(app).post("/api/payments/paypal/create").send({
+      items: [], paymentMethod: "other", subtotal: 0, taxTotal: 0, total: 0,
+    });
+    expect(res.status).toBe(404);
+  });
+
+  it("returns 404 for a webhook from an unsupported provider", async () => {
+    const res = await request(app).post("/api/webhooks/paypal").send({ id: "x" });
+    expect(res.status).toBe(404);
+  });
+
+  it("acks (200) an unknown Afterpay order ref", async () => {
+    const res = await request(app).post("/api/webhooks/afterpay").send({ token: "ap_unknown", status: "approved" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ received: true });
+  });
+});

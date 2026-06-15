@@ -106,6 +106,14 @@ export const INTEGRATION_PAYMENT_LABELS: Record<string, string> = {
   wechat_alipay:   "WeChat / Alipay",
 };
 
+/**
+ * Integration payment methods that use the asynchronous "scan-to-pay" flow
+ * (parked sale → customer approves → webhook/poll captures), rather than being
+ * recorded instantly as a generic "other" tender. These are real first-class
+ * payment-method enum values handled by the POS pending dialog.
+ */
+export const ASYNC_PAYMENT_PROVIDERS: ReadonlySet<string> = new Set(["zip", "afterpay", "klarna"]);
+
 export const PAYMENT_INTEGRATION_CATEGORIES = [
   "Payments & EFTPOS",
   "Buy Now, Pay Later",

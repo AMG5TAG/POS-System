@@ -28,7 +28,7 @@ import {
   ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
   CreditCard, KeyRound, RefreshCw,
   Landmark, ShoppingBag, Megaphone, Cloud,
-  Settings, Users,
+  Settings, Users, HelpCircle,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -52,6 +52,9 @@ interface Integration {
   disconnectedReason: string | null;
   disconnectedAt: string | null;
   oauthConfigured: boolean | null;
+  /** Bring-your-own OAuth app: collect the merchant's own client id/secret,
+   *  then run the OAuth redirect using those (Xero / QuickBooks / MYOB). */
+  byoOAuth?: boolean;
 }
 
 function disconnectReasonMessage(reason: string | null): string | null {
@@ -78,6 +81,20 @@ function TyroSvg({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 24 24" className={className} fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
       <path d="M3 3.5h18v4H14v13h-4v-13H3z" />
+    </svg>
+  );
+}
+
+// Official Zip Pay wordmark (from zip.co). Two-tone brand colours — Zip ink
+// (#1A0826) + Zip violet (#AA8FFF) — so it's rendered on a white tile rather
+// than the monochrome currentColor treatment used for single-colour glyphs.
+function ZipSvg({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 216 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M72.3735 26.0004L79.0028 80H143.895L137.262 26.0004H72.3735Z" fill="#AA8FFF" />
+      <path d="M211.943 45.4415C210.446 33.3035 200.911 25.9478 187.953 26.0003H144.778L151.41 79.9999H170.825L169.498 69.204H190.048C206.23 69.1982 213.638 59.1202 211.943 45.4415ZM187.959 54.0607L167.651 54.0811L166.058 41.1203L186.482 41.1378C191.282 41.1961 193.739 43.898 194.136 47.5978C194.381 49.9816 193.292 54.0607 187.962 54.0607H187.959Z" fill="#1A0826" />
+      <path d="M92.2064 19.0612C95.6468 15.4014 95.0787 9.27881 90.9376 5.38595C86.7964 1.4931 80.6504 1.30417 77.2101 4.9639C73.7698 8.62364 74.3379 14.7462 78.479 18.639C82.6201 22.5319 88.7661 22.7209 92.2064 19.0612Z" fill="#1A0826" />
+      <path d="M4.77643 64.9121L6.62923 80H71.4714L69.3501 62.7208H39.1159L38.8533 60.5762L66.6979 41.1204L64.8392 26.0004H0L2.12124 43.2796H32.405L32.6705 45.4387L4.77643 64.9121Z" fill="#1A0826" />
     </svg>
   );
 }
@@ -118,7 +135,7 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   paypal:               { type: "img",  bg: "bg-[#003087]",     src: SI("paypal",        "ffffff") },
   wechat_alipay:        { type: "img",  bg: "bg-[#07C160]",     src: SI("wechat",        "ffffff") },
   afterpay:             { type: "img",  bg: "bg-[#B2FCE4]",     src: SI("afterpay",      "000000") },
-  zip:                  { type: "img",  bg: "bg-[#1A0826]",     src: SI("zippay",        "ffffff") },
+  zip:                  { type: "svg",  bg: "bg-white border",  color: "text-[#1A0826]", component: ZipSvg },
   klarna:               { type: "img",  bg: "bg-[#FFB3C7]",     src: SI("klarna",        "000000") },
   apple_wallet:         { type: "img",  bg: "bg-black",          src: SI("apple",         "ffffff") },
   google_pay:           { type: "img",  bg: "bg-white border",  src: SI("googlepay",     "000000") },
@@ -164,10 +181,42 @@ function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: stri
 
 function ConnectModal({ integration, onClose, onSaved }: { integration: Integration | null; onClose: () => void; onSaved: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
+  const [byoSubmitting, setByoSubmitting] = useState(false);
   const connectMutation = useConnectIntegration();
-  useEffect(() => { if (integration) setValues({}); }, [integration]);
+  useEffect(() => { if (integration) { setValues({}); setByoSubmitting(false); } }, [integration]);
   if (!integration) return null;
   const handleSave = () => {
+    // Bring-your-own OAuth app (Xero / QuickBooks / MYOB): save the merchant's
+    // own client id/secret, then hand off to the provider's OAuth consent flow.
+    if (integration.byoOAuth) {
+      if (!values.clientId?.trim() || !values.clientSecret?.trim()) {
+        toast.error("Enter your Client ID and Client Secret");
+        return;
+      }
+      setByoSubmitting(true);
+      void (async () => {
+        try {
+          const r = await fetch(`/api/integrations/${integration.key}/oauth-app`, {
+            method: "POST",
+            credentials: "include",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ clientId: values.clientId, clientSecret: values.clientSecret }),
+          });
+          if (!r.ok) {
+            const d = await r.json().catch(() => ({})) as { error?: string };
+            throw new Error(d.error ?? "Failed to save credentials");
+          }
+          // Redirect into the OAuth consent flow using the merchant's own app.
+          window.location.href = integration.key === "xero"
+            ? "/api/xero/auth/start"
+            : `/api/integrations/oauth/${integration.key}/start`;
+        } catch (e) {
+          toast.error(e instanceof Error ? e.message : "Failed to save credentials");
+          setByoSubmitting(false);
+        }
+      })();
+      return;
+    }
     connectMutation.mutate(
       { key: integration.key, data: values as unknown as Parameters<typeof connectMutation.mutate>[0]["data"] },
       {
@@ -185,6 +234,12 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
             <span>Connect {integration.label}</span>
           </DialogTitle>
           <DialogDescription>{integration.description}</DialogDescription>
+          <a
+            href={`/management/settings-integrations/integrations/help#${integration.section}`}
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <HelpCircle className="w-3.5 h-3.5" /> How to connect {integration.label}
+          </a>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {integration.fields.map((f) => (
@@ -193,36 +248,71 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
               <Input id={f.name} type={f.type} value={values[f.name] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))} autoComplete="off" />
             </div>
           ))}
-          {integration.key === "zip" && (
-            <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
-              <p className="text-[11px] font-medium text-muted-foreground">
-                In your Zip merchant dashboard, add this webhook URL and paste the signing secret it gives you above:
-              </p>
-              <div className="flex items-center gap-2">
-                <code className="flex-1 text-[11px] bg-background border rounded px-2 py-1 truncate" title={`${window.location.origin}/api/webhooks/zip`}>
-                  {window.location.origin}/api/webhooks/zip
-                </code>
-                <Button
-                  type="button"
-                  variant="outline"
-                  size="sm"
-                  className="h-7 px-2 text-[11px] shrink-0"
-                  onClick={() => {
-                    void navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/zip`)
-                      .then(() => toast.success("Webhook URL copied"))
-                      .catch(() => toast.error("Couldn't copy — select and copy manually"));
-                  }}
-                >
-                  Copy
-                </Button>
+          {["zip", "afterpay", "klarna"].includes(integration.key) && (() => {
+            const webhookUrl = `${window.location.origin}/api/webhooks/${integration.key}`;
+            return (
+              <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  In your {integration.label} merchant dashboard, add this webhook URL and paste the signing secret it gives you above:
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-[11px] bg-background border rounded px-2 py-1 truncate" title={webhookUrl}>
+                    {webhookUrl}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-[11px] shrink-0"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(webhookUrl)
+                        .then(() => toast.success("Webhook URL copied"))
+                        .catch(() => toast.error("Couldn't copy — select and copy manually"));
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
               </div>
-            </div>
-          )}
+            );
+          })()}
+          {integration.byoOAuth && (() => {
+            const callbackUrl = integration.key === "xero"
+              ? `${window.location.origin}/api/xero/auth/callback`
+              : `${window.location.origin}/api/integrations/oauth/${integration.key}/callback`;
+            return (
+              <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  Create an app in your {integration.label} developer portal, paste its Client ID & Secret above, and register this redirect (callback) URL on the app:
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-[11px] bg-background border rounded px-2 py-1 truncate" title={callbackUrl}>
+                    {callbackUrl}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-[11px] shrink-0"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(callbackUrl)
+                        .then(() => toast.success("Redirect URL copied"))
+                        .catch(() => toast.error("Couldn't copy — select and copy manually"));
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Saving will take you to {integration.label} to authorise access.</p>
+              </div>
+            );
+          })()}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={connectMutation.isPending} className="gap-1.5">
-            {connectMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Save & Connect
+          <Button onClick={handleSave} disabled={connectMutation.isPending || byoSubmitting} className="gap-1.5">
+            {(connectMutation.isPending || byoSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
+            {integration.byoOAuth ? "Save & Authorise" : "Save & Connect"}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -393,12 +483,12 @@ function IntegrationCard({
 /* ─── Section (collapsible, shared by all groups) ─────────────────────────────────── */
 
 function Section({
-  title, description, icon: Icon, accent, iconBg, iconColor,
+  id, title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
   onNavigate, onSyncContacts,
   defaultOpen = false,
 }: {
-  title: string; description: string;
+  id: string; title: string; description: string;
   icon: React.ComponentType<{ className?: string }>;
   accent: string; iconBg: string; iconColor: string;
   items: Integration[];
@@ -446,6 +536,15 @@ function Section({
       </button>
 
       {open && (
+        <>
+        <div className="flex justify-end -mt-1">
+          <a
+            href={`/management/settings-integrations/integrations/help#${id}`}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <HelpCircle className="w-3.5 h-3.5" /> How to connect these
+          </a>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
           {items.map((intg) => (
             <IntegrationCard
@@ -464,6 +563,7 @@ function Section({
             />
           ))}
         </div>
+        </>
       )}
     </section>
   );
@@ -611,6 +711,12 @@ export default function ManagementIntegrationsPage() {
             <p className="text-muted-foreground text-sm mt-1 max-w-xl">
               Connect third-party services to extend KoaPOS. OAuth tokens are encrypted and stored securely in the platform vault.
             </p>
+            <a
+              href="/management/settings-integrations/integrations/help"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
+            >
+              <HelpCircle className="w-4 h-4" /> Connection guide — how to connect each app
+            </a>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             {connectedCount > 0 && (

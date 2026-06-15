@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, laybysTable, laybyPaymentsTable, customersTable, productsTable } from "@workspace/db";
-import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm";
+import { eq, and, desc, ilike, or, sql, count, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import {
@@ -25,6 +25,28 @@ type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0
  * completed state (cancelled / re-opened) so the figures never drift. Layby
  * line items always carry a real productId. */
 interface LaybyStockLine { productId?: number | null; quantity?: number | null }
+
+/** Snapshot each product-linked layby line item's cost price (server-authoritative)
+ *  so completed-layby COGS reflects cost at sale, not the product's later cost. */
+async function snapshotLaybyItemCosts(merchantId: number, items: unknown): Promise<unknown> {
+  if (!Array.isArray(items)) return items;
+  const arr = items as Array<Record<string, unknown>>;
+  const ids = [...new Set(arr.map((l) => l.productId).filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+  if (ids.length === 0) return items;
+  const rows = await db
+    .select({ id: productsTable.id, costPrice: productsTable.costPrice })
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)));
+  const costById = new Map(rows.map((r) => [r.id, r.costPrice != null ? parseFloat(r.costPrice) : NaN]));
+  return arr.map((l) => {
+    const pid = l.productId;
+    if (typeof pid === "number" && costById.has(pid)) {
+      const c = costById.get(pid)!;
+      if (Number.isFinite(c)) return { ...l, costPrice: c };
+    }
+    return l;
+  });
+}
 
 function aggregateQtyByProduct(items: unknown): Map<number, number> {
   const map = new Map<number, number>();
@@ -181,6 +203,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
   // A deposit covering the full amount completes the layby immediately, which
   // (like a POS sale) deducts stock and rolls into the customer's spend.
   const completedOnCreate = depositAmount >= totalAmount;
+  const itemsWithCost = await snapshotLaybyItemCosts(merchantId, items);
 
   const layby = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -190,7 +213,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
         customerId: customerId ?? null,
         staffId: typeof staffId === "number" ? staffId : null,
         reference,
-        items,
+        items: itemsWithCost,
         totalAmount: String(totalAmount),
         depositAmount: String(depositAmount),
         amountPaid: String(depositAmount),

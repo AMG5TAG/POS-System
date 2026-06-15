@@ -553,24 +553,42 @@ router.post("/reports/run", requireAuth, requireManagerOrOwner, async (req, res)
       return { period: r.staff_name, revenue, transactions: txns, avgSale: txns > 0 ? r2(revenue / txns) : 0 };
     });
   } else {
-    // product: unnest transaction line items
+    // product: unnest transaction line items. Revenue uses the canonical
+    // `totalPrice`/`productName` keys (not `price`/`name`), and COGS prefers the
+    // at-sale cost snapshot, falling back to the product's current cost.
     const result = await db.execute<Record<string, string>>(sql`
-      SELECT COALESCE(item->>'name', 'Unknown') AS product,
+      SELECT COALESCE(p.name, item->>'productName', 'Unknown') AS product,
         SUM((item->>'quantity')::numeric)::int AS qty_sold,
-        SUM((item->>'quantity')::numeric * (item->>'price')::numeric) AS revenue
+        COALESCE(SUM((item->>'totalPrice')::numeric), 0) AS revenue,
+        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0) AS cogs
       FROM transactions t
-      CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
+      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
+      LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
       WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
         AND t.created_at::date BETWEEN ${startDate}::date AND ${endDate}::date
-        AND jsonb_typeof(t.items) = 'array'
       GROUP BY product ORDER BY revenue DESC LIMIT 200
     `);
     columns = [
       { key: "period", label: "Product", type: "text" },
       { key: "qtySold", label: "Qty Sold", type: "number" },
       { key: "revenue", label: "Revenue", type: "currency" },
+      { key: "cogs", label: "COGS", type: "currency" },
+      { key: "grossProfit", label: "Gross Profit", type: "currency" },
+      { key: "marginPct", label: "Margin %", type: "number" },
     ];
-    rows = result.rows.map((r) => ({ period: r.product, qtySold: Number(r.qty_sold), revenue: r2(r.revenue) }));
+    rows = result.rows.map((r) => {
+      const revenue = r2(r.revenue);
+      const cogs = r2(r.cogs);
+      const grossProfit = r2(String(revenue - cogs));
+      return {
+        period: r.product,
+        qtySold: Number(r.qty_sold),
+        revenue,
+        cogs,
+        grossProfit,
+        marginPct: revenue > 0 ? Math.round((grossProfit / revenue) * 1000) / 10 : 0,
+      };
+    });
   }
 
   res.json({ groupBy, startDate, endDate, columns, rows });

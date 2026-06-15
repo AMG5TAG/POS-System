@@ -236,6 +236,19 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+/** Best-effort cost price-history audit row; never blocks the product write. */
+async function logCostHistory(
+  merchantId: number,
+  productId: number,
+  costPrice: string,
+  retailPrice: string | null,
+  source: "manual" | "import",
+): Promise<void> {
+  try {
+    await db.insert(productPriceHistoryTable).values({ merchantId, productId, costPrice, retailPrice, source });
+  } catch { /* audit row is non-critical — never fail the product write over it */ }
+}
+
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -274,6 +287,10 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       tags: tags ?? null,
     })
     .returning();
+  // Record the initial cost as the first price-history entry.
+  if (product && costPrice != null) {
+    void logCostHistory(req.session.merchantId!, product.id, costPrice.toString(), price.toString(), "manual");
+  }
   res.status(201).json(formatProduct(product, null, ptRecord));
 });
 
@@ -507,8 +524,16 @@ router.post("/products/import", requireAuth, uploadMemoryProducts.single("file")
   const skipped = rawRows.length - toInsert.length;
 
   try {
-    await db.insert(productsTable).values(insertValues);
-    imported = insertValues.length;
+    const inserted = await db.insert(productsTable).values(insertValues)
+      .returning({ id: productsTable.id, costPrice: productsTable.costPrice, price: productsTable.price });
+    imported = inserted.length;
+    // Record the imported cost as each product's first price-history entry.
+    const historyRows = inserted
+      .filter((p) => p.costPrice != null)
+      .map((p) => ({ merchantId, productId: p.id, costPrice: p.costPrice as string, retailPrice: p.price ?? null, source: "import" as const }));
+    if (historyRows.length > 0) {
+      await db.insert(productPriceHistoryTable).values(historyRows).catch(() => { /* audit non-critical */ });
+    }
   } catch (err) {
     req.log.error({ err }, "Product CSV bulk insert failed");
     res.status(500).json({ error: "Database error during bulk insert" }); return;
@@ -634,6 +659,14 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   const warranty = readWarranty(req.body);
   if (warranty) { updates.warrantyDuration = warranty.warrantyDuration; updates.warrantyUnit = warranty.warrantyUnit; }
 
+  // Capture the prior cost so we only write a price-history row on a real change.
+  let previousCost: string | null = null;
+  if (costPrice !== undefined) {
+    const [existing] = await db.select({ costPrice: productsTable.costPrice }).from(productsTable)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+    previousCost = existing?.costPrice ?? null;
+  }
+
   let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
   if (productTypeId != null) {
     const [pt] = await db.select().from(productTypesTable)
@@ -657,6 +690,14 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
       .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
   }
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
+
+  // Audit a manual cost change (only when the value actually changed).
+  if (costPrice !== undefined) {
+    const newCost = costPrice.toString();
+    if (previousCost !== newCost) {
+      void logCostHistory(req.session.merchantId!, product.id, newCost, product.price ?? null, "manual");
+    }
+  }
 
   if (patchPtRecord === null && product.productTypeId) {
     const [pt] = await db.select().from(productTypesTable)

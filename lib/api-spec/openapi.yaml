@@ -10301,7 +10301,7 @@ components:
           type: number
         paymentMethod:
           type: string
-          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip]
+          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip, afterpay, klarna]
         amountTendered:
           type: ["number", "null"]
         changeDue:
@@ -10358,7 +10358,7 @@ components:
             $ref: "#/components/schemas/TransactionItem"
         paymentMethod:
           type: string
-          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip]
+          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip, afterpay, klarna]
         subtotal:
           type: number
         taxTotal:
@@ -15352,6 +15352,11 @@ components:
         quantity:    { type: number, minimum: 0.0001 }
         unitPrice:   { type: number, minimum: 0 }
         taxRate:     { type: number, minimum: 0, maximum: 100 }
+        # Optional product linkage so a quote converted to a sale carries the
+        # productId — letting the POS snapshot cost price like any other sale.
+        productId:   { type: integer, nullable: true }
+        productName: { type: string, nullable: true }
+        costPrice:   { type: number, nullable: true }
 
     QuoteDiscountInput:
       type: object

@@ -916,6 +916,8 @@ export const TransactionPaymentMethod = {
   laybuy: 'laybuy',
   loyalty: 'loyalty',
   zip: 'zip',
+  afterpay: 'afterpay',
+  klarna: 'klarna',
 } as const;
 
 export type TransactionIssuedGiftCardsItem = {
@@ -977,6 +979,8 @@ export const TransactionInputPaymentMethod = {
   laybuy: 'laybuy',
   loyalty: 'loyalty',
   zip: 'zip',
+  afterpay: 'afterpay',
+  klarna: 'klarna',
 } as const;
 
 /**
@@ -5309,6 +5313,9 @@ export interface QuoteLineItem {
      * @maximum 100
      */
   taxRate: number;
+  productId?: number | null;
+  productName?: string | null;
+  costPrice?: number | null;
 }
 
 export type QuoteDiscountInputType = typeof QuoteDiscountInputType[keyof typeof QuoteDiscountInputType];

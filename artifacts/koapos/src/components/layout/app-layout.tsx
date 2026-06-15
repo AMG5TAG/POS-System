@@ -19,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync, Activity,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -206,6 +206,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Sales Overview", href: "/management/marketing-reports/sales-overview",       icon: BarChart2  },
       { name: "Reports",        href: "/management/marketing-reports/reports", icon: TrendingUp,
         matchPaths: ["/management/marketing-reports/reports/daily"] },
+      { name: "Analytics",      href: "/management/marketing-reports/analytics",   icon: Activity   },
       { name: "KPIs & Targets", href: "/management/marketing-reports/kpis-targets",                 icon: Target     },
       { name: "Referrals",      href: "/management/marketing-reports/referrals",  icon: UserPlus   },
       { name: "Social Feed",    href: "/management/marketing-reports/social-feed",icon: Share2     },
@@ -368,6 +369,7 @@ const SEARCH_INDEX = [
   { label: "Reports · Gift Cards",        href: "/management/marketing-reports/sales-overview#gift-cards",         icon: Gift,          group: "Reports"    },
   { label: "Reports · Scheduled",         href: "/management/marketing-reports/sales-overview#scheduled",          icon: CalendarClock, group: "Reports"    },
   { label: "Reports · User Activity",     href: "/management/marketing-reports/sales-overview#user-activity",      icon: Users,         group: "Reports"    },
+  { label: "Analytics",                   href: "/management/marketing-reports/analytics",                        icon: Activity,      group: "Reports"    },
 ];
 
 /* ─── Route → breadcrumb label ───────────────────────────────────────────── */
