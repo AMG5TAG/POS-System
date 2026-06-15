@@ -93,7 +93,12 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+// Capture the raw request body so webhook handlers (e.g. Zip Pay) can verify
+// provider HMAC signatures over the exact bytes received.
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, _res, buf) => { (req as express.Request & { rawBody?: string }).rawBody = buf.toString("utf8"); },
+}));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);

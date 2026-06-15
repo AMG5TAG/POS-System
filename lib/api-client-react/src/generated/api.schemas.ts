@@ -915,6 +915,7 @@ export const TransactionPaymentMethod = {
   store_credit: 'store_credit',
   laybuy: 'laybuy',
   loyalty: 'loyalty',
+  zip: 'zip',
 } as const;
 
 export type TransactionIssuedGiftCardsItem = {
@@ -975,6 +976,7 @@ export const TransactionInputPaymentMethod = {
   store_credit: 'store_credit',
   laybuy: 'laybuy',
   loyalty: 'loyalty',
+  zip: 'zip',
 } as const;
 
 /**

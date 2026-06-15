@@ -450,6 +450,14 @@ export default function POSPage() {
   // succeeds or the cart is cleared, starting a fresh key for the next sale.
   const idempotencyKeyRef = useRef<string | null>(null);
 
+  /* Zip Pay (buy-now-pay-later) — asynchronous, scan-to-pay. The sale is parked
+     server-side and only recorded once Zip captures, so the POS shows a pending
+     dialog (QR + polling) instead of completing instantly. The completion-UI
+     inputs are snapshotted at create time because capture happens later, outside
+     the checkout closure. */
+  const [zipPending, setZipPending] = useState<{ attemptId: number; qrPayload: string | null; expiresAt: string | null; status: string; error: string | null; amount: number } | null>(null);
+  const zipSnapRef = useRef<SaleCompletionSnapshot | null>(null);
+
   // Refs kept in sync with state so pagehide / unmount cleanup can read the
   // latest cart without stale closures.
   const cartRef = useRef<CartItem[]>([]);
@@ -2349,6 +2357,74 @@ export default function POSPage() {
     setApprovalPinError("");
   };
 
+  /* Snapshot of everything the receipt / completion UI needs, captured at the
+     moment a sale is submitted. For instant sales it's used synchronously; for
+     Zip it's stashed in a ref and replayed when the capture webhook/poll lands. */
+  type SaleCompletionSnapshot = {
+    paymentMethod: string;
+    total: number;
+    subtotal: number;
+    taxTotal: number;
+    cart: CartItem[];
+    customer: Customer | null;
+    loyaltyAmount: number;
+    loyaltyUnit: string;
+    overallDiscountPct: number | null;
+  };
+
+  /* Drive the shared post-sale UI (receipt, KPI refresh, cart clear) from a
+     completed transaction + its snapshot. Shared by the instant path and Zip. */
+  const completeSaleUi = (data: Transaction, snap: SaleCompletionSnapshot) => {
+    idempotencyKeyRef.current = null;
+    invalidateSalesKpiQueries(queryClient);
+    try {
+      if (sessionSnap) {
+        const s = { ...sessionSnap };
+        s.sales = s.sales ?? {};
+        s.sales[snap.paymentMethod] = (s.sales[snap.paymentMethod] ?? 0) + snap.total;
+        s.txCount = (s.txCount ?? 0) + 1;
+        setSessionSnap(s);
+        saveRegisterSession(s);
+      }
+    } catch { /* ignore */ }
+    setCompletedCart(snap.cart);
+    setCompletedIssuedGiftCards(data.issuedGiftCards ?? []);
+    setCompletedPaymentMethod(snap.paymentMethod);
+    setCompletedSubtotal(snap.subtotal);
+    setCompletedTaxTotal(snap.taxTotal);
+    setCompletedCustomer(snap.customer);
+    setCompletedLoyaltyAmount(snap.loyaltyAmount);
+    setCompletedLoyaltyUnit(snap.loyaltyUnit);
+    setCompletedOverallDiscountPct(snap.overallDiscountPct);
+    clearCart();
+    setCompletedTx(data);
+    setCompletedTotal(snap.total);
+    setReceiptEmail(snap.customer?.email ?? "");
+    setReceiptPhone(snap.customer?.phone ?? "");
+    setReceiptMode("idle");
+    setSelectedCustomer(null);
+    setWalkIn(null);
+    setPaymentModalOpen(false);
+    setTimeout(() => setReceiptOpen(true), 250);
+  };
+
+  /* Park a sale as a Zip charge and open the pending dialog. The server records
+     nothing until Zip captures; polling + the webhook converge via settleAttempt. */
+  const startZipPayment = (data: Record<string, unknown>, snap: SaleCompletionSnapshot) => {
+    zipSnapRef.current = snap;
+    void (async () => {
+      try {
+        const r = await customFetch<{ id: number; qrPayload: string | null; expiresAt: string | null; status: string; amount: number }>(
+          "/api/payments/zip/create", { method: "POST", body: JSON.stringify(data) },
+        );
+        setZipPending({ attemptId: r.id, qrPayload: r.qrPayload, expiresAt: r.expiresAt, status: r.status, error: null, amount: r.amount });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : "Failed to start Zip payment";
+        toast.error(msg);
+      }
+    })();
+  };
+
   const handleCheckout = (
     paymentMethod: TransactionInputPaymentMethod,
     amountTendered: number,
@@ -2525,85 +2601,45 @@ export default function POSPage() {
       loyaltyAmount > 0 &&
       paymentMethod !== "loyalty";
 
-    createTransactionMutation.mutate({
-      data: {
-        items: txItems, paymentMethod, subtotal, taxTotal,
-        discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
-        total, amountTendered,
-        customerId: selectedCustomer?.id,
-        staffId: currentStaff?.id,
-        loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
-        notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
-        receiptNumber,
-        idempotencyKey,
-        ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
-        ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
-        ...(giftCardPayment ? { giftCardPayment } : {}),
-      }
-    }, {
-      onSuccess: (data) => {
-        idempotencyKeyRef.current = null;
-        /* Completed sales drive the KPI / dashboard numbers — refresh them. */
-        invalidateSalesKpiQueries(queryClient);
-        // Track session sales by payment method (in-memory only)
-        try {
-          if (sessionSnap) {
-            const s = { ...sessionSnap };
-            const pm = paymentMethod as string;
-            s.sales = s.sales ?? {};
-            s.sales[pm] = (s.sales[pm] ?? 0) + total;
-            s.txCount = (s.txCount ?? 0) + 1;
-            setSessionSnap(s);
-            saveRegisterSession(s);
-          }
-        } catch { /* ignore */ }
-        // Capture total + cart before clearing
-        const saleTotal = total;
-        setCompletedCart([...cart]);
-        // Gift cards are now issued atomically by the server inside the same DB
-        // transaction — no separate createGiftCard call needed. The response
-        // contains issuedGiftCards so the cashier can hand the code to the customer.
-        setCompletedIssuedGiftCards(data.issuedGiftCards ?? []);
-        setCompletedPaymentMethod(paymentMethod);
-        setCompletedSubtotal(subtotal);
-        setCompletedTaxTotal(taxTotal);
-        setCompletedCustomer(selectedCustomer);
-        setCompletedLoyaltyAmount(sendLoyaltyEarned ? loyaltyAmount : 0);
-        setCompletedLoyaltyUnit(loyaltyUnit);
-        setCompletedOverallDiscountPct(
-          overallDiscountMode === "percent" && overallDiscountAmt > 0
-            ? (parseFloat(overallDiscountPctInput) || null)
-            : null,
-        );
-        clearCart();
-        setCompletedTx(data);
-        setCompletedTotal(saleTotal);
-        setReceiptEmail(selectedCustomer?.email ?? "");
-        setReceiptPhone(selectedCustomer?.phone ?? "");
-        setReceiptMode("idle");
-        setSelectedCustomer(null);
-        setWalkIn(null);
-        // Close payment modal first, then open receipt after animation completes
-        setPaymentModalOpen(false);
-        setTimeout(() => setReceiptOpen(true), 250);
-      },
+    const data = {
+      items: txItems, paymentMethod, subtotal, taxTotal,
+      discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
+      total, amountTendered,
+      customerId: selectedCustomer?.id,
+      staffId: currentStaff?.id,
+      loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
+      notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+      receiptNumber,
+      idempotencyKey,
+      ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
+      ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
+      ...(giftCardPayment ? { giftCardPayment } : {}),
+    };
+
+    const completionSnapshot: SaleCompletionSnapshot = {
+      paymentMethod, total, subtotal, taxTotal,
+      cart: [...cart],
+      customer: selectedCustomer,
+      loyaltyAmount: sendLoyaltyEarned ? loyaltyAmount : 0,
+      loyaltyUnit,
+      overallDiscountPct: overallDiscountMode === "percent" && overallDiscountAmt > 0
+        ? (parseFloat(overallDiscountPctInput) || null)
+        : null,
+    };
+
+    // Zip Pay is asynchronous: park the sale and hand off to the pending dialog
+    // rather than recording a completed transaction now.
+    if (paymentMethod === "zip") {
+      startZipPayment(data, completionSnapshot);
+      return;
+    }
+
+    createTransactionMutation.mutate({ data }, {
+      onSuccess: (tx) => completeSaleUi(tx, completionSnapshot),
       onError: (err: unknown) => {
         const isNetworkError = err instanceof Error && (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Failed to fetch") || !navigator.onLine);
         if (isNetworkError || !navigator.onLine) {
-          queueSale("/api/transactions", JSON.stringify({
-            items: txItems, paymentMethod, subtotal, taxTotal,
-            discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
-            total, amountTendered,
-            customerId: selectedCustomer?.id,
-            staffId: currentStaff?.id,
-            loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
-            notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
-            receiptNumber,
-            idempotencyKey,
-            ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
-            ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
-            ...(giftCardPayment ? { giftCardPayment } : {}),
-          }));
+          queueSale("/api/transactions", JSON.stringify(data));
           setPaymentModalOpen(false);
           clearCart();
           setSelectedCustomer(null);
@@ -2623,6 +2659,55 @@ export default function POSPage() {
   // Keep a ref to the latest handleCheckout closure so the serial modal can
   // resume the sale after cart serials are applied (next render).
   latestCheckout.current = handleCheckout;
+
+  /* Render the Zip QR. Zip may return a ready image (data:/http) or a raw token;
+     for a token we encode it ourselves so it's always scannable. */
+  const [zipQr, setZipQr] = useState<string | null>(null);
+  useEffect(() => {
+    const payload = zipPending?.qrPayload;
+    if (!payload) { setZipQr(null); return; }
+    if (payload.startsWith("data:") || /^https?:\/\/.*\.(png|svg|gif|jpe?g)(\?|$)/i.test(payload)) {
+      setZipQr(payload);
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(payload, { width: 220, margin: 1 })
+      .then((u) => { if (!cancelled) setZipQr(u); })
+      .catch(() => { if (!cancelled) setZipQr(null); });
+    return () => { cancelled = true; };
+  }, [zipPending?.qrPayload]);
+
+  /* Poll the parked Zip attempt until it reaches a terminal state. The webhook
+     is the primary signal; this poll is the fallback so the POS still resolves
+     if the webhook is delayed or undelivered. */
+  useEffect(() => {
+    if (!zipPending || zipPending.error || zipPending.status === "captured") return;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const r = await customFetch<{ status: string; transactionId: number | null; failureReason: string | null }>(
+          `/api/payments/${zipPending.attemptId}/status`, { method: "GET" },
+        );
+        if (cancelled) return;
+        if (r.status === "captured" && r.transactionId) {
+          const tx = await customFetch<Transaction>(`/api/transactions/${r.transactionId}`, { method: "GET" });
+          if (cancelled) return;
+          const snap = zipSnapRef.current;
+          setZipPending(null);
+          if (snap) completeSaleUi(tx, snap);
+          toast.success("Zip payment approved");
+        } else if (["declined", "expired", "cancelled", "failed"].includes(r.status)) {
+          setZipPending((p) => (p ? { ...p, status: r.status, error: r.failureReason ?? `Zip payment ${r.status}` } : null));
+        } else if (r.status !== zipPending.status) {
+          setZipPending((p) => (p ? { ...p, status: r.status } : null));
+        }
+      } catch { /* transient — keep polling */ }
+    };
+    const iv = setInterval(() => { void poll(); }, 3000);
+    void poll();
+    return () => { cancelled = true; clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [zipPending?.attemptId, zipPending?.status, zipPending?.error]);
 
   const confirmSerials = () => {
     for (const arr of Object.values(serialInputs)) {
@@ -4033,13 +4118,17 @@ export default function POSPage() {
                   // Compute the tag locally and pass it through handleCheckout
                   // so we don't depend on async setState reaching the payload.
                   const isIntegration = String(payMethod).startsWith("__intg__");
+                  const intgKey = isIntegration ? String(payMethod).slice("__intg__".length) : null;
+                  // Zip Pay has a real async payment flow — record it as a
+                  // first-class "zip" tender (handleCheckout routes it to the
+                  // pending dialog). Other integrations are still recorded as a
+                  // generic "other" tender with an audit note.
                   const apiMethod: TransactionInputPaymentMethod =
-                    isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
+                    intgKey === "zip" ? "zip" : isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
                   let extraNote: string | undefined;
-                  if (isIntegration) {
-                    const key = String(payMethod).slice("__intg__".length);
-                    const label = INTEGRATION_PAYMENT_LABELS[key] ?? key;
-                    extraNote = `[Payment via ${label} (${key})]`;
+                  if (isIntegration && intgKey !== "zip") {
+                    const label = INTEGRATION_PAYMENT_LABELS[intgKey!] ?? intgKey!;
+                    extraNote = `[Payment via ${label} (${intgKey})]`;
                   }
                   // For loyalty payments, tender the entered loyalty amount
                   // (not the auto-defaulted total) so the server deducts
@@ -5239,6 +5328,43 @@ export default function POSPage() {
             <Button variant="outline" onClick={() => setTillClosedDialogOpen(false)}>Cancel</Button>
             <Button onClick={() => { setTillClosedDialogOpen(false); setOpenRegisterDialogOpen(true); }}>
               <DoorOpen className="w-4 h-4 mr-1.5" /> Open Till
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Zip Pay pending dialog ─────────────────────────────────────────── */}
+      <Dialog open={!!zipPending} onOpenChange={(o) => { if (!o) setZipPending(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Zip Pay</DialogTitle>
+          </DialogHeader>
+          {zipPending?.error ? (
+            <div className="py-4 text-center space-y-2">
+              <p className="font-medium text-destructive">{zipPending.error}</p>
+              <p className="text-sm text-muted-foreground">No charge was completed — try another payment method.</p>
+            </div>
+          ) : (
+            <div className="py-2 flex flex-col items-center gap-4 text-center">
+              {zipQr ? (
+                <img src={zipQr} alt="Zip payment QR code" className="w-52 h-52 rounded-lg border bg-white p-2" />
+              ) : (
+                <div className="w-52 h-52 rounded-lg border flex items-center justify-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <p className="font-medium">Ask the customer to scan with the Zip app</p>
+                {zipPending && <p className="text-lg font-semibold">{formatCurrency(zipPending.amount)}</p>}
+                <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for approval…
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setZipPending(null)}>
+              {zipPending?.error ? "Close" : "Cancel"}
             </Button>
           </DialogFooter>
         </DialogContent>

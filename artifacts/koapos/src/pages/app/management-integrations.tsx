@@ -193,6 +193,31 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
               <Input id={f.name} type={f.type} value={values[f.name] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))} autoComplete="off" />
             </div>
           ))}
+          {integration.key === "zip" && (
+            <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+              <p className="text-[11px] font-medium text-muted-foreground">
+                In your Zip merchant dashboard, add this webhook URL and paste the signing secret it gives you above:
+              </p>
+              <div className="flex items-center gap-2">
+                <code className="flex-1 text-[11px] bg-background border rounded px-2 py-1 truncate" title={`${window.location.origin}/api/webhooks/zip`}>
+                  {window.location.origin}/api/webhooks/zip
+                </code>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2 text-[11px] shrink-0"
+                  onClick={() => {
+                    void navigator.clipboard.writeText(`${window.location.origin}/api/webhooks/zip`)
+                      .then(() => toast.success("Webhook URL copied"))
+                      .catch(() => toast.error("Couldn't copy — select and copy manually"));
+                  }}
+                >
+                  Copy
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>

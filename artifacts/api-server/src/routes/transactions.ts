@@ -134,13 +134,31 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
-router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
-  const parsed = CreateTransactionBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+/* ── Reusable sale finalisation ────────────────────────────────────────────────
+   The core of POST /transactions, extracted so it can be driven both by a live
+   cashier request AND by an asynchronous payment confirmation (e.g. the Zip Pay
+   webhook captures a charge and replays the parked sale through here). It is
+   I/O-agnostic: instead of writing to an Express `res`, it returns a result the
+   caller maps to a response (cashier) or a payment_attempts update (webhook).
 
+   Behaviour is identical to the original handler — only the request/response
+   boundary moved out. */
+export interface FinalizeSaleSyncContext { host: string; cookie: string; }
+export interface FinalizeSaleOptions {
+  /** Present → fire Xero/QuickBooks live sync (needs a session cookie). Omit to skip. */
+  syncContext?: FinalizeSaleSyncContext;
+}
+type CreateTransactionInput = Extract<ReturnType<typeof CreateTransactionBody.safeParse>, { success: true }>["data"];
+export type FinalizeSaleResult =
+  | { ok: true; transaction: typeof transactionsTable.$inferSelect; customer: typeof customersTable.$inferSelect | null }
+  | { ok: false; status: number; error: string; expected?: unknown };
+
+export async function finalizeSale(
+  merchantId: number,
+  body: CreateTransactionInput,
+  rawItems: Array<{ serials?: unknown }>,
+  opts: FinalizeSaleOptions = {},
+): Promise<FinalizeSaleResult> {
   const {
     subtotal: clientSubtotal,
     taxTotal: clientTaxTotal,
@@ -152,7 +170,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     idempotencyKey: rawIdempotencyKey, giftCardPayment,
     requestedDiscountTotal: clientRequestedDiscountTotal,
     discountPct: clientDiscountPct,
-  } = parsed.data;
+  } = body;
 
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
@@ -160,8 +178,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       : null;
 
   if (clientItems.length === 0) {
-    res.status(400).json({ error: "Transaction must include at least one item" });
-    return;
+    return { ok: false, status: 400, error: "Transaction must include at least one item" };
   }
 
   // Idempotency: if this exact request was already recorded (e.g. the client
@@ -172,17 +189,16 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       .select()
       .from(transactionsTable)
       .where(and(
-        eq(transactionsTable.merchantId, req.session.merchantId!),
+        eq(transactionsTable.merchantId, merchantId),
         eq(transactionsTable.idempotencyKey, idempotencyKey),
       ));
     if (existing) {
       let cust: typeof customersTable.$inferSelect | null = null;
       if (existing.customerId) {
-        const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+        const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, merchantId)));
         cust = c ?? null;
       }
-      res.status(201).json(formatTransaction(existing, cust));
-      return;
+      return { ok: true, transaction: existing, customer: cust };
     }
   }
 
@@ -192,10 +208,9 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     const [c] = await db
       .select()
       .from(customersTable)
-      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
     if (!c) {
-      res.status(404).json({ error: "Customer not found" });
-      return;
+      return { ok: false, status: 404, error: "Customer not found" };
     }
     scopedCustomer = c;
   }
@@ -212,19 +227,18 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     ? await db
         .select()
         .from(productsTable)
-        .where(and(inArray(productsTable.id, regularProductIds), eq(productsTable.merchantId, req.session.merchantId!)))
+        .where(and(inArray(productsTable.id, regularProductIds), eq(productsTable.merchantId, merchantId)))
     : [];
   const productMap = new Map(dbProducts.map((p) => [p.id, p]));
   const missing = regularProductIds.filter((id) => !productMap.has(id));
   if (missing.length > 0) {
-    res.status(400).json({ error: `Unknown product id(s): ${missing.join(", ")}` });
-    return;
+    return { ok: false, status: 400, error: `Unknown product id(s): ${missing.join(", ")}` };
   }
 
   // Product type lookup for digital code validation
   const productTypeIds = [...new Set(dbProducts.map((p) => p.productTypeId).filter((id): id is number => id != null))];
   const dbProductTypes = productTypeIds.length > 0
-    ? await db.select().from(productTypesTable).where(and(inArray(productTypesTable.id, productTypeIds as number[]), eq(productTypesTable.merchantId, req.session.merchantId!)))
+    ? await db.select().from(productTypesTable).where(and(inArray(productTypesTable.id, productTypeIds as number[]), eq(productTypesTable.merchantId, merchantId)))
     : [];
   const productTypeMap = new Map(dbProductTypes.map((pt) => [pt.id, pt]));
 
@@ -239,22 +253,18 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     serials?: string[];
   }[] = [];
   // Per-item serial numbers aren't in the generated body schema (which strips
-  // unknown keys), so read them from the raw body, matched to clientItems by index.
-  const rawItems: Array<{ serials?: unknown }> = Array.isArray((req.body as { items?: unknown }).items)
-    ? (req.body as { items: Array<{ serials?: unknown }> }).items
-    : [];
+  // unknown keys), so they are supplied separately via `rawItems`, matched to
+  // clientItems by index.
   for (let idx = 0; idx < clientItems.length; idx++) {
     const i = clientItems[idx];
     if (!Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.quantity)) {
-      res.status(400).json({ error: `Invalid quantity for product ${i.productId}` });
-      return;
+      return { ok: false, status: 400, error: `Invalid quantity for product ${i.productId}` };
     }
     // A gift card issue line must always have quantity 1 — each unit is a unique card
     // with its own generated number, so selling qty>1 would require multiple distinct
     // numbers, which the current dialog doesn't support.
     if (i.giftCardIssue && i.quantity !== 1) {
-      res.status(400).json({ error: "Gift card issue items must have quantity 1. Add each card as a separate line." });
-      return;
+      return { ok: false, status: 400, error: "Gift card issue items must have quantity 1. Add each card as a separate line." };
     }
     let unitPrice: number;
     let taxRatePct: number;
@@ -277,10 +287,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     // and indicates either a UI bug or a forged request. Use 0.005 as the
     // tolerance so sub-cent floating-point noise doesn't trigger a false 422.
     if (rawDiscount > lineGross + 0.005) {
-      res.status(422).json({
-        error: `Discount on "${itemName}" ($${rawDiscount.toFixed(2)}) exceeds the line total ($${lineGross.toFixed(2)}). Reduce or remove the discount before completing the sale.`,
-      });
-      return;
+      return { ok: false, status: 422, error: `Discount on "${itemName}" ($${rawDiscount.toFixed(2)}) exceeds the line total ($${lineGross.toFixed(2)}). Reduce or remove the discount before completing the sale.` };
     }
     const discount = round2(Math.min(rawDiscount, lineGross)); // clamp for sub-cent rounding
     const totalPrice = round2(lineGross - discount);
@@ -332,21 +339,18 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // or unexpected floating-point edge case before a negative-total record
   // can be persisted. Returns 422 so the POS surfaces it to the cashier.
   if (total < 0) {
-    res.status(422).json({
-      error: "Discounts exceed the cart subtotal — the sale total cannot be negative.",
-    });
-    return;
+    return { ok: false, status: 422, error: "Discounts exceed the cart subtotal — the sale total cannot be negative." };
   }
 
   // Reject obvious tampering on the only authoritative number: the charged
   // total. The breakdown fields can drift by sub-cent rounding when the
   // client sums tax pre-rounding, so we don't gate on them.
   if (Math.abs(clientTotal - total) > 0.01) {
-    res.status(409).json({
+    return {
+      ok: false, status: 409,
       error: "Sale total does not match current product pricing. Please refresh the cart and try again.",
       expected: { subtotal, taxTotal, discountTotal, total },
-    });
-    return;
+    };
   }
   void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
 
@@ -364,7 +368,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       config:      loyaltySettingsTable.config,
     })
     .from(loyaltySettingsTable)
-    .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
+    .where(eq(loyaltySettingsTable.merchantId, merchantId));
   const programType = loyaltyRow?.programType ?? "cashback";
   const loyaltyConfig = (loyaltyRow?.config ?? {}) as Record<string, unknown>;
   // No row → default to enabled (matches GET /loyalty/settings default behaviour)
@@ -383,20 +387,16 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
 
   if (paymentMethod === "loyalty") {
     if (!programOn) {
-      res.status(400).json({ error: "Loyalty program is disabled" });
-      return;
+      return { ok: false, status: 400, error: "Loyalty program is disabled" };
     }
     if (programType === "stamp") {
-      res.status(400).json({ error: "Stamp programs cannot be redeemed at checkout" });
-      return;
+      return { ok: false, status: 400, error: "Stamp programs cannot be redeemed at checkout" };
     }
     if (!scopedCustomer) {
-      res.status(400).json({ error: "Loyalty payments require a customer" });
-      return;
+      return { ok: false, status: 400, error: "Loyalty payments require a customer" };
     }
     if (requiredLoyaltyPoints > scopedCustomer.loyaltyPoints) {
-      res.status(400).json({ error: "Insufficient loyalty balance" });
-      return;
+      return { ok: false, status: 400, error: "Insufficient loyalty balance" };
     }
   }
 
@@ -532,8 +532,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   if (paymentMethod === "cash") {
     const cashTendered = Math.max(0, amountTendered ?? total);
     if (cashTendered < total - 0.009) {
-      res.status(400).json({ error: "Cash tendered is less than the sale total" });
-      return;
+      return { ok: false, status: 400, error: "Cash tendered is less than the sale total" };
     }
     persistedTendered = cashTendered;
     persistedChange = Math.max(0, cashTendered - total);
@@ -564,7 +563,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     const [row] = await tx
       .insert(transactionsTable)
       .values({
-        merchantId: req.session.merchantId!,
+        merchantId,
         customerId: customerId ?? null,
         staffId: staffId ?? null,
         receiptNumber,
@@ -601,7 +600,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         .from(giftCardsTable)
         .where(and(
           eq(giftCardsTable.id, giftCardPayment.cardId),
-          eq(giftCardsTable.merchantId, req.session.merchantId!),
+          eq(giftCardsTable.merchantId, merchantId),
         ))
         .for("update");
       if (!card) throw new HttpError(404, "Gift card not found");
@@ -621,7 +620,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         })
         .where(eq(giftCardsTable.id, card.id));
       await tx.insert(giftCardLedgerTable).values({
-        merchantId: req.session.merchantId!,
+        merchantId,
         giftCardId: card.id,
         type: "redemption",
         amount: (-applied).toString(),
@@ -645,7 +644,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       const [issuedCard] = await tx
         .insert(giftCardsTable)
         .values({
-          merchantId: req.session.merchantId!,
+          merchantId,
           cardNumber: item.giftCardNumber,
           initialValue:   cardValue.toString(),
           currentBalance: cardValue.toString(),
@@ -653,7 +652,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         })
         .returning();
       await tx.insert(giftCardLedgerTable).values({
-        merchantId:   req.session.merchantId!,
+        merchantId,
         giftCardId:  issuedCard.id,
         type:        "issue",
         amount:      cardValue.toString(),
@@ -682,7 +681,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         .from(digitalCodesTable)
         .where(and(
           eq(digitalCodesTable.productId, product.id),
-          eq(digitalCodesTable.merchantId, req.session.merchantId!),
+          eq(digitalCodesTable.merchantId, merchantId),
           eq(digitalCodesTable.isUsed, "false"),
         ))
         .orderBy(digitalCodesTable.id)
@@ -724,7 +723,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           .update(productSerialsTable)
           .set({ status: "sold", soldAt: new Date(), transactionId: row.id })
           .where(and(
-            eq(productSerialsTable.merchantId, req.session.merchantId!),
+            eq(productSerialsTable.merchantId, merchantId),
             eq(productSerialsTable.productId, item.productId),
             eq(productSerialsTable.serial, serial),
             eq(productSerialsTable.status, "available"),
@@ -733,7 +732,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         if (updated.length === 0) {
           await tx
             .insert(productSerialsTable)
-            .values({ merchantId: req.session.merchantId!, productId: item.productId, serial, status: "sold", soldAt: new Date(), transactionId: row.id })
+            .values({ merchantId, productId: item.productId, serial, status: "sold", soldAt: new Date(), transactionId: row.id })
             .onConflictDoNothing();
         }
         serialsTouched = true;
@@ -771,7 +770,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           visitCount:    sql`${customersTable.visitCount} + 1`,
           loyaltyPoints: loyaltyDelta,
         })
-        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, merchantId)));
 
       // Tier auto-upgrade: compute new tier based on updated loyaltyPoints + totalSpent
       const tiers = (loyaltyConfig.tiers ?? []) as Array<{
@@ -793,7 +792,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         await tx
           .update(customersTable)
           .set({ tierName: tier.name, tierUpdatedAt: new Date() })
-          .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+          .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, merchantId)));
       }
     }
 
@@ -806,7 +805,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           .set({ status: "completed" })
           .where(and(
             eq(serviceJobsTable.jobNumber, jobNumber),
-            eq(serviceJobsTable.merchantId, req.session.merchantId!),
+            eq(serviceJobsTable.merchantId, merchantId),
           ));
       }
       const apptMatch = notes.match(/\[Appt #(\d+):/);
@@ -817,7 +816,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           .set({ status: "completed" })
           .where(and(
             eq(appointmentsTable.id, apptId),
-            eq(appointmentsTable.merchantId, req.session.merchantId!),
+            eq(appointmentsTable.merchantId, merchantId),
           ));
       }
     }
@@ -826,8 +825,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     });
   } catch (err) {
     if (err instanceof HttpError) {
-      res.status(err.status).json({ error: err.message });
-      return;
+      return { ok: false, status: err.status, error: err.message };
     }
     // Idempotency race: a concurrent request with the same key won the unique
     // index. Return the transaction it created instead of surfacing a 500.
@@ -836,61 +834,90 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(transactionsTable)
         .where(and(
-          eq(transactionsTable.merchantId, req.session.merchantId!),
+          eq(transactionsTable.merchantId, merchantId),
           eq(transactionsTable.idempotencyKey, idempotencyKey),
         ));
       if (existing) {
         let cust: typeof customersTable.$inferSelect | null = null;
         if (existing.customerId) {
-          const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+          const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, merchantId)));
           cust = c ?? null;
         }
-        res.status(201).json(formatTransaction(existing, cust));
-        return;
+        return { ok: true, transaction: existing, customer: cust };
       }
     }
     throw err;
   }
 
   if (updatedStockItems.length) {
-    const merchantId = req.session.merchantId!;
     Promise.all(updatedStockItems.map((p) => maybeQueueImmediateAlert(merchantId, p, p.previousStockQuantity)))
       .catch(() => { /* non-blocking */ });
   }
 
-  /* Fire-and-forget Xero / QuickBooks live sync if the merchant has enabled it.
-     The response is already sent; sync failures are logged silently. */
-  const mId = req.session.merchantId!;
-  (async () => {
-    try {
-      const [xeroRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
-        .from(merchantIntegrationsTable)
-        .where(and(eq(merchantIntegrationsTable.merchantId, mId), eq(merchantIntegrationsTable.integrationKey, "xero")));
-      const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
-      if (xeroCreds.syncSettings?.syncOnSale) {
-        await fetch(`https://${req.headers.host}/api/xero/sync-sale`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: String(req.headers.cookie ?? "") },
-          body: JSON.stringify({ transactionId: transaction.id }),
-        });
-      }
-    } catch { /* silent */ }
-    try {
-      const [qbRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
-        .from(merchantIntegrationsTable)
-        .where(and(eq(merchantIntegrationsTable.merchantId, mId), eq(merchantIntegrationsTable.integrationKey, "quickbooks")));
-      const qbCreds = qbRow?.credentials ? JSON.parse(qbRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
-      if (qbCreds.syncSettings?.syncOnSale) {
-        await fetch(`https://${req.headers.host}/api/quickbooks/sync-sale`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: String(req.headers.cookie ?? "") },
-          body: JSON.stringify({ transactionId: transaction.id }),
-        });
-      }
-    } catch { /* silent */ }
-  })();
+  /* Fire-and-forget Xero / QuickBooks live sync if the merchant has enabled it
+     and a session context was supplied (the internal sync endpoints require the
+     cashier's auth cookie). Async/webhook callers omit syncContext, so this is
+     skipped for sales finalised out-of-band. */
+  const syncContext = opts.syncContext;
+  if (syncContext) {
+    void (async () => {
+      try {
+        const [xeroRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
+          .from(merchantIntegrationsTable)
+          .where(and(eq(merchantIntegrationsTable.merchantId, merchantId), eq(merchantIntegrationsTable.integrationKey, "xero")));
+        const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
+        if (xeroCreds.syncSettings?.syncOnSale) {
+          await fetch(`https://${syncContext.host}/api/xero/sync-sale`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: syncContext.cookie },
+            body: JSON.stringify({ transactionId: transaction.id }),
+          });
+        }
+      } catch { /* silent */ }
+      try {
+        const [qbRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
+          .from(merchantIntegrationsTable)
+          .where(and(eq(merchantIntegrationsTable.merchantId, merchantId), eq(merchantIntegrationsTable.integrationKey, "quickbooks")));
+        const qbCreds = qbRow?.credentials ? JSON.parse(qbRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
+        if (qbCreds.syncSettings?.syncOnSale) {
+          await fetch(`https://${syncContext.host}/api/quickbooks/sync-sale`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: syncContext.cookie },
+            body: JSON.stringify({ transactionId: transaction.id }),
+          });
+        }
+      } catch { /* silent */ }
+    })();
+  }
 
-  res.status(201).json(formatTransaction(transaction, scopedCustomer));
+  return { ok: true, transaction, customer: scopedCustomer };
+}
+
+router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
+  const parsed = CreateTransactionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  // Per-item serial numbers are stripped by the generated body schema, so read
+  // them from the raw request body and hand them to finalizeSale separately.
+  const rawItems: Array<{ serials?: unknown }> = Array.isArray((req.body as { items?: unknown }).items)
+    ? (req.body as { items: Array<{ serials?: unknown }> }).items
+    : [];
+
+  const result = await finalizeSale(req.session.merchantId!, parsed.data, rawItems, {
+    syncContext: { host: String(req.headers.host ?? ""), cookie: String(req.headers.cookie ?? "") },
+  });
+
+  if (!result.ok) {
+    if (result.expected !== undefined) {
+      res.status(result.status).json({ error: result.error, expected: result.expected });
+    } else {
+      res.status(result.status).json({ error: result.error });
+    }
+    return;
+  }
+  res.status(201).json(formatTransaction(result.transaction, result.customer));
 });
 
 router.get("/transactions/:id", requireAuth, async (req, res): Promise<void> => {

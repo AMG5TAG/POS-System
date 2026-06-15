@@ -3,7 +3,7 @@ import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, cu
 import { eq, and, desc } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault, readVault } from "../services/tokenVault";
+import { upsertVault, deleteVault, readVault, upsertCredentialVault } from "../services/tokenVault";
 
 const router: IRouter = Router();
 
@@ -33,7 +33,7 @@ export const INTEGRATIONS = [
   { key: "paypal",          label: "PayPal",                section: "payments",   category: "Payments & Terminals", description: "Accept PayPal in-store via QR code — customer scans with the PayPal app to pay.",                        authType: "credentials" as const, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }, { name: "merchantId", label: "Merchant ID", type: "text" }] as F[], useVault: false },
   { key: "wechat_alipay",   label: "WeChat Pay & Alipay",   section: "payments",   category: "Payments & Terminals", description: "Display merchant QR codes for WeChat Pay and Alipay in-store.",                                          authType: "credentials" as const, fields: [{ name: "wechatMerchantId", label: "WeChat Merchant ID", type: "text" }, { name: "wechatApiKey", label: "WeChat API Key", type: "password" }, { name: "alipayMerchantId", label: "Alipay Merchant ID", type: "text" }, { name: "alipayApiKey", label: "Alipay API Key", type: "password" }] as F[], useVault: false },
   { key: "afterpay",        label: "Afterpay",              section: "payments",   category: "Payments & Terminals", description: "Let customers split purchases into 4 fortnightly payments.",                                              authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "apple_wallet",    label: "Apple Wallet",          section: "payments",   category: "Payments & Terminals", description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",                  authType: "credentials" as const, fields: [{ name: "passTypeId", label: "Pass Type ID", type: "text" }, { name: "teamId", label: "Apple Team ID", type: "text" }, { name: "certificateBase64", label: "Certificate (Base64)", type: "password" }] as F[], useVault: false },
   { key: "google_pay",      label: "Google Wallet",         section: "payments",   category: "Payments & Terminals", description: "Issue loyalty cards and offers to Google Wallet.",                                                        authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
@@ -387,7 +387,23 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
   if ("comingSoon" in intg && intg.comingSoon) { res.status(400).json({ error: "Coming soon" }); return; }
   if (intg.authType !== "credentials") { res.status(400).json({ error: "Use OAuth flow" }); return; }
-  const credentials = JSON.stringify(req.body ?? {});
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  if (intg.useVault) {
+    // Credential secrets (e.g. Zip's apiKey) are encrypted at rest in the vault.
+    // Surface the first non-secret (text) field as the display handle.
+    const fields = "fields" in intg ? intg.fields : [];
+    const displayField = fields.find((f) => f.type === "text")?.name;
+    await upsertCredentialVault(merchantId, key, body, { accountHandleField: displayField });
+    // Keep a marker row so the rest of the app can detect the connection.
+    const existing = await getRow(merchantId, key);
+    if (existing) { await db.update(merchantIntegrationsTable).set({ status: "connected", credentials: null, connectedAt: new Date() }).where(eq(merchantIntegrationsTable.id, existing.id)); }
+    else { await db.insert(merchantIntegrationsTable).values({ merchantId, integrationKey: key, status: "connected", connectedAt: new Date() }); }
+    res.json({ status: "connected" });
+    return;
+  }
+
+  const credentials = JSON.stringify(body);
   const existing = await getRow(merchantId, key);
   if (existing) { await db.update(merchantIntegrationsTable).set({ status: "connected", credentials, connectedAt: new Date() }).where(eq(merchantIntegrationsTable.id, existing.id)); }
   else { await db.insert(merchantIntegrationsTable).values({ merchantId, integrationKey: key, status: "connected", credentials, connectedAt: new Date() }); }

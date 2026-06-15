@@ -163,7 +163,7 @@ const ExportBtn = ({ rows, filename, columns }: {
 const PAYMENT_COLORS: Record<string, string> = {
   card: "#6366f1", cash: "#22c55e", split: "#f59e0b",
   voucher: "#ec4899", store_credit: "#8b5cf6", loyalty: "#06b6d4",
-  laybuy: "#f97316", direct_deposit: "#14b8a6", other: "#94a3b8",
+  laybuy: "#f97316", direct_deposit: "#14b8a6", zip: "#7c3aed", other: "#94a3b8",
 };
 
 /* ─── Tab: Sales ─────────────────────────────────────────────────────────── */
