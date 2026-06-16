@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
@@ -280,6 +280,25 @@ async function applyInvoiceStock(tx: DbExecutor, merchantId: number, items: unkn
   }
 }
 
+/** Confirm a client-supplied foreign-key id actually belongs to this merchant.
+ *  Returns the id when it resolves to a live row, otherwise null. Used to guard
+ *  invoice inserts/updates against stale client state (e.g. a device whose
+ *  cached day-staff id predates a data restore that renumbered staff): without
+ *  this the raw FK constraint throws an opaque 500 and invoice creation fails.
+ *  `null`/`undefined` inputs pass straight through as null (field is optional). */
+async function resolveMerchantFk(
+  table: typeof staffTable | typeof customersTable | typeof serviceJobsTable | typeof appointmentsTable,
+  merchantId: number,
+  id: number | null | undefined,
+): Promise<number | null> {
+  if (id == null) return null;
+  const [row] = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, id), eq(table.merchantId, merchantId)));
+  return row ? id : null;
+}
+
 /** Snapshot each product-linked line item's cost price (server-authoritative),
  *  so invoice COGS in reports reflects the cost at invoicing rather than trusting
  *  whatever the client sent. Free-text lines (no productId) are left untouched. */
@@ -407,6 +426,20 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
+
+  // Validate client-supplied foreign keys against this merchant before insert.
+  // A stale value (e.g. a cached day-staff id from before a data restore) would
+  // otherwise hit the DB FK constraint and surface as an opaque 500. Staff
+  // attribution and the optional service-job/appointment links are non-critical,
+  // so an unresolved id is dropped to null rather than failing the whole invoice.
+  const safeStaffId = await resolveMerchantFk(staffTable, merchantId, staffId);
+  const safeCustomerId = await resolveMerchantFk(customersTable, merchantId, customerId);
+  const safeServiceJobId = await resolveMerchantFk(serviceJobsTable, merchantId, serviceJobId);
+  const safeAppointmentId = await resolveMerchantFk(appointmentsTable, merchantId, appointmentId);
+  if (staffId != null && safeStaffId == null) {
+    console.warn(`[invoices] POST /invoices: staffId ${staffId} does not belong to merchant ${merchantId}; creating invoice without staff attribution`);
+  }
+
   const rawLines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
   const lines = await snapshotInvoiceLineCosts(merchantId, rawLines);
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
@@ -422,8 +455,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
 
   const [inv] = await db.insert(invoicesTable).values({
     merchantId,
-    customerId: customerId ?? null,
-    staffId: staffId ?? null,
+    customerId: safeCustomerId,
+    staffId: safeStaffId,
     invoiceNumber: invNumber,
     status: "draft",
     subtotal: String(subtotal),
@@ -437,8 +470,8 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     // objects, not the raw "YYYY-MM-DD" strings from the client.
     dueDate: dueDate ? new Date(dueDate) : null,
     notes: notes ?? null,
-    serviceJobId: serviceJobId ?? null,
-    appointmentId: appointmentId ?? null,
+    serviceJobId: safeServiceJobId,
+    appointmentId: safeAppointmentId,
     isRecurring: recurring ? "true" : "false",
     recurringFrequency: recurring?.frequency ?? null,
     recurringOccurrences: recurring?.occurrences ?? null,
@@ -537,9 +570,12 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   }
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
-  if (customerId !== undefined) updates.customerId = customerId ?? null;
-  if (serviceJobId !== undefined) updates.serviceJobId = serviceJobId ?? null;
-  if (appointmentId !== undefined) updates.appointmentId = appointmentId ?? null;
+  // Validate FK ids against the merchant (mirrors POST /invoices) so a stale
+  // client value can't trip the DB constraint and turn an edit into a 500.
+  const updMerchantId = req.session.merchantId!;
+  if (customerId !== undefined) updates.customerId = await resolveMerchantFk(customersTable, updMerchantId, customerId);
+  if (serviceJobId !== undefined) updates.serviceJobId = await resolveMerchantFk(serviceJobsTable, updMerchantId, serviceJobId);
+  if (appointmentId !== undefined) updates.appointmentId = await resolveMerchantFk(appointmentsTable, updMerchantId, appointmentId);
   if (items !== undefined || discount !== undefined) {
     // Fetch existing items/discount if only one was sent
     const [existing] = await db
