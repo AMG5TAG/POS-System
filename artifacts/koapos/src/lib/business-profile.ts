@@ -1,3 +1,4 @@
+import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetBusinessProfile,
@@ -71,6 +72,42 @@ export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   customLinks: [],
 };
 
+/* ── One-time recovery: localStorage → backend ───────────────────────────────
+   Before the backend migration, the business profile lived only in browser
+   localStorage under `koapos_business_profile`. The migration switched the app
+   to read from the API but never seeded existing local data, so merchants who
+   had filled in their details saw a blank profile ("lost their business info").
+
+   On first load after the update we copy any surviving local profile into the
+   backend — but ONLY when the backend profile is still empty, so we never
+   clobber details that were entered (or migrated) since. Runs at most once per
+   browser, gated by both a module flag (concurrent mounts) and a persisted
+   flag (subsequent loads). */
+const LEGACY_STORAGE_KEY = "koapos_business_profile";
+const MIGRATION_DONE_KEY = "koapos_business_profile_migrated";
+
+let migrationAttempted = false;
+
+function readLegacyProfile(): Partial<BusinessProfile> | null {
+  try {
+    const raw = localStorage.getItem(LEGACY_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<BusinessProfile>;
+    return parsed && typeof parsed === "object" ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Whether a profile carries any merchant-entered details worth preserving. */
+function hasUserData(p: BusinessProfile): boolean {
+  return Boolean(
+    p.abn || p.tagline || p.description || p.logo || p.contactEmail ||
+    p.website || p.openingDate || p.state || p.postcode ||
+    (p.categories.length > 0),
+  );
+}
+
 export function useBusinessProfile() {
   const qc = useQueryClient();
   const { data, isLoading } = useGetBusinessProfile({ query: { queryKey: getGetBusinessProfileQueryKey() } });
@@ -106,6 +143,54 @@ export function useBusinessProfile() {
       onError: () => qc.invalidateQueries({ queryKey: getGetBusinessProfileQueryKey() }),
     });
   };
+
+  // One-time recovery of a pre-migration localStorage profile (see above).
+  useEffect(() => {
+    if (migrationAttempted || isLoading) return;
+    try {
+      if (localStorage.getItem(MIGRATION_DONE_KEY)) { migrationAttempted = true; return; }
+    } catch { migrationAttempted = true; return; }
+
+    // Backend already has details — nothing to recover; don't run again.
+    if (hasUserData(profile)) {
+      migrationAttempted = true;
+      try { localStorage.setItem(MIGRATION_DONE_KEY, "1"); } catch { /* ignore */ }
+      return;
+    }
+
+    const legacy = readLegacyProfile();
+    const merged: BusinessProfile | null = legacy
+      ? {
+          ...DEFAULT_BUSINESS_PROFILE,
+          ...legacy,
+          categories:   arr(legacy.categories,   DEFAULT_BUSINESS_PROFILE.categories),
+          brandColors:  arr(legacy.brandColors,  DEFAULT_BUSINESS_PROFILE.brandColors),
+          bgColors:     arr(legacy.bgColors,     DEFAULT_BUSINESS_PROFILE.bgColors),
+          textColors:   arr(legacy.textColors,   DEFAULT_BUSINESS_PROFILE.textColors),
+          paymentTypes: arr(legacy.paymentTypes, DEFAULT_BUSINESS_PROFILE.paymentTypes),
+          customLinks:  arr(legacy.customLinks,  DEFAULT_BUSINESS_PROFILE.customLinks),
+          openingHours: { ...DEFAULT_HOURS, ...(legacy.openingHours ?? {}) },
+          socialLinks:  { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(legacy.socialLinks ?? {}) },
+        }
+      : null;
+
+    // No local data, or local data is itself empty — nothing useful to migrate.
+    if (!merged || !hasUserData(merged)) {
+      migrationAttempted = true;
+      try { localStorage.setItem(MIGRATION_DONE_KEY, "1"); } catch { /* ignore */ }
+      return;
+    }
+
+    migrationAttempted = true;
+    qc.setQueryData(getGetBusinessProfileQueryKey(), merged);
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    mutate({ data: merged as any }, {
+      // Only mark the migration done once it has actually persisted, so a
+      // transient failure can retry on the next load instead of losing the data.
+      onSuccess: () => { try { localStorage.setItem(MIGRATION_DONE_KEY, "1"); } catch { /* ignore */ } },
+      onError:   () => { migrationAttempted = false; qc.invalidateQueries({ queryKey: getGetBusinessProfileQueryKey() }); },
+    });
+  }, [isLoading, profile, mutate, qc]);
 
   return { profile, save, isLoading };
 }

@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from "react";
-import { useLocation } from "wouter";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { customerDisplayName } from "@/lib/customer-name";
@@ -41,8 +40,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
-import { FullScreenSheet } from "@/components/ui/full-screen-sheet";
-import { AccordionScreen, type AccordionSectionDef } from "@/components/ui/accordion-screen";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1314,15 +1311,65 @@ function CustomerDetailInner({
   }
 
   const tabIndex = TABS.findIndex(t => t.key === tab);
-  void tabIndex;
 
-  const labelFor = (key: DetailTab) => TABS.find(t => t.key === key)?.label ?? key;
+  return (
+    <>
+      <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
+        <DialogTitle>
+          <div className="flex items-center gap-3">
+            <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-sm shrink-0">
+              {initials}
+            </div>
+            <div className="min-w-0">
+              <p className="font-bold text-base leading-tight truncate">{fullName}</p>
+              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                {customer.customerGroup && (
+                  <Badge variant="outline" className="text-xs px-2 py-0 h-5">{customer.customerGroup}</Badge>
+                )}
+                {customer.loyaltyPoints != null && customer.loyaltyPoints > 0 && (
+                  <span className="flex items-center gap-0.5 text-xs text-amber-600 font-medium">
+                    <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
+                    {customer.loyaltyPoints} pts
+                  </span>
+                )}
+                {customer.tierName && (
+                  <Badge className="text-[10px] px-1.5 py-0 h-4 bg-violet-100 text-violet-700 border-violet-200">
+                    {customer.tierName}
+                  </Badge>
+                )}
+                {mergeNoteCount > 0 && (
+                  <span className="flex items-center gap-0.5 text-xs text-indigo-600 font-medium">
+                    <GitMerge className="w-3 h-3" />
+                    Merged {mergeNoteCount} {mergeNoteCount === 1 ? "profile" : "profiles"}
+                  </span>
+                )}
+              </div>
+            </div>
+          </div>
+        </DialogTitle>
+      </DialogHeader>
 
-  const sections: AccordionSectionDef[] = [
-    {
-      id: "overview",
-      title: labelFor("overview"),
-      content: (
+      {/* Tabs */}
+      <div className="flex flex-wrap gap-1.5 px-6 py-2 shrink-0 mt-3">
+        {TABS.map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setTab(key)}
+            className={cn(
+              "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
+              tab === key
+                ? "bg-primary text-primary-foreground shadow-sm"
+                : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
+      {/* ── Overview ── */}
+      {tab === "overview" && (
         <div className="space-y-3">
           {customer.warningNote && (
             <div className="flex items-start gap-2 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2.5 text-sm">
@@ -1352,12 +1399,10 @@ function CustomerDetailInner({
             </div>
           )}
         </div>
-      ),
-    },
-    {
-      id: "address",
-      title: labelFor("address"),
-      content: (
+      )}
+
+      {/* ── Address ── */}
+      {tab === "address" && (
         <div className="space-y-3">
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
@@ -1372,12 +1417,10 @@ function CustomerDetailInner({
               : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
           </div>
         </div>
-      ),
-    },
-    {
-      id: "account",
-      title: labelFor("account"),
-      content: (
+      )}
+
+      {/* ── Account ── */}
+      {tab === "account" && (
         <div className="space-y-3">
           <div className="rounded-xl border bg-muted/20 divide-y">
             <InfoRow icon={Calendar} label="Date of Birth" value={customer.dateOfBirth} />
@@ -1465,19 +1508,15 @@ function CustomerDetailInner({
             )}
           </div>
         </div>
-      ),
-    },
-    {
-      id: "credit",
-      title: labelFor("credit"),
-      content: (
+      )}
+
+      {/* ── Store Credit ── */}
+      {tab === "credit" && (
         <CustomerStoreCreditPanel customerId={customer.id} />
-      ),
-    },
-    {
-      id: "history",
-      title: labelFor("history"),
-      content: (
+      )}
+
+      {/* ── History ── */}
+      {tab === "history" && (
         <div className="space-y-4">
           {histLoading ? (
             <div className="flex items-center justify-center py-8 text-muted-foreground gap-2">
@@ -1664,12 +1703,10 @@ function CustomerDetailInner({
             </>
           )}
         </div>
-      ),
-    },
-    {
-      id: "notes",
-      title: labelFor("notes"),
-      content: (
+      )}
+
+      {/* ── Notes ── */}
+      {tab === "notes" && (
         <div className="space-y-4">
           {/* Add note */}
           <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
@@ -1805,12 +1842,10 @@ function CustomerDetailInner({
             </div>
           )}
         </div>
-      ),
-    },
-    {
-      id: "files",
-      title: labelFor("files"),
-      content: (
+      )}
+
+      {/* ── Files ── */}
+      {tab === "files" && (
         <div className="space-y-4">
           {/* Upload */}
           <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-center space-y-2">
@@ -1901,12 +1936,10 @@ function CustomerDetailInner({
             )}
           </div>
         </div>
-      ),
-    },
-    {
-      id: "qr",
-      title: labelFor("qr"),
-      content: (
+      )}
+
+      {/* ── QR Code / Portal ── */}
+      {tab === "qr" && (
         <div className="space-y-3">
           {/* QR Code card */}
           <div className="rounded-xl border bg-white p-5 flex flex-col items-center gap-3">
@@ -1978,23 +2011,10 @@ function CustomerDetailInner({
             </div>
           )}
         </div>
-      ),
-    },
-  ];
+      )}
 
-  return (
-    <>
-      <AccordionScreen
-        title={fullName}
-        subtitle={customer.customerGroup || undefined}
-        onBack={onClose}
-        openId={tab}
-        onOpenChange={(id) => setTab(id as DetailTab)}
-        sections={sections}
-        completeLabel="Done"
-        onComplete={onClose}
-        headerActions={
-          <>
+      </div>
+      <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
         <Button
           variant="destructive" size="sm" className="w-8 h-8 p-0"
           onClick={() => { onDelete(customer.id); onClose(); }}
@@ -2038,9 +2058,7 @@ function CustomerDetailInner({
             <Pencil className="w-3.5 h-3.5" /> Edit
           </Button>
         </div>
-          </>
-        }
-      />
+      </DialogFooter>
 
       {onMerge && (
         <ManualMergePickerDialog
@@ -2498,19 +2516,21 @@ function CustomerDetailDialog({
   onMerge?: (a: Customer, b: Customer) => void;
 }) {
   return (
-    <FullScreenSheet open={!!customer} onClose={onClose}>
-      {customer && (
-        <CustomerDetailInner
-          customer={customer}
-          onClose={onClose}
-          onEdit={onEdit}
-          onDelete={onDelete}
-          deleteIsPending={deleteIsPending}
-          merchantUsername={merchantUsername}
-          onMerge={onMerge}
-        />
-      )}
-    </FullScreenSheet>
+    <Dialog open={!!customer} onOpenChange={onClose}>
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+        {customer && (
+          <CustomerDetailInner
+            customer={customer}
+            onClose={onClose}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            deleteIsPending={deleteIsPending}
+            merchantUsername={merchantUsername}
+            onMerge={onMerge}
+          />
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 
@@ -2518,7 +2538,6 @@ function CustomerDetailDialog({
 
 export default function CustomersPage() {
   const queryClient = useQueryClient();
-  const [, navigate] = useLocation();
   const { user } = useAuth();
   const canMerge = user?.staffRole !== "cashier";
   const { settings: customerSettings } = useCustomerSettings();
@@ -2669,9 +2688,15 @@ export default function CustomersPage() {
     toast.success(`${success} customer${success === 1 ? "" : "s"} deleted`);
   };
 
-  const openCreate = () => navigate("/customers/new");
+  const openCreate = () => {
+    setEditingCustomer(null);
+    setDialogOpen(true);
+  };
 
-  const openEdit = (c: Customer) => navigate(`/customers/${c.id}/edit`);
+  const openEdit = (c: Customer) => {
+    setEditingCustomer(c);
+    setDialogOpen(true);
+  };
 
   const handleDelete = (id?: number) => {
     const targetId = id ?? deletingCustomer?.id;
@@ -3056,9 +3081,11 @@ export default function CustomersPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Customer create/edit now opens the full-screen accordion route
-          (/customers/new, /customers/:id/edit). QuickAddCustomerDialog keeps
-          the inline modal for POS quick-add. */}
+      <AddCustomerWizard
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+        editingCustomer={editingCustomer}
+      />
 
       {/* ── Duplicate review modal ── */}
       <DuplicateModal

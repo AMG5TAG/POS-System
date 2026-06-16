@@ -58,7 +58,6 @@ const ProductsRecallsPage = lazy(() => import("@/pages/app/products-recalls"));
 const ProductsWarrantyPage = lazy(() => import("@/pages/app/products-warranty"));
 
 const CustomersPage = lazy(() => import("@/pages/app/customers"));
-const CustomerFormPage = lazy(() => import("@/pages/app/customer-edit"));
 const CustomersFormsPage = lazy(() => import("@/pages/app/customers-forms"));
 const TransactionsPage = lazy(() => import("@/pages/app/transactions"));
 const InventoryPage = lazy(() => import("@/pages/app/inventory"));
@@ -396,12 +395,6 @@ function Router() {
       </Route>
       <Route path="/customers">
         <ProtectedRoute component={CustomersPage} />
-      </Route>
-      <Route path="/customers/new">
-        <ProtectedRoute component={CustomerFormPage} />
-      </Route>
-      <Route path="/customers/:id/edit">
-        <ProtectedRoute component={CustomerFormPage} />
       </Route>
       <Route path="/transactions">
         <ProtectedRoute component={TransactionsPage} />
