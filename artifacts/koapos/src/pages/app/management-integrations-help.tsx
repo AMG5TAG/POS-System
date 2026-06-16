@@ -187,7 +187,7 @@ export default function ManagementIntegrationsHelpPage() {
 
   return (
     <AppLayout>
-      <div className="w-full max-w-3xl mx-auto px-4 lg:px-6 py-6 space-y-6">
+      <div className="w-full px-4 lg:px-6 py-6 space-y-6">
         <div>
           <Button
             variant="ghost"
