@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, mobilePosAppSettingsTable } from "@workspace/db";
-import { eq, and, desc, sql, ilike, or } from "drizzle-orm";
+import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable } from "@workspace/db";
+import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
 
@@ -192,6 +192,53 @@ router.get("/mobile-pos/customers", async (req, res): Promise<void> => {
   });
 });
 
+/* ── Service jobs / appointments (for linking to a sale or invoice) ──── */
+router.get("/mobile-pos/service-jobs", async (req, res): Promise<void> => {
+  const mpos = await requireMpos(req, res);
+  if (!mpos) return;
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const where = search
+    ? and(
+        eq(serviceJobsTable.merchantId, mpos.merchantId),
+        or(
+          ilike(serviceJobsTable.jobNumber, `%${search}%`),
+          ilike(serviceJobsTable.title, `%${search}%`),
+          ilike(serviceJobsTable.deviceDescription, `%${search}%`),
+        )!,
+      )
+    : eq(serviceJobsTable.merchantId, mpos.merchantId);
+  const rows = await db
+    .select({
+      id: serviceJobsTable.id, jobNumber: serviceJobsTable.jobNumber, title: serviceJobsTable.title,
+      deviceType: serviceJobsTable.deviceType, deviceDescription: serviceJobsTable.deviceDescription,
+      status: serviceJobsTable.status,
+    })
+    .from(serviceJobsTable)
+    .where(where)
+    .orderBy(desc(serviceJobsTable.createdAt))
+    .limit(30);
+  res.json({ items: rows });
+});
+
+router.get("/mobile-pos/appointments", async (req, res): Promise<void> => {
+  const mpos = await requireMpos(req, res);
+  if (!mpos) return;
+  const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+  const where = search
+    ? and(eq(appointmentsTable.merchantId, mpos.merchantId), ilike(appointmentsTable.title, `%${search}%`))
+    : eq(appointmentsTable.merchantId, mpos.merchantId);
+  const rows = await db
+    .select({
+      id: appointmentsTable.id, title: appointmentsTable.title,
+      scheduledAt: appointmentsTable.scheduledAt, status: appointmentsTable.status,
+    })
+    .from(appointmentsTable)
+    .where(where)
+    .orderBy(desc(appointmentsTable.scheduledAt))
+    .limit(30);
+  res.json({ items: rows.map((r) => ({ ...r, scheduledAt: r.scheduledAt?.toISOString() ?? null })) });
+});
+
 /* ── Invoices (read-only list) ───────────────────────────────────────── */
 router.get("/mobile-pos/invoices", async (req, res): Promise<void> => {
   const mpos = await requireMpos(req, res);
@@ -237,7 +284,42 @@ const MposSaleBody = z.object({
   customerId: z.number().int().positive().nullable().optional(),
   amountTendered: z.number().nonnegative().nullable().optional(),
   notes: z.string().max(2000).optional(),
+  serviceJobId: z.number().int().positive().nullable().optional(),
+  appointmentId: z.number().int().positive().nullable().optional(),
 });
+
+/* Resolve a service job / appointment (scoped to the merchant) and build the
+   "[Service #…]" / "[Appt #…]" note tags the rest of the app recognises. */
+async function resolveSaleLinks(
+  merchantId: number,
+  serviceJobId: number | null | undefined,
+  appointmentId: number | null | undefined,
+): Promise<{ serviceJobId: number | null; appointmentId: number | null; tags: string[] }> {
+  const tags: string[] = [];
+  let safeServiceJobId: number | null = null;
+  let safeAppointmentId: number | null = null;
+  if (serviceJobId != null) {
+    const [sj] = await db
+      .select({ jobNumber: serviceJobsTable.jobNumber, title: serviceJobsTable.title, deviceDescription: serviceJobsTable.deviceDescription, deviceType: serviceJobsTable.deviceType })
+      .from(serviceJobsTable)
+      .where(and(eq(serviceJobsTable.id, serviceJobId), eq(serviceJobsTable.merchantId, merchantId)));
+    if (sj) {
+      safeServiceJobId = serviceJobId;
+      tags.push(`[Service #${sj.jobNumber}: ${sj.title || sj.deviceDescription || sj.deviceType || "service"}]`);
+    }
+  }
+  if (appointmentId != null) {
+    const [ap] = await db
+      .select({ title: appointmentsTable.title })
+      .from(appointmentsTable)
+      .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
+    if (ap) {
+      safeAppointmentId = appointmentId;
+      tags.push(`[Appt #${appointmentId}: ${ap.title}]`);
+    }
+  }
+  return { serviceJobId: safeServiceJobId, appointmentId: safeAppointmentId, tags };
+}
 
 router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
   const mpos = await requireMpos(req, res);
@@ -256,6 +338,11 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
       .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, mpos.merchantId)));
     safeCustomerId = c ? customerId : null;
   }
+
+  // Resolve any linked service job / appointment and fold the link tags into the
+  // notes — the same soft-link format the main POS uses.
+  const links = await resolveSaleLinks(mpos.merchantId, parsed.data.serviceJobId, parsed.data.appointmentId);
+  const finalNotes = [...links.tags, notes?.trim() || null].filter(Boolean).join(" | ") || null;
 
   // Server-authoritative totals (GST-inclusive pricing, matching the main POS).
   const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -289,9 +376,20 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
       paymentMethod,
       amountTendered: tendered != null ? String(tendered) : null,
       changeDue: changeDue != null ? String(changeDue) : null,
-      notes: notes ?? null,
+      notes: finalNotes,
       items: items.map((i) => ({ productId: i.productId ?? null, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate ?? 0 })),
     }).returning();
+
+    // A linked service job / appointment is marked completed by the sale,
+    // matching the main POS behaviour.
+    if (links.serviceJobId != null) {
+      await tx.update(serviceJobsTable).set({ status: "completed" })
+        .where(and(eq(serviceJobsTable.id, links.serviceJobId), eq(serviceJobsTable.merchantId, mpos.merchantId)));
+    }
+    if (links.appointmentId != null) {
+      await tx.update(appointmentsTable).set({ status: "completed" })
+        .where(and(eq(appointmentsTable.id, links.appointmentId), eq(appointmentsTable.merchantId, mpos.merchantId)));
+    }
 
     // Decrement tracked stock for product-linked lines.
     for (const i of items) {
@@ -316,6 +414,110 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
     changeDue: result.changeDue != null ? parseFloat(result.changeDue) : null,
     paymentMethod: result.paymentMethod,
     createdAt: result.createdAt.toISOString(),
+  });
+});
+
+/* ── Invoices: create a draft invoice ────────────────────────────────── */
+const MposInvoiceBody = z.object({
+  items: z.array(SaleItem).min(1).max(100),
+  customerId: z.number().int().positive().nullable().optional(),
+  dueDate: z.string().trim().min(1).nullable().optional(),
+  notes: z.string().max(2000).optional(),
+  serviceJobId: z.number().int().positive().nullable().optional(),
+  appointmentId: z.number().int().positive().nullable().optional(),
+});
+
+router.post("/mobile-pos/invoices", async (req, res): Promise<void> => {
+  const mpos = await requireMpos(req, res);
+  if (!mpos) return;
+  if (!mpos.settings.showInvoices) { res.status(403).json({ error: "Invoices are disabled for this app" }); return; }
+  const parsed = MposInvoiceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { items, customerId, dueDate, notes } = parsed.data;
+
+  // Validate the (optional) customer belongs to this merchant.
+  let safeCustomerId: number | null = null;
+  if (customerId != null) {
+    const [c] = await db
+      .select({ id: customersTable.id })
+      .from(customersTable)
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, mpos.merchantId)));
+    safeCustomerId = c ? customerId : null;
+  }
+
+  // Validate any linked service job / appointment belong to this merchant. These
+  // are stored as real FKs; the invoice auto-completes them when it's paid.
+  let safeServiceJobId: number | null = null;
+  if (parsed.data.serviceJobId != null) {
+    const [sj] = await db.select({ id: serviceJobsTable.id }).from(serviceJobsTable)
+      .where(and(eq(serviceJobsTable.id, parsed.data.serviceJobId), eq(serviceJobsTable.merchantId, mpos.merchantId)));
+    safeServiceJobId = sj ? parsed.data.serviceJobId : null;
+  }
+  let safeAppointmentId: number | null = null;
+  if (parsed.data.appointmentId != null) {
+    const [ap] = await db.select({ id: appointmentsTable.id }).from(appointmentsTable)
+      .where(and(eq(appointmentsTable.id, parsed.data.appointmentId), eq(appointmentsTable.merchantId, mpos.merchantId)));
+    safeAppointmentId = ap ? parsed.data.appointmentId : null;
+  }
+
+  // Server-authoritative totals (GST-inclusive pricing, matching the POS).
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const total = round2(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
+  const taxTotal = round2(items.reduce((s, i) => {
+    const r = i.taxRate ?? 0;
+    return s + (i.unitPrice * i.quantity) * (r / (100 + r));
+  }, 0));
+  const subtotal = round2(total - taxTotal);
+
+  // Snapshot cost prices for product-linked lines so COGS reporting stays accurate.
+  const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is number => id != null))];
+  const costById = new Map<number, number>();
+  if (productIds.length) {
+    const rows = await db
+      .select({ id: productsTable.id, costPrice: productsTable.costPrice })
+      .from(productsTable)
+      .where(and(eq(productsTable.merchantId, mpos.merchantId), inArray(productsTable.id, productIds)));
+    for (const r of rows) costById.set(r.id, r.costPrice != null ? parseFloat(r.costPrice) : 0);
+  }
+
+  // Invoice number: KI + zero-padded running count for this merchant (matches the main app).
+  const [countRow] = await db
+    .select({ count: sql<number>`count(*)` })
+    .from(invoicesTable)
+    .where(eq(invoicesTable.merchantId, mpos.merchantId));
+  const invoiceNumber = `KI${String(Number(countRow.count) + 1).padStart(5, "0")}`;
+
+  const [inv] = await db.insert(invoicesTable).values({
+    merchantId: mpos.merchantId,
+    customerId: safeCustomerId,
+    staffId: mpos.staffId,
+    invoiceNumber,
+    status: "draft",
+    subtotal: String(subtotal),
+    taxTotal: String(taxTotal),
+    total: String(total),
+    items: items.map((i) => ({
+      description: i.name,
+      quantity: i.quantity,
+      unitPrice: i.unitPrice,
+      taxRate: i.taxRate ?? 0,
+      productId: i.productId ?? null,
+      costPrice: i.productId != null ? (costById.get(i.productId) ?? null) : null,
+    })),
+    dueDate: dueDate ? new Date(dueDate) : null,
+    notes: notes ?? null,
+    serviceJobId: safeServiceJobId,
+    appointmentId: safeAppointmentId,
+  }).returning();
+
+  res.status(201).json({
+    id: inv.id,
+    invoiceNumber: inv.invoiceNumber,
+    status: inv.status,
+    total: parseFloat(inv.total),
+    amountPaid: parseFloat(inv.amountPaid ?? "0"),
+    dueDate: inv.dueDate?.toISOString() ?? null,
+    createdAt: inv.createdAt.toISOString(),
   });
 });
 

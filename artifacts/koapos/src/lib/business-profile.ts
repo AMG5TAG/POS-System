@@ -99,6 +99,22 @@ function readLegacyProfile(): Partial<BusinessProfile> | null {
   }
 }
 
+/**
+ * Coerce a colour array back to a usable palette. Colour slots are fixed (the
+ * UI has no add/remove), so an empty or malformed value is always degraded data
+ * — never an intentional "no colours" choice. The backend stores these as
+ * `"[]"` for any profile that hasn't populated them, which parses to an empty
+ * array and would render a blank palette (no swatches to choose). We also drop
+ * any non-string / blank entries: a null element makes ColourPicker throw on
+ * `value.toUpperCase()` and white-screen the page. Falls back to `fallback`
+ * whenever nothing usable remains.
+ */
+function colorArr(v: unknown, fallback: string[]): string[] {
+  if (!Array.isArray(v)) return fallback;
+  const clean = v.filter((c): c is string => typeof c === "string" && c.trim() !== "");
+  return clean.length > 0 ? clean : fallback;
+}
+
 /** Whether a profile carries any merchant-entered details worth preserving. */
 function hasUserData(p: BusinessProfile): boolean {
   return Boolean(
@@ -124,9 +140,9 @@ export function useBusinessProfile() {
         ...DEFAULT_BUSINESS_PROFILE,
         ...raw,
         categories:   arr(raw.categories,   DEFAULT_BUSINESS_PROFILE.categories),
-        brandColors:  arr(raw.brandColors,  DEFAULT_BUSINESS_PROFILE.brandColors),
-        bgColors:     arr(raw.bgColors,     DEFAULT_BUSINESS_PROFILE.bgColors),
-        textColors:   arr(raw.textColors,   DEFAULT_BUSINESS_PROFILE.textColors),
+        brandColors:  colorArr(raw.brandColors, DEFAULT_BUSINESS_PROFILE.brandColors),
+        bgColors:     colorArr(raw.bgColors,    DEFAULT_BUSINESS_PROFILE.bgColors),
+        textColors:   colorArr(raw.textColors,  DEFAULT_BUSINESS_PROFILE.textColors),
         paymentTypes: arr(raw.paymentTypes, DEFAULT_BUSINESS_PROFILE.paymentTypes),
         customLinks:  arr(raw.customLinks,  DEFAULT_BUSINESS_PROFILE.customLinks),
         openingHours: { ...DEFAULT_HOURS, ...(raw.openingHours ?? {}) },
@@ -164,9 +180,9 @@ export function useBusinessProfile() {
           ...DEFAULT_BUSINESS_PROFILE,
           ...legacy,
           categories:   arr(legacy.categories,   DEFAULT_BUSINESS_PROFILE.categories),
-          brandColors:  arr(legacy.brandColors,  DEFAULT_BUSINESS_PROFILE.brandColors),
-          bgColors:     arr(legacy.bgColors,     DEFAULT_BUSINESS_PROFILE.bgColors),
-          textColors:   arr(legacy.textColors,   DEFAULT_BUSINESS_PROFILE.textColors),
+          brandColors:  colorArr(legacy.brandColors, DEFAULT_BUSINESS_PROFILE.brandColors),
+          bgColors:     colorArr(legacy.bgColors,    DEFAULT_BUSINESS_PROFILE.bgColors),
+          textColors:   colorArr(legacy.textColors,  DEFAULT_BUSINESS_PROFILE.textColors),
           paymentTypes: arr(legacy.paymentTypes, DEFAULT_BUSINESS_PROFILE.paymentTypes),
           customLinks:  arr(legacy.customLinks,  DEFAULT_BUSINESS_PROFILE.customLinks),
           openingHours: { ...DEFAULT_HOURS, ...(legacy.openingHours ?? {}) },

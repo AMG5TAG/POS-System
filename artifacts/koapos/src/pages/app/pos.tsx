@@ -22,11 +22,13 @@ import {
   useGetMerchant, useListPosRegisters,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useVerifyStaffPin,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
+  useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse, customFetch,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { SendDialog } from "@/components/send/send-dialog";
 import { useButtonStyle } from "@/lib/button-style";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
@@ -272,6 +274,26 @@ export default function POSPage() {
   const { data: merchantData } = useGetMerchant();
   const { profile: businessProfile } = useBusinessProfile();
 
+  /* Create-invoice-from-POS: turning the current cart into an unpaid invoice is
+     offered as a checkout payment option. These power the create + send flow. */
+  type CreatedInvoice = {
+    id: number; invoiceNumber: string;
+    customerId: number | null; customerName?: string | null;
+    customerEmail?: string | null; customerPhone?: string | null;
+    status: string; subtotal: number; taxTotal: number; total: number;
+    amountPaid: number;
+    discountType: string | null; discountValue: number | null; discountTotal: number | null;
+    items: { description: string; quantity: number; unitPrice: number; taxRate: number }[];
+    createdAt: string;
+  };
+  const { opts: invoiceOpts } = useSalesTemplate("Invoice");
+  const { printInvoice: printInvoiceTpl } = useDocumentTemplate();
+  const createInvoiceMutation = useCreateInvoice();
+  const sendInvoiceEmailMutation = useSendInvoiceEmail();
+  const [invoiceSendTarget, setInvoiceSendTarget] = useState<CreatedInvoice | null>(null);
+  const [invoiceCreating, setInvoiceCreating] = useState(false);
+  const [invoiceEmailSubject, setInvoiceEmailSubject] = useState("");
+
   /* pos settings — used for role discount limits */
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
 
@@ -354,6 +376,9 @@ export default function POSPage() {
   const [payMethod, setPayMethod] = useState<PaymentMethodId>(
     () => getEnabledPaymentMethods()[0] ?? "cash"
   );
+  // "invoice" isn't a real stored tender (not in PaymentMethodId), so it's
+  // compared via String() — mirroring how integration methods are handled.
+  const isInvoiceMethod = String(payMethod) === "invoice";
   const [numpadInput, setNumpadInput] = useState("");
   const [splitLegs, setSplitLegs] = useState<{ method: PaymentMethodId; amount: string }[]>([
     { method: "cash", amount: "" },
@@ -2426,6 +2451,136 @@ export default function POSPage() {
     })();
   };
 
+  /* ── Create an invoice from the current cart ───────────────────────────────
+     GST is handled exactly like the Invoices page: unitPrice is GST-inclusive
+     and tax is extracted per line by the server. Per-line discounts/modifiers
+     are folded into the unit price; whole-of-sale discounts (manual overall +
+     loyalty tier) are passed as a single fixed invoice discount. */
+  const buildInvoiceItemsFromCart = () => cart.map((i) => {
+    const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
+    const lineGross = (unitPriceFor(i) + modAdj) * i.quantity;
+    const lineAfterItemDisc = Math.max(0, lineGross - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
+    const unit = i.quantity > 0 ? lineAfterItemDisc / i.quantity : lineAfterItemDisc;
+    return {
+      description: i.product.name,
+      quantity: i.quantity,
+      unitPrice: Math.round(unit * 100) / 100,
+      taxRate: i.product.taxRate ?? 10,
+      productId: i.giftCardNumber ? null : i.product.id,
+      costPrice: (i.product as Product & { costPrice?: number }).costPrice ?? null,
+    };
+  });
+
+  const handleCreateInvoice = async () => {
+    if (!selectedCustomer) { toast.error("Select a customer to create an invoice"); return; }
+    if (cart.length === 0) { toast.error("Add at least one item to invoice"); return; }
+    setInvoiceCreating(true);
+    try {
+      const discAmt = Math.round((overallDiscountAmt + tierDiscountAmt) * 100) / 100;
+      const noteParts = [
+        linkedService ? `[Service #${linkedService.jobNumber}: ${linkedService.deviceType || linkedService.deviceDescription || "service"}]` : null,
+        linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
+        saleNotes.trim() || null,
+      ].filter(Boolean) as string[];
+      const body = {
+        customerId: selectedCustomer.id,
+        staffId: currentStaff?.id ?? null,
+        items: buildInvoiceItemsFromCart(),
+        notes: noteParts.length ? noteParts.join(" | ") : undefined,
+        serviceJobId: linkedService?.id ?? null,
+        appointmentId: linkedAppointment?.id ?? null,
+        discount: discAmt > 0 ? { type: "fixed" as const, value: discAmt } : undefined,
+      };
+      const created = await createInvoiceMutation.mutateAsync({
+        data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"],
+      }) as unknown as CreatedInvoice;
+
+      const bizName = merchantData?.businessName ?? "Your Business";
+      clearCart();
+      setSelectedCustomer(null);
+      setWalkIn(null);
+      setPaymentModalOpen(false);
+      setInvoiceEmailSubject(`Invoice ${created.invoiceNumber} from ${bizName}`);
+      setInvoiceSendTarget(created);
+      toast.success(`Invoice ${created.invoiceNumber} created`);
+    } catch {
+      toast.error("Failed to create invoice");
+    } finally {
+      setInvoiceCreating(false);
+    }
+  };
+
+  /* Adapt a created invoice to the Transaction shape the shared document
+     template prints (mirrors the Invoices page). Invoice.subtotal is already
+     GST-exclusive, so a GST-inclusive subtotal is passed to round-trip. */
+  const invoiceToTransaction = (inv: CreatedInvoice): Transaction => ({
+    id: inv.id,
+    merchantId: 0,
+    customerId: inv.customerId,
+    customer: (inv.customerName || inv.customerEmail)
+      ? ({ firstName: inv.customerName ?? "", lastName: "", email: inv.customerEmail ?? "", phone: inv.customerPhone ?? "" } as unknown as Transaction["customer"])
+      : undefined,
+    receiptNumber: inv.invoiceNumber,
+    status: inv.status as unknown as Transaction["status"],
+    subtotal: inv.subtotal + inv.taxTotal,
+    taxTotal: inv.taxTotal,
+    discountTotal: inv.discountTotal ?? 0,
+    total: inv.total,
+    paymentMethod: "" as unknown as Transaction["paymentMethod"],
+    items: (inv.items ?? []).map((l) => ({
+      productId: 0, productName: l.description, quantity: l.quantity,
+      unitPrice: l.unitPrice, totalPrice: l.quantity * l.unitPrice,
+    })),
+    createdAt: inv.createdAt,
+    amountPaid: inv.amountPaid,
+  } as Transaction);
+
+  const invoiceEmailTemplate = () => ({
+    templateId: "e-pro",
+    subjectLine:      invoiceEmailSubject.trim() || invoiceOpts.subjectLine,
+    customGreeting:   invoiceOpts.customGreeting,
+    customMessage:    invoiceOpts.customMessage,
+    customSignOff:    invoiceOpts.customSignOff,
+    footerText:       invoiceOpts.footerText,
+    thankYouMsg:      invoiceOpts.thankYouMsg,
+    showGstBreakdown: invoiceOpts.showGstBreakdown,
+    showWebsite:      invoiceOpts.showWebsite,
+    showSocialLinks:  invoiceOpts.showSocialLinks,
+    showLogo:         invoiceOpts.showLogo,
+    brandColor:       businessProfile.brandColors?.[0] ?? "#4f46e5",
+    logo:             businessProfile.logo ?? "",
+    website:          businessProfile.website ?? "",
+    contactEmail:     businessProfile.contactEmail ?? "",
+    tagline:          businessProfile.tagline ?? "",
+    socialLinks:      businessProfile.socialLinks ?? {},
+  });
+
+  const sendInvoiceEmail = async (email: string) => {
+    if (!invoiceSendTarget) return;
+    try {
+      await sendInvoiceEmailMutation.mutateAsync({
+        id: invoiceSendTarget.id,
+        data: { email, template: invoiceEmailTemplate() } as Parameters<typeof sendInvoiceEmailMutation.mutateAsync>[0]["data"],
+      });
+    } catch {
+      throw new Error("Failed to send email");
+    }
+    toast.success("Invoice emailed");
+  };
+
+  const downloadInvoicePdf = async (inv: CreatedInvoice) => {
+    try {
+      const blob = await getInvoicePdf(inv.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${inv.invoiceNumber}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to generate PDF");
+    }
+  };
+
   const handleCheckout = (
     paymentMethod: TransactionInputPaymentMethod,
     amountTendered: number,
@@ -3680,6 +3835,9 @@ export default function POSPage() {
                   ...builtIn.map(m => ({ id: m.id as PaymentMethodId, label: m.label, Icon: m.icon, isIntegration: false })),
                   ...integrationMethods.map(m => ({ ...m, Icon: CreditCard })),
                   { id: "gift_card" as PaymentMethodId, label: "Gift Card", Icon: Gift, isIntegration: false },
+                  // Creating an invoice is only offered for a normal sale — not
+                  // when the terminal is locked to settling an existing invoice.
+                  ...(invoicePay ? [] : [{ id: "invoice" as PaymentMethodId, label: "Invoice", Icon: FileText, isIntegration: false }]),
                 ];
                 const splitEligible = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id) && m.id !== "split" && m.id !== "laybuy");
                 if (payMethod === "split") {
@@ -3990,6 +4148,39 @@ export default function POSPage() {
 
                   <div className="flex-1" />
                 </div>
+              ) : isInvoiceMethod ? (
+                /* ── Invoice (create from cart) ── */
+                <div className="flex-1 flex flex-col gap-3">
+                  <div className="border rounded-xl px-4 py-4 bg-muted/20 space-y-2">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Invoice Summary</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Customer</span>
+                      <span className="font-semibold truncate max-w-[60%] text-right">
+                        {selectedCustomer ? customerDisplayName(selectedCustomer) : "— required —"}
+                      </span>
+                    </div>
+                    {(linkedService || linkedAppointment) && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Linked</span>
+                        <span className="font-medium truncate max-w-[60%] text-right">
+                          {linkedService ? `Service #${linkedService.jobNumber}` : `Appt #${linkedAppointment?.id}`}
+                        </span>
+                      </div>
+                    )}
+                    <div className="border-t pt-2 flex items-center justify-between">
+                      <span className="text-sm font-semibold">Invoice total</span>
+                      <span className="text-lg font-bold tabular-nums">{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+                  {!selectedCustomer && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 space-y-1">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Customer required</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500">Select a customer before creating an invoice.</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">An unpaid invoice will be created from this cart. You can email or print it next.</p>
+                  <div className="flex-1" />
+                </div>
               ) : (
                 <>
                   {/* Display */}
@@ -4056,6 +4247,8 @@ export default function POSPage() {
                 disabled={
                   createTransactionMutation.isPending ||
                   invoicePayPending ||
+                  invoiceCreating ||
+                  (isInvoiceMethod && !selectedCustomer) ||
                   (payMethod === "gift_card" && (!gcValidation?.valid)) ||
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
@@ -4081,6 +4274,7 @@ export default function POSPage() {
                 }
                 onClick={() => {
                   // Gate flows that need a dedicated lifecycle.
+                  if (isInvoiceMethod) { void handleCreateInvoice(); return; }
                   if (payMethod === "gift_card" && gcValidation?.valid) {
                     const gc = gcValidation;
                     const applied = gc.applicableAmount;
@@ -4143,12 +4337,37 @@ export default function POSPage() {
                   handleCheckout(apiMethod, tendered, extraNote);
                 }}
               >
-                {(createTransactionMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
+                {isInvoiceMethod
+                  ? (invoiceCreating ? "Creating Invoice…" : "Create Invoice")
+                  : (createTransactionMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Invoice send (after create-from-POS) ─── */}
+      <SendDialog
+        open={!!invoiceSendTarget}
+        onOpenChange={(o) => { if (!o) setInvoiceSendTarget(null); }}
+        title="Send Invoice"
+        documentLabel={invoiceSendTarget?.invoiceNumber}
+        reprintLabel="Print"
+        reprintSub="Print invoice"
+        reprintButtonLabel="Print Invoice"
+        reprintHint={invoiceSendTarget ? <>This will open a print preview for invoice <strong>{invoiceSendTarget.invoiceNumber}</strong>.</> : null}
+        onReprint={() => { if (invoiceSendTarget) void printInvoiceTpl(invoiceToTransaction(invoiceSendTarget)); }}
+        reprintExtraActions={invoiceSendTarget ? [{ label: "Download PDF", onClick: () => downloadInvoicePdf(invoiceSendTarget) }] : undefined}
+        defaultEmail={invoiceSendTarget?.customerEmail ?? ""}
+        emailHint="A PDF copy of the invoice will be attached."
+        emailExtra={
+          <div className="space-y-1.5">
+            <Label className="text-xs">Subject</Label>
+            <Input type="text" placeholder="Invoice subject…" value={invoiceEmailSubject} onChange={(e) => setInvoiceEmailSubject(e.target.value)} />
+          </div>
+        }
+        onEmail={sendInvoiceEmail}
+      />
 
       {/* ─── Leave sale confirmation (navigation guard) ─── */}
       <LeaveSaleDialog />

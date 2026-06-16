@@ -79,7 +79,7 @@ import {
 
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
-type DetailTab = "details" | "inventory" | "settings";
+type DetailTab = "details" | "media" | "inventory" | "settings";
 type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
 
 type BulkActionPending =
@@ -642,19 +642,28 @@ function ProductDetailDialog({
     ? Math.round(((product.price - product.costPrice) / product.price) * 100)
     : null;
 
-  const isLowStock = product.trackInventory &&
+  // Non-stocked product types (services, downloads, digital codes) never carry
+  // inventory, so the low-stock warning must never apply to them.
+  const detailProductType = (product as Product & { productType?: string }).productType ?? "standard";
+  const isLowStock = !NO_STOCK_TYPES.has(detailProductType) && product.trackInventory &&
     (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
 
   const TABS: { key: DetailTab; label: string }[] = [
     { key: "details",   label: "Details"   },
+    { key: "media",     label: "Media"     },
     { key: "inventory", label: "Inventory" },
     { key: "settings",  label: "Settings"  },
   ];
+  const tabIndex = TABS.findIndex((t) => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+
+  const productImage = (product as Product & { imageUrl?: string | null }).imageUrl || "";
 
   return (
     <>
     <Dialog open={!!product} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle>
             <div className="flex items-center gap-3">
@@ -721,6 +730,25 @@ function ProductDetailDialog({
               <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
                 <p className="text-xs text-muted-foreground mb-0.5">Description</p>
                 <p className="whitespace-pre-line">{product.description}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "media" && (
+          <div className="py-4">
+            {productImage ? (
+              <div className="rounded-xl border bg-muted/20 p-3 flex items-center justify-center">
+                <img
+                  src={productImage}
+                  alt={product.name}
+                  className="max-h-[50vh] w-auto max-w-full rounded-lg object-contain"
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border bg-muted/20 py-16 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <ImageIcon className="w-10 h-10 opacity-40" />
+                <p className="text-sm">No image for this product</p>
               </div>
             )}
           </div>
@@ -806,10 +834,18 @@ function ProductDetailDialog({
         </div>
 
         <div className="flex items-center justify-between px-6 pb-5 pt-4 border-t shrink-0">
-          <Button variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
+          <div className="flex items-center gap-2">
+            <Button variant="destructive" size="sm" className="gap-1.5"
+              onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1" onClick={goPrevTab} disabled={tabIndex === 0}>
+              <ChevronLeft className="w-4 h-4" /> Previous
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1" onClick={goNextTab} disabled={tabIndex === TABS.length - 1}>
+              Next <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
@@ -1824,6 +1860,7 @@ export default function ProductsPage() {
                       <input type="checkbox" checked={allChecked} onChange={toggleAll}
                         className="rounded border-muted-foreground/40 accent-primary" />
                     </th>
+                    <th className="p-3 w-14 text-left font-medium">Image</th>
                     <SortTh {...sh("Product / SKU", "name")} />
                     <th className="p-3 text-left font-medium whitespace-nowrap">Type</th>
                     <SortTh {...sh("Category", "category")} />
@@ -1849,7 +1886,7 @@ export default function ProductsPage() {
                     const isChecked   = checked.has(product.id);
                     const productType = (product as Product & { productType?: string }).productType ?? "standard";
                     const isService   = productType === "service";
-                    const isLowStock  = !isService && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+                    const isLowStock  = !NO_STOCK_TYPES.has(productType) && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
                     const marginPct = cost !== null && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
@@ -1869,6 +1906,16 @@ export default function ProductsPage() {
                         <td className="p-3" onClick={(e) => e.stopPropagation()}>
                           <input type="checkbox" checked={isChecked} onChange={() => toggleOne(product.id)}
                             className="rounded border-muted-foreground/40 accent-primary" />
+                        </td>
+                        <td className="p-3">
+                          {(() => {
+                            const img = (product as Product & { imageUrl?: string | null }).imageUrl;
+                            return img
+                              ? <img src={img} alt={product.name} className="w-10 h-10 rounded-md object-cover border" />
+                              : <div className="w-10 h-10 rounded-md border bg-muted/40 flex items-center justify-center">
+                                  <Package className="w-4 h-4 text-muted-foreground/50" />
+                                </div>;
+                          })()}
                         </td>
                         <td className="p-3 min-w-[160px]">
                           <p className="font-medium leading-tight">{product.name}</p>

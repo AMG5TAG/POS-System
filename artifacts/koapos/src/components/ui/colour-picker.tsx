@@ -36,13 +36,19 @@ interface ColourPickerProps {
 }
 
 export function ColourPicker({ value, onChange, className, presets }: ColourPickerProps) {
+  // Defend against a null/undefined or non-string colour reaching us (e.g. a
+  // malformed stored palette): calling `.toUpperCase()`/`.toLowerCase()` on it
+  // would throw and white-screen the whole page.
+  const safeValue = typeof value === "string" ? value : "";
   const [mode, setMode] = useState<"hex" | "rgb">("hex");
-  const [hexDraft, setHexDraft] = useState(() => value.toUpperCase());
+  const [hexDraft, setHexDraft] = useState(() => safeValue.toUpperCase());
   const nativeRef = useRef<HTMLInputElement>(null);
-  const rgb = hexToRgb(value);
+  const rgb = hexToRgb(safeValue);
 
   const { brandColors: rawBrandColors } = useBrandColors();
-  const brandColors = Array.isArray(rawBrandColors) ? rawBrandColors : [];
+  const brandColors = Array.isArray(rawBrandColors)
+    ? rawBrandColors.filter((c): c is string => typeof c === "string" && c !== "")
+    : [];
 
   const palette = presets ?? APP_PALETTE;
 
@@ -61,7 +67,7 @@ export function ColourPicker({ value, onChange, className, presets }: ColourPick
   };
 
   const handleHexBlur = () => {
-    setHexDraft(value.toUpperCase());
+    setHexDraft(safeValue.toUpperCase());
   };
 
   const handleRgbChange = (channel: "r" | "g" | "b", raw: string) => {
@@ -92,7 +98,7 @@ export function ColourPicker({ value, onChange, className, presets }: ColourPick
                 onClick={() => pickSwatch(c)}
                 className={cn(
                   "w-6 h-6 rounded border-2 transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-ring",
-                  c.toLowerCase() === value.toLowerCase()
+                  c.toLowerCase() === safeValue.toLowerCase()
                     ? "border-foreground scale-110 shadow-sm"
                     : "border-transparent hover:border-foreground/40 hover:scale-105",
                 )}
@@ -112,7 +118,7 @@ export function ColourPicker({ value, onChange, className, presets }: ColourPick
             onClick={() => pickSwatch(c)}
             className={cn(
               "w-6 h-6 rounded border-2 transition-all shrink-0 focus:outline-none focus:ring-2 focus:ring-ring",
-              c.toLowerCase() === value.toLowerCase()
+              c.toLowerCase() === safeValue.toLowerCase()
                 ? "border-foreground scale-110 shadow-sm"
                 : "border-transparent hover:border-foreground/40 hover:scale-105",
             )}
@@ -127,13 +133,13 @@ export function ColourPicker({ value, onChange, className, presets }: ColourPick
           type="button"
           onClick={() => nativeRef.current?.click()}
           className="w-9 h-9 rounded border border-border shrink-0 mt-0.5 focus:outline-none focus:ring-2 focus:ring-ring overflow-hidden"
-          style={{ backgroundColor: value }}
+          style={{ backgroundColor: safeValue }}
           title="Click to use system colour picker"
         >
           <input
             ref={nativeRef}
             type="color"
-            value={value}
+            value={safeValue || "#000000"}
             onChange={(e) => {
               onChange(e.target.value);
               setHexDraft(e.target.value.toUpperCase());
