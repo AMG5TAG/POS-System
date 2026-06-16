@@ -383,6 +383,8 @@ import type {
   ServicePlanBillResult,
   ServicePlanInput,
   ServicePlanList,
+  ServiceSettings,
+  ServiceSettingsInput,
   SetActiveLocation200,
   SetActiveLocationBody,
   ShippingCarrier,
@@ -6255,6 +6257,154 @@ export const useUpdateLoyaltySettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateLoyaltySettingsMutationOptions(options));
+    }
+
+export const getGetServiceSettingsUrl = () => {
+
+
+
+
+  return `/api/service-settings`
+}
+
+/**
+ * @summary Get merchant service job menu options
+ */
+export const getServiceSettings = async ( options?: RequestInit): Promise<ServiceSettings> => {
+
+  return customFetch<ServiceSettings>(getGetServiceSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetServiceSettingsQueryKey = () => {
+    return [
+    `/api/service-settings`
+    ] as const;
+    }
+
+
+export const getGetServiceSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getServiceSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetServiceSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getServiceSettings>>> = ({ signal }) => getServiceSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getServiceSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetServiceSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getServiceSettings>>>
+export type GetServiceSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get merchant service job menu options
+ */
+
+export function useGetServiceSettings<TData = Awaited<ReturnType<typeof getServiceSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getServiceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetServiceSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateServiceSettingsUrl = () => {
+
+
+
+
+  return `/api/service-settings`
+}
+
+/**
+ * @summary Update merchant service job menu options
+ */
+export const updateServiceSettings = async (serviceSettingsInput: ServiceSettingsInput, options?: RequestInit): Promise<ServiceSettings> => {
+
+  return customFetch<ServiceSettings>(getUpdateServiceSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      serviceSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateServiceSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceSettings>>, TError,{data: BodyType<ServiceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateServiceSettings>>, TError,{data: BodyType<ServiceSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateServiceSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateServiceSettings>>, {data: BodyType<ServiceSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateServiceSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateServiceSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateServiceSettings>>>
+    export type UpdateServiceSettingsMutationBody = BodyType<ServiceSettingsInput>
+    export type UpdateServiceSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update merchant service job menu options
+ */
+export const useUpdateServiceSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateServiceSettings>>, TError,{data: BodyType<ServiceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateServiceSettings>>,
+        TError,
+        {data: BodyType<ServiceSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateServiceSettingsMutationOptions(options));
     }
 
 export const getGetLoyaltyLeaderboardUrl = () => {

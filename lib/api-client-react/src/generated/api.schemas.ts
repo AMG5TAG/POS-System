@@ -2558,6 +2558,28 @@ export interface LoyaltySettingsInput {
   naming?: LoyaltyNaming;
 }
 
+export interface ServiceSettings {
+  showPartsLabour: boolean;
+  showApprovalDeposit: boolean;
+  showDiagnostics: boolean;
+  showWarranty: boolean;
+  showTechnicianTime: boolean;
+  showSignOff: boolean;
+  showShipping: boolean;
+  showNotes: boolean;
+}
+
+export interface ServiceSettingsInput {
+  showPartsLabour: boolean;
+  showApprovalDeposit: boolean;
+  showDiagnostics: boolean;
+  showWarranty: boolean;
+  showTechnicianTime: boolean;
+  showSignOff: boolean;
+  showShipping: boolean;
+  showNotes: boolean;
+}
+
 export interface CashDrawerEntry {
   id: number;
   type: string;
@@ -4057,6 +4079,7 @@ export interface PosRegisterSession {
   merchantId: number;
   registerId: string;
   openedAt: string;
+  staffId?: number | null;
   openedBy: string;
   openingFloat: string;
   openingNotes: string;
@@ -4070,6 +4093,7 @@ export interface PosRegisterSession {
 
 export interface PosRegisterSessionInput {
   registerId?: string;
+  staffId?: number | null;
   openedBy?: string;
   openingFloat?: string;
   openingNotes?: string;

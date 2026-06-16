@@ -19,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync, Activity,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -166,6 +166,12 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   {
+    name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/service-options",
+    children: [
+      { name: "Service Options", href: "/management/invoices-services/service-options", icon: Wrench },
+    ],
+  },
+  {
     name: "Products & Inventory", icon: Boxes, defaultHref: "/management/products-inventory/inventory",
     children: [
       { name: "Inventory",       href: "/management/products-inventory/inventory",       icon: Boxes    },
@@ -193,8 +199,9 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       {
         name: "Apps", icon: LayoutGrid,
         children: [
-          { name: "Tech App",  href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
-          { name: "Dashboard", href: "/management/staff-operations/dashboard", icon: LayoutDashboard  },
+          { name: "Tech App",   href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
+          { name: "Mobile POS", href: "/management/staff-operations/mobile-pos",     icon: Smartphone },
+          { name: "Dashboard",  href: "/management/staff-operations/dashboard", icon: LayoutDashboard  },
         ],
       },
       { name: "Legal",         href: "/management/staff-operations/legal",              icon: Scale       },
@@ -392,6 +399,9 @@ const SEGMENT_LABEL: Record<string, string> = {
   "staff-operations": "Staff & Operations",
   "products-inventory": "Products & Inventory",
   "settings-integrations": "Settings & Integrations",
+  "invoices-services": "Invoices & Services",
+  "service-options": "Service Options",
+  "mobile-pos": "Mobile POS",
 };
 
 function inMarketingSection(loc: string): boolean {
@@ -1485,7 +1495,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </Link>
 
         {/* Nav items */}
-        <nav className="flex items-center gap-0.5 overflow-x-auto shrink-0" aria-label="Main navigation" style={{ scrollbarWidth: "none" }}>
+        <nav className="flex items-center gap-0.5 overflow-x-auto flex-1 min-w-0" aria-label="Main navigation" style={{ scrollbarWidth: "none" }}>
           <TopNavBtn icon={LayoutDashboard} label="Dashboard" isActive={location === "/dashboard"} onClick={() => navigate("/dashboard")} />
           <TopNavDropdown label="POS" icon={ShoppingCart} items={POS_SUBNAV} isActive={isPOSSection}
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
@@ -1506,9 +1516,6 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
               isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
           )}
         </nav>
-
-        {/* Flex spacer */}
-        <div className="flex-1 min-w-0" />
 
         {/* Search */}
         <div className="w-44 xl:w-64 shrink-0">

@@ -2481,6 +2481,47 @@ export const UpdateLoyaltySettingsResponse = zod.object({
 
 
 /**
+ * @summary Get merchant service job menu options
+ */
+export const GetServiceSettingsResponse = zod.object({
+  "showPartsLabour": zod.boolean(),
+  "showApprovalDeposit": zod.boolean(),
+  "showDiagnostics": zod.boolean(),
+  "showWarranty": zod.boolean(),
+  "showTechnicianTime": zod.boolean(),
+  "showSignOff": zod.boolean(),
+  "showShipping": zod.boolean(),
+  "showNotes": zod.boolean()
+})
+
+
+/**
+ * @summary Update merchant service job menu options
+ */
+export const UpdateServiceSettingsBody = zod.object({
+  "showPartsLabour": zod.boolean(),
+  "showApprovalDeposit": zod.boolean(),
+  "showDiagnostics": zod.boolean(),
+  "showWarranty": zod.boolean(),
+  "showTechnicianTime": zod.boolean(),
+  "showSignOff": zod.boolean(),
+  "showShipping": zod.boolean(),
+  "showNotes": zod.boolean()
+})
+
+export const UpdateServiceSettingsResponse = zod.object({
+  "showPartsLabour": zod.boolean(),
+  "showApprovalDeposit": zod.boolean(),
+  "showDiagnostics": zod.boolean(),
+  "showWarranty": zod.boolean(),
+  "showTechnicianTime": zod.boolean(),
+  "showSignOff": zod.boolean(),
+  "showShipping": zod.boolean(),
+  "showNotes": zod.boolean()
+})
+
+
+/**
  * Returns the top 10 customers by loyalty points for the merchant.
  * @summary Top loyalty earners
  */
@@ -8246,6 +8287,7 @@ export const ListPosRegisterSessionsResponse = zod.object({
   "merchantId": zod.number(),
   "registerId": zod.string(),
   "openedAt": zod.string(),
+  "staffId": zod.number().nullish(),
   "openedBy": zod.string(),
   "openingFloat": zod.string(),
   "openingNotes": zod.string(),
@@ -8265,6 +8307,7 @@ export const ListPosRegisterSessionsResponse = zod.object({
  */
 export const CreatePosRegisterSessionBody = zod.object({
   "registerId": zod.string().optional(),
+  "staffId": zod.number().nullish(),
   "openedBy": zod.string().optional(),
   "openingFloat": zod.string().optional(),
   "openingNotes": zod.string().optional(),
@@ -8288,6 +8331,7 @@ export const UpdatePosRegisterSessionParams = zod.object({
 
 export const UpdatePosRegisterSessionBody = zod.object({
   "registerId": zod.string().optional(),
+  "staffId": zod.number().nullish(),
   "openedBy": zod.string().optional(),
   "openingFloat": zod.string().optional(),
   "openingNotes": zod.string().optional(),
@@ -8306,6 +8350,7 @@ export const UpdatePosRegisterSessionResponse = zod.object({
   "merchantId": zod.number(),
   "registerId": zod.string(),
   "openedAt": zod.string(),
+  "staffId": zod.number().nullish(),
   "openedBy": zod.string(),
   "openingFloat": zod.string(),
   "openingNotes": zod.string(),

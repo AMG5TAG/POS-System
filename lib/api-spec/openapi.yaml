@@ -36,6 +36,8 @@ tags:
     description: Loyalty program settings
   - name: service-jobs
     description: Service job management
+  - name: service-settings
+    description: Per-merchant service job menu options
   - name: Storage
     description: Object storage upload and serving endpoints.
   - name: cameras
@@ -1700,6 +1702,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoyaltySettings"
+
+  /service-settings:
+    get:
+      operationId: getServiceSettings
+      tags: [service-settings]
+      summary: Get merchant service job menu options
+      responses:
+        "200":
+          description: Service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
+    put:
+      operationId: updateServiceSettings
+      tags: [service-settings]
+      summary: Update merchant service job menu options
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceSettingsInput"
+      responses:
+        "200":
+          description: Updated service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
 
   /loyalty/leaderboard:
     get:
@@ -12112,6 +12144,38 @@ components:
         naming:
           $ref: "#/components/schemas/LoyaltyNaming"
 
+    # ── Service Settings ──────────────────────────────────────────────────────
+    # Booleans toggling each section of the service job menu. All optional;
+    # an omitted key defaults to true (section visible).
+    ServiceSettings:
+      type: object
+      required:
+        [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
+         showTechnicianTime, showSignOff, showShipping, showNotes]
+      properties:
+        showPartsLabour:    { type: boolean }
+        showApprovalDeposit: { type: boolean }
+        showDiagnostics:    { type: boolean }
+        showWarranty:       { type: boolean }
+        showTechnicianTime: { type: boolean }
+        showSignOff:        { type: boolean }
+        showShipping:       { type: boolean }
+        showNotes:          { type: boolean }
+    ServiceSettingsInput:
+      type: object
+      required:
+        [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
+         showTechnicianTime, showSignOff, showShipping, showNotes]
+      properties:
+        showPartsLabour:    { type: boolean }
+        showApprovalDeposit: { type: boolean }
+        showDiagnostics:    { type: boolean }
+        showWarranty:       { type: boolean }
+        showTechnicianTime: { type: boolean }
+        showSignOff:        { type: boolean }
+        showShipping:       { type: boolean }
+        showNotes:          { type: boolean }
+
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:
       type: object
@@ -13910,6 +13974,7 @@ components:
         merchantId: { type: integer }
         registerId: { type: string }
         openedAt: { type: string }
+        staffId: { type: integer, nullable: true }
         openedBy: { type: string }
         openingFloat: { type: string }
         openingNotes: { type: string }
@@ -13924,6 +13989,7 @@ components:
       type: object
       properties:
         registerId: { type: string }
+        staffId: { type: integer, nullable: true }
         openedBy: { type: string }
         openingFloat: { type: string }
         openingNotes: { type: string }

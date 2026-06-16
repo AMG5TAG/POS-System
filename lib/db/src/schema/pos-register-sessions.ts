@@ -1,11 +1,16 @@
 import { pgTable, text, serial, integer, timestamp, numeric } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
+import { staffTable } from "./staff";
 
 export const posRegisterSessionsTable = pgTable("pos_register_sessions", {
   id:            serial("id").primaryKey(),
   merchantId:      integer("merchant_id").notNull().references(() => merchantsTable.id),
   registerId:      text("register_id").notNull().default("default"),
   openedAt:        timestamp("opened_at", { withTimezone: true }).notNull().defaultNow(),
+  // The staff member who opened the till. `openedBy` keeps their display name
+  // for receipts/Z-reports; `staffId` is the authoritative link so the open/
+  // close is attributed to a specific staff member rather than the merchant.
+  staffId:         integer("staff_id").references(() => staffTable.id),
   openedBy:        text("opened_by").notNull().default(""),
   openingFloat:      numeric("opening_float").notNull().default("0"),
   openingNotes:      text("opening_notes").notNull().default(""),

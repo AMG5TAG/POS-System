@@ -580,7 +580,7 @@ export default function POSPage() {
 
     /* Sync to server so other devices can detect this till is in use. */
     createServerSession.mutate(
-      { data: { registerId: activeRegisterId, openedBy: session.openedBy ?? "", openingFloat: String(float), openingNotes: openNotes, deviceId } },
+      { data: { registerId: activeRegisterId, staffId: dayStaffMember?.id ?? null, openedBy: session.openedBy ?? "", openingFloat: String(float), openingNotes: openNotes, deviceId } },
       {
         onSuccess: (row) => {
           const id = (row as { id?: number })?.id;

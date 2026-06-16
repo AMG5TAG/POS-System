@@ -812,8 +812,11 @@ function LoginScreen({
 /* ── Root page ───────────────────────────────────────────────────────── */
 
 export default function TechAppPage() {
-  const [, params] = useRoute("/b/:businessUsername/t/webapp");
-  const username = params?.businessUsername ?? "";
+  // Canonical route is /t/techapp; /t/webapp is kept as a legacy alias so
+  // already-printed service-ticket QR codes keep resolving.
+  const [, techParams] = useRoute("/b/:businessUsername/t/techapp");
+  const [, legacyParams] = useRoute("/b/:businessUsername/t/webapp");
+  const username = techParams?.businessUsername ?? legacyParams?.businessUsername ?? "";
 
   const [phase, setPhase] = useState<"boot" | "login" | "app" | "no-business">("boot");
   const [business, setBusiness] = useState<TechBusiness | null>(null);

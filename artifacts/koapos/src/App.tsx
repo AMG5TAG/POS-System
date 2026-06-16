@@ -20,6 +20,7 @@ const PortalPage = lazy(() => import("@/pages/portal"));
 const BookingPage = lazy(() => import("@/pages/booking"));
 const TechAppPage = lazy(() => import("@/pages/tech"));
 const DashboardAppPage = lazy(() => import("@/pages/dashboard-app"));
+const MobilePosAppPage = lazy(() => import("@/pages/mobile-pos"));
 const LandingPage = lazy(() => import("@/pages/marketing/landing"));
 const LoginPage = lazy(() => import("@/pages/marketing/login"));
 const RegisterPage = lazy(() => import("@/pages/marketing/register"));
@@ -85,6 +86,7 @@ const ManagementSalesPage = lazy(() => import("@/pages/app/management-sales"));
 const ManagementRegistersPage = lazy(() => import("@/pages/app/management-registers"));
 const ManagementIntegrationsPage = lazy(() => import("@/pages/app/management-integrations"));
 const ManagementIntegrationsHelpPage = lazy(() => import("@/pages/app/management-integrations-help"));
+const ManagementServiceOptionsPage = lazy(() => import("@/pages/app/management-service-options"));
 const ManagementXeroPage = lazy(() => import("@/pages/app/management-xero"));
 const ManagementImportExportPage = lazy(() => import("@/pages/app/management-import-export"));
 const ManagementLoyaltyPage = lazy(() => import("@/pages/app/management-loyalty"));
@@ -144,6 +146,7 @@ const ManagementFeedbackPage = lazy(() => import("@/pages/app/management-feedbac
 const CamerasPage = lazy(() => import("@/pages/app/cameras"));
 const ManagementCamerasPage = lazy(() => import("@/pages/app/management-cameras"));
 const ManagementTechAppPage = lazy(() => import("@/pages/app/management-tech-app"));
+const ManagementMobilePosPage = lazy(() => import("@/pages/app/management-mobile-pos"));
 const ManagementDashboardAppPage = lazy(() => import("@/pages/app/management-dashboard-app"));
 const ManagementLegalPage = lazy(() => import("@/pages/app/management-legal"));
 const ManagementGiftCardsPage = lazy(() => import("@/pages/app/management-gift-cards"));
@@ -286,11 +289,17 @@ function Router() {
       <Route path="/b/:businessUsername/c/:token">
         <PublicRoute component={PortalPage} />
       </Route>
+      <Route path="/b/:businessUsername/t/techapp">
+        <PublicRoute component={TechAppPage} />
+      </Route>
       <Route path="/b/:businessUsername/t/webapp">
         <PublicRoute component={TechAppPage} />
       </Route>
       <Route path="/b/:businessUsername/t/dashboard">
         <PublicRoute component={DashboardAppPage} />
+      </Route>
+      <Route path="/b/:businessUsername/t/posapp">
+        <PublicRoute component={MobilePosAppPage} />
       </Route>
       <Route path="/c/:token">
         <PublicRoute component={PortalPage} />
@@ -474,6 +483,9 @@ function Router() {
       <Route path="/management/customers/loyalty">
         <ManagementProtectedRoute component={ManagementLoyaltyPage} />
       </Route>
+      <Route path="/management/invoices-services/service-options">
+        <ManagementProtectedRoute component={ManagementServiceOptionsPage} />
+      </Route>
       <Route path="/management/customers/gift-cards">
         <ManagementProtectedRoute component={ManagementGiftCardsPage} />
       </Route>
@@ -560,6 +572,9 @@ function Router() {
       </Route>
       <Route path="/management/staff-operations/tech-app">
         <ManagementProtectedRoute component={ManagementTechAppPage} />
+      </Route>
+      <Route path="/management/staff-operations/mobile-pos">
+        <ManagementProtectedRoute component={ManagementMobilePosPage} />
       </Route>
       <Route path="/management/staff-operations/dashboard">
         <ManagementProtectedRoute component={ManagementDashboardAppPage} />

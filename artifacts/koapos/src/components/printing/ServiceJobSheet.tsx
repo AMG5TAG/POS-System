@@ -186,7 +186,7 @@ export function ServiceJobSheet({
   const qrTarget = useMemo(() => {
     if (data.jobId == null) return null;
     if (branding.techAppUsername) {
-      return `${publicOrigin()}/b/${encodeURIComponent(branding.techAppUsername)}/t/webapp?job=${data.jobId}`;
+      return `${publicOrigin()}/b/${encodeURIComponent(branding.techAppUsername)}/t/techapp?job=${data.jobId}`;
     }
     return `${publicOrigin()}/service-jobs/${data.jobId}`;
   }, [data.jobId, branding.techAppUsername]);

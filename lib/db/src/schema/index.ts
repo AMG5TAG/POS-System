@@ -22,6 +22,8 @@ export * from "./sales-settings";
 export * from "./brands";
 export * from "./suppliers";
 export * from "./loyalty-settings";
+export * from "./service-settings";
+export * from "./mobile-pos-app";
 export * from "./tags";
 export * from "./product-types";
 export * from "./customer-notes";

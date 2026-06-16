@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   useUpdateServiceJob,
+  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -125,6 +126,12 @@ export function ServiceJobDetailDialog({
   const queryClient  = useQueryClient();
   const updateMutation = useUpdateServiceJob();
   const fileInputRef   = useRef<HTMLInputElement>(null);
+
+  /* Which menu sections this merchant has enabled (Management → Invoices &
+     Services → Service Options). Until loaded, every section shows — matching
+     the all-on default so nothing flickers away on open. */
+  const { data: serviceSettings } = useGetServiceSettings();
+  const show = (key: keyof NonNullable<typeof serviceSettings>) => serviceSettings?.[key] ?? true;
 
   const [localStatus, setLocalStatus] = useState<string>(job?.status ?? "pending");
   const [newNoteText, setNewNoteText] = useState("");
@@ -436,6 +443,7 @@ export function ServiceJobDetailDialog({
             )}
 
             {/* Parts & Labour */}
+            {show("showPartsLabour") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Wrench className="w-3.5 h-3.5 text-primary" />
@@ -445,8 +453,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobLinesPanel jobId={job.id} customerId={job.customerId} />
               </div>
             </div>
+            )}
 
             {/* Estimate approval & deposit */}
+            {show("showApprovalDeposit") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Wallet className="w-3.5 h-3.5 text-primary" />
@@ -456,8 +466,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobDepositPanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Diagnostics / QC Checklist */}
+            {show("showDiagnostics") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <ListChecks className="w-3.5 h-3.5 text-primary" />
@@ -467,8 +479,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobChecklistPanel jobId={job.id} deviceType={job.deviceType} />
               </div>
             </div>
+            )}
 
             {/* Repair warranty & rework */}
+            {show("showWarranty") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Shield className="w-3.5 h-3.5 text-primary" />
@@ -478,8 +492,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobWarrantyPanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Technician time */}
+            {show("showTechnicianTime") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Clock className="w-3.5 h-3.5 text-primary" />
@@ -489,8 +505,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobTimePanel jobId={job.id} />
               </div>
             </div>
+            )}
 
             {/* Customer sign-off */}
+            {show("showSignOff") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <PenLine className="w-3.5 h-3.5 text-primary" />
@@ -500,8 +518,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobSignaturePanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Mail-in / shipping */}
+            {show("showShipping") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Truck className="w-3.5 h-3.5 text-primary" />
@@ -511,8 +531,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobShippingPanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Notes */}
+            {show("showNotes") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <StickyNote className="w-3.5 h-3.5 text-primary" />
@@ -560,6 +582,7 @@ export function ServiceJobDetailDialog({
                 )}
               </div>
             </div>
+            )}
 
             {/* Photos & Files */}
             <div className="rounded-xl border bg-muted/20">
