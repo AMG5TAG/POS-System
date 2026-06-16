@@ -5,6 +5,7 @@ import { AIProvider } from "@/lib/ai-context";
 import { useAuth } from "@/lib/use-auth";
 import { ThemeProvider } from "@/lib/theme";
 import { BrandColorProvider } from "@/lib/brand-color-context";
+import { AppThemeProvider } from "@/lib/app-theme";
 import { ButtonStyleProvider } from "@/lib/button-style";
 import { NavLayoutProvider } from "@/lib/nav-layout";
 import { StaffSessionProvider } from "@/lib/staff-day-session";
@@ -57,6 +58,7 @@ const ProductsRecallsPage = lazy(() => import("@/pages/app/products-recalls"));
 const ProductsWarrantyPage = lazy(() => import("@/pages/app/products-warranty"));
 
 const CustomersPage = lazy(() => import("@/pages/app/customers"));
+const CustomerFormPage = lazy(() => import("@/pages/app/customer-edit"));
 const CustomersFormsPage = lazy(() => import("@/pages/app/customers-forms"));
 const TransactionsPage = lazy(() => import("@/pages/app/transactions"));
 const InventoryPage = lazy(() => import("@/pages/app/inventory"));
@@ -76,6 +78,7 @@ const SettingsPage = lazy(() => import("@/pages/app/settings"));
 const SettingsBusinessPage = lazy(() => import("@/pages/app/settings-business"));
 const SettingsRegionalPage = lazy(() => import("@/pages/app/settings-regional"));
 const SettingsAccountPage = lazy(() => import("@/pages/app/settings-account"));
+const SettingsThemesPage = lazy(() => import("@/pages/app/settings-themes"));
 const SettingsCustomersPage = lazy(() => import("@/pages/app/settings-customers"));
 const SettingsPOSPage = lazy(() => import("@/pages/app/settings-pos"));
 const AppointmentsPage = lazy(() => import("@/pages/app/appointments"));
@@ -394,6 +397,12 @@ function Router() {
       <Route path="/customers">
         <ProtectedRoute component={CustomersPage} />
       </Route>
+      <Route path="/customers/new">
+        <ProtectedRoute component={CustomerFormPage} />
+      </Route>
+      <Route path="/customers/:id/edit">
+        <ProtectedRoute component={CustomerFormPage} />
+      </Route>
       <Route path="/transactions">
         <ProtectedRoute component={TransactionsPage} />
       </Route>
@@ -652,6 +661,9 @@ function Router() {
       <Route path="/management/settings-integrations/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
       </Route>
+      <Route path="/management/settings-integrations/themes">
+        <ManagementProtectedRoute component={SettingsThemesPage} />
+      </Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
       </Route>
@@ -909,12 +921,14 @@ function App() {
                 <StaffSessionProvider>
                   <ButtonStyleProvider>
                     <BrandColorProvider>
-                      <AIProvider>
-                        <a href="#main-content" className="skip-link">Skip to main content</a>
-                        <RoutePrefetcher />
-                        <Router />
-                        <Toaster />
-                      </AIProvider>
+                      <AppThemeProvider>
+                        <AIProvider>
+                          <a href="#main-content" className="skip-link">Skip to main content</a>
+                          <RoutePrefetcher />
+                          <Router />
+                          <Toaster />
+                        </AIProvider>
+                      </AppThemeProvider>
                     </BrandColorProvider>
                   </ButtonStyleProvider>
                 </StaffSessionProvider>

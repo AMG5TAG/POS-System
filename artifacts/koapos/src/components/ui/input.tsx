@@ -1,9 +1,24 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
+import { shouldAutoCapitalize, applyCapitalizeFirst } from "@/lib/auto-capitalize"
 
-const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
-  ({ className, type, ...props }, ref) => {
+export interface InputProps extends React.ComponentProps<"input"> {
+  /** Opt out of the app-wide auto-capitalise-first-letter behaviour. */
+  noAutoCapitalize?: boolean
+}
+
+const Input = React.forwardRef<HTMLInputElement, InputProps>(
+  ({ className, type, noAutoCapitalize, onChange, ...props }, ref) => {
+    const autoCap = !noAutoCapitalize && shouldAutoCapitalize(type)
+
+    const handleChange = autoCap
+      ? (e: React.ChangeEvent<HTMLInputElement>) => {
+          applyCapitalizeFirst(e.currentTarget)
+          onChange?.(e)
+        }
+      : onChange
+
     return (
       <input
         type={type}
@@ -12,6 +27,7 @@ const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
           className
         )}
         ref={ref}
+        onChange={handleChange}
         {...props}
       />
     )

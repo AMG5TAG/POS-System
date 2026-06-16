@@ -6,6 +6,7 @@ import { customerDisplayName } from "@/lib/customer-name";
 import { useTheme } from "@/lib/theme";
 import { useNavLayout, type NavLayoutMode } from "@/lib/nav-layout";
 import { useAccessibility } from "@/lib/accessibility";
+import { useAppTheme } from "@/lib/app-theme";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, Receipt,
@@ -19,7 +20,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -243,6 +244,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Business Details",  href: "/management/settings-integrations/business-details",      icon: Building2,
         matchPaths: ["/management/settings-integrations/business-details/regional"] },
       { name: "Tax",               href: "/management/settings-integrations/tax",           icon: Receipt        },
+      { name: "Themes",            href: "/management/settings-integrations/themes",        icon: Palette        },
       {
         name: "Templates", icon: LayoutTemplate,
         children: [
@@ -299,6 +301,7 @@ const SEARCH_INDEX = [
   { label: "POS · End of Day",            href: "/pos/eod",                                       icon: Moon,          group: "POS"        },
   { label: "Overview",            href: "/management/overview",         icon: LayoutDashboard, group: "Management" },
   { label: "Account",            href: "/management/settings-integrations/account",          icon: UserCircle,      group: "Management" },
+  { label: "Themes",             href: "/management/settings-integrations/themes",           icon: Palette,         group: "Management" },
   { label: "Modules",            href: "/management/settings-integrations/account/modules",                     icon: Blocks,          group: "Management" },
   { label: "AI Assistant",       href: "/management/marketing-reports/ai-assistant",             icon: Brain,          group: "Management" },
   { label: "Business Details",   href: "/management/settings-integrations/business-details",         icon: Building2,       group: "Management" },
@@ -583,6 +586,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
   const inputRef = useRef<HTMLInputElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const listRef = useRef<HTMLDivElement>(null);
+  const { settings: themeSettings } = useAppTheme();
 
   const setOpenWithCallback = (val: boolean) => { setOpen(val); onOpenChange?.(val); };
 
@@ -750,10 +754,25 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
     inputRef.current?.blur();
   };
 
+  // Themes setting: hide the universal search bar entirely.
+  if (themeSettings.hideSearchBar) return null;
+
+  const layout = themeSettings.searchBarLayout;
+  const collapsedIcon = layout === "icon" && !open && query.length === 0;
+  const outerCls = cn(
+    "relative",
+    layout === "expanded" && "flex-1",
+    layout === "compact" && "w-56 max-w-full shrink-0",
+    layout === "icon" && (collapsedIcon ? "w-9 shrink-0" : "flex-1"),
+  );
+
   return (
-    <div ref={containerRef} className="relative flex-1">
+    <div ref={containerRef} className={outerCls}>
       <div className="relative">
-        <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none transition-colors", isSearching ? "text-primary animate-pulse" : "text-muted-foreground")} />
+        <Search
+          onMouseDown={collapsedIcon ? () => { setOpenWithCallback(true); inputRef.current?.focus(); } : undefined}
+          className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 transition-colors", collapsedIcon ? "cursor-pointer" : "pointer-events-none", isSearching ? "text-primary animate-pulse" : "text-muted-foreground")}
+        />
         <input
           ref={inputRef}
           type="text"
@@ -766,10 +785,15 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
             if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx]); }
             if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
           }}
-          placeholder="Search customers, products, services…"
-          className="w-full h-9 pl-9 pr-14 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all"
+          placeholder={collapsedIcon ? "" : "Search customers, products, services…"}
+          className={cn(
+            "h-9 pl-9 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all",
+            collapsedIcon ? "w-9 pr-0 cursor-pointer" : "w-full pr-14",
+          )}
         />
-        <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground font-mono border rounded px-1 py-0.5">⌘K</kbd>
+        {!collapsedIcon && (
+          <kbd className="absolute right-3 top-1/2 -translate-y-1/2 hidden sm:flex items-center gap-0.5 text-[10px] text-muted-foreground font-mono border rounded px-1 py-0.5">⌘K</kbd>
+        )}
       </div>
       {open && (
         <div className="absolute top-full mt-2 left-0 right-0 bg-popover border rounded-xl shadow-xl z-50 overflow-hidden min-w-[320px]">
@@ -1539,7 +1563,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
         </div>
       </header>
 
-      <main id="main-content" className="flex-1 overflow-y-auto bg-muted/10">{children}</main>
+      <main id="main-content" className="relative flex-1 overflow-y-auto bg-muted/10">{children}</main>
     </div>
   );
 }
@@ -1675,7 +1699,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
         </div>
       </header>
 
-      <main id="main-content" className="flex-1 overflow-y-auto bg-muted/10 pb-16">{children}</main>
+      <main id="main-content" className="relative flex-1 overflow-y-auto bg-muted/10 pb-16">{children}</main>
 
       {/* Fixed bottom bar */}
       <nav className="fixed bottom-0 left-0 right-0 h-16 border-t bg-background flex items-center justify-around px-2 z-30" aria-label="Main navigation">
@@ -2009,7 +2033,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
             <AccessibilityPicker />
           </header>
 
-          <main id="main-content" className="flex-1 overflow-y-auto bg-muted/10">{children}</main>
+          <main id="main-content" className="relative flex-1 overflow-y-auto bg-muted/10">{children}</main>
         </div>
       </div>
     </SidebarProvider>

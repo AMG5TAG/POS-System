@@ -46,6 +46,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { FullScreenSheet } from "@/components/ui/full-screen-sheet";
+import { AccordionScreen, type AccordionSectionDef } from "@/components/ui/accordion-screen";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -631,7 +633,6 @@ function ProductDetailDialog({
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
 }) {
-  const [tab, setTab]                         = useState<DetailTab>("details");
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete]       = useState(false);
   const { data: floorPlanData }                 = useGetFloorPlan();
@@ -645,52 +646,14 @@ function ProductDetailDialog({
   const isLowStock = product.trackInventory &&
     (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
 
-  const TABS: { key: DetailTab; label: string }[] = [
-    { key: "details",   label: "Details"   },
-    { key: "inventory", label: "Inventory" },
-    { key: "settings",  label: "Settings"  },
-  ];
-
-  return (
-    <>
-    <Dialog open={!!product} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
-        <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-          <DialogTitle>
-            <div className="flex items-center gap-3">
-              <div className="w-11 h-11 rounded-xl bg-primary/10 flex items-center justify-center shrink-0">
-                <Package className="w-5 h-5 text-primary" />
-              </div>
-              <div className="min-w-0">
-                <p className="font-bold text-base leading-tight truncate">{product.name}</p>
-                <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
-                  <Badge variant={product.isActive ? "default" : "secondary"} className="text-xs px-2 py-0 h-5">
-                    {product.isActive ? "Active" : "Inactive"}
-                  </Badge>
-                  {product.category && (
-                    <Badge variant="outline" className="text-xs px-2 py-0 h-5">{product.category.name}</Badge>
-                  )}
-                </div>
-              </div>
-            </div>
-          </DialogTitle>
-        </DialogHeader>
-
-        <div className="flex border-b px-6 gap-0 shrink-0 mt-3">
-          {TABS.map(({ key, label }) => (
-            <button key={key} onClick={() => setTab(key)} className={cn(
-              "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
-              tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
-            )}>
-              {label}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex-1 overflow-y-auto px-6 min-h-0">
-
-        {tab === "details" && (
-          <div className="space-y-3 py-4">
+  const sections: AccordionSectionDef[] = [
+    {
+      id: "details",
+      title: "Details",
+      description: "Pricing, identifiers and description",
+      icon: Package,
+      content: (
+          <div className="space-y-3">
             {/* Pricing */}
             <div className="rounded-xl border bg-muted/20 divide-y">
               <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
@@ -724,10 +687,15 @@ function ProductDetailDialog({
               </div>
             )}
           </div>
-        )}
-
-        {tab === "inventory" && (
-          <div className="space-y-3 py-4">
+      ),
+    },
+    {
+      id: "inventory",
+      title: "Inventory",
+      description: "Stock tracking and location",
+      icon: Boxes,
+      content: (
+          <div className="space-y-3">
             <div className="rounded-xl border bg-muted/20 divide-y">
               <div className="flex items-center gap-3 px-4 py-3">
                 <Boxes className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -780,10 +748,15 @@ function ProductDetailDialog({
               </div>
             )}
           </div>
-        )}
-
-        {tab === "settings" && (
-          <div className="space-y-3 py-4">
+      ),
+    },
+    {
+      id: "settings",
+      title: "Settings",
+      description: "Status and loyalty",
+      icon: Settings2,
+      content: (
+          <div className="space-y-3">
             <div className="rounded-xl border bg-muted/20 divide-y">
               <div className="flex items-center gap-3 px-4 py-3">
                 <Settings2 className="w-4 h-4 text-muted-foreground shrink-0" />
@@ -801,28 +774,37 @@ function ProductDetailDialog({
               </div>
             </div>
           </div>
-        )}
+      ),
+    },
+  ];
 
-        </div>
-
-        <div className="flex items-center justify-between px-6 pb-5 pt-4 border-t shrink-0">
-          <Button variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+  return (
+    <>
+    <FullScreenSheet open={!!product} onClose={onClose}>
+      <AccordionScreen
+        title={product.name}
+        subtitle={product.isActive ? "Active product" : "Inactive product"}
+        onBack={onClose}
+        sections={sections}
+        completeLabel="Done"
+        onComplete={onClose}
+        headerActions={
+          <>
+            <Button variant="destructive" size="sm" className="gap-1.5"
+              onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
+              <Trash2 className="w-3.5 h-3.5" /> Delete
+            </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
             </Button>
             <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(product); }}>
               <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
-          </div>
-        </div>
-      </DialogContent>
+          </>
+        }
+      />
       <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
-    </Dialog>
+    </FullScreenSheet>
     <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
       <AlertDialogContent>
         <AlertDialogHeader>
@@ -1505,6 +1487,12 @@ export default function ProductsPage() {
   const isFirstTab = visibleFormTabs[0]?.key === formTab;
   const isLastTab = visibleFormTabs[visibleFormTabs.length - 1]?.key === formTab;
 
+  /* Close the product create/edit screen, honouring the unsaved-changes guard. */
+  const closeProductDialog = () => {
+    if (isDirtyProduct) { setPendingProductClose(true); return; }
+    setDialogOpen(false);
+  };
+
   const setField = <K extends keyof ProductForm>(k: K, v: ProductForm[K]) => {
     setFormTouched(true);
     setForm((f) => ({ ...f, [k]: v }));
@@ -2055,51 +2043,10 @@ export default function ProductsPage() {
         deleteIsPending={deleteMutation.isPending}
       />
 
-      {/* ─── Add / Edit Product dialog ─────────────────────────────────────── */}
-      <Dialog open={dialogOpen} onOpenChange={(open) => {
-        if (!open && isDirtyProduct) { setPendingProductClose(true); return; }
-        setDialogOpen(open);
-      }}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
-          {/* Header */}
-          <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-            <DialogTitle>
-              {editingProduct ? `Edit Product — ${editingProduct.name}` : "New Product"}
-            </DialogTitle>
-          </DialogHeader>
-
-          {/* Tab nav */}
-          <div className="flex border-b px-6 gap-0 shrink-0 mt-3 overflow-x-auto scrollbar-none">
-            {visibleFormTabs
-              .map(({ key, label }) => (
-                <button
-                  key={key}
-                  onClick={() => {
-                    setFormTab(key);
-                  }}
-                  className={cn(
-                    "px-4 py-2.5 text-sm font-medium border-b-2 -mb-px transition-colors",
-                    formTab === key
-                      ? "border-primary text-primary"
-                      : "border-transparent text-muted-foreground hover:text-foreground",
-                  )}
-                >
-                  {label}
-                </button>
-              ))}
-          </div>
-
-          {/* Tab content — tabIndex allows mouse-wheel scroll immediately on dialog open */}
-          <div
-            className="flex-1 overflow-y-auto px-6 min-h-0"
-            tabIndex={-1}
-            style={{ outline: "none" }}
-            ref={scrollContainerRef}
-          >
-
-            {/* ── Details ── */}
-            {formTab === "details" && (
-              <div className="py-5 space-y-5">
+      {/* ─── Add / Edit Product full-screen accordion ──────────────────────── */}
+      {(() => { const __sections_content = {
+            details: (
+              <div className="space-y-5">
                 <div className="grid grid-cols-2 gap-4">
                   <div className="col-span-2">
                     <div className="flex items-center justify-between mb-1.5">
@@ -2401,11 +2348,10 @@ export default function ProductsPage() {
                 </div>
                 )}
               </div>
-            )}
+            ),
 
-            {/* ── Pricing ── */}
-            {formTab === "pricing" && (
-              <div className="py-5 space-y-6">
+            pricing: (
+              <div className="space-y-6">
                 {/* Supplier */}
                 <div>
                   <SectionHeader label="Supplier" />
@@ -2540,11 +2486,10 @@ export default function ProductsPage() {
                   </div>
                 )}
               </div>
-            )}
+            ),
 
-            {/* ── Media ── */}
-            {formTab === "media" && (
-              <div className="py-5 space-y-6">
+            media: (
+              <div className="space-y-6">
                 <div>
                   <SectionHeader label="Product Images" />
                   <p className="text-xs text-muted-foreground mt-1 mb-4">Upload images or paste a URL. JPG, PNG, WebP · Max 2048×2048px recommended.</p>
@@ -2573,11 +2518,10 @@ export default function ProductsPage() {
                   </div>
                 </div>
               </div>
-            )}
+            ),
 
-            {/* ── Stock ── */}
-            {formTab === "stock" && (
-              <div className="py-5 space-y-6">
+            stock: (
+              <div className="space-y-6">
 
                 {/* Inventory */}
                 <div>
@@ -2671,11 +2615,10 @@ export default function ProductsPage() {
                 </div>}
 
               </div>
-            )}
+            ),
 
-            {/* ── Settings ── */}
-            {formTab === "settings" && (
-              <div className="py-5 space-y-5">
+            settings: (
+              <div className="space-y-5">
 
                 {/* Availability + Loyalty — same line (Availability only when editing) */}
                 <div className={cn("border-t pt-5 grid gap-4", editingProduct ? "md:grid-cols-2" : "grid-cols-1")}>
@@ -2737,11 +2680,10 @@ export default function ProductsPage() {
                   />
                 </div>
               </div>
-            )}
+            ),
 
-            {/* ── Digital Codes ── */}
-            {formTab === "digital_codes" && (
-              <div className="py-5 space-y-5">
+            digital_codes: (
+              <div className="space-y-5">
 
                 {/* ePay switch */}
                 <div>
@@ -2871,11 +2813,10 @@ export default function ProductsPage() {
                   )}
                 </div>}
               </div>
-            )}
+            ),
 
-            {/* ── Compatibility ── */}
-            {formTab === "compatibility" && (
-              <div className="py-5 space-y-5">
+            compatibility: (
+              <div className="space-y-5">
                 <div>
                   <SectionHeader label="PC Part Type" />
                   <p className="text-xs text-muted-foreground mt-1 mb-3">
@@ -2951,11 +2892,10 @@ export default function ProductsPage() {
                   </div>
                 )}
               </div>
-            )}
+            ),
 
-            {/* ── Variants ── */}
-            {formTab === "variants" && (
-              <div className="py-5 space-y-4">
+            variants: (
+              <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <div>
                     <SectionHeader label="Product Variants" />
@@ -3113,39 +3053,37 @@ export default function ProductsPage() {
                   </>
                 )}
               </div>
-            )}
+            ),
+            } as Record<FormTab, React.ReactNode>;
 
-          </div>
+            const savePending = createMutation.isPending || updateMutation.isPending;
+            const formSections: AccordionSectionDef[] = visibleFormTabs.map(({ key, label }) => ({
+              id: key,
+              title: label,
+              content: __sections_content[key],
+            }));
 
-          {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/10 shrink-0">
-            <div className="flex gap-2">
-              {!isFirstTab && (
-                <Button variant="outline" onClick={goPrevTab} className="gap-1.5">
-                  <ChevronLeft className="w-4 h-4" /> Previous
-                </Button>
-              )}
-              {!isLastTab && (
-                <Button variant="outline" onClick={goNextTab} className="gap-1.5">
-                  Next Tab <ChevronRight className="w-4 h-4" />
-                </Button>
-              )}
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => {
-                if (isDirtyProduct) { setPendingProductClose(true); return; }
-                setDialogOpen(false);
-              }}>Cancel</Button>
-              <Button
-                onClick={handleSave}
-                disabled={createMutation.isPending || updateMutation.isPending}
-              >
-                {editingProduct ? "Save Changes" : "Create Product"}
-              </Button>
-            </div>
-          </div>
-        </DialogContent>
-      </Dialog>
+            return (
+              <FullScreenSheet open={dialogOpen} onClose={closeProductDialog}>
+                <AccordionScreen
+                  title={editingProduct ? "Edit Product" : "New Product"}
+                  subtitle={editingProduct ? "Update product details" : "Create a new product"}
+                  onBack={closeProductDialog}
+                  openId={formTab}
+                  onOpenChange={(id) => setFormTab(id as FormTab)}
+                  sections={formSections}
+                  completeLabel={savePending ? "Saving…" : editingProduct ? "Update Product" : "Create Product"}
+                  completeDisabled={savePending}
+                  onComplete={handleSave}
+                  headerActions={
+                    <Button onClick={handleSave} disabled={savePending} className="gap-1.5">
+                      {savePending ? "Saving…" : editingProduct ? "Update Product" : "Create Product"}
+                    </Button>
+                  }
+                />
+              </FullScreenSheet>
+            );
+          })()}
 
       {/* ─── Unsaved product changes guard (page navigation) ───────────────── */}
       <ProductNavGuard />

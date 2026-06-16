@@ -4,7 +4,7 @@ import {
   BarChart2, TrendingUp, Target, UserPlus, Share2, Globe, Mail, FileText, Brain, Activity,
   UserSquare2, Clock, Coins, Monitor, Map, MapPin, Camera, Scale, TabletSmartphone, LayoutDashboard,
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Repeat,
-  UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, FolderSync, MessageSquare,
+  UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, FolderSync, MessageSquare, Palette,
 } from "lucide-react";
 
 export interface HubTab {
@@ -105,6 +105,7 @@ export const SETTINGS_HUB_TABS: HubTab[] = [
     matchPaths: ["/management/settings-integrations/business-details/regional"],
   },
   { label: "Tax",              href: "/management/settings-integrations/tax",            icon: Receipt        },
+  { label: "Themes",           href: "/management/settings-integrations/themes",         icon: Palette        },
   {
     label: "Integrations",
     href: "/management/settings-integrations/integrations",
