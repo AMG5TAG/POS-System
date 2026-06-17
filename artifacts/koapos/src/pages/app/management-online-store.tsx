@@ -19,7 +19,8 @@ import {
   Gift, Users, QrCode, MapPin, Star, Mail, ChevronRight, CheckCircle2,
   Settings2, Palette, Upload, ExternalLink, FileText, Package,
   Code2, Sparkles, Phone, Clock, ArrowUp, ArrowDown, Layers, Wand2, Building2,
-  Link2, Copy, Check,
+  Link2, Copy, Check, Maximize2, Minimize2,
+  Play, MessageSquare, HelpCircle, Columns3, Timer, Share2, Map as MapIcon, DollarSign, CopyPlus,
 } from "lucide-react";
 import {
   useGetOnlineStoreSettings,
@@ -49,7 +50,11 @@ interface SiteSettings {
   pages: Page[]; quickCodes: QuickCode[];
 }
 
-interface Page { id: string; name: string; slug: string; visible: boolean; blocks: Block[]; }
+interface Page {
+  id: string; name: string; slug: string; visible: boolean; blocks: Block[];
+  /* SEO & page settings (optional — round-tripped inside the pages JSON blob). */
+  seoTitle?: string; seoDescription?: string; shareImage?: string; publishAt?: string;
+}
 
 interface Block {
   id: string; type: BlockType; data: Record<string, string | number | boolean>;
@@ -57,7 +62,8 @@ interface Block {
 
 type BlockType =
   | "hero" | "heading" | "text" | "image" | "product-grid" | "featured-product"
-  | "gallery" | "cta" | "newsletter" | "contact" | "spacer" | "loyalty-banner" | "quick-code";
+  | "gallery" | "cta" | "newsletter" | "contact" | "spacer" | "loyalty-banner" | "quick-code"
+  | "video" | "testimonials" | "faq" | "columns" | "countdown" | "social" | "map" | "pricing";
 
 interface QuickCode { id: string; code: string; label: string; url: string; }
 
@@ -86,6 +92,14 @@ const BLOCK_LIBRARY: BlockMeta[] = [
   { type: "spacer",           label: "Spacer",            icon: GripVertical, description: "Vertical spacing",                                          defaultData: { height: 48 } },
   { type: "loyalty-banner",   label: "Loyalty Promo",     icon: Gift,         description: "Promote your loyalty program",                              defaultData: { headline: "Join our rewards program", text: "Earn points on every purchase", points: 100 } },
   { type: "quick-code",       label: "Quick Code",        icon: QrCode,       description: "Embed a QR code or short URL",                              defaultData: { code: "" } },
+  { type: "video",            label: "Video",             icon: Play,         description: "Embed a YouTube or Vimeo video",                           defaultData: { url: "", caption: "" } },
+  { type: "testimonials",     label: "Testimonials",      icon: MessageSquare,description: "Customer quotes / reviews",                                defaultData: { quote1: "Fantastic service and quality!", author1: "Happy Customer", quote2: "I'll definitely be back.", author2: "Local Regular", quote3: "", author3: "" } },
+  { type: "faq",              label: "FAQ / Accordion",   icon: HelpCircle,   description: "Expandable question & answer list",                        defaultData: { q1: "What are your hours?", a1: "We're open 9–5, Mon–Sat.", q2: "Do you offer delivery?", a2: "Yes, within the local area.", q3: "", a3: "" } },
+  { type: "columns",          label: "Columns",           icon: Columns3,     description: "Multi-column text layout",                                 defaultData: { columns: 3, col1: "Quality first", col2: "Fast service", col3: "Local & trusted", col4: "" } },
+  { type: "countdown",        label: "Countdown Timer",   icon: Timer,        description: "Count down to a date (e.g. a sale)",                        defaultData: { headline: "Sale ends in", target: "" } },
+  { type: "social",           label: "Social Icons",      icon: Share2,       description: "Links to your social profiles",                            defaultData: { facebook: "", instagram: "", twitter: "", tiktok: "", youtube: "" } },
+  { type: "map",              label: "Map",               icon: MapIcon,      description: "Embedded map of your location",                            defaultData: { address: "", zoom: 14 } },
+  { type: "pricing",          label: "Pricing Table",     icon: DollarSign,   description: "Compare plans or packages",                                defaultData: { name1: "Basic", price1: "$9", features1: "Feature A, Feature B", name2: "Pro", price2: "$29", features2: "Everything in Basic, Feature C, Feature D", name3: "", price3: "", features3: "" } },
 ];
 
 const FONT_OPTIONS = [
@@ -293,6 +307,103 @@ function BlockPreview({ block, theme }: { block: Block; theme: ThemeSettings }) 
           <code className="text-xs font-mono">{String(block.data.code) || "SAMPLE"}</code>
         </div>
       );
+    case "video":
+      return (
+        <div className="space-y-1.5">
+          <div className={cn("aspect-video bg-muted flex items-center justify-center", radiusClass)}>
+            <Play className="w-8 h-8 text-muted-foreground/50" />
+          </div>
+          {block.data.caption ? <p className="text-xs text-center opacity-60" style={{ color: theme.text }}>{String(block.data.caption)}</p> : null}
+        </div>
+      );
+    case "testimonials": {
+      const items = [1, 2, 3].map((n) => ({ quote: String(block.data[`quote${n}`] ?? ""), author: String(block.data[`author${n}`] ?? "") })).filter((t) => t.quote);
+      return (
+        <div className={cn("grid gap-3", items.length >= 3 ? "sm:grid-cols-3" : items.length === 2 ? "sm:grid-cols-2" : "grid-cols-1")}>
+          {items.map((t, i) => (
+            <div key={i} className={cn("p-4 bg-muted/40 text-sm", radiusClass)} style={{ color: theme.text }}>
+              <p className="italic">“{t.quote}”</p>
+              <p className="text-xs font-semibold mt-2 opacity-70">— {t.author}</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case "faq": {
+      const items = [1, 2, 3].map((n) => ({ q: String(block.data[`q${n}`] ?? ""), a: String(block.data[`a${n}`] ?? "") })).filter((f) => f.q);
+      return (
+        <div className="space-y-2">
+          {items.map((f, i) => (
+            <div key={i} className={cn("border p-3", radiusClass)} style={{ color: theme.text }}>
+              <p className="text-sm font-semibold flex items-center justify-between">{f.q}<ChevronRight className="w-3.5 h-3.5 opacity-50" /></p>
+              <p className="text-xs opacity-70 mt-1">{f.a}</p>
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case "columns": {
+      const n = Math.max(2, Math.min(4, Number(block.data.columns) || 3));
+      const cols = [1, 2, 3, 4].slice(0, n).map((k) => String(block.data[`col${k}`] ?? "")).filter(Boolean);
+      return (
+        <div className={cn("grid gap-3", n === 2 ? "sm:grid-cols-2" : n === 4 ? "sm:grid-cols-4" : "sm:grid-cols-3")}>
+          {cols.map((c, i) => <div key={i} className="text-sm text-center opacity-80" style={{ color: theme.text }}>{c}</div>)}
+        </div>
+      );
+    }
+    case "countdown":
+      return (
+        <div className={cn("p-5 text-center", radiusClass)} style={{ backgroundColor: `${theme.primary}15` }}>
+          <p className="text-sm font-semibold mb-2" style={{ color: theme.text }}>{String(block.data.headline) || "Countdown"}</p>
+          <div className="flex justify-center gap-3">
+            {["Days", "Hrs", "Min", "Sec"].map((u) => (
+              <div key={u} className={cn("px-3 py-2 bg-background border", radiusClass)}>
+                <p className="text-lg font-bold tabular-nums" style={{ color: theme.primary }}>00</p>
+                <p className="text-[9px] uppercase opacity-60" style={{ color: theme.text }}>{u}</p>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    case "social": {
+      const links = [
+        { k: "facebook", label: "Facebook" }, { k: "instagram", label: "Instagram" },
+        { k: "twitter", label: "X" }, { k: "tiktok", label: "TikTok" }, { k: "youtube", label: "YouTube" },
+      ].filter((l) => block.data[l.k]);
+      return (
+        <div className="flex items-center justify-center gap-2 flex-wrap">
+          {(links.length ? links : [{ k: "x", label: "Social" }]).map((l) => (
+            <div key={l.k} className={cn("w-9 h-9 flex items-center justify-center", radiusClass)} style={{ backgroundColor: `${theme.primary}1a` }}>
+              <Share2 className="w-4 h-4" style={{ color: theme.primary }} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+    case "map":
+      return (
+        <div className={cn("aspect-[16/7] bg-muted flex flex-col items-center justify-center gap-1", radiusClass)} style={{ color: theme.text }}>
+          <MapIcon className="w-7 h-7 opacity-40" />
+          <p className="text-xs opacity-60">{String(block.data.address) || "Your location"}</p>
+        </div>
+      );
+    case "pricing": {
+      const plans = [1, 2, 3].map((n) => ({
+        name: String(block.data[`name${n}`] ?? ""), price: String(block.data[`price${n}`] ?? ""),
+        features: String(block.data[`features${n}`] ?? "").split(",").map((f) => f.trim()).filter(Boolean),
+      })).filter((p) => p.name);
+      return (
+        <div className={cn("grid gap-3", plans.length >= 3 ? "sm:grid-cols-3" : plans.length === 2 ? "sm:grid-cols-2" : "grid-cols-1")}>
+          {plans.map((p, i) => (
+            <div key={i} className={cn("border p-4 text-center", radiusClass)} style={{ color: theme.text }}>
+              <p className="text-sm font-semibold">{p.name}</p>
+              <p className="text-xl font-bold my-1" style={{ color: theme.primary }}>{p.price}</p>
+              <ul className="text-xs opacity-70 space-y-0.5">{p.features.map((f, j) => <li key={j}>{f}</li>)}</ul>
+            </div>
+          ))}
+        </div>
+      );
+    }
   }
 }
 
@@ -398,11 +509,129 @@ function BlockEditor({ block, onChange }: { block: Block; onChange: (b: Block) =
         </div>
       );
     case "quick-code": return <Field label="Quick code"><Input value={String(block.data.code ?? "")} onChange={(e) => set({ code: e.target.value })} placeholder="SUMMER25" /></Field>;
+    case "video":
+      return (
+        <div className="space-y-3">
+          <Field label="Video URL"><Input value={String(block.data.url ?? "")} onChange={(e) => set({ url: e.target.value })} placeholder="https://youtube.com/watch?v=…" /></Field>
+          <Field label="Caption"><Input value={String(block.data.caption ?? "")} onChange={(e) => set({ caption: e.target.value })} /></Field>
+        </div>
+      );
+    case "testimonials":
+      return (
+        <div className="space-y-3">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="space-y-1.5 border-t pt-2 first:border-t-0 first:pt-0">
+              <Field label={`Quote ${n}`}><Textarea rows={2} value={String(block.data[`quote${n}`] ?? "")} onChange={(e) => set({ [`quote${n}`]: e.target.value })} /></Field>
+              <Field label={`Author ${n}`}><Input value={String(block.data[`author${n}`] ?? "")} onChange={(e) => set({ [`author${n}`]: e.target.value })} /></Field>
+            </div>
+          ))}
+        </div>
+      );
+    case "faq":
+      return (
+        <div className="space-y-3">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="space-y-1.5 border-t pt-2 first:border-t-0 first:pt-0">
+              <Field label={`Question ${n}`}><Input value={String(block.data[`q${n}`] ?? "")} onChange={(e) => set({ [`q${n}`]: e.target.value })} /></Field>
+              <Field label={`Answer ${n}`}><Textarea rows={2} value={String(block.data[`a${n}`] ?? "")} onChange={(e) => set({ [`a${n}`]: e.target.value })} /></Field>
+            </div>
+          ))}
+        </div>
+      );
+    case "columns":
+      return (
+        <div className="space-y-3">
+          <Field label="Number of columns"><Input type="number" min={2} max={4} value={Number(block.data.columns) || 3} onChange={(e) => set({ columns: parseInt(e.target.value) || 3 })} /></Field>
+          {[1, 2, 3, 4].map((n) => (
+            <Field key={n} label={`Column ${n}`}><Textarea rows={2} value={String(block.data[`col${n}`] ?? "")} onChange={(e) => set({ [`col${n}`]: e.target.value })} /></Field>
+          ))}
+        </div>
+      );
+    case "countdown":
+      return (
+        <div className="space-y-3">
+          <Field label="Headline"><Input value={String(block.data.headline ?? "")} onChange={(e) => set({ headline: e.target.value })} /></Field>
+          <Field label="Target date & time"><Input type="datetime-local" value={String(block.data.target ?? "")} onChange={(e) => set({ target: e.target.value })} /></Field>
+        </div>
+      );
+    case "social":
+      return (
+        <div className="space-y-3">
+          {(["facebook", "instagram", "twitter", "tiktok", "youtube"] as const).map((k) => (
+            <Field key={k} label={k.charAt(0).toUpperCase() + k.slice(1)}><Input value={String(block.data[k] ?? "")} onChange={(e) => set({ [k]: e.target.value })} placeholder="https://…" /></Field>
+          ))}
+        </div>
+      );
+    case "map":
+      return (
+        <div className="space-y-3">
+          <Field label="Address"><Input value={String(block.data.address ?? "")} onChange={(e) => set({ address: e.target.value })} placeholder="123 Main St, Sydney" /></Field>
+          <Field label="Zoom"><Input type="number" min={1} max={20} value={Number(block.data.zoom) || 14} onChange={(e) => set({ zoom: parseInt(e.target.value) || 14 })} /></Field>
+        </div>
+      );
+    case "pricing":
+      return (
+        <div className="space-y-3">
+          {[1, 2, 3].map((n) => (
+            <div key={n} className="space-y-1.5 border-t pt-2 first:border-t-0 first:pt-0">
+              <div className="grid grid-cols-2 gap-2">
+                <Field label={`Plan ${n} name`}><Input value={String(block.data[`name${n}`] ?? "")} onChange={(e) => set({ [`name${n}`]: e.target.value })} /></Field>
+                <Field label="Price"><Input value={String(block.data[`price${n}`] ?? "")} onChange={(e) => set({ [`price${n}`]: e.target.value })} /></Field>
+              </div>
+              <Field label="Features (comma-separated)"><Textarea rows={2} value={String(block.data[`features${n}`] ?? "")} onChange={(e) => set({ [`features${n}`]: e.target.value })} /></Field>
+            </div>
+          ))}
+        </div>
+      );
   }
 }
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return <div className="space-y-1.5"><Label className="text-xs">{label}</Label>{children}</div>;
+}
+
+/* Per-block styling lives in reserved `_`-prefixed keys on block.data so it
+ * round-trips with the rest of the block and applies to every block type. */
+function blockWrapperStyle(data: Record<string, string | number | boolean>): React.CSSProperties {
+  const s: React.CSSProperties = {};
+  if (data._bg) s.backgroundColor = String(data._bg);
+  const pad = Number(data._padY);
+  if (pad) { s.paddingTop = pad; s.paddingBottom = pad; }
+  if (data._align) s.textAlign = data._align as React.CSSProperties["textAlign"];
+  return s;
+}
+
+function BlockStyleSection({ block, onChange }: { block: Block; onChange: (b: Block) => void }) {
+  const set = (patch: Record<string, string | number | boolean>) => onChange({ ...block, data: { ...block.data, ...patch } });
+  const clear = (key: string) => { const d = { ...block.data }; delete d[key]; onChange({ ...block, data: d }); };
+  return (
+    <div className="mt-4 pt-4 border-t space-y-3">
+      <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5"><Palette className="w-3 h-3" /> Block style</p>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Background">
+          <div className="flex items-center gap-1.5">
+            <Input type="color" value={String(block.data._bg ?? "#ffffff")} onChange={(e) => set({ _bg: e.target.value })} className="h-8 w-12 p-1" />
+            {block.data._bg ? <button onClick={() => clear("_bg")} className="text-[10px] text-muted-foreground hover:text-foreground">Clear</button> : <span className="text-[10px] text-muted-foreground">None</span>}
+          </div>
+        </Field>
+        <Field label="Spacing (px)"><Input type="number" min={0} max={160} value={Number(block.data._padY) || 0} onChange={(e) => set({ _padY: parseInt(e.target.value) || 0 })} className="h-8" /></Field>
+      </div>
+      <div className="grid grid-cols-2 gap-3">
+        <Field label="Alignment">
+          <Select value={String(block.data._align ?? "left")} onValueChange={(v) => set({ _align: v })}>
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="left">Left</SelectItem><SelectItem value="center">Center</SelectItem><SelectItem value="right">Right</SelectItem></SelectContent>
+          </Select>
+        </Field>
+        <Field label="Width">
+          <Select value={block.data._fullWidth ? "full" : "contained"} onValueChange={(v) => set({ _fullWidth: v === "full" })}>
+            <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
+            <SelectContent><SelectItem value="contained">Contained</SelectItem><SelectItem value="full">Full width</SelectItem></SelectContent>
+          </Select>
+        </Field>
+      </div>
+    </div>
+  );
 }
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
@@ -422,6 +651,10 @@ export default function ManagementOnlineStorePage() {
   const [newPage, setNewPage] = useState({ name: "", slug: "" });
   const [connectProvider, setConnectProvider] = useState<string | null>(null);
   const [connectForm, setConnectForm] = useState({ url: "", apiKey: "" });
+  const [fullScreen, setFullScreen] = useState(false);
+  const [clipboardBlock, setClipboardBlock] = useState<Block | null>(null);
+  const [dragBlockId, setDragBlockId] = useState<string | null>(null);
+  const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
 
   /* Branding source: Business Details (management > business) */
   const { profile: businessProfile } = useBusinessProfile();
@@ -587,6 +820,60 @@ export default function ManagementOnlineStorePage() {
     }));
   };
 
+  /* Insert a (cloned) block right after `afterId`, or at the end. */
+  const insertBlockAfter = (block: Block, afterId: string | null) => {
+    if (!activePage) return;
+    const fresh: Block = { ...block, id: `b${Date.now()}`, data: { ...block.data } };
+    mutateSite((s) => ({
+      ...s,
+      pages: s.pages.map((p) => {
+        if (p.id !== activePage.id) return p;
+        const at = afterId ? p.blocks.findIndex((b) => b.id === afterId) + 1 : p.blocks.length;
+        const arr = [...p.blocks];
+        arr.splice(at > 0 ? at : arr.length, 0, fresh);
+        return { ...p, blocks: arr };
+      }),
+    }));
+    setActiveBlockId(fresh.id);
+  };
+
+  const duplicateBlock = (id: string) => {
+    const b = activePage?.blocks.find((x) => x.id === id);
+    if (b) { insertBlockAfter(b, id); toast.success("Block duplicated"); }
+  };
+
+  const copyBlock = (id: string) => {
+    const b = activePage?.blocks.find((x) => x.id === id);
+    if (b) { setClipboardBlock(b); toast.success("Block copied — paste it on any page"); }
+  };
+
+  const pasteBlock = () => {
+    if (clipboardBlock) { insertBlockAfter(clipboardBlock, activeBlockId); toast.success("Block pasted"); }
+  };
+
+  /* Drag-and-drop reorder within the active page. */
+  const reorderBlock = (fromId: string, toId: string) => {
+    if (!activePage || fromId === toId) return;
+    mutateSite((s) => ({
+      ...s,
+      pages: s.pages.map((p) => {
+        if (p.id !== activePage.id) return p;
+        const arr = [...p.blocks];
+        const from = arr.findIndex((b) => b.id === fromId);
+        const to   = arr.findIndex((b) => b.id === toId);
+        if (from < 0 || to < 0) return p;
+        const [moved] = arr.splice(from, 1);
+        arr.splice(to, 0, moved);
+        return { ...p, blocks: arr };
+      }),
+    }));
+  };
+
+  const updatePage = (patch: Partial<Page>) => {
+    if (!activePage) return;
+    mutateSite((s) => ({ ...s, pages: s.pages.map((p) => p.id === activePage.id ? { ...p, ...patch } : p) }));
+  };
+
   /* ─── Quick codes ────────────────────────────────────────────────── */
   const addQuickCode = () => {
     const id = `qc${Date.now()}`;
@@ -634,7 +921,7 @@ export default function ManagementOnlineStorePage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6">
+      <div className={cn("space-y-6", fullScreen ? "fixed inset-0 z-50 bg-background overflow-y-auto p-4 md:p-6" : "p-6 md:p-8")}>
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -654,6 +941,14 @@ export default function ManagementOnlineStorePage() {
                 </Button>
               </>
             )}
+            <Button
+              size="sm" variant="outline" className="gap-1.5"
+              onClick={() => setFullScreen((v) => !v)}
+              title={fullScreen ? "Exit full screen" : "Open builder full screen"}
+            >
+              {fullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
+              <span className="hidden sm:inline">{fullScreen ? "Exit full screen" : "Full screen"}</span>
+            </Button>
           </div>
         </div>
 
@@ -917,7 +1212,10 @@ export default function ManagementOnlineStorePage() {
                   <div className="border-r p-3 space-y-2 bg-muted/20">
                     <div className="flex items-center justify-between">
                       <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Pages</p>
-                      <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setAddPageOpen(true)} title="Add page"><Plus className="w-3 h-3" /></Button>
+                      <div className="flex">
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setPageSettingsOpen(true)} title="Page settings & SEO"><Settings2 className="w-3 h-3" /></Button>
+                        <Button size="icon" variant="ghost" className="h-6 w-6" onClick={() => setAddPageOpen(true)} title="Add page"><Plus className="w-3 h-3" /></Button>
+                      </div>
                     </div>
                     <div className="space-y-1">
                       {site.pages.map((p) => (
@@ -937,6 +1235,11 @@ export default function ManagementOnlineStorePage() {
                       ))}
                     </div>
                     <Separator className="my-3" />
+                    {clipboardBlock && (
+                      <Button size="sm" variant="outline" className="w-full gap-1.5 mb-2 h-7 text-xs" onClick={pasteBlock} title="Paste copied block onto this page">
+                        <Copy className="w-3 h-3" /> Paste block
+                      </Button>
+                    )}
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Add block</p>
                     <div className="space-y-1 max-h-72 overflow-auto pr-1">
                       {BLOCK_LIBRARY.map((b) => {
@@ -956,7 +1259,7 @@ export default function ManagementOnlineStorePage() {
                         style={{ backgroundColor: site.theme.bg, fontFamily: site.theme.font === "serif" ? "serif" : site.theme.font === "mono" ? "monospace" : "system-ui" }}>
                         <div className="flex items-center gap-1.5 border-b px-3 py-2 bg-background/60">
                           <div className="w-2 h-2 rounded-full bg-red-400" /><div className="w-2 h-2 rounded-full bg-yellow-400" /><div className="w-2 h-2 rounded-full bg-green-400" />
-                          <p className="text-[10px] text-muted-foreground ml-2 truncate">{site.domain}{activePage.slug}</p>
+                          <p className="text-[10px] text-muted-foreground ml-2 truncate">{(site.domain.trim() || `koapos.com.au/b/${merchantUsername || "your-username"}/o/${storeSlug}`)}{activePage.slug}</p>
                         </div>
                         <div className="flex items-center justify-between px-5 py-3 border-b" style={{ borderColor: `${site.theme.text}15` }}>
                           <p className="font-bold text-sm" style={{ color: site.theme.text }}>{site.storeName}</p>
@@ -970,12 +1273,21 @@ export default function ManagementOnlineStorePage() {
                           {activePage.blocks.length === 0 ? (
                             <div className="py-12 text-center text-sm text-muted-foreground"><Layout className="w-8 h-8 mx-auto mb-2 opacity-30" />No blocks yet. Add one from the left.</div>
                           ) : activePage.blocks.map((b) => (
-                            <div key={b.id} onClick={() => setActiveBlockId(b.id)}
-                              className={cn("relative rounded cursor-pointer transition-all", activeBlockId === b.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-muted-foreground/30")}>
+                            <div key={b.id}
+                              draggable
+                              onDragStart={() => setDragBlockId(b.id)}
+                              onDragOver={(e) => e.preventDefault()}
+                              onDrop={(e) => { e.preventDefault(); if (dragBlockId) reorderBlock(dragBlockId, b.id); setDragBlockId(null); }}
+                              onDragEnd={() => setDragBlockId(null)}
+                              onClick={() => setActiveBlockId(b.id)}
+                              style={blockWrapperStyle(b.data)}
+                              className={cn("relative rounded cursor-pointer transition-all", b.data._fullWidth && "-mx-4", dragBlockId === b.id && "opacity-50", activeBlockId === b.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-muted-foreground/30")}>
                               {activeBlockId === b.id && (
                                 <div className="absolute -top-2 -right-2 flex gap-1 z-10">
                                   <button onClick={(e) => { e.stopPropagation(); moveBlock(b.id, -1); }} className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-muted" title="Move up"><ArrowUp className="w-3 h-3" /></button>
                                   <button onClick={(e) => { e.stopPropagation(); moveBlock(b.id, 1); }}  className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-muted" title="Move down"><ArrowDown className="w-3 h-3" /></button>
+                                  <button onClick={(e) => { e.stopPropagation(); duplicateBlock(b.id); }} className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-muted" title="Duplicate"><CopyPlus className="w-3 h-3" /></button>
+                                  <button onClick={(e) => { e.stopPropagation(); copyBlock(b.id); }} className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-muted" title="Copy"><Copy className="w-3 h-3" /></button>
                                   <button onClick={(e) => { e.stopPropagation(); deleteBlock(b.id); }}  className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground" title="Delete"><Trash2 className="w-3 h-3" /></button>
                                 </div>
                               )}
@@ -995,6 +1307,7 @@ export default function ManagementOnlineStorePage() {
                           <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => deleteBlock(activeBlock.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
                         </div>
                         <BlockEditor block={activeBlock} onChange={updateBlock} />
+                        <BlockStyleSection block={activeBlock} onChange={updateBlock} />
                       </>
                     ) : (
                       <div className="text-center text-xs text-muted-foreground py-12">
@@ -1084,6 +1397,43 @@ export default function ManagementOnlineStorePage() {
           <DialogFooter>
             <Button variant="outline" onClick={() => setAddPageOpen(false)}>Cancel</Button>
             <Button onClick={addPage}>Add page</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={pageSettingsOpen} onOpenChange={setPageSettingsOpen}>
+        <DialogContent className="max-w-md max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Page settings &amp; SEO</DialogTitle>
+            <DialogDescription>Settings for <strong>{activePage?.name}</strong>. Used by search engines and social shares.</DialogDescription>
+          </DialogHeader>
+          {activePage && (
+            <div className="space-y-3">
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Page name"><Input value={activePage.name} onChange={(e) => updatePage({ name: e.target.value })} /></Field>
+                <Field label="Slug"><Input value={activePage.slug} onChange={(e) => updatePage({ slug: e.target.value })} placeholder="/about" /></Field>
+              </div>
+              <Field label="SEO title"><Input value={activePage.seoTitle ?? ""} onChange={(e) => updatePage({ seoTitle: e.target.value })} placeholder={activePage.name} /></Field>
+              <Field label="SEO description"><Textarea rows={3} value={activePage.seoDescription ?? ""} onChange={(e) => updatePage({ seoDescription: e.target.value })} placeholder="A short summary shown in search results (max ~160 characters)." /></Field>
+              <Field label="Social share image URL"><Input value={activePage.shareImage ?? ""} onChange={(e) => updatePage({ shareImage: e.target.value })} placeholder="https://…" /></Field>
+              <div className="grid grid-cols-2 gap-3">
+                <Field label="Publish date (optional)"><Input type="datetime-local" value={activePage.publishAt ?? ""} onChange={(e) => updatePage({ publishAt: e.target.value })} /></Field>
+                <Field label="Visibility">
+                  <Select value={activePage.visible ? "visible" : "hidden"} onValueChange={(v) => updatePage({ visible: v === "visible" })}>
+                    <SelectTrigger className="h-9"><SelectValue /></SelectTrigger>
+                    <SelectContent><SelectItem value="visible">Visible</SelectItem><SelectItem value="hidden">Hidden</SelectItem></SelectContent>
+                  </Select>
+                </Field>
+              </div>
+              {activePage.publishAt && (
+                <p className="text-xs text-muted-foreground">
+                  Scheduled to go live on {new Date(activePage.publishAt).toLocaleString("en-AU")}. Until then it stays hidden from visitors.
+                </p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setPageSettingsOpen(false)}>Done</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
