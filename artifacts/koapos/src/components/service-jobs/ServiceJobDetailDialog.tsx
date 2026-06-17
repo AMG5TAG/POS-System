@@ -167,6 +167,23 @@ export function ServiceJobDetailDialog({
     if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send SMS");
     toast.success(`SMS sent to ${job.customerPhone}`);
   };
+
+  /* Send the customer their portal login link so they can track this job.
+   * The server resolves the customer's portal token and delivers the link to
+   * the contact on file via the requested channel. */
+  const sendPortalLink = async (via: "email" | "sms") => {
+    if (!job) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/portal-link?via=${via}`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error(`Network error — login link not sent`);
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send login link");
+    toast.success(`Login link sent to ${via === "email" ? job.customerEmail : job.customerPhone}`);
+  };
+
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
@@ -462,6 +479,9 @@ export function ServiceJobDetailDialog({
               </div>
             )}
 
+            </>)}
+
+            {tab === "service" && (<>
             {/* Work Details */}
             {(showAll || job.workDescription || job.additionalEquipment) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
@@ -481,9 +501,7 @@ export function ServiceJobDetailDialog({
                 {(job.additionalEquipment || showAll) && <DetailRow icon={Package} label="Additional Equipment" value={job.additionalEquipment ?? (showAll ? "—" : null)} />}
               </div>
             )}
-            </>)}
 
-            {tab === "service" && (<>
             {/* Parts & Labour */}
             {show("showPartsLabour") && (
             <div className="rounded-xl border bg-muted/20">
@@ -751,6 +769,28 @@ export function ServiceJobDetailDialog({
                     smsReadonly: true,
                     smsHint: "Texts a status update to the customer's number on file.",
                     onSms: () => sendJobSms(),
+                  })}
+                />
+              )}
+              {(job.customerEmail || job.customerPhone) && (
+                <SendButton
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  buttonTitle="Send customer login link"
+                  title="Send Login Link"
+                  documentLabel={job.jobNumber}
+                  {...(job.customerEmail && {
+                    defaultEmail: job.customerEmail,
+                    emailReadonly: true,
+                    emailHint: "Emails the customer their portal login link to track this job.",
+                    onEmail: () => sendPortalLink("email"),
+                  })}
+                  {...(job.customerPhone && {
+                    defaultPhone: job.customerPhone,
+                    smsReadonly: true,
+                    smsHint: "Texts the customer their portal login link to track this job.",
+                    onSms: () => sendPortalLink("sms"),
                   })}
                 />
               )}

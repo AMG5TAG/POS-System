@@ -716,6 +716,13 @@ function ProductDetailDialog({
 
         {tab === "details" && (
           <div className="space-y-3 py-4">
+            {/* Description */}
+            {product.description && (
+              <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Description</p>
+                <p className="whitespace-pre-line">{product.description}</p>
+              </div>
+            )}
             {/* Pricing */}
             <div className="rounded-xl border bg-muted/20 divide-y">
               <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
@@ -741,13 +748,6 @@ function ProductDetailDialog({
                   .replace(/-/g, " ")
                   .replace(/\b\w/g, (c) => c.toUpperCase())} />
             </div>
-            {/* Description */}
-            {product.description && (
-              <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
-                <p className="text-xs text-muted-foreground mb-0.5">Description</p>
-                <p className="whitespace-pre-line">{product.description}</p>
-              </div>
-            )}
           </div>
         )}
 
@@ -851,9 +851,9 @@ function ProductDetailDialog({
 
         <div className="flex items-center justify-between px-6 pb-5 pt-4 border-t shrink-0">
           <div className="flex items-center gap-2">
-            <Button variant="destructive" size="sm" className="gap-1.5"
-              onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
-              <Trash2 className="w-3.5 h-3.5" /> Delete
+            <Button variant="destructive" size="sm"
+              onClick={() => setConfirmDelete(true)} disabled={deleteIsPending} title="Delete product">
+              <Trash2 className="w-3.5 h-3.5" />
             </Button>
             <Button size="sm" onClick={() => { onClose(); onEdit(product); }}>
               <Pencil className="w-3.5 h-3.5" />
