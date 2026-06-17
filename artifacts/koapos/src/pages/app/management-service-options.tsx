@@ -13,10 +13,15 @@ import {
   Wrench, Wallet, ListChecks, Shield, Clock, PenLine, Truck, StickyNote, Loader2,
 } from "lucide-react";
 
+/* Only the boolean section-visibility keys (excludes the numeric warranty defaults). */
+type SectionKey = {
+  [K in keyof ServiceSettings]: ServiceSettings[K] extends boolean ? K : never;
+}[keyof ServiceSettings];
+
 /* Each toggle maps 1:1 to a section card in ServiceJobDetailDialog. The `key`
    matches the ServiceSettings field that gates that section. */
 const SECTIONS: {
-  key: keyof ServiceSettings;
+  key: SectionKey;
   label: string;
   description: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -48,7 +53,7 @@ export default function ManagementServiceOptionsPage() {
     });
   }
 
-  function handleToggle(key: keyof ServiceSettings, value: boolean) {
+  function handleToggle(key: SectionKey, value: boolean) {
     savePatch({ [key]: value } as Partial<ServiceSettings>);
   }
 

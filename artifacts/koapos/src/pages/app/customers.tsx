@@ -35,6 +35,7 @@ import { useMapUrl } from "@/lib/map-provider";
 import { loadCustomerFilesCloudSettings } from "@/lib/cloud-files-settings";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
 import { CustomerStoreCreditPanel } from "@/components/customers/CustomerStoreCreditPanel";
+import { AppleLogoIcon, GoogleWalletLogo } from "@/components/provider-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -75,7 +76,7 @@ import {
 
 type SortKey = "name" | "email" | "company" | "loyaltyPoints" | "visitCount";
 type SortDir  = "asc" | "desc";
-type DetailTab = "overview" | "address" | "account" | "credit" | "history" | "notes" | "files" | "qr";
+type DetailTab = "details" | "account" | "history" | "notes" | "files" | "qr";
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
 
@@ -1021,7 +1022,7 @@ function CustomerDetailInner({
   const mapUrl = useMapUrl();
   const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
   const { printStickers } = useStickerPrinter();
-  const [tab, setTab] = useState<DetailTab>("overview");
+  const [tab, setTab] = useState<DetailTab>("details");
 
   /* Print a customer label using the saved "customer" sticker template. Real
    * values are passed as overrides; toggles for missing data are turned off so
@@ -1056,6 +1057,7 @@ function CustomerDetailInner({
   const sendJobEmailMutation = useSendServiceJobEmail();
   const composeEmailMutation = useComposeEmail();
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
   const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
@@ -1217,14 +1219,12 @@ function CustomerDetailInner({
   ].filter(Boolean).join(", ") || null;
 
   const TABS: { key: DetailTab; label: string }[] = [
-    { key: "overview", label: "Overview" },
-    { key: "address",  label: "Address"  },
-    { key: "account",  label: "Account"  },
-    { key: "credit",   label: "Credit"   },
-    { key: "history",  label: "History"  },
-    { key: "notes",    label: "Notes"    },
-    { key: "files",    label: "Files"    },
-    { key: "qr",       label: "QR Code"  },
+    { key: "details", label: "Details" },
+    { key: "account", label: "Account" },
+    { key: "history", label: "History" },
+    { key: "notes",   label: "Notes"   },
+    { key: "files",   label: "Files"   },
+    { key: "qr",      label: "QR Code" },
   ];
 
   const invalidateNotes = () => queryClient.invalidateQueries({ queryKey: [`/customers/${customer.id}/notes`] });
@@ -1319,15 +1319,17 @@ function CustomerDetailInner({
       <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
         <DialogTitle>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-sm shrink-0">
+            <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-base shrink-0">
               {initials}
             </div>
             <div className="min-w-0">
-              <p className="font-bold text-base leading-tight truncate">{fullName}</p>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <p className="font-bold text-3xl leading-tight truncate">{fullName}</p>
                 {customer.customerGroup && (
-                  <Badge variant="outline" className="text-xs px-2 py-0 h-5">{customer.customerGroup}</Badge>
+                  <Badge variant="outline" className="text-xs px-2 py-0 h-5 shrink-0">{customer.customerGroup}</Badge>
                 )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                 {customer.loyaltyPoints != null && customer.loyaltyPoints > 0 && (
                   <span className="flex items-center gap-0.5 text-xs text-amber-600 font-medium">
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -1352,7 +1354,7 @@ function CustomerDetailInner({
       </DialogHeader>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1.5 px-6 py-2 shrink-0 mt-3">
+      <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-0 shrink-0 mt-2">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -1369,9 +1371,9 @@ function CustomerDetailInner({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-      {/* ── Overview ── */}
-      {tab === "overview" && (
+      <div className="flex-1 overflow-y-auto px-6 pt-2 pb-4 min-h-0">
+      {/* ── Details ── */}
+      {tab === "details" && (
         <div className="space-y-3">
           {customer.warningNote && (
             <div className="flex items-start gap-2 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2.5 text-sm">
@@ -1391,21 +1393,7 @@ function CustomerDetailInner({
               <InfoRow icon={Hash} label="Total Spent" value={formatCurrency(customer.totalSpent)} />
             )}
           </div>
-          {customer.notes && (
-            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex gap-3">
-              <StickyNote className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
-                <p className="whitespace-pre-wrap">{customer.notes}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Address ── */}
-      {tab === "address" && (
-        <div className="space-y-3">
+          {/* Addresses (merged from the former Address tab) */}
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
             {billingAddr
@@ -1418,6 +1406,15 @@ function CustomerDetailInner({
               ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapUrl(shippingAddr)} />
               : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
           </div>
+          {customer.notes && (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex gap-3">
+              <StickyNote className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                <p className="whitespace-pre-wrap">{customer.notes}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1509,12 +1506,13 @@ function CustomerDetailInner({
               </p>
             )}
           </div>
-        </div>
-      )}
 
-      {/* ── Store Credit ── */}
-      {tab === "credit" && (
-        <CustomerStoreCreditPanel customerId={customer.id} />
+          {/* ── Store Credit (merged from the former Credit tab) ── */}
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Store Credit</p>
+            <CustomerStoreCreditPanel customerId={customer.id} />
+          </div>
+        </div>
       )}
 
       {/* ── History ── */}
@@ -1527,14 +1525,14 @@ function CustomerDetailInner({
           ) : (
             <>
               {/* Transactions */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Receipt className="w-3.5 h-3.5" /> Sales ({history?.transactions?.length ?? 0})
                 </p>
                 {!history?.transactions?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No sales recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.transactions.map((tx) => (
                       <div key={tx.id} className="flex items-center px-4 py-2.5 text-sm hover:bg-muted/40 transition-colors group">
                         <button
@@ -1585,14 +1583,14 @@ function CustomerDetailInner({
               </div>
 
               {/* Invoices */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5" /> Invoices ({history?.invoices?.length ?? 0})
                 </p>
                 {!history?.invoices?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No invoices recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.invoices.map((inv) => {
                       const outstanding = inv.total - (inv.amountPaid ?? 0);
                       return (
@@ -1619,14 +1617,14 @@ function CustomerDetailInner({
               </div>
 
               {/* Appointments */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" /> Appointments ({history?.appointments?.length ?? 0})
                 </p>
                 {!history?.appointments?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No appointments recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.appointments.map((a) => (
                       <button key={a.id} type="button" onClick={() => setSelectedAppt(a)} className="flex items-center justify-between px-4 py-2.5 text-sm w-full text-left hover:bg-muted/40 transition-colors">
                         <div>
@@ -1641,14 +1639,14 @@ function CustomerDetailInner({
               </div>
 
               {/* Service Jobs */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Wrench className="w-3.5 h-3.5" /> Service Jobs ({history?.serviceJobs?.length ?? 0})
                 </p>
                 {!history?.serviceJobs?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No service jobs recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
                       const custOverride = { name: customerDisplayName(customer, "") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
@@ -1879,7 +1877,7 @@ function CustomerDetailInner({
           ) : !files.length ? (
             <p className="text-sm text-muted-foreground text-center py-4">No files attached yet.</p>
           ) : (
-            <div className="rounded-xl border divide-y bg-muted/20">
+            <div className="rounded-lg border divide-y bg-background">
               {files.map((f: CustomerFile) => (
                 <div key={f.id} className="flex items-center gap-3 px-4 py-3">
                   <span className="text-xl shrink-0">{fileIcon(f.contentType)}</span>
@@ -1912,7 +1910,7 @@ function CustomerDetailInner({
             {!(formSubmissions as FormSubmission[]).length ? (
               <p className="text-sm text-muted-foreground text-center py-4">No form submissions yet.</p>
             ) : (
-              <div className="rounded-xl border divide-y bg-muted/20">
+              <div className="rounded-lg border divide-y bg-background">
                 {(formSubmissions as FormSubmission[]).map(sub => {
                   const form = (allForms as Array<{ id: number; name: string }>)
                     .find(f => f.id === sub.formId);
@@ -1987,28 +1985,36 @@ function CustomerDetailInner({
             )}
           </div>
 
-          {/* Wallet buttons */}
+          {/* Wallet buttons — official "Add to Apple/Google Wallet" badges */}
           {localPortalToken && (
             <div className="rounded-xl border bg-muted/20 p-4 space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Save to Wallet</p>
               <button
                 onClick={handleAppleWallet}
                 disabled={qrWalletLoading !== null}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-black text-white py-2.5 text-sm font-semibold hover:opacity-80 disabled:opacity-50 transition-opacity"
+                aria-label="Add to Apple Wallet"
+                className="w-full flex items-center justify-center gap-2.5 rounded-lg bg-black text-white py-2.5 px-4 hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {qrWalletLoading === "apple" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
-                Add to Apple Wallet
+                {qrWalletLoading === "apple" ? <Loader2 className="w-5 h-5 animate-spin" /> : <AppleLogoIcon className="w-5 h-5" />}
+                <span className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] font-medium opacity-80">Add to</span>
+                  <span className="text-base font-semibold tracking-tight">Apple Wallet</span>
+                </span>
               </button>
               <button
                 onClick={handleGoogleWallet}
                 disabled={qrWalletLoading !== null}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-white text-gray-800 border py-2.5 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                aria-label="Add to Google Wallet"
+                className="w-full flex items-center justify-center gap-2.5 rounded-lg bg-black text-white py-2.5 px-4 hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {qrWalletLoading === "google" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4 text-blue-500" />}
-                Save to Google Wallet
+                {qrWalletLoading === "google" ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleWalletLogo className="w-5 h-5" />}
+                <span className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] font-medium opacity-80">Add to</span>
+                  <span className="text-base font-semibold tracking-tight">Google Wallet</span>
+                </span>
               </button>
               <p className="text-xs text-muted-foreground text-center pt-1">
-                Wallet integration requires Apple/Google credentials in your environment secrets.
+                Requires Apple/Google Wallet credentials in your environment secrets.
               </p>
             </div>
           )}
@@ -2026,49 +2032,45 @@ function CustomerDetailInner({
           >
             <Trash2 className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" className="gap-1" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
-            <ChevronLeft className="w-4 h-4" /> <span className="hidden sm:inline">Previous</span>
+          <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(customer); }} title="Edit customer">
+            <Pencil className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" className="gap-1" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
-            <span className="hidden sm:inline">Next</span> <ChevronRight className="w-4 h-4" />
+          <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+            <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
         <div className="flex gap-2 items-center">
           {onMerge && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMergePickerOpen(true)}>
-              <Users className="w-3.5 h-3.5" /> Merge with...
+              <Users className="w-3.5 h-3.5" /> Merge
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => {
-              exportCustomerPDF({
-                customer,
-                transactions: (history?.transactions ?? []) as Transaction[],
-                appointments: (history?.appointments ?? []) as Appointment[],
-                serviceJobs:  (history?.serviceJobs  ?? []) as ServiceJob[],
-                notes:        notes as CustomerNote[],
-                formSubmissions: (formSubmissions as FormSubmission[]),
-                allForms:      (allForms as FormTemplate[]),
-                merchantName: merchantUsername ?? undefined,
-              });
-            }}
-          >
-            <FileDown className="w-3.5 h-3.5" /> PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={printCustomerLabel}>
-            <Printer className="w-3.5 h-3.5" /> Label
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={onClose}>
-            <X className="w-3.5 h-3.5" /> Close
-          </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(customer); }}>
-            <Pencil className="w-3.5 h-3.5" /> Edit
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintOpen(true)}>
+            <Printer className="w-3.5 h-3.5" /> Print
           </Button>
         </div>
       </DialogFooter>
+
+      <CustomerPrintDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        onPdf={() => {
+          exportCustomerPDF({
+            customer,
+            transactions: (history?.transactions ?? []) as Transaction[],
+            appointments: (history?.appointments ?? []) as Appointment[],
+            serviceJobs:  (history?.serviceJobs  ?? []) as ServiceJob[],
+            notes:        notes as CustomerNote[],
+            formSubmissions: (formSubmissions as FormSubmission[]),
+            allForms:      (allForms as FormTemplate[]),
+            merchantName: merchantUsername ?? undefined,
+          });
+        }}
+        onLabel={printCustomerLabel}
+      />
 
       {onMerge && (
         <ManualMergePickerDialog
@@ -2511,6 +2513,80 @@ function CustomerDetailInner({
       </Dialog>
 
     </>
+  );
+}
+
+/* Print pop-up — mirrors the Invoices "Send" dialog, but offers PDF and Label
+   (instead of Email). Combines the former PDF + Label footer buttons. */
+function CustomerPrintDialog({
+  open, onOpenChange, onPdf, onLabel,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPdf: () => void;
+  onLabel: () => void;
+}) {
+  const [mode, setMode] = useState<"pdf" | "label" | null>(null);
+  useEffect(() => { if (open) setMode(null); }, [open]);
+
+  const OPTIONS = [
+    { key: "pdf" as const,   icon: FileDown, label: "PDF",   sub: "Download a PDF summary" },
+    { key: "label" as const, icon: Printer,  label: "Label", sub: "Print to label printer" },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <Printer className="w-4 h-4 text-primary" /> Print
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="grid grid-cols-2 gap-2">
+            {OPTIONS.map(({ key, icon: Icon, label, sub }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMode(key)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border text-center transition-colors",
+                  mode === key
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border hover:bg-muted/40 text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="text-sm font-medium leading-tight">{label}</span>
+                <span className="text-[10px] leading-tight opacity-70">{sub}</span>
+              </button>
+            ))}
+          </div>
+
+          {mode === "pdf" && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Download a PDF summary of this customer — profile, history and notes.</p>
+              <Button className="w-full gap-2" onClick={() => { onPdf(); onOpenChange(false); }}>
+                <FileDown className="w-4 h-4" /> Download PDF
+              </Button>
+            </div>
+          )}
+
+          {mode === "label" && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Print a customer label to your sticker/label printer.</p>
+              <Button className="w-full gap-2" onClick={() => { onLabel(); onOpenChange(false); }}>
+                <Printer className="w-4 h-4" /> Print Label
+              </Button>
+            </div>
+          )}
+
+          {!mode && (
+            <p className="text-xs text-muted-foreground text-center py-2">Select a print option above</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
   );
 }
 

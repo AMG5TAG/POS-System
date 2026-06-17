@@ -33,3 +33,24 @@ export function OneDriveIcon({ className }: IconProps) {
     </svg>
   );
 }
+
+/** Apple logo glyph (monochrome — inherits currentColor). */
+export function AppleLogoIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true">
+      <path d="M16.365 1.43c0 1.14-.42 2.18-1.12 2.96-.84.94-2.2 1.66-3.32 1.57-.14-1.1.43-2.27 1.1-3 .76-.82 2.1-1.44 3.34-1.53zM20.5 17.2c-.6 1.37-.89 1.98-1.66 3.19-1.07 1.68-2.58 3.77-4.45 3.78-1.66.02-2.08-1.08-4.33-1.07-2.25.01-2.72 1.09-4.38 1.07-1.87-.01-3.3-1.9-4.37-3.58C-1.1 17.1-1.4 11.3 1.05 8.18c1.06-1.37 2.6-2.24 4.27-2.24 1.7 0 2.77 1.1 4.18 1.1 1.36 0 2.19-1.1 4.16-1.1 1.48 0 3.05.8 4.17 2.2-3.66 2-3.07 7.2.67 9.06z" />
+    </svg>
+  );
+}
+
+/** Google Wallet mark — stacked cards in Google's four brand colours. */
+export function GoogleWalletLogo({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <rect x="6.5" y="3" width="9" height="3" rx="1.5" fill="#FBBC04" />
+      <rect x="4.5" y="6" width="13" height="3.5" rx="1.75" fill="#34A853" />
+      <rect x="2.5" y="9.5" width="17" height="11" rx="2.5" fill="#4285F4" />
+      <circle cx="15.5" cy="15" r="2.4" fill="#EA4335" />
+    </svg>
+  );
+}
