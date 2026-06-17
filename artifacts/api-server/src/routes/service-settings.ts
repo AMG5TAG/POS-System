@@ -16,6 +16,14 @@ const DEFAULT_CONFIG = {
   showSignOff: true,
   showShipping: true,
   showNotes: true,
+  // Default warranty windows (days) pre-filled on new service jobs / reworks.
+  repairWarrantyDays: 14,
+  reworkWarrantyDays: 14,
+};
+
+const clampDays = (v: unknown, fallback: number): number => {
+  const n = Math.round(Number(v));
+  return Number.isFinite(n) && n >= 0 ? n : fallback;
 };
 
 function formatSettings(row: typeof serviceSettingsTable.$inferSelect | undefined) {
@@ -29,7 +37,19 @@ function formatSettings(row: typeof serviceSettingsTable.$inferSelect | undefine
     showSignOff:        cfg.showSignOff        ?? DEFAULT_CONFIG.showSignOff,
     showShipping:       cfg.showShipping       ?? DEFAULT_CONFIG.showShipping,
     showNotes:          cfg.showNotes          ?? DEFAULT_CONFIG.showNotes,
+    repairWarrantyDays: clampDays(cfg.repairWarrantyDays, DEFAULT_CONFIG.repairWarrantyDays),
+    reworkWarrantyDays: clampDays(cfg.reworkWarrantyDays, DEFAULT_CONFIG.reworkWarrantyDays),
   };
+}
+
+/** Merchant-level warranty defaults applied when creating service/rework jobs. */
+export async function getServiceWarrantyDefaults(merchantId: number): Promise<{ repairWarrantyDays: number; reworkWarrantyDays: number }> {
+  const [row] = await db
+    .select()
+    .from(serviceSettingsTable)
+    .where(eq(serviceSettingsTable.merchantId, merchantId));
+  const s = formatSettings(row);
+  return { repairWarrantyDays: s.repairWarrantyDays, reworkWarrantyDays: s.reworkWarrantyDays };
 }
 
 router.get("/service-settings", requireAuth, async (req, res): Promise<void> => {

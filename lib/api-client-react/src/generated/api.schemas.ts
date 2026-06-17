@@ -2567,6 +2567,16 @@ export interface ServiceSettings {
   showSignOff: boolean;
   showShipping: boolean;
   showNotes: boolean;
+  /**
+     * Default repair warranty period (days) pre-filled on new service jobs.
+     * @minimum 0
+     */
+  repairWarrantyDays: number;
+  /**
+     * Default warranty period (days) applied to no-charge rework jobs.
+     * @minimum 0
+     */
+  reworkWarrantyDays: number;
 }
 
 export interface ServiceSettingsInput {
@@ -2578,6 +2588,10 @@ export interface ServiceSettingsInput {
   showSignOff: boolean;
   showShipping: boolean;
   showNotes: boolean;
+  /** @minimum 0 */
+  repairWarrantyDays?: number;
+  /** @minimum 0 */
+  reworkWarrantyDays?: number;
 }
 
 export interface CashDrawerEntry {

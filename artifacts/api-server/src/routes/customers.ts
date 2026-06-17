@@ -34,6 +34,7 @@ import {
 import { ObjectStorageService } from "../lib/objectStorage";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
 import { mirrorCustomerFileToCloud, getCustomerFilesCloudConfig } from "../services/cloudFileMirror";
+import { triggerInstantSync } from "../services/autoSyncScheduler";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -185,6 +186,7 @@ router.post("/customers", requireAuth, async (req, res): Promise<void> => {
       heardFromDetails: parsed.data.heardFromDetails ?? null,
       referredByCustomerId: parsed.data.referredByCustomerId ?? null,
     }).returning();
+    triggerInstantSync(merchantId, "contacts");
     res.status(201).json(formatCustomer(customer));
   } catch (err) {
     req.log.error({ err }, "Customer create failed");
@@ -389,6 +391,7 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     res.status(500).json({ error: "Database error during bulk insert" }); return;
   }
 
+  if (imported > 0 || updated > 0) triggerInstantSync(merchantId, "contacts");
   res.json({ imported, updated, skipped, errors });
 });
 
@@ -476,6 +479,7 @@ router.patch("/customers/:id", requireAuth, async (req, res): Promise<void> => {
     }
     const [customer] = await db.update(customersTable).set(patch).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, merchantId))).returning();
     if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+    triggerInstantSync(merchantId, "contacts");
     res.json(formatCustomer(customer));
   } catch (err) {
     req.log.error({ err }, "Customer update failed");

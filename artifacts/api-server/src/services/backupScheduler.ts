@@ -5,8 +5,8 @@
  * with no encryption password are skipped (they cannot be encrypted).
  */
 import type { Logger } from "pino";
-import { db, merchantBackupConfigsTable } from "@workspace/db";
-import { ne } from "drizzle-orm";
+import { db, merchantBackupConfigsTable, merchantBackupSchedulesTable } from "@workspace/db";
+import { eq } from "drizzle-orm";
 import {
   startBackup,
   isBackupRunning,
@@ -30,37 +30,53 @@ function isDue(frequency: string, lastBackupAt: Date | null): boolean {
 }
 
 async function runDueBackups(logger: Logger): Promise<void> {
+  // Merchants that can encrypt (a password is required to run any backup).
   const configs = await db
     .select()
-    .from(merchantBackupConfigsTable)
-    .where(ne(merchantBackupConfigsTable.frequency, "disabled"));
+    .from(merchantBackupConfigsTable);
+  const canEncrypt = new Map(configs.map((c) => [c.merchantId, Boolean(c.encryptionPasswordEnc)]));
 
+  // 1) Legacy single-frequency schedule (merchant_backup_configs.frequency).
   for (const config of configs) {
+    if (config.frequency === "disabled") continue;
     if (!config.encryptionPasswordEnc) continue;
     if (!isDue(config.frequency, config.lastBackupAt)) continue;
-    // Skip if a backup for this merchant is still in flight (e.g. a long run
-    // spanning two ticks, or a manual backup the merchant just triggered).
     if (isBackupRunning(config.merchantId)) {
-      logger.info(
-        { merchantId: config.merchantId },
-        "Skipping scheduled backup — one is already running",
-      );
+      logger.info({ merchantId: config.merchantId }, "Skipping scheduled backup — one is already running");
       continue;
     }
     try {
-      logger.info(
-        { merchantId: config.merchantId, frequency: config.frequency },
-        "Running scheduled backup",
-      );
+      logger.info({ merchantId: config.merchantId, frequency: config.frequency }, "Running scheduled backup");
       // startBackup returns once the pending row is created; the work then runs
       // in the background guarded by the per-merchant lock.
       await startBackup(config.merchantId, "scheduled");
     } catch (err) {
       if (err instanceof BackupInProgressError) continue;
-      logger.error(
-        { merchantId: config.merchantId, err },
-        "Scheduled backup failed",
-      );
+      logger.error({ merchantId: config.merchantId, err }, "Scheduled backup failed");
+    }
+  }
+
+  // 2) Named multi-schedules (merchant_backup_schedules). The per-merchant lock
+  // serialises these with each other and with the legacy run above: at most one
+  // starts per merchant per tick; the rest are picked up on later ticks.
+  const schedules = await db
+    .select()
+    .from(merchantBackupSchedulesTable)
+    .where(eq(merchantBackupSchedulesTable.enabled, true));
+
+  for (const schedule of schedules) {
+    if (!canEncrypt.get(schedule.merchantId)) continue;
+    if (!isDue(schedule.frequency, schedule.lastBackupAt)) continue;
+    if (isBackupRunning(schedule.merchantId)) continue;
+    try {
+      logger.info({ merchantId: schedule.merchantId, scheduleId: schedule.id, frequency: schedule.frequency }, "Running scheduled backup (named schedule)");
+      await startBackup(schedule.merchantId, "scheduled", {
+        destinationIds: schedule.destinationIds ?? [],
+        scheduleId: schedule.id,
+      });
+    } catch (err) {
+      if (err instanceof BackupInProgressError) continue;
+      logger.error({ merchantId: schedule.merchantId, scheduleId: schedule.id, err }, "Named scheduled backup failed");
     }
   }
 }

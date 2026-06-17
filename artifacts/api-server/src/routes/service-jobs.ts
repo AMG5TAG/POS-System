@@ -7,6 +7,7 @@ import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
 import { publicDomain } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
+import { getServiceWarrantyDefaults } from "./service-settings";
 
 const router: IRouter = Router();
 
@@ -108,10 +109,18 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   const jobPrefix = typeof body.jobNumberPrefix === "string" && body.jobNumberPrefix ? body.jobNumberPrefix : "SJ";
   const jobDigits = typeof body.jobNumberDigits === "number" && body.jobNumberDigits > 0 ? body.jobNumberDigits : 4;
 
+  // Pre-fill the repair warranty window from the merchant's Service Options
+  // default unless the caller supplied an explicit value.
+  const warrantyDefaults = await getServiceWarrantyDefaults(merchantId);
+  const repairWarrantyDays = body.repairWarrantyDays != null
+    ? Math.max(0, Math.round(Number(body.repairWarrantyDays) || 0))
+    : warrantyDefaults.repairWarrantyDays;
+
   const [job] = await db
     .insert(serviceJobsTable)
     .values({
       merchantId,
+      repairWarrantyDays,
       customerId: body.customerId ? Number(body.customerId) : null,
       staffId: body.staffId ? Number(body.staffId) : null,
       jobNumber: nextJobNumber(existing, jobPrefix, jobDigits),
@@ -466,6 +475,8 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
   const jobNumber = nextJobNumber(existing);
   const today = new Date().toISOString().split("T")[0];
 
+  const { reworkWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
+
   const [created] = await db.insert(serviceJobsTable).values({
     merchantId,
     customerId: orig.customerId ?? null,
@@ -480,6 +491,7 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
     condition: orig.condition ?? null,
     workDescription: orig.workDescription ?? null,
     isUnderWarranty: "true",
+    repairWarrantyDays: reworkWarrantyDays,
     reworkOfJobId: orig.id,
   }).returning();
 

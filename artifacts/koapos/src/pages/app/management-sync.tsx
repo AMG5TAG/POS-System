@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   RefreshCw, Cloud, Users, Loader2, Plug, CheckCircle2, DatabaseBackup, FolderSync,
-  Clock, FolderUp, ShieldCheck, Lightbulb, Save, CalendarClock,
+  Clock, FolderUp, ShieldCheck, Lightbulb, Save, CalendarClock, AlertTriangle,
 } from "lucide-react";
 import { useListIntegrations, useDisconnectIntegration } from "@workspace/api-client-react";
 import { MicrosoftIcon, OneDriveIcon } from "@/components/provider-icons";
@@ -285,6 +285,141 @@ function CustomerFilesCloudPanel({ storages }: { storages: SyncIntegration[] }) 
   );
 }
 
+/* Automatic sync schedule for contacts + calendar. */
+const AUTO_FREQUENCIES: { value: string; label: string }[] = [
+  { value: "disabled", label: "Off" },
+  { value: "instant", label: "Instant (on change)" },
+  { value: "8h", label: "Every 8 hours" },
+  { value: "24h", label: "Every 24 hours" },
+  { value: "monthly", label: "Monthly" },
+];
+
+interface AutoSyncState {
+  contacts: { provider: string; frequency: string; includeNotes: boolean; lastSyncAt: string | null };
+  calendar: { provider: string; frequency: string; lastSyncAt: string | null };
+}
+
+function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
+  const [state, setState] = useState<AutoSyncState | null>(null);
+  const [dirty, setDirty] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    fetch("/api/integrations/auto-sync", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: AutoSyncState) => setState({ contacts: d.contacts, calendar: d.calendar }))
+      .catch(() => { /* leave hidden */ });
+  }, []);
+
+  if (!state) return null;
+
+  const hasAccounts = accounts.length > 0;
+  const defaultProvider = accounts[0]?.key ?? "";
+  const accountLabel = (key: string) => accounts.find((a) => a.key === key)?.label ?? key;
+
+  const update = (patch: Partial<AutoSyncState>) => { setState((s) => ({ ...s!, ...patch })); setDirty(true); };
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      const r = await fetch("/api/integrations/auto-sync", {
+        method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contacts: {
+            provider: state.contacts.frequency === "disabled" ? state.contacts.provider : (state.contacts.provider || defaultProvider),
+            frequency: state.contacts.frequency,
+            includeNotes: state.contacts.includeNotes,
+          },
+          calendar: {
+            provider: state.calendar.frequency === "disabled" ? state.calendar.provider : (state.calendar.provider || defaultProvider),
+            frequency: state.calendar.frequency,
+          },
+        }),
+      });
+      const d = await r.json() as { ok?: boolean; error?: string; contacts?: AutoSyncState["contacts"]; calendar?: AutoSyncState["calendar"] };
+      if (r.ok && d.ok && d.contacts && d.calendar) {
+        setState({ contacts: d.contacts, calendar: d.calendar });
+        setDirty(false);
+        toast.success("Automatic sync settings saved");
+      } else {
+        toast.error(d.error ?? "Failed to save automatic sync settings");
+      }
+    } catch {
+      toast.error("Failed to save automatic sync settings");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const providerSelect = (value: string, onChange: (v: string) => void, disabled: boolean) => (
+    <Select value={value || defaultProvider} onValueChange={onChange} disabled={disabled || accounts.length <= 1}>
+      <SelectTrigger className="h-8 text-xs w-[160px]"><SelectValue placeholder="Account" /></SelectTrigger>
+      <SelectContent>
+        {accounts.map((a) => <SelectItem key={a.key} value={a.key}>{a.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+
+  const freqSelect = (value: string, onChange: (v: string) => void) => (
+    <Select value={value} onValueChange={onChange} disabled={!hasAccounts}>
+      <SelectTrigger className="h-8 text-xs w-[170px]"><SelectValue /></SelectTrigger>
+      <SelectContent>
+        {AUTO_FREQUENCIES.map((f) => <SelectItem key={f.value} value={f.value}>{f.label}</SelectItem>)}
+      </SelectContent>
+    </Select>
+  );
+
+  return (
+    <div className="mt-4 border rounded-xl bg-card p-4 space-y-4">
+      <div className="flex items-center gap-2">
+        <RefreshCw className="w-4 h-4 text-primary" />
+        <h3 className="text-sm font-semibold">Automatic sync</h3>
+        <span className="text-xs text-muted-foreground">Keep contacts &amp; calendar in sync on a schedule.</span>
+      </div>
+
+      {!hasAccounts && (
+        <p className="text-xs text-amber-600 dark:text-amber-400">Connect a Google or Microsoft account above to enable automatic sync.</p>
+      )}
+
+      {/* Contacts row */}
+      <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+        <div className="min-w-[120px]">
+          <p className="text-sm font-medium">Contacts</p>
+          <p className="text-[11px] text-muted-foreground">Last: {formatRelativeTime(state.contacts.lastSyncAt ?? undefined)}</p>
+        </div>
+        {providerSelect(state.contacts.provider, (v) => update({ contacts: { ...state.contacts, provider: v } }), state.contacts.frequency === "disabled")}
+        {freqSelect(state.contacts.frequency, (v) => update({ contacts: { ...state.contacts, frequency: v } }))}
+        <label className="flex items-center gap-2 text-xs text-muted-foreground">
+          <Switch checked={state.contacts.includeNotes} onCheckedChange={(c) => update({ contacts: { ...state.contacts, includeNotes: c } })} disabled={!hasAccounts || state.contacts.frequency === "disabled"} />
+          Include notes
+        </label>
+      </div>
+
+      {/* Calendar row */}
+      <div className="flex flex-wrap items-center gap-3 border-t pt-3">
+        <div className="min-w-[120px]">
+          <p className="text-sm font-medium">Calendar</p>
+          <p className="text-[11px] text-muted-foreground">Last: {formatRelativeTime(state.calendar.lastSyncAt ?? undefined)}</p>
+        </div>
+        {providerSelect(state.calendar.provider, (v) => update({ calendar: { ...state.calendar, provider: v } }), state.calendar.frequency === "disabled")}
+        {freqSelect(state.calendar.frequency, (v) => update({ calendar: { ...state.calendar, frequency: v } }))}
+      </div>
+
+      <div className="flex items-center justify-between border-t pt-3">
+        <p className="text-[11px] text-muted-foreground">
+          {(state.contacts.frequency === "instant" || state.calendar.frequency === "instant")
+            ? `Instant syncs run shortly after a change to ${accountLabel(state.contacts.provider || defaultProvider)}.`
+            : "Automatic contact syncs overwrite existing matches to stay current."}
+        </p>
+        <Button size="sm" onClick={save} disabled={saving || !dirty}>
+          {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+          Save
+        </Button>
+      </div>
+    </div>
+  );
+}
+
 export default function ManagementSyncPage() {
   const [location] = useLocation();
   const { data: raw, refetch } = useListIntegrations({ query: { queryKey: ["integrations"] } });
@@ -298,6 +433,8 @@ export default function ManagementSyncPage() {
   const [notesConflict, setNotesConflict] = useState<"append" | "overwrite">("append");
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(() => getLastCustomerSync());
+  /* Duplicate-overwrite warning (set when the first sync pass detects matches). */
+  const [dupWarning, setDupWarning] = useState<{ duplicates: number; total: number; message: string } | null>(null);
 
   /* Calendar push (appointments → connected account's calendar) */
   const [calendarBusyKey, setCalendarBusyKey] = useState<string | null>(null);
@@ -342,7 +479,7 @@ export default function ManagementSyncPage() {
     });
   };
 
-  const runContactSync = async () => {
+  const runContactSync = async (duplicateStrategy?: "overwrite" | "skip") => {
     if (!syncTarget) return;
     setSyncing(true);
     try {
@@ -350,14 +487,18 @@ export default function ManagementSyncPage() {
         method: "POST",
         credentials: "include",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ provider: syncTarget.key, includeNotes, notesConflict }),
+        body: JSON.stringify({ provider: syncTarget.key, includeNotes, notesConflict, ...(duplicateStrategy ? { duplicateStrategy } : {}) }),
       });
-      const data = await r.json() as { ok?: boolean; synced?: number; failed?: number; message?: string; error?: string };
-      if (r.ok && data.ok) {
+      const data = await r.json() as { ok?: boolean; synced?: number; failed?: number; message?: string; error?: string; needsConfirmation?: boolean; duplicates?: number; total?: number };
+      if (r.ok && data.ok && data.needsConfirmation) {
+        // Existing contacts matched — warn before overwriting.
+        setDupWarning({ duplicates: data.duplicates ?? 0, total: data.total ?? 0, message: data.message ?? "" });
+      } else if (r.ok && data.ok) {
         const failMsg = (data.failed ?? 0) > 0 ? `, ${data.failed} failed` : "";
         toast.success(data.message ?? `Synced ${data.synced} contacts${failMsg}`);
         recordCustomerSync(syncTarget.label);
         setLastSync(getLastCustomerSync());
+        setDupWarning(null);
         setSyncTarget(null);
       } else {
         toast.error(data.error ?? "Contact sync failed");
@@ -391,7 +532,7 @@ export default function ManagementSyncPage() {
     }
   };
 
-  const openSync = (i: SyncIntegration) => { setSyncTarget(i); setIncludeNotes(false); setNotesConflict("append"); };
+  const openSync = (i: SyncIntegration) => { setSyncTarget(i); setIncludeNotes(false); setNotesConflict("append"); setDupWarning(null); };
 
   return (
     <AppLayout>
@@ -426,6 +567,7 @@ export default function ManagementSyncPage() {
                 calendarBusy={calendarBusyKey === i.key} />
             ))}
           </div>
+          <AutoSyncPanel accounts={accounts.filter((a) => CONTACT_SYNC_KEYS.has(a.key) && a.status === "connected")} />
         </section>
 
         {/* ── Cloud Backup ── */}
@@ -456,7 +598,7 @@ export default function ManagementSyncPage() {
             <DialogTitle className="flex items-center gap-2"><Users className="w-4 h-4" /> Sync Contacts to {syncTarget?.label}</DialogTitle>
             <DialogDescription>
               Push your KoaPOS customers to {syncTarget?.key === "google_contacts" ? "Google Contacts" : "Microsoft Contacts"}.
-              Existing contacts are not de-duplicated — re-syncing creates additional entries.
+              Contacts that already exist (matched by email) are detected — you'll be warned before any are overwritten.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1">
@@ -484,9 +626,34 @@ export default function ManagementSyncPage() {
           </div>
           <DialogFooter className="gap-2 sm:gap-0">
             <Button variant="outline" onClick={() => setSyncTarget(null)} disabled={syncing}>Cancel</Button>
-            <Button disabled={syncing} onClick={runContactSync}>
+            <Button disabled={syncing} onClick={() => runContactSync()}>
               {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Users className="w-3.5 h-3.5 mr-1.5" />}
               {syncing ? "Syncing…" : "Sync Now"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Duplicate overwrite warning ── */}
+      <Dialog open={!!dupWarning} onOpenChange={(o) => { if (!o) setDupWarning(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-600 dark:text-amber-400">
+              <AlertTriangle className="w-4 h-4" /> Duplicate contacts found
+            </DialogTitle>
+            <DialogDescription>
+              {dupWarning?.message ?? `${dupWarning?.duplicates} existing contact(s) match your customers.`}
+              {" "}Overwriting replaces their current name, email, phone{includeNotes ? " and notes" : ""} in {syncTarget?.label}. Skipping leaves them unchanged and only adds new contacts.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter className="gap-2 sm:gap-0">
+            <Button variant="outline" onClick={() => setDupWarning(null)} disabled={syncing}>Cancel</Button>
+            <Button variant="outline" onClick={() => runContactSync("skip")} disabled={syncing}>
+              Skip duplicates
+            </Button>
+            <Button variant="destructive" onClick={() => runContactSync("overwrite")} disabled={syncing}>
+              {syncing ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <AlertTriangle className="w-3.5 h-3.5 mr-1.5" />}
+              Overwrite {dupWarning?.duplicates ?? ""}
             </Button>
           </DialogFooter>
         </DialogContent>

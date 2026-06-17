@@ -229,6 +229,186 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/* ── Named backup schedules (multiple per merchant) ──────────────────────────── */
+
+interface ScheduleItem {
+  id: number;
+  label: string;
+  frequency: string;
+  destinationIds: string[];
+  enabled: boolean;
+  lastBackupAt: string | null;
+}
+
+const SCHEDULE_FREQ_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+] as const;
+
+function destinationLabel(d: BackupStorageDestination): string {
+  const base = STORAGE_META[d.type as StorageType]?.label ?? d.type;
+  const hint = d.bucket || d.gcsBucket || d.folder || d.directory || d.host || "";
+  return hint ? `${base} · ${hint}` : base;
+}
+
+function BackupSchedulesCard({ destinations, passwordIsSet }: { destinations: BackupStorageDestination[]; passwordIsSet: boolean }) {
+  const [items, setItems] = useState<ScheduleItem[] | null>(null);
+  const [editing, setEditing] = useState<ScheduleItem | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () =>
+    fetch("/api/backups/schedules", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: { items?: ScheduleItem[] }) => setItems(d.items ?? []))
+      .catch(() => setItems([]));
+  useEffect(() => { void load(); }, []);
+
+  const freqLabel = (v: string) => SCHEDULE_FREQ_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  const destNameById = (id: string) => {
+    const d = destinations.find((x) => x.id === id);
+    return d ? destinationLabel(d) : id;
+  };
+
+  const openNew = () => setEditing({ id: 0, label: "Backup", frequency: "daily", destinationIds: [], enabled: true, lastBackupAt: null });
+
+  const save = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      const isNew = editing.id === 0;
+      const r = await fetch(isNew ? "/api/backups/schedules" : `/api/backups/schedules/${editing.id}`, {
+        method: isNew ? "POST" : "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: editing.label, frequency: editing.frequency, destinationIds: editing.destinationIds, enabled: editing.enabled }),
+      });
+      if (r.ok) { toast.success(isNew ? "Schedule added" : "Schedule updated"); setEditing(null); await load(); }
+      else { const d = await r.json().catch(() => ({})); toast.error((d as { error?: string }).error ?? "Failed to save schedule"); }
+    } catch { toast.error("Failed to save schedule"); } finally { setSaving(false); }
+  };
+
+  const toggleEnabled = async (s: ScheduleItem) => {
+    const r = await fetch(`/api/backups/schedules/${s.id}`, {
+      method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...s, enabled: !s.enabled }),
+    });
+    if (r.ok) void load(); else toast.error("Failed to update schedule");
+  };
+
+  const remove = async (s: ScheduleItem) => {
+    if (!confirm(`Delete schedule "${s.label}"?`)) return;
+    const r = await fetch(`/api/backups/schedules/${s.id}`, { method: "DELETE", credentials: "include" });
+    if (r.ok) { toast.success("Schedule deleted"); void load(); } else toast.error("Failed to delete schedule");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" /> Scheduled backups</CardTitle>
+            <CardDescription>
+              Run several backups on different schedules and destinations — e.g. Daily → OneDrive and Monthly → S3.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={openNew} disabled={!passwordIsSet}><Plus className="mr-1 h-4 w-4" /> Add schedule</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!passwordIsSet && (
+          <p className="text-amber-600 dark:text-amber-400 text-xs">Set an encryption password above before adding schedules.</p>
+        )}
+        {items === null ? (
+          <Skeleton className="h-20 w-full" />
+        ) : items.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No additional schedules. The single frequency above still applies.</p>
+        ) : (
+          <div className="divide-y rounded-lg border">
+            {items.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{s.label}</span>
+                    <Badge variant="secondary">{freqLabel(s.frequency)}</Badge>
+                    {!s.enabled && <Badge variant="outline">Paused</Badge>}
+                  </div>
+                  <p className="text-muted-foreground text-xs mt-0.5 truncate">
+                    {s.destinationIds.length > 0 ? s.destinationIds.map(destNameById).join(", ") : "Server copy only"}
+                    {s.lastBackupAt ? ` · last ${formatDate(s.lastBackupAt)}` : ""}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => toggleEnabled(s)}>{s.enabled ? "Pause" : "Resume"}</Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditing({ ...s })}>Edit</Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => remove(s)} aria-label="Delete schedule">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Add / edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "Edit schedule" : "Add schedule"}</DialogTitle>
+            <DialogDescription>Choose how often this backup runs and which destinations it copies to.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} placeholder="e.g. Nightly OneDrive" />
+              </div>
+              <div className="space-y-2">
+                <Label>Frequency</Label>
+                <Select value={editing.frequency} onValueChange={(v) => setEditing({ ...editing, frequency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SCHEDULE_FREQ_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Destinations</Label>
+                {destinations.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">No external destinations configured above. This schedule will keep a server copy only.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {destinations.map((d) => {
+                      const on = editing.destinationIds.includes(d.id);
+                      return (
+                        <Button
+                          key={d.id} type="button" size="sm" variant={on ? "default" : "outline"}
+                          onClick={() => setEditing({
+                            ...editing,
+                            destinationIds: on ? editing.destinationIds.filter((x) => x !== d.id) : [...editing.destinationIds, d.id],
+                          })}
+                        >
+                          {on && <CheckCircle2 className="mr-1 h-3.5 w-3.5" />}{destinationLabel(d)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving || !editing?.label.trim()}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editing?.id ? "Save" : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 /**
  * The full Backup & Restore settings UI, without an AppLayout wrapper, so it can
  * be embedded inside the consolidated Sync page (Management → Settings &
@@ -761,6 +941,9 @@ export function BackupSettingsPanel() {
             Save settings
           </Button>
         </div>
+
+        {/* Scheduled backups (multiple) */}
+        <BackupSchedulesCard destinations={config?.destinations ?? []} passwordIsSet={passwordIsSet} />
 
         {/* History */}
         <Card>

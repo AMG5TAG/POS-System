@@ -19,6 +19,8 @@
     "add-service-settings-table": "tsx ./src/add-service-settings-table.ts",
     "add-register-session-staff-id": "tsx ./src/add-register-session-staff-id.ts",
     "add-mobile-pos-app-table": "tsx ./src/add-mobile-pos-app-table.ts",
+    "add-auto-sync-settings-table": "tsx ./src/add-auto-sync-settings-table.ts",
+    "add-backup-schedules-table": "tsx ./src/add-backup-schedules-table.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

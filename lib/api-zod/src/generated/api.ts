@@ -2483,6 +2483,12 @@ export const UpdateLoyaltySettingsResponse = zod.object({
 /**
  * @summary Get merchant service job menu options
  */
+export const getServiceSettingsResponseRepairWarrantyDaysMin = 0;
+
+export const getServiceSettingsResponseReworkWarrantyDaysMin = 0;
+
+
+
 export const GetServiceSettingsResponse = zod.object({
   "showPartsLabour": zod.boolean(),
   "showApprovalDeposit": zod.boolean(),
@@ -2491,13 +2497,21 @@ export const GetServiceSettingsResponse = zod.object({
   "showTechnicianTime": zod.boolean(),
   "showSignOff": zod.boolean(),
   "showShipping": zod.boolean(),
-  "showNotes": zod.boolean()
+  "showNotes": zod.boolean(),
+  "repairWarrantyDays": zod.number().min(getServiceSettingsResponseRepairWarrantyDaysMin).describe('Default repair warranty period (days) pre-filled on new service jobs.'),
+  "reworkWarrantyDays": zod.number().min(getServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.')
 })
 
 
 /**
  * @summary Update merchant service job menu options
  */
+export const updateServiceSettingsBodyRepairWarrantyDaysMin = 0;
+
+export const updateServiceSettingsBodyReworkWarrantyDaysMin = 0;
+
+
+
 export const UpdateServiceSettingsBody = zod.object({
   "showPartsLabour": zod.boolean(),
   "showApprovalDeposit": zod.boolean(),
@@ -2506,8 +2520,16 @@ export const UpdateServiceSettingsBody = zod.object({
   "showTechnicianTime": zod.boolean(),
   "showSignOff": zod.boolean(),
   "showShipping": zod.boolean(),
-  "showNotes": zod.boolean()
+  "showNotes": zod.boolean(),
+  "repairWarrantyDays": zod.number().min(updateServiceSettingsBodyRepairWarrantyDaysMin).optional(),
+  "reworkWarrantyDays": zod.number().min(updateServiceSettingsBodyReworkWarrantyDaysMin).optional()
 })
+
+export const updateServiceSettingsResponseRepairWarrantyDaysMin = 0;
+
+export const updateServiceSettingsResponseReworkWarrantyDaysMin = 0;
+
+
 
 export const UpdateServiceSettingsResponse = zod.object({
   "showPartsLabour": zod.boolean(),
@@ -2517,7 +2539,9 @@ export const UpdateServiceSettingsResponse = zod.object({
   "showTechnicianTime": zod.boolean(),
   "showSignOff": zod.boolean(),
   "showShipping": zod.boolean(),
-  "showNotes": zod.boolean()
+  "showNotes": zod.boolean(),
+  "repairWarrantyDays": zod.number().min(updateServiceSettingsResponseRepairWarrantyDaysMin).describe('Default repair warranty period (days) pre-filled on new service jobs.'),
+  "reworkWarrantyDays": zod.number().min(updateServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.')
 })
 
 

@@ -12151,7 +12151,8 @@ components:
       type: object
       required:
         [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
-         showTechnicianTime, showSignOff, showShipping, showNotes]
+         showTechnicianTime, showSignOff, showShipping, showNotes,
+         repairWarrantyDays, reworkWarrantyDays]
       properties:
         showPartsLabour:    { type: boolean }
         showApprovalDeposit: { type: boolean }
@@ -12161,6 +12162,8 @@ components:
         showSignOff:        { type: boolean }
         showShipping:       { type: boolean }
         showNotes:          { type: boolean }
+        repairWarrantyDays: { type: integer, minimum: 0, description: "Default repair warranty period (days) pre-filled on new service jobs." }
+        reworkWarrantyDays: { type: integer, minimum: 0, description: "Default warranty period (days) applied to no-charge rework jobs." }
     ServiceSettingsInput:
       type: object
       required:
@@ -12175,6 +12178,8 @@ components:
         showSignOff:        { type: boolean }
         showShipping:       { type: boolean }
         showNotes:          { type: boolean }
+        repairWarrantyDays: { type: integer, minimum: 0 }
+        reworkWarrantyDays: { type: integer, minimum: 0 }
 
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:

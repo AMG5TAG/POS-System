@@ -8,7 +8,7 @@
  */
 import path from "path";
 import { mkdir, stat, rm } from "fs/promises";
-import { db, merchantBackupsTable, merchantBackupConfigsTable } from "@workspace/db";
+import { db, merchantBackupsTable, merchantBackupConfigsTable, merchantBackupSchedulesTable } from "@workspace/db";
 import type { MerchantBackupConfig } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { logger } from "../lib/logger";
@@ -51,11 +51,20 @@ export function isBackupRunning(merchantId: number): boolean {
  * caller holds the per-merchant lock; never throws (failures are recorded on
  * the row).
  */
+/** Optional scoping for a single backup run (used by named schedules). */
+export interface BackupRunOptions {
+  /** Restrict the fan-out to this subset of configured destination ids. */
+  destinationIds?: string[];
+  /** When set, stamp this schedule's lastBackupAt instead of the config's. */
+  scheduleId?: number;
+}
+
 async function performBackup(
   merchantId: number,
   backupId: number,
   password: string,
   config: typeof merchantBackupConfigsTable.$inferSelect,
+  opts?: BackupRunOptions,
 ): Promise<void> {
   const fileName = `backup-${merchantId}-${backupId}-${Date.now()}.koapos.enc`;
   const dir = canonicalDir(merchantId);
@@ -76,7 +85,12 @@ async function performBackup(
     // isn't durably stored on the server is not a successful backup.
     const serverRef = await uploadServer(canonicalPath, fileName, merchantId);
 
-    const destinations = (config.destinations ?? []) as StoredDestination[];
+    let destinations = (config.destinations ?? []) as StoredDestination[];
+    // A named schedule copies only to its selected subset of destinations.
+    if (opts?.destinationIds) {
+      const want = new Set(opts.destinationIds);
+      destinations = destinations.filter((d) => want.has(d.id));
+    }
     const { locations, errors } = await uploadToDestinations(
       destinations,
       canonicalPath,
@@ -105,10 +119,19 @@ async function performBackup(
       })
       .where(eq(merchantBackupsTable.id, backupId));
 
-    await db
-      .update(merchantBackupConfigsTable)
-      .set({ lastBackupAt: new Date() })
-      .where(eq(merchantBackupConfigsTable.merchantId, merchantId));
+    // Stamp the schedule that triggered this run, or the central config for
+    // manual/legacy runs — so each schedule's "due" check stays independent.
+    if (opts?.scheduleId != null) {
+      await db
+        .update(merchantBackupSchedulesTable)
+        .set({ lastBackupAt: new Date() })
+        .where(eq(merchantBackupSchedulesTable.id, opts.scheduleId));
+    } else {
+      await db
+        .update(merchantBackupConfigsTable)
+        .set({ lastBackupAt: new Date() })
+        .where(eq(merchantBackupConfigsTable.merchantId, merchantId));
+    }
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     logger.error({ merchantId, backupId, err }, "Backup failed");
@@ -130,6 +153,7 @@ async function performBackup(
 export async function startBackup(
   merchantId: number,
   trigger: "manual" | "scheduled",
+  opts?: BackupRunOptions,
 ): Promise<typeof merchantBackupsTable.$inferSelect> {
   if (activeBackups.has(merchantId)) {
     throw new BackupInProgressError();
@@ -155,7 +179,7 @@ export async function startBackup(
       .returning();
 
     // Run the work in the background; release the lock when it settles.
-    void performBackup(merchantId, pending.id, password, config)
+    void performBackup(merchantId, pending.id, password, config, opts)
       .catch((err) =>
         logger.error({ merchantId, err }, "Background backup crashed"),
       )

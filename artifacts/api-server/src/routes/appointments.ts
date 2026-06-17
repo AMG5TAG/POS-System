@@ -7,6 +7,7 @@ import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, 
 import { sendSms } from "../services/sms";
 import { sendEmail } from "../services/email";
 import { generateIcs } from "../services/icsGenerator";
+import { triggerInstantSync } from "../services/autoSyncScheduler";
 
 const router: IRouter = Router();
 
@@ -254,6 +255,7 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
   const formatted = await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt]));
+  triggerInstantSync(merchantId, "calendar");
   res.status(201).json(formatted);
 
   if ((sendSmsFlag || sendEmailFlag) && customer) {
@@ -314,6 +316,7 @@ router.patch("/appointments/:id", requireAuth, async (req, res): Promise<void> =
   const customerMap = new Map(customers.map((c) => [c.id, c]));
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
+  triggerInstantSync(merchantId, "calendar");
   res.json(await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt])));
 });
 

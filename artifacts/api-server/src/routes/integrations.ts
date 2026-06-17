@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, customerNotesTable, appointmentsTable } from "@workspace/db";
-import { eq, and, desc, gte } from "drizzle-orm";
+import { db, merchantIntegrationsTable, oauthTokenVaultTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault, readVault, upsertCredentialVault, getOAuthAppCreds, saveOAuthAppCreds } from "../services/tokenVault";
-import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "../services/microsoftToken";
+import { upsertVault, deleteVault, upsertCredentialVault, getOAuthAppCreds, saveOAuthAppCreds } from "../services/tokenVault";
+import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError } from "../services/accountSync";
 
 const router: IRouter = Router();
 
@@ -620,289 +620,87 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
     provider,
     includeNotes  = false,
     notesConflict = "append",
+    duplicateStrategy,
   } = req.body as {
     provider?: string;
     includeNotes?: boolean;
     notesConflict?: "append" | "overwrite";
+    // Absent on the first call → if duplicates exist we stop and warn rather
+    // than silently overwriting. The client re-calls with an explicit choice.
+    duplicateStrategy?: "overwrite" | "skip";
   };
 
-  if (provider !== "google_contacts" && provider !== "microsoft_contacts") {
+  if (!isSyncProvider(provider)) {
     res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
     return;
   }
 
-  // Resolve a valid access token. Microsoft access tokens are short-lived
-  // (~1 hour), so refresh via the stored refresh token instead of using the
-  // raw cached token — otherwise every Graph request 401s once it lapses.
-  let accessToken: string;
-  if (provider === "microsoft_contacts") {
-    try {
-      accessToken = await getValidMicrosoftToken(merchantId, provider, MICROSOFT_SCOPES.microsoft_contacts!);
-    } catch (err) {
-      if (err instanceof MicrosoftNotConnectedError) {
-        res.status(401).json({ error: err.message });
-        return;
-      }
-      req.log.error({ merchantId, err }, "Microsoft token refresh failed");
-      res.status(502).json({ error: "Could not refresh Microsoft access — please reconnect the account on the Sync page." });
+  try {
+    const result = await syncContacts(merchantId, provider, { includeNotes, notesConflict, duplicateStrategy }, req.log);
+    if (result.needsConfirmation) {
+      res.json({
+        ok: true,
+        provider,
+        needsConfirmation: true,
+        duplicates: result.duplicates,
+        total: result.total,
+        message: `${result.duplicates} of ${result.total} customer${result.total !== 1 ? "s" : ""} already exist as contacts. Overwriting replaces their existing details.`,
+      });
       return;
     }
-  } else {
-    const vault = await readVault(merchantId, provider);
-    if (!vault?.accessToken) {
-      res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
-      return;
-    }
-    accessToken = vault.accessToken;
+    const parts: string[] = [];
+    if (result.created) parts.push(`${result.created} added`);
+    if (result.updated) parts.push(`${result.updated} overwritten`);
+    if (result.skipped) parts.push(`${result.skipped} skipped`);
+    if (result.notesSynced) parts.push(`${result.notesSynced} with notes`);
+    if (result.failed) parts.push(`${result.failed} failed`);
+    res.json({
+      ok: true,
+      provider,
+      synced: result.created + result.updated,
+      created: result.created,
+      updated: result.updated,
+      skipped: result.skipped,
+      failed: result.failed,
+      notesSynced: result.notesSynced,
+      message: parts.length ? `Contacts sync: ${parts.join(", ")}.` : "Nothing to sync.",
+    });
+  } catch (err) {
+    if (err instanceof AccountNotConnectedError) { res.status(401).json({ error: err.message }); return; }
+    req.log.error({ merchantId, provider, err }, "Contacts sync failed");
+    res.status(502).json({ error: "Contact sync failed — please reconnect the account on the Sync page and try again." });
   }
-
-  const customers = await db
-    .select()
-    .from(customersTable)
-    .where(eq(customersTable.merchantId, merchantId));
-
-  if (customers.length === 0) {
-    res.json({ ok: true, provider, synced: 0, failed: 0, notesSynced: 0, message: "No customers to sync" });
-    return;
-  }
-
-  // ── Build per-customer notes text when requested ─────────────────────────
-  const notesByCustomer = new Map<number, string>();
-  if (includeNotes) {
-    const MAX_NOTE_CHARS = 2000;
-    const allNotes = await db
-      .select()
-      .from(customerNotesTable)
-      .where(eq(customerNotesTable.merchantId, merchantId))
-      .orderBy(desc(customerNotesTable.createdAt)); // newest first
-
-    for (const note of allNotes) {
-      const existing = notesByCustomer.get(note.customerId) ?? "";
-
-      if (notesConflict === "overwrite") {
-        // Keep only the most-recent note (first seen in desc order)
-        if (existing === "") {
-          const date = new Date(note.createdAt).toLocaleDateString("en-AU", {
-            day: "numeric", month: "short", year: "numeric",
-          });
-          notesByCustomer.set(
-            note.customerId,
-            `[KoaPOS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS),
-          );
-        }
-      } else {
-        // Append: collect all notes newest-first
-        const date = new Date(note.createdAt).toLocaleDateString("en-AU", {
-          day: "numeric", month: "short", year: "numeric",
-        });
-        const line = `• ${date}: ${note.note}`;
-        const next = existing === "" ? `[KoaPOS Notes]\n${line}` : `${existing}\n${line}`;
-        notesByCustomer.set(note.customerId, next.slice(0, MAX_NOTE_CHARS));
-      }
-    }
-  }
-
-  // ── Sync contacts one by one ─────────────────────────────────────────────
-  let synced     = 0;
-  let failed     = 0;
-  let notesSynced = 0;
-
-  if (provider === "google_contacts") {
-    // Google People API — POST /v1/people:createContact
-    for (const c of customers) {
-      const notesText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
-      const body: Record<string, unknown> = {
-        names:          [{ givenName: c.firstName ?? "", familyName: c.lastName ?? "" }],
-        emailAddresses: c.email ? [{ value: c.email }] : [],
-        phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
-      };
-      if (includeNotes && notesText) {
-        (body as Record<string, unknown>).biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }];
-      }
-      try {
-        const r = await fetch("https://people.googleapis.com/v1/people:createContact", {
-          method:  "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body:    JSON.stringify(body),
-        });
-        if (r.ok) {
-          synced++;
-          if (includeNotes && notesText) notesSynced++;
-        } else {
-          req.log.warn({ merchantId, status: r.status, email: c.email }, "Google Contacts create failed");
-          failed++;
-        }
-      } catch (err) {
-        req.log.warn({ merchantId, err, email: c.email }, "Google Contacts create threw");
-        failed++;
-      }
-    }
-  } else {
-    // Microsoft Graph Contacts API — POST /v1.0/me/contacts
-    for (const c of customers) {
-      const notesText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
-      const fullName  = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
-      const body: Record<string, unknown> = {
-        givenName:      c.firstName ?? "",
-        surname:        c.lastName  ?? "",
-        emailAddresses: c.email ? [{ address: c.email, name: fullName || c.email }] : [],
-        businessPhones: c.phone ? [c.phone] : [],
-      };
-      if (includeNotes && notesText) {
-        body.personalNotes = notesText;
-      }
-      try {
-        const r = await fetch("https://graph.microsoft.com/v1.0/me/contacts", {
-          method:  "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body:    JSON.stringify(body),
-        });
-        if (r.ok) {
-          synced++;
-          if (includeNotes && notesText) notesSynced++;
-        } else {
-          req.log.warn({ merchantId, status: r.status, email: c.email }, "Microsoft Contacts create failed");
-          failed++;
-        }
-      } catch (err) {
-        req.log.warn({ merchantId, err, email: c.email }, "Microsoft Contacts create threw");
-        failed++;
-      }
-    }
-  }
-
-  const notesMsg = includeNotes && notesSynced > 0
-    ? `, ${notesSynced} with notes`
-    : "";
-  res.json({
-    ok:         true,
-    provider,
-    synced,
-    failed,
-    notesSynced,
-    message:    `Synced ${synced} contact${synced !== 1 ? "s" : ""}${notesMsg}${failed > 0 ? ` (${failed} failed)` : ""}`,
-  });
 });
 
 /* ── POST /integrations/calendar/sync ─────────────────────────────────────────
    Pushes the merchant's upcoming KoaPOS appointments to the connected account's
-   calendar — Microsoft (Graph /me/events) or Google (Calendar API). Each push is
-   idempotent: re-syncing updates/skips an existing event rather than duplicating
-   it (Microsoft via transactionId, Google via a stable event id).
-
+   calendar — Microsoft (Graph /me/events) or Google (Calendar API). Idempotent
+   via stable event ids (Microsoft transactionId, Google event id).
    Body: { provider: "microsoft_contacts" | "google_contacts" }
    ─────────────────────────────────────────────────────────────────────────── */
-
 router.post("/integrations/calendar/sync", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { provider } = req.body as { provider?: string };
-
-  if (provider !== "google_contacts" && provider !== "microsoft_contacts") {
+  if (!isSyncProvider(provider)) {
     res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
     return;
   }
-
-  // Resolve a valid access token (refresh Microsoft's short-lived token).
-  let accessToken: string;
-  if (provider === "microsoft_contacts") {
-    try {
-      accessToken = await getValidMicrosoftToken(merchantId, provider, MICROSOFT_SCOPES.microsoft_contacts!);
-    } catch (err) {
-      if (err instanceof MicrosoftNotConnectedError) {
-        res.status(401).json({ error: err.message });
-        return;
-      }
-      req.log.error({ merchantId, err }, "Microsoft token refresh failed");
-      res.status(502).json({ error: "Could not refresh Microsoft access — please reconnect the account on the Sync page." });
-      return;
-    }
-  } else {
-    const vault = await readVault(merchantId, provider);
-    if (!vault?.accessToken) {
-      res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
-      return;
-    }
-    accessToken = vault.accessToken;
+  try {
+    const result = await syncCalendar(merchantId, provider, req.log);
+    res.json({
+      ok: true,
+      provider,
+      synced: result.synced,
+      failed: result.failed,
+      message: result.total === 0
+        ? "No upcoming appointments to sync"
+        : `Synced ${result.synced} appointment${result.synced !== 1 ? "s" : ""}${result.failed > 0 ? ` (${result.failed} failed)` : ""}`,
+    });
+  } catch (err) {
+    if (err instanceof AccountNotConnectedError) { res.status(401).json({ error: err.message }); return; }
+    req.log.error({ merchantId, provider, err }, "Calendar sync failed");
+    res.status(502).json({ error: "Calendar sync failed — please reconnect the account on the Sync page and try again." });
   }
-
-  // Only push upcoming, non-cancelled appointments.
-  const now = new Date();
-  const appointments = (await db
-    .select()
-    .from(appointmentsTable)
-    .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now)))
-    .orderBy(appointmentsTable.scheduledAt))
-    .filter((a) => a.status !== "cancelled");
-
-  if (appointments.length === 0) {
-    res.json({ ok: true, provider, synced: 0, failed: 0, message: "No upcoming appointments to sync" });
-    return;
-  }
-
-  // Microsoft Graph wants a naive ISO timestamp paired with a separate timeZone.
-  const toGraphTime = (d: Date) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "");
-
-  let synced = 0;
-  let failed = 0;
-
-  for (const a of appointments) {
-    const start = new Date(a.scheduledAt);
-    const end   = new Date(start.getTime() + (a.durationMinutes ?? 30) * 60_000);
-
-    try {
-      if (provider === "microsoft_contacts") {
-        // POST /me/events with a stable transactionId so re-syncing is idempotent.
-        const r = await fetch("https://graph.microsoft.com/v1.0/me/events", {
-          method:  "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            subject:       a.title,
-            body:          { contentType: "text", content: a.description ?? a.notes ?? "" },
-            start:         { dateTime: toGraphTime(start), timeZone: "UTC" },
-            end:           { dateTime: toGraphTime(end),   timeZone: "UTC" },
-            transactionId: `koapos-appt-${a.id}`,
-          }),
-        });
-        if (r.ok) {
-          synced++;
-        } else {
-          req.log.warn({ merchantId, status: r.status, appointmentId: a.id }, "Microsoft Calendar create failed");
-          failed++;
-        }
-      } else {
-        // Google Calendar — a stable event id makes re-syncing idempotent
-        // (a repeat insert returns 409, which we treat as already-synced).
-        const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
-          method:  "POST",
-          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-          body: JSON.stringify({
-            id:          `koapos${a.id}`,
-            summary:     a.title,
-            description: a.description ?? a.notes ?? "",
-            start:       { dateTime: start.toISOString() },
-            end:         { dateTime: end.toISOString() },
-          }),
-        });
-        if (r.ok || r.status === 409) {
-          synced++;
-        } else {
-          req.log.warn({ merchantId, status: r.status, appointmentId: a.id }, "Google Calendar create failed");
-          failed++;
-        }
-      }
-    } catch (err) {
-      req.log.warn({ merchantId, err, appointmentId: a.id }, "Calendar event create threw");
-      failed++;
-    }
-  }
-
-  res.json({
-    ok:      true,
-    provider,
-    synced,
-    failed,
-    message: `Synced ${synced} appointment${synced !== 1 ? "s" : ""}${failed > 0 ? ` (${failed} failed)` : ""}`,
-  });
 });
 
 export default router;

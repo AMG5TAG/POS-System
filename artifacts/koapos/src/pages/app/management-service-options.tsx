@@ -1,6 +1,9 @@
+import { useEffect, useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Switch } from "@/components/ui/switch";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
@@ -33,9 +36,9 @@ export default function ManagementServiceOptionsPage() {
   const { data: settings, isLoading } = useGetServiceSettings();
   const updateMutation = useUpdateServiceSettings();
 
-  function handleToggle(key: keyof ServiceSettings, value: boolean) {
+  function savePatch(patch: Partial<ServiceSettings>) {
     if (!settings) return;
-    const next = { ...settings, [key]: value };
+    const next = { ...settings, ...patch };
     updateMutation.mutate({ data: next }, {
       onSuccess: () => {
         queryClient.setQueryData(["/api/service-settings"], next);
@@ -43,6 +46,10 @@ export default function ManagementServiceOptionsPage() {
       },
       onError: () => toast.error("Failed to save service options"),
     });
+  }
+
+  function handleToggle(key: keyof ServiceSettings, value: boolean) {
+    savePatch({ [key]: value } as Partial<ServiceSettings>);
   }
 
   return (
@@ -95,7 +102,74 @@ export default function ManagementServiceOptionsPage() {
             )}
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Shield className="w-5 h-5 text-primary" /> Warranty defaults</CardTitle>
+            <CardDescription>
+              Default repair-warranty windows. Repair warranty pre-fills new service jobs; rework warranty
+              is applied to no-charge rework jobs. Either can still be changed per job.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading || !settings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-md">
+                <WarrantyDaysField
+                  label="Repair warranty (days)"
+                  value={settings.repairWarrantyDays}
+                  saving={updateMutation.isPending}
+                  onSave={(n) => savePatch({ repairWarrantyDays: n })}
+                />
+                <WarrantyDaysField
+                  label="Rework warranty (days)"
+                  value={settings.reworkWarrantyDays}
+                  saving={updateMutation.isPending}
+                  onSave={(n) => savePatch({ reworkWarrantyDays: n })}
+                />
+              </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AppLayout>
+  );
+}
+
+/** A numeric warranty-days input that commits on blur (or Enter) when changed. */
+function WarrantyDaysField({
+  label, value, saving, onSave,
+}: {
+  label: string;
+  value: number;
+  saving: boolean;
+  onSave: (days: number) => void;
+}) {
+  const [text, setText] = useState(String(value ?? 0));
+  // Re-seed when the persisted value changes (e.g. after a successful save).
+  useEffect(() => { setText(String(value ?? 0)); }, [value]);
+
+  const commit = () => {
+    const n = Math.max(0, Math.round(parseFloat(text) || 0));
+    if (n === (value ?? 0)) { setText(String(value ?? 0)); return; }
+    onSave(n);
+  };
+
+  return (
+    <div className="space-y-1.5">
+      <Label className="text-sm">{label}</Label>
+      <Input
+        type="number"
+        min={0}
+        value={text}
+        disabled={saving}
+        onChange={(e) => setText(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+      />
+    </div>
   );
 }
