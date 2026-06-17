@@ -175,6 +175,22 @@ function generateSKU(prefix: string) {
   return `${prefix.toUpperCase().replace(/[^A-Z0-9]/g, "")}-${n}`;
 }
 
+/* Colour a margin percentage by health band:
+ *   negative → red, 0–10% → orange, 11–20% → yellow, 21%+ → green. */
+function marginColorClass(pct: number): string {
+  if (pct < 0)  return "text-red-500";
+  if (pct <= 10) return "text-orange-500";
+  if (pct <= 20) return "text-yellow-500";
+  return "text-green-600";
+}
+
+/* Colour a stock quantity by level: 0 → red, 1–5 → yellow, 5+ → green. */
+function stockColorClass(qty: number): string {
+  if (qty <= 0) return "text-red-500";
+  if (qty <= 5) return "text-yellow-500";
+  return "text-green-600";
+}
+
 /* Derive a scannable EAN-13 barcode deterministically from a SKU, so the same
  * SKU always yields the same barcode. Builds 12 digits from the SKU's character
  * codes, then appends the EAN-13 check digit. */
@@ -839,20 +855,19 @@ function ProductDetailDialog({
               onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
               <Trash2 className="w-3.5 h-3.5" /> Delete
             </Button>
-            <Button variant="outline" size="sm" className="gap-1" onClick={goPrevTab} disabled={tabIndex === 0}>
-              <ChevronLeft className="w-4 h-4" /> Previous
+            <Button size="sm" onClick={() => { onClose(); onEdit(product); }}>
+              <Pencil className="w-3.5 h-3.5" />
             </Button>
-            <Button variant="outline" size="sm" className="gap-1" onClick={goNextTab} disabled={tabIndex === TABS.length - 1}>
-              Next <ChevronRight className="w-4 h-4" />
+            <Button variant="outline" size="sm" onClick={goPrevTab} disabled={tabIndex === 0}>
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" onClick={goNextTab} disabled={tabIndex === TABS.length - 1}>
+              <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
-            </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(product); }}>
-              <Pencil className="w-3.5 h-3.5" /> Edit
             </Button>
           </div>
         </div>
@@ -1006,6 +1021,7 @@ export default function ProductsPage() {
   const { data: inventorySettings } = useGetInventorySettings();
   const showHideCostsBtn  = inventorySettings?.showCosts  !== "false";
   const enableGroupPricing = inventorySettings?.groupPricing !== "false";
+  const stockColorsEnabled = inventorySettings?.stockColors === "true";
 
   /* ── Digital codes state ── */
   type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
@@ -1869,9 +1885,9 @@ export default function ProductsPage() {
                     <SortTh {...sh("Sell (inc. GST)", "price")} />
                     {!hideCosts && (
                       <>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap">Margin</th>
                         {customerGroups.map((group) => (
-                          <th key={group.id} className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">
+                          <th key={group.id} className="p-3 text-right font-medium whitespace-nowrap">
                             {group.name} Margin
                           </th>
                         ))}
@@ -1928,7 +1944,7 @@ export default function ProductsPage() {
                         </td>
                         <td className="p-3">
                           {product.category
-                            ? <Badge variant="outline" className="text-xs font-normal">{product.category.name}</Badge>
+                            ? <Badge variant="outline" className="text-xs font-normal border-0 px-0">{product.category.name}</Badge>
                             : <span className="text-muted-foreground">—</span>}
                         </td>
                         <td className="p-3 text-muted-foreground text-sm">
@@ -1944,7 +1960,7 @@ export default function ProductsPage() {
                           <>
                             <td className="p-3 text-right">
                               {marginPct != null
-                                ? <span className="text-[#16a34a] font-medium">{marginPct}%</span>
+                                ? <span className={cn("font-medium", marginColorClass(marginPct))}>{marginPct}%</span>
                                 : <span className="text-muted-foreground/50">—</span>}
                             </td>
                             {customerGroups.map((group) => {
@@ -1956,7 +1972,7 @@ export default function ProductsPage() {
                               return (
                                 <td key={group.id} className="p-3 text-right">
                                   {groupMarginPct != null
-                                    ? <span className={cn("font-medium", groupMarginPct < 0 ? "text-red-500" : "text-[#16a34a]")}>{groupMarginPct}%</span>
+                                    ? <span className={cn("font-medium", marginColorClass(groupMarginPct))}>{groupMarginPct}%</span>
                                     : <span className="text-muted-foreground/50">—</span>}
                                 </td>
                               );
@@ -1965,7 +1981,9 @@ export default function ProductsPage() {
                         )}
                         <td className="p-3">
                           {!isService && product.trackInventory
-                            ? <span className={cn("font-medium", isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]")}>{product.stockQuantity}</span>
+                            ? <span className={cn("font-medium", stockColorsEnabled
+                                ? stockColorClass(product.stockQuantity ?? 0)
+                                : (isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]"))}>{product.stockQuantity}</span>
                             : <span className="text-[#16a34a] font-medium">∞</span>}
                         </td>
                         <td className="p-3">

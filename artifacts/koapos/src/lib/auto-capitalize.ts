@@ -24,8 +24,28 @@ const EXCLUDED_TYPES = new Set([
   "radio",
 ]);
 
-export function shouldAutoCapitalize(type?: string): boolean {
-  return !type || !EXCLUDED_TYPES.has(type);
+/** Extra field hints used to detect email inputs that aren't typed `email`. */
+export interface AutoCapitalizeHints {
+  name?: string;
+  id?: string;
+  autoComplete?: string;
+  inputMode?: string;
+  placeholder?: string;
+}
+
+/** True when the field looks like an email address regardless of its `type`. */
+function looksLikeEmailField(type?: string, hints?: AutoCapitalizeHints): boolean {
+  if (type === "email") return true;
+  if (hints?.autoComplete === "email") return true;
+  if (hints?.inputMode === "email") return true;
+  const haystack = `${hints?.name ?? ""} ${hints?.id ?? ""} ${hints?.placeholder ?? ""}`.toLowerCase();
+  return /e-?mail/.test(haystack);
+}
+
+export function shouldAutoCapitalize(type?: string, hints?: AutoCapitalizeHints): boolean {
+  if (type && EXCLUDED_TYPES.has(type)) return false;
+  if (looksLikeEmailField(type, hints)) return false;
+  return true;
 }
 
 /** Uppercases the first character of the string, leaving the rest untouched. */

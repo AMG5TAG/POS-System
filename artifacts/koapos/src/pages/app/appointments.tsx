@@ -227,26 +227,65 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
   const [composeBody, setComposeBody] = useState("");
   const composeEmailMutation = useComposeEmail();
   const mapUrl = useMapUrl();
+
+  type ApptTab = "details" | "forms";
+  const TABS: { key: ApptTab; label: string }[] = [
+    { key: "details", label: "Details" },
+    { key: "forms",   label: "Forms"   },
+  ];
+  const [tab, setTab] = useState<ApptTab>("details");
+  const tabIndex = TABS.findIndex(t => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useEffect(() => { setTab("details"); }, [appt?.id]);
+
   if (!appt) return null;
   const { label, className } = getStatus(appt.status);
 
   return (
     <>
     <Dialog open={!!appt} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <CalendarClock className="w-5 h-5 text-primary shrink-0" />
-            <span className="truncate">{appt.title || "Appointment"}</span>
-            <span className="font-mono text-xs font-normal text-muted-foreground">{apptRefCode(appt.id)}</span>
-            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
-              {label}
-            </span>
+          <DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary shrink-0">
+                <CalendarClock className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-2xl leading-tight truncate">{appt.title || "Appointment"}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="font-mono text-xs font-normal text-muted-foreground">{apptRefCode(appt.id)}</span>
+                  <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
+                    {label}
+                  </span>
+                </div>
+              </div>
+            </div>
           </DialogTitle>
         </DialogHeader>
 
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-0 shrink-0 mt-2">
+          {TABS.map(({ key, label: tabLabel }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
+                tab === key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {tabLabel}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto px-6 min-h-0">
         <div className="space-y-4 py-4">
+          {tab === "details" && (<>
           {/* Time */}
           <div className="rounded-xl border bg-muted/20 divide-y">
             <div className="flex items-start gap-3 px-4 py-3">
@@ -342,24 +381,41 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
               </div>
             </div>
           )}
+          </>)}
 
-          <FormsAttachmentPanel
-            sourceType="appointment"
-            sourceId={appt.id}
-            customerId={appt.customerId ?? undefined}
-            customerName={appt.customerName ?? undefined}
-          />
+          {tab === "forms" && (
+            <FormsAttachmentPanel
+              sourceType="appointment"
+              sourceId={appt.id}
+              customerId={appt.customerId ?? undefined}
+              customerName={appt.customerName ?? undefined}
+            />
+          )}
         </div>
         </div>
 
         <DialogFooter className="gap-2 flex-row justify-between sm:justify-between px-6 pb-5 pt-4 border-t shrink-0">
-          <Button
-            variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => setConfirmDelete(true)}
-            disabled={deleteIsPending}
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="destructive" size="sm" className="w-8 h-8 p-0"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleteIsPending}
+              title="Delete appointment"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+            {appt.status === "scheduled" && (
+              <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(appt); }} title="Edit appointment">
+                <Pencil className="w-4 h-4" />
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2 justify-end">
             {appt.customerPhone && (
               <a href={`sms:${appt.customerPhone}`}>
@@ -377,11 +433,6 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt)}>
               <Printer className="w-3.5 h-3.5" /> Print
             </Button>
-            {appt.status === "scheduled" && (
-              <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
-                <Pencil className="w-3.5 h-3.5" /> Edit
-              </Button>
-            )}
           </div>
         </DialogFooter>
       </DialogContent>

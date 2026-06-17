@@ -26,17 +26,19 @@ export default function ManagementInventoryPage() {
 
   const [showHideCostsBtn, setShowHideCostsBtnState] = useState(true);
   const [enableGroupPricing, setEnableGroupPricingState] = useState(true);
+  const [enableStockColors, setEnableStockColorsState] = useState(false);
   const [defaultImageUrl, setDefaultImageUrl] = useState("");
 
   useEffect(() => {
     if (settings) {
       setShowHideCostsBtnState(settings.showCosts !== "false");
       setEnableGroupPricingState(settings.groupPricing !== "false");
+      setEnableStockColorsState(settings.stockColors === "true");
       setDefaultImageUrl(settings.defaultImageUrl ?? "");
     }
   }, [settings]);
 
-  function persist(patch: { showCosts?: string; groupPricing?: string; skuPrefix?: string; defaultImageUrl?: string | null }) {
+  function persist(patch: { showCosts?: string; groupPricing?: string; stockColors?: string; skuPrefix?: string; defaultImageUrl?: string | null }) {
     update.mutate(
       { data: patch },
       {
@@ -56,6 +58,12 @@ export default function ManagementInventoryPage() {
     setEnableGroupPricingState(v);
     persist({ groupPricing: v ? "true" : "false" });
     toast.success(v ? "Customer Group Pricing enabled" : "Customer Group Pricing disabled");
+  }
+
+  function toggleStockColors(v: boolean) {
+    setEnableStockColorsState(v);
+    persist({ stockColors: v ? "true" : "false" });
+    toast.success(v ? "Stock level colours enabled in Products" : "Stock level colours disabled");
   }
 
   function handleDefaultImageChange(url: string) {
@@ -109,6 +117,16 @@ export default function ManagementInventoryPage() {
                 </p>
               </div>
               <Switch checked={showHideCostsBtn} onCheckedChange={toggleShowHideCosts} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">Colour-code stock levels</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Colour the Stock column in the Products table by level — red when out of stock,
+                  yellow when low (1–5), green when 5+.
+                </p>
+              </div>
+              <Switch checked={enableStockColors} onCheckedChange={toggleStockColors} />
             </div>
           </div>
         </div>

@@ -10,7 +10,13 @@ export interface InputProps extends React.ComponentProps<"input"> {
 
 const Input = React.forwardRef<HTMLInputElement, InputProps>(
   ({ className, type, noAutoCapitalize, onChange, ...props }, ref) => {
-    const autoCap = !noAutoCapitalize && shouldAutoCapitalize(type)
+    const autoCap = !noAutoCapitalize && shouldAutoCapitalize(type, {
+      name: props.name,
+      id: props.id,
+      autoComplete: props.autoComplete,
+      inputMode: props.inputMode,
+      placeholder: props.placeholder,
+    })
 
     const handleChange = autoCap
       ? (e: React.ChangeEvent<HTMLInputElement>) => {

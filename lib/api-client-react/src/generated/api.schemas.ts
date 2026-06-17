@@ -4273,6 +4273,7 @@ export interface InventorySettings {
   skuPrefix: string;
   showCosts: string;
   groupPricing: string;
+  stockColors: string;
   defaultImageUrl?: string | null;
 }
 
@@ -4280,6 +4281,7 @@ export interface InventorySettingsInput {
   skuPrefix?: string;
   showCosts?: string;
   groupPricing?: string;
+  stockColors?: string;
   defaultImageUrl?: string | null;
 }
 

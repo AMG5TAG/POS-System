@@ -1046,6 +1046,37 @@ function CustomerDetailInner({
     });
     if (!ok) toast.error("Couldn't open the print dialog — please try again");
   };
+
+  /* Print an address label using the saved "address" sticker template. Prefers
+   * the shipping address, falling back to billing then the generic address
+   * field. Toggles for missing data are turned off so the label never shows
+   * sample placeholder text. */
+  const printAddressLabel = () => {
+    const name = customerDisplayName(customer, "") || customer.email || "";
+    const company = customer.company ?? "";
+    const street = customer.shippingStreet || customer.billingStreet || customer.address || "";
+    const suburb = customer.shippingCity || customer.billingCity || "";
+    const state = customer.shippingState || customer.billingState || "";
+    const postcode = customer.shippingPostcode || customer.billingPostcode || "";
+    const hasSuburbLine = !!(suburb || state || postcode);
+    const ok = printStickers({
+      typeId: "address",
+      context: { customer: { name }, merchant: {} },
+      fieldsOverride: {
+        name,
+        company,
+        street,
+        suburb,
+        state,
+        postcode,
+        ...(name ? {} : { showName: "false" }),
+        ...(company ? {} : { showCompany: "false" }),
+        ...(street ? {} : { showStreet: "false" }),
+        ...(hasSuburbLine ? {} : { showSuburb: "false" }),
+      },
+    });
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+  };
   const [emailDialogTx, setEmailDialogTx] = useState<Transaction | null>(null);
   const [emailAddr, setEmailAddr] = useState("");
   const [emailDialogJob, setEmailDialogJob] = useState<ServiceJob | null>(null);
@@ -2070,6 +2101,7 @@ function CustomerDetailInner({
           });
         }}
         onLabel={printCustomerLabel}
+        onAddress={printAddressLabel}
       />
 
       {onMerge && (
@@ -2519,19 +2551,21 @@ function CustomerDetailInner({
 /* Print pop-up — mirrors the Invoices "Send" dialog, but offers PDF and Label
    (instead of Email). Combines the former PDF + Label footer buttons. */
 function CustomerPrintDialog({
-  open, onOpenChange, onPdf, onLabel,
+  open, onOpenChange, onPdf, onLabel, onAddress,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onPdf: () => void;
   onLabel: () => void;
+  onAddress: () => void;
 }) {
-  const [mode, setMode] = useState<"pdf" | "label" | null>(null);
+  const [mode, setMode] = useState<"pdf" | "label" | "address" | null>(null);
   useEffect(() => { if (open) setMode(null); }, [open]);
 
   const OPTIONS = [
-    { key: "pdf" as const,   icon: FileDown, label: "PDF",   sub: "Download a PDF summary" },
-    { key: "label" as const, icon: Printer,  label: "Label", sub: "Print to label printer" },
+    { key: "pdf" as const,     icon: FileDown, label: "PDF",     sub: "Download a PDF summary" },
+    { key: "label" as const,   icon: Printer,  label: "Label",   sub: "Print to label printer" },
+    { key: "address" as const, icon: MapPin,   label: "Address", sub: "Print an address label" },
   ];
 
   return (
@@ -2543,7 +2577,7 @@ function CustomerPrintDialog({
           </DialogTitle>
         </DialogHeader>
         <div className="space-y-4 py-1">
-          <div className="grid grid-cols-2 gap-2">
+          <div className="grid grid-cols-3 gap-2">
             {OPTIONS.map(({ key, icon: Icon, label, sub }) => (
               <button
                 key={key}
@@ -2577,6 +2611,15 @@ function CustomerPrintDialog({
               <p className="text-sm text-muted-foreground">Print a customer label to your sticker/label printer.</p>
               <Button className="w-full gap-2" onClick={() => { onLabel(); onOpenChange(false); }}>
                 <Printer className="w-4 h-4" /> Print Label
+              </Button>
+            </div>
+          )}
+
+          {mode === "address" && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Print a shipping/postal address label to your sticker/label printer.</p>
+              <Button className="w-full gap-2" onClick={() => { onAddress(); onOpenChange(false); }}>
+                <MapPin className="w-4 h-4" /> Print Address Label
               </Button>
             </div>
           )}

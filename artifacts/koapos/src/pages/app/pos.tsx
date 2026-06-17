@@ -107,9 +107,9 @@ function openDenomTotal(counts: Record<number, string>): number {
 /* ─── POS layout class maps (account settings + per-staff overrides) ─────── */
 
 const TILE_SIZE_CLASSES: Record<"compact" | "normal" | "large", { image: string; body: string; name: string; price: string }> = {
-  compact: { image: "h-[110px]", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
-  normal:  { image: "h-[150px]", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
-  large:   { image: "h-[190px]", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
+  compact: { image: "aspect-square", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
+  normal:  { image: "aspect-square", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
+  large:   { image: "aspect-square", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
 };
 
 /* Minimum tile width per size — drives how many columns fit. The grid fills as

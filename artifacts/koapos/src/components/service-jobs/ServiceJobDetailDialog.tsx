@@ -17,7 +17,7 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Package, StickyNote, Camera, Upload, X,
-  Trash2, Eye,
+  Trash2, Eye, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -171,6 +171,18 @@ export function ServiceJobDetailDialog({
   const [showAll,     setShowAll]     = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
+  type SvcTab = "details" | "service" | "notes" | "files";
+  const TABS: { key: SvcTab; label: string }[] = [
+    { key: "details", label: "Details" },
+    { key: "service", label: "Service" },
+    { key: "notes",   label: "Notes"   },
+    { key: "files",   label: "Files"   },
+  ];
+  const [tab, setTab] = useState<SvcTab>("details");
+  const tabIndex = TABS.findIndex(t => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+
   useEffect(() => {
     if (!job) return;
     setLocalStatus(job.status ?? "pending");
@@ -178,6 +190,7 @@ export function ServiceJobDetailDialog({
     setLocalPhotos(Array.isArray(job.photos) ? (job.photos as string[]).filter(Boolean) : []);
     setLightboxSrc(null);
     setShowAll(false);
+    setTab("details");
   }, [job?.id]);
 
   if (!job) return null;
@@ -270,38 +283,65 @@ export function ServiceJobDetailDialog({
       )}
 
       <Dialog open={!!job} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold flex-wrap">
-              <Wrench className="w-5 h-5 text-primary shrink-0" />
-              <span className="font-mono">{job.jobNumber}</span>
-              <Select value={localStatus} onValueChange={handleStatusChange}>
-                <SelectTrigger className={cn("h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
-                    <SelectItem key={val} value={val} className="text-xs">{cfg.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                type="button"
-                onClick={() => setShowAll((v) => !v)}
-                className={cn(
-                  "ml-auto text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors",
-                  showAll
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-foreground"
-                )}
-              >
-                {showAll ? "Compact View" : "Display All"}
-              </button>
+            <DialogTitle>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary shrink-0">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-2xl leading-tight truncate font-mono">{job.jobNumber}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    <Select value={localStatus} onValueChange={handleStatusChange}>
+                      <SelectTrigger className={cn("h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
+                          <SelectItem key={val} value={val} className="text-xs">{cfg.label}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <button
+                      type="button"
+                      onClick={() => setShowAll((v) => !v)}
+                      className={cn(
+                        "text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors",
+                        showAll
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                      )}
+                    >
+                      {showAll ? "Compact View" : "Display All"}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </DialogTitle>
           </DialogHeader>
 
+          {/* Tabs */}
+          <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-0 shrink-0 mt-2">
+            {TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
+                  tab === key
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex-1 overflow-y-auto px-6 min-h-0">
           <div className="space-y-4 py-4">
+            {tab === "details" && (<>
             {(job.isCritical || job.isUnderWarranty || job.isPartnerRepair) && (
               <div className="flex flex-wrap gap-2">
                 {job.isCritical && (
@@ -441,7 +481,9 @@ export function ServiceJobDetailDialog({
                 {(job.additionalEquipment || showAll) && <DetailRow icon={Package} label="Additional Equipment" value={job.additionalEquipment ?? (showAll ? "—" : null)} />}
               </div>
             )}
+            </>)}
 
+            {tab === "service" && (<>
             {/* Parts & Labour */}
             {show("showPartsLabour") && (
             <div className="rounded-xl border bg-muted/20">
@@ -532,7 +574,9 @@ export function ServiceJobDetailDialog({
               </div>
             </div>
             )}
+            </>)}
 
+            {tab === "notes" && (<>
             {/* Notes */}
             {show("showNotes") && (
             <div className="rounded-xl border bg-muted/20">
@@ -583,7 +627,9 @@ export function ServiceJobDetailDialog({
               </div>
             </div>
             )}
+            </>)}
 
+            {tab === "files" && (<>
             {/* Photos & Files */}
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
@@ -654,22 +700,29 @@ export function ServiceJobDetailDialog({
               customerId={job.customerId ?? undefined}
               customerName={job.customerName ?? undefined}
             />
+            </>)}
           </div>
           </div>
 
           <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
-            {onDelete && (
-              <Button
-                variant="destructive"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setConfirmDelete(true)}
-                disabled={deleteIsPending}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
+            <div className="flex gap-2 items-center">
+              {onDelete && (
+                <Button
+                  variant="destructive" size="sm" className="w-8 h-8 p-0"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={deleteIsPending}
+                  title="Delete service job"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+                <ChevronLeft className="w-4 h-4" />
               </Button>
-            )}
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
             <div className="flex gap-2">
               {(job.customerEmail || job.customerPhone || onPrint) && (
                 <SendButton

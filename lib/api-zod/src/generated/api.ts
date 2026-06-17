@@ -8633,6 +8633,7 @@ export const GetInventorySettingsResponse = zod.object({
   "skuPrefix": zod.string(),
   "showCosts": zod.string(),
   "groupPricing": zod.string(),
+  "stockColors": zod.string(),
   "defaultImageUrl": zod.string().nullish()
 })
 
@@ -8644,6 +8645,7 @@ export const UpdateInventorySettingsBody = zod.object({
   "skuPrefix": zod.string().optional(),
   "showCosts": zod.string().optional(),
   "groupPricing": zod.string().optional(),
+  "stockColors": zod.string().optional(),
   "defaultImageUrl": zod.string().nullish()
 })
 
@@ -8653,6 +8655,7 @@ export const UpdateInventorySettingsResponse = zod.object({
   "skuPrefix": zod.string(),
   "showCosts": zod.string(),
   "groupPricing": zod.string(),
+  "stockColors": zod.string(),
   "defaultImageUrl": zod.string().nullish()
 })
 

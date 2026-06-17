@@ -85,6 +85,7 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
+SKIP_SCHEMA_DRIFT_CHECK = "true"
 
 [userenv.shared]
 SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"
