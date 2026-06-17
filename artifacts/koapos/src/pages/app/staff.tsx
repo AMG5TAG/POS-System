@@ -21,7 +21,7 @@ import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
   ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Download, Calendar, Receipt,
-  RefreshCw, Mail,
+  RefreshCw, Mail, Phone, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
