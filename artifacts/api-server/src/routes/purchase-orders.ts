@@ -59,6 +59,7 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null,
     totalCost: parseFloat(po.totalCost),
     deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
     deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
+    distributeDelivery: (po as { distributeDelivery?: string }).distributeDelivery === "true",
     items: items.map(fmtItem),
     receipts: receipts.map(fmtReceipt),
     createdAt: po.createdAt.toISOString(),
@@ -69,12 +70,30 @@ async function syncCostPricesFromPO(
   merchantId: number,
   poId: number,
   poNumber: string,
-  items: Array<{ productId?: number | null; unitCost?: number | null }>,
+  items: Array<{ productId?: number | null; unitCost?: number | null; quantity?: number | null }>,
   supplierName: string | null,
+  // Total delivery/shipping charge to spread across the line items (by value),
+  // folding it into each product's landed cost. 0 = don't distribute.
+  deliveryToDistribute = 0,
 ) {
+  // Allocation basis: each line's extended value (qty × unitCost) as a share of
+  // the order's goods subtotal, so pricier lines absorb proportionally more.
+  const goodsSubtotal = items.reduce(
+    (s, i) => (i.productId && i.unitCost != null ? s + (i.quantity ?? 1) * i.unitCost : s),
+    0,
+  );
+  const distribute = deliveryToDistribute > 0 && goodsSubtotal > 0;
+
   for (const item of items) {
     if (!item.productId || item.unitCost == null) continue;
-    const cost = item.unitCost;
+    const qty = item.quantity ?? 1;
+    let cost = item.unitCost;
+    if (distribute && qty > 0) {
+      const lineShare = (qty * item.unitCost) / goodsSubtotal;
+      const allocatedPerUnit = (deliveryToDistribute * lineShare) / qty;
+      cost = item.unitCost + allocatedPerUnit;
+    }
+    cost = Math.round(cost * 100) / 100;
     await db.update(productsTable)
       .set({ costPrice: String(cost) })
       .where(and(eq(productsTable.id, item.productId), eq(productsTable.merchantId, merchantId)));
@@ -156,6 +175,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
+  const distributeDelivery = req.body?.distributeDelivery === true;
   const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
   const totalCost = itemsSubtotal + deliveryGross;
   const [po] = await db.insert(purchaseOrdersTable).values({
@@ -172,6 +192,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
     totalCost: String(totalCost),
     deliveryCharge: String(deliveryCharge),
     deliveryTaxMode,
+    distributeDelivery: distributeDelivery ? "true" : "false",
   }).returning();
   if (body.items?.length) {
     await db.insert(purchaseOrderItemsTable).values(
@@ -194,7 +215,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
         .where(and(eq(suppliersTable.id, body.supplierId), eq(suppliersTable.merchantId, merchantId)));
       supplierName = sup?.name ?? null;
     }
-    await syncCostPricesFromPO(merchantId, po.id, poNumber, body.items, supplierName);
+    await syncCostPricesFromPO(merchantId, po.id, poNumber, body.items, supplierName, distributeDelivery ? deliveryCharge : 0);
   }
   const result = await getPOWithItems(po.id, merchantId);
   res.status(201).json(result);
@@ -222,6 +243,7 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
+  const distributeDelivery = req.body?.distributeDelivery === true;
   const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
   const totalCost = itemsSubtotal + deliveryGross;
   await db.update(purchaseOrdersTable).set({
@@ -239,6 +261,7 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     totalCost: String(totalCost),
     deliveryCharge: String(deliveryCharge),
     deliveryTaxMode,
+    distributeDelivery: distributeDelivery ? "true" : "false",
   }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (body.items !== undefined) {
     await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
@@ -265,7 +288,7 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
       supplierName = sup?.name ?? null;
     }
     if (body.items.length) {
-      await syncCostPricesFromPO(merchantId, id, updatedPO?.poNumber ?? "", body.items, supplierName);
+      await syncCostPricesFromPO(merchantId, id, updatedPO?.poNumber ?? "", body.items, supplierName, distributeDelivery ? deliveryCharge : 0);
     }
   }
   const result = await getPOWithItems(id, merchantId);

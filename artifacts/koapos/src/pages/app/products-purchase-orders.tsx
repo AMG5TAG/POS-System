@@ -67,6 +67,7 @@ const EMPTY_FORM = {
   status:          "Draft" as POStatus,
   deliveryCharge:  0,
   deliveryTaxMode: "exclusive" as TaxMode,
+  distributeDelivery: false,
   invoiceAttachments: [] as string[],
 };
 const EMPTY_ITEM: POItem = { productName: "", quantity: 1, unitCost: 0, received: 0 };
@@ -204,6 +205,7 @@ export default function ProductsPurchaseOrdersPage() {
       status:             po.status as POStatus,
       deliveryCharge:     (po as { deliveryCharge?: number }).deliveryCharge ?? 0,
       deliveryTaxMode:    ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode,
+      distributeDelivery: (po as { distributeDelivery?: boolean }).distributeDelivery ?? false,
       invoiceAttachments: (po as { invoiceUrls?: string[] }).invoiceUrls ?? [],
     });
     setItems((po.items ?? []).map((i) => ({
@@ -266,6 +268,7 @@ export default function ProductsPurchaseOrdersPage() {
       notes:           form.notes || undefined,
       deliveryCharge:  form.deliveryCharge,
       deliveryTaxMode: form.deliveryTaxMode,
+      distributeDelivery: form.distributeDelivery,
       invoiceUrls:     form.invoiceAttachments,
       items:           validItems,
     };
@@ -965,6 +968,22 @@ export default function ProductsPurchaseOrdersPage() {
                     </>
                   )}
                 </div>
+              )}
+
+              {/* Landed cost: fold shipping into each product's cost of goods */}
+              {form.deliveryCharge > 0 && (
+                <label className="flex items-start gap-2 mt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-muted-foreground/40 accent-primary shrink-0"
+                    checked={form.distributeDelivery}
+                    onChange={(e) => setForm({ ...form, distributeDelivery: e.target.checked })}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Distribute shipping across product costs</span><br />
+                    Spread the delivery charge across the line items (by value) and add it to each product's cost of goods.
+                  </span>
+                </label>
               )}
             </div>
 

@@ -15,6 +15,7 @@
     "protect-merchant-accounts": "tsx ./src/protect-merchant-accounts.ts",
     "add-invoice-link-columns": "tsx ./src/add-invoice-link-columns.ts",
     "add-staff-password-hash": "tsx ./src/add-staff-password-hash.ts",
+    "add-po-distribute-delivery": "tsx ./src/add-po-distribute-delivery.ts",
     "add-service-settings-table": "tsx ./src/add-service-settings-table.ts",
     "add-register-session-staff-id": "tsx ./src/add-register-session-staff-id.ts",
     "add-mobile-pos-app-table": "tsx ./src/add-mobile-pos-app-table.ts",

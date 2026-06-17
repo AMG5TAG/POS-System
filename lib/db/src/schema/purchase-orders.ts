@@ -21,6 +21,9 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   totalCost:       numeric("total_cost",       { precision: 10, scale: 2 }).notNull().default("0"),
   deliveryCharge:  numeric("delivery_charge",  { precision: 10, scale: 2 }).notNull().default("0"),
   deliveryTaxMode: text("delivery_tax_mode").notNull().default("exclusive"),
+  // When "true", the delivery/shipping charge is allocated across line items
+  // (by value) and folded into each product's cost price (landed cost).
+  distributeDelivery: text("distribute_delivery").notNull().default("false"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
