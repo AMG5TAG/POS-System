@@ -26,6 +26,7 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 import { parseStaffPosPrefs, type StaffPosPrefs } from "@/lib/pos-local-settings";
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
@@ -955,6 +956,22 @@ function StaffDetailDialog({
 }) {
   const billing = formatAddress(staff?.billingAddress);
   const postal  = formatAddress(staff?.postalAddress);
+
+  const STAFF_TABS = [
+    { key: "details",    label: "Details" },
+    { key: "address",    label: "Address" },
+    { key: "access",     label: "Access" },
+    { key: "employment", label: "Employment" },
+  ] as const;
+  type StaffTab = typeof STAFF_TABS[number]["key"];
+
+  const [tab, setTab] = useState<StaffTab>("details");
+  const tabIndex = STAFF_TABS.findIndex((t) => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(STAFF_TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < STAFF_TABS.length - 1) setTab(STAFF_TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!staff, goPrevTab, goNextTab);
+  useEffect(() => { setTab("details"); }, [staff?.id]);
+
   return (
     <Dialog open={!!staff} onOpenChange={(o) => { if (!o) onClose(); }}>
       <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
@@ -975,39 +992,59 @@ function StaffDetailDialog({
               </div>
             </DialogHeader>
 
-            <div className="flex-1 overflow-y-auto px-6 py-2 divide-y">
-              <section className="py-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Contact</h3>
-                <DetailRow icon={Mail} label="Email" value={staff.email} />
-                <DetailRow icon={Phone} label="Phone" value={staff.phone} />
-                <DetailRow icon={Calendar} label="Date of birth" value={staff.dateOfBirth} />
-              </section>
+            <div className="flex border-b px-6 gap-0 shrink-0">
+              {STAFF_TABS.map(({ key, label }) => (
+                <button key={key} onClick={() => setTab(key)} className={cn(
+                  "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                  tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}>
+                  {label}
+                </button>
+              ))}
+            </div>
 
-              <section className="py-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Company</h3>
-                <DetailRow icon={Building2} label="Company" value={staff.company} />
-                <DetailRow icon={Receipt} label="ABN" value={staff.abn} />
-              </section>
+            <div className="flex-1 overflow-y-auto px-6 py-3">
+              {tab === "details" && (
+                <div className="divide-y">
+                  <section className="py-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Contact</h3>
+                    <DetailRow icon={Mail} label="Email" value={staff.email} />
+                    <DetailRow icon={Phone} label="Phone" value={staff.phone} />
+                    <DetailRow icon={Calendar} label="Date of birth" value={staff.dateOfBirth} />
+                  </section>
+                  <section className="py-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Company</h3>
+                    <DetailRow icon={Building2} label="Company" value={staff.company} />
+                    <DetailRow icon={Receipt} label="ABN" value={staff.abn} />
+                  </section>
+                </div>
+              )}
 
-              <section className="py-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Addresses</h3>
-                <DetailRow icon={MapPin} label="Billing address" value={billing} />
-                <DetailRow icon={MapPin} label="Postal address" value={postal} />
-              </section>
+              {tab === "address" && (
+                <section className="py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Addresses</h3>
+                  <DetailRow icon={MapPin} label="Billing address" value={billing} />
+                  <DetailRow icon={MapPin} label="Postal address" value={postal} />
+                </section>
+              )}
 
-              <section className="py-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Access</h3>
-                <DetailRow icon={ShieldCheck} label="Role" value={<span className="capitalize">{staff.role.replace("_", " ")}</span>} />
-                <DetailRow icon={Lock} label="PIN" value={staff.pin ? "Set" : "Not set"} />
-                <DetailRow icon={Monitor} label="Default register" value={registerName} />
-              </section>
+              {tab === "access" && (
+                <section className="py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Access</h3>
+                  <DetailRow icon={ShieldCheck} label="Role" value={<span className="capitalize">{staff.role.replace("_", " ")}</span>} />
+                  <DetailRow icon={Lock} label="PIN" value={staff.pin ? "Set" : "Not set"} />
+                  <DetailRow icon={Monitor} label="Default register" value={registerName} />
+                </section>
+              )}
 
-              <section className="py-2">
-                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Employment</h3>
-                <DetailRow icon={DollarSign} label="Pay rate" value={staff.payRate ? `$${staff.payRate}/hr` : ""} />
-                <DetailRow icon={DollarSign} label="Loading" value={staff.loadingRate ? `${staff.loadingRate}%` : ""} />
-                <DetailRow icon={DollarSign} label="Super" value={staff.superRate ? `${staff.superRate}%` : ""} />
-              </section>
+              {tab === "employment" && (
+                <section className="py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Employment</h3>
+                  <DetailRow icon={DollarSign} label="Pay rate" value={staff.payRate ? `$${staff.payRate}/hr` : ""} />
+                  <DetailRow icon={DollarSign} label="Loading" value={staff.loadingRate ? `${staff.loadingRate}%` : ""} />
+                  <DetailRow icon={DollarSign} label="Super" value={staff.superRate ? `${staff.superRate}%` : ""} />
+                </section>
+              )}
             </div>
 
             <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
@@ -1023,6 +1060,12 @@ function StaffDetailDialog({
                 )}
                 <Button size="sm" className="w-8 h-8 p-0" onClick={() => onEdit(staff)} title="Edit staff member">
                   <Pencil className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === STAFF_TABS.length - 1} title="Next tab">
+                  <ChevronRight className="w-4 h-4" />
                 </Button>
               </div>
               <div className="flex gap-2 items-center">

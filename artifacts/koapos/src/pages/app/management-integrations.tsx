@@ -109,7 +109,6 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   google_drive:         { type: "img",  bg: "bg-white border",  src: SI("googledrive",   "4285F4") },
   onedrive:             { type: "img",  bg: "bg-[#0078D4]",     src: SI("onedrive",      "ffffff") },
   dropbox:              { type: "img",  bg: "bg-[#0061FF]",     src: SI("dropbox",       "ffffff") },
-  proton_drive:         { type: "img",  bg: "bg-[#6D4AFF]",     src: SI("proton",        "ffffff") },
   google_contacts:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
   microsoft_contacts:   { type: "img",  bg: "bg-[#0078D4]",     src: SI("microsoft",     "ffffff") },
   apple_account:        { type: "svg",  bg: "bg-black",          color: "text-white",    component: AppleSvg },
@@ -624,7 +623,7 @@ const ALL_SECTIONS = [
 // Cloud-storage and account/contacts integrations now live on the consolidated
 // Sync page (Management → Settings & Integrations → Sync), so they are hidden here.
 export const SYNC_INTEGRATION_KEYS = new Set([
-  "google_drive", "onedrive", "dropbox", "proton_drive",
+  "google_drive", "onedrive", "dropbox",
   "google_contacts", "microsoft_contacts", "apple_account",
 ]);
 

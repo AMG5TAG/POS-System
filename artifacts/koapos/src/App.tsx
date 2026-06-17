@@ -155,6 +155,7 @@ const ManagementLegalPage = lazy(() => import("@/pages/app/management-legal"));
 const ManagementGiftCardsPage = lazy(() => import("@/pages/app/management-gift-cards"));
 const MarketingReferralsPage = lazy(() => import("@/pages/app/marketing-referrals"));
 const LandingPagePublicView = lazy(() => import("@/pages/marketing/landing-page-public"));
+const OnlineStorePublicView = lazy(() => import("@/pages/marketing/online-store-public"));
 const PosEodPage = lazy(() => import("@/pages/app/pos-eod"));
 const ManagementReportsBasPage = lazy(() => import("@/pages/app/management-reports-bas"));
 const ManagementReportsVoidAuditPage = lazy(() => import("@/pages/app/management-reports-void-audit"));
@@ -719,6 +720,9 @@ function Router() {
       {/* Public landing pages (no auth required) */}
       <Route path="/b/:businessUsername/a/:customName" component={LandingPagePublicView} />
       <Route path="/p/:slug" component={LandingPagePublicView} />
+
+      {/* Public online store (no auth required) */}
+      <Route path="/b/:businessUsername/o/:storeSlug" component={OnlineStorePublicView} />
 
       {/* Marketing section */}
       <Route path="/marketing/overview">

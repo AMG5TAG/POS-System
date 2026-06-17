@@ -226,7 +226,7 @@ function DayCell({
   onBirthdayClick: (b: CalendarBirthday) => void;
 }) {
   if (!day) {
-    return <div className="min-h-[160px] bg-muted/20 dark:bg-muted/40 rounded-lg border border-border/40 dark:border-border/70" />;
+    return <div className="min-h-[120px] bg-muted/20 dark:bg-muted/40 rounded-lg border border-border/40 dark:border-border/70" />;
   }
 
   const dayNum = parseInt(day.date.split("-")[2], 10);
@@ -278,10 +278,17 @@ function DayCell({
 
   return (
     <div className={cn(
-      "min-h-[120px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
+      "relative overflow-hidden min-h-[120px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
       isCurrentMonth && !isPast ? "bg-card" : "bg-muted/30 dark:bg-muted/20 opacity-60",
       isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60 dark:border-border",
     )}>
+      {isPast && isCurrentMonth && !isToday && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{ backgroundImage: "repeating-linear-gradient(135deg, transparent 0, transparent 12px, hsl(var(--foreground) / 0.10) 12px, hsl(var(--foreground) / 0.10) 13px)" }}
+        />
+      )}
       <div className={cn(
         "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full shrink-0 self-start",
         isToday ? "bg-primary text-primary-foreground" :

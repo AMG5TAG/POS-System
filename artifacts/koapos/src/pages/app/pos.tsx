@@ -3030,7 +3030,7 @@ export default function POSPage() {
                     {(() => {
                       const imgSrc = productImageSrc(product.imageUrl, defaultProductImage);
                       return imgSrc
-                        ? <img src={imgSrc} alt={product.name} className="w-full h-full object-contain" />
+                        ? <img src={imgSrc} alt={product.name} loading="eager" decoding="async" draggable={false} className="w-full h-full object-contain" />
                         : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
                     })()}
                     {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
@@ -4647,7 +4647,7 @@ export default function POSPage() {
                 <div className="flex gap-4">
                   <div className="w-28 h-28 shrink-0 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
                     {imgSrc
-                      ? <img src={imgSrc} alt={p.name} className="w-full h-full object-contain" />
+                      ? <img src={imgSrc} alt={p.name} loading="eager" decoding="async" draggable={false} className="w-full h-full object-contain" />
                       : <span className="text-4xl font-bold text-muted-foreground/20">{p.name.charAt(0)}</span>}
                   </div>
                   <div className="flex-1 min-w-0 space-y-1.5">

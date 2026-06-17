@@ -65,7 +65,9 @@ function StatusTile({ icon, value, label, bg, iconColor, valueColor, dot }: Stat
         <span className={cn("text-3xl font-bold tabular-nums", valueColor)}>{value}</span>
         {dot && <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />}
       </div>
-      <span className="text-[11px] font-semibold tracking-wider text-center opacity-70 uppercase">{label}</span>
+      {/* Tiles use light pastel backgrounds with no dark variant, so pin the label
+          to a dark colour — otherwise it inherits white in dark mode and vanishes. */}
+      <span className="text-[11px] font-semibold tracking-wider text-center uppercase text-gray-700">{label}</span>
     </div>
   );
 }

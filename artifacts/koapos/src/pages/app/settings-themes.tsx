@@ -49,6 +49,23 @@ function saveTemplates(list: ThemeTemplate[]) {
   try { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(list)); } catch {}
 }
 
+/* Built-in preset themes — a quick way to restyle the app. Applying one turns
+ * off "use brand colours" and sets the primary colour (and light/dark mode). */
+const THEME_PRESETS: { name: string; primary: string; mode: ThemeMode }[] = [
+  { name: "Koastal Gold",  primary: "#efbf04", mode: "light" },
+  { name: "Ocean Blue",    primary: "#0ea5e9", mode: "light" },
+  { name: "Forest Green",  primary: "#10b981", mode: "light" },
+  { name: "Royal Purple",  primary: "#8b5cf6", mode: "light" },
+  { name: "Sunset Orange", primary: "#f97316", mode: "light" },
+  { name: "Rose Pink",     primary: "#ec4899", mode: "light" },
+  { name: "Crimson",       primary: "#ef4444", mode: "light" },
+  { name: "Teal",          primary: "#14b8a6", mode: "light" },
+  { name: "Slate",         primary: "#475569", mode: "light" },
+  { name: "Midnight Indigo", primary: "#6366f1", mode: "dark" },
+  { name: "Amber Night",   primary: "#f59e0b", mode: "dark" },
+  { name: "Emerald Night", primary: "#34d399", mode: "dark" },
+];
+
 const SEARCH_LAYOUTS: { value: SearchBarLayout; label: string; hint: string }[] = [
   { value: "expanded", label: "Expanded", hint: "Full-width bar that fills the header" },
   { value: "compact",  label: "Compact",  hint: "Fixed narrow search field" },
@@ -108,6 +125,12 @@ export default function SettingsThemesPage() {
     toast.success(`Saved theme "${name}"`);
   };
 
+  const applyPreset = (preset: { name: string; primary: string; mode: ThemeMode }) => {
+    setSettings({ useBrandColors: false, primaryColor: preset.primary });
+    setMode(preset.mode);
+    toast.success(`Applied "${preset.name}" theme`);
+  };
+
   const applyTemplate = (tpl: ThemeTemplate) => {
     replaceSettings(tpl.app);
     setMode(tpl.mode);
@@ -128,7 +151,7 @@ export default function SettingsThemesPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 md:p-8 space-y-6 max-w-4xl">
+      <div className="p-6 md:p-8 space-y-6">
         <div className="flex items-center gap-3">
           <Palette className="w-6 h-6 text-primary" />
           <div>
@@ -183,6 +206,41 @@ export default function SettingsThemesPage() {
                 </div>
               </SectionRow>
             )}
+          </CardContent>
+        </Card>
+
+        {/* ── Preset themes ──────────────────────────────────────────────── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-base"><Palette className="w-4 h-4" /> Preset themes</CardTitle>
+            <CardDescription>One-click looks. Applying a preset sets the colour and light/dark mode — you can still fine-tune below.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3">
+              {THEME_PRESETS.map((preset) => {
+                const isActive = !settings.useBrandColors && settings.primaryColor.toLowerCase() === preset.primary.toLowerCase();
+                return (
+                  <button
+                    key={preset.name}
+                    type="button"
+                    onClick={() => applyPreset(preset)}
+                    className={cn(
+                      "rounded-xl border p-3 text-left transition-all hover:shadow-sm",
+                      isActive ? "border-primary ring-1 ring-primary" : "hover:border-foreground/30",
+                    )}
+                  >
+                    <div className="flex items-center gap-2 mb-2">
+                      <span className="w-7 h-7 rounded-lg border shrink-0" style={{ background: preset.primary }} />
+                      <span className={cn("text-[10px] font-medium px-1.5 py-0.5 rounded-full", preset.mode === "dark" ? "bg-slate-800 text-slate-200" : "bg-muted text-muted-foreground")}>
+                        {preset.mode === "dark" ? "Night" : "Day"}
+                      </span>
+                      {isActive && <Check className="w-3.5 h-3.5 text-primary ml-auto" />}
+                    </div>
+                    <p className="text-xs font-medium truncate">{preset.name}</p>
+                  </button>
+                );
+              })}
+            </div>
           </CardContent>
         </Card>
 

@@ -486,8 +486,12 @@ export default function ManagementOverviewPage() {
               title="Net Profit"
               icon={TrendingUp}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600"
-              value={isLoading ? "—" : formatCurrency(revenueExGst - discountTotal - refundTotal - costTotal)}
-              sub="Revenue ex-GST, less COGS, discounts & refunds"
+              // Matches the Sales Overview P&L definition exactly: Revenue (ex-GST)
+              // − COGS. Sales totals are already net of discounts, so discounts /
+              // refunds are NOT subtracted again here (doing so double-counted them
+              // and produced a lower figure than the Sales Overview screen).
+              value={isLoading ? "—" : formatCurrency(revenueExGst - costTotal)}
+              sub="Revenue ex-GST, less COGS"
               valueClass="text-emerald-600"
               href="/management/marketing-reports/sales-overview"
             />
@@ -610,7 +614,7 @@ export default function ManagementOverviewPage() {
           {deviceTypes.length > 0 && (
             <div className="rounded-2xl border bg-card p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="font-semibold text-primary flex items-center gap-2">
+                <p className="font-semibold flex items-center gap-2">
                   <Monitor className="w-4 h-4" />
                   Device Types
                 </p>
@@ -620,7 +624,7 @@ export default function ManagementOverviewPage() {
                 {deviceTypes.map(({ type, count }) => (
                   <div key={type}>
                     <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="text-primary capitalize">{type}</span>
+                      <span className="capitalize">{type}</span>
                       <span>{count}</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">

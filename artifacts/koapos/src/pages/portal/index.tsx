@@ -531,7 +531,7 @@ function QuotesTab({ token }: { token: string }) {
       if (!r.ok) throw new Error();
       qc.invalidateQueries({ queryKey: ["portal-quotes", token] });
     } catch {
-      alert("Sorry, that couldn't be saved. Please try again.");
+      toast.error("Sorry, that couldn't be saved. Please try again.");
     } finally {
       setPending(null);
     }

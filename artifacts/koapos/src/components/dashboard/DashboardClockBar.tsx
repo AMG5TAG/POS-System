@@ -36,13 +36,29 @@ function getDateInTz(d: Date, tz: string) {
   return { day: get("weekday"), date: `${get("day")}/${get("month")}/${get("year")}` };
 }
 
-function isOpenInTz(d: Date, tz: string) {
+function minutesInTz(d: Date, tz: string) {
   const parts = new Intl.DateTimeFormat("en-AU", {
     hour: "numeric", minute: "2-digit", hour12: false, timeZone: tz,
   }).formatToParts(d);
   const get = (type: string) => parseInt(parts.find(x => x.type === type)?.value ?? "0");
-  const total = get("hour") * 60 + get("minute");
+  return get("hour") * 60 + get("minute");
+}
+
+function isOpenInTz(d: Date, tz: string) {
+  const total = minutesInTz(d, tz);
   return total >= OPEN_HOUR * 60 + OPEN_MIN && total < CLOSE_HOUR * 60 + CLOSE_MIN;
+}
+
+/* Clock colour by trading state: green while open, amber within 15 minutes
+ * either side of opening / closing, red when otherwise closed. */
+const EDGE_MIN = 15;
+function clockStateInTz(d: Date, tz: string): "open" | "edge" | "closed" {
+  const total = minutesInTz(d, tz);
+  const open  = OPEN_HOUR * 60 + OPEN_MIN;
+  const close = CLOSE_HOUR * 60 + CLOSE_MIN;
+  if (Math.abs(total - open) <= EDGE_MIN || Math.abs(total - close) <= EDGE_MIN) return "edge";
+  if (total > open && total < close) return "open";
+  return "closed";
 }
 
 export function DashboardClockBar({
@@ -62,25 +78,27 @@ export function DashboardClockBar({
   const { hours, minutes, seconds, ampm } = getTimeInTz(now, tz);
   const { day, date } = getDateInTz(now, tz);
   const open = isOpenInTz(now, tz);
+  const clockState = clockStateInTz(now, tz);
+  const clockColor = clockState === "open" ? "text-emerald-500" : clockState === "edge" ? "text-amber-500" : "text-rose-500";
 
   const displayName = user?.ownerName || user?.businessName || "there";
 
   return (
     <div className="rounded-2xl border bg-card px-5 py-3 flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-5">
       <div className="flex items-center gap-5">
-        <div className="flex items-baseline gap-0.5 shrink-0">
-          <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
+        <div className={`flex items-baseline gap-0.5 shrink-0 ${clockColor}`}>
+          <span className="text-4xl font-bold tabular-nums tracking-tight leading-none">
             {hours}
           </span>
-          <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
-          <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
+          <span className="text-4xl font-bold opacity-50 leading-none animate-pulse">:</span>
+          <span className="text-4xl font-bold tabular-nums tracking-tight leading-none">
             {minutes}
           </span>
-          <span className="text-4xl font-bold text-primary/50 leading-none animate-pulse">:</span>
-          <span className="text-4xl font-bold tabular-nums tracking-tight text-primary leading-none">
+          <span className="text-4xl font-bold opacity-50 leading-none animate-pulse">:</span>
+          <span className="text-4xl font-bold tabular-nums tracking-tight leading-none">
             {seconds}
           </span>
-          <span className="ml-1.5 text-sm font-semibold text-primary/70 self-end pb-0.5">{ampm}</span>
+          <span className="ml-1.5 text-sm font-semibold opacity-70 self-end pb-0.5">{ampm}</span>
         </div>
 
         <div className="shrink-0 border-l pl-5">

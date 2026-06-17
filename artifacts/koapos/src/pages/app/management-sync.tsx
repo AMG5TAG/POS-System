@@ -44,14 +44,13 @@ const LOGOS: Record<string, { bg: string; src?: string; node?: React.ReactNode }
   google_drive:       { bg: "bg-white border", src: SI("googledrive", "4285F4") },
   onedrive:           { bg: "bg-white border", node: <OneDriveIcon className="w-5 h-5" /> },
   dropbox:            { bg: "bg-[#0061FF]",     src: SI("dropbox",     "ffffff") },
-  proton_drive:       { bg: "bg-[#6D4AFF]",     src: SI("proton",      "ffffff") },
   google_contacts:    { bg: "bg-white border", src: SI("google",      "4285F4") },
   microsoft_contacts: { bg: "bg-white border", node: <MicrosoftIcon className="w-5 h-5" /> },
   apple_account:      { bg: "bg-black",         src: SI("apple",       "ffffff") },
 };
 
 const ACCOUNT_KEYS = ["google_contacts", "microsoft_contacts", "apple_account"];
-const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox", "proton_drive"];
+const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox"];
 // Customer (contacts) sync is supported for Google & Microsoft accounts.
 const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts"]);
 

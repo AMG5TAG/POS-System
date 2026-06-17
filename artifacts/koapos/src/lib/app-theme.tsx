@@ -122,14 +122,25 @@ export function AppThemeProvider({ children }: { children: ReactNode }) {
     const root = document.documentElement;
     const hex = settings.useBrandColors ? profile.brandColors?.[0] : settings.primaryColor;
     const triple = hex ? hexToHslTriple(hex) : null;
+    // Sidebar selected-menu highlight uses the --sidebar-accent / --sidebar-primary
+    // tokens (not --primary), so drive those too — that way the active menu item
+    // is highlighted in the brand / chosen colour.
+    const sidebarTokens = ["--sidebar-primary", "--sidebar-primary-foreground", "--sidebar-accent", "--sidebar-accent-foreground", "--sidebar-ring"];
     if (triple && hex) {
+      const fg = readableForeground(hex);
       root.style.setProperty("--primary", triple);
       root.style.setProperty("--ring", triple);
-      root.style.setProperty("--primary-foreground", readableForeground(hex));
+      root.style.setProperty("--primary-foreground", fg);
+      root.style.setProperty("--sidebar-primary", triple);
+      root.style.setProperty("--sidebar-primary-foreground", fg);
+      root.style.setProperty("--sidebar-accent", triple);
+      root.style.setProperty("--sidebar-accent-foreground", fg);
+      root.style.setProperty("--sidebar-ring", triple);
     } else {
       root.style.removeProperty("--primary");
       root.style.removeProperty("--ring");
       root.style.removeProperty("--primary-foreground");
+      sidebarTokens.forEach((t) => root.style.removeProperty(t));
     }
   }, [settings.useBrandColors, settings.primaryColor, profile.brandColors]);
 

@@ -21,6 +21,7 @@ import {
   Code2, Sparkles, Phone, Clock, ArrowUp, ArrowDown, Layers, Wand2, Building2,
   Link2, Copy, Check, Maximize2, Minimize2,
   Play, MessageSquare, HelpCircle, Columns3, Timer, Share2, Map as MapIcon, DollarSign, CopyPlus,
+  AppWindow, Menu as MenuIcon,
 } from "lucide-react";
 import {
   useGetOnlineStoreSettings,
@@ -31,17 +32,18 @@ import {
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { useStoreSlug, slugifyStorePath } from "@/lib/online-store-slug";
+import DOMPurify from "dompurify";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 type StoreMode = "builder" | "thirdparty";
 
-interface ThemeSettings {
+export interface ThemeSettings {
   primary: string; accent: string; bg: string; text: string;
   font: "sans" | "serif" | "mono"; radius: "none" | "sm" | "md" | "lg";
 }
 
-interface SiteSettings {
+export interface SiteSettings {
   mode: StoreMode; storeName: string; tagline: string; logoUrl: string;
   faviconUrl: string; domain: string; published: boolean;
   theme: ThemeSettings;
@@ -50,20 +52,21 @@ interface SiteSettings {
   pages: Page[]; quickCodes: QuickCode[];
 }
 
-interface Page {
+export interface Page {
   id: string; name: string; slug: string; visible: boolean; blocks: Block[];
   /* SEO & page settings (optional — round-tripped inside the pages JSON blob). */
   seoTitle?: string; seoDescription?: string; shareImage?: string; publishAt?: string;
 }
 
-interface Block {
+export interface Block {
   id: string; type: BlockType; data: Record<string, string | number | boolean>;
 }
 
 type BlockType =
   | "hero" | "heading" | "text" | "image" | "product-grid" | "featured-product"
   | "gallery" | "cta" | "newsletter" | "contact" | "spacer" | "loyalty-banner" | "quick-code"
-  | "video" | "testimonials" | "faq" | "columns" | "countdown" | "social" | "map" | "pricing";
+  | "video" | "testimonials" | "faq" | "columns" | "countdown" | "social" | "map" | "pricing"
+  | "html" | "iframe" | "similar-products" | "menu" | "product-category";
 
 interface QuickCode { id: string; code: string; label: string; url: string; }
 
@@ -100,6 +103,11 @@ const BLOCK_LIBRARY: BlockMeta[] = [
   { type: "social",           label: "Social Icons",      icon: Share2,       description: "Links to your social profiles",                            defaultData: { facebook: "", instagram: "", twitter: "", tiktok: "", youtube: "" } },
   { type: "map",              label: "Map",               icon: MapIcon,      description: "Embedded map of your location",                            defaultData: { address: "", zoom: 14 } },
   { type: "pricing",          label: "Pricing Table",     icon: DollarSign,   description: "Compare plans or packages",                                defaultData: { name1: "Basic", price1: "$9", features1: "Feature A, Feature B", name2: "Pro", price2: "$29", features2: "Everything in Basic, Feature C, Feature D", name3: "", price3: "", features3: "" } },
+  { type: "html",             label: "Custom HTML",       icon: Code2,        description: "Paste your own raw HTML",                                  defaultData: { html: "<div style=\"padding:24px;text-align:center;font-weight:600\">Your custom HTML here</div>" } },
+  { type: "iframe",           label: "iFrame Embed",      icon: AppWindow,    description: "Embed an external page or widget by URL",                  defaultData: { url: "", height: 400, title: "Embedded content" } },
+  { type: "similar-products", label: "Similar Products",  icon: ShoppingBag,  description: "Show products related to one item",                        defaultData: { headline: "You may also like", productSku: "", count: 4 } },
+  { type: "menu",             label: "Menu",              icon: MenuIcon,     description: "A food / service menu list with prices",                   defaultData: { headline: "Menu", items: "Flat White | $4.50\nMuffin | $5.00\nToasted Sandwich | $9.00" } },
+  { type: "product-category", label: "Product Category",  icon: Layers,       description: "Grid of products from a chosen category",                  defaultData: { headline: "Shop the range", category: "all", columns: 4, count: 8 } },
 ];
 
 const FONT_OPTIONS = [
@@ -154,7 +162,7 @@ const THIRDPARTY_PROVIDERS = [
 
 /* ─── API converters ─────────────────────────────────────────────────────── */
 
-function apiToSite(r: Record<string, unknown>): SiteSettings {
+export function apiToSite(r: Record<string, unknown>): SiteSettings {
   let pages: Page[] = DEFAULT_SITE.pages;
   let theme: ThemeSettings = { ...DEFAULT_SITE.theme };
   let payments = { ...DEFAULT_SITE.payments };
@@ -203,7 +211,7 @@ function apiToThirdParty(r: Record<string, unknown>): ThirdParty | null {
 
 /* ─── Block preview ──────────────────────────────────────────────────────── */
 
-function BlockPreview({ block, theme }: { block: Block; theme: ThemeSettings }) {
+export function BlockPreview({ block, theme }: { block: Block; theme: ThemeSettings }) {
   const radiusClass = { none: "rounded-none", sm: "rounded", md: "rounded-lg", lg: "rounded-full" }[theme.radius];
   switch (block.type) {
     case "hero":
@@ -404,6 +412,70 @@ function BlockPreview({ block, theme }: { block: Block; theme: ThemeSettings }) 
         </div>
       );
     }
+    case "html":
+      return <div className={cn("overflow-hidden", radiusClass)} dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(String(block.data.html ?? "")) }} />;
+    case "iframe":
+      return block.data.url ? (
+        <iframe
+          src={String(block.data.url)} title={String(block.data.title ?? "Embedded content")}
+          height={Number(block.data.height) || 400}
+          className={cn("w-full border-0", radiusClass)} loading="lazy"
+        />
+      ) : (
+        <div className={cn("flex flex-col items-center justify-center gap-1 bg-muted py-10", radiusClass)} style={{ color: theme.text }}>
+          <AppWindow className="w-7 h-7 opacity-40" /><p className="text-xs opacity-60">Add an embed URL</p>
+        </div>
+      );
+    case "similar-products": {
+      const cols = Math.max(2, Math.min(4, Number(block.data.count) || 4));
+      return (
+        <div className="space-y-2">
+          {block.data.headline ? <p className="text-sm font-semibold" style={{ color: theme.text }}>{String(block.data.headline)}</p> : null}
+          <div className={cn("grid gap-2", cols === 2 ? "grid-cols-2" : cols === 3 ? "grid-cols-3" : "grid-cols-4")}>
+            {Array.from({ length: cols }).map((_, i) => (
+              <div key={i} className={cn("border overflow-hidden", radiusClass)}>
+                <div className="aspect-square bg-muted/60 flex items-center justify-center"><ShoppingBag className="w-4 h-4 text-muted-foreground/40" /></div>
+                <div className="p-1.5"><div className="h-2 w-3/4 bg-muted rounded mb-1" /><div className="h-2 w-1/3 bg-muted rounded" /></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    case "menu": {
+      const rows = String(block.data.items ?? "").split("\n").map((l) => l.trim()).filter(Boolean)
+        .map((l) => { const [name, price] = l.split("|").map((s) => s.trim()); return { name: name ?? "", price: price ?? "" }; });
+      return (
+        <div className="space-y-2" style={{ color: theme.text }}>
+          {block.data.headline ? <p className="text-base font-bold">{String(block.data.headline)}</p> : null}
+          <div className="space-y-1.5">
+            {rows.map((r, i) => (
+              <div key={i} className="flex items-baseline gap-2 text-sm">
+                <span className="font-medium">{r.name}</span>
+                <span className="flex-1 border-b border-dotted opacity-30" style={{ borderColor: theme.text }} />
+                <span className="font-semibold" style={{ color: theme.primary }}>{r.price}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      );
+    }
+    case "product-category": {
+      const cols = Math.max(2, Math.min(4, Number(block.data.columns) || 4));
+      const n = Math.max(1, Number(block.data.count) || 8);
+      return (
+        <div className="space-y-2">
+          {block.data.headline ? <p className="text-sm font-semibold" style={{ color: theme.text }}>{String(block.data.headline)}</p> : null}
+          <div className={cn("grid gap-2", cols === 2 ? "grid-cols-2" : cols === 3 ? "grid-cols-3" : "grid-cols-4")}>
+            {Array.from({ length: Math.min(n, cols * 2) }).map((_, i) => (
+              <div key={i} className={cn("aspect-square bg-muted/60 flex items-center justify-center", radiusClass)}><Package className="w-4 h-4 text-muted-foreground/40" /></div>
+            ))}
+          </div>
+          {block.data.category && block.data.category !== "all"
+            ? <p className="text-[10px] opacity-50" style={{ color: theme.text }}>Category: {String(block.data.category)}</p> : null}
+        </div>
+      );
+    }
   }
 }
 
@@ -583,6 +655,52 @@ function BlockEditor({ block, onChange }: { block: Block; onChange: (b: Block) =
           ))}
         </div>
       );
+    case "html":
+      return (
+        <Field label="Custom HTML">
+          <Textarea rows={8} className="font-mono text-xs" value={String(block.data.html ?? "")} onChange={(e) => set({ html: e.target.value })} placeholder="<div>…</div>" />
+        </Field>
+      );
+    case "iframe":
+      return (
+        <div className="space-y-3">
+          <Field label="Embed URL"><Input value={String(block.data.url ?? "")} onChange={(e) => set({ url: e.target.value })} placeholder="https://…" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Height (px)"><Input type="number" min={100} max={1200} value={Number(block.data.height) || 400} onChange={(e) => set({ height: parseInt(e.target.value) || 400 })} /></Field>
+            <Field label="Title"><Input value={String(block.data.title ?? "")} onChange={(e) => set({ title: e.target.value })} /></Field>
+          </div>
+        </div>
+      );
+    case "similar-products":
+      return (
+        <div className="space-y-3">
+          <Field label="Headline"><Input value={String(block.data.headline ?? "")} onChange={(e) => set({ headline: e.target.value })} /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Based on SKU"><Input value={String(block.data.productSku ?? "")} onChange={(e) => set({ productSku: e.target.value })} placeholder="SKU-123" /></Field>
+            <Field label="How many"><Input type="number" min={2} max={4} value={Number(block.data.count) || 4} onChange={(e) => set({ count: parseInt(e.target.value) || 4 })} /></Field>
+          </div>
+        </div>
+      );
+    case "menu":
+      return (
+        <div className="space-y-3">
+          <Field label="Headline"><Input value={String(block.data.headline ?? "")} onChange={(e) => set({ headline: e.target.value })} /></Field>
+          <Field label="Items (one per line: Name | Price)">
+            <Textarea rows={6} value={String(block.data.items ?? "")} onChange={(e) => set({ items: e.target.value })} placeholder={"Flat White | $4.50\nMuffin | $5.00"} />
+          </Field>
+        </div>
+      );
+    case "product-category":
+      return (
+        <div className="space-y-3">
+          <Field label="Headline"><Input value={String(block.data.headline ?? "")} onChange={(e) => set({ headline: e.target.value })} /></Field>
+          <Field label="Category"><Input value={String(block.data.category ?? "all")} onChange={(e) => set({ category: e.target.value })} placeholder="all | beverages | snacks" /></Field>
+          <div className="grid grid-cols-2 gap-3">
+            <Field label="Columns"><Input type="number" min={2} max={4} value={Number(block.data.columns) || 4} onChange={(e) => set({ columns: parseInt(e.target.value) || 4 })} /></Field>
+            <Field label="Product count"><Input type="number" min={1} max={48} value={Number(block.data.count) || 8} onChange={(e) => set({ count: parseInt(e.target.value) || 8 })} /></Field>
+          </div>
+        </div>
+      );
   }
 }
 
@@ -689,6 +807,13 @@ export default function ManagementOnlineStorePage() {
       }
     }
   }, [rawSettings, settingsLoading]);
+
+  // Opened from the "Full screen" button (new tab) → start in full-screen builder.
+  useEffect(() => {
+    if (new URLSearchParams(window.location.search).get("builder") === "fullscreen") {
+      setFullScreen(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (rawThirdParty) {
@@ -941,14 +1066,6 @@ export default function ManagementOnlineStorePage() {
                 </Button>
               </>
             )}
-            <Button
-              size="sm" variant="outline" className="gap-1.5"
-              onClick={() => setFullScreen((v) => !v)}
-              title={fullScreen ? "Exit full screen" : "Open builder full screen"}
-            >
-              {fullScreen ? <Minimize2 className="w-3.5 h-3.5" /> : <Maximize2 className="w-3.5 h-3.5" />}
-              <span className="hidden sm:inline">{fullScreen ? "Exit full screen" : "Full screen"}</span>
-            </Button>
           </div>
         </div>
 
@@ -1195,15 +1312,30 @@ export default function ManagementOnlineStorePage() {
 
             <Card>
               <CardHeader className="pb-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div><CardTitle className="text-base flex items-center gap-2"><Wand2 className="w-4 h-4" /> Page Builder</CardTitle><CardDescription>Drag-style block editor for your pages</CardDescription></div>
-                  <div className="flex gap-1 bg-muted rounded-lg p-1">
-                    {(["sm", "md", "lg"] as const).map((w) => (
-                      <button key={w} onClick={() => setPreviewWidth(w)}
-                        className={cn("px-2 py-1 text-[10px] font-semibold uppercase rounded transition-all", previewWidth === w ? "bg-background shadow-sm" : "pill-selector text-muted-foreground")}>
-                        {w === "sm" ? "Mobile" : w === "md" ? "Tablet" : "Desktop"}
-                      </button>
-                    ))}
+                <div className="flex items-center justify-between gap-3 flex-wrap">
+                  <div><CardTitle className="text-base flex items-center gap-2"><Wand2 className="w-4 h-4" /> Store Builder</CardTitle><CardDescription>Drag-style block editor for your pages</CardDescription></div>
+                  <div className="flex items-center gap-2">
+                    <div className="flex gap-1 bg-muted rounded-lg p-1">
+                      {(["sm", "md", "lg"] as const).map((w) => (
+                        <button key={w} onClick={() => setPreviewWidth(w)}
+                          className={cn("px-2 py-1 text-[10px] font-semibold uppercase rounded transition-all", previewWidth === w ? "bg-background shadow-sm" : "pill-selector text-muted-foreground")}>
+                          {w === "sm" ? "Mobile" : w === "md" ? "Tablet" : "Desktop"}
+                        </button>
+                      ))}
+                    </div>
+                    {fullScreen ? (
+                      <Button size="sm" variant="outline" className="gap-1.5" onClick={() => setFullScreen(false)} title="Exit full screen">
+                        <Minimize2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Exit full screen</span>
+                      </Button>
+                    ) : (
+                      <Button
+                        size="sm" variant="outline" className="gap-1.5"
+                        onClick={() => window.open(`${window.location.pathname}?builder=fullscreen`, "_blank", "noopener")}
+                        title="Open the Store Builder in a new full-size tab"
+                      >
+                        <Maximize2 className="w-3.5 h-3.5" /><span className="hidden sm:inline">Full screen</span>
+                      </Button>
+                    )}
                   </div>
                 </div>
               </CardHeader>
@@ -1240,13 +1372,15 @@ export default function ManagementOnlineStorePage() {
                         <Copy className="w-3 h-3" /> Paste block
                       </Button>
                     )}
-                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">Add block</p>
-                    <div className="space-y-1 max-h-72 overflow-auto pr-1">
+                    <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Add block</p>
+                    <div className="grid grid-cols-2 gap-1.5">
                       {BLOCK_LIBRARY.map((b) => {
                         const Icon = b.icon;
                         return (
-                          <button key={b.type} onClick={() => addBlock(b)} className="w-full flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted text-left" title={b.description}>
-                            <Icon className="w-3.5 h-3.5 text-muted-foreground" />{b.label}
+                          <button key={b.type} onClick={() => addBlock(b)} title={b.description}
+                            className="flex flex-col items-center justify-center gap-1 rounded-md border bg-background/60 px-1.5 py-2 text-[10px] text-center leading-tight hover:bg-muted hover:border-primary/40 transition-colors">
+                            <Icon className="w-4 h-4 text-muted-foreground" />
+                            <span className="line-clamp-2">{b.label}</span>
                           </button>
                         );
                       })}
