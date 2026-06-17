@@ -2,8 +2,9 @@ import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Store } from "lucide-react";
 import {
-  apiToSite, BlockPreview, type SiteSettings,
+  apiToSite, BlockPreview, blockWrapperStyle, blockColSpan, type SiteSettings,
 } from "@/pages/app/management-online-store";
+import { cn } from "@/lib/utils";
 
 /*
  * Public, unauthenticated storefront for the KoaPOS website builder.
@@ -75,9 +76,17 @@ export default function OnlineStorePublicView() {
       </header>
 
       {/* Page blocks */}
-      <main className="max-w-5xl mx-auto p-4 sm:p-6 space-y-4">
+      <main className="max-w-5xl mx-auto p-4 sm:p-6">
         {page?.blocks.length
-          ? page.blocks.map((b) => <div key={b.id}><BlockPreview block={b} theme={data.theme} /></div>)
+          ? (
+            <div className="grid grid-cols-12 gap-4 items-start">
+              {page.blocks.map((b) => (
+                <div key={b.id} className={cn(blockColSpan(b.data))} style={blockWrapperStyle(b.data)}>
+                  <BlockPreview block={b} theme={data.theme} />
+                </div>
+              ))}
+            </div>
+          )
           : <p className="text-center text-sm opacity-60 py-16" style={{ color: data.theme.text }}>This page has no content yet.</p>}
       </main>
     </div>

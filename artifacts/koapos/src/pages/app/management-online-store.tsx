@@ -21,7 +21,7 @@ import {
   Code2, Sparkles, Phone, Clock, ArrowUp, ArrowDown, Layers, Wand2, Building2,
   Link2, Copy, Check, Maximize2, Minimize2,
   Play, MessageSquare, HelpCircle, Columns3, Timer, Share2, Map as MapIcon, DollarSign, CopyPlus,
-  AppWindow, Menu as MenuIcon,
+  AppWindow, Menu as MenuIcon, Loader2, AlertCircle,
 } from "lucide-react";
 import {
   useGetOnlineStoreSettings,
@@ -33,6 +33,7 @@ import {
 import { useBusinessProfile } from "@/lib/business-profile";
 import { useStoreSlug, slugifyStorePath } from "@/lib/online-store-slug";
 import DOMPurify from "dompurify";
+import { useQueryClient } from "@tanstack/react-query";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -41,7 +42,15 @@ type StoreMode = "builder" | "thirdparty";
 export interface ThemeSettings {
   primary: string; accent: string; bg: string; text: string;
   font: "sans" | "serif" | "mono"; radius: "none" | "sm" | "md" | "lg";
+  /** Default layout applied to every product page when a customer views a product. */
+  productLayout?: "standard" | "gallery" | "compact";
 }
+
+const PRODUCT_LAYOUTS = [
+  { value: "standard", label: "Standard", hint: "Image left, details right" },
+  { value: "gallery",  label: "Gallery",  hint: "Large image on top, details below" },
+  { value: "compact",  label: "Compact",  hint: "Small image, condensed details" },
+] as const;
 
 export interface SiteSettings {
   mode: StoreMode; storeName: string; tagline: string; logoUrl: string;
@@ -144,7 +153,7 @@ const COLOUR_PRESETS = [
 
 const DEFAULT_SITE: SiteSettings = {
   mode: "builder", storeName: "", tagline: "", logoUrl: "", faviconUrl: "", domain: "", published: false,
-  theme: { primary: "#0EA5E9", accent: "#06B6D4", bg: "#F8FAFC", text: "#0F172A", font: "sans", radius: "md" },
+  theme: { primary: "#0EA5E9", accent: "#06B6D4", bg: "#F8FAFC", text: "#0F172A", font: "sans", radius: "md", productLayout: "standard" },
   payments: { stripe: false, paypal: false, afterpay: false, applePay: false },
   features: { loyalty: false, customers: false, checkout: true, quickCodes: false, reviews: false, newsletter: false },
   pages: [{ id: "p-home", name: "Home", slug: "/", visible: true, blocks: [] }],
@@ -710,13 +719,26 @@ function Field({ label, children }: { label: string; children: React.ReactNode }
 
 /* Per-block styling lives in reserved `_`-prefixed keys on block.data so it
  * round-trips with the rest of the block and applies to every block type. */
-function blockWrapperStyle(data: Record<string, string | number | boolean>): React.CSSProperties {
+export function blockWrapperStyle(data: Record<string, string | number | boolean>): React.CSSProperties {
   const s: React.CSSProperties = {};
   if (data._bg) s.backgroundColor = String(data._bg);
   const pad = Number(data._padY);
   if (pad) { s.paddingTop = pad; s.paddingBottom = pad; }
   if (data._align) s.textAlign = data._align as React.CSSProperties["textAlign"];
   return s;
+}
+
+/* Column span on a 12-col grid, so blocks can sit side by side at full / half /
+ * third / quarter widths. Mobile always stacks full-width. */
+const WIDTH_OPTIONS = [
+  { value: "full",    label: "Full width", span: "col-span-12" },
+  { value: "half",    label: "Half (½)",   span: "col-span-12 sm:col-span-6" },
+  { value: "third",   label: "Third (⅓)",  span: "col-span-12 sm:col-span-4" },
+  { value: "quarter", label: "Quarter (¼)", span: "col-span-12 sm:col-span-3" },
+] as const;
+
+export function blockColSpan(data: Record<string, string | number | boolean>): string {
+  return WIDTH_OPTIONS.find((w) => w.value === data._width)?.span ?? "col-span-12";
 }
 
 function BlockStyleSection({ block, onChange }: { block: Block; onChange: (b: Block) => void }) {
@@ -742,9 +764,9 @@ function BlockStyleSection({ block, onChange }: { block: Block; onChange: (b: Bl
           </Select>
         </Field>
         <Field label="Width">
-          <Select value={block.data._fullWidth ? "full" : "contained"} onValueChange={(v) => set({ _fullWidth: v === "full" })}>
+          <Select value={String(block.data._width ?? "full")} onValueChange={(v) => set({ _width: v })}>
             <SelectTrigger className="h-8"><SelectValue /></SelectTrigger>
-            <SelectContent><SelectItem value="contained">Contained</SelectItem><SelectItem value="full">Full width</SelectItem></SelectContent>
+            <SelectContent>{WIDTH_OPTIONS.map((w) => <SelectItem key={w.value} value={w.value}>{w.label}</SelectItem>)}</SelectContent>
           </Select>
         </Field>
       </div>
@@ -793,6 +815,45 @@ export default function ManagementOnlineStorePage() {
     await navigator.clipboard.writeText(liveStoreUrl).catch(() => {});
     setUrlCopied(true);
     setTimeout(() => setUrlCopied(false), 2000);
+  };
+
+  /* ── Custom-domain verification ───────────────────────────────────────────
+   * The backend is the source of truth for whether a custom domain is live: it
+   * verifies the DNS record, registers the hostname and provisions the TLS
+   * certificate, then reports `domainStatus` on the store settings. Until then
+   * a saved domain shows as "pending". The Verify button kicks the backend
+   * check; everything here is ready for those endpoints to fill in. */
+  const queryClient = useQueryClient();
+  const backendDomainStatus = (rawSettings as { domainStatus?: string } | undefined)?.domainStatus;
+  const domainStatus: "none" | "pending" | "verifying" | "active" | "failed" =
+    !site.domain.trim() ? "none"
+    : (backendDomainStatus === "active" || backendDomainStatus === "verifying" || backendDomainStatus === "failed")
+      ? backendDomainStatus
+      : "pending";
+  const [verifying, setVerifying] = useState(false);
+
+  const verifyDomain = async () => {
+    const domain = site.domain.trim();
+    if (!domain) return;
+    setVerifying(true);
+    try {
+      const res = await fetch("/api/online-store/domain/verify", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ domain }),
+      });
+      const data = await res.json().catch(() => ({} as { status?: string; error?: string }));
+      if (!res.ok) throw new Error(data.error || "Verification could not be started");
+      // Backend persists the new domainStatus; refresh settings so the badge updates.
+      await queryClient.invalidateQueries({ queryKey: ["online-store-settings"] });
+      if (data.status === "active") toast.success(`${domain} is live!`);
+      else toast.success("Verification started — we’ll activate your domain once DNS & certificate checks pass.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Couldn’t verify the domain — please try again later.");
+    } finally {
+      setVerifying(false);
+    }
   };
 
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -1046,7 +1107,7 @@ export default function ManagementOnlineStorePage() {
 
   return (
     <AppLayout>
-      <div className={cn("space-y-6", fullScreen ? "fixed inset-0 z-50 bg-background overflow-y-auto p-4 md:p-6" : "p-6 md:p-8")}>
+      <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
           <div>
             <h1 className="text-2xl font-bold flex items-center gap-2">
@@ -1238,14 +1299,56 @@ export default function ManagementOnlineStorePage() {
 
                 {/* Custom domain (DNS) */}
                 <div className="space-y-1.5">
-                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Custom domain (optional)</Label>
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Custom domain (optional)</Label>
+                    {domainStatus === "active" && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                        <Check className="h-3 w-3" /> Active
+                      </span>
+                    )}
+                    {domainStatus === "verifying" && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                        <Loader2 className="h-3 w-3 animate-spin" /> Verifying…
+                      </span>
+                    )}
+                    {domainStatus === "pending" && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                        <Clock className="h-3 w-3" /> Pending verification
+                      </span>
+                    )}
+                    {domainStatus === "failed" && (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-medium px-2 py-0.5 rounded-full bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                        <AlertCircle className="h-3 w-3" /> Verification failed
+                      </span>
+                    )}
+                  </div>
                   <p className="text-xs text-muted-foreground">
-                    Point your own domain at your store. Customers will then visit your domain instead of the platform URL.
+                    Use your own domain for your store. Enter it below, add the DNS record, then click Verify —
+                    we check the record and issue the security certificate. Until it’s Active, your store stays on
+                    the platform URL above.
                   </p>
-                  <Input value={site.domain} onChange={(e) => updateSite({ domain: e.target.value })} placeholder="shop.yourbusiness.com.au" className="font-mono text-sm" />
-                  {site.domain.trim() && (
-                    <p className="text-xs text-emerald-600 flex items-center gap-1">
-                      <Check className="h-3.5 w-3.5" /> Live at <span className="font-mono">{liveStoreUrl}</span>
+                  <div className="flex items-center gap-2">
+                    <Input value={site.domain} onChange={(e) => updateSite({ domain: e.target.value })} placeholder="shop.yourbusiness.com.au" className="font-mono text-sm flex-1" />
+                    {site.domain.trim() && domainStatus !== "active" && (
+                      <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={verifyDomain} disabled={verifying}>
+                        {verifying ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Check className="h-3.5 w-3.5" />}
+                        {verifying ? "Verifying…" : "Verify"}
+                      </Button>
+                    )}
+                  </div>
+                  {domainStatus === "active" && (
+                    <p className="text-[11px] text-emerald-600 flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5" /> Live at <span className="font-mono">https://{site.domain.trim()}</span>
+                    </p>
+                  )}
+                  {domainStatus === "failed" && (
+                    <p className="text-[11px] text-red-600">
+                      We couldn’t verify <span className="font-mono">{site.domain.trim()}</span>. Check the CNAME record is correct and has propagated, then Verify again.
+                    </p>
+                  )}
+                  {(domainStatus === "pending" || domainStatus === "verifying") && (
+                    <p className="text-[11px] text-muted-foreground">
+                      Saved. After the DNS record is added, Verify activates <span className="font-mono">{site.domain.trim()}</span> once the certificate is issued (can take a few minutes).
                     </p>
                   )}
                 </div>
@@ -1255,7 +1358,7 @@ export default function ManagementOnlineStorePage() {
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">DNS setup</p>
                   <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
                     <li>Log in to your domain registrar (e.g. Crazy Domains, Namecheap, Cloudflare).</li>
-                    <li>Add a <span className="font-mono font-medium">CNAME</span> record for your chosen subdomain pointing to:</li>
+                    <li>Add a <span className="font-mono font-medium">CNAME</span> record for a <strong>subdomain</strong> (e.g. <span className="font-mono">shop</span>) pointing to:</li>
                   </ol>
                   <div className="flex items-center gap-2 rounded border bg-background px-3 py-1.5 mt-1">
                     <span className="text-xs font-mono flex-1 select-all">koapos.com.au</span>
@@ -1263,7 +1366,11 @@ export default function ManagementOnlineStorePage() {
                       <Copy className="h-3.5 w-3.5" />
                     </button>
                   </div>
-                  <p className="text-xs text-muted-foreground">DNS changes can take up to 24–48 hours to propagate.</p>
+                  <p className="text-[11px] text-muted-foreground">
+                    Using a root/apex domain (e.g. <span className="font-mono">yourbusiness.com</span> with no subdomain)? A CNAME
+                    won’t work there — use an <span className="font-mono">ALIAS</span>/<span className="font-mono">ANAME</span> record if your
+                    registrar supports it, or contact us. DNS changes can take up to 24–48 hours to propagate.
+                  </p>
                 </div>
               </CardContent>
             </Card>
@@ -1307,10 +1414,33 @@ export default function ManagementOnlineStorePage() {
                     </Select>
                   </Field>
                 </div>
+                {/* Default product page layout — applied to every product when a customer opens it. */}
+                <div>
+                  <Label className="text-xs mb-2 block">Default product page layout</Label>
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                    {PRODUCT_LAYOUTS.map((opt) => {
+                      const active = (site.theme.productLayout ?? "standard") === opt.value;
+                      return (
+                        <button
+                          key={opt.value}
+                          type="button"
+                          onClick={() => updateTheme({ productLayout: opt.value })}
+                          className={cn("text-left rounded-lg border p-3 transition-colors", active ? "border-primary bg-primary/5 ring-1 ring-primary" : "hover:bg-muted")}
+                        >
+                          <span className="flex items-center gap-1.5 text-sm font-medium">
+                            {active && <Check className="w-3.5 h-3.5 text-primary" />}{opt.label}
+                          </span>
+                          <span className="text-xs text-muted-foreground">{opt.hint}</span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground mt-1.5">Every product in your store uses this layout when a customer opens it.</p>
+                </div>
               </CardContent>
             </Card>
 
-            <Card>
+            <Card className={cn(fullScreen && "fixed inset-0 z-50 m-0 rounded-none border-0 overflow-y-auto")}>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3 flex-wrap">
                   <div><CardTitle className="text-base flex items-center gap-2"><Wand2 className="w-4 h-4" /> Store Builder</CardTitle><CardDescription>Drag-style block editor for your pages</CardDescription></div>
@@ -1403,9 +1533,9 @@ export default function ManagementOnlineStorePage() {
                             ))}
                           </div>
                         </div>
-                        <div className="p-4 space-y-3">
+                        <div className="p-4 grid grid-cols-12 gap-3 items-start">
                           {activePage.blocks.length === 0 ? (
-                            <div className="py-12 text-center text-sm text-muted-foreground"><Layout className="w-8 h-8 mx-auto mb-2 opacity-30" />No blocks yet. Add one from the left.</div>
+                            <div className="col-span-12 py-12 text-center text-sm text-muted-foreground"><Layout className="w-8 h-8 mx-auto mb-2 opacity-30" />No blocks yet. Add one from the left.</div>
                           ) : activePage.blocks.map((b) => (
                             <div key={b.id}
                               draggable
@@ -1415,7 +1545,7 @@ export default function ManagementOnlineStorePage() {
                               onDragEnd={() => setDragBlockId(null)}
                               onClick={() => setActiveBlockId(b.id)}
                               style={blockWrapperStyle(b.data)}
-                              className={cn("relative rounded cursor-pointer transition-all", b.data._fullWidth && "-mx-4", dragBlockId === b.id && "opacity-50", activeBlockId === b.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-muted-foreground/30")}>
+                              className={cn("relative rounded cursor-pointer transition-all", blockColSpan(b.data), dragBlockId === b.id && "opacity-50", activeBlockId === b.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-muted-foreground/30")}>
                               {activeBlockId === b.id && (
                                 <div className="absolute -top-2 -right-2 flex gap-1 z-10">
                                   <button onClick={(e) => { e.stopPropagation(); moveBlock(b.id, -1); }} className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-muted" title="Move up"><ArrowUp className="w-3 h-3" /></button>

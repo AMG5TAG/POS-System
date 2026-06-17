@@ -1199,7 +1199,7 @@ function TopNavBtn({
       onClick={onClick}
       className={cn(
         "flex items-center gap-1.5 px-2.5 py-1.5 rounded-md text-sm font-medium transition-colors whitespace-nowrap",
-        isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+        isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
       )}
     >
       <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -1261,7 +1261,7 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
                           </div>
                           {child.children.map((leaf) => (
                             <button key={leaf.href} onClick={() => { navigate(leaf.href); onToggle(); }}
-                              className={cn("w-full flex items-center gap-2.5 pl-11 pr-3 py-1.5 text-sm hover:bg-muted transition-colors text-left", isLeafActive(leaf, location) && "bg-secondary/60 font-medium")}>
+                              className={cn("w-full flex items-center gap-2.5 pl-11 pr-3 py-1.5 text-sm hover:bg-muted transition-colors text-left", isLeafActive(leaf, location) && "bg-primary/15 text-primary font-medium")}>
                               <leaf.icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                               {leaf.name}
                             </button>
@@ -1271,7 +1271,7 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
                     }
                     return (
                       <button key={child.href} onClick={() => { navigate(child.href); onToggle(); }}
-                        className={cn("w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-sm hover:bg-muted transition-colors text-left", isLeafActive(child, location) && "bg-secondary/60 font-medium")}>
+                        className={cn("w-full flex items-center gap-2.5 pl-7 pr-3 py-2 text-sm hover:bg-muted transition-colors text-left", isLeafActive(child, location) && "bg-primary/15 text-primary font-medium")}>
                         <child.icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         {child.name}
                       </button>
@@ -1283,7 +1283,7 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
             const active = location === item.href;
             return (
               <button key={item.href} onClick={() => { navigate(item.href); onToggle(); }}
-                className={cn("w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted transition-colors text-left", active && "bg-secondary/60 font-medium")}>
+                className={cn("w-full flex items-center gap-2.5 px-3 py-2 text-sm hover:bg-muted transition-colors text-left", active && "bg-primary/15 text-primary font-medium")}>
                 <item.icon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                 {item.name}
               </button>
@@ -1300,7 +1300,7 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
         onClick={handleMainClick}
         className={cn(
           "flex items-center gap-1.5 px-2.5 py-1.5 rounded-l-md text-sm font-medium transition-colors whitespace-nowrap",
-          isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+          isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
         )}
       >
         <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -1310,7 +1310,7 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
         onClick={handleToggle}
         className={cn(
           "px-1.5 py-1.5 rounded-r-md text-sm font-medium transition-colors",
-          isActive ? "bg-secondary text-secondary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
+          isActive ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/60",
         )}
       >
         <ChevronDown className={cn("w-3 h-3 shrink-0 transition-transform", isOpen && "rotate-180")} />
@@ -1613,13 +1613,13 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
         <div className="p-3 space-y-4">
           <div className="space-y-0.5">
-            <button onClick={() => go("/services")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location.startsWith("/services") && "bg-secondary/60 font-medium")}>
+            <button onClick={() => go("/services")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location.startsWith("/services") && "bg-primary/15 text-primary font-medium")}>
               <Wrench className="w-4 h-4 shrink-0 text-muted-foreground" /><span>Services</span>
             </button>
-            <button onClick={() => go("/appointments")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location === "/appointments" && "bg-secondary/60 font-medium")}>
+            <button onClick={() => go("/appointments")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location === "/appointments" && "bg-primary/15 text-primary font-medium")}>
               <CalendarClock className="w-4 h-4 shrink-0 text-muted-foreground" /><span>Appointments</span>
             </button>
-            <button onClick={() => go("/transactions")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location === "/transactions" && "bg-secondary/60 font-medium")}>
+            <button onClick={() => go("/transactions")} className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", location === "/transactions" && "bg-primary/15 text-primary font-medium")}>
               <Receipt className="w-4 h-4 shrink-0 text-muted-foreground" /><span>Transactions</span>
             </button>
           </div>
@@ -1631,7 +1631,7 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
                 const active = location === item.href;
                 return (
                   <button key={item.href} onClick={() => go(item.href)}
-                    className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", active && "bg-secondary/60 font-medium")}>
+                    className={cn("w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm hover:bg-muted transition-colors text-left", active && "bg-primary/15 text-primary font-medium")}>
                     <item.icon className="w-4 h-4 shrink-0 text-muted-foreground" /><span>{item.name}</span>
                   </button>
                 );
@@ -1864,7 +1864,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
     return (
       <SidebarMenuItem>
         <SidebarMenuButton asChild isActive={active} tooltip={name}
-          className="data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground">
+          className="data-[active=true]:bg-primary data-[active=true]:text-primary-foreground">
           <Link href={href} className="flex items-center gap-3">
             <Icon className="w-4 h-4 shrink-0" /><span>{name}</span>
           </Link>
@@ -1897,7 +1897,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
     return (
       <SidebarMenuItem>
         <SidebarMenuButton isActive={isActive} onClick={handleClick} tooltip={label}
-          className={`flex items-center gap-3 cursor-pointer w-full data-[active=true]:bg-secondary data-[active=true]:text-secondary-foreground${accent ? " text-primary font-semibold hover:text-primary" : ""}`}>
+          className={`flex items-center gap-3 cursor-pointer w-full data-[active=true]:bg-primary data-[active=true]:text-primary-foreground${accent ? " text-primary font-semibold hover:text-primary" : ""}`}>
           <Icon className={`w-4 h-4 shrink-0${accent ? " text-primary" : ""}`} />
           <span className="flex-1">{label}</span>
           {!isOpen && totalSectionBadge > 0 && (
