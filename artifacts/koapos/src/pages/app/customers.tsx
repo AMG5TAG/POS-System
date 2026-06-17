@@ -1311,6 +1311,8 @@ function CustomerDetailInner({
   }
 
   const tabIndex = TABS.findIndex(t => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
 
   return (
     <>
@@ -2015,14 +2017,22 @@ function CustomerDetailInner({
 
       </div>
       <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
-        <Button
-          variant="destructive" size="sm" className="w-8 h-8 p-0"
-          onClick={() => { onDelete(customer.id); onClose(); }}
-          disabled={deleteIsPending}
-          title="Delete customer"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        <div className="flex gap-2 items-center">
+          <Button
+            variant="destructive" size="sm" className="w-8 h-8 p-0"
+            onClick={() => { onDelete(customer.id); onClose(); }}
+            disabled={deleteIsPending}
+            title="Delete customer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+            <ChevronLeft className="w-4 h-4" /> <span className="hidden sm:inline">Previous</span>
+          </Button>
+          <Button variant="outline" size="sm" className="gap-1" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+            <span className="hidden sm:inline">Next</span> <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
         <div className="flex gap-2 items-center">
           {onMerge && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMergePickerOpen(true)}>
@@ -2517,7 +2527,7 @@ function CustomerDetailDialog({
 }) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
         {customer && (
           <CustomerDetailInner
             customer={customer}
