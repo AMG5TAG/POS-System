@@ -14,6 +14,7 @@
     "setup-report-views": "tsx ./src/setup-report-views.ts",
     "protect-merchant-accounts": "tsx ./src/protect-merchant-accounts.ts",
     "add-invoice-link-columns": "tsx ./src/add-invoice-link-columns.ts",
+    "add-staff-password-hash": "tsx ./src/add-staff-password-hash.ts",
     "add-service-settings-table": "tsx ./src/add-service-settings-table.ts",
     "add-register-session-staff-id": "tsx ./src/add-register-session-staff-id.ts",
     "add-mobile-pos-app-table": "tsx ./src/add-mobile-pos-app-table.ts",
