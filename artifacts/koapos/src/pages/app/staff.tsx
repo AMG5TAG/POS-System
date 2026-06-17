@@ -922,6 +922,102 @@ function SalesReportView() {
   );
 }
 
+/* ─── Staff detail dialog ────────────────────────────────────────────────── */
+
+function formatAddress(json: string | null | undefined): string {
+  if (!json) return "";
+  try {
+    const a = JSON.parse(json) as Partial<AddressFields>;
+    return [a.street, a.city, a.state, a.postcode, a.country].filter(Boolean).join(", ");
+  } catch { return ""; }
+}
+
+function DetailRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <Icon className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <div className="text-sm font-medium break-words">{value || <span className="text-muted-foreground font-normal">—</span>}</div>
+      </div>
+    </div>
+  );
+}
+
+function StaffDetailDialog({
+  staff, onClose, onEdit, registerName,
+}: {
+  staff: Staff | null;
+  onClose: () => void;
+  onEdit: (s: Staff) => void;
+  registerName: string;
+}) {
+  const billing = formatAddress(staff?.billingAddress);
+  const postal  = formatAddress(staff?.postalAddress);
+  return (
+    <Dialog open={!!staff} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
+        {staff && (
+          <>
+            <DialogHeader className="p-6 pb-4 border-b space-y-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0">
+                  {staff.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <DialogTitle className="truncate">{staff.name}</DialogTitle>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <Badge variant="secondary" className="capitalize">{staff.role.replace("_", " ")}</Badge>
+                    <Badge variant={staff.isActive ? "default" : "secondary"}>{staff.isActive ? "Active" : "Inactive"}</Badge>
+                  </div>
+                </div>
+                <Button variant="outline" size="sm" onClick={() => onEdit(staff)} className="shrink-0">
+                  <Pencil className="w-4 h-4 mr-2" /> Edit
+                </Button>
+              </div>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto px-6 py-2 divide-y">
+              <section className="py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Contact</h3>
+                <DetailRow icon={Mail} label="Email" value={staff.email} />
+                <DetailRow icon={Phone} label="Phone" value={staff.phone} />
+                <DetailRow icon={Calendar} label="Date of birth" value={staff.dateOfBirth} />
+              </section>
+
+              <section className="py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Company</h3>
+                <DetailRow icon={Building2} label="Company" value={staff.company} />
+                <DetailRow icon={Receipt} label="ABN" value={staff.abn} />
+              </section>
+
+              <section className="py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Addresses</h3>
+                <DetailRow icon={MapPin} label="Billing address" value={billing} />
+                <DetailRow icon={MapPin} label="Postal address" value={postal} />
+              </section>
+
+              <section className="py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Access</h3>
+                <DetailRow icon={ShieldCheck} label="Role" value={<span className="capitalize">{staff.role.replace("_", " ")}</span>} />
+                <DetailRow icon={Lock} label="PIN" value={staff.pin ? "Set" : "Not set"} />
+                <DetailRow icon={Monitor} label="Default register" value={registerName} />
+              </section>
+
+              <section className="py-2">
+                <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Employment</h3>
+                <DetailRow icon={DollarSign} label="Pay rate" value={staff.payRate ? `$${staff.payRate}/hr` : ""} />
+                <DetailRow icon={DollarSign} label="Loading" value={staff.loadingRate ? `${staff.loadingRate}%` : ""} />
+                <DetailRow icon={DollarSign} label="Super" value={staff.superRate ? `${staff.superRate}%` : ""} />
+              </section>
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffPage() {
@@ -931,6 +1027,7 @@ export default function StaffPage() {
   const [delDialogOpen, setDelDialog]   = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [deletingStaff, setDeleting]    = useState<Staff | null>(null);
+  const [viewingStaff, setViewing]      = useState<Staff | null>(null);
 
   const { data: staffList, isLoading } = useListStaff({ query: { queryKey: ["staff"] } });
   const createMutation = useCreateStaff();
@@ -1149,7 +1246,11 @@ export default function StaffPage() {
                 </thead>
                 <tbody className="divide-y">
                   {sorted.map((member) => (
-                    <tr key={member.id} className="bg-background hover:bg-muted/30 transition-colors">
+                    <tr
+                      key={member.id}
+                      onClick={() => setViewing(member)}
+                      className="bg-background hover:bg-muted/30 transition-colors cursor-pointer"
+                    >
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
@@ -1175,13 +1276,13 @@ export default function StaffPage() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(member)}>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(member); }}>
                             <Pencil className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost" size="icon"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => { setDeleting(member); setDelDialog(true); }}
+                            onClick={(e) => { e.stopPropagation(); setDeleting(member); setDelDialog(true); }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -1198,6 +1299,14 @@ export default function StaffPage() {
         {/* Sales report view */}
         {view === "report" && <SalesReportView />}
       </div>
+
+      {/* Staff detail view */}
+      <StaffDetailDialog
+        staff={viewingStaff}
+        onClose={() => setViewing(null)}
+        onEdit={(s) => { setViewing(null); openEdit(s); }}
+        registerName={registerMap[String(viewingStaff?.defaultRegisterType ?? "")] || "—"}
+      />
 
       {/* 4-step wizard */}
       <WizardDialog

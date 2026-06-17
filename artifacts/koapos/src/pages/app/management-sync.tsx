@@ -16,7 +16,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   RefreshCw, Cloud, Users, Loader2, Plug, CheckCircle2, DatabaseBackup, FolderSync,
-  Clock, FolderUp, ShieldCheck, Lightbulb, Save,
+  Clock, FolderUp, ShieldCheck, Lightbulb, Save, CalendarClock,
 } from "lucide-react";
 import { useListIntegrations, useDisconnectIntegration } from "@workspace/api-client-react";
 import { MicrosoftIcon, OneDriveIcon } from "@/components/provider-icons";
@@ -55,11 +55,13 @@ const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox", "proton_drive"];
 // Customer (contacts) sync is supported for Google & Microsoft accounts.
 const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts"]);
 
-function SyncCard({ intg, onConnect, onDisconnect, onSync, busy }: {
+function SyncCard({ intg, onConnect, onDisconnect, onSync, onSyncCalendar, calendarBusy, busy }: {
   intg: SyncIntegration;
   onConnect: (i: SyncIntegration) => void;
   onDisconnect: (i: SyncIntegration) => void;
   onSync?: (i: SyncIntegration) => void;
+  onSyncCalendar?: (i: SyncIntegration) => void;
+  calendarBusy?: boolean;
   busy: boolean;
 }) {
   const logo = LOGOS[intg.key];
@@ -88,7 +90,12 @@ function SyncCard({ intg, onConnect, onDisconnect, onSync, busy }: {
           <>
             {onSync && (
               <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onSync(intg)}>
-                <RefreshCw className="w-3.5 h-3.5" /> Sync
+                <RefreshCw className="w-3.5 h-3.5" /> Contacts
+              </Button>
+            )}
+            {onSyncCalendar && (
+              <Button size="sm" variant="outline" className="gap-1.5" onClick={() => onSyncCalendar(intg)} disabled={calendarBusy}>
+                {calendarBusy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <CalendarClock className="w-3.5 h-3.5" />} Calendar
               </Button>
             )}
             <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive ml-auto" onClick={() => onDisconnect(intg)}>
@@ -292,6 +299,9 @@ export default function ManagementSyncPage() {
   const [syncing, setSyncing] = useState(false);
   const [lastSync, setLastSync] = useState(() => getLastCustomerSync());
 
+  /* Calendar push (appointments → connected account's calendar) */
+  const [calendarBusyKey, setCalendarBusyKey] = useState<string | null>(null);
+
   /* OAuth callback lands back here (?success=/?error=) for sync integrations. */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -359,6 +369,28 @@ export default function ManagementSyncPage() {
     }
   };
 
+  const runCalendarSync = async (intg: SyncIntegration) => {
+    setCalendarBusyKey(intg.key);
+    try {
+      const r = await fetch("/api/integrations/calendar/sync", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ provider: intg.key }),
+      });
+      const data = await r.json() as { ok?: boolean; synced?: number; failed?: number; message?: string; error?: string };
+      if (r.ok && data.ok) {
+        toast.success(data.message ?? `Synced ${data.synced} appointments`);
+      } else {
+        toast.error(data.error ?? "Calendar sync failed");
+      }
+    } catch {
+      toast.error("Calendar sync request failed — please try again");
+    } finally {
+      setCalendarBusyKey(null);
+    }
+  };
+
   const openSync = (i: SyncIntegration) => { setSyncTarget(i); setIncludeNotes(false); setNotesConflict("append"); };
 
   return (
@@ -389,7 +421,9 @@ export default function ManagementSyncPage() {
             {accounts.map((i) => (
               <SyncCard key={i.key} intg={i} busy={busyKey === i.key}
                 onConnect={connect} onDisconnect={disconnect}
-                onSync={CONTACT_SYNC_KEYS.has(i.key) ? openSync : undefined} />
+                onSync={CONTACT_SYNC_KEYS.has(i.key) ? openSync : undefined}
+                onSyncCalendar={CONTACT_SYNC_KEYS.has(i.key) ? runCalendarSync : undefined}
+                calendarBusy={calendarBusyKey === i.key} />
             ))}
           </div>
         </section>

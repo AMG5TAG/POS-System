@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, customerNotesTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, customerNotesTable, appointmentsTable } from "@workspace/db";
+import { eq, and, desc, gte } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
 import { upsertVault, deleteVault, readVault, upsertCredentialVault, getOAuthAppCreds, saveOAuthAppCreds } from "../services/tokenVault";
+import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "../services/microsoftToken";
 
 const router: IRouter = Router();
 
@@ -630,10 +631,29 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
     return;
   }
 
-  const vault = await readVault(merchantId, provider);
-  if (!vault?.accessToken) {
-    res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
-    return;
+  // Resolve a valid access token. Microsoft access tokens are short-lived
+  // (~1 hour), so refresh via the stored refresh token instead of using the
+  // raw cached token — otherwise every Graph request 401s once it lapses.
+  let accessToken: string;
+  if (provider === "microsoft_contacts") {
+    try {
+      accessToken = await getValidMicrosoftToken(merchantId, provider, MICROSOFT_SCOPES.microsoft_contacts!);
+    } catch (err) {
+      if (err instanceof MicrosoftNotConnectedError) {
+        res.status(401).json({ error: err.message });
+        return;
+      }
+      req.log.error({ merchantId, err }, "Microsoft token refresh failed");
+      res.status(502).json({ error: "Could not refresh Microsoft access — please reconnect the account on the Sync page." });
+      return;
+    }
+  } else {
+    const vault = await readVault(merchantId, provider);
+    if (!vault?.accessToken) {
+      res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
+      return;
+    }
+    accessToken = vault.accessToken;
   }
 
   const customers = await db
@@ -702,7 +722,7 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
       try {
         const r = await fetch("https://people.googleapis.com/v1/people:createContact", {
           method:  "POST",
-          headers: { Authorization: `Bearer ${vault.accessToken}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
           body:    JSON.stringify(body),
         });
         if (r.ok) {
@@ -734,7 +754,7 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
       try {
         const r = await fetch("https://graph.microsoft.com/v1.0/me/contacts", {
           method:  "POST",
-          headers: { Authorization: `Bearer ${vault.accessToken}`, "Content-Type": "application/json" },
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
           body:    JSON.stringify(body),
         });
         if (r.ok) {
@@ -761,6 +781,127 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
     failed,
     notesSynced,
     message:    `Synced ${synced} contact${synced !== 1 ? "s" : ""}${notesMsg}${failed > 0 ? ` (${failed} failed)` : ""}`,
+  });
+});
+
+/* ── POST /integrations/calendar/sync ─────────────────────────────────────────
+   Pushes the merchant's upcoming KoaPOS appointments to the connected account's
+   calendar — Microsoft (Graph /me/events) or Google (Calendar API). Each push is
+   idempotent: re-syncing updates/skips an existing event rather than duplicating
+   it (Microsoft via transactionId, Google via a stable event id).
+
+   Body: { provider: "microsoft_contacts" | "google_contacts" }
+   ─────────────────────────────────────────────────────────────────────────── */
+
+router.post("/integrations/calendar/sync", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { provider } = req.body as { provider?: string };
+
+  if (provider !== "google_contacts" && provider !== "microsoft_contacts") {
+    res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
+    return;
+  }
+
+  // Resolve a valid access token (refresh Microsoft's short-lived token).
+  let accessToken: string;
+  if (provider === "microsoft_contacts") {
+    try {
+      accessToken = await getValidMicrosoftToken(merchantId, provider, MICROSOFT_SCOPES.microsoft_contacts!);
+    } catch (err) {
+      if (err instanceof MicrosoftNotConnectedError) {
+        res.status(401).json({ error: err.message });
+        return;
+      }
+      req.log.error({ merchantId, err }, "Microsoft token refresh failed");
+      res.status(502).json({ error: "Could not refresh Microsoft access — please reconnect the account on the Sync page." });
+      return;
+    }
+  } else {
+    const vault = await readVault(merchantId, provider);
+    if (!vault?.accessToken) {
+      res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
+      return;
+    }
+    accessToken = vault.accessToken;
+  }
+
+  // Only push upcoming, non-cancelled appointments.
+  const now = new Date();
+  const appointments = (await db
+    .select()
+    .from(appointmentsTable)
+    .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now)))
+    .orderBy(appointmentsTable.scheduledAt))
+    .filter((a) => a.status !== "cancelled");
+
+  if (appointments.length === 0) {
+    res.json({ ok: true, provider, synced: 0, failed: 0, message: "No upcoming appointments to sync" });
+    return;
+  }
+
+  // Microsoft Graph wants a naive ISO timestamp paired with a separate timeZone.
+  const toGraphTime = (d: Date) => new Date(d).toISOString().replace(/\.\d{3}Z$/, "");
+
+  let synced = 0;
+  let failed = 0;
+
+  for (const a of appointments) {
+    const start = new Date(a.scheduledAt);
+    const end   = new Date(start.getTime() + (a.durationMinutes ?? 30) * 60_000);
+
+    try {
+      if (provider === "microsoft_contacts") {
+        // POST /me/events with a stable transactionId so re-syncing is idempotent.
+        const r = await fetch("https://graph.microsoft.com/v1.0/me/events", {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            subject:       a.title,
+            body:          { contentType: "text", content: a.description ?? a.notes ?? "" },
+            start:         { dateTime: toGraphTime(start), timeZone: "UTC" },
+            end:           { dateTime: toGraphTime(end),   timeZone: "UTC" },
+            transactionId: `koapos-appt-${a.id}`,
+          }),
+        });
+        if (r.ok) {
+          synced++;
+        } else {
+          req.log.warn({ merchantId, status: r.status, appointmentId: a.id }, "Microsoft Calendar create failed");
+          failed++;
+        }
+      } else {
+        // Google Calendar — a stable event id makes re-syncing idempotent
+        // (a repeat insert returns 409, which we treat as already-synced).
+        const r = await fetch("https://www.googleapis.com/calendar/v3/calendars/primary/events", {
+          method:  "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            id:          `koapos${a.id}`,
+            summary:     a.title,
+            description: a.description ?? a.notes ?? "",
+            start:       { dateTime: start.toISOString() },
+            end:         { dateTime: end.toISOString() },
+          }),
+        });
+        if (r.ok || r.status === 409) {
+          synced++;
+        } else {
+          req.log.warn({ merchantId, status: r.status, appointmentId: a.id }, "Google Calendar create failed");
+          failed++;
+        }
+      }
+    } catch (err) {
+      req.log.warn({ merchantId, err, appointmentId: a.id }, "Calendar event create threw");
+      failed++;
+    }
+  }
+
+  res.json({
+    ok:      true,
+    provider,
+    synced,
+    failed,
+    message: `Synced ${synced} appointment${synced !== 1 ? "s" : ""}${failed > 0 ? ` (${failed} failed)` : ""}`,
   });
 });
 
