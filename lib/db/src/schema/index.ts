@@ -3,6 +3,7 @@ export * from "./products";
 export * from "./customers";
 export * from "./transactions";
 export * from "./staff";
+export * from "./staff-password-reset-tokens";
 export * from "./appointments";
 export * from "./service-jobs";
 export * from "./service-job-lines";

@@ -28,6 +28,7 @@ const RegisterPage = lazy(() => import("@/pages/marketing/register"));
 const PricingPage = lazy(() => import("@/pages/marketing/pricing"));
 const ForgotPasswordPage = lazy(() => import("@/pages/marketing/forgot-password"));
 const ResetPasswordPage = lazy(() => import("@/pages/marketing/reset-password"));
+const StaffResetPasswordPage = lazy(() => import("@/pages/marketing/staff-reset-password"));
 const TermsPage = lazy(() => import("@/pages/marketing/terms"));
 const PrivacyPage = lazy(() => import("@/pages/marketing/privacy"));
 
@@ -181,7 +182,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password", "/reset-password", "/terms", "/privacy"];
+const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
 
 setOnUnauthorized(() => {
   queryClient.clear();
@@ -278,6 +279,9 @@ function Router() {
       </Route>
       <Route path="/reset-password">
         <PublicRoute component={ResetPasswordPage} />
+      </Route>
+      <Route path="/staff-reset-password">
+        <PublicRoute component={StaffResetPasswordPage} />
       </Route>
       <Route path="/terms">
         <TermsPage />

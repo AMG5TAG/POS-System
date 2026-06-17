@@ -239,6 +239,32 @@ interface WizardDialogProps {
 
 function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }: WizardDialogProps) {
   const [step, setStep] = useState(0);
+  const [invitingLogin, setInvitingLogin] = useState(false);
+
+  // Invite an existing staff member to enable email sign-in (sends a set-password
+  // link). The register PIN is unaffected.
+  const sendLoginInvite = async () => {
+    if (!editingStaff?.id) return;
+    setInvitingLogin(true);
+    try {
+      const r = await fetch("/api/staff-auth/enable", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId: editingStaff.id }),
+      });
+      if (r.ok) {
+        toast.success("Invite sent — they'll get an email to set a password.");
+      } else {
+        const d = await r.json().catch(() => null);
+        toast.error(d && typeof d.error === "string" ? d.error : "Failed to send invite");
+      }
+    } catch {
+      toast.error("Failed to send invite");
+    } finally {
+      setInvitingLogin(false);
+    }
+  };
   const [form, setForm] = useState<WizardForm>(defaultForm);
 
   useEffect(() => {
@@ -401,6 +427,30 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                   <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
                     <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span>A welcome email containing this PIN will be sent to <strong>{form.email}</strong> when saved.</span>
+                  </div>
+                )}
+                {editingStaff && (
+                  <div className="rounded-xl border px-3 py-2.5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                      <p className="text-sm font-medium">Email sign-in</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Let this employee sign in remotely with their email and password — their role controls what they can access, and their register PIN stays the same. We'll email them a link to set a password.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      disabled={!editingStaff.email || invitingLogin}
+                      onClick={() => void sendLoginInvite()}
+                    >
+                      {invitingLogin ? "Sending…" : "Send email login invite"}
+                    </Button>
+                    {!editingStaff.email && (
+                      <p className="text-xs text-amber-600">Add an email address and save before sending an invite.</p>
+                    )}
                   </div>
                 )}
               </div>
