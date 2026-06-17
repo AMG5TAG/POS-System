@@ -514,7 +514,7 @@ export default function SettingsBusinessPage() {
             <h1 className="text-2xl font-bold">Business Info</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Update your business name, logo, contact details, and branding.</p>
           </div>
-          <Button onClick={handleSave} disabled={updateMutation.isPending} size="sm" className="shrink-0 bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold">
+          <Button onClick={handleSave} disabled={updateMutation.isPending} size="sm" className="shrink-0 font-semibold">
             {updateMutation.isPending ? "Saving…" : "Save Business Info"}
           </Button>
         </div>
@@ -578,7 +578,7 @@ export default function SettingsBusinessPage() {
             {(ext.categories ?? []).length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {(ext.categories ?? []).map((cat) => (
-                  <Badge key={cat} variant="secondary" className="flex items-center gap-1 pr-1">
+                  <Badge key={cat} className="flex items-center gap-1 pr-1 bg-primary text-primary-foreground hover:bg-primary/90">
                     {cat}
                     <button onClick={() => removeCategory(cat)} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
                   </Badge>
@@ -874,7 +874,7 @@ export default function SettingsBusinessPage() {
 
         {/* Save */}
         <div className="pb-8 flex justify-end">
-          <Button onClick={handleSave} disabled={updateMutation.isPending} className="bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold px-8">
+          <Button onClick={handleSave} disabled={updateMutation.isPending} className="font-semibold px-8">
             {updateMutation.isPending ? "Saving…" : "Save Business Info"}
           </Button>
         </div>

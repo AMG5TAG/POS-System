@@ -1054,7 +1054,7 @@ export default function InventoryPage() {
             </div>
 
             <div className="flex justify-end pt-1">
-              <Button onClick={handleAlertSave} disabled={updateAlertMutation.isPending} size="sm" className="bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold">
+              <Button onClick={handleAlertSave} disabled={updateAlertMutation.isPending} size="sm" className="font-semibold">
                 {updateAlertMutation.isPending ? "Saving…" : "Save Alert Settings"}
               </Button>
             </div>
