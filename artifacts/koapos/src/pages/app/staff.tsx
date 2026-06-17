@@ -771,7 +771,7 @@ function SalesReportView() {
                 "px-3 py-1 rounded-md text-sm font-medium transition-all capitalize",
                 preset === p
                   ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                  : "pill-selector text-muted-foreground hover:text-foreground",
               )}
             >
               {p === "week" ? "Last 7d" : p === "month" ? "This month" : p.charAt(0).toUpperCase() + p.slice(1)}
@@ -1166,7 +1166,7 @@ export default function StaffPage() {
                 onClick={() => setView("staff")}
                 className={cn(
                   "px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5",
-                  view === "staff" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  view === "staff" ? "bg-background shadow-sm" : "pill-selector text-muted-foreground hover:text-foreground",
                 )}
               >
                 <UserSquare2 className="w-4 h-4" /> Employees
@@ -1175,7 +1175,7 @@ export default function StaffPage() {
                 onClick={() => setView("report")}
                 className={cn(
                   "px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5",
-                  view === "report" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  view === "report" ? "bg-background shadow-sm" : "pill-selector text-muted-foreground hover:text-foreground",
                 )}
               >
                 <BarChart2 className="w-4 h-4" /> Sales Report

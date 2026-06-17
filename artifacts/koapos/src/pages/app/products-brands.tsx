@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import {
   useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useRequestUploadUrl, useConfirmUpload,
   useListProducts, getListProductsQueryKey,
@@ -19,6 +19,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
+import { useShowBrandCostValue } from "@/lib/brand-view-settings";
 
 type Brand = {
   id: number;
@@ -227,6 +228,24 @@ export default function ProductsBrandsPage() {
   );
   const brands = ((brandsData?.items ?? []) as unknown as Brand[]);
 
+  // "Cost Value" is a view option toggled from Management › Products and
+  // Inventory › Inventory. When on, fetch all products once and total each
+  // brand's inventory cost (cost price × stock on hand).
+  const [showCostValue] = useShowBrandCostValue();
+  const { data: allProductsData } = useListProducts(
+    { limit: 1000 } as unknown as Parameters<typeof useListProducts>[0],
+    { query: { queryKey: ["products", "brand-cost-value"], enabled: showCostValue } }
+  );
+  const costValueByBrand = useMemo(() => {
+    const map = new Map<number, number>();
+    const items = (allProductsData?.items ?? []) as Array<{ brandId?: number | null; costPrice?: number | null; stockQuantity?: number | null }>;
+    for (const p of items) {
+      if (p.brandId == null) continue;
+      map.set(p.brandId, (map.get(p.brandId) ?? 0) + (p.costPrice ?? 0) * (p.stockQuantity ?? 0));
+    }
+    return map;
+  }, [allProductsData]);
+
   const createBrandMutation = useCreateBrand();
   const updateBrandMutation = useUpdateBrand();
   const deleteBrandMutation = useDeleteBrand();
@@ -340,6 +359,9 @@ export default function ProductsBrandsPage() {
               <SortBtn label="Brand" col="name" sort={sort} onSort={handleSort} />
             </div>
             <div className="flex items-center gap-6 shrink-0 mr-16">
+              {showCostValue && (
+                <span className="text-sm font-medium text-muted-foreground">Cost Value</span>
+              )}
               <SortBtn label="Retail Value" col="retailValue" sort={sort} onSort={handleSort} />
               <SortBtn label="Products" col="productCount" sort={sort} onSort={handleSort} />
             </div>
@@ -396,6 +418,12 @@ export default function ProductsBrandsPage() {
 
                       {/* Stats */}
                       <div className="flex items-center gap-8 shrink-0">
+                        {showCostValue && (
+                          <div className="text-right w-24">
+                            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Cost Value</p>
+                            <p className="text-sm font-semibold text-foreground">{fmt(costValueByBrand.get(b.id) ?? 0)}</p>
+                          </div>
+                        )}
                         <div className="text-right w-24">
                           <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Retail Value</p>
                           <p className="text-sm font-semibold text-primary">{fmt(b.retailValue)}</p>

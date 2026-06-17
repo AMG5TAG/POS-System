@@ -454,7 +454,7 @@ export default function ServiceJobNewPage() {
                     "flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors text-left",
                     deviceType === type
                       ? "border-primary bg-primary/10 text-primary font-medium"
-                      : "border-border hover:bg-muted/40 text-foreground"
+                      : "pill-selector border-border hover:bg-muted/40 text-foreground"
                   )}
                 >
                   <div
@@ -520,23 +520,23 @@ export default function ServiceJobNewPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Additional Equipment</Label>
-            <Textarea
-              placeholder="List any additional equipment..."
-              value={additionalEquipment}
-              onChange={(e) => setAdditionalEquipment(e.target.value)}
-              rows={2}
-              className="resize-none"
-            />
-          </div>
-
-          <div className="space-y-1.5">
             <Label>Work Description</Label>
             <Textarea
               placeholder="Describe the service..."
               value={workDescription}
               onChange={(e) => setWorkDescription(e.target.value)}
               rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Additional Equipment</Label>
+            <Textarea
+              placeholder="List any additional equipment..."
+              value={additionalEquipment}
+              onChange={(e) => setAdditionalEquipment(e.target.value)}
+              rows={2}
               className="resize-none"
             />
           </div>
@@ -763,7 +763,7 @@ export default function ServiceJobNewPage() {
                   onClick={() => setSelectedStickerTplId("")}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors",
-                    !selectedStickerTplId ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted/50"
+                    !selectedStickerTplId ? "border-primary bg-primary/5 font-medium" : "pill-selector border-border hover:bg-muted/50"
                   )}
                 >
                   <repairStickerType.icon className={cn("w-3.5 h-3.5 shrink-0", repairStickerType.color)} />
@@ -775,7 +775,7 @@ export default function ServiceJobNewPage() {
                     onClick={() => setSelectedStickerTplId(tpl.id)}
                     className={cn(
                       "flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors",
-                      selectedStickerTplId === tpl.id ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted/50"
+                      selectedStickerTplId === tpl.id ? "border-primary bg-primary/5 font-medium" : "pill-selector border-border hover:bg-muted/50"
                     )}
                   >
                     <repairStickerType.icon className={cn("w-3.5 h-3.5 shrink-0", repairStickerType.color)} />

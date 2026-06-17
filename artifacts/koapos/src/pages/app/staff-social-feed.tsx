@@ -279,7 +279,7 @@ export default function StaffSocialFeedPage() {
               "px-4 py-1.5 rounded-full text-sm font-medium border transition-colors",
               activePlatform === "all"
                 ? "bg-foreground text-background border-foreground"
-                : "bg-background text-foreground border-border hover:bg-muted"
+                : "pill-selector bg-background text-foreground border-border hover:bg-muted"
             )}
           >
             All Feeds
@@ -295,7 +295,7 @@ export default function StaffSocialFeedPage() {
                   "flex items-center gap-1.5 px-4 py-1.5 rounded-full text-sm font-medium border transition-colors",
                   activePlatform === p.key
                     ? "bg-foreground text-background border-foreground"
-                    : "bg-background text-foreground border-border hover:bg-muted"
+                    : "pill-selector bg-background text-foreground border-border hover:bg-muted"
                 )}
               >
                 <PlatformIcon platform={p.key} size={16} />

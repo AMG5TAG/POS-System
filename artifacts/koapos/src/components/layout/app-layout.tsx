@@ -1146,7 +1146,7 @@ function AccessibilityPicker() {
                   cls ?? "text-sm",
                   fontSize === key
                     ? "bg-primary/10 border-primary text-primary"
-                    : "border-border hover:bg-muted text-foreground"
+                    : "pill-selector border-border hover:bg-muted text-foreground"
                 )}
               >
                 {label}
@@ -1165,7 +1165,7 @@ function AccessibilityPicker() {
                   "flex-1 rounded-lg py-1.5 text-xs font-medium border transition-colors",
                   contrastMode === mode
                     ? "bg-primary/10 border-primary text-primary"
-                    : "border-border hover:bg-muted text-foreground"
+                    : "pill-selector border-border hover:bg-muted text-foreground"
                 )}
               >
                 {mode === "normal" ? "Standard" : "High"}

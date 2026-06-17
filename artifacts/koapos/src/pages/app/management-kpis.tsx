@@ -312,7 +312,7 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
                     const sel = form.staffIds.includes(String(s.id));
                     return (
                       <button key={s.id} onClick={() => toggleStaff(String(s.id))}
-                        className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                        className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                         {s.name}
                       </button>
                     );
@@ -425,7 +425,7 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
                 const sel = selectedStaffIds.includes(String(s.id));
                 return (
                   <button key={s.id} onClick={() => toggleStaff(String(s.id))}
-                    className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                    className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                     {s.name}
                   </button>
                 );

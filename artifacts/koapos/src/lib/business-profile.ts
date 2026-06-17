@@ -109,9 +109,32 @@ function readLegacyProfile(): Partial<BusinessProfile> | null {
  * `value.toUpperCase()` and white-screen the page. Falls back to `fallback`
  * whenever nothing usable remains.
  */
+/** Coerce a value that should be an array — accepting a real array or a JSON
+ *  string of one (the backend stores these extended fields as text, so a saved
+ *  profile can echo back e.g. `"[]"` or `'["#fff"]'`). Returns null when it
+ *  cannot produce an array, so callers can fall back. */
+function toArray(v: unknown): unknown[] | null {
+  if (Array.isArray(v)) return v;
+  if (typeof v === "string" && v.trim() !== "") {
+    try { const p = JSON.parse(v); return Array.isArray(p) ? p : null; } catch { return null; }
+  }
+  return null;
+}
+
+/** Coerce a value that should be a plain object — accepting an object or a JSON
+ *  string of one. Arrays and anything else become `{}`, so spreading the result
+ *  can never pollute the target with array indices / string characters. */
+function toObject(v: unknown): Record<string, unknown> {
+  if (typeof v === "string" && v.trim() !== "") {
+    try { v = JSON.parse(v); } catch { return {}; }
+  }
+  return v && typeof v === "object" && !Array.isArray(v) ? (v as Record<string, unknown>) : {};
+}
+
 function colorArr(v: unknown, fallback: string[]): string[] {
-  if (!Array.isArray(v)) return fallback;
-  const clean = v.filter((c): c is string => typeof c === "string" && c.trim() !== "");
+  const a = toArray(v);
+  if (!a) return fallback;
+  const clean = a.filter((c): c is string => typeof c === "string" && c.trim() !== "");
   return clean.length > 0 ? clean : fallback;
 }
 
@@ -134,7 +157,7 @@ export function useBusinessProfile() {
   // the backend, so a saved profile can come back with e.g. `brandColors: null`;
   // letting that overwrite the default array crashes consumers that `.map()` it
   // (e.g. ColourPicker) — blanking the page after save.
-  const arr = <T>(v: unknown, fallback: T[]): T[] => (Array.isArray(v) ? (v as T[]) : fallback);
+  const arr = <T>(v: unknown, fallback: T[]): T[] => (toArray(v) as T[] | null) ?? fallback;
   const profile: BusinessProfile = raw
     ? {
         ...DEFAULT_BUSINESS_PROFILE,
@@ -145,8 +168,8 @@ export function useBusinessProfile() {
         textColors:   colorArr(raw.textColors,  DEFAULT_BUSINESS_PROFILE.textColors),
         paymentTypes: arr(raw.paymentTypes, DEFAULT_BUSINESS_PROFILE.paymentTypes),
         customLinks:  arr(raw.customLinks,  DEFAULT_BUSINESS_PROFILE.customLinks),
-        openingHours: { ...DEFAULT_HOURS, ...(raw.openingHours ?? {}) },
-        socialLinks: { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(raw.socialLinks ?? {}) },
+        openingHours: { ...DEFAULT_HOURS, ...(toObject(raw.openingHours) as Record<string, DayHours>) },
+        socialLinks: { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(toObject(raw.socialLinks) as Partial<BusinessProfile["socialLinks"]>) },
       }
     : DEFAULT_BUSINESS_PROFILE;
 
@@ -185,8 +208,8 @@ export function useBusinessProfile() {
           textColors:   colorArr(legacy.textColors,  DEFAULT_BUSINESS_PROFILE.textColors),
           paymentTypes: arr(legacy.paymentTypes, DEFAULT_BUSINESS_PROFILE.paymentTypes),
           customLinks:  arr(legacy.customLinks,  DEFAULT_BUSINESS_PROFILE.customLinks),
-          openingHours: { ...DEFAULT_HOURS, ...(legacy.openingHours ?? {}) },
-          socialLinks:  { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(legacy.socialLinks ?? {}) },
+          openingHours: { ...DEFAULT_HOURS, ...(toObject(legacy.openingHours) as Record<string, DayHours>) },
+          socialLinks:  { ...DEFAULT_BUSINESS_PROFILE.socialLinks, ...(toObject(legacy.socialLinks) as Partial<BusinessProfile["socialLinks"]>) },
         }
       : null;
 

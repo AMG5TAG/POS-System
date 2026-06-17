@@ -24,6 +24,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
 import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
 import { ServiceJobWarrantyPanel } from "@/components/service-jobs/ServiceJobWarrantyPanel";
@@ -199,6 +200,7 @@ export function ServiceJobDetailDialog({
   const tabIndex = TABS.findIndex(t => t.key === tab);
   const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
   const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!job, goPrevTab, goNextTab);
 
   useEffect(() => {
     if (!job) return;

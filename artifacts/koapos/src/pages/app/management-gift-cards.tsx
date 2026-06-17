@@ -676,7 +676,7 @@ function SettingsTab() {
               onClick={() => setExpiryMode("none")}
               className={cn(
                 "flex-1 rounded-lg border p-3 text-sm text-center transition-colors",
-                expiryMode === "none" ? "border-primary bg-primary/5 text-primary font-medium" : "hover:border-muted-foreground/30"
+                expiryMode === "none" ? "border-primary bg-primary/5 text-primary font-medium" : "pill-selector hover:border-muted-foreground/30"
               )}
             >
               No Expiry
@@ -685,7 +685,7 @@ function SettingsTab() {
               onClick={() => setExpiryMode("months")}
               className={cn(
                 "flex-1 rounded-lg border p-3 text-sm text-center transition-colors",
-                expiryMode === "months" ? "border-primary bg-primary/5 text-primary font-medium" : "hover:border-muted-foreground/30"
+                expiryMode === "months" ? "border-primary bg-primary/5 text-primary font-medium" : "pill-selector hover:border-muted-foreground/30"
               )}
             >
               Set Expiry

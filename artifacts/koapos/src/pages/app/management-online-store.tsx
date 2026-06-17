@@ -817,7 +817,7 @@ export default function ManagementOnlineStorePage() {
                   <div className="flex gap-1 bg-muted rounded-lg p-1">
                     {(["sm", "md", "lg"] as const).map((w) => (
                       <button key={w} onClick={() => setPreviewWidth(w)}
-                        className={cn("px-2 py-1 text-[10px] font-semibold uppercase rounded transition-all", previewWidth === w ? "bg-background shadow-sm" : "text-muted-foreground")}>
+                        className={cn("px-2 py-1 text-[10px] font-semibold uppercase rounded transition-all", previewWidth === w ? "bg-background shadow-sm" : "pill-selector text-muted-foreground")}>
                         {w === "sm" ? "Mobile" : w === "md" ? "Tablet" : "Desktop"}
                       </button>
                     ))}

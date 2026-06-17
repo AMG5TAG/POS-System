@@ -378,7 +378,7 @@ export default function POS3DPrintsPage() {
                         "text-[11px] px-2.5 py-1 rounded-full border transition-colors",
                         filterType === t
                           ? "bg-primary text-primary-foreground border-primary"
-                          : "border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
+                          : "pill-selector border-border text-muted-foreground hover:text-foreground hover:bg-muted/40"
                       )}
                     >
                       {t}
@@ -509,7 +509,7 @@ export default function POS3DPrintsPage() {
                           "text-xs px-2.5 py-1 rounded-lg border transition-colors",
                           printWeightGrams === g
                             ? "border-primary bg-primary/10 text-primary font-medium"
-                            : "border-border text-muted-foreground hover:bg-muted/40"
+                            : "pill-selector border-border text-muted-foreground hover:bg-muted/40"
                         )}
                       >
                         {g}g
@@ -573,7 +573,7 @@ export default function POS3DPrintsPage() {
                           "text-xs px-2.5 py-1 rounded-lg border transition-colors",
                           printHours === h && printMinutes === m
                             ? "border-primary bg-primary/10 text-primary font-medium"
-                            : "border-border text-muted-foreground hover:bg-muted/40"
+                            : "pill-selector border-border text-muted-foreground hover:bg-muted/40"
                         )}
                       >
                         {label}

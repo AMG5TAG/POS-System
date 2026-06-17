@@ -42,7 +42,7 @@ function FieldPill({
             "px-3 py-1.5 transition-colors",
             isOn
               ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted/60",
+              : "pill-selector text-muted-foreground hover:bg-muted/60",
           )}
         >
           On
@@ -54,7 +54,7 @@ function FieldPill({
             "px-3 py-1.5 border-l transition-colors",
             !isOn
               ? "bg-muted text-foreground"
-              : "text-muted-foreground hover:bg-muted/60",
+              : "pill-selector text-muted-foreground hover:bg-muted/60",
           )}
         >
           Off
@@ -522,7 +522,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setOrientation("horizontal")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-                        orientation === "horizontal" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        orientation === "horizontal" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <svg width="14" height="10" viewBox="0 0 14 10" fill="none" className="shrink-0"><rect x="1" y="1" width="12" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
@@ -532,7 +532,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setOrientation("vertical")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
-                        orientation === "vertical" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        orientation === "vertical" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <svg width="10" height="14" viewBox="0 0 10 14" fill="none" className="shrink-0"><rect x="1" y="1" width="8" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
@@ -549,7 +549,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setColorMode("bw")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-                        colorMode === "bw" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        colorMode === "bw" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <span className="w-3 h-3 rounded-full border border-current bg-black shrink-0" />
@@ -559,7 +559,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setColorMode("color")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
-                        colorMode === "color" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        colorMode === "color" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <span
@@ -580,7 +580,7 @@ export default function ManagementStickersPage() {
                         onClick={() => setBarcodePosition("top")}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-                          barcodePosition === "top" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                          barcodePosition === "top" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <Barcode className="w-3.5 h-3.5 shrink-0" />
@@ -590,7 +590,7 @@ export default function ManagementStickersPage() {
                         onClick={() => setBarcodePosition("bottom")}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
-                          barcodePosition === "bottom" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                          barcodePosition === "bottom" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <Barcode className="w-3.5 h-3.5 shrink-0" />
@@ -665,7 +665,7 @@ export default function ManagementStickersPage() {
                             "text-[10px] px-2 py-0.5 rounded border transition-colors",
                             sid === selectedSizeId
                               ? "bg-primary text-primary-foreground border-primary"
-                              : "hover:bg-muted border-border",
+                              : "pill-selector hover:bg-muted border-border",
                           )}
                         >
                           {sid}

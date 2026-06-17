@@ -307,7 +307,7 @@ function GridLayoutSection() {
             {([2, 3, 4, 5] as const).map((n) => (
               <button key={n} onClick={() => update({ columns: n })}
                 className={cn("flex flex-col items-center justify-center py-3 rounded-xl border-2 text-xs font-medium transition-all",
-                  s.columns === n ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                  s.columns === n ? "border-primary bg-primary/5 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                 <ColDots cols={n} />{n} cols
               </button>
             ))}
@@ -319,7 +319,7 @@ function GridLayoutSection() {
             {(["compact", "normal", "large"] as const).map((size) => (
               <button key={size} onClick={() => update({ tileSize: size })}
                 className={cn("flex items-center justify-center gap-1.5 py-2.5 rounded-xl border-2 text-sm font-medium transition-all capitalize",
-                  s.tileSize === size ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                  s.tileSize === size ? "border-primary bg-primary/5 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                 <span>{size === "compact" ? "▪️" : size === "normal" ? "🔲" : "⬛"}</span> {size.charAt(0).toUpperCase() + size.slice(1)}
               </button>
             ))}
@@ -341,7 +341,7 @@ function GridLayoutSection() {
             {(["right", "left"] as const).map((pos) => (
               <button key={pos} onClick={() => update({ cartPosition: pos })}
                 className={cn("flex items-center justify-center gap-2 py-2.5 rounded-xl border-2 text-sm font-medium transition-all",
-                  s.cartPosition === pos ? "border-primary bg-primary/5 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                  s.cartPosition === pos ? "border-primary bg-primary/5 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                 {pos === "right" ? <ArrowRight className="w-4 h-4" /> : <ArrowLeft className="w-4 h-4" />}
                 {pos === "right" ? "→ Right" : "← Left"}
               </button>

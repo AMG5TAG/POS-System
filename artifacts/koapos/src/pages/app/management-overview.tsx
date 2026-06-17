@@ -140,7 +140,7 @@ function Segmented<T extends string>({
             "flex-1 px-3 py-1.5 text-sm font-medium transition-colors",
             value === o.id
               ? "bg-primary text-primary-foreground"
-              : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+              : "pill-selector bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
           )}
         >
           {o.label}
@@ -397,7 +397,7 @@ export default function ManagementOverviewPage() {
                       "px-3 py-1.5 text-sm font-medium transition-colors",
                       period === t.id
                         ? "bg-primary text-primary-foreground"
-                        : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+                        : "pill-selector bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
                     )}
                   >
                     {t.label}
@@ -547,7 +547,7 @@ export default function ManagementOverviewPage() {
                     "px-3 py-1.5 text-sm font-medium transition-colors",
                     actPeriod === t.id
                       ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+                      : "pill-selector bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
                   {t.label}

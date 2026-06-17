@@ -175,6 +175,21 @@ html.dark.high-contrast {
   --ring: 48 100% 65%;
 }
 
+/* ── High-contrast pill selectors in dark mode ───────────────────────────────
+ * Segmented / filter "pill" selectors render their unselected options with
+ * muted text and a muted border, which washes out against the dark page
+ * background. In dark mode, unselected pills (tagged with `.pill-selector`)
+ * get a clearly visible border and bright foreground text; the selected pill
+ * keeps its solid primary fill, set inline by each selector. */
+.dark .pill-selector {
+  border-color: hsl(var(--foreground) / 0.4);
+  color: hsl(var(--foreground));
+}
+.dark .pill-selector:hover {
+  border-color: hsl(var(--foreground) / 0.7);
+  color: hsl(var(--foreground));
+}
+
 /* ── Accessibility: skip-to-content link ─────────────────────────────────── */
 .skip-link {
   position: absolute;

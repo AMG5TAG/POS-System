@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { getLandingPageName, setLandingPageName, useLandingPageNames } from "@/lib/landing-page-names";
 import {
   Globe, Plus, Trash2, Copy, ExternalLink, Pencil, Image, AlignLeft, Palette,
   Link2, GripVertical, ChevronUp, ChevronDown, ToggleLeft, ToggleRight,
@@ -343,7 +344,7 @@ function LinkRow({ link, onUpdate, onDelete, onMove, isFirst, isLast }: {
               {LINK_SIZES.map((s) => (
                 <button key={s.value} type="button" onClick={() => onUpdate({ size: s.value })}
                   className={cn("flex-1 py-1.5 text-xs font-medium border rounded transition-colors",
-                    (link.size ?? "medium") === s.value ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground hover:bg-muted/50")}>
+                    (link.size ?? "medium") === s.value ? "bg-primary/10 border-primary text-primary" : "pill-selector border-border text-muted-foreground hover:bg-muted/50")}>
                   {s.label}
                 </button>
               ))}
@@ -375,6 +376,11 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
   const profileRef = useRef<HTMLInputElement>(null);
   const bgImageRef = useRef<HTMLInputElement>(null);
   const { profile } = useBusinessProfile();
+
+  // Internal identifying name — admin-only label, stored client-side.
+  const [internalName, setInternalName] = useState(() => getLandingPageName(page.id));
+  useEffect(() => { setInternalName(getLandingPageName(page.id)); }, [page.id]);
+  const updateInternalName = (v: string) => { setInternalName(v); setLandingPageName(page.id, v); };
 
   const set = <K extends keyof LandingPage>(k: K, v: LandingPage[K]) => onChange({ [k]: v });
 
@@ -464,6 +470,11 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                 </div>
               </div>
             </div>
+            <div className="space-y-1">
+              <Label className="text-xs">Page name <span className="text-muted-foreground font-normal">(internal — for identifying)</span></Label>
+              <Input value={internalName} onChange={(e) => updateInternalName(e.target.value)} placeholder="e.g. Summer promo, Store A flyer" />
+              <p className="text-[11px] text-muted-foreground">Only shown to you in the Landing Pages list. Not visible to visitors.</p>
+            </div>
             <div className="space-y-1"><Label className="text-xs">Title</Label>
               <Input value={page.title} onChange={(e) => set("title", e.target.value)} placeholder="My Business" />
             </div>
@@ -485,7 +496,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                 {(["color", "gradient", "image"] as const).map((t) => (
                   <button key={t} onClick={() => set("bgType", t)}
                     className={cn("flex-1 py-1.5 text-xs font-medium capitalize transition-colors",
-                      page.bgType === t ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
+                      page.bgType === t ? "bg-primary/10 text-primary" : "pill-selector text-muted-foreground hover:bg-muted/50"
                     )}>
                     {t}
                   </button>
@@ -502,7 +513,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                     <div className="grid grid-cols-3 gap-1">
                       {["to bottom", "to right", "135deg"].map((d) => (
                         <button key={d} onClick={() => set("bgDir", d)}
-                          className={cn("py-1 text-xs rounded border transition-colors", page.bgDir === d ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground hover:bg-muted/50")}>
+                          className={cn("py-1 text-xs rounded border transition-colors", page.bgDir === d ? "bg-primary/10 border-primary text-primary" : "pill-selector border-border text-muted-foreground hover:bg-muted/50")}>
                           {d === "to bottom" ? "↓ Down" : d === "to right" ? "→ Right" : "↘ Diagonal"}
                         </button>
                       ))}
@@ -528,7 +539,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                 {(["pill", "rounded", "square"] as const).map((s) => (
                   <button key={s} onClick={() => set("btnStyle", s)}
                     className={cn("flex-1 py-1.5 text-xs font-medium border transition-colors capitalize", { pill: "rounded-full", rounded: "rounded-lg", square: "rounded-sm" }[s],
-                      page.btnStyle === s ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground hover:bg-muted/50")}>
+                      page.btnStyle === s ? "bg-primary/10 border-primary text-primary" : "pill-selector border-border text-muted-foreground hover:bg-muted/50")}>
                     {s}
                   </button>
                 ))}
@@ -540,7 +551,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                 {(["filled", "outline", "ghost"] as const).map((v) => (
                   <button key={v} onClick={() => set("btnVariant", v)}
                     className={cn("flex-1 py-1.5 text-xs font-medium border transition-colors capitalize rounded",
-                      page.btnVariant === v ? "bg-primary/10 border-primary text-primary" : "border-border text-muted-foreground hover:bg-muted/50")}>
+                      page.btnVariant === v ? "bg-primary/10 border-primary text-primary" : "pill-selector border-border text-muted-foreground hover:bg-muted/50")}>
                     {v}
                   </button>
                 ))}
@@ -636,6 +647,7 @@ function PagesListView({ pages, onSelect, onCreate, onDelete, onClone, onUse, on
 }) {
   const isTemplates = mode === "templates";
   const Icon = isTemplates ? LayoutTemplate : Globe;
+  const names = useLandingPageNames();
   return (
     <div className="p-4 md:p-6 space-y-6">
       <div className="flex items-center justify-between flex-wrap gap-3">
@@ -698,6 +710,9 @@ function PagesListView({ pages, onSelect, onCreate, onDelete, onClone, onUse, on
                 </div>
               </div>
               <CardContent className="p-3">
+                {names[page.id] && (
+                  <p className="text-sm font-semibold truncate mb-2" title={names[page.id]}>{names[page.id]}</p>
+                )}
                 {isTemplates ? (
                   <div className="space-y-2">
                     <Button size="sm" className="w-full gap-1.5 h-7" onClick={(e) => { e.stopPropagation(); onUse(page.id); }}>

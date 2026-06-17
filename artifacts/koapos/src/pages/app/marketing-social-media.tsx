@@ -254,7 +254,7 @@ export default function MarketingSocialMediaPage() {
                         <button key={a.id} type="button"
                           onClick={() => setSelected((s) => { const n = new Set(s); n.has(key) ? n.delete(key) : n.add(key); return n; })}
                           className={cn("flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs transition-colors",
-                            on ? "border-primary bg-primary/10 text-primary" : "hover:bg-muted")}>
+                            on ? "border-primary bg-primary/10 text-primary" : "pill-selector hover:bg-muted")}>
                           {P && <P.icon className={cn("w-3.5 h-3.5", on ? "text-primary" : P.color)} />}
                           {a.name}
                         </button>

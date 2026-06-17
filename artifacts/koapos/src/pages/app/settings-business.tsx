@@ -176,7 +176,7 @@ function RegSegmentToggle<T extends string>({ options, value, onChange }: {
       {options.map(opt => (
         <button key={opt.value} type="button" onClick={() => onChange(opt.value)}
           className={`flex-1 px-3 py-1.5 text-sm font-medium transition-colors ${
-            value === opt.value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
+            value === opt.value ? "bg-primary/10 text-primary" : "pill-selector text-muted-foreground hover:bg-muted/50"
           }`}>{opt.label}</button>
       ))}
     </div>
@@ -356,6 +356,16 @@ export default function SettingsBusinessPage() {
       setRegTimezone(merchant.timezone || "Australia/Sydney");
     }
   }, [merchant]);
+
+  /* Hydrate the extended-fields form once the profile loads (and re-sync after a
+   * save). `ext` is only the initial value at mount, so without this the form
+   * keeps the loading-time defaults and a Save would overwrite real data. Skip
+   * while the user has unsaved edits so we never clobber them. */
+  const profileKey = JSON.stringify(profile);
+  useEffect(() => {
+    if (!dirtyBusiness) setExt(profile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileKey, dirtyBusiness]);
 
   /* Helpers */
   const setExtField = <K extends keyof BusinessProfile>(key: K, val: BusinessProfile[K]) => {

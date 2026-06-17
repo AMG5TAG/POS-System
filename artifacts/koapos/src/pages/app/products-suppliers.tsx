@@ -591,19 +591,19 @@ export default function ProductsSuppliersPage() {
             <div className="flex items-center border rounded-lg overflow-hidden">
               <button
                 onClick={() => setView("cards")}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "cards" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "cards" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
                 <LayoutGrid className="w-3.5 h-3.5" /> Cards
               </button>
               <button
                 onClick={() => setView("table")}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-r", view === "table" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-r", view === "table" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
                 <Table2 className="w-3.5 h-3.5" /> Table
               </button>
               <button
                 onClick={() => setView("performance")}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "performance" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "performance" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
                 <BarChart3 className="w-3.5 h-3.5" /> Performance
               </button>

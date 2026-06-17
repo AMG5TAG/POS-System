@@ -122,7 +122,7 @@ function HistoryDetailDialog({ take, onClose }: { take: StockTake; onClose: () =
                 className={cn("px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
                   catFilter === c
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-muted hover:border-foreground/30")}>
+                    : "pill-selector bg-background text-muted-foreground border-muted hover:border-foreground/30")}>
                 {c === "all" ? "All" : c}
               </button>
             ))}
@@ -427,7 +427,7 @@ function StockTakeView({
                 className={cn("px-2.5 py-1 rounded-full text-xs font-medium transition-colors border",
                   catFilter === c
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background text-muted-foreground border-muted hover:border-foreground/30")}>
+                    : "pill-selector bg-background text-muted-foreground border-muted hover:border-foreground/30")}>
                 {c === "all" ? "All categories" : c}
               </button>
             ))}

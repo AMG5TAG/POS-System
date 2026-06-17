@@ -2044,7 +2044,7 @@ export default function ReportsPage() {
                   "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border",
                   preset === p.id
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background hover:bg-muted text-foreground border-border",
+                    : "pill-selector bg-background hover:bg-muted text-foreground border-border",
                 )}
               >
                 {p.label}
@@ -2071,7 +2071,7 @@ export default function ReportsPage() {
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                 activeTab === id
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted",
               )}
             >
               <Icon className="w-3.5 h-3.5" />

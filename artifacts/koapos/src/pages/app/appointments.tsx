@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { useMapUrl } from "@/lib/map-provider";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { AppLayout } from "@/components/layout/app-layout";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
@@ -237,6 +238,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
   const tabIndex = TABS.findIndex(t => t.key === tab);
   const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
   const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!appt, goPrevTab, goNextTab);
   useEffect(() => { setTab("details"); }, [appt?.id]);
 
   if (!appt) return null;
@@ -275,7 +277,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                 "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
                 tab === key
                   ? "bg-primary text-primary-foreground shadow-sm"
-                  : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+                  : "pill-selector bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
               )}
             >
               {tabLabel}

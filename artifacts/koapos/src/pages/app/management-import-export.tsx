@@ -11,6 +11,7 @@ import {
   Tag, FolderOpen, History, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -494,6 +495,31 @@ const ENTITIES: EntityConfig[] = [
       };
     },
   },
+  {
+    key: "group-export",
+    label: "Group Export",
+    pluralLabel: "Group Pricing Sheets",
+    icon: Layers,
+    exportOnly: true,
+    description: "Export a pricing sheet per customer group, with each group's custom prices highlighted.",
+    exportUrl: "/api/products?limit=10000",
+    createUrl: "",
+    fields: [
+      { key: "name",        label: "Product Name" },
+      { key: "sku",         label: "SKU" },
+      { key: "description", label: "Description" },
+      { key: "rrp",         label: "RRP (inc GST)" },
+      { key: "groupPrice",  label: "Group Price" },
+    ],
+    sampleRows: [],
+    toExportRow: (item) => ({
+      name:        String(item.name        ?? ""),
+      sku:         String(item.sku         ?? ""),
+      description: String(item.description ?? ""),
+      rrp:         item.price != null ? String(item.price) : "",
+      groupPrice:  "",
+    }),
+  },
 ];
 
 /* ─── Column alias matching ──────────────────────────────────────────────── */
@@ -684,6 +710,127 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
         <Button size="sm" className="gap-1.5 justify-center" onClick={handleExportAll} disabled={exporting}>
           {exporting ? "Exporting…" : <><Download className="w-3.5 h-3.5" /> Export All {entity.pluralLabel}</>}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Group pricing export card ──────────────────────────────────────────────
+ * Special export (no import) that downloads a per-customer-group pricing sheet
+ * as an Excel file, with each group's custom prices highlighted. Moved here
+ * from the Products screen. */
+function GroupExportCard() {
+  const { settings: customerSettings } = useCustomerSettings();
+  const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  const exportGroupPriceSheet = async (groupId: string, groupName: string) => {
+    setExportingId(groupId);
+    try {
+      const res = await fetch("/api/products?limit=10000", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      const products: Record<string, unknown>[] = Array.isArray(data)
+        ? data
+        : (Array.isArray(data.items) ? data.items : []);
+
+      const hdrCell = "background:#1e293b;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #334155;font-size:13px;";
+      const cell    = "padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;";
+      const hiCell  = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;";
+      const hiPriceCell = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;font-weight:bold;color:#92400e;";
+
+      const headerRow = `<tr>
+        <th style="${hdrCell}">Product Name</th>
+        <th style="${hdrCell}">SKU</th>
+        <th style="${hdrCell}">Description</th>
+        <th style="${hdrCell}">RRP (inc GST)</th>
+        <th style="${hdrCell}">${groupName} Price</th>
+      </tr>`;
+
+      const dataRows = products.map((p) => {
+        const ep = p as { name?: string; sku?: string; description?: string; price?: number | string; groupPrices?: Record<string, number> };
+        const gp = ep.groupPrices?.[groupId];
+        const hasPrice = gp != null && Number(gp) > 0;
+        const rowBg = hasPrice ? "background:#fefce8;" : "";
+        return `<tr style="${rowBg}">
+          <td style="${hasPrice ? hiCell : cell}">${(ep.name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+          <td style="${hasPrice ? hiCell : cell}">${(ep.sku ?? "").replace(/&/g, "&amp;")}</td>
+          <td style="${hasPrice ? hiCell : cell}">${(ep.description ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+          <td style="${hasPrice ? hiCell : cell}">${ep.price != null ? "$" + Number(ep.price).toFixed(2) : ""}</td>
+          <td style="${hasPrice ? hiPriceCell : cell}">${hasPrice ? "$" + Number(gp).toFixed(2) : ""}</td>
+        </tr>`;
+      }).join("");
+
+      const legend = `<p style="font-family:sans-serif;font-size:12px;color:#92400e;background:#fefce8;border:1px solid #fcd34d;padding:6px 10px;display:inline-block;border-radius:4px;margin-bottom:8px;">
+        ★ Highlighted rows have a custom <strong>${groupName}</strong> price set
+      </p>`;
+
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8">
+          <style>table{border-collapse:collapse;font-family:sans-serif;}</style>
+        </head>
+        <body>
+          <h2 style="font-family:sans-serif;margin-bottom:4px;">${groupName} Group Pricing</h2>
+          ${legend}
+          <table>${headerRow}${dataRows}</table>
+        </body></html>`;
+
+      const blob = new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `Group_Pricing_${groupName.replace(/\s+/g, "_")}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${groupName} pricing exported`);
+    } catch {
+      toast.error("Export failed — check your connection and try again.");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4 h-full">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Download className="w-4 h-4 text-primary" />
+          <span className="font-semibold text-sm">Export</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Download a pricing sheet for a customer group as an Excel file. Products with a custom price for
+          that group are highlighted.
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1">
+        <p className="text-xs font-medium text-foreground/70 uppercase tracking-wide mb-2">Included Columns</p>
+        <div className="flex flex-wrap gap-1.5">
+          {["Product Name", "SKU", "Description", "RRP (inc GST)", "Group Price"].map((label) => (
+            <span key={label} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border bg-muted text-muted-foreground border-border">
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-auto">
+        <p className="text-xs font-medium text-muted-foreground">Choose a group to export</p>
+        {customerGroups.map((group) => (
+          <Button
+            key={group.id}
+            variant="outline"
+            size="sm"
+            className="gap-2 justify-start"
+            disabled={exportingId !== null}
+            onClick={() => exportGroupPriceSheet(group.id, group.name)}
+          >
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: group.color }} />
+            {exportingId === group.id ? "Exporting…" : <>Export {group.name} Pricing</>}
+          </Button>
+        ))}
       </div>
     </div>
   );
@@ -1318,6 +1465,8 @@ export default function ManagementImportExportPage() {
                 <Download className="w-10 h-10 text-muted-foreground/30" />
                 <p className="font-medium text-muted-foreground">Coming Soon</p>
               </div>
+            ) : entity.key === "group-export" ? (
+              <GroupExportCard />
             ) : (
               <ExportCard entity={entity} />
             )}

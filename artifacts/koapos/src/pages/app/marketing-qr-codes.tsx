@@ -1011,14 +1011,17 @@ export default function MarketingQRCodesPage() {
   // Resolve the merchant's landing pages and shortlinks into selectable QR targets.
   const landingOptions = useMemo<LinkOption[]>(() => {
     const username = String((merchant as Record<string, unknown> | undefined)?.username ?? "").toLowerCase();
-    return ((landingResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((p) => {
-      const slug = String(p.slug ?? "");
-      return {
-        id:    String(p.id ?? slug),
-        label: String(p.title || slug || "Untitled page"),
-        url:   `${publicOrigin()}/b/${username || "your-username"}/a/${slug}`,
-      };
-    });
+    return ((landingResponse?.items ?? []) as unknown as Record<string, unknown>[])
+      // Templates are reusable styles, not live pages — they can't be a QR target.
+      .filter((p) => String(p.isTemplate ?? "false") !== "true")
+      .map((p) => {
+        const slug = String(p.slug ?? "");
+        return {
+          id:    String(p.id ?? slug),
+          label: String(p.title || slug || "Untitled page"),
+          url:   `${publicOrigin()}/b/${username || "your-username"}/a/${slug}`,
+        };
+      });
   }, [landingResponse, merchant]);
 
   const shortlinkOptions = useMemo<LinkOption[]>(() => {
@@ -1285,7 +1288,7 @@ export default function MarketingQRCodesPage() {
                             "flex flex-col items-center gap-1 py-2 px-1 rounded-lg border transition-all",
                             qrType === t.id
                               ? "border-primary bg-primary/5 text-primary shadow-sm"
-                              : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40"
+                              : "pill-selector border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40"
                           )}>
                           <Icon className="w-3.5 h-3.5 shrink-0" />
                           <span className="text-[9px] font-medium leading-tight text-center">{t.label}</span>
@@ -1487,7 +1490,7 @@ export default function MarketingQRCodesPage() {
                       className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
                         settings.dotStyle === s.value
                           ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
+                          : "pill-selector border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
                       <DotIcon style={s.value} />
                       <span className="text-[10px] font-medium">{s.label}</span>
                     </button>
@@ -1507,7 +1510,7 @@ export default function MarketingQRCodesPage() {
                       className={cn("flex flex-col items-center gap-1.5 py-2 px-1 rounded-lg border-2 transition-all",
                         settings.cornerSquareStyle === s.csStyle && settings.cornerDotStyle === s.cdStyle
                           ? "border-primary bg-primary/5 text-primary shadow-sm"
-                          : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
+                          : "pill-selector border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/40")}>
                       <EyeIcon csStyle={s.csStyle} cdStyle={s.cdStyle} />
                       <span className="text-[10px] font-medium">{s.label}</span>
                     </button>

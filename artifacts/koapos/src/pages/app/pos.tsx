@@ -3915,7 +3915,7 @@ export default function POSPage() {
                           className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-all text-left
                             ${payMethod === id
                               ? "border-primary bg-primary/10 text-primary"
-                              : "border-border bg-background hover:border-primary/40 hover:bg-muted/60 text-foreground"}`}
+                              : "pill-selector border-border bg-background hover:border-primary/40 hover:bg-muted/60 text-foreground"}`}
                         >
                           <Icon className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate text-xs">{label}{isIntegration && <span className="ml-1 text-[9px] opacity-60 font-normal">↗</span>}</span>
@@ -4124,7 +4124,7 @@ export default function POSPage() {
                                       "flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all",
                                       gcRemainingMethod === m
                                         ? "border-primary bg-primary/10 text-primary"
-                                        : "border-border bg-background hover:border-primary/40"
+                                        : "pill-selector border-border bg-background hover:border-primary/40"
                                     )}
                                   >
                                     {m === "cash" ? "Cash" : "EFTPOS"}

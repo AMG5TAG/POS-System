@@ -12,6 +12,7 @@ import {
   useGetInventorySettings,
   useUpdateInventorySettings,
 } from "@workspace/api-client-react";
+import { useShowBrandCostValue } from "@/lib/brand-view-settings";
 
 const INVENTORY_TABS = [
   { href: "#display",        label: "Display",        icon: Boxes },
@@ -28,6 +29,7 @@ export default function ManagementInventoryPage() {
   const [enableGroupPricing, setEnableGroupPricingState] = useState(true);
   const [enableStockColors, setEnableStockColorsState] = useState(false);
   const [defaultImageUrl, setDefaultImageUrl] = useState("");
+  const [showBrandCostValue, setShowBrandCostValue] = useShowBrandCostValue();
 
   useEffect(() => {
     if (settings) {
@@ -127,6 +129,16 @@ export default function ManagementInventoryPage() {
                 </p>
               </div>
               <Switch checked={enableStockColors} onCheckedChange={toggleStockColors} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">Show 'Cost Value' column on Brands</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Adds a Cost Value column to the Brands list (Products › Brands) showing each brand's
+                  total inventory cost — the sum of cost price × stock on hand across its products.
+                </p>
+              </div>
+              <Switch checked={showBrandCostValue} onCheckedChange={setShowBrandCostValue} />
             </div>
           </div>
         </div>

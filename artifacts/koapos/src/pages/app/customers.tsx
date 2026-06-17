@@ -1,6 +1,7 @@
 import { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { customerDisplayName } from "@/lib/customer-name";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -1344,6 +1345,7 @@ function CustomerDetailInner({
   const tabIndex = TABS.findIndex(t => t.key === tab);
   const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
   const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(true, goPrevTab, goNextTab);
 
   return (
     <>
@@ -1394,7 +1396,7 @@ function CustomerDetailInner({
               "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
               tab === key
                 ? "bg-primary text-primary-foreground shadow-sm"
-                : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+                : "pill-selector bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {label}
@@ -1490,7 +1492,7 @@ function CustomerDetailInner({
                     "flex-1 py-1.5 font-medium transition-colors capitalize",
                     loyaltyMode === m
                       ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:bg-muted",
+                      : "pill-selector bg-background text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {m === "set" ? "Set to" : m.charAt(0).toUpperCase() + m.slice(1)}

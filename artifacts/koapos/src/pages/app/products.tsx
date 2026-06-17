@@ -45,7 +45,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -60,13 +60,14 @@ import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 import { computeAllGroupPrices } from "@/lib/group-pricing";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import {
   Search, Plus, Pencil, Trash2, Package, Check,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
-  Archive, X as XIcon, Upload,
+  Archive, X as XIcon, Upload, Hash,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -79,7 +80,7 @@ import {
 
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
-type DetailTab = "details" | "media" | "inventory" | "settings";
+type DetailTab = "details" | "price" | "media" | "inventory" | "serials" | "settings";
 type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
 
 type BulkActionPending =
@@ -651,6 +652,35 @@ function ProductDetailDialog({
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete]       = useState(false);
   const { data: floorPlanData }                 = useGetFloorPlan();
+
+  // Serial numbers captured when warranty units are received against a
+  // purchase order. Surfaced in their own tab when any exist.
+  const [serials, setSerials] = useState<string[]>([]);
+  useEffect(() => {
+    if (!product) { setSerials([]); return; }
+    let cancelled = false;
+    fetch(`/api/products/${product.id}/serials`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { items?: { serial: string }[] }) => {
+        if (!cancelled) setSerials((d.items ?? []).map((x) => x.serial).filter(Boolean));
+      })
+      .catch(() => { if (!cancelled) setSerials([]); });
+    return () => { cancelled = true; };
+  }, [product?.id]);
+
+  const TABS: { key: DetailTab; label: string }[] = [
+    { key: "details",   label: "Details"   },
+    { key: "price",     label: "Price"     },
+    { key: "media",     label: "Media"     },
+    { key: "inventory", label: "Inventory" },
+    ...(serials.length > 0 ? [{ key: "serials" as DetailTab, label: "Serial Numbers" }] : []),
+    { key: "settings",  label: "Settings"  },
+  ];
+  const tabIndex = TABS.findIndex((t) => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!product, goPrevTab, goNextTab);
+
   if (!product) return null;
   const productStockLocation = (product as Product & { stockLocation?: string | null }).stockLocation ?? null;
 
@@ -663,16 +693,6 @@ function ProductDetailDialog({
   const detailProductType = (product as Product & { productType?: string }).productType ?? "standard";
   const isLowStock = !NO_STOCK_TYPES.has(detailProductType) && product.trackInventory &&
     (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
-
-  const TABS: { key: DetailTab; label: string }[] = [
-    { key: "details",   label: "Details"   },
-    { key: "media",     label: "Media"     },
-    { key: "inventory", label: "Inventory" },
-    { key: "settings",  label: "Settings"  },
-  ];
-  const tabIndex = TABS.findIndex((t) => t.key === tab);
-  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
-  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
 
   const productImage = (product as Product & { imageUrl?: string | null }).imageUrl || "";
 
@@ -723,17 +743,6 @@ function ProductDetailDialog({
                 <p className="whitespace-pre-line">{product.description}</p>
               </div>
             )}
-            {/* Pricing */}
-            <div className="rounded-xl border bg-muted/20 divide-y">
-              <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
-              {product.costPrice != null && (
-                <InfoRow icon={DollarSign} label="Cost Price" value={formatCurrency(product.costPrice)} />
-              )}
-              {margin !== null && (
-                <InfoRow icon={DollarSign} label="Margin" value={`${margin}%`} valueClass={margin < 20 ? "text-destructive" : "text-emerald-600"} />
-              )}
-              <InfoRow icon={Settings2} label="Tax Rate (GST)" value={`${product.taxRate ?? 10}%`} />
-            </div>
             {/* Identifiers */}
             {(product.sku || (product as Product & { barcode?: string }).barcode) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
@@ -747,6 +756,22 @@ function ProductDetailDialog({
                 value={((product as Product & { productType?: string }).productType ?? "standard")
                   .replace(/-/g, " ")
                   .replace(/\b\w/g, (c) => c.toUpperCase())} />
+            </div>
+          </div>
+        )}
+
+        {tab === "price" && (
+          <div className="space-y-3 py-4">
+            {/* Pricing */}
+            <div className="rounded-xl border bg-muted/20 divide-y">
+              <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
+              {product.costPrice != null && (
+                <InfoRow icon={DollarSign} label="Cost Price" value={formatCurrency(product.costPrice)} />
+              )}
+              {margin !== null && (
+                <InfoRow icon={DollarSign} label="Margin" value={`${margin}%`} valueClass={margin < 20 ? "text-destructive" : "text-emerald-600"} />
+              )}
+              <InfoRow icon={Settings2} label="Tax Rate (GST)" value={`${product.taxRate ?? 10}%`} />
             </div>
           </div>
         )}
@@ -826,6 +851,23 @@ function ProductDetailDialog({
           </div>
         )}
 
+        {tab === "serials" && (
+          <div className="space-y-3 py-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Serial numbers recorded when warranty units were received against a purchase order.</p>
+              <Badge variant="outline" className="text-xs shrink-0">{serials.length}</Badge>
+            </div>
+            <div className="rounded-xl border bg-muted/20 divide-y">
+              {serials.map((s, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <Hash className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="font-mono break-all">{s}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
         {tab === "settings" && (
           <div className="space-y-3 py-4">
             <div className="rounded-xl border bg-muted/20 divide-y">
@@ -849,28 +891,32 @@ function ProductDetailDialog({
 
         </div>
 
-        <div className="flex items-center justify-between px-6 pb-5 pt-4 border-t shrink-0">
-          <div className="flex items-center gap-2">
-            <Button variant="destructive" size="sm"
-              onClick={() => setConfirmDelete(true)} disabled={deleteIsPending} title="Delete product">
-              <Trash2 className="w-3.5 h-3.5" />
+        <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="destructive" size="sm" className="w-8 h-8 p-0"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleteIsPending}
+              title="Delete product"
+            >
+              <Trash2 className="w-4 h-4" />
             </Button>
-            <Button size="sm" onClick={() => { onClose(); onEdit(product); }}>
-              <Pencil className="w-3.5 h-3.5" />
+            <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(product); }} title="Edit product">
+              <Pencil className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={goPrevTab} disabled={tabIndex === 0}>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
               <ChevronLeft className="w-4 h-4" />
             </Button>
-            <Button variant="outline" size="sm" onClick={goNextTab} disabled={tabIndex === TABS.length - 1}>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
               <ChevronRight className="w-4 h-4" />
             </Button>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-2 items-center">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
             </Button>
           </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
       <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
     </Dialog>
@@ -1013,7 +1059,6 @@ export default function ProductsPage() {
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
-  const [groupExportOpen, setGroupExportOpen] = useState(false);
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter]       = useState("");
@@ -1584,61 +1629,6 @@ export default function ProductsPage() {
     ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
     : null;
 
-  const exportGroupPriceSheet = (groupId: string, groupName: string) => {
-    setGroupExportOpen(false);
-
-    const hdrCell = "background:#1e293b;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #334155;font-size:13px;";
-    const cell    = "padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;";
-    const hiCell  = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;";
-    const hiPriceCell = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;font-weight:bold;color:#92400e;";
-
-    const headerRow = `<tr>
-      <th style="${hdrCell}">Product Name</th>
-      <th style="${hdrCell}">SKU</th>
-      <th style="${hdrCell}">Description</th>
-      <th style="${hdrCell}">RRP (inc GST)</th>
-      <th style="${hdrCell}">${groupName} Price</th>
-    </tr>`;
-
-    const dataRows = products.map((p) => {
-      const ep = p as Product & { groupPrices?: Record<string, number>; description?: string };
-      const gp = ep.groupPrices?.[groupId];
-      const hasPrice = gp != null && Number(gp) > 0;
-      const rowBg = hasPrice ? "background:#fefce8;" : "";
-      return `<tr style="${rowBg}">
-        <td style="${hasPrice ? hiCell : cell}">${(p.name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
-        <td style="${hasPrice ? hiCell : cell}">${(p.sku ?? "").replace(/&/g, "&amp;")}</td>
-        <td style="${hasPrice ? hiCell : cell}">${(ep.description ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
-        <td style="${hasPrice ? hiCell : cell}">${p.price != null ? "$" + Number(p.price).toFixed(2) : ""}</td>
-        <td style="${hasPrice ? hiPriceCell : cell}">${hasPrice ? "$" + Number(gp).toFixed(2) : ""}</td>
-      </tr>`;
-    }).join("");
-
-    const legend = `<p style="font-family:sans-serif;font-size:12px;color:#92400e;background:#fefce8;border:1px solid #fcd34d;padding:6px 10px;display:inline-block;border-radius:4px;margin-bottom:8px;">
-      ★ Highlighted rows have a custom <strong>${groupName}</strong> price set
-    </p>`;
-
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:x="urn:schemas-microsoft-com:office:excel"
-      xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="utf-8">
-        <style>table{border-collapse:collapse;font-family:sans-serif;}</style>
-      </head>
-      <body>
-        <h2 style="font-family:sans-serif;margin-bottom:4px;">${groupName} Group Pricing</h2>
-        ${legend}
-        <table>${headerRow}${dataRows}</table>
-      </body></html>`;
-
-    const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `Group_Pricing_${groupName.replace(/\s+/g, "_")}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
-
   return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-3">
@@ -1716,31 +1706,6 @@ export default function ProductsPage() {
               {hideCosts ? "Show Costs" : "Hide Costs"}
             </Button>
           )}
-
-
-          {/* Group Export */}
-          <Popover open={groupExportOpen} onOpenChange={setGroupExportOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <Download className="w-4 h-4" />
-                Group Export
-                <ChevronDown className="w-3 h-3 text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-52 p-1">
-              <p className="text-[11px] text-muted-foreground px-2 py-1.5 font-medium">Export pricing for group</p>
-              {customerGroups.map((group) => (
-                <button
-                  key={group.id}
-                  onClick={() => exportGroupPriceSheet(group.id, group.name)}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
-                >
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: group.color }} />
-                  {group.name}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
 
           {/* Add Product */}
           <Button onClick={openCreate} className="ml-auto gap-1.5">
@@ -2223,7 +2188,7 @@ export default function ProductsPage() {
                                 "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
                                 active
                                   ? "border-primary bg-primary/5 text-primary"
-                                  : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                                  : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
                               )}
                             >
                               <Icon className="w-4 h-4" />
@@ -2243,7 +2208,7 @@ export default function ProductsPage() {
                               "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
                               form.productType === value
                                 ? "border-primary bg-primary/5 text-primary"
-                                : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                                : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
                             )}
                           >
                             <Icon className="w-4 h-4" />
@@ -2954,7 +2919,7 @@ export default function ProductsPage() {
                         "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
                         !pcPartType
                           ? "border-primary bg-primary/5 text-primary font-medium"
-                          : "border-border hover:border-muted-foreground/40 text-muted-foreground"
+                          : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground"
                       )}
                     >
                       <Package className="w-3.5 h-3.5 shrink-0" />
@@ -2969,7 +2934,7 @@ export default function ProductsPage() {
                           "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
                           pcPartType === id
                             ? "border-primary bg-primary/5 text-primary font-medium"
-                            : "border-border hover:border-muted-foreground/40 text-muted-foreground"
+                            : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground"
                         )}
                       >
                         <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -3183,32 +3148,29 @@ export default function ProductsPage() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/10 shrink-0">
-            <div className="flex gap-2">
-              {!isFirstTab && (
-                <Button variant="outline" onClick={goPrevTab} className="gap-1.5">
-                  <ChevronLeft className="w-4 h-4" /> Previous
-                </Button>
-              )}
-              {!isLastTab && (
-                <Button variant="outline" onClick={goNextTab} className="gap-1.5">
-                  Next Tab <ChevronRight className="w-4 h-4" />
-                </Button>
-              )}
+          <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
+            <div className="flex gap-2 items-center">
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={isFirstTab} title="Previous tab">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={isLastTab} title="Next tab">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => {
+            <div className="flex gap-2 items-center">
+              <Button variant="outline" size="sm" onClick={() => {
                 if (isDirtyProduct) { setPendingProductClose(true); return; }
                 setDialogOpen(false);
               }}>Cancel</Button>
               <Button
+                size="sm"
                 onClick={handleSave}
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
                 {editingProduct ? "Save Changes" : "Create Product"}
               </Button>
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

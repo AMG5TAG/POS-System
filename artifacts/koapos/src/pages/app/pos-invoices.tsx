@@ -1770,14 +1770,14 @@ export default function POSInvoicesPage() {
                     <button
                       type="button"
                       onClick={() => setDiscount((d) => ({ ...d, type: "fixed" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       $
                     </button>
                     <button
                       type="button"
                       onClick={() => setDiscount((d) => ({ ...d, type: "percent" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       %
                     </button>
@@ -2044,14 +2044,14 @@ export default function POSInvoicesPage() {
                     <button
                       type="button"
                       onClick={() => setEditDiscount((d) => ({ ...d, type: "fixed" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       $
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditDiscount((d) => ({ ...d, type: "percent" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       %
                     </button>
