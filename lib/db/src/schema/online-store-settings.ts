@@ -10,6 +10,8 @@ export const onlineStoreSettingsTable = pgTable("online_store_settings", {
   logoUrl:    text("logo_url").notNull().default(""),
   faviconUrl: text("favicon_url").notNull().default(""),
   domain:     text("domain").notNull().default(""),
+  /** Custom-domain lifecycle: pending → verifying → active | failed. */
+  domainStatus: text("domain_status").notNull().default("pending"),
   published:  text("published").notNull().default("false"),
   theme:      text("theme").notNull().default("{}"),
   payments:   text("payments").notNull().default("{}"),
