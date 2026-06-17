@@ -200,9 +200,9 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       {
         name: "Apps", icon: LayoutGrid,
         children: [
-          { name: "Tech App",   href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
-          { name: "Mobile POS", href: "/management/staff-operations/mobile-pos",     icon: Smartphone },
           { name: "Dashboard",  href: "/management/staff-operations/dashboard", icon: LayoutDashboard  },
+          { name: "Mobile POS", href: "/management/staff-operations/mobile-pos",     icon: Smartphone },
+          { name: "Tech App",   href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
         ],
       },
       { name: "Legal",         href: "/management/staff-operations/legal",              icon: Scale       },

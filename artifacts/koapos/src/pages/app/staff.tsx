@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Stepper } from "@/components/ui/stepper";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -945,11 +945,12 @@ function DetailRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ c
 }
 
 function StaffDetailDialog({
-  staff, onClose, onEdit, registerName,
+  staff, onClose, onEdit, onDelete, registerName,
 }: {
   staff: Staff | null;
   onClose: () => void;
   onEdit: (s: Staff) => void;
+  onDelete?: (s: Staff) => void;
   registerName: string;
 }) {
   const billing = formatAddress(staff?.billingAddress);
@@ -971,9 +972,6 @@ function StaffDetailDialog({
                     <Badge variant={staff.isActive ? "default" : "secondary"}>{staff.isActive ? "Active" : "Inactive"}</Badge>
                   </div>
                 </div>
-                <Button variant="outline" size="sm" onClick={() => onEdit(staff)} className="shrink-0">
-                  <Pencil className="w-4 h-4 mr-2" /> Edit
-                </Button>
               </div>
             </DialogHeader>
 
@@ -1011,6 +1009,26 @@ function StaffDetailDialog({
                 <DetailRow icon={DollarSign} label="Super" value={staff.superRate ? `${staff.superRate}%` : ""} />
               </section>
             </div>
+
+            <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
+              <div className="flex gap-2 items-center">
+                {onDelete && (
+                  <Button
+                    variant="destructive" size="sm" className="w-8 h-8 p-0"
+                    onClick={() => onDelete(staff)}
+                    title="Remove staff member"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button size="sm" className="w-8 h-8 p-0" onClick={() => onEdit(staff)} title="Edit staff member">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+              </div>
+            </DialogFooter>
           </>
         )}
       </DialogContent>
@@ -1305,6 +1323,7 @@ export default function StaffPage() {
         staff={viewingStaff}
         onClose={() => setViewing(null)}
         onEdit={(s) => { setViewing(null); openEdit(s); }}
+        onDelete={(s) => { setViewing(null); setDeleting(s); setDelDialog(true); }}
         registerName={registerMap[String(viewingStaff?.defaultRegisterType ?? "")] || "—"}
       />
 

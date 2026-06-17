@@ -19,6 +19,7 @@ import {
   Gift, Users, QrCode, MapPin, Star, Mail, ChevronRight, CheckCircle2,
   Settings2, Palette, Upload, ExternalLink, FileText, Package,
   Code2, Sparkles, Phone, Clock, ArrowUp, ArrowDown, Layers, Wand2, Building2,
+  Link2, Copy, Check,
 } from "lucide-react";
 import {
   useGetOnlineStoreSettings,
@@ -28,6 +29,7 @@ import {
   useGetMerchant,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { useStoreSlug, slugifyStorePath } from "@/lib/online-store-slug";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -91,6 +93,16 @@ const FONT_OPTIONS = [
   { value: "serif", label: "Serif (Elegant)" },
   { value: "mono",  label: "Monospace (Tech)" },
 ] as const;
+
+/* The store theme only supports three font families, while Business Details
+ * stores a specific brand font name. Classify the brand font into the closest
+ * category so "Import from Business" can carry the font across. */
+function brandFontToCategory(name: string): "sans" | "serif" | "mono" {
+  const f = name.toLowerCase();
+  if (/mono|courier|code|consol/.test(f)) return "mono";
+  if (!/sans/.test(f) && /serif|times|georgia|merriweather|playfair|lora|garamond|slab|baskerville/.test(f)) return "serif";
+  return "sans";
+}
 
 const RADIUS_OPTIONS = [
   { value: "none", label: "Square" },
@@ -417,6 +429,21 @@ export default function ManagementOnlineStorePage() {
   const logoFileRef = useRef<HTMLInputElement>(null);
   const faviconFileRef = useRef<HTMLInputElement>(null);
 
+  /* Store URL: default platform URL is https://koapos.com.au/b/USERNAME/o/CUSTOM
+   * where CUSTOM (the slug) is editable; `site.domain` is the optional custom
+   * DNS domain pointed at the store. */
+  const PLATFORM_BASE = "https://koapos.com.au";
+  const [storeSlug, setStoreSlug] = useStoreSlug();
+  const merchantUsername = (merchant?.username ?? "").toLowerCase();
+  const defaultStoreUrl = `${PLATFORM_BASE}/b/${merchantUsername || "your-username"}/o/${storeSlug}`;
+  const liveStoreUrl = site.domain.trim() ? `https://${site.domain.trim().replace(/^https?:\/\//, "")}` : defaultStoreUrl;
+  const [urlCopied, setUrlCopied] = useState(false);
+  const copyStoreUrl = async () => {
+    await navigator.clipboard.writeText(liveStoreUrl).catch(() => {});
+    setUrlCopied(true);
+    setTimeout(() => setUrlCopied(false), 2000);
+  };
+
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Load from API on mount
@@ -478,6 +505,7 @@ export default function ManagementOnlineStorePage() {
         accent:  accent || s.theme.accent,
         bg:      (bp.bgColors ?? [])[0]   || s.theme.bg,
         text:    (bp.textColors ?? [])[0] || s.theme.text,
+        font:    bp.brandFont ? brandFontToCategory(bp.brandFont) : s.theme.font,
       },
     }));
     toast.success("Imported branding from Business Details");
@@ -718,7 +746,7 @@ export default function ManagementOnlineStorePage() {
               <CardHeader className="pb-3 flex flex-row items-center justify-between gap-2 space-y-0">
                 <CardTitle className="text-base flex items-center gap-2"><Settings2 className="w-4 h-4" /> Site Basics</CardTitle>
                 <Button variant="outline" size="sm" className="gap-1.5" onClick={importFromBusiness}
-                  title="Import name, tagline, logo, favicon and brand colours from Business Details">
+                  title="Import name, tagline, logo, favicon, brand colours and font from Business Details">
                   <Building2 className="w-3.5 h-3.5" /> Import from Business
                 </Button>
               </CardHeader>
@@ -726,7 +754,6 @@ export default function ManagementOnlineStorePage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                   <Field label="Store name"><Input value={site.storeName} onChange={(e) => updateSite({ storeName: e.target.value })} /></Field>
                   <Field label="Tagline">   <Input value={site.tagline}   onChange={(e) => updateSite({ tagline:   e.target.value })} /></Field>
-                  <Field label="Domain"><Input value={site.domain}  onChange={(e) => updateSite({ domain:  e.target.value })} placeholder="mystore.koapos.shop" /></Field>
                   <Field label="Logo URL"><Input value={site.logoUrl} onChange={(e) => updateSite({ logoUrl: e.target.value })} placeholder="https://…" /></Field>
                   <Field label="Favicon URL"><Input value={site.faviconUrl} onChange={(e) => updateSite({ faviconUrl: e.target.value })} placeholder="https://…" /></Field>
                 </div>
@@ -764,6 +791,67 @@ export default function ManagementOnlineStorePage() {
                     title="Use the store logo as the favicon">
                     <ImageIcon className="w-3.5 h-3.5" /> Use logo as favicon
                   </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2"><Link2 className="w-4 h-4" /> Store URL &amp; Domain</CardTitle>
+                <CardDescription>Your store is published at the address below. Share it or point your own domain to it.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-5">
+                {/* Default platform URL with editable CUSTOM segment */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Default store URL</Label>
+                  <div className="flex items-center gap-2 rounded-md border bg-muted/40 px-3 py-2 flex-wrap">
+                    <span className="text-sm text-muted-foreground font-mono whitespace-nowrap">
+                      {PLATFORM_BASE}/b/{merchantUsername || "your-username"}/o/
+                    </span>
+                    <Input
+                      value={storeSlug}
+                      onChange={(e) => setStoreSlug(e.target.value)}
+                      onBlur={(e) => setStoreSlug(slugifyStorePath(e.target.value) || "store")}
+                      className="h-7 w-40 font-mono text-sm"
+                      placeholder="store"
+                    />
+                    <button onClick={copyStoreUrl} className="ml-auto shrink-0 text-muted-foreground hover:text-foreground transition-colors" title="Copy store URL">
+                      {urlCopied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                    </button>
+                  </div>
+                  {!merchantUsername && (
+                    <p className="text-xs text-amber-600">Set a username in Business Details to activate your store URL.</p>
+                  )}
+                </div>
+
+                {/* Custom domain (DNS) */}
+                <div className="space-y-1.5">
+                  <Label className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Custom domain (optional)</Label>
+                  <p className="text-xs text-muted-foreground">
+                    Point your own domain at your store. Customers will then visit your domain instead of the platform URL.
+                  </p>
+                  <Input value={site.domain} onChange={(e) => updateSite({ domain: e.target.value })} placeholder="shop.yourbusiness.com.au" className="font-mono text-sm" />
+                  {site.domain.trim() && (
+                    <p className="text-xs text-emerald-600 flex items-center gap-1">
+                      <Check className="h-3.5 w-3.5" /> Live at <span className="font-mono">{liveStoreUrl}</span>
+                    </p>
+                  )}
+                </div>
+
+                {/* DNS setup instructions */}
+                <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">DNS setup</p>
+                  <ol className="text-xs text-muted-foreground space-y-1 list-decimal list-inside">
+                    <li>Log in to your domain registrar (e.g. Crazy Domains, Namecheap, Cloudflare).</li>
+                    <li>Add a <span className="font-mono font-medium">CNAME</span> record for your chosen subdomain pointing to:</li>
+                  </ol>
+                  <div className="flex items-center gap-2 rounded border bg-background px-3 py-1.5 mt-1">
+                    <span className="text-xs font-mono flex-1 select-all">koapos.com.au</span>
+                    <button onClick={() => { navigator.clipboard.writeText("koapos.com.au").catch(() => {}); toast.success("Copied"); }} className="text-muted-foreground hover:text-foreground transition-colors">
+                      <Copy className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">DNS changes can take up to 24–48 hours to propagate.</p>
                 </div>
               </CardContent>
             </Card>

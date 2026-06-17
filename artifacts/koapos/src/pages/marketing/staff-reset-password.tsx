@@ -31,7 +31,14 @@ type FormValues = z.infer<typeof schema>;
 
 function useToken(): string | null {
   if (typeof window === "undefined") return null;
-  return new URLSearchParams(window.location.search).get("token");
+  const m = window.location.search.match(/[?&]token=([^&]*)/);
+  if (!m) return null;
+  // Read the token WITHOUT the "+"→space conversion that URLSearchParams does.
+  // Reset tokens can be base64 and an unencoded "+" in the email link would
+  // otherwise be turned into a space, corrupting the token so the server
+  // rejects it as "invalid or expired" the instant the link is used. Tokens
+  // never contain real spaces, so treating "+" as a literal plus is safe.
+  try { return decodeURIComponent(m[1].replace(/\+/g, "%2B")); } catch { return m[1]; }
 }
 
 export default function StaffResetPasswordPage() {
