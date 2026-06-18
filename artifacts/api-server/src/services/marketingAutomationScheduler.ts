@@ -176,10 +176,13 @@ async function runBirthday(
   biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
-  const today = new Date();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  const yearStr = String(today.getFullYear());
+  // Send on the day by default, or `birthdayDaysBefore` days ahead of it.
+  const daysBefore = rule.birthdayDaysBefore ?? 0;
+  const target = new Date();
+  target.setDate(target.getDate() + daysBefore);
+  const mm = String(target.getMonth() + 1).padStart(2, "0");
+  const dd = String(target.getDate()).padStart(2, "0");
+  const yearStr = String(new Date().getFullYear());
 
   const customers = await db
     .select()
@@ -208,10 +211,17 @@ async function runBirthday(
     const dedupeKey = `${yearStr}-${c.id}`;
     if (await alreadySent(rule.id, dedupeKey, 365 * 24 * 3600 * 1000)) continue;
     const firstName = c.firstName ?? "Valued Customer";
-    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name };
+    const discount = rule.birthdayDiscount?.trim() ?? "";
+    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, birthday_discount: discount };
     const subject = applyVars(rule.templateSubject ?? `Happy Birthday from ${biz.name}!`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
-    const text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
+    let html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
+    let text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
+    // Append the discount/gift line when set but not already woven into the template.
+    const bodyTemplate = rule.templateBody ?? "";
+    if (discount && !bodyTemplate.includes("{{birthday_discount}}")) {
+      html += `<p>🎁 ${discount}</p>`;
+      text += ` 🎁 ${discount}`;
+    }
     const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;

@@ -138,6 +138,7 @@ const MarketingSocialMediaPage = lazy(() => import("@/pages/app/marketing-social
 const MarketingLoyaltyPromotionsPage = lazy(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazy(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazy(() => import("@/pages/app/management-marketing-automation"));
+const ManagementMarketingBirthdaysPage = lazy(() => import("@/pages/app/management-marketing-birthdays"));
 const ManagementOnlineStorePage = lazy(() => import("@/pages/app/management-online-store"));
 const OnlineDeliveryOrdersPage = lazy(() => import("@/pages/app/online-delivery-orders"));
 const OnlineShippingPage = lazy(() => import("@/pages/app/online-shipping"));
@@ -629,6 +630,9 @@ function Router() {
       </Route>
       <Route path="/management/marketing-reports/social-feed">
         <ManagementProtectedRoute component={ManagementMarketingSocialFeedPage} />
+      </Route>
+      <Route path="/management/marketing-reports/birthdays">
+        <ManagementProtectedRoute component={ManagementMarketingBirthdaysPage} />
       </Route>
       <Route path="/management/marketing-reports/online-store">
         <ManagementProtectedRoute component={ManagementOnlineStorePage} />
