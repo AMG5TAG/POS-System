@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Zap, Plus, Trash2, Pencil, Play, RefreshCw, Mail, MessageSquare,
   Clock, CheckCircle2, XCircle, AlertTriangle, Info, Cake, Calendar,
-  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Share2,
+  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Share2, Gift,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,8 @@ interface AutomationRule {
   templateBody: string | null;
   delayDays: number | null;
   scheduledAt: string | null;
+  birthdayDiscount: string | null;
+  birthdayDaysBefore: number | null;
   lastRunAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -84,6 +86,15 @@ const TRIGGER_EVENTS = [
 /** Trigger types that use the time-window config fields. */
 const DELAY_TRIGGER = "days_after_sale";
 const SCHEDULED_TRIGGER = "scheduled_time";
+const BIRTHDAY_TRIGGER = "birthday";
+
+const BIRTHDAY_DAYS_OPTIONS = [
+  { value: "0",  label: "On their birthday" },
+  { value: "1",  label: "1 day before" },
+  { value: "3",  label: "3 days before" },
+  { value: "7",  label: "7 days before" },
+  { value: "14", label: "14 days before" },
+];
 
 const CHANNELS = [
   { value: "email",  label: "Email",       icon: Mail },
@@ -99,6 +110,8 @@ const EMPTY_FORM = {
   templateId: "",
   delayDays: "",
   scheduledAt: "",
+  birthdayDiscount: "",
+  birthdayDaysBefore: "0",
 };
 
 /** ISO timestamp → value for an <input type="datetime-local"> (local time). */
@@ -236,6 +249,8 @@ export default function ManagementMarketingAutomationPage() {
       templateId: rule.templateId ?? "",
       delayDays: rule.delayDays != null ? String(rule.delayDays) : "",
       scheduledAt: rule.scheduledAt ? isoToLocalInput(rule.scheduledAt) : "",
+      birthdayDiscount: rule.birthdayDiscount ?? "",
+      birthdayDaysBefore: rule.birthdayDaysBefore != null ? String(rule.birthdayDaysBefore) : "0",
     });
     setDialogOpen(true);
   }
@@ -266,6 +281,8 @@ export default function ManagementMarketingAutomationPage() {
         isActive: editRule ? editRule.isActive : true,
         delayDays: form.triggerEvent === DELAY_TRIGGER ? Number(form.delayDays) || null : null,
         scheduledAt: form.triggerEvent === SCHEDULED_TRIGGER && form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
+        birthdayDiscount: form.triggerEvent === BIRTHDAY_TRIGGER ? (form.birthdayDiscount.trim() || null) : null,
+        birthdayDaysBefore: form.triggerEvent === BIRTHDAY_TRIGGER ? (Number(form.birthdayDaysBefore) || 0) : null,
       };
       if (editRule) {
         await apiFetch(`/marketing-automation/${editRule.id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -574,6 +591,36 @@ export default function ManagementMarketingAutomationPage() {
                 />
                 <p className="text-xs text-muted-foreground">A one-off broadcast — sends within the hour after this time.</p>
               </div>
+            )}
+
+            {form.triggerEvent === BIRTHDAY_TRIGGER && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>When to send</Label>
+                  <Select value={form.birthdayDaysBefore} onValueChange={(v) => setForm((f) => ({ ...f, birthdayDaysBefore: v }))}>
+                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BIRTHDAY_DAYS_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Gift className="w-4 h-4 text-muted-foreground" /> Birthday discount or gift
+                  </Label>
+                  <Input
+                    placeholder="e.g. Use code BDAY20 for 20% off this week"
+                    value={form.birthdayDiscount}
+                    onChange={(e) => setForm((f) => ({ ...f, birthdayDiscount: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Added to the bottom of the message, or insert it in your template with the{" "}
+                    <strong>{"{{birthday_discount}}"}</strong> merge tag.
+                  </p>
+                </div>
+              </>
             )}
 
             <div className="space-y-1.5">

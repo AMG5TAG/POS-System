@@ -18,7 +18,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift, Trophy,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles, Cake,
+  Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
   CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
 } from "lucide-react";
@@ -218,7 +218,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "KPIs & Targets", href: "/management/marketing-reports/kpis-targets",                 icon: Target     },
       { name: "Referrals",      href: "/management/marketing-reports/referrals",  icon: UserPlus   },
       { name: "Social Feed",    href: "/management/marketing-reports/social-feed",icon: Share2     },
-      { name: "Birthdays",      href: "/management/marketing-reports/birthdays",  icon: Cake       },
       {
         name: "Landing Pages", icon: LayoutTemplate,
         children: [
@@ -334,7 +333,6 @@ const SEARCH_INDEX = [
   { label: "Loyalty",            href: "/management/customers/loyalty",          icon: Gift,            group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing-reports/referrals",       icon: UserPlus, group: "Management" },
   { label: "Marketing · Social Feed Settings", href: "/management/marketing-reports/social-feed", icon: Share2, group: "Management" },
-  { label: "Marketing · Birthdays", href: "/management/marketing-reports/birthdays", icon: Cake, group: "Management" },
   { label: "Misc",                          href: "/management/settings-integrations/system/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Online Store",              href: "/management/marketing-reports/online-store",  icon: Globe,        group: "Management" },
   { label: "POS Registers",      href: "/management/staff-operations/pos-registers",        icon: Monitor,         group: "Management" },
