@@ -29,7 +29,9 @@ import {
   useGetOnlineStoreThirdparty,
   useUpsertOnlineStoreThirdparty,
   useGetMerchant,
+  useListProducts,
 } from "@workspace/api-client-react";
+import { isProductBlock } from "@/pages/marketing/storefront-commerce";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { useStoreSlug, slugifyStorePath } from "@/lib/online-store-slug";
 import DOMPurify from "dompurify";
@@ -52,6 +54,21 @@ const PRODUCT_LAYOUTS = [
   { value: "compact",  label: "Compact",  hint: "Small image, condensed details" },
 ] as const;
 
+export interface FooterSettings {
+  enabled: boolean;
+  text: string;        // free blurb / copyright line
+  linksRaw: string;    // one "Label | /url" per line
+  email: string;
+  phone: string;
+  facebook: string;
+  instagram: string;
+  twitter: string;
+}
+
+export const DEFAULT_FOOTER: FooterSettings = {
+  enabled: false, text: "", linksRaw: "", email: "", phone: "", facebook: "", instagram: "", twitter: "",
+};
+
 export interface SiteSettings {
   mode: StoreMode; storeName: string; tagline: string; logoUrl: string;
   faviconUrl: string; domain: string; published: boolean;
@@ -59,6 +76,7 @@ export interface SiteSettings {
   payments: { stripe: boolean; paypal: boolean; afterpay: boolean; applePay: boolean };
   features: { loyalty: boolean; customers: boolean; checkout: boolean; quickCodes: boolean; reviews: boolean; newsletter: boolean };
   pages: Page[]; quickCodes: QuickCode[];
+  footer: FooterSettings;
 }
 
 export interface Page {
@@ -158,6 +176,7 @@ const DEFAULT_SITE: SiteSettings = {
   features: { loyalty: false, customers: false, checkout: true, quickCodes: false, reviews: false, newsletter: false },
   pages: [{ id: "p-home", name: "Home", slug: "/", visible: true, blocks: [] }],
   quickCodes: [],
+  footer: { ...DEFAULT_FOOTER },
 };
 
 const THIRDPARTY_PROVIDERS = [
@@ -177,11 +196,13 @@ export function apiToSite(r: Record<string, unknown>): SiteSettings {
   let payments = { ...DEFAULT_SITE.payments };
   let features = { ...DEFAULT_SITE.features };
   let quickCodes: QuickCode[] = [];
+  let footer: FooterSettings = { ...DEFAULT_FOOTER };
   try { if (r.pages)      pages      = JSON.parse(r.pages as string);                                    } catch { /* ignore */ }
   try { if (r.theme)      theme      = { ...DEFAULT_SITE.theme, ...JSON.parse(r.theme as string) };      } catch { /* ignore */ }
   try { if (r.payments)   payments   = { ...DEFAULT_SITE.payments, ...JSON.parse(r.payments as string) };} catch { /* ignore */ }
   try { if (r.features)   features   = { ...DEFAULT_SITE.features, ...JSON.parse(r.features as string) };} catch { /* ignore */ }
   try { if (r.quickCodes) quickCodes = JSON.parse(r.quickCodes as string);                               } catch { /* ignore */ }
+  try { if (r.footer)     footer     = { ...DEFAULT_FOOTER, ...JSON.parse(r.footer as string) };         } catch { /* ignore */ }
   return {
     mode:       (String(r.mode      ?? "builder")) as StoreMode,
     storeName:  String(r.storeName  ?? ""),
@@ -190,7 +211,7 @@ export function apiToSite(r: Record<string, unknown>): SiteSettings {
     faviconUrl: String(r.faviconUrl ?? ""),
     domain:     String(r.domain     ?? ""),
     published:  String(r.published) === "true",
-    theme, payments, features, pages, quickCodes,
+    theme, payments, features, pages, quickCodes, footer,
   };
 }
 
@@ -204,8 +225,59 @@ function siteToApi(s: SiteSettings): Record<string, unknown> {
     features:   JSON.stringify(s.features),
     pages:      JSON.stringify(s.pages),
     quickCodes: JSON.stringify(s.quickCodes),
+    footer:     JSON.stringify(s.footer),
   };
 }
+
+/* ─── Starter templates ──────────────────────────────────────────────────────
+ * One-click page layouts. Blocks carry no id; applyTemplate clones them with
+ * fresh ids onto the active page. Data keys mirror each block's defaultData. */
+export interface PageTemplate { id: string; name: string; description: string; blocks: { type: BlockType; data: Record<string, string | number | boolean> }[]; }
+
+/** A reusable block the merchant saved to their library (localStorage-backed). */
+interface SavedSection { id: string; name: string; block: Block; }
+
+export const PAGE_TEMPLATES: PageTemplate[] = [
+  {
+    id: "tpl-shop-home", name: "Shop Home", description: "Hero, featured products and a full product grid — a classic storefront landing page.",
+    blocks: [
+      { type: "hero",         data: { headline: "Welcome to our store", subhead: "Quality products, delivered to your door", cta: "Shop now", ctaLink: "#products", imageUrl: "" } },
+      { type: "heading",      data: { text: "Featured", size: "lg", align: "center" } },
+      { type: "product-grid", data: { columns: 4, count: 4, category: "all", search: false } },
+      { type: "heading",      data: { text: "Shop everything", size: "lg", align: "left" } },
+      { type: "product-grid", data: { columns: 4, count: 12, category: "all", search: true } },
+      { type: "newsletter",   data: { headline: "Stay in the loop", text: "Sign up for new arrivals and special offers" } },
+    ],
+  },
+  {
+    id: "tpl-single-product", name: "Single Product", description: "Spotlight one hero product with social proof and FAQs.",
+    blocks: [
+      { type: "featured-product", data: { productSku: "", layout: "right" } },
+      { type: "testimonials",     data: { quote1: "Absolutely love it!", author1: "Verified Buyer", quote2: "Worth every cent.", author2: "Repeat Customer", quote3: "", author3: "" } },
+      { type: "faq",              data: { q1: "How long is delivery?", a1: "2–5 business days.", q2: "What's your return policy?", a2: "30-day no-questions returns.", q3: "", a3: "" } },
+      { type: "similar-products", data: { headline: "You may also like", productSku: "", count: 4 } },
+    ],
+  },
+  {
+    id: "tpl-about", name: "About / Contact", description: "Tell your story and make it easy to get in touch.",
+    blocks: [
+      { type: "heading", data: { text: "Our story", size: "xl", align: "center" } },
+      { type: "text",    data: { text: "Share what makes your business special — your history, your values, and why customers love you." } },
+      { type: "columns", data: { columns: 3, col1: "Locally owned", col2: "Quality guaranteed", col3: "Friendly service", col4: "" } },
+      { type: "contact", data: { phone: "", email: "", address: "", hours: "Mon–Sat, 9–5" } },
+      { type: "map",     data: { address: "", zoom: 14 } },
+    ],
+  },
+  {
+    id: "tpl-promo", name: "Promotion / Sale", description: "Drive urgency with a countdown, a CTA and the products on sale.",
+    blocks: [
+      { type: "hero",         data: { headline: "Big Sale Now On", subhead: "Limited time only — don't miss out", cta: "Shop the sale", ctaLink: "#products", imageUrl: "" } },
+      { type: "countdown",    data: { headline: "Sale ends in", target: "" } },
+      { type: "product-grid", data: { columns: 4, count: 8, category: "all", search: false } },
+      { type: "cta",          data: { headline: "Ready to save?", text: "These prices won't last", buttonText: "Browse deals", buttonLink: "#products" } },
+    ],
+  },
+];
 
 function apiToThirdParty(r: Record<string, unknown>): ThirdParty | null {
   if (!r || !r.providerId) return null;
@@ -540,6 +612,10 @@ function BlockEditor({ block, onChange }: { block: Block; onChange: (b: Block) =
             <Field label="Product count"><Input type="number" min={1} max={48} value={Number(block.data.count)} onChange={(e) => set({ count: parseInt(e.target.value) || 8 })} /></Field>
           </div>
           <Field label="Category"><Input value={String(block.data.category ?? "all")} onChange={(e) => set({ category: e.target.value })} placeholder="all | beverages | snacks" /></Field>
+          <div className="flex items-center justify-between pt-1">
+            <Label className="text-xs">Show search &amp; category filter</Label>
+            <Switch checked={block.data.search === true} onCheckedChange={(v) => set({ search: v })} />
+          </div>
         </div>
       );
     case "featured-product":
@@ -708,6 +784,10 @@ function BlockEditor({ block, onChange }: { block: Block; onChange: (b: Block) =
             <Field label="Columns"><Input type="number" min={2} max={4} value={Number(block.data.columns) || 4} onChange={(e) => set({ columns: parseInt(e.target.value) || 4 })} /></Field>
             <Field label="Product count"><Input type="number" min={1} max={48} value={Number(block.data.count) || 8} onChange={(e) => set({ count: parseInt(e.target.value) || 8 })} /></Field>
           </div>
+          <div className="flex items-center justify-between pt-1">
+            <Label className="text-xs">Show search &amp; category filter</Label>
+            <Switch checked={block.data.search === true} onCheckedChange={(v) => set({ search: v })} />
+          </div>
         </div>
       );
   }
@@ -741,6 +821,65 @@ export function blockColSpan(data: Record<string, string | number | boolean>): s
   return WIDTH_OPTIONS.find((w) => w.value === data._width)?.span ?? "col-span-12";
 }
 
+/* Block-level visibility scheduling. Reserved `_visibleFrom` / `_visibleUntil`
+ * (datetime-local strings) gate when a block appears on the live store. The
+ * builder always renders scheduled blocks (with a badge); the public renderer
+ * hides them outside their window. */
+export function blockHasSchedule(block: Block): boolean {
+  return !!(block.data._visibleFrom || block.data._visibleUntil);
+}
+
+export function isBlockLive(block: Block, now: number = Date.now()): boolean {
+  const from = block.data._visibleFrom ? new Date(String(block.data._visibleFrom)).getTime() : NaN;
+  const until = block.data._visibleUntil ? new Date(String(block.data._visibleUntil)).getTime() : NaN;
+  if (!Number.isNaN(from) && now < from) return false;
+  if (!Number.isNaN(until) && now > until) return false;
+  return true;
+}
+
+/* Live (read-only) product preview for the builder canvas, so product blocks
+ * show the merchant's real catalogue instead of grey placeholders. The public
+ * storefront uses the interactive ShoppableProducts renderer instead. */
+type CanvasProduct = { id: number; name: string; price: number; imageUrl: string; categoryId: number | null };
+
+function CanvasProductPreview({ block, products, theme }: { block: Block; products: CanvasProduct[]; theme: ThemeSettings }) {
+  const rc = { none: "rounded-none", sm: "rounded", md: "rounded-lg", lg: "rounded-2xl" }[theme.radius] ?? "rounded-lg";
+  const isFeatured = block.type === "featured-product";
+  const cols = isFeatured ? 1 : (Number(block.data.columns) || 4);
+  const count = isFeatured ? 1 : (Number(block.data.count) || 8);
+  const category = String(block.data.category ?? "all");
+  const base = category !== "all" ? products.filter((p) => String(p.categoryId) === category) : products;
+  const items = base.slice(0, count);
+
+  if (items.length === 0) {
+    return (
+      <div className={cn("p-4 text-center text-[11px] opacity-60 border border-dashed", rc)} style={{ color: theme.text }}>
+        <Package className="w-5 h-5 mx-auto mb-1 opacity-40" />
+        No products yet — add some to your catalogue.
+      </div>
+    );
+  }
+  const gridCols = cols === 2 ? "grid-cols-2" : cols === 3 ? "grid-cols-3" : "grid-cols-4";
+  return (
+    <div className="space-y-2">
+      {block.data.headline ? <p className="font-bold text-sm" style={{ color: theme.text }}>{String(block.data.headline)}</p> : null}
+      <div className={cn("grid gap-2", isFeatured ? "grid-cols-1" : gridCols)}>
+        {items.map((p) => (
+          <div key={p.id} className={cn("flex flex-col overflow-hidden border", rc)} style={{ borderColor: `${theme.text}15` }}>
+            <div className="aspect-square bg-muted/40 flex items-center justify-center overflow-hidden">
+              {p.imageUrl ? <img src={p.imageUrl} alt={p.name} className="w-full h-full object-cover" /> : <Package className="w-6 h-6 opacity-30" />}
+            </div>
+            <div className="p-2">
+              <p className="text-[11px] font-medium leading-tight line-clamp-2" style={{ color: theme.text }}>{p.name}</p>
+              <p className="text-[11px] font-bold mt-0.5" style={{ color: theme.text }}>${p.price.toFixed(2)}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 function BlockStyleSection({ block, onChange }: { block: Block; onChange: (b: Block) => void }) {
   const set = (patch: Record<string, string | number | boolean>) => onChange({ ...block, data: { ...block.data, ...patch } });
   const clear = (key: string) => { const d = { ...block.data }; delete d[key]; onChange({ ...block, data: d }); };
@@ -770,7 +909,97 @@ function BlockStyleSection({ block, onChange }: { block: Block; onChange: (b: Bl
           </Select>
         </Field>
       </div>
+      <div className="pt-1">
+        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5 mb-2"><Clock className="w-3 h-3" /> Visibility schedule</p>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="Show from">
+            <div className="flex items-center gap-1.5">
+              <Input type="datetime-local" value={String(block.data._visibleFrom ?? "")} onChange={(e) => set({ _visibleFrom: e.target.value })} className="h-8 text-xs" />
+              {block.data._visibleFrom ? <button onClick={() => clear("_visibleFrom")} className="text-[10px] text-muted-foreground hover:text-foreground">Clear</button> : null}
+            </div>
+          </Field>
+          <Field label="Hide after">
+            <div className="flex items-center gap-1.5">
+              <Input type="datetime-local" value={String(block.data._visibleUntil ?? "")} onChange={(e) => set({ _visibleUntil: e.target.value })} className="h-8 text-xs" />
+              {block.data._visibleUntil ? <button onClick={() => clear("_visibleUntil")} className="text-[10px] text-muted-foreground hover:text-foreground">Clear</button> : null}
+            </div>
+          </Field>
+        </div>
+        <p className="text-[10px] text-muted-foreground mt-1.5">Leave blank to always show. Outside this window the block is hidden on your live store.</p>
+      </div>
     </div>
+  );
+}
+
+/* ─── Reviews moderation ─────────────────────────────────────────────────── */
+
+interface ModReview {
+  id: number; productName: string; authorName: string; authorEmail: string;
+  rating: number; title: string; body: string; status: string; verified: boolean; createdAt: string;
+}
+
+function ReviewsModerationCard() {
+  const [items, setItems] = useState<ModReview[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const load = useCallback(() => {
+    setLoading(true);
+    fetch("/api/product-reviews", { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : { items: [] }))
+      .then((d) => setItems((d.items ?? []) as ModReview[]))
+      .catch(() => { /* leave empty */ })
+      .finally(() => setLoading(false));
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  const setStatus = async (id: number, status: "approved" | "hidden") => {
+    await fetch(`/api/product-reviews/${id}`, { method: "PATCH", credentials: "include", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) });
+    setItems((prev) => prev.map((r) => (r.id === id ? { ...r, status } : r)));
+  };
+  const remove = async (id: number) => {
+    if (!window.confirm("Delete this review permanently?")) return;
+    await fetch(`/api/product-reviews/${id}`, { method: "DELETE", credentials: "include" });
+    setItems((prev) => prev.filter((r) => r.id !== id));
+  };
+
+  return (
+    <Card>
+      <CardHeader className="pb-3">
+        <CardTitle className="text-base flex items-center gap-2"><Star className="w-4 h-4" /> Customer Reviews</CardTitle>
+        <CardDescription>Moderate reviews submitted from your store. Hidden reviews stay private; enable "Product reviews" in Features to collect them.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Loading…</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No reviews yet.</p>
+        ) : (
+          <div className="divide-y max-h-96 overflow-y-auto">
+            {items.map((r) => (
+              <div key={r.id} className="py-3 flex items-start gap-3">
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-amber-500 text-xs tracking-tight" aria-label={`${r.rating} of 5`}>{"★".repeat(r.rating)}{"☆".repeat(5 - r.rating)}</span>
+                    <span className="text-sm font-medium">{r.authorName}</span>
+                    {r.verified && <Badge variant="outline" className="text-[10px]">Verified</Badge>}
+                    {r.status === "hidden" && <Badge variant="secondary" className="text-[10px]">Hidden</Badge>}
+                  </div>
+                  <p className="text-[11px] text-muted-foreground">{r.productName}</p>
+                  {r.title && <p className="text-sm font-medium mt-0.5">{r.title}</p>}
+                  <p className="text-sm text-muted-foreground mt-0.5 line-clamp-3">{r.body}</p>
+                </div>
+                <div className="flex items-center gap-1 shrink-0">
+                  {r.status === "approved"
+                    ? <Button size="icon" variant="ghost" className="h-7 w-7" title="Hide review" onClick={() => setStatus(r.id, "hidden")}><EyeOff className="w-3.5 h-3.5" /></Button>
+                    : <Button size="icon" variant="ghost" className="h-7 w-7" title="Show review" onClick={() => setStatus(r.id, "approved")}><Eye className="w-3.5 h-3.5" /></Button>}
+                  <Button size="icon" variant="ghost" className="h-7 w-7 text-destructive hover:text-destructive" title="Delete review" onClick={() => remove(r.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -778,6 +1007,9 @@ function BlockStyleSection({ block, onChange }: { block: Block; onChange: (b: Bl
 
 export default function ManagementOnlineStorePage() {
   const { data: rawSettings, isLoading: settingsLoading } = useGetOnlineStoreSettings({ query: { queryKey: ["online-store-settings"] } });
+  const { data: productsData } = useListProducts({ limit: 500 }, { query: { queryKey: ["products", "store-builder"] } });
+  const liveProducts: CanvasProduct[] = ((productsData?.items ?? []) as Array<{ id: number; name: string; price?: string | number; imageUrl?: string | null; categoryId?: number | null }>)
+    .map((p) => ({ id: p.id, name: p.name, price: typeof p.price === "number" ? p.price : parseFloat(String(p.price ?? "0")) || 0, imageUrl: p.imageUrl ?? "", categoryId: p.categoryId ?? null }));
   const { data: rawThirdParty } = useGetOnlineStoreThirdparty({ query: { queryKey: ["online-store-thirdparty"] } });
   const upsertSettings   = useUpsertOnlineStoreSettings();
   const upsertThirdParty = useUpsertOnlineStoreThirdparty();
@@ -793,6 +1025,8 @@ export default function ManagementOnlineStorePage() {
   const [connectForm, setConnectForm] = useState({ url: "", apiKey: "" });
   const [fullScreen, setFullScreen] = useState(false);
   const [clipboardBlock, setClipboardBlock] = useState<Block | null>(null);
+  const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [savedSections, setSavedSections] = useState<SavedSection[]>([]);
   const [dragBlockId, setDragBlockId] = useState<string | null>(null);
   const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
 
@@ -907,6 +1141,7 @@ export default function ManagementOnlineStorePage() {
   /* ─── Site mutators ──────────────────────────────────────────────── */
   const updateSite  = (patch: Partial<SiteSettings>) => mutateSite((s) => ({ ...s, ...patch }));
   const updateTheme = (patch: Partial<ThemeSettings>) => mutateSite((s) => ({ ...s, theme: { ...s.theme, ...patch } }));
+  const updateFooter = (patch: Partial<FooterSettings>) => mutateSite((s) => ({ ...s, footer: { ...s.footer, ...patch } }));
 
   /* Pull name, tagline, logo, favicon and brand colours from Business Details. */
   const importFromBusiness = () => {
@@ -1036,6 +1271,39 @@ export default function ManagementOnlineStorePage() {
   const pasteBlock = () => {
     if (clipboardBlock) { insertBlockAfter(clipboardBlock, activeBlockId); toast.success("Block pasted"); }
   };
+
+  /* ─── Starter templates ──────────────────────────────────────────────── */
+  const applyTemplate = (tpl: PageTemplate) => {
+    if (!activePage) return;
+    if (activePage.blocks.length > 0 && !window.confirm(`Replace the contents of "${activePage.name}" with the "${tpl.name}" template?`)) return;
+    const base = Date.now();
+    const blocks: Block[] = tpl.blocks.map((b, i) => ({ id: `b${base}${i}`, type: b.type, data: { ...b.data } }));
+    mutateSite((s) => ({ ...s, pages: s.pages.map((p) => p.id === activePage.id ? { ...p, blocks } : p) }));
+    setActiveBlockId(null);
+    setTemplatesOpen(false);
+    toast.success(`Applied "${tpl.name}" template`);
+  };
+
+  /* ─── Reusable saved sections (localStorage, per merchant) ─────────────── */
+  const sectionsKey = `koapos-store-sections:${merchantUsername || "default"}`;
+  useEffect(() => {
+    try { const raw = localStorage.getItem(sectionsKey); setSavedSections(raw ? (JSON.parse(raw) as SavedSection[]) : []); }
+    catch { setSavedSections([]); }
+  }, [sectionsKey]);
+  const persistSections = (next: SavedSection[]) => {
+    setSavedSections(next);
+    try { localStorage.setItem(sectionsKey, JSON.stringify(next)); } catch { /* quota / private mode */ }
+  };
+  const saveActiveAsSection = () => {
+    if (!activeBlock) return;
+    const label = BLOCK_LIBRARY.find((m) => m.type === activeBlock.type)?.label ?? activeBlock.type;
+    const name = window.prompt("Name this saved section:", label)?.trim();
+    if (!name) return;
+    persistSections([...savedSections, { id: `sec${Date.now()}`, name, block: { ...activeBlock, data: { ...activeBlock.data } } }]);
+    toast.success("Section saved — reuse it on any page");
+  };
+  const insertSavedSection = (sec: SavedSection) => { insertBlockAfter(sec.block, activeBlockId); toast.success(`Inserted "${sec.name}"`); };
+  const deleteSavedSection = (id: string) => persistSections(savedSections.filter((s) => s.id !== id));
 
   /* Drag-and-drop reorder within the active page. */
   const reorderBlock = (fromId: string, toId: string) => {
@@ -1497,10 +1765,26 @@ export default function ManagementOnlineStorePage() {
                       ))}
                     </div>
                     <Separator className="my-3" />
+                    <Button size="sm" variant="outline" className="w-full gap-1.5 mb-2 h-7 text-xs" onClick={() => setTemplatesOpen(true)} title="Start this page from a ready-made layout">
+                      <Sparkles className="w-3 h-3" /> Templates
+                    </Button>
                     {clipboardBlock && (
                       <Button size="sm" variant="outline" className="w-full gap-1.5 mb-2 h-7 text-xs" onClick={pasteBlock} title="Paste copied block onto this page">
                         <Copy className="w-3 h-3" /> Paste block
                       </Button>
+                    )}
+                    {savedSections.length > 0 && (
+                      <div className="mb-2">
+                        <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Saved sections</p>
+                        <div className="space-y-1">
+                          {savedSections.map((sec) => (
+                            <div key={sec.id} className="flex items-center gap-1">
+                              <button onClick={() => insertSavedSection(sec)} className="flex-1 text-left text-[11px] px-2 py-1 rounded border bg-background/60 hover:bg-muted truncate" title={`Insert "${sec.name}"`}>{sec.name}</button>
+                              <button onClick={() => deleteSavedSection(sec.id)} className="p-1 text-muted-foreground hover:text-destructive" title="Delete saved section"><Trash2 className="w-3 h-3" /></button>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
                     )}
                     <p className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5">Add block</p>
                     <div className="grid grid-cols-2 gap-1.5">
@@ -1545,7 +1829,15 @@ export default function ManagementOnlineStorePage() {
                               onDragEnd={() => setDragBlockId(null)}
                               onClick={() => setActiveBlockId(b.id)}
                               style={blockWrapperStyle(b.data)}
-                              className={cn("relative rounded cursor-pointer transition-all", blockColSpan(b.data), dragBlockId === b.id && "opacity-50", activeBlockId === b.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-muted-foreground/30")}>
+                              className={cn("relative rounded cursor-pointer transition-all", blockColSpan(b.data), dragBlockId === b.id && "opacity-50", !isBlockLive(b) && "opacity-50", activeBlockId === b.id ? "ring-2 ring-primary" : "hover:ring-1 hover:ring-muted-foreground/30")}>
+                              {blockHasSchedule(b) && (
+                                <div className="absolute -top-2 -left-2 z-10">
+                                  <span className="text-[9px] px-1.5 py-0.5 rounded-full bg-background border shadow-sm flex items-center gap-0.5 text-muted-foreground"
+                                    title={isBlockLive(b) ? "Scheduled — currently visible on your live store" : "Scheduled — hidden on your live store right now"}>
+                                    <Clock className="w-2.5 h-2.5" />{isBlockLive(b) ? "Scheduled" : "Hidden now"}
+                                  </span>
+                                </div>
+                              )}
                               {activeBlockId === b.id && (
                                 <div className="absolute -top-2 -right-2 flex gap-1 z-10">
                                   <button onClick={(e) => { e.stopPropagation(); moveBlock(b.id, -1); }} className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-muted" title="Move up"><ArrowUp className="w-3 h-3" /></button>
@@ -1555,7 +1847,9 @@ export default function ManagementOnlineStorePage() {
                                   <button onClick={(e) => { e.stopPropagation(); deleteBlock(b.id); }}  className="w-6 h-6 rounded bg-background border shadow-sm flex items-center justify-center hover:bg-destructive hover:text-destructive-foreground" title="Delete"><Trash2 className="w-3 h-3" /></button>
                                 </div>
                               )}
-                              <BlockPreview block={b} theme={site.theme} />
+                              {isProductBlock(b) && liveProducts.length > 0
+                                ? <CanvasProductPreview block={b} products={liveProducts} theme={site.theme} />
+                                : <BlockPreview block={b} theme={site.theme} />}
                             </div>
                           ))}
                         </div>
@@ -1568,7 +1862,10 @@ export default function ManagementOnlineStorePage() {
                       <>
                         <div className="flex items-center justify-between mb-3">
                           <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{BLOCK_LIBRARY.find((m) => m.type === activeBlock.type)?.label}</p>
-                          <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => deleteBlock(activeBlock.id)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                          <div className="flex items-center gap-0.5">
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-foreground" onClick={saveActiveAsSection} title="Save as reusable section"><Layers className="w-3.5 h-3.5" /></Button>
+                            <Button size="icon" variant="ghost" className="h-6 w-6 text-muted-foreground hover:text-destructive" onClick={() => deleteBlock(activeBlock.id)} title="Delete block"><Trash2 className="w-3.5 h-3.5" /></Button>
+                          </div>
                         </div>
                         <BlockEditor block={activeBlock} onChange={updateBlock} />
                         <BlockStyleSection block={activeBlock} onChange={updateBlock} />
@@ -1626,6 +1923,34 @@ export default function ManagementOnlineStorePage() {
             <Card>
               <CardHeader className="pb-3">
                 <div className="flex items-center justify-between gap-3">
+                  <div><CardTitle className="text-base flex items-center gap-2"><Layout className="w-4 h-4" /> Global Footer</CardTitle><CardDescription>Shown at the bottom of every page on your live store</CardDescription></div>
+                  <Switch checked={site.footer.enabled} onCheckedChange={(v) => updateFooter({ enabled: v })} />
+                </div>
+              </CardHeader>
+              {site.footer.enabled && (
+                <CardContent className="space-y-3">
+                  <Field label="Footer text"><Textarea rows={2} value={site.footer.text} onChange={(e) => updateFooter({ text: e.target.value })} placeholder="© 2026 Your Business. All rights reserved." /></Field>
+                  <Field label="Footer links (one per line: Label | /url)">
+                    <Textarea rows={3} value={site.footer.linksRaw} onChange={(e) => updateFooter({ linksRaw: e.target.value })} placeholder={"About | /about\nContact | /contact\nReturns | /returns"} />
+                  </Field>
+                  <div className="grid grid-cols-2 gap-3">
+                    <Field label="Contact email"><Input value={site.footer.email} onChange={(e) => updateFooter({ email: e.target.value })} placeholder="hello@store.com" /></Field>
+                    <Field label="Contact phone"><Input value={site.footer.phone} onChange={(e) => updateFooter({ phone: e.target.value })} placeholder="(02) 1234 5678" /></Field>
+                  </div>
+                  <div className="grid grid-cols-3 gap-3">
+                    <Field label="Facebook"><Input value={site.footer.facebook} onChange={(e) => updateFooter({ facebook: e.target.value })} placeholder="https://…" /></Field>
+                    <Field label="Instagram"><Input value={site.footer.instagram} onChange={(e) => updateFooter({ instagram: e.target.value })} placeholder="https://…" /></Field>
+                    <Field label="X / Twitter"><Input value={site.footer.twitter} onChange={(e) => updateFooter({ twitter: e.target.value })} placeholder="https://…" /></Field>
+                  </div>
+                </CardContent>
+              )}
+            </Card>
+
+            <ReviewsModerationCard />
+
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between gap-3">
                   <div><CardTitle className="text-base flex items-center gap-2"><Code2 className="w-4 h-4" /> Quick Codes</CardTitle><CardDescription>Promo codes and short URLs redeemable on your store</CardDescription></div>
                   <Button size="sm" variant="outline" className="gap-1.5" onClick={addQuickCode}><Plus className="w-3.5 h-3.5" /> Add code</Button>
                 </div>
@@ -1650,6 +1975,28 @@ export default function ManagementOnlineStorePage() {
           </>
         )}
       </div>
+
+      <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Sparkles className="w-4 h-4 text-primary" /> Page templates</DialogTitle>
+            <DialogDescription>Apply a ready-made layout to "{activePage?.name}". This replaces the page's current blocks.</DialogDescription>
+          </DialogHeader>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 py-1">
+            {PAGE_TEMPLATES.map((tpl) => (
+              <button key={tpl.id} onClick={() => applyTemplate(tpl)}
+                className="text-left rounded-lg border p-3 hover:border-primary/50 hover:bg-muted/40 transition-colors">
+                <p className="text-sm font-semibold">{tpl.name}</p>
+                <p className="text-xs text-muted-foreground mt-1">{tpl.description}</p>
+                <p className="text-[10px] text-muted-foreground/70 mt-2">{tpl.blocks.length} blocks</p>
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setTemplatesOpen(false)}>Cancel</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       <Dialog open={addPageOpen} onOpenChange={setAddPageOpen}>
         <DialogContent className="max-w-sm">

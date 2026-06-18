@@ -33,6 +33,9 @@ import { cn } from "@/lib/utils";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { SendButton } from "@/components/send/send-dialog";
 
+/** How many records to load per page; "Load more" fetches another page. */
+const PAGE_SIZE = 200;
+
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   completed: "default",
   refunded: "destructive",
@@ -82,9 +85,17 @@ function ReceiptDialog({ tx, txDetail, onClose }: ReceiptDialogProps) {
                 <span>Total</span><span>{formatCurrency(txDetail.total ?? 0)}</span>
               </div>
             </div>
-            <Badge variant={STATUS_COLORS[txDetail.status ?? "completed"]} className="capitalize">
-              {txDetail.status}
-            </Badge>
+            <div className="flex items-center justify-between border-t pt-2">
+              <span className="flex items-center gap-1.5 text-sm font-medium capitalize">
+                {txDetail.paymentMethod === "card" || (txDetail.paymentMethod ?? "").includes("eftpos")
+                  ? <CreditCard className="w-4 h-4 text-muted-foreground" />
+                  : <Banknote className="w-4 h-4 text-muted-foreground" />}
+                {txDetail.paymentMethod || "—"}
+              </span>
+              <Badge variant={STATUS_COLORS[txDetail.status ?? "completed"] ?? "outline"} className="capitalize">
+                {txDetail.status}
+              </Badge>
+            </div>
           </div>
         )}
       </DialogContent>
@@ -218,12 +229,17 @@ export default function POSHistoryPage() {
   const [viewingTx, setViewingTx] = useState<Transaction | null>(null);
   const [refundTx, setRefundTx] = useState<Transaction | null>(null);
   const [deleteTx, setDeleteTx] = useState<Transaction | null>(null);
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const { printReceipt, isLoading: tplLoading } = useDocumentTemplate();
 
   const { data: txData, isLoading } = useListTransactions(
-    { status: statusFilter && statusFilter !== "all" ? statusFilter : undefined, limit: 100 },
-    { query: { queryKey: ["transactions", statusFilter] } }
+    { status: statusFilter && statusFilter !== "all" ? statusFilter : undefined, limit },
+    { query: { queryKey: ["transactions", statusFilter, limit] } }
   );
+
+  const totalCount = txData?.total ?? 0;
+  const loadedCount = txData?.items?.length ?? 0;
+  const hasMore = loadedCount < totalCount;
 
   const { data: viewDetail } = useGetTransaction(
     viewingTx?.id ?? 0,
@@ -317,7 +333,7 @@ export default function POSHistoryPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setLimit(PAGE_SIZE); }}>
             <SelectTrigger className="w-full sm:w-40">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -339,6 +355,7 @@ export default function POSHistoryPage() {
             </CardContent>
           </Card>
         ) : (
+          <>
           <div className="rounded-lg border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b">
@@ -470,6 +487,15 @@ export default function POSHistoryPage() {
               </tbody>
             </table>
           </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-1 pt-1">
+            <span>Showing {loadedCount} of {totalCount}{search && ` · ${transactions.length} match this search`}</span>
+            {hasMore && (
+              <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + PAGE_SIZE)}>
+                Load more
+              </Button>
+            )}
+          </div>
+          </>
         )}
       </div>
 

@@ -18,6 +18,8 @@ export const onlineStoreSettingsTable = pgTable("online_store_settings", {
   features:   text("features").notNull().default("{}"),
   pages:      text("pages").notNull().default("[]"),
   quickCodes: text("quick_codes").notNull().default("[]"),
+  /** Global footer config (JSON) shown on every storefront page. */
+  footer:     text("footer").notNull().default("{}"),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

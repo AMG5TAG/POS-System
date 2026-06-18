@@ -20,6 +20,19 @@ export const deliveryOrdersTable = pgTable("delivery_orders", {
   total:          numeric("total").notNull().default("0"),
   items:          text("items").notNull().default("[]"),
   notes:          text("notes").notNull().default(""),
+  /* ── Commerce breakdown (online-store checkout) ──────────────────────────
+   * Added so storefront orders carry a full money breakdown, not just `total`.
+   * All defaulted so the additive push is safe for existing delivery rows. */
+  subtotal:        numeric("subtotal").notNull().default("0"),
+  discountCode:    text("discount_code").notNull().default(""),
+  discountTotal:   numeric("discount_total").notNull().default("0"),
+  taxTotal:        numeric("tax_total").notNull().default("0"),
+  shippingTotal:   numeric("shipping_total").notNull().default("0"),
+  currency:        text("currency").notNull().default("AUD"),
+  /** pending → paid → refunded; storefront orders start "pending" (manual confirm). */
+  paymentStatus:   text("payment_status").notNull().default("pending"),
+  paymentProvider: text("payment_provider").notNull().default(""),
+  paymentRef:      text("payment_ref").notNull().default(""),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 
