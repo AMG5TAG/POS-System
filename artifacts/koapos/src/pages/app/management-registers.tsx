@@ -1,10 +1,14 @@
 import { useMemo, useState } from "react";
+import { useQueryClient } from "@tanstack/react-query";
+import { format } from "date-fns";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListStaff, useListPosRegisters, useCreatePosRegister,
   useUpdatePosRegister, useDeletePosRegister,
   useGetPosSettings, useUpsertPosSettings,
   useListIntegrations,
+  useListPosRegisterSessions, useUpdatePosRegisterSession,
+  useListCashDrawerEntries, useGetPaymentTotals,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -25,8 +29,12 @@ import {
   SplitSquareHorizontal, Landmark, Ticket, Wallet, CalendarClock, Star,
   ArrowRight, ArrowLeft, Printer, ScanLine, Keyboard, HardDrive,
   Wifi, Usb, Zap, Settings2, ShieldCheck,
+  Lock, LockOpen, DollarSign, Gift, ArrowDownLeft, ArrowUpRight, Clock, User,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS } from "@/lib/keyboard-shortcuts";
+import {
+  getEnabledPaymentMethods, getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
+} from "@/lib/pos-local-settings";
 
 export {
   FORCE_STAFF_LOGIN_KEY,
@@ -827,6 +835,263 @@ function ShortcutsSection() {
   );
 }
 
+/* ─── Open Tills — remote close & cash up ────────────────────────────────── */
+
+type OpenSession = {
+  id: number;
+  registerId: string;
+  openedAt: string;
+  openedBy: string;
+  openingFloat: string;
+  closedAt: string | null;
+};
+
+const fmtMoney = (n: number) => `$${n.toFixed(2)}`;
+const TODAY_ISO = new Date().toISOString().split("T")[0];
+
+function PaymentIcon({ id }: { id: string }) {
+  const cls = "w-3.5 h-3.5 text-muted-foreground shrink-0";
+  if (id === "cash") return <Banknote className={cls} />;
+  if (id === "card" || id === "eftpos" || id.includes("eftpos") || id.includes("terminal")) return <CreditCard className={cls} />;
+  if (id === "loyalty") return <Star className={cls} />;
+  if (id === "store_credit") return <Wallet className={cls} />;
+  if (id === "laybuy") return <CalendarClock className={cls} />;
+  if (id === "direct_deposit") return <Landmark className={cls} />;
+  if (id === "voucher") return <Ticket className={cls} />;
+  if (id === "gift_card") return <Gift className={cls} />;
+  return <DollarSign className={cls} />;
+}
+
+function OpenTillsSection({ registerNames }: { registerNames: Record<string, string> }) {
+  const qc = useQueryClient();
+  const updateSession = useUpdatePosRegisterSession();
+
+  const { data: sessData } = useListPosRegisterSessions({}, { query: { queryKey: ["pos-register-sessions"] } });
+  const openSessions = ((sessData as { items?: OpenSession[] })?.items ?? []).filter((s) => !s.closedAt);
+  const hasOpen = openSessions.length > 0;
+
+  /* Today's cash movements + system payment totals (merchant-wide) for cash-up reconciliation. */
+  const { data: rawEntries = [] } = useListCashDrawerEntries(
+    { date: TODAY_ISO },
+    { query: { queryKey: ["cash-drawer", TODAY_ISO], enabled: hasOpen } },
+  );
+  const entries = rawEntries as { type: string; amount: number }[];
+  const cashIn  = entries.filter((e) => e.type === "cash_in").reduce((s, e) => s + e.amount, 0);
+  const cashOut = entries.filter((e) => e.type === "cash_out").reduce((s, e) => s + e.amount, 0);
+
+  const { data: paymentSystemTotals = {} } = useGetPaymentTotals(
+    { date: TODAY_ISO },
+    { query: { queryKey: ["payment-totals", TODAY_ISO], staleTime: 30_000, enabled: hasOpen } },
+  );
+
+  const paymentRows = useMemo(() => {
+    const builtIn = getEnabledPaymentMethods();
+    const rows: { id: string; label: string }[] = [];
+    for (const id of builtIn.filter((m) => m !== "split")) {
+      const meta = ALL_PAYMENT_METHODS.find((m) => m.id === id);
+      if (meta) rows.push({ id, label: meta.label });
+    }
+    if (!(builtIn as string[]).includes("gift_card")) rows.push({ id: "gift_card", label: "Gift Card" });
+    for (const key of getEnabledIntegrationPayments()) rows.push({ id: key, label: INTEGRATION_PAYMENT_LABELS[key] ?? key });
+    return rows;
+  }, []);
+
+  const [closing, setClosing] = useState<OpenSession | null>(null);
+  const [paymentDeclared, setPaymentDeclared] = useState<Record<string, string>>({});
+  const [closingNotes, setClosingNotes] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  const openingFloat = parseFloat(closing?.openingFloat ?? "0");
+  const expectedCash = openingFloat + cashIn - cashOut;
+  const cashDeclaredVal = parseFloat(paymentDeclared["cash"] ?? "");
+  const cashVariance = !isNaN(cashDeclaredVal) ? cashDeclaredVal - expectedCash : null;
+
+  function openClose(session: OpenSession) {
+    const expected = parseFloat(session.openingFloat ?? "0") + cashIn - cashOut;
+    const prefill: Record<string, string> = {};
+    for (const row of paymentRows) {
+      if (row.id === "cash") { prefill["cash"] = expected.toFixed(2); continue; }
+      const sys = (paymentSystemTotals as Record<string, { total: number }>)[row.id];
+      prefill[row.id] = sys ? sys.total.toFixed(2) : "0.00";
+    }
+    setPaymentDeclared(prefill);
+    setClosingNotes("");
+    setClosing(session);
+  }
+
+  function handleClose() {
+    if (!closing) return;
+    setSaving(true);
+    const totals: Record<string, number> = {};
+    for (const row of paymentRows) totals[row.id] = parseFloat(paymentDeclared[row.id] ?? "0") || 0;
+    updateSession.mutate(
+      {
+        id: closing.id,
+        data: {
+          closedAt: new Date().toISOString(),
+          cashCounted: String(totals["cash"] ?? 0),
+          eftposDeclared: String(totals["eftpos"] ?? totals["tyro_eftpos"] ?? totals["commbank_eftpos"] ?? 0),
+          paymentTotals: JSON.stringify(totals),
+          closingNotes,
+        },
+      },
+      {
+        onSuccess: () => {
+          toast.success(`${registerNames[closing.registerId] ?? "Register"} closed — Z-Read recorded`);
+          setClosing(null);
+          qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
+        },
+        onError: () => toast.error("Failed to close register"),
+        onSettled: () => setSaving(false),
+      },
+    );
+  }
+
+  if (!hasOpen) return null;
+
+  return (
+    <div className="rounded-xl border border-green-300 dark:border-green-900/50 overflow-hidden">
+      <div className="px-5 py-4 border-b bg-green-50 dark:bg-green-950/20 flex items-center gap-2">
+        <LockOpen className="w-4 h-4 text-green-600 shrink-0" />
+        <div className="flex-1">
+          <p className="font-semibold text-sm text-green-800 dark:text-green-300">Open Tills</p>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            {openSessions.length} register{openSessions.length !== 1 ? "s" : ""} currently open. Close and cash up any till remotely.
+          </p>
+        </div>
+      </div>
+      <div className="divide-y">
+        {openSessions.map((s) => (
+          <div key={s.id} className="flex items-center gap-3 px-5 py-3.5">
+            <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30 shrink-0">
+              <Monitor className="w-4 h-4 text-green-700 dark:text-green-400" />
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-sm font-medium truncate">{registerNames[s.registerId] ?? s.registerId}</p>
+              <p className="text-xs text-muted-foreground mt-0.5 flex flex-wrap items-center gap-x-3 gap-y-0.5">
+                <span className="inline-flex items-center gap-1"><User className="w-3 h-3" />{s.openedBy || "Unknown"}</span>
+                <span className="inline-flex items-center gap-1"><Clock className="w-3 h-3" />{format(new Date(s.openedAt), "d MMM, h:mm a")}</span>
+                <span>Float {fmtMoney(parseFloat(s.openingFloat))}</span>
+              </p>
+            </div>
+            <Button size="sm" variant="destructive" className="shrink-0 text-xs gap-1.5" onClick={() => openClose(s)}>
+              <Lock className="w-3.5 h-3.5" /> Close & Cash Up
+            </Button>
+          </div>
+        ))}
+      </div>
+
+      {/* Close & cash up dialog */}
+      <Dialog open={!!closing} onOpenChange={(o) => { if (!o) setClosing(null); }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Printer className="w-4 h-4 text-primary" />
+              Close &amp; Cash Up — {closing ? (registerNames[closing.registerId] ?? closing.registerId) : ""}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-1">
+            {closing && (
+              <p className="text-xs text-muted-foreground">
+                Opened{closing.openedBy ? ` by ${closing.openedBy}` : ""} at {format(new Date(closing.openedAt), "d MMM, h:mm a")}.
+                This will end the till session and record a Z-Read.
+              </p>
+            )}
+
+            {/* Cash drawer summary */}
+            <div className="rounded-lg bg-muted/50 p-3 text-sm space-y-1.5">
+              <div className="flex justify-between">
+                <span className="text-muted-foreground">Opening Float</span>
+                <span>{fmtMoney(openingFloat)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground flex items-center gap-1"><ArrowDownLeft className="w-3 h-3 text-green-600" /> Cash In</span>
+                <span className="text-green-600">+{fmtMoney(cashIn)}</span>
+              </div>
+              <div className="flex justify-between">
+                <span className="text-muted-foreground flex items-center gap-1"><ArrowUpRight className="w-3 h-3 text-red-500" /> Cash Out</span>
+                <span className="text-red-500">−{fmtMoney(cashOut)}</span>
+              </div>
+              <div className="flex justify-between font-semibold border-t pt-1.5 mt-0.5">
+                <span>Expected Cash in Drawer</span>
+                <span>{fmtMoney(expectedCash)}</span>
+              </div>
+            </div>
+
+            {/* Declare totals by payment type */}
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-2">Declare Totals by Payment Type</p>
+              <div className="rounded-lg border overflow-hidden">
+                <div className="grid grid-cols-3 gap-2 px-3 py-2 bg-muted/50 border-b text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span>Method</span>
+                  <span className="text-right">POS Total</span>
+                  <span className="text-right">Counted / Declared</span>
+                </div>
+                <div className="divide-y">
+                  {paymentRows.map((row) => {
+                    const sys = (paymentSystemTotals as Record<string, { total: number; txCount: number }>)[row.id];
+                    const sysTotal = sys?.total ?? 0;
+                    const declared = paymentDeclared[row.id] ?? "";
+                    const declaredNum = parseFloat(declared);
+                    const diff = !isNaN(declaredNum) && sysTotal > 0 ? declaredNum - sysTotal : null;
+                    const isCash = row.id === "cash";
+                    return (
+                      <div key={row.id} className="grid grid-cols-3 gap-2 items-center px-3 py-2.5">
+                        <span className="text-sm font-medium flex items-center gap-1.5">
+                          <PaymentIcon id={row.id} />
+                          <span className="truncate">{row.label}</span>
+                        </span>
+                        <div className="text-right">
+                          <span className={cn("text-sm tabular-nums", sysTotal > 0 ? "text-foreground" : "text-muted-foreground/50")}>
+                            {sysTotal > 0 ? fmtMoney(sysTotal) : "—"}
+                          </span>
+                          {sys?.txCount ? (
+                            <p className="text-[10px] text-muted-foreground">{sys.txCount} txn{sys.txCount !== 1 ? "s" : ""}</p>
+                          ) : null}
+                        </div>
+                        <div className="flex flex-col items-end gap-0.5">
+                          <Input
+                            type="number" min="0" step="0.01"
+                            className="h-7 text-sm text-right w-28 tabular-nums"
+                            value={declared}
+                            onChange={(e) => setPaymentDeclared((prev) => ({ ...prev, [row.id]: e.target.value }))}
+                          />
+                          {isCash && cashVariance !== null && (
+                            <p className={cn("text-[10px] font-medium",
+                              cashVariance < -0.005 ? "text-red-500" : cashVariance > 0.005 ? "text-amber-500" : "text-green-600")}>
+                              {cashVariance >= 0 ? "+" : ""}{fmtMoney(cashVariance)}{Math.abs(cashVariance) < 0.01 && " ✓"}
+                            </p>
+                          )}
+                          {!isCash && diff !== null && Math.abs(diff) > 0.005 && (
+                            <p className={cn("text-[10px] font-medium", diff < 0 ? "text-red-500" : "text-amber-500")}>
+                              {diff >= 0 ? "+" : ""}{fmtMoney(diff)}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <Label>Closing Notes (optional)</Label>
+              <Textarea rows={2} placeholder="Handover notes, discrepancies…" value={closingNotes} onChange={(e) => setClosingNotes(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setClosing(null)}>Cancel</Button>
+            <Button variant="destructive" className="gap-1.5" onClick={handleClose} disabled={saving}>
+              <Lock className="w-4 h-4" /> Close Register
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementRegistersPage() {
@@ -836,7 +1101,13 @@ export default function ManagementRegistersPage() {
   const deleteRegister = useDeletePosRegister();
   const { settings, upsert: upsertSettings } = usePosSettings();
 
-  const registers: PosRegister[] = ((rawRegisters?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToRegister);
+  const rawRegisterItems = (rawRegisters?.items ?? []) as unknown as Record<string, unknown>[];
+  const registers: PosRegister[] = rawRegisterItems.map(apiToRegister);
+  const registerNameById = useMemo(() => {
+    const map: Record<string, string> = {};
+    for (const r of rawRegisterItems) map[String(r.registerId ?? "")] = String(r.name ?? "");
+    return map;
+  }, [rawRegisterItems]);
 
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editing, setEditing] = useState<PosRegister | null>(null);
@@ -903,6 +1174,8 @@ export default function ManagementRegistersPage() {
             <Plus className="h-4 w-4 mr-1" />New Register
           </Button>
         </div>
+
+        <OpenTillsSection registerNames={registerNameById} />
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           <div id="registers" className="space-y-4">
