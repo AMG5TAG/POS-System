@@ -32,7 +32,7 @@ import { ServiceJobTimePanel } from "@/components/service-jobs/ServiceJobTimePan
 import { ServiceJobSignaturePanel } from "@/components/service-jobs/ServiceJobSignaturePanel";
 import { ServiceJobShippingPanel } from "@/components/service-jobs/ServiceJobShippingPanel";
 import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDialog";
-import { History, ListChecks, Clock, PenLine, Truck, Wallet } from "lucide-react";
+import { History, ListChecks, Clock, PenLine, Truck, Wallet, Send } from "lucide-react";
 import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
@@ -752,6 +752,7 @@ export function ServiceJobDetailDialog({
                   buttonTitle="Send or print job"
                   title="Send Job"
                   documentLabel={job.jobNumber}
+                  children={<><Send className="w-4 h-4 mr-1.5" />Job Info</>}
                   {...(onPrint && {
                     reprintLabel: "Print",
                     reprintSub: "Sheet or sticker",
@@ -782,6 +783,7 @@ export function ServiceJobDetailDialog({
                   buttonTitle="Send customer login link"
                   title="Send Login Link"
                   documentLabel={job.jobNumber}
+                  children={<><Send className="w-4 h-4 mr-1.5" />Portal</>}
                   {...(job.customerEmail && {
                     defaultEmail: job.customerEmail,
                     emailReadonly: true,
