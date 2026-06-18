@@ -9,10 +9,33 @@ interface BirthdayCustomer {
   email: string | null; loyaltyPoints: number;
 }
 
+/** localStorage key that records the date the banner was last dismissed, so a
+ *  cleared banner stays cleared for the day but new birthdays still surface. */
+const DISMISS_KEY = "birthday-banner-dismissed";
+
+function todayKey(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function BirthdayBanner() {
-  const [dismissed, setDismissed] = useState(false);
+  const [dismissed, setDismissed] = useState(() => {
+    try {
+      return localStorage.getItem(DISMISS_KEY) === todayKey();
+    } catch {
+      return false;
+    }
+  });
   const [awarded, setAwarded] = useState<Set<number>>(new Set());
   const qc = useQueryClient();
+
+  const handleDismiss = () => {
+    try {
+      localStorage.setItem(DISMISS_KEY, todayKey());
+    } catch { /* ignore storage failures */ }
+    setDismissed(true);
+  };
 
   const { data } = useQuery<{ customers: BirthdayCustomer[] }>({
     queryKey: ["birthdays-today"],
@@ -72,7 +95,7 @@ export function BirthdayBanner() {
             ))}
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-pink-400 hover:text-pink-600 shrink-0" onClick={() => setDismissed(true)}>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-pink-400 hover:text-pink-600 shrink-0" onClick={handleDismiss}>
           <X className="w-4 h-4" />
         </Button>
       </div>

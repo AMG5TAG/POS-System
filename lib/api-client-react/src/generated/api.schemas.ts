@@ -3403,6 +3403,7 @@ export interface PosSettings {
   gridShowPrices: string;
   gridShowStockBadges: string;
   gridCartPosition: string;
+  quickViewShowSupplier: string;
   forceStaffLogin: string;
   staffLoginMessage: string;
   activeRegisterId: string;
@@ -3423,6 +3424,7 @@ export interface PosSettingsInput {
   gridShowPrices?: string;
   gridShowStockBadges?: string;
   gridCartPosition?: string;
+  quickViewShowSupplier?: string;
   forceStaffLogin?: string;
   staffLoginMessage?: string;
   activeRegisterId?: string;

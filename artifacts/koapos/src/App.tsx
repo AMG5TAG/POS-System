@@ -142,7 +142,6 @@ const ManagementOnlineStorePage = lazy(() => import("@/pages/app/management-onli
 const OnlineDeliveryOrdersPage = lazy(() => import("@/pages/app/online-delivery-orders"));
 const OnlineShippingPage = lazy(() => import("@/pages/app/online-shipping"));
 const OnlineMarketplacePage = lazy(() => import("@/pages/app/online-marketplace"));
-const ManagementKoaPOSPage = lazy(() => import("@/pages/app/management-koapos"));
 const ManagementMiscPage = lazy(() => import("@/pages/app/management-misc"));
 const ManagementSyncPage = lazy(() => import("@/pages/app/management-sync"));
 const ManagementFeedbackPage = lazy(() => import("@/pages/app/management-feedback"));
@@ -683,7 +682,7 @@ function Router() {
       {/* Backup now lives inside the consolidated Sync page */}
       <Route path="/management/backup"><Redirect to="/management/settings-integrations/sync" /></Route>
       <Route path="/management/settings-integrations/system">
-        <ManagementProtectedRoute component={ManagementKoaPOSPage} />
+        <Redirect to="/management/settings-integrations/system/misc" />
       </Route>
       <Route path="/management/settings-integrations/system/misc">
         <ManagementProtectedRoute component={ManagementMiscPage} />
@@ -861,7 +860,7 @@ function Router() {
       <Route path="/management/tyro-eftpos"><Redirect to="/management/settings-integrations/integrations/tyro-eftpos" /></Route>
       <Route path="/management/import-export"><Redirect to="/management/settings-integrations/import-export" /></Route>
       <Route path="/management/sync"><Redirect to="/management/settings-integrations/sync" /></Route>
-      <Route path="/management/koapos"><Redirect to="/management/settings-integrations/system" /></Route>
+      <Route path="/management/koapos"><Redirect to="/management/settings-integrations/system/misc" /></Route>
       <Route path="/management/misc"><Redirect to="/management/settings-integrations/system/misc" /></Route>
       <Route path="/modules"><Redirect to="/management/settings-integrations/account/modules" /></Route>
       <Route path="/marketing"><Redirect to="/marketing/overview" /></Route>

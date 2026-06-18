@@ -13194,7 +13194,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, quickViewShowSupplier, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -13205,6 +13205,7 @@ components:
         gridShowPrices:              { type: string }
         gridShowStockBadges:         { type: string }
         gridCartPosition:            { type: string }
+        quickViewShowSupplier:       { type: string }
         forceStaffLogin:             { type: string }
         staffLoginMessage:           { type: string }
         activeRegisterId:            { type: string }
@@ -13226,6 +13227,7 @@ components:
         gridShowPrices:              { type: string }
         gridShowStockBadges:         { type: string }
         gridCartPosition:            { type: string }
+        quickViewShowSupplier:       { type: string }
         forceStaffLogin:             { type: string }
         staffLoginMessage:           { type: string }
         activeRegisterId:            { type: string }
@@ -14189,13 +14191,14 @@ components:
 
     InventorySettings:
       type: object
-      required: [id, merchantId, skuPrefix, showCosts, groupPricing]
+      required: [id, merchantId, skuPrefix, showCosts, groupPricing, stockColors]
       properties:
         id: { type: integer }
         merchantId: { type: integer }
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        stockColors: { type: string }
         defaultImageUrl: { type: string, nullable: true }
 
     InventorySettingsInput:
@@ -14204,6 +14207,7 @@ components:
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        stockColors: { type: string }
         defaultImageUrl: { type: string, nullable: true }
 
     RegionalExtSettings:

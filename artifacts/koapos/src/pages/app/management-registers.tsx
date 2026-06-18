@@ -244,11 +244,12 @@ interface PosGridSettingsLocal {
   tileSize: "compact" | "normal" | "large";
   showPrices: boolean;
   showStockBadges: boolean;
+  showQuickViewSupplier: boolean;
   cartPosition: "right" | "left";
 }
 
 const GRID_DEFAULTS: PosGridSettingsLocal = {
-  columns: 3, tileSize: "normal", showPrices: true, showStockBadges: false, cartPosition: "right",
+  columns: 3, tileSize: "normal", showPrices: true, showStockBadges: false, showQuickViewSupplier: true, cartPosition: "right",
 };
 
 function ColDots({ cols }: { cols: number }) {
@@ -273,6 +274,7 @@ function GridLayoutSection() {
       tileSize: (["compact","normal","large"].includes(settings.gridTileSize) ? settings.gridTileSize : GRID_DEFAULTS.tileSize) as "compact"|"normal"|"large",
       showPrices: settings.gridShowPrices !== "false",
       showStockBadges: settings.gridShowStockBadges === "true",
+      showQuickViewSupplier: settings.quickViewShowSupplier !== "false",
       cartPosition: (["right","left"].includes(settings.gridCartPosition) ? settings.gridCartPosition : GRID_DEFAULTS.cartPosition) as "right"|"left",
     };
   }, [settings]);
@@ -284,6 +286,7 @@ function GridLayoutSection() {
       gridTileSize: next.tileSize,
       gridShowPrices: String(next.showPrices),
       gridShowStockBadges: String(next.showStockBadges),
+      quickViewShowSupplier: String(next.showQuickViewSupplier),
       gridCartPosition: next.cartPosition,
     } });
   };
@@ -292,6 +295,7 @@ function GridLayoutSection() {
     `${s.columns} columns`, `${s.tileSize} tiles`, `cart ${s.cartPosition}`,
     s.showPrices ? "prices visible" : "prices hidden",
     s.showStockBadges ? "stock badges on" : "stock badges off",
+    s.showQuickViewSupplier ? "quick-view supplier on" : "quick-view supplier off",
   ].join(" · ");
 
   return (
@@ -333,6 +337,10 @@ function GridLayoutSection() {
           <div className="flex items-center justify-between px-4 py-3.5">
             <div><p className="text-sm font-medium">Show Stock Badges</p><p className="text-xs text-muted-foreground">Show stock level on each product tile</p></div>
             <Switch checked={s.showStockBadges} onCheckedChange={(v) => update({ showStockBadges: v })} />
+          </div>
+          <div className="flex items-center justify-between px-4 py-3.5">
+            <div><p className="text-sm font-medium">Show Supplier in Quick View</p><p className="text-xs text-muted-foreground">Display the product's supplier when quick-viewing a product on the Sell screen</p></div>
+            <Switch checked={s.showQuickViewSupplier} onCheckedChange={(v) => update({ showQuickViewSupplier: v })} />
           </div>
         </div>
         <div>

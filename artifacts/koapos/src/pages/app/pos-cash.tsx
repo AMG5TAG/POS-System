@@ -217,9 +217,12 @@ export default function POSCashPage() {
   return (
     <AppLayout>
       <div className="p-4 md:p-6 space-y-4">
-        <div>
-          <h1 className="text-2xl font-bold">Cash</h1>
-          <p className="text-sm text-muted-foreground">Track cash float, movements, and perform end-of-day till reconciliation.</p>
+        <div className="flex items-center gap-3">
+          <Coins className="w-6 h-6 text-primary" />
+          <div>
+            <h1 className="text-2xl font-bold">Cash</h1>
+            <p className="text-sm text-muted-foreground">Track cash float, movements, and perform end-of-day till reconciliation.</p>
+          </div>
         </div>
 
         {/* ── Tabs ─────────────────────────────────────────────────────── */}

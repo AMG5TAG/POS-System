@@ -11,6 +11,7 @@ export const posSettingsTable = pgTable("pos_settings", {
   gridShowPrices:            text("grid_show_prices").notNull().default("true"),
   gridShowStockBadges:       text("grid_show_stock_badges").notNull().default("false"),
   gridCartPosition:          text("grid_cart_position").notNull().default("right"),
+  quickViewShowSupplier:     text("quick_view_show_supplier").notNull().default("true"),
   forceStaffLogin:           text("force_staff_login").notNull().default("false"),
   staffLoginMessage:         text("staff_login_message").notNull().default("{}"),
   activeRegisterId:          text("active_register_id").notNull().default(""),

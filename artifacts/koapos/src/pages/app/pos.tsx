@@ -20,7 +20,7 @@ import {
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
-  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useVerifyStaffPin,
+  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useUpsertPosSettings, useVerifyStaffPin,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
   Product, Customer, Staff, ServiceJob, Appointment,
@@ -34,6 +34,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 import { customerDisplayName } from "@/lib/customer-name";
@@ -330,6 +331,7 @@ export default function POSPage() {
       tileSize: (tile && ["compact", "normal", "large"].includes(tile) ? tile : "normal") as "compact" | "normal" | "large",
       showPrices: posSettingsData ? posSettingsData.gridShowPrices === "true" : true,
       showStockBadges: posSettingsData?.gridShowStockBadges === "true",
+      showQuickViewSupplier: posSettingsData ? posSettingsData.quickViewShowSupplier !== "false" : true,
       cartPosition: (posSettingsData?.gridCartPosition === "left" ? "left" : "right") as "left" | "right",
     };
     return { ...base, ...parseStaffPosPrefs(dayStaffMember?.posPrefs) };
@@ -414,6 +416,14 @@ export default function POSPage() {
   const [modPickerGroups, setModPickerGroups] = useState<ModifierGroup[]>([]);
   // Quick-view: inspect a product without adding it to the sale.
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  // Whether the Quick View panel shows the product's supplier — an account-wide,
+  // server-synced POS setting (quickViewShowSupplier).
+  const upsertPosSettings = useUpsertPosSettings({
+    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pos-settings"] }) },
+  });
+  const toggleQuickViewSupplier = (v: boolean) => {
+    upsertPosSettings.mutate({ data: { quickViewShowSupplier: String(v) } });
+  };
   const [modPickerSelected, setModPickerSelected] = useState<Record<number, number[]>>({});
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
@@ -3034,7 +3044,11 @@ export default function POSPage() {
                         : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
                     })()}
                     {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
-                      <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
+                      product.stockQuantity <= 0 ? (
+                        <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0 bg-red-600 text-white border-transparent hover:bg-red-600">OOS</Badge>
+                      ) : (
+                        <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
+                      )
                     )}
                     {posLayout.showStockBadges && product.trackInventory && product.stockQuantity != null && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       <Badge variant="secondary" className="absolute bottom-1.5 right-1.5 text-[10px] px-1 py-0 tabular-nums">{product.stockQuantity}</Badge>
@@ -4657,15 +4671,19 @@ export default function POSPage() {
                     <div className="flex flex-wrap gap-1">
                       {typeName && <Badge variant="secondary" className="text-[10px]">{typeName}</Badge>}
                       {stockEligible && (
-                        <Badge variant={isLow ? "destructive" : "outline"} className="text-[10px] tabular-nums">
-                          {p.stockQuantity} in stock{isLow ? " · Low" : ""}
-                        </Badge>
+                        (p.stockQuantity ?? 0) <= 0 ? (
+                          <Badge variant="destructive" className="text-[10px] tabular-nums bg-red-600 text-white border-transparent hover:bg-red-600">OOS · out of stock</Badge>
+                        ) : (
+                          <Badge variant={isLow ? "destructive" : "outline"} className="text-[10px] tabular-nums">
+                            {p.stockQuantity} in stock{isLow ? " · Low" : ""}
+                          </Badge>
+                        )
                       )}
                     </div>
                     <dl className="text-xs text-muted-foreground space-y-0.5 pt-1">
                       {p.sku && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">SKU</dt><dd className="truncate">{p.sku}</dd></div>}
                       {p.barcode && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Barcode</dt><dd className="truncate">{p.barcode}</dd></div>}
-                      {p.supplier && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Supplier</dt><dd className="truncate">{p.supplier}</dd></div>}
+                      {posLayout.showQuickViewSupplier && p.supplier && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Supplier</dt><dd className="truncate">{p.supplier}</dd></div>}
                     </dl>
                   </div>
                 </div>
@@ -4675,6 +4693,12 @@ export default function POSPage() {
                     {tags.map(t => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
                   </div>
                 )}
+                <div className="flex items-center justify-between border-t pt-3">
+                  <Label htmlFor="qv-show-supplier" className="text-xs text-muted-foreground flex items-center gap-1.5 cursor-pointer">
+                    <Package className="w-3.5 h-3.5" /> Show supplier
+                  </Label>
+                  <Switch id="qv-show-supplier" checked={posLayout.showQuickViewSupplier} onCheckedChange={toggleQuickViewSupplier} disabled={upsertPosSettings.isPending} />
+                </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setQuickViewProduct(null)}>Close</Button>
                   <Button onClick={() => { setQuickViewProduct(null); fetchModifiersAndShow(p); }}>Add to sale</Button>
