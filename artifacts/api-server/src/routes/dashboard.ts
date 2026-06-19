@@ -42,8 +42,34 @@ function toLocalDateKey(date: Date, tz: string): string {
 const router: IRouter = Router();
 
 type MonthMode = "rolling30" | "calendar_mtd";
+type YearMode = "financial" | "rolling365";
+type WeekMode = "rolling7" | "calendar_week";
 
-function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Date {
+/**
+ * Start of the current Australian financial year (1 July). If today is in
+ * July–December the FY started this July; in January–June it started last July.
+ */
+function financialYearStart(now: Date): Date {
+  const fyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(fyYear, 6, 1, 0, 0, 0, 0); // month index 6 = July
+}
+
+/** Monday 00:00 of the calendar week that `now` falls in. */
+function calendarWeekStart(now: Date): Date {
+  const d = new Date(now);
+  const dow = d.getDay(); // 0 = Sun … 6 = Sat
+  const daysSinceMonday = (dow + 6) % 7; // Mon→0, Sun→6
+  d.setDate(d.getDate() - daysSinceMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getPeriodStart(
+  period: string,
+  monthMode: MonthMode = "rolling30",
+  yearMode: YearMode = "rolling365",
+  weekMode: WeekMode = "rolling7",
+): Date {
   const now = new Date();
   switch (period) {
     case "today": {
@@ -58,6 +84,9 @@ function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Dat
       return d;
     }
     case "week": {
+      // calendar_week: from Monday of the current week to now.
+      // rolling7 (default): the trailing 7 days.
+      if (weekMode === "calendar_week") return calendarWeekStart(now);
       const d = new Date(now);
       d.setDate(d.getDate() - 7);
       return d;
@@ -76,6 +105,9 @@ function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Dat
       return d;
     }
     case "year": {
+      // financial: from 1 July of the current AU financial year to now.
+      // rolling365 (default): the trailing 365 days.
+      if (yearMode === "financial") return financialYearStart(now);
       const d = new Date(now);
       d.setFullYear(d.getFullYear() - 1);
       return d;
@@ -152,7 +184,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
   const period = queryParams.data.period ?? "today";
   const monthMode: MonthMode = queryParams.data.monthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
-  const periodStart = getPeriodStart(period, monthMode);
+  const yearMode: YearMode = queryParams.data.yearMode === "rolling365" ? "rolling365" : "financial";
+  // The Sales Overview always treats "week" as the current Mon–Sun calendar week.
+  const periodStart = getPeriodStart(period, monthMode, yearMode, "calendar_week");
   const periodEnd = getPeriodEnd(period);
   const merchantId = req.session.merchantId!;
 

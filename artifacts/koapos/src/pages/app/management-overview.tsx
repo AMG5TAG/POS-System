@@ -13,6 +13,7 @@ import {
   GetDashboardSummaryPeriod,
   GetDashboardActivityPeriod,
   GetDashboardSummaryMonthMode,
+  GetDashboardSummaryYearMode,
   SalesSettings,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -33,10 +34,11 @@ import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
 
 /* ─── Period tabs ─────────────────────────────────────────────────────────── */
 
-type Period = "today" | "month" | "year";
+type Period = "today" | "week" | "month" | "year";
 
 const PERIOD_TABS: { id: Period; label: string; api: GetDashboardSummaryPeriod }[] = [
   { id: "today", label: "Today", api: "today" },
+  { id: "week",  label: "Week",  api: "week"  },
   { id: "month", label: "Month", api: "month" },
   { id: "year",  label: "Year",  api: "year"  },
 ];
@@ -159,15 +161,17 @@ function OverviewSettingsDialog({
   const [salesPeriod, setSalesPeriod]       = useState<Period>("today");
   const [activityPeriod, setActivityPeriod] = useState<ActivityPeriod>("week");
   const [monthMode, setMonthMode]           = useState<GetDashboardSummaryMonthMode>("rolling30");
+  const [yearMode, setYearMode]             = useState<GetDashboardSummaryYearMode>("financial");
 
   // Re-seed the form whenever the dialog opens with the latest saved values.
   useEffect(() => {
     if (!open || !settings) return;
     const sp = settings.overviewDefaultSalesPeriod;
-    setSalesPeriod(sp === "month" || sp === "year" ? sp : "today");
+    setSalesPeriod(sp === "week" || sp === "month" || sp === "year" ? sp : "today");
     const ap = settings.overviewDefaultActivityPeriod;
     setActivityPeriod(ap === "day" || ap === "month" || ap === "year" ? ap : "week");
     setMonthMode(settings.overviewMonthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30");
+    setYearMode(settings.overviewYearMode === "rolling365" ? "rolling365" : "financial");
   }, [open, settings]);
 
   function handleSave() {
@@ -177,6 +181,7 @@ function OverviewSettingsDialog({
           overviewDefaultSalesPeriod: salesPeriod,
           overviewDefaultActivityPeriod: activityPeriod,
           overviewMonthMode: monthMode,
+          overviewYearMode: yearMode,
         },
       },
       {
@@ -197,7 +202,7 @@ function OverviewSettingsDialog({
         <DialogHeader>
           <DialogTitle>Overview Defaults</DialogTitle>
           <DialogDescription>
-            Choose which period opens first and how “Month” is calculated. Saved to this business.
+            Choose which period opens first and how “Month” and “Year” are calculated. Saved to this business.
           </DialogDescription>
         </DialogHeader>
 
@@ -236,6 +241,23 @@ function OverviewSettingsDialog({
                 : "Month tabs cover a rolling window of the last 30 days."}
             </p>
           </div>
+
+          <div className="space-y-2">
+            <Label>“Year” means</Label>
+            <Segmented<GetDashboardSummaryYearMode>
+              value={yearMode}
+              onChange={setYearMode}
+              options={[
+                { id: "financial", label: "Financial year" },
+                { id: "rolling365", label: "Last 365 days" },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              {yearMode === "financial"
+                ? "Year tabs cover the current financial year (1 July to today)."
+                : "Year tabs cover a rolling window of the last 365 days."}
+            </p>
+          </div>
         </div>
 
         <DialogFooter>
@@ -257,10 +279,12 @@ export default function ManagementOverviewPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [, navigate] = useLocation();
 
-  /* Per-merchant overview preferences (default tabs + Month definition) */
+  /* Per-merchant overview preferences (default tabs + Month/Year definitions) */
   const { data: salesSettings } = useGetSalesSettings();
   const monthMode: GetDashboardSummaryMonthMode =
     salesSettings?.overviewMonthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
+  const yearMode: GetDashboardSummaryYearMode =
+    salesSettings?.overviewYearMode === "rolling365" ? "rolling365" : "financial";
 
   /* Apply the saved default tabs once, the first time settings load. After that
      the user's manual tab clicks win and aren't overridden on refetch. */
@@ -269,21 +293,26 @@ export default function ManagementOverviewPage() {
     if (defaultsApplied.current || !salesSettings) return;
     defaultsApplied.current = true;
     const sp = salesSettings.overviewDefaultSalesPeriod;
-    if (sp === "today" || sp === "month" || sp === "year") setPeriod(sp);
+    if (sp === "today" || sp === "week" || sp === "month" || sp === "year") setPeriod(sp);
     const ap = salesSettings.overviewDefaultActivityPeriod;
     if (ap === "day" || ap === "week" || ap === "month" || ap === "year") setActPeriod(ap);
   }, [salesSettings]);
 
   const api = PERIOD_TABS.find((t) => t.id === period)!.api;
 
-  /* Only the "month" period is affected by monthMode; send it so the server can
-     switch between rolling-30-days and calendar month-to-date. */
+  /* "month" is affected by monthMode and "year" by yearMode; send each so the
+     server can switch between rolling and calendar windows. */
   const summaryMonthMode = period === "month" ? monthMode : undefined;
+  const summaryYearMode = period === "year" ? yearMode : undefined;
   const activityMonthMode = actPeriod === "month" ? monthMode : undefined;
 
   const { data: summary, isLoading } = useGetDashboardSummary(
-    { period: api, ...(summaryMonthMode ? { monthMode: summaryMonthMode } : {}) },
-    { query: { queryKey: ["mgmt-overview", api, summaryMonthMode ?? "default"] } },
+    {
+      period: api,
+      ...(summaryMonthMode ? { monthMode: summaryMonthMode } : {}),
+      ...(summaryYearMode ? { yearMode: summaryYearMode } : {}),
+    },
+    { query: { queryKey: ["mgmt-overview", api, summaryMonthMode ?? "default", summaryYearMode ?? "default"] } },
   );
 
   /* Always fetch "yesterday" for the VS Yesterday comparison bar */
@@ -342,9 +371,11 @@ export default function ManagementOverviewPage() {
   /* Period label text */
   const periodLabel = period === "today"
     ? "today"
-    : period === "month"
-      ? (monthMode === "calendar_mtd" ? "this month" : "in the last 30 days")
-      : "this year";
+    : period === "week"
+      ? "this week"
+      : period === "month"
+        ? (monthMode === "calendar_mtd" ? "this month" : "in the last 30 days")
+        : (yearMode === "financial" ? "this financial year" : "in the last 365 days");
 
   /* Activity data */
   const actServices     = activity?.services       ?? 0;

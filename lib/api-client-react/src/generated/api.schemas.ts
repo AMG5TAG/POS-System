@@ -3468,6 +3468,7 @@ export type SalesSettingsOverviewDefaultSalesPeriod = typeof SalesSettingsOvervi
 
 export const SalesSettingsOverviewDefaultSalesPeriod = {
   today: 'today',
+  week: 'week',
   month: 'month',
   year: 'year',
 } as const;
@@ -3488,6 +3489,14 @@ export type SalesSettingsOverviewMonthMode = typeof SalesSettingsOverviewMonthMo
 export const SalesSettingsOverviewMonthMode = {
   rolling30: 'rolling30',
   calendar_mtd: 'calendar_mtd',
+} as const;
+
+export type SalesSettingsOverviewYearMode = typeof SalesSettingsOverviewYearMode[keyof typeof SalesSettingsOverviewYearMode];
+
+
+export const SalesSettingsOverviewYearMode = {
+  financial: 'financial',
+  rolling365: 'rolling365',
 } as const;
 
 export interface SalesSettings {
@@ -3519,6 +3528,7 @@ export interface SalesSettings {
   overviewDefaultSalesPeriod: SalesSettingsOverviewDefaultSalesPeriod;
   overviewDefaultActivityPeriod: SalesSettingsOverviewDefaultActivityPeriod;
   overviewMonthMode: SalesSettingsOverviewMonthMode;
+  overviewYearMode: SalesSettingsOverviewYearMode;
   createdAt?: string;
   updatedAt: string;
 }
@@ -3528,6 +3538,7 @@ export type SalesSettingsUpdateOverviewDefaultSalesPeriod = typeof SalesSettings
 
 export const SalesSettingsUpdateOverviewDefaultSalesPeriod = {
   today: 'today',
+  week: 'week',
   month: 'month',
   year: 'year',
 } as const;
@@ -3548,6 +3559,14 @@ export type SalesSettingsUpdateOverviewMonthMode = typeof SalesSettingsUpdateOve
 export const SalesSettingsUpdateOverviewMonthMode = {
   rolling30: 'rolling30',
   calendar_mtd: 'calendar_mtd',
+} as const;
+
+export type SalesSettingsUpdateOverviewYearMode = typeof SalesSettingsUpdateOverviewYearMode[keyof typeof SalesSettingsUpdateOverviewYearMode];
+
+
+export const SalesSettingsUpdateOverviewYearMode = {
+  financial: 'financial',
+  rolling365: 'rolling365',
 } as const;
 
 export interface SalesSettingsUpdate {
@@ -3577,6 +3596,7 @@ export interface SalesSettingsUpdate {
   overviewDefaultSalesPeriod?: SalesSettingsUpdateOverviewDefaultSalesPeriod;
   overviewDefaultActivityPeriod?: SalesSettingsUpdateOverviewDefaultActivityPeriod;
   overviewMonthMode?: SalesSettingsUpdateOverviewMonthMode;
+  overviewYearMode?: SalesSettingsUpdateOverviewYearMode;
 }
 
 export interface KpiSettings {
@@ -5865,6 +5885,10 @@ period?: GetDashboardSummaryPeriod;
  * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
  */
 monthMode?: GetDashboardSummaryMonthMode;
+/**
+ * How the "year" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.
+ */
+yearMode?: GetDashboardSummaryYearMode;
 };
 
 export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof typeof GetDashboardSummaryPeriod];
@@ -5884,6 +5908,14 @@ export type GetDashboardSummaryMonthMode = typeof GetDashboardSummaryMonthMode[k
 export const GetDashboardSummaryMonthMode = {
   rolling30: 'rolling30',
   calendar_mtd: 'calendar_mtd',
+} as const;
+
+export type GetDashboardSummaryYearMode = typeof GetDashboardSummaryYearMode[keyof typeof GetDashboardSummaryYearMode];
+
+
+export const GetDashboardSummaryYearMode = {
+  financial: 'financial',
+  rolling365: 'rolling365',
 } as const;
 
 export type GetDashboardActivityParams = {

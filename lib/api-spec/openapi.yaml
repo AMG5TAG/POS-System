@@ -1933,6 +1933,12 @@ paths:
           schema:
             type: string
             enum: [rolling30, calendar_mtd]
+        - name: yearMode
+          in: query
+          description: How the "year" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.
+          schema:
+            type: string
+            enum: [financial, rolling365]
       responses:
         "200":
           description: Dashboard summary
@@ -13270,7 +13276,7 @@ components:
 
     SalesSettings:
       type: object
-      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, overviewDefaultSalesPeriod, overviewDefaultActivityPeriod, overviewMonthMode, updatedAt]
+      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, overviewDefaultSalesPeriod, overviewDefaultActivityPeriod, overviewMonthMode, overviewYearMode, updatedAt]
       properties:
         id:                        { type: integer }
         merchantId:                { type: integer }
@@ -13297,9 +13303,10 @@ components:
         quotePrefix:               { type: string }
         quoteDigits:               { type: integer }
         quoteDepositPercent:       { type: number }
-        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, week, month, year] }
         overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
         overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
+        overviewYearMode:              { type: string, enum: [financial, rolling365] }
         createdAt:                 { type: string, format: date-time }
         updatedAt:                 { type: string, format: date-time }
 
@@ -13329,9 +13336,10 @@ components:
         quotePrefix:               { type: string }
         quoteDigits:               { type: integer }
         quoteDepositPercent:       { type: number }
-        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, week, month, year] }
         overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
         overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
+        overviewYearMode:              { type: string, enum: [financial, rolling365] }
 
     KpiSettings:
       type: object

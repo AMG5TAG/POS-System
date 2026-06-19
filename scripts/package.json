@@ -21,6 +21,7 @@
     "add-mobile-pos-app-table": "tsx ./src/add-mobile-pos-app-table.ts",
     "add-auto-sync-settings-table": "tsx ./src/add-auto-sync-settings-table.ts",
     "add-backup-schedules-table": "tsx ./src/add-backup-schedules-table.ts",
+    "add-overview-year-mode": "tsx ./src/add-overview-year-mode.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
