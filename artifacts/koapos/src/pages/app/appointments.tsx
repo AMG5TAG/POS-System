@@ -74,6 +74,49 @@ function addOneHour(dt: string): string {
   return toLocalDatetimeValue(d);
 }
 
+function addMinutes(dt: string, mins: number): string {
+  if (!dt) return "";
+  const d = new Date(dt);
+  d.setMinutes(d.getMinutes() + mins);
+  return toLocalDatetimeValue(d);
+}
+
+/* ─── Booking kinds ──────────────────────────────────────────────────────
+   Pickup / Delivery / Appointment. The kind is persisted as the leading word
+   of the appointment title ("Pickup", "Delivery"); anything else is a regular
+   appointment. This keeps the feature frontend-only — no schema change — and
+   the dashboard calendar (which only shows aggregate counts) is unaffected. */
+type BookingKind = "pickup" | "delivery" | "appointment";
+
+const BOOKING_KINDS: { id: BookingKind; label: string }[] = [
+  { id: "pickup",      label: "Pickup" },
+  { id: "delivery",    label: "Delivery" },
+  { id: "appointment", label: "Appointment" },
+];
+
+function kindLabel(kind: BookingKind): string {
+  return kind === "pickup" ? "Pickup" : kind === "delivery" ? "Delivery" : "Appointment";
+}
+
+/** Pickup/Delivery are quick 5-minute slots; a regular appointment is an hour. */
+function kindDurationMinutes(kind: BookingKind): number {
+  return kind === "pickup" || kind === "delivery" ? 5 : 60;
+}
+
+function kindFromTitle(title?: string | null): BookingKind {
+  const t = (title ?? "").trim().toLowerCase();
+  if (t.startsWith("pickup")) return "pickup";
+  if (t.startsWith("delivery")) return "delivery";
+  return "appointment";
+}
+
+/** Calendar-chip colour per kind (appointments-page calendar only). */
+const KIND_CHIP_CLASS: Record<BookingKind, string> = {
+  pickup:      "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
+  delivery:    "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700",
+  appointment: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+};
+
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-AU", {
     weekday: "short", day: "numeric", month: "short",
@@ -507,6 +550,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
 /* ─── Booking dialog ─────────────────────────────────────────────────────── */
 
 type FormState = {
+  kind: BookingKind;
   customerId: string;
   staffId: string;
   serviceJobId: string;
@@ -521,7 +565,7 @@ type FormState = {
 
 function makeDefaultForm(): FormState {
   const start = defaultStartTime();
-  return { customerId: "", staffId: "", serviceJobId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
+  return { kind: "appointment", customerId: "", staffId: "", serviceJobId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
 }
 
 interface BookingDialogProps {
@@ -548,6 +592,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
     if (open) {
       setBookedAppt(null);
       setForm(editing ? {
+        kind:       kindFromTitle(editing.title),
         customerId: editing.customerId ? String(editing.customerId) : "",
         staffId:    editing.staffId    ? String(editing.staffId)    : "",
         serviceJobId: editing.serviceJobId ? String(editing.serviceJobId) : "",
@@ -565,11 +610,27 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const setField = (key: keyof FormState, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
 
+  /* Switching kind re-defaults the end time: 5 min for pickup/delivery,
+     1 hour for a regular appointment. */
+  const setKind = (kind: BookingKind) =>
+    setForm((f) => ({ ...f, kind, endTime: addMinutes(f.startTime, kindDurationMinutes(kind)) }));
+
   const safeStaff = Array.isArray(staff) ? staff : [];
 
   const handleSubmit = () => {
     if (!form.customerId) { toast.error("Please select a customer"); return; }
     if (!form.startTime || !form.endTime) { toast.error("Please set start and end times"); return; }
+    /* The kind is stored as the title. Pickup/Delivery set it explicitly; a
+       regular appointment leaves the title to the server's auto-generated
+       "Appointment — Customer" on create, or preserves the existing title on
+       edit — unless we're switching an existing pickup/delivery back to a
+       regular appointment, in which case we clear it to "Appointment". */
+    let title: string | undefined;
+    if (form.kind === "pickup" || form.kind === "delivery") {
+      title = kindLabel(form.kind);
+    } else if (editing && kindFromTitle(editing.title) !== "appointment") {
+      title = "Appointment";
+    }
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
       staffId:    form.staffId    ? Number(form.staffId)    : null,
@@ -580,6 +641,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       notes:  form.notes || null,
       sendSms: form.sendSms,
       sendEmail: form.sendEmail,
+      ...(title !== undefined ? { title } : {}),
     };
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
     if (editing) {
@@ -705,6 +767,25 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
 
         <div className="flex-1 overflow-y-auto px-6 min-h-0">
         <div className="space-y-5 py-4">
+          {/* Booking kind — Pickup / Delivery / Appointment */}
+          <div className="grid grid-cols-3 gap-2">
+            {BOOKING_KINDS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setKind(k.id)}
+                className={cn(
+                  "py-2 rounded-lg border text-sm font-medium transition-colors",
+                  form.kind === k.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background hover:border-primary/40"
+                )}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+
           {/* Customer */}
           <div className="space-y-1.5">
             <Label>
@@ -743,17 +824,17 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
 
           {/* Time */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Appointment Time</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{kindLabel(form.kind)} Time</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-sm"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> Start Time</Label>
                 <Input type="datetime-local" value={form.startTime}
-                  onChange={(e) => { setField("startTime", e.target.value); setField("endTime", addOneHour(e.target.value)); }} className="text-sm" />
+                  onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startTime: v, endTime: addMinutes(v, kindDurationMinutes(f.kind)) })); }} className="text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-sm">
                   <Clock className="w-3.5 h-3.5 text-muted-foreground" /> End Time
-                  <span className="text-muted-foreground text-xs font-normal">(auto +1hr)</span>
+                  <span className="text-muted-foreground text-xs font-normal">(auto +{kindDurationMinutes(form.kind) === 5 ? "5min" : "1hr"})</span>
                 </Label>
                 <Input type="datetime-local" value={form.endTime} onChange={(e) => setField("endTime", e.target.value)} className="text-sm" />
               </div>
@@ -995,6 +1076,13 @@ function AppointmentsCalendar({
                               })
                             : "";
                           const isCompleted = a.status === "completed";
+                          const kind = kindFromTitle(a.title);
+                          // Mark by kind: show the kind label (with customer when
+                          // present), and colour by kind. Completed keeps its
+                          // distinct emerald colour regardless of kind.
+                          const label = kind === "appointment"
+                            ? (a.customerName || a.title || "Appointment")
+                            : `${kindLabel(kind)}${a.customerName ? ` · ${a.customerName}` : ""}`;
                           return (
                             <button
                               key={a.id}
@@ -1003,13 +1091,13 @@ function AppointmentsCalendar({
                                 "text-[11px] px-1.5 py-0.5 rounded border text-left truncate transition-colors",
                                 isCompleted
                                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700"
-                                  : "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700"
+                                  : KIND_CHIP_CLASS[kind]
                               )}
-                              title={`${time} — ${a.customerName || a.title || "Appointment"}`}
+                              title={`${time} — ${kindLabel(kind)}${a.customerName ? ` — ${a.customerName}` : ""}`}
                             >
                               <span className="font-medium">{time}</span>
                               {" — "}
-                              <span className="truncate">{a.customerName || a.title || "Appointment"}</span>
+                              <span className="truncate">{label}</span>
                             </button>
                           );
                         })}
