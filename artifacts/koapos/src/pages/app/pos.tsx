@@ -382,6 +382,9 @@ export default function POSPage() {
   // compared via String() — mirroring how integration methods are handled.
   const isInvoiceMethod = String(payMethod) === "invoice";
   const [numpadInput, setNumpadInput] = useState("");
+  /* Reference/description captured when tendering via Direct Deposit (e.g. the
+     bank reference or payer name) so the payment can be reconciled later. */
+  const [depositDesc, setDepositDesc] = useState("");
   const [splitLegs, setSplitLegs] = useState<{ method: PaymentMethodId; amount: string }[]>([
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
@@ -434,6 +437,7 @@ export default function POSPage() {
   const isPaymentDirty =
     numpadInput !== "" ||
     gcPayCardNumber !== "" ||
+    depositDesc !== "" ||
     splitLegs.some(l => l.amount !== "") ||
     (paymentModalInitialMethodRef.current !== null && payMethod !== paymentModalInitialMethodRef.current);
 
@@ -1461,6 +1465,7 @@ export default function POSPage() {
       setPayMethod(initialMethod);
       paymentModalInitialMethodRef.current = initialMethod;
       setNumpadInput("");
+      setDepositDesc("");
       setReceiptMode("idle");
       setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
       setGcPayCardNumber("");
@@ -1572,6 +1577,9 @@ export default function POSPage() {
     if (payMethod !== "gift_card") {
       setGcPayCardNumber("");
       setGcValidation(null);
+    }
+    if (payMethod !== "direct_deposit") {
+      setDepositDesc("");
     }
     if (autoExactMethods.includes(payMethod)) {
       setNumpadInput(effectiveTotal.toFixed(2));
@@ -4210,6 +4218,25 @@ export default function POSPage() {
                     </span>
                   </div>
 
+                  {/* Direct Deposit reference/description */}
+                  {payMethod === "direct_deposit" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="deposit-desc" className="flex items-center gap-1.5 text-sm">
+                        <Banknote className="w-4 h-4 text-muted-foreground" /> Deposit Description
+                      </Label>
+                      <Input
+                        id="deposit-desc"
+                        autoFocus
+                        value={depositDesc}
+                        onChange={(e) => setDepositDesc(e.target.value)}
+                        placeholder="Bank reference / payer name…"
+                      />
+                      {!depositDesc.trim() && (
+                        <p className="text-xs text-muted-foreground">Required to record this deposit.</p>
+                      )}
+                    </div>
+                  )}
+
                   {/* Numpad grid */}
                   <div className="grid grid-cols-3 gap-2 flex-1">
                     {(["7","8","9","4","5","6","1","2","3"] as const).map(k => (
@@ -4270,6 +4297,7 @@ export default function POSPage() {
                   invoiceCreating ||
                   (isInvoiceMethod && !selectedCustomer) ||
                   (payMethod === "gift_card" && (!gcValidation?.valid)) ||
+                  (payMethod === "direct_deposit" && !depositDesc.trim()) ||
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
@@ -4347,6 +4375,8 @@ export default function POSPage() {
                   if (isIntegration && !isAsyncProvider) {
                     const label = INTEGRATION_PAYMENT_LABELS[intgKey!] ?? intgKey!;
                     extraNote = `[Payment via ${label} (${intgKey})]`;
+                  } else if (payMethod === "direct_deposit" && depositDesc.trim()) {
+                    extraNote = `[Deposit: ${depositDesc.trim()}]`;
                   }
                   // For loyalty payments, tender the entered loyalty amount
                   // (not the auto-defaulted total) so the server deducts
