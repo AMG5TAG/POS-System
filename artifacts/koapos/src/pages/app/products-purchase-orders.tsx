@@ -29,14 +29,17 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink, ShieldCheck } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags } from "lucide-react";
 import { toast } from "sonner";
+import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 
 type POStatus = "Draft" | "Ordered" | "Partially Received" | "Fully Received" | "Cancelled"
               | "Sent" | "Partial" | "Received"; // legacy values
 type TaxMode  = "exclusive" | "inclusive";
 type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number };
+/* Minimal product shape needed to render a sale-ticket (price label). */
+type ProductRecord = { id: number; name: string; sku?: string | null; price?: number | null; barcode?: string | null; category?: { name?: string } | null };
 
 interface SupplierOption { id: number; name: string }
 
@@ -96,6 +99,8 @@ export default function ProductsPurchaseOrdersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [items, setItems] = useState<POItem[]>([{ ...EMPTY_ITEM }]);
   const [printPO, setPrintPO] = useState<PrintPO | null>(null);
+  /* PO whose print-choice screen is open (A4 PO vs. sale tickets). */
+  const [printChoicePO, setPrintChoicePO] = useState<PurchaseOrder | null>(null);
   const [viewingPO, setViewingPO] = useState<PurchaseOrder | null>(null);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -142,6 +147,55 @@ export default function ProductsPurchaseOrdersPage() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
+
+  /* Full product catalogue + sticker printer, used to print "sale tickets"
+     (price labels) for the products brought in when a PO is completed. */
+  const { data: allProductsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
+  const productsById = useMemo(() => {
+    const m = new Map<number, ProductRecord>();
+    for (const p of (allProductsData?.items ?? []) as ProductRecord[]) m.set(p.id, p);
+    return m;
+  }, [allProductsData]);
+  const { printStickersBatch, defaultTemplateFor, businessName } = useStickerPrinter();
+  const hasProductTemplate = !!defaultTemplateFor("product");
+
+  /* Build the sale-ticket print jobs for a PO: one label per received unit of
+     each catalogued line item. Returns the jobs and the total ticket count. */
+  const ticketsForPO = (po: PurchaseOrder | null) => {
+    const jobs: PrintStickersArgs[] = [];
+    let count = 0;
+    for (const it of ((po?.items ?? []) as POItem[])) {
+      const qty = it.received || it.quantity || 0;
+      const product = it.productId != null ? productsById.get(it.productId) : undefined;
+      if (!product || qty <= 0) continue;
+      count += qty;
+      jobs.push({
+        typeId: "product",
+        quantity: qty,
+        context: { merchant: { name: businessName } },
+        fieldsOverride: {
+          productName: product.name,
+          sku: product.sku ?? "",
+          price: product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
+          barcode: product.barcode ?? "",
+          category: product.category?.name ?? "",
+        },
+      });
+    }
+    return { jobs, count };
+  };
+
+  const handlePrintTickets = (po: PurchaseOrder | null) => {
+    const { jobs, count } = ticketsForPO(po);
+    if (count === 0) {
+      toast.error("No catalogued products to print tickets for.");
+      return;
+    }
+    const ok = printStickersBatch(jobs);
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+    else toast.success(`Printing ${count} sale ticket${count > 1 ? "s" : ""}`);
+    setPrintChoicePO(null);
+  };
 
   const { data: orders = [], isLoading } = useListPurchaseOrders({});
   const createPO      = useCreatePurchaseOrder();
@@ -633,7 +687,7 @@ export default function ProductsPurchaseOrdersPage() {
                     {emailLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mail className="w-4 h-4 mr-1.5" />}
                     Email to Supplier
                   </Button>
-                  <Button variant="outline" onClick={() => setPrintPO(po as unknown as PrintPO)}>
+                  <Button variant="outline" onClick={() => setPrintChoicePO(po)}>
                     <Printer className="w-4 h-4 mr-1.5" /> Print
                   </Button>
                 </div>
@@ -1093,9 +1147,24 @@ export default function ProductsPurchaseOrdersPage() {
           onSuccess={(updated) => {
             setViewingPO(updated);
             invalidateList();
+            // Goods are in — offer to print the PO and/or sale tickets.
+            setPrintChoicePO(updated);
           }}
         />
       )}
+
+      {/* ── Print choice (A4 PO vs. sale tickets) ────────────────────── */}
+      <POPrintChoiceDialog
+        po={printChoicePO}
+        ticketCount={ticketsForPO(printChoicePO).count}
+        hasProductTemplate={hasProductTemplate}
+        onClose={() => setPrintChoicePO(null)}
+        onPrintPO={() => {
+          if (printChoicePO) setPrintPO(printChoicePO as unknown as PrintPO);
+          setPrintChoicePO(null);
+        }}
+        onPrintTickets={() => handlePrintTickets(printChoicePO)}
+      />
 
       {/* ── Auto-print after PO creation ─────────────────────────────── */}
       {printPO && <POPrintArea po={printPO} onDone={() => setPrintPO(null)} />}
@@ -1330,6 +1399,64 @@ function ReceiveGoodsDialog({
               : <><PackageCheck className="w-4 h-4" /> Confirm Receipt</>}
           </Button>
         </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ── Print choice dialog ──────────────────────────────────────────────── */
+
+function POPrintChoiceDialog({
+  po,
+  ticketCount,
+  hasProductTemplate,
+  onClose,
+  onPrintPO,
+  onPrintTickets,
+}: {
+  po: PurchaseOrder | null;
+  ticketCount: number;
+  hasProductTemplate: boolean;
+  onClose: () => void;
+  onPrintPO: () => void;
+  onPrintTickets: () => void;
+}) {
+  const ticketsDisabled = !hasProductTemplate || ticketCount === 0;
+  return (
+    <Dialog open={!!po} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base">Print — {po?.poNumber}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <button
+            onClick={onPrintPO}
+            className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors"
+          >
+            <Printer className="w-8 h-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold text-sm">Purchase Order</p>
+              <p className="text-xs text-muted-foreground mt-0.5">A4 document</p>
+            </div>
+          </button>
+          <button
+            onClick={onPrintTickets}
+            disabled={ticketsDisabled}
+            className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          >
+            <Tags className="w-8 h-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold text-sm">Sale Tickets</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {!hasProductTemplate
+                  ? "No product label template"
+                  : ticketCount === 0
+                    ? "No products brought in"
+                    : `${ticketCount} label${ticketCount > 1 ? "s" : ""} for products brought in`}
+              </p>
+            </div>
+          </button>
+        </div>
       </DialogContent>
     </Dialog>
   );

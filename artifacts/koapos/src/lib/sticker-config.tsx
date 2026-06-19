@@ -1021,9 +1021,10 @@ export function useStickerPrinter() {
   const defaultTemplateFor = (typeId: string): StickerTemplate | undefined =>
     templates.find((t) => t.typeId === typeId && t.isDefault) ?? templates.find((t) => t.typeId === typeId);
 
-  const printStickers = (args: PrintStickersArgs): boolean => {
+  /** Resolve a single sticker's print HTML (full document) without printing. */
+  const buildStickersHtml = (args: PrintStickersArgs): string | null => {
     const type = STICKER_TYPES.find((t) => t.id === args.typeId);
-    if (!type) return false;
+    if (!type) return null;
     const tpl = args.template ?? defaultTemplateFor(args.typeId);
     const sizeId = args.sizeOverride ?? tpl?.sizeId ?? type.defaultSize;
     const size = DYMO_SIZES.find((s) => s.id === sizeId) ?? DYMO_SIZES[0];
@@ -1033,7 +1034,7 @@ export function useStickerPrinter() {
     const resolved = args.context ? resolveQuickCodes(baseFields, args.context) : baseFields;
     const fields = { ...resolved, ...(args.fieldsOverride ?? {}) };
 
-    const html = buildLabelHtml({
+    return buildLabelHtml({
       typeId: args.typeId,
       size,
       fields,
@@ -1045,8 +1046,29 @@ export function useStickerPrinter() {
       barcodePosition: args.barcodePosition ?? "bottom",
       colorMode: args.colorMode ?? "bw",
     });
+  };
+
+  const printStickers = (args: PrintStickersArgs): boolean => {
+    const html = buildStickersHtml(args);
+    if (!html) return false;
     return printLabelHtmlViaIframe(html);
   };
 
-  return { printStickers, defaultTemplateFor, businessName, brandColor, logoUrl };
+  /**
+   * Print labels for many items in a SINGLE print job (one dialog), rather than
+   * one print per item. Each item is rendered with its own fields/quantity; the
+   * resulting label blocks are concatenated into one document. All items are
+   * expected to share a size (e.g. the default product template), so the first
+   * item's page setup drives the job. Returns false if nothing could be built.
+   */
+  const printStickersBatch = (items: PrintStickersArgs[]): boolean => {
+    const docs = items.map(buildStickersHtml).filter((h): h is string => !!h);
+    if (docs.length === 0) return false;
+    const bodyOf = (doc: string) => doc.match(/<body>([\s\S]*?)<\/body>/i)?.[1] ?? "";
+    const mergedBody = docs.map(bodyOf).join("\n");
+    const merged = docs[0].replace(/<body>[\s\S]*?<\/body>/i, `<body>\n${mergedBody}\n</body>`);
+    return printLabelHtmlViaIframe(merged);
+  };
+
+  return { printStickers, printStickersBatch, buildStickersHtml, defaultTemplateFor, businessName, brandColor, logoUrl };
 }
