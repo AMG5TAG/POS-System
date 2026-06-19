@@ -594,7 +594,9 @@ export default function POSPage() {
       return;
     }
     const deviceId = getOrCreateDeviceId();
-    const float = openDenomTotal(openDenomCounts);
+    /* Operations registers have no cash drawer — open with a $0 float and no
+       cash count. Every other register type uses the counted opening float. */
+    const float = isOperationsRegister ? 0 : openDenomTotal(openDenomCounts);
     const session: RegisterSession = {
       openedAt: new Date().toISOString(),
       openedBy: dayStaffMember?.name ?? currentStaff?.name ?? null,
@@ -610,7 +612,8 @@ export default function POSPage() {
     setOpenRegisterDialogOpen(false);
     setOpenDenomCounts({});
     setOpenNotes("");
-    setCashMovementPrintOpen(true);
+    /* Skip the cash-movement (float) slip for cashless Operations registers. */
+    if (!isOperationsRegister) setCashMovementPrintOpen(true);
     toast.success("Register opened");
 
     /* Sync to server so other devices can detect this till is in use. */
@@ -823,6 +826,9 @@ export default function POSPage() {
 
   const { data: registersData } = useListPosRegisters();
   const activeRegister = (registersData?.items ?? []).find((r) => r.registerId === activeRegisterId);
+  /* "Operations" registers are invoicing & quoting only — they have no cash
+     drawer, so opening one must not prompt for an opening cash float. */
+  const isOperationsRegister = String(activeRegister?.type ?? "Cash") === "Operations";
 
   /* Server-side session hooks for device locking */
   const createServerSession = useCreatePosRegisterSession();
@@ -5045,7 +5051,13 @@ export default function POSPage() {
               </div>
             </div>
 
-            {/* Opening float — denomination count */}
+            {/* Opening float — denomination count. Operations registers have no
+                cash drawer, so the cash-in prompt is omitted for them. */}
+            {isOperationsRegister ? (
+              <div className="rounded-xl bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
+                This is an invoicing &amp; quoting register — no opening cash float is required.
+              </div>
+            ) : (
             <div className="space-y-3">
               <Label className="flex items-center gap-1.5">
                 <Banknote className="w-4 h-4 text-muted-foreground" /> Count Cash in Drawer
@@ -5103,6 +5115,7 @@ export default function POSPage() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Notes */}
             <div className="space-y-1.5">
