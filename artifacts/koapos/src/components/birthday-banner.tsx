@@ -1,17 +1,29 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Gift, X } from "lucide-react";
 import { toast } from "sonner";
+import { useStaffSession } from "@/lib/staff-day-session";
+import { useAuth } from "@/lib/use-auth";
 
 interface BirthdayCustomer {
   id: number; firstName: string; lastName: string;
   email: string | null; loyaltyPoints: number;
 }
 
-/** localStorage key that records the date the banner was last dismissed, so a
- *  cleared banner stays cleared for the day but new birthdays still surface. */
+/** localStorage key prefix that records the date the banner was last dismissed.
+ *  The key is suffixed per staff member (see dismissKeyFor) so a dismissal only
+ *  hides the banner for the staff member who dismissed it — a different staff
+ *  member who PIN-logs-in on the same device still sees today's birthdays. The
+ *  stored value is the date, so a cleared banner stays cleared for the day but
+ *  new birthdays still surface the next day. */
 const DISMISS_KEY = "birthday-banner-dismissed";
+
+/** Scope the dismissal to the staff member signed in for the day on this
+ *  device, falling back to the merchant account, then to a shared key. */
+function dismissKeyFor(identity: string): string {
+  return `${DISMISS_KEY}:${identity}`;
+}
 
 function todayKey(): string {
   const d = new Date();
@@ -20,19 +32,34 @@ function todayKey(): string {
 }
 
 export function BirthdayBanner() {
-  const [dismissed, setDismissed] = useState(() => {
+  const { dayStaff } = useStaffSession();
+  const { user } = useAuth();
+  const identity =
+    dayStaff?.staffId != null
+      ? `staff-${dayStaff.staffId}`
+      : user?.id != null
+        ? `merchant-${user.id}`
+        : "anon";
+  const dismissKey = dismissKeyFor(identity);
+
+  // Re-evaluate whenever the acting staff member changes (PIN day-login /
+  // sign-out) so the banner reappears for a staff member who hasn't dismissed
+  // it, even on a shared device.
+  const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
     try {
-      return localStorage.getItem(DISMISS_KEY) === todayKey();
+      setDismissed(localStorage.getItem(dismissKey) === todayKey());
     } catch {
-      return false;
+      setDismissed(false);
     }
-  });
+  }, [dismissKey]);
+
   const [awarded, setAwarded] = useState<Set<number>>(new Set());
   const qc = useQueryClient();
 
   const handleDismiss = () => {
     try {
-      localStorage.setItem(DISMISS_KEY, todayKey());
+      localStorage.setItem(dismissKey, todayKey());
     } catch { /* ignore storage failures */ }
     setDismissed(true);
   };

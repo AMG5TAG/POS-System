@@ -6,10 +6,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Merchant | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // No `retry` override here on purpose: inherit the QueryClient's smart retry
+  // (see query-retry.ts) so a transient failure while the API server is still
+  // booting on a cold load self-heals, while a genuine 401 still fails fast and
+  // redirects to /login.
   const { data: me, isLoading: meLoading, error } = useGetMe({
     query: {
       queryKey: ["me"],
-      retry: false,
     }
   });
 
