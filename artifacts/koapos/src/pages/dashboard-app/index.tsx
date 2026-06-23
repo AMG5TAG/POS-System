@@ -5,6 +5,7 @@ import {
   Wrench, CalendarClock, FileText, StickyNote, TrendingUp,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { setHomeScreenApp } from "@/lib/home-screen";
 
 /**
  * Public, read-only Dashboard app — served at /b/:businessUsername/t/dashboard.
@@ -84,6 +85,11 @@ export default function DashboardAppPage() {
   }, [username]);
 
   useEffect(() => { void load(true); }, [load]);
+
+  /* Brand the home-screen icon for this business's Dashboard. */
+  useEffect(() => {
+    if (snap) setHomeScreenApp({ name: `${snap.businessName} Dashboard`, iconUrl: snap.logoUrl });
+  }, [snap]);
 
   // Auto-refresh every 60s so a pinned display stays current.
   useEffect(() => {

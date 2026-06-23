@@ -1,9 +1,10 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, techAppSettingsTable, techAppEventsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, appointmentsTable, techAppSettingsTable, techAppEventsTable } from "@workspace/db";
+import { eq, and, or, asc, desc, ilike } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendSms } from "../services/sms";
+import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { publicDomain } from "../lib/publicUrl";
 
 /**
@@ -495,6 +496,210 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
   }
 
   res.json({ status, notes });
+});
+
+/* ── Appointments (scoped to the technician's business) ──────────────── */
+
+const APPT_STATUSES = ["scheduled", "completed", "cancelled", "no-show"] as const;
+
+/** Compact appointment shape for the tech app; phone honours showCustomerContact. */
+function formatAppt(
+  a: typeof appointmentsTable.$inferSelect,
+  customer: typeof customersTable.$inferSelect | null,
+  staffName: string | null,
+  showContact: boolean,
+) {
+  const endAt = new Date(a.scheduledAt.getTime() + a.durationMinutes * 60_000);
+  return {
+    id: a.id,
+    title: a.title,
+    customerId: a.customerId ?? null,
+    customerName: customer ? customerDisplayName(customer.firstName, customer.lastName, customer.company) : null,
+    customerPhone: showContact ? (customer?.phone ?? null) : null,
+    staffId: a.staffId ?? null,
+    staffName,
+    scheduledAt: a.scheduledAt.toISOString(),
+    endAt: endAt.toISOString(),
+    durationMinutes: a.durationMinutes,
+    status: a.status,
+    notes: a.notes ?? null,
+  };
+}
+
+router.get("/tech/appointments", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+
+  const appts = await db
+    .select()
+    .from(appointmentsTable)
+    .where(eq(appointmentsTable.merchantId, tech.merchantId))
+    .orderBy(asc(appointmentsTable.scheduledAt));
+
+  const customers = await db.select().from(customersTable).where(eq(customersTable.merchantId, tech.merchantId));
+  const customerMap = new Map(customers.map((c) => [c.id, c]));
+  const staff = await db.select().from(staffTable).where(eq(staffTable.merchantId, tech.merchantId));
+  const staffMap = new Map(staff.map((s) => [s.id, s.name]));
+
+  res.json({
+    items: appts.map((a) =>
+      formatAppt(
+        a,
+        a.customerId ? customerMap.get(a.customerId) ?? null : null,
+        a.staffId ? staffMap.get(a.staffId) ?? null : null,
+        tech.settings.showCustomerContact,
+      ),
+    ),
+  });
+});
+
+/* Customer lookup for the appointment form (name/phone/email contains). */
+router.get("/tech/customers", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+  const q = String(req.query.q ?? "").trim();
+  if (q.length < 1) { res.json({ items: [] }); return; }
+  const like = `%${q}%`;
+  const rows = await db
+    .select()
+    .from(customersTable)
+    .where(and(
+      eq(customersTable.merchantId, tech.merchantId),
+      or(
+        ilike(customersTable.firstName, like),
+        ilike(customersTable.lastName, like),
+        ilike(customersTable.company, like),
+        ilike(customersTable.phone, like),
+        ilike(customersTable.email, like),
+      ),
+    ))
+    .limit(20);
+  res.json({
+    items: rows.map((c) => ({
+      id: c.id,
+      name: customerDisplayName(c.firstName, c.lastName, c.company) || "Unnamed customer",
+      phone: tech.settings.showCustomerContact ? (c.phone ?? null) : null,
+    })),
+  });
+});
+
+const TechApptCreateBody = z.object({
+  scheduledAt: z.string().min(1),
+  durationMinutes: z.number().int().min(1).max(1440).optional(),
+  title: z.string().trim().max(200).optional(),
+  customerId: z.number().int().positive().nullable().optional(),
+  status: z.enum(APPT_STATUSES).optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+router.post("/tech/appointments", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+  const parsed = TechApptCreateBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid appointment details" }); return; }
+  const { scheduledAt, durationMinutes, title, customerId, status, notes } = parsed.data;
+
+  const start = new Date(scheduledAt);
+  if (isNaN(start.getTime())) { res.status(400).json({ error: "Invalid date/time" }); return; }
+
+  /* Validate the customer belongs to this business and auto-title from them. */
+  let customer: typeof customersTable.$inferSelect | null = null;
+  let resolvedTitle = title?.trim() || "Appointment";
+  if (customerId) {
+    const [found] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, tech.merchantId)));
+    if (!found) { res.status(400).json({ error: "Customer not found" }); return; }
+    customer = found;
+    if (!title?.trim()) {
+      const who = customerDisplayName(found.firstName, found.lastName, found.company);
+      resolvedTitle = who ? `Appointment — ${who}` : "Appointment";
+    }
+  }
+
+  const [appt] = await db.insert(appointmentsTable).values({
+    merchantId: tech.merchantId,
+    customerId: customerId ?? null,
+    staffId: tech.staffId, // assign to the signed-in technician
+    title: resolvedTitle,
+    scheduledAt: start,
+    durationMinutes: durationMinutes ?? 30,
+    status: status ?? "scheduled",
+    notes: notes ?? null,
+  }).returning();
+
+  logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "appointment_created", `Created appointment "${resolvedTitle}"`);
+  triggerInstantSync(tech.merchantId, "calendar");
+  res.status(201).json(formatAppt(appt, customer, tech.staffName, tech.settings.showCustomerContact));
+});
+
+const TechApptUpdateBody = z.object({
+  scheduledAt: z.string().optional(),
+  durationMinutes: z.number().int().min(1).max(1440).optional(),
+  title: z.string().trim().max(200).optional(),
+  customerId: z.number().int().positive().nullable().optional(),
+  status: z.enum(APPT_STATUSES).optional(),
+  notes: z.string().max(5000).nullable().optional(),
+});
+
+router.patch("/tech/appointments/:id", async (req, res): Promise<void> => {
+  const tech = await requireTech(req, res);
+  if (!tech) return;
+  const id = parseInt(req.params.id, 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid appointment id" }); return; }
+  const parsed = TechApptUpdateBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid appointment details" }); return; }
+  const { scheduledAt, durationMinutes, title, customerId, status, notes } = parsed.data;
+
+  const updates: Record<string, unknown> = {};
+  if (scheduledAt !== undefined) {
+    const start = new Date(scheduledAt);
+    if (isNaN(start.getTime())) { res.status(400).json({ error: "Invalid date/time" }); return; }
+    updates.scheduledAt = start;
+  }
+  if (durationMinutes !== undefined) updates.durationMinutes = durationMinutes;
+  if (status !== undefined) updates.status = status;
+  if (notes !== undefined) updates.notes = notes;
+  if (title !== undefined) updates.title = title.trim() || "Appointment";
+
+  /* Validate the customer (when changing it) so we never link a foreign one. */
+  let customer: typeof customersTable.$inferSelect | null = null;
+  if (customerId !== undefined) {
+    if (customerId === null) {
+      updates.customerId = null;
+    } else {
+      const [found] = await db.select().from(customersTable)
+        .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, tech.merchantId)));
+      if (!found) { res.status(400).json({ error: "Customer not found" }); return; }
+      customer = found;
+      updates.customerId = customerId;
+    }
+  }
+
+  if (Object.keys(updates).length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
+
+  const [appt] = await db.update(appointmentsTable).set(updates)
+    .where(and(eq(appointmentsTable.id, id), eq(appointmentsTable.merchantId, tech.merchantId)))
+    .returning();
+  if (!appt) { res.status(404).json({ error: "Appointment not found" }); return; }
+
+  /* Resolve names for the response shape. */
+  if (!customer && appt.customerId) {
+    const [c] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.id, appt.customerId), eq(customersTable.merchantId, tech.merchantId)));
+    customer = c ?? null;
+  }
+  let staffName: string | null = null;
+  if (appt.staffId) {
+    if (appt.staffId === tech.staffId) staffName = tech.staffName;
+    else {
+      const [s] = await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, appt.staffId));
+      staffName = s?.name ?? null;
+    }
+  }
+
+  logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "appointment_updated", `Updated appointment "${appt.title}"`);
+  triggerInstantSync(tech.merchantId, "calendar");
+  res.json(formatAppt(appt, customer, staffName, tech.settings.showCustomerContact));
 });
 
 export default router;

@@ -55,6 +55,7 @@ export * from "./messages";
 export * from "./ai-settings";
 export * from "./customer-files-cloud-settings";
 export * from "./merchant-auto-sync-settings";
+export * from "./contact-sync-links";
 export * from "./product-recalls";
 export * from "./product-pre-orders";
 export * from "./product-return-auths";

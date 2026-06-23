@@ -1,4 +1,4 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { useParams } from "wouter";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { QRCodeSVG } from "qrcode.react";
@@ -7,6 +7,7 @@ import {
   CheckCircle2, Clock, AlertCircle, Copy, Check, ExternalLink,
   ChevronLeft, Wallet, FileText,
 } from "lucide-react";
+import { setHomeScreenApp } from "@/lib/home-screen";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -638,6 +639,11 @@ export default function PortalPage() {
 
   const { data, isLoading, error } = usePortalData(token ?? "");
 
+  /* Brand the home-screen icon for this business's customer portal. */
+  useEffect(() => {
+    if (data?.merchant) setHomeScreenApp({ name: data.merchant.businessName, iconUrl: data.merchant.logoUrl, themeColor: "#f59e0b" });
+  }, [data]);
+
   if (!token) {
     return (
       <div className="min-h-screen flex items-center justify-center p-6 text-center">
@@ -706,7 +712,7 @@ export default function PortalPage() {
       </header>
 
       {/* Content */}
-      <main className="flex-1 overflow-y-auto pb-20 max-w-md mx-auto w-full">
+      <main className="flex-1 overflow-y-auto pb-24 max-w-md mx-auto w-full">
         {tab === "loyalty"      && <LoyaltyTab      data={data} token={token} businessUsername={effectiveUsername} />}
         {tab === "profile"      && <ProfileTab      data={data} token={token} />}
         {tab === "appointments" && <AppointmentsTab token={token} />}
@@ -721,12 +727,12 @@ export default function PortalPage() {
             key={t.id}
             onClick={() => setTab(t.id)}
             className={cn(
-              "flex-1 flex flex-col items-center justify-center py-2 gap-0.5 text-xs font-medium transition-colors",
+              "flex-1 flex flex-col items-center justify-center py-3.5 gap-1 text-xs font-medium transition-colors",
               tab === t.id ? "text-amber-500" : "text-gray-400 hover:text-gray-600",
             )}
           >
-            <t.icon className={cn("w-5 h-5", tab === t.id && "fill-current opacity-80")} />
-            <span className="text-[10px]">{t.label}</span>
+            <t.icon className={cn("w-6 h-6", tab === t.id && "fill-current opacity-80")} />
+            <span className="text-[11px]">{t.label}</span>
           </button>
         ))}
       </nav>

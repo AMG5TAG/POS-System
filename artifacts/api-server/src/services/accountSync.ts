@@ -8,7 +8,7 @@
  * always resolve a freshly-refreshed token via the per-provider helpers.
  */
 import type { Logger } from "pino";
-import { db, customersTable, customerNotesTable, appointmentsTable } from "@workspace/db";
+import { db, customersTable, customerNotesTable, appointmentsTable, contactSyncLinksTable } from "@workspace/db";
 import { eq, and, desc, gte } from "drizzle-orm";
 import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "./microsoftToken";
 import { getValidGoogleToken, GoogleNotConnectedError } from "./googleToken";
@@ -46,31 +46,47 @@ export async function resolveAccountToken(merchantId: number, provider: SyncProv
 
 /* ── Contacts ──────────────────────────────────────────────────────────────── */
 
-/** A matched existing contact on the remote provider, keyed by email. */
+/** A contact on the remote provider. `key` is its stable id (MS id / Google resourceName). */
 type ContactRef = { id?: string; resourceName?: string; etag?: string };
 
-/** Index every existing Microsoft contact by lowercased email → { id }. */
-async function fetchMicrosoftContactIndex(accessToken: string): Promise<Map<string, ContactRef>> {
-  const index = new Map<string, ContactRef>();
+/**
+ * Snapshot of the remote address book, indexed two ways:
+ *  - `byEmail`: lowercased email → ref (used to adopt contacts we never created).
+ *  - `byId`:    stable remote id → ref (used to resolve a stored sync link and,
+ *               for Google, pick up the *current* etag needed to update).
+ */
+type RemoteIndex = { byEmail: Map<string, ContactRef>; byId: Map<string, ContactRef> };
+
+/** The stable remote id for a ref: Microsoft contact id, or Google resourceName. */
+const refKey = (ref: ContactRef): string | undefined => ref.id ?? ref.resourceName;
+
+/** List & index every existing Microsoft contact (by email and by id). */
+async function fetchMicrosoftContactIndex(accessToken: string): Promise<RemoteIndex> {
+  const byEmail = new Map<string, ContactRef>();
+  const byId = new Map<string, ContactRef>();
   let url: string | null = "https://graph.microsoft.com/v1.0/me/contacts?$select=id,emailAddresses&$top=100";
   for (let page = 0; url && page < 100; page++) {
     const r: Response = await fetch(url, { headers: { Authorization: `Bearer ${accessToken}` } });
     if (!r.ok) throw new Error(`Microsoft contacts list failed (${r.status})`);
     const d = await r.json() as { value?: Array<{ id?: string; emailAddresses?: Array<{ address?: string }> }>; "@odata.nextLink"?: string };
     for (const ct of d.value ?? []) {
+      if (!ct.id) continue;
+      const ref: ContactRef = { id: ct.id };
+      byId.set(ct.id, ref);
       for (const e of ct.emailAddresses ?? []) {
         const key = e.address?.trim().toLowerCase();
-        if (key && ct.id && !index.has(key)) index.set(key, { id: ct.id });
+        if (key && !byEmail.has(key)) byEmail.set(key, ref);
       }
     }
     url = d["@odata.nextLink"] ?? null;
   }
-  return index;
+  return { byEmail, byId };
 }
 
-/** Index every existing Google contact by lowercased email → { resourceName, etag }. */
-async function fetchGoogleContactIndex(accessToken: string): Promise<Map<string, ContactRef>> {
-  const index = new Map<string, ContactRef>();
+/** List & index every existing Google contact (by email and by resourceName). */
+async function fetchGoogleContactIndex(accessToken: string): Promise<RemoteIndex> {
+  const byEmail = new Map<string, ContactRef>();
+  const byId = new Map<string, ContactRef>();
   let pageToken: string | undefined;
   for (let page = 0; page < 100; page++) {
     const params = new URLSearchParams({ personFields: "emailAddresses", pageSize: "1000" });
@@ -79,15 +95,18 @@ async function fetchGoogleContactIndex(accessToken: string): Promise<Map<string,
     if (!r.ok) throw new Error(`Google contacts list failed (${r.status})`);
     const d = await r.json() as { connections?: Array<{ resourceName?: string; etag?: string; emailAddresses?: Array<{ value?: string }> }>; nextPageToken?: string };
     for (const ct of d.connections ?? []) {
+      if (!ct.resourceName || !ct.etag) continue;
+      const ref: ContactRef = { resourceName: ct.resourceName, etag: ct.etag };
+      byId.set(ct.resourceName, ref);
       for (const e of ct.emailAddresses ?? []) {
         const key = e.value?.trim().toLowerCase();
-        if (key && ct.resourceName && ct.etag && !index.has(key)) index.set(key, { resourceName: ct.resourceName, etag: ct.etag });
+        if (key && !byEmail.has(key)) byEmail.set(key, ref);
       }
     }
     pageToken = d.nextPageToken;
     if (!pageToken) break;
   }
-  return index;
+  return { byEmail, byId };
 }
 
 type Customer = typeof customersTable.$inferSelect;
@@ -152,25 +171,67 @@ export async function syncContacts(
     }
   }
 
-  // Detect existing contacts (by email) so callers can warn before overwriting.
+  // Snapshot the remote address book (indexed by email and by remote id).
   const existingIndex = provider === "microsoft_contacts"
     ? await fetchMicrosoftContactIndex(accessToken)
     : await fetchGoogleContactIndex(accessToken);
 
-  const emailKey    = (c: Customer) => (c.email ?? "").trim().toLowerCase();
-  const isDuplicate = (c: Customer) => { const k = emailKey(c); return k !== "" && existingIndex.has(k); };
-  const duplicates  = customers.filter(isDuplicate);
-  const fresh       = customers.filter((c) => !isDuplicate(c));
+  // Load the persisted customer → remote-contact links for this provider. These
+  // are what make this a *true* sync: a customer we've pushed before is updated
+  // by id, never re-created — even if their email is blank or has changed.
+  const links = await db
+    .select()
+    .from(contactSyncLinksTable)
+    .where(and(eq(contactSyncLinksTable.merchantId, merchantId), eq(contactSyncLinksTable.provider, provider)));
+  const linkByCustomer = new Map<number, typeof contactSyncLinksTable.$inferSelect>();
+  for (const l of links) linkByCustomer.set(l.customerId, l);
 
-  // First pass with no explicit choice and duplicates present: stop and warn.
-  if (duplicates.length > 0 && duplicateStrategy == null) {
-    return { ...EMPTY_CONTACT_RESULT, needsConfirmation: true, duplicates: duplicates.length, total: customers.length };
+  const emailKey = (c: Customer) => (c.email ?? "").trim().toLowerCase();
+
+  // Classify each customer against its stored link and the remote snapshot:
+  //  - linked:  we created/own this contact already → update it in place.
+  //  - matched: exists remotely by email but we never linked it (the user's own
+  //             contact) → ambiguous, so confirm before overwriting.
+  //  - fresh:   no link and no remote match → create it.
+  type Plan = { c: Customer; ref?: ContactRef };
+  const linked: Plan[] = [];
+  const matched: Plan[] = [];
+  const fresh: Plan[] = [];
+  for (const c of customers) {
+    const link = linkByCustomer.get(c.id);
+    const linkedRef = link ? existingIndex.byId.get(link.remoteContactId) : undefined;
+    if (linkedRef) { linked.push({ c, ref: linkedRef }); continue; }
+    const k = emailKey(c);
+    const emailRef = k ? existingIndex.byEmail.get(k) : undefined;
+    if (emailRef) { matched.push({ c, ref: emailRef }); continue; }
+    fresh.push({ c });
+  }
+
+  // Only *unlinked* remote matches are ambiguous; previously-synced contacts are
+  // updated silently and never trigger the duplicate prompt.
+  if (matched.length > 0 && duplicateStrategy == null) {
+    return { ...EMPTY_CONTACT_RESULT, needsConfirmation: true, duplicates: matched.length, total: customers.length };
   }
 
   let created = 0, updated = 0, skipped = 0, failed = 0, notesSynced = 0;
   const notesFor = (c: Customer) => (includeNotes ? (notesByCustomer.get(c.id) ?? "") : "");
 
-  const createContact = (c: Customer, notesText: string): Promise<Response> => {
+  /** Remember (or refresh) the link from a customer to the remote contact we wrote. */
+  const upsertLink = async (customerId: number, ref: ContactRef): Promise<void> => {
+    const remoteId = refKey(ref);
+    if (!remoteId) return;
+    await db
+      .insert(contactSyncLinksTable)
+      .values({ merchantId, customerId, provider, remoteContactId: remoteId, remoteEtag: ref.etag ?? null, lastSyncedAt: new Date() })
+      .onConflictDoUpdate({
+        target: [contactSyncLinksTable.merchantId, contactSyncLinksTable.customerId, contactSyncLinksTable.provider],
+        set: { remoteContactId: remoteId, remoteEtag: ref.etag ?? null, lastSyncedAt: new Date() },
+      });
+  };
+
+  type WriteResult = { ok: boolean; status: number; ref?: ContactRef };
+
+  const createContact = async (c: Customer, notesText: string): Promise<WriteResult> => {
     if (provider === "google_contacts") {
       const body: Record<string, unknown> = {
         names:          [{ givenName: c.firstName ?? "", familyName: c.lastName ?? "" }],
@@ -178,9 +239,12 @@ export async function syncContacts(
         phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
       };
       if (includeNotes && notesText) body.biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }];
-      return fetch("https://people.googleapis.com/v1/people:createContact", {
+      const r = await fetch("https://people.googleapis.com/v1/people:createContact", {
         method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
+      if (!r.ok) return { ok: false, status: r.status };
+      const d = await r.json() as { resourceName?: string; etag?: string };
+      return { ok: true, status: r.status, ref: { resourceName: d.resourceName, etag: d.etag } };
     }
     const fullName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
     const body: Record<string, unknown> = {
@@ -190,12 +254,15 @@ export async function syncContacts(
       businessPhones: c.phone ? [c.phone] : [],
     };
     if (includeNotes && notesText) body.personalNotes = notesText;
-    return fetch("https://graph.microsoft.com/v1.0/me/contacts", {
+    const r = await fetch("https://graph.microsoft.com/v1.0/me/contacts", {
       method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
+    if (!r.ok) return { ok: false, status: r.status };
+    const d = await r.json() as { id?: string };
+    return { ok: true, status: r.status, ref: { id: d.id } };
   };
 
-  const updateContact = (c: Customer, notesText: string, ref: ContactRef): Promise<Response> => {
+  const updateContact = async (c: Customer, notesText: string, ref: ContactRef): Promise<WriteResult> => {
     if (provider === "google_contacts") {
       const fields = ["names", "emailAddresses", "phoneNumbers"];
       const body: Record<string, unknown> = {
@@ -205,9 +272,12 @@ export async function syncContacts(
         phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
       };
       if (includeNotes && notesText) { body.biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }]; fields.push("biographies"); }
-      return fetch(`https://people.googleapis.com/v1/${ref.resourceName}:updateContact?updatePersonFields=${fields.join(",")}`, {
+      const r = await fetch(`https://people.googleapis.com/v1/${ref.resourceName}:updateContact?updatePersonFields=${fields.join(",")}`, {
         method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
       });
+      if (!r.ok) return { ok: false, status: r.status };
+      const d = await r.json() as { resourceName?: string; etag?: string };
+      return { ok: true, status: r.status, ref: { resourceName: d.resourceName ?? ref.resourceName, etag: d.etag ?? ref.etag } };
     }
     const fullName = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
     const body: Record<string, unknown> = {
@@ -217,41 +287,67 @@ export async function syncContacts(
       businessPhones: c.phone ? [c.phone] : [],
     };
     if (includeNotes && notesText) body.personalNotes = notesText;
-    return fetch(`https://graph.microsoft.com/v1.0/me/contacts/${ref.id}`, {
+    const r = await fetch(`https://graph.microsoft.com/v1.0/me/contacts/${ref.id}`, {
       method: "PATCH", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(body),
     });
+    if (!r.ok) return { ok: false, status: r.status };
+    return { ok: true, status: r.status, ref: { id: ref.id } };
   };
 
-  for (const c of fresh) {
+  // Brand-new customers → create the contact, then remember it so it is never
+  // re-created on a later sync.
+  for (const { c } of fresh) {
     const notesText = notesFor(c);
     try {
       const r = await createContact(c, notesText);
-      if (r.ok) { created++; if (includeNotes && notesText) notesSynced++; }
-      else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact create failed"); failed++; }
+      if (r.ok) {
+        created++;
+        if (includeNotes && notesText) notesSynced++;
+        if (r.ref) await upsertLink(c.id, r.ref);
+      } else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact create failed"); failed++; }
     } catch (err) {
       logger.warn({ merchantId, provider, err, email: c.email }, "Contact create threw");
       failed++;
     }
   }
 
+  // Already-linked contacts → keep them up to date in place.
+  for (const { c, ref } of linked) {
+    const notesText = notesFor(c);
+    try {
+      const r = await updateContact(c, notesText, ref!);
+      if (r.ok) {
+        updated++;
+        if (includeNotes && notesText) notesSynced++;
+        await upsertLink(c.id, r.ref ?? ref!);
+      } else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact update failed"); failed++; }
+    } catch (err) {
+      logger.warn({ merchantId, provider, err, email: c.email }, "Contact update threw");
+      failed++;
+    }
+  }
+
+  // Remote contacts we just adopted by email: overwrite (and link) or skip.
   if (duplicateStrategy === "overwrite") {
-    for (const c of duplicates) {
-      const ref = existingIndex.get(emailKey(c))!;
+    for (const { c, ref } of matched) {
       const notesText = notesFor(c);
       try {
-        const r = await updateContact(c, notesText, ref);
-        if (r.ok) { updated++; if (includeNotes && notesText) notesSynced++; }
-        else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact overwrite failed"); failed++; }
+        const r = await updateContact(c, notesText, ref!);
+        if (r.ok) {
+          updated++;
+          if (includeNotes && notesText) notesSynced++;
+          await upsertLink(c.id, r.ref ?? ref!); // link so future syncs are id-based
+        } else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact overwrite failed"); failed++; }
       } catch (err) {
         logger.warn({ merchantId, provider, err, email: c.email }, "Contact overwrite threw");
         failed++;
       }
     }
   } else {
-    skipped = duplicates.length;
+    skipped = matched.length;
   }
 
-  return { needsConfirmation: false, duplicates: duplicates.length, total: customers.length, created, updated, skipped, failed, notesSynced };
+  return { needsConfirmation: false, duplicates: matched.length, total: customers.length, created, updated, skipped, failed, notesSynced };
 }
 
 /* ── Calendar ──────────────────────────────────────────────────────────────── */

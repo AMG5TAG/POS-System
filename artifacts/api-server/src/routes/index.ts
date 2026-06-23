@@ -160,6 +160,14 @@ router.use(serviceJobTimeRouter);
 router.use(partCompatibilityRouter);
 router.use(tradeInsRouter);
 router.use(publicBookingRouter);
+// Public / PIN-scoped app routers — must be mounted BEFORE any router that
+// applies a blanket `router.use(requireAuth)` (e.g. customerFilesCloudRouter
+// below). A pathless requireAuth in a root-mounted sub-router runs for every
+// later request, so mounting these after it 401s their public endpoints.
+router.use(portalRouter);
+router.use(techRouter);
+router.use(mobilePosRouter);
+router.use(dashboardAppPublicRouter);
 router.use(servicePlansRouter);
 router.use(scheduledReportsRouter);
 router.use(locationsRouter);
@@ -177,13 +185,9 @@ router.use(autoSyncSettingsRouter);
 router.use(storageRouter);
 router.use(loyaltyRouter);
 router.use(serviceSettingsRouter);
-router.use(portalRouter);
-router.use(techRouter);
 router.use(techAppAdminRouter);
-router.use(mobilePosRouter);
 router.use(mobilePosAppAdminRouter);
 router.use(dashboardAppAdminRouter);
-router.use(dashboardAppPublicRouter);
 router.use(cashDrawerRouter);
 router.use(parkedSalesRouter);
 router.use(purchaseOrdersRouter);

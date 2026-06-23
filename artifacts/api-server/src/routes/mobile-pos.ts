@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable } from "@workspace/db";
+import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable, posFavouritesTable } from "@workspace/db";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
@@ -162,6 +162,47 @@ router.get("/mobile-pos/products", async (req, res): Promise<void> => {
       trackInventory: p.trackInventory === "true", stockQuantity: p.stockQuantity,
     })),
   });
+});
+
+/* ── Favourites (per-merchant; the Mobile POS keeps its own pinned list) ─ */
+const MPOS_FAV_REGISTER = "mobile-pos";
+
+function parseFavIds(raw: string | null | undefined): number[] {
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(raw);
+    return Array.isArray(arr) ? arr.filter((n): n is number => typeof n === "number") : [];
+  } catch { return []; }
+}
+
+router.get("/mobile-pos/favourites", async (req, res): Promise<void> => {
+  const mpos = await requireMpos(req, res);
+  if (!mpos) return;
+  const [row] = await db.select().from(posFavouritesTable)
+    .where(and(eq(posFavouritesTable.merchantId, mpos.merchantId), eq(posFavouritesTable.registerId, MPOS_FAV_REGISTER)))
+    .limit(1);
+  res.json({ productIds: parseFavIds(row?.productIds) });
+});
+
+const MposFavBody = z.object({ productIds: z.array(z.number().int().positive()).max(500) });
+
+router.put("/mobile-pos/favourites", async (req, res): Promise<void> => {
+  const mpos = await requireMpos(req, res);
+  if (!mpos) return;
+  const parsed = MposFavBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid favourites" }); return; }
+  const ids = [...new Set(parsed.data.productIds)];
+  const productIds = JSON.stringify(ids);
+  const [existing] = await db.select().from(posFavouritesTable)
+    .where(and(eq(posFavouritesTable.merchantId, mpos.merchantId), eq(posFavouritesTable.registerId, MPOS_FAV_REGISTER)))
+    .limit(1);
+  if (existing) {
+    await db.update(posFavouritesTable).set({ productIds })
+      .where(and(eq(posFavouritesTable.merchantId, mpos.merchantId), eq(posFavouritesTable.registerId, MPOS_FAV_REGISTER)));
+  } else {
+    await db.insert(posFavouritesTable).values({ merchantId: mpos.merchantId, registerId: MPOS_FAV_REGISTER, productIds });
+  }
+  res.json({ productIds: ids });
 });
 
 /* ── Customer lookup (for attaching a sale) ──────────────────────────── */

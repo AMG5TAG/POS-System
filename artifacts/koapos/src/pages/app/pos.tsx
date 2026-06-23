@@ -22,6 +22,7 @@ import {
   useGetMerchant, useListPosRegisters,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useUpsertPosSettings, useVerifyStaffPin,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
+  useGetPosFavourites, useUpdatePosFavourites,
   useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
@@ -239,11 +240,28 @@ export default function POSPage() {
 
   const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
 
+  /* Favourites are persisted per register via /api/pos-favourites so a pinned
+     list survives reloads and is shared across this register's devices. */
+  const { data: favouritesData } = useGetPosFavourites(
+    { registerId: activeRegisterId },
+    { query: { queryKey: ["pos-favourites", activeRegisterId] } },
+  );
+  const updateFavourites = useUpdatePosFavourites();
+
+  useEffect(() => {
+    if (!favouritesData) return;
+    try {
+      const arr = JSON.parse(favouritesData.productIds || "[]");
+      setFavouriteIds(new Set(Array.isArray(arr) ? arr.filter((n): n is number => typeof n === "number") : []));
+    } catch { setFavouriteIds(new Set()); }
+  }, [favouritesData]);
+
   const toggleFavourite = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setFavouriteIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
+      updateFavourites.mutate({ data: { registerId: activeRegisterId, productIds: JSON.stringify([...next]) } });
       return next;
     });
   };

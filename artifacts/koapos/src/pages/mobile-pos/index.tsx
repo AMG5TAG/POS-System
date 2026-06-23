@@ -2,9 +2,10 @@ import { useState, useEffect, useCallback, useMemo } from "react";
 import { useRoute } from "wouter";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { setHomeScreenApp } from "@/lib/home-screen";
 import {
   ShoppingCart, FileText, Package, Loader2, LogOut, Plus, Minus, Trash2,
-  Search, X, Check, Banknote, CreditCard, User, Wrench, CalendarDays, Link2,
+  Search, X, Check, Banknote, CreditCard, User, Wrench, CalendarDays, Link2, Star,
 } from "lucide-react";
 
 /**
@@ -76,6 +77,11 @@ export default function MobilePosAppPage() {
     })();
     return () => { active = false; };
   }, [username]);
+
+  /* Brand the home-screen icon for this business's Mobile POS. */
+  useEffect(() => {
+    if (business) setHomeScreenApp({ name: `${business.businessName} POS`, iconUrl: business.logoUrl });
+  }, [business]);
 
   const handleLogin = async () => {
     if (!pin.trim() || loggingIn) return;
@@ -176,7 +182,7 @@ function MobilePosShell({ business, settings, onLogout }: { business: Business |
         </button>
       </header>
 
-      <main className="flex-1 min-h-0 overflow-auto pb-20">
+      <main className="flex-1 min-h-0 overflow-auto pb-24">
         {tab === "sell" && settings?.showSell && <SellTab />}
         {tab === "invoices" && settings?.showInvoices && <InvoicesTab />}
         {tab === "products" && settings?.showProducts && <ProductsTab />}
@@ -194,10 +200,10 @@ function MobilePosShell({ business, settings, onLogout }: { business: Business |
               <button
                 key={t.key}
                 onClick={() => setTab(t.key)}
-                className={cn("flex-1 flex flex-col items-center gap-0.5 py-2.5 text-[11px] font-medium transition-colors",
+                className={cn("flex-1 flex flex-col items-center gap-1 py-3.5 text-xs font-medium transition-colors",
                   active ? "text-primary" : "text-muted-foreground")}
               >
-                <Icon className="w-5 h-5" /> {t.label}
+                <Icon className="w-6 h-6" /> {t.label}
               </button>
             );
           })}
@@ -302,6 +308,8 @@ function LinkSelector({ value, onChange }: { value: SaleLink | null; onChange: (
 function SellTab() {
   const [products, setProducts] = useState<Product[] | null>(null);
   const [search, setSearch] = useState("");
+  const [favIds, setFavIds] = useState<Set<number>>(new Set());
+  const [filterFav, setFilterFav] = useState(false);
   const [cart, setCart] = useState<CartLine[]>([]);
   const [payment, setPayment] = useState<"cash" | "card" | "eftpos">("cash");
   const [checkout, setCheckout] = useState(false);
@@ -321,6 +329,23 @@ function SellTab() {
     }, 250);
     return () => clearTimeout(t);
   }, [search]);
+
+  /* Load the merchant's pinned favourites once. */
+  useEffect(() => {
+    void mpFetch<{ productIds: number[] }>("/favourites").then((r) => {
+      if (r.ok && r.data) setFavIds(new Set(r.data.productIds));
+    });
+  }, []);
+
+  /* Toggle a favourite and persist the new list immediately. */
+  const toggleFav = (id: number) => {
+    setFavIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      void mpFetch("/favourites", { method: "PUT", body: JSON.stringify({ productIds: [...next] }) });
+      return next;
+    });
+  };
 
   /* Customer search (server requires ≥2 chars). */
   useEffect(() => {
@@ -376,7 +401,7 @@ function SellTab() {
 
   return (
     <div className="flex flex-col">
-      <div className="sticky top-[49px] z-[5] bg-muted/20 px-3 py-2">
+      <div className="sticky top-[49px] z-[5] bg-muted/20 px-3 py-2 space-y-2">
         <div className="relative">
           <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2" />
           <input
@@ -385,29 +410,62 @@ function SellTab() {
             className="w-full rounded-xl border bg-background pl-9 pr-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary"
           />
         </div>
+        <div className="flex gap-1.5">
+          <button
+            onClick={() => setFilterFav(false)}
+            className={cn("flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors",
+              !filterFav ? "bg-primary text-primary-foreground" : "bg-background border text-muted-foreground")}
+          >
+            All
+          </button>
+          <button
+            onClick={() => setFilterFav(true)}
+            className={cn("flex-1 rounded-lg py-1.5 text-xs font-semibold transition-colors flex items-center justify-center gap-1",
+              filterFav ? "bg-primary text-primary-foreground" : "bg-background border text-muted-foreground")}
+          >
+            <Star className={cn("w-3.5 h-3.5", filterFav && "fill-current")} />
+            Favourites{favIds.size ? ` (${favIds.size})` : ""}
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 p-3">
-        {products == null
-          ? <div className="col-span-full py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
-          : products.length === 0
-            ? <p className="col-span-full py-10 text-center text-sm text-muted-foreground">No products found.</p>
-            : products.map((p) => (
-              <button key={p.id} onClick={() => addToCart(p)}
-                className="rounded-xl border bg-background p-2.5 text-left active:scale-95 transition-transform">
+        {(() => {
+          if (products == null) return <div className="col-span-full py-10 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
+          const shown = filterFav ? products.filter((p) => favIds.has(p.id)) : products;
+          if (shown.length === 0) {
+            return (
+              <p className="col-span-full py-10 text-center text-sm text-muted-foreground">
+                {filterFav ? "No favourites yet — tap the star on a product to pin it here." : "No products found."}
+              </p>
+            );
+          }
+          return shown.map((p) => (
+            <div key={p.id} className="relative">
+              <button onClick={() => addToCart(p)}
+                className="w-full rounded-xl border bg-background p-2.5 text-left active:scale-95 transition-transform">
                 {p.imageUrl
                   ? <img src={p.imageUrl} alt="" className="w-full h-16 object-cover rounded-lg mb-1.5" />
                   : <div className="w-full h-16 rounded-lg bg-muted mb-1.5 flex items-center justify-center"><Package className="w-5 h-5 text-muted-foreground" /></div>}
                 <p className="text-xs font-medium leading-tight line-clamp-2">{p.name}</p>
                 <p className="text-sm font-semibold mt-0.5">{money(p.price)}</p>
               </button>
-            ))}
+              <button
+                onClick={() => toggleFav(p.id)}
+                aria-label={favIds.has(p.id) ? "Remove from favourites" : "Add to favourites"}
+                className="absolute top-1 right-1 w-7 h-7 rounded-full bg-background/90 border flex items-center justify-center shadow-sm active:scale-90 transition-transform"
+              >
+                <Star className={cn("w-3.5 h-3.5", favIds.has(p.id) ? "fill-amber-400 text-amber-400" : "text-muted-foreground")} />
+              </button>
+            </div>
+          ));
+        })()}
       </div>
 
       {/* Cart bar */}
       {count > 0 && !checkout && (
         <button onClick={() => setCheckout(true)}
-          className="fixed bottom-[60px] inset-x-3 z-[8] rounded-xl bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between shadow-lg">
+          className="fixed bottom-[76px] inset-x-3 z-[8] rounded-xl bg-primary text-primary-foreground px-4 py-3 flex items-center justify-between shadow-lg">
           <span className="flex items-center gap-2 text-sm font-medium"><ShoppingCart className="w-4 h-4" /> {count} item{count !== 1 ? "s" : ""}</span>
           <span className="text-sm font-bold">{money(total)} · Checkout</span>
         </button>
