@@ -67,8 +67,10 @@ import {
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
-  Archive, X as XIcon, Upload, Hash,
+  Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { publicProductUrl } from "@/lib/public-url";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -513,11 +515,13 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   // must be supplied per-print — otherwise the label falls back to the sample
   // placeholder text baked into the renderer ("Product Name", "Beverages", "$5.50").
   const productFields: Record<string, string> = {
-    productName: product.name,
-    sku:         product.sku     ?? "",
-    price:       product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
-    barcode:     product.barcode ?? "",
-    category:    product.category?.name ?? "",
+    productName:  product.name,
+    sku:          product.sku     ?? "",
+    price:        product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
+    barcode:      product.barcode ?? "",
+    category:     product.category?.name ?? "",
+    // Public product-page URL for the optional QR toggle on the product sticker.
+    productQrUrl: publicProductUrl((merchant as { username?: string | null } | undefined)?.username, product.id),
   };
 
   const resolvedFields = defaultTpl
@@ -638,6 +642,108 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   );
 }
 
+/* ─── Product QR code dialog ─────────────────────────────────────────────────
+ * Shows a QR code that opens the public, customer-facing product page when
+ * scanned. The merchant's public username forms the URL namespace; without one
+ * there's no public page, so we prompt the user to set a store address. */
+
+function ProductQrDialog({ open, onOpenChange, product }: {
+  open: boolean;
+  onOpenChange: (v: boolean) => void;
+  product: Product | null;
+}) {
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const [, navigate]       = useLocation();
+  const [copied, setCopied] = useState(false);
+  const qrRef = useRef<SVGSVGElement>(null);
+
+  if (!product) return null;
+
+  const username = (merchant as { username?: string | null } | undefined)?.username ?? "";
+  const url = publicProductUrl(username, product.id);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Rasterise the inline SVG to a PNG for download (mirrors the loyalty-QR
+  // pattern) so the code can be dropped into print artwork or shared.
+  const handleDownload = () => {
+    const svg = qrRef.current;
+    if (!svg) return;
+    const canvas = document.createElement("canvas");
+    const size = 600;
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    const svgBlob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
+    const objUrl = URL.createObjectURL(svgBlob);
+    img.onload = () => {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(objUrl);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `${product.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-qr.png`;
+      a.click();
+    };
+    img.src = objUrl;
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-sm">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            <QrCode className="w-4 h-4" /> Product QR Code
+          </DialogTitle>
+        </DialogHeader>
+
+        {!username ? (
+          <div className="text-center py-6 space-y-3">
+            <QrCode className="w-10 h-10 text-muted-foreground/30 mx-auto" />
+            <p className="font-medium">Set a store address first</p>
+            <p className="text-sm text-muted-foreground">
+              Product QR codes link to your public store address. Add a business
+              username in Business settings to enable customer-facing product pages.
+            </p>
+            <Button size="sm" variant="outline"
+              onClick={() => { onOpenChange(false); navigate("/management/settings-integrations/business-details"); }}>
+              Open Business settings
+            </Button>
+          </div>
+        ) : (
+          <div className="flex flex-col items-center gap-4 py-2">
+            <p className="text-sm text-muted-foreground text-center">
+              Scan to open the customer-facing page for <span className="font-medium text-foreground">{product.name}</span>.
+            </p>
+            <div className="p-3 bg-white rounded-xl border-2 border-gray-100">
+              <QRCodeSVG ref={qrRef} value={url} size={200} level="M" />
+            </div>
+            <p className="text-xs text-muted-foreground text-center break-all max-w-[18rem]">{url}</p>
+            <div className="grid grid-cols-2 gap-2 w-full">
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy}>
+                {copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownload}>
+                <Download className="w-3.5 h-3.5" /> Download
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5 col-span-2"
+                onClick={() => window.open(url, "_blank", "noopener")}>
+                <ExternalLink className="w-3.5 h-3.5" /> Open page
+              </Button>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Product detail dialog ──────────────────────────────────────────────── */
 
 function ProductDetailDialog({
@@ -651,6 +757,7 @@ function ProductDetailDialog({
 }) {
   const [tab, setTab]                         = useState<DetailTab>("details");
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
+  const [qrOpen, setQrOpen]                     = useState(false);
   const [confirmDelete, setConfirmDelete]       = useState(false);
   const { data: floorPlanData }                 = useGetFloorPlan();
 
@@ -913,6 +1020,9 @@ function ProductDetailDialog({
             </Button>
           </div>
           <div className="flex gap-2 items-center">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setQrOpen(true)}>
+              <QrCode className="w-3.5 h-3.5" /> QR Code
+            </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
             </Button>
@@ -920,6 +1030,7 @@ function ProductDetailDialog({
         </DialogFooter>
       </DialogContent>
       <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
+      <ProductQrDialog open={qrOpen} onOpenChange={setQrOpen} product={product} />
     </Dialog>
     <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
       <AlertDialogContent>

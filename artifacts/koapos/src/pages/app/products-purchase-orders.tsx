@@ -14,9 +14,11 @@ import {
   useConfirmUpload,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
+  useGetMerchant,
   ApiError,
   type PurchaseOrder,
 } from "@workspace/api-client-react";
+import { publicProductUrl } from "@/lib/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -157,6 +159,8 @@ export default function ProductsPurchaseOrdersPage() {
     return m;
   }, [allProductsData]);
   const { printStickersBatch, defaultTemplateFor, businessName } = useStickerPrinter();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const merchantUsername = (merchant as { username?: string | null } | undefined)?.username;
   const hasProductTemplate = !!defaultTemplateFor("product");
 
   /* Build the sale-ticket print jobs for a PO: one label per received unit of
@@ -179,6 +183,7 @@ export default function ProductsPurchaseOrdersPage() {
           price: product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
           barcode: product.barcode ?? "",
           category: product.category?.name ?? "",
+          productQrUrl: publicProductUrl(merchantUsername, product.id),
         },
       });
     }

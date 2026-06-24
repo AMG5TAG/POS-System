@@ -8,16 +8,29 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { validateABN } from "@/lib/abn";
-import { Building2, Receipt, Package, PartyPopper, ArrowRight, Loader2, ChevronLeft } from "lucide-react";
+import { Building2, Receipt, Globe, Package, PartyPopper, ArrowRight, Loader2, ChevronLeft } from "lucide-react";
 import { Stepper } from "@/components/ui/stepper";
 import { cn } from "@/lib/utils";
 
 const STEPS = [
   { icon: Building2, title: "Your Business",       desc: "Confirm your business name and ABN" },
   { icon: Receipt,   title: "Tax Settings",        desc: "Set your GST rate" },
+  { icon: Globe,     title: "Store Address",       desc: "Claim your public web address" },
   { icon: Package,   title: "Add a Product",       desc: "Add your first product (optional)" },
   { icon: PartyPopper, title: "You're all set!",   desc: "Your account is ready to use" },
 ];
+
+// Mirror of the username rules in settings-account.tsx so the address claimed
+// here is accepted by the same PATCH /merchants/me validation.
+const USERNAME_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
+function formatUsernameInput(raw: string) {
+  return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
+}
+/** Derive a valid starter username from the business name, or "" if too short. */
+function suggestUsername(businessName: string): string {
+  const u = formatUsernameInput(businessName).replace(/^-+/, "").replace(/-+$/, "");
+  return u.length >= 3 ? u : "";
+}
 
 async function completeOnboarding() {
   const res = await fetch("/api/auth/onboarding/complete", { method: "PATCH", credentials: "include" });
@@ -56,10 +69,17 @@ export function OnboardingWizard() {
   const [abn, setAbn] = useState("");
   const abnInvalid = abn.length > 0 && !validateABN(abn);
 
-  // Step 2 state
+  // Step 2 (Tax) state
   const [gstRate, setGstRate] = useState("10");
 
-  // Step 3 state
+  // Step 3 (Store Address) state
+  const [storeUsername, setStoreUsername] = useState("");
+  const usernameValid = storeUsername.length === 0 || USERNAME_RE.test(storeUsername);
+  const usernameLongEnough = storeUsername.length >= 3;
+  const usernameBlocksNext = storeUsername.length > 0 && (!usernameValid || !usernameLongEnough);
+  const PORTAL_BASE = `${window.location.hostname}/b/`;
+
+  // Step 4 (Add a Product) state
   const [productName, setProductName] = useState("");
   const [productPrice, setProductPrice] = useState("");
   const [skipProduct, setSkipProduct] = useState(false);
@@ -83,6 +103,10 @@ export function OnboardingWizard() {
         }
       } catch { toast.error("Failed to save business details"); setSaving(false); return; }
       setSaving(false);
+      // Pre-fill a starter store address from the business name so most merchants
+      // just confirm one — fixing the "no public username" gap that leaves product
+      // QR codes, the portal and the online store without a public address.
+      setStoreUsername((cur) => cur || suggestUsername(businessName.trim()));
       setStep(1);
     } else if (step === 1) {
       setSaving(true);
@@ -90,13 +114,40 @@ export function OnboardingWizard() {
       setSaving(false);
       setStep(2);
     } else if (step === 2) {
+      // Claim the public username. Saving is best-effort-required: a valid entry
+      // is saved via the same endpoint Settings uses (with its uniqueness check);
+      // an empty entry is allowed through so onboarding is never hard-blocked.
+      const u = storeUsername.trim();
+      if (u) {
+        if (!USERNAME_RE.test(u)) {
+          toast.error("Choose a valid store address", { description: "3–30 lowercase letters, numbers and hyphens." });
+          return;
+        }
+        setSaving(true);
+        try {
+          await updateMerchant.mutateAsync({ data: { username: u } });
+          await qc.invalidateQueries({ queryKey: getGetMeQueryKey() });
+        } catch (err) {
+          setSaving(false);
+          const resp = err as { response?: { status?: number; data?: { error?: string } } };
+          if (resp?.response?.status === 409) {
+            toast.error("That store address is taken", { description: "Please choose another." });
+          } else {
+            toast.error("Couldn't save store address", { description: resp?.response?.data?.error ?? "Please try again." });
+          }
+          return;
+        }
+        setSaving(false);
+      }
+      setStep(3);
+    } else if (step === 3) {
       if (!skipProduct && productName.trim() && productPrice) {
         setSaving(true);
         try { await createProduct(productName.trim(), productPrice); } catch { /* non-critical */ }
         setSaving(false);
       }
-      setStep(3);
-    } else if (step === 3) {
+      setStep(4);
+    } else if (step === 4) {
       setSaving(true);
       try {
         await completeOnboarding();
@@ -174,7 +225,37 @@ export function OnboardingWizard() {
             </div>
           )}
 
-          {step === 2 && !skipProduct && (
+          {step === 2 && (
+            <div className="space-y-3">
+              <div>
+                <Label>Store Address</Label>
+                <div className="mt-1 flex items-stretch rounded-md border overflow-hidden focus-within:ring-1 focus-within:ring-ring">
+                  <span className="px-2.5 flex items-center text-xs text-muted-foreground bg-muted/50 border-r whitespace-nowrap">{PORTAL_BASE}</span>
+                  <input
+                    value={storeUsername}
+                    onChange={(e) => setStoreUsername(formatUsernameInput(e.target.value))}
+                    placeholder="your-store"
+                    className="flex-1 min-w-0 px-2.5 py-2 text-sm bg-transparent outline-none"
+                    autoFocus
+                  />
+                </div>
+                {storeUsername.length > 0 && !usernameValid && (
+                  <p className="text-xs text-destructive mt-1">Use 3–30 lowercase letters, numbers and hyphens (start and end with a letter or number).</p>
+                )}
+                {storeUsername.length > 0 && usernameValid && usernameLongEnough && (
+                  <p className="text-xs text-muted-foreground mt-1">Your public page will be at <span className="font-medium text-foreground">{PORTAL_BASE}{storeUsername}</span></p>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                This is your public web address — used for product QR pages, your customer portal and online store. You can change it later in Settings → Account.
+              </p>
+              <Button variant="ghost" size="sm" className="text-muted-foreground" onClick={() => { setStoreUsername(""); setStep(3); }}>
+                Skip for now
+              </Button>
+            </div>
+          )}
+
+          {step === 3 && !skipProduct && (
             <>
               <div>
                 <Label>Product Name</Label>
@@ -190,7 +271,7 @@ export function OnboardingWizard() {
             </>
           )}
 
-          {step === 2 && skipProduct && (
+          {step === 3 && skipProduct && (
             <div className="flex flex-col items-center justify-center py-6 gap-2 text-muted-foreground">
               <Package className="w-8 h-8 opacity-30" />
               <p className="text-sm">You can add products anytime from the <strong>Products</strong> menu.</p>
@@ -198,7 +279,7 @@ export function OnboardingWizard() {
             </div>
           )}
 
-          {step === 3 && (
+          {step === 4 && (
             <div className="flex flex-col items-center justify-center py-6 gap-3 text-center">
               <PartyPopper className="w-12 h-12 text-primary" />
               <div>
@@ -214,10 +295,10 @@ export function OnboardingWizard() {
           <Button variant="ghost" size="sm" onClick={back} disabled={step === 0 || saving}>
             <ChevronLeft className="w-4 h-4 mr-1" /> Back
           </Button>
-          <Button onClick={next} disabled={saving || (step === 0 && abnInvalid)}>
+          <Button onClick={next} disabled={saving || (step === 0 && abnInvalid) || (step === 2 && usernameBlocksNext)}>
             {saving ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Saving…</> :
-             step === 3 ? "Go to Dashboard →" :
-             <><ArrowRight className="w-4 h-4 mr-1" /> {step === 2 && !skipProduct && productName ? "Add & Continue" : "Continue"}</>}
+             step === 4 ? "Go to Dashboard →" :
+             <><ArrowRight className="w-4 h-4 mr-1" /> {step === 2 && storeUsername ? "Claim & Continue" : step === 3 && !skipProduct && productName ? "Add & Continue" : "Continue"}</>}
           </Button>
         </div>
       </DialogContent>

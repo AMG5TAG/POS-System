@@ -25,6 +25,7 @@ import serviceJobTimeRouter from "./service-job-time";
 import partCompatibilityRouter from "./part-compatibility";
 import tradeInsRouter from "./trade-ins";
 import publicBookingRouter from "./public-booking";
+import productsPublicRouter from "./products-public";
 import servicePlansRouter from "./service-plans";
 import scheduledReportsRouter from "./scheduled-reports";
 import locationsRouter from "./locations";
@@ -165,6 +166,7 @@ router.use(publicBookingRouter);
 // below). A pathless requireAuth in a root-mounted sub-router runs for every
 // later request, so mounting these after it 401s their public endpoints.
 router.use(portalRouter);
+router.use(productsPublicRouter);
 router.use(techRouter);
 router.use(mobilePosRouter);
 router.use(dashboardAppPublicRouter);

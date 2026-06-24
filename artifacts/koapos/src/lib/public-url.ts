@@ -33,3 +33,18 @@ export function techAppJobUrl(username: string | null | undefined, jobId: number
     ? `${origin}/b/${encodeURIComponent(username)}/t/techapp?job=${jobId}`
     : `${origin}/service-jobs/${jobId}`;
 }
+
+/**
+ * Public, customer-facing product page (/b/:username/p/:productId). This is the
+ * target encoded into a product's QR code — scanning it opens a web page showing
+ * the product's details. Requires a business username (the public URL namespace);
+ * when none is configured there is no public page, so this returns "".
+ *
+ * Single source of truth for the product QR target used on product stickers and
+ * the product QR dialog.
+ */
+export function publicProductUrl(username: string | null | undefined, productId: number | string): string {
+  return username
+    ? `${publicOrigin()}/b/${encodeURIComponent(username)}/p/${productId}`
+    : "";
+}

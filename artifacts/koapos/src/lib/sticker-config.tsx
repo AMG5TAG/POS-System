@@ -175,6 +175,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showPrice",       label: "Price",         defaultValue: "true",  type: "toggle" },
       { key: "showCategory",    label: "Category",      defaultValue: "true",  type: "toggle" },
       { key: "showBarcode",     label: "Barcode",       defaultValue: "true",  type: "toggle" },
+      { key: "showProductQr",   label: "Product QR",    defaultValue: "false", type: "toggle" },
       { key: "showBizName",     label: "Business Name", defaultValue: "true",  type: "toggle" },
     ],
   },
@@ -397,6 +398,19 @@ const SAMPLE_SERVICE_QR_URL = `${publicOrigin()}/b/demo/t/techapp?job=0`;
  *  when no real customer has been supplied yet. */
 const SAMPLE_CUSTOMER_QR = "CUS-0042";
 
+/** Sample public product URL used to render a representative QR in editor
+ *  previews when no real product has been supplied yet. */
+const SAMPLE_PRODUCT_QR = `${publicOrigin()}/b/demo/p/0`;
+
+/**
+ * The value a product sticker encodes into its QR code: the public, customer-
+ * facing product page URL the print path supplies (see publicProductUrl). A
+ * shopper scans it to view the product's details online.
+ */
+function productQrValue(f: (k: string) => string): string {
+  return f("productQrUrl");
+}
+
 /**
  * The value a customer sticker encodes into its QR code. Prefers an explicit
  * value the print entry point supplies, then the customer ID, then the loyalty
@@ -482,6 +496,13 @@ export function LabelPreview({
     ? qrDataUrl(customerQrValue(f) || SAMPLE_CUSTOMER_QR)
     : "";
 
+  // Product QR — product stickers can carry a QR that opens the public product
+  // page when scanned. Falls back to a sample URL so the editor preview always
+  // shows a representative code.
+  const productQrSrc = type.id === "product" && show("showProductQr")
+    ? qrDataUrl(productQrValue(f) || SAMPLE_PRODUCT_QR)
+    : "";
+
   const labelW = rotated ? finalH : finalW;
   const labelH = rotated ? finalW : finalH;
 
@@ -525,6 +546,21 @@ export function LabelPreview({
     <img
       src={customerQrSrc}
       alt="customer qr"
+      style={{
+        width: Math.max(22, finalScale * 11),
+        height: Math.max(22, finalScale * 11),
+        objectFit: "contain",
+        flexShrink: 0,
+        alignSelf: "center",
+        imageRendering: "pixelated",
+      }}
+    />
+  ) : null;
+
+  const productQrImg = productQrSrc ? (
+    <img
+      src={productQrSrc}
+      alt="product qr"
       style={{
         width: Math.max(22, finalScale * 11),
         height: Math.max(22, finalScale * 11),
@@ -590,31 +626,34 @@ export function LabelPreview({
         <div className="flex-1 min-h-0 flex flex-col justify-between">
 
         {type.id === "product" && (
-          <>
-            <div>
-              {show("showProductName") && (
-                <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
-                  {f("productName") || "Product Name"}
-                </div>
-              )}
-              {show("showCategory") && (
-                <div className="text-gray-400 truncate">{f("category") || "Beverages"}</div>
-              )}
-              {show("showSku") && (
-                <div className="text-gray-400">{f("sku") || "BEV-001"}</div>
-              )}
+          <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
+            <div className="flex-1 min-w-0 flex flex-col justify-between">
+              <div>
+                {show("showProductName") && (
+                  <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
+                    {f("productName") || "Product Name"}
+                  </div>
+                )}
+                {show("showCategory") && (
+                  <div className="text-gray-400 truncate">{f("category") || "Beverages"}</div>
+                )}
+                {show("showSku") && (
+                  <div className="text-gray-400">{f("sku") || "BEV-001"}</div>
+                )}
+              </div>
+              <div>
+                {show("showPrice") && (
+                  <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: accent }}>
+                    {f("price") || "$5.50"}
+                  </div>
+                )}
+                {show("showBizName") && (
+                  <div className="text-gray-400 text-right truncate">{businessName}</div>
+                )}
+              </div>
             </div>
-            <div>
-              {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: accent }}>
-                  {f("price") || "$5.50"}
-                </div>
-              )}
-              {show("showBizName") && (
-                <div className="text-gray-400 text-right truncate">{businessName}</div>
-              )}
-            </div>
-          </>
+            {productQrImg}
+          </div>
         )}
 
         {type.id === "customer" && (
@@ -944,11 +983,18 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const customerQrSrc = typeId === "customer" && show("showCustomerQr")
     ? qrDataUrl(customerQrValue(f) || SAMPLE_CUSTOMER_QR)
     : "";
+  // Product QR — product stickers can carry a QR that opens the public product
+  // page when scanned (the print path supplies the real URL). Falls back to a
+  // sample so a test print still shows it, matching the on-screen preview.
+  const productQrSrc = typeId === "product" && show("showProductQr")
+    ? qrDataUrl(productQrValue(f) || SAMPLE_PRODUCT_QR)
+    : "";
   const qrMm = Math.max(8, Math.min(shorter * 0.7, pageH * 0.78));
 
   const inner = (() => {
     switch (typeId) {
-      case "product": return `
+      case "product": {
+        const productText = `
         <div>
           ${show("showProductName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
           ${show("showCategory") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
@@ -958,6 +1004,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
           ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
+        if (!productQrSrc) return productText;
+        return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-self:stretch">${productText}</div>
+          <img src="${productQrSrc}" alt="product qr" style="width:${qrMm.toFixed(1)}mm;height:${qrMm.toFixed(1)}mm;object-fit:contain;flex-shrink:0;image-rendering:pixelated"/>
+        </div>`;
+      }
 
       case "customer": {
         const customerText = `

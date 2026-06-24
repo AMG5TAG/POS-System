@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetMerchant, useListProducts, Product } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { publicProductUrl } from "@/lib/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -106,6 +107,9 @@ export default function ManagementStickersPage() {
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [tplName, setTplName] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // When saving a new template whose name matches an existing one, holds that
+  // template's id so the user can choose to overwrite it or save a separate copy.
+  const [overwriteCandidateId, setOverwriteCandidateId] = useState<string | null>(null);
 
   // Product search
   const [productQuery,     setProductQuery]     = useState("");
@@ -192,24 +196,45 @@ export default function ManagementStickersPage() {
     setShowSaveForm(true);
   };
 
-  const saveTemplate = () => {
-    const name = tplName.trim();
-    if (!name) { toast.error("Please enter a template name."); return; }
+  // An existing template of the current type whose name matches the one typed
+  // (case-insensitive). Used to offer "overwrite vs save new" on a name clash.
+  const findNameClash = (name: string) =>
+    templates.find(
+      (t) => t.typeId === selectedTypeId && t.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+
+  // Persist the current label as a template — either overwriting an existing one
+  // (when `overwriteId` is given) or creating a new one.
+  const persistTemplate = (overwriteId?: string) => {
     const data = {
-      name,
+      name: tplName.trim(),
       typeId: selectedTypeId,
       sizeId: selectedSizeId,
       fields: templateFieldsForSave(),
     };
-    if (editingTemplateId) {
-      update(editingTemplateId, data);
+    if (overwriteId) {
+      update(overwriteId, data);
+      setEditingTemplateId(overwriteId);
       toast.success("Template updated.");
     } else {
       const tpl = create(data);
       setEditingTemplateId(tpl.id);
       toast.success("Template saved.");
     }
+    setOverwriteCandidateId(null);
     setShowSaveForm(false);
+  };
+
+  const saveTemplate = () => {
+    const name = tplName.trim();
+    if (!name) { toast.error("Please enter a template name."); return; }
+    // Editing an existing template just updates it in place.
+    if (editingTemplateId) { persistTemplate(editingTemplateId); return; }
+    // Saving a new template: if the name collides with an existing one of the
+    // same type, ask whether to overwrite it or keep both.
+    const clash = findNameClash(name);
+    if (clash) { setOverwriteCandidateId(clash.id); return; }
+    persistTemplate();
   };
 
   const duplicateTemplate = (tpl: { name: string; typeId: string; sizeId: string; fields: Record<string, string> }) => {
@@ -230,11 +255,13 @@ export default function ManagementStickersPage() {
     setProductQuery(p.name);
     setShowProdDropdown(false);
     const updates: Record<string, string> = {
-      productName: p.name,
-      sku:         p.sku         ?? "",
-      price:       p.price != null ? `$${Number(p.price).toFixed(2)}` : "",
-      barcode:     p.barcode     ?? "",
-      category:    (p as Product & { category?: { name: string } }).category?.name ?? "",
+      productName:  p.name,
+      sku:          p.sku         ?? "",
+      price:        p.price != null ? `$${Number(p.price).toFixed(2)}` : "",
+      barcode:      p.barcode     ?? "",
+      category:     (p as Product & { category?: { name: string } }).category?.name ?? "",
+      // Public product-page URL for the optional QR toggle on the product sticker.
+      productQrUrl: publicProductUrl((merchant as { username?: string | null } | undefined)?.username, p.id),
     };
     setFields((prev) => ({ ...prev, [selectedTypeId]: { ...prev[selectedTypeId], ...updates } }));
   };
@@ -406,7 +433,7 @@ export default function ManagementStickersPage() {
             </Popover>
 
             {/* Save current label as a (new or updated) template */}
-            <Popover open={showSaveForm} onOpenChange={(o) => { if (o && !editingTemplateId) setTplName(""); setShowSaveForm(o); }}>
+            <Popover open={showSaveForm} onOpenChange={(o) => { if (o && !editingTemplateId) setTplName(""); if (!o) setOverwriteCandidateId(null); setShowSaveForm(o); }}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <Save className="w-3.5 h-3.5" />
@@ -420,22 +447,38 @@ export default function ManagementStickersPage() {
                 <Input
                   autoFocus
                   value={tplName}
-                  onChange={(e) => setTplName(e.target.value)}
+                  onChange={(e) => { setTplName(e.target.value); setOverwriteCandidateId(null); }}
                   onKeyDown={(e) => { if (e.key === "Enter") saveTemplate(); }}
                   placeholder="Template name…"
                   className="h-8 text-sm"
                 />
-                <div className="flex items-center justify-between gap-2">
-                  {editingTemplateId ? (
-                    <button onClick={() => { setEditingTemplateId(null); setTplName(""); }}
-                      className="text-[11px] text-muted-foreground hover:underline inline-flex items-center gap-0.5">
-                      <Plus className="w-3 h-3" /> Save as new
-                    </button>
-                  ) : <span />}
-                  <Button size="sm" className="gap-1.5 h-8" onClick={saveTemplate}>
-                    <Save className="w-3.5 h-3.5" /> {editingTemplateId ? "Update" : "Save"}
-                  </Button>
-                </div>
+                {overwriteCandidateId ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-amber-600">
+                      A {selectedType.label} template named “{tplName.trim()}” already exists. Overwrite it or save a new one?
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="h-8 flex-1" onClick={() => persistTemplate(overwriteCandidateId)}>
+                        Overwrite
+                      </Button>
+                      <Button size="sm" className="gap-1.5 h-8 flex-1" onClick={() => persistTemplate()}>
+                        <Plus className="w-3.5 h-3.5" /> Save new
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    {editingTemplateId ? (
+                      <button onClick={() => { setEditingTemplateId(null); setTplName(""); }}
+                        className="text-[11px] text-muted-foreground hover:underline inline-flex items-center gap-0.5">
+                        <Plus className="w-3 h-3" /> Save as new
+                      </button>
+                    ) : <span />}
+                    <Button size="sm" className="gap-1.5 h-8" onClick={saveTemplate}>
+                      <Save className="w-3.5 h-3.5" /> {editingTemplateId ? "Update" : "Save"}
+                    </Button>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
 

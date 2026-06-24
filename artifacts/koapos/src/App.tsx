@@ -157,6 +157,7 @@ const ManagementGiftCardsPage = lazyWithRetry(() => import("@/pages/app/manageme
 const MarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/marketing-referrals"));
 const LandingPagePublicView = lazyWithRetry(() => import("@/pages/marketing/landing-page-public"));
 const OnlineStorePublicView = lazyWithRetry(() => import("@/pages/marketing/online-store-public"));
+const ProductPublicView = lazyWithRetry(() => import("@/pages/marketing/product-public"));
 const PosEodPage = lazyWithRetry(() => import("@/pages/app/pos-eod"));
 const ManagementReportsBasPage = lazyWithRetry(() => import("@/pages/app/management-reports-bas"));
 const ManagementReportsVoidAuditPage = lazyWithRetry(() => import("@/pages/app/management-reports-void-audit"));
@@ -729,6 +730,9 @@ function Router() {
 
       {/* Public online store (no auth required) */}
       <Route path="/b/:businessUsername/o/:storeSlug" component={OnlineStorePublicView} />
+
+      {/* Public product page (no auth required) — target of a product QR code */}
+      <Route path="/b/:businessUsername/p/:productId" component={ProductPublicView} />
 
       {/* Marketing section */}
       <Route path="/marketing/overview">
