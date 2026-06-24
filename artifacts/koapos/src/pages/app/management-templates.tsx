@@ -102,6 +102,7 @@ export interface TplOpts {
   sendForLayby:         boolean;
   printCustomerCopy:    boolean;
   showBarcode:          boolean;
+  showSerialNumber:     boolean;
   // Service Sheet
   showCustomerDetails:  boolean;
   showDeviceDetails:    boolean;
@@ -144,6 +145,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false, socialIconBrandColors: false,
   showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
   sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
+  showSerialNumber: true,
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
@@ -245,6 +247,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
       { section: "Body",   key: "showPaymentMethods", label: "Show Payment Method", type: "toggle" },
       { section: "Body",   key: "showLoyaltyEarned",  label: "Show Loyalty Earned", type: "toggle" },
+      { section: "Body",   key: "showSerialNumber",   label: "Show Serial Numbers", type: "toggle", hint: "Prints the S/N or IMEI under each product line" },
       { section: "Body",   key: "showBarcode",        label: "Show Sale Barcode",   type: "toggle", hint: "Scannable barcode to retrieve this sale" },
       { section: "Body",   key: "showCustomerQr",     label: "Show Customer QR",    type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Body",   key: "loyaltyQrText",      label: "QR Scan Label",       type: "text",   placeholder: "Scan to view customer loyalty profile" },
@@ -267,6 +270,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",       type: "toggle" },
+      { section: "Body",     key: "showSerialNumber",        label: "Show Serial Numbers",       type: "toggle", hint: "Prints the S/N or IMEI under each product line" },
       { section: "Body",     key: "showBarcode",             label: "Show Sale Barcode",         type: "toggle", hint: "Scannable barcode to retrieve this sale" },
       { section: "Payment",  key: "showPaymentMethods",      label: "Show Accepted Methods",     type: "toggle", hint: "Shows methods enabled in POS Registers" },
       { section: "Payment",  key: "paymentSectionHeading",   label: "Payment Heading",           type: "text",     placeholder: "PAYMENT DETAILS", quickCodes: true },
@@ -390,6 +394,17 @@ function buildQuickCodeGroups(businessName: string, abn: string, email: string, 
         { code: "{{transaction.items}}",          label: "Item Count",     example: "3 items"     },
         { code: "{{transaction.payment_method}}", label: "Payment Method", example: "EFTPOS"      },
         { code: "{{transaction.change}}",         label: "Change Given",   example: "$0.50"       },
+      ],
+    },
+    {
+      id: "document", label: "Document & Date", icon: FileText,
+      color: "text-slate-700", chipBg: "bg-slate-50 border-slate-200 hover:bg-slate-100 text-slate-700",
+      codes: [
+        { code: "{{invoice.number}}",     label: "Invoice Number",     example: "INV-0042"                            },
+        { code: "{{service.number}}",     label: "Service Number",     example: "SVC-0031"                            },
+        { code: "{{appointment.number}}", label: "Appointment Number", example: "APT-0007"                            },
+        { code: "{{date.today}}",         label: "Today's Date",       example: new Date().toLocaleDateString("en-AU") },
+        { code: "{{time.now}}",           label: "Today's Time",       example: "09:30 AM"                            },
       ],
     },
     {

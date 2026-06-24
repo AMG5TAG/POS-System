@@ -421,6 +421,45 @@ function customerQrValue(f: (k: string) => string): string {
   return f("customerQrValue") || f("customerId") || f("loyaltyNo");
 }
 
+/* ─── Per-field font size ─────────────────────────────────────────────────────
+ * Each text option on a label can be sized independently. The chosen scale is a
+ * plain multiplier (1 = the field's default size) persisted alongside the field
+ * toggles under a `fs_<key>` key, so it rides through the same template save /
+ * load / print path without a schema change. Both the on-screen preview and the
+ * print HTML multiply the field's base size by this scale. */
+
+/** Font-size choices offered per option in the editor (label → scale). */
+export const FONT_SIZE_OPTIONS: { label: string; value: string }[] = [
+  { label: "XS", value: "0.7" },
+  { label: "S",  value: "0.85" },
+  { label: "M",  value: "1" },
+  { label: "L",  value: "1.25" },
+  { label: "XL", value: "1.5" },
+];
+
+/** Toggle options that don't render text (images, codes, layout switches) and so
+ *  have no font size to set. */
+const NON_TEXT_FONT_KEYS = new Set([
+  "showBarcode", "showLogo", "showServiceQr", "showCustomerQr", "showProductQr", "splitJobNo",
+]);
+
+/** Whether an option key carries text the user can resize. Used by the editor to
+ *  decide whether to show a font-size control next to the toggle. */
+export function fieldHasFontSize(field: StickerField): boolean {
+  return field.type !== "text" && !NON_TEXT_FONT_KEYS.has(field.key);
+}
+
+/** The key under which a field's font scale is stored in the template fields. */
+export function fontScaleKey(fieldKey: string): string {
+  return `fs_${fieldKey}`;
+}
+
+/** Read a field's font scale (1 when unset or invalid). */
+function fieldFontScale(f: (k: string) => string, fieldKey: string): number {
+  const v = parseFloat(f(fontScaleKey(fieldKey)));
+  return Number.isFinite(v) && v > 0 ? v : 1;
+}
+
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
 export function LabelPreview({
@@ -470,6 +509,11 @@ export function LabelPreview({
   const f = (k: string) => fields[k] ?? "";
   // Show helpers — default "true" unless explicitly "false"
   const show = (k: string) => f(k) !== "false";
+
+  // Per-field font size: base multiplier × the user's chosen scale for that
+  // option, floored so small sizes stay legible on screen.
+  const pSize = (k: string, mult: number, min: number) =>
+    Math.max(min, finalScale * mult * fieldFontScale(f, k));
 
   // Colour mode — black & white by default. In B&W every accent prints black so
   // the label renders cleanly on a thermal/mono printer; "color" keeps the brand
@@ -606,7 +650,7 @@ export function LabelPreview({
   const websiteEl = show("showWebsite") && website ? (
     <div
       className="text-gray-400 truncate"
-      style={{ fontSize: Math.max(6, finalScale * 2.2), lineHeight: 1.2 }}
+      style={{ fontSize: pSize("showWebsite", 2.2, 6), lineHeight: 1.2 }}
     >
       {website}
     </div>
@@ -630,25 +674,25 @@ export function LabelPreview({
             <div className="flex-1 min-w-0 flex flex-col justify-between">
               <div>
                 {show("showProductName") && (
-                  <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
+                  <div className="font-bold truncate" style={{ fontSize: pSize("showProductName", 3.2, 8) }}>
                     {f("productName") || "Product Name"}
                   </div>
                 )}
                 {show("showCategory") && (
-                  <div className="text-gray-400 truncate">{f("category") || "Beverages"}</div>
+                  <div className="text-gray-400 truncate" style={{ fontSize: pSize("showCategory", 2.8, 6) }}>{f("category") || "Beverages"}</div>
                 )}
                 {show("showSku") && (
-                  <div className="text-gray-400">{f("sku") || "BEV-001"}</div>
+                  <div className="text-gray-400" style={{ fontSize: pSize("showSku", 2.8, 6) }}>{f("sku") || "BEV-001"}</div>
                 )}
               </div>
               <div>
                 {show("showPrice") && (
-                  <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 3.8), color: accent }}>
+                  <div className="font-bold" style={{ fontSize: pSize("showPrice", 3.8, 9), color: accent }}>
                     {f("price") || "$5.50"}
                   </div>
                 )}
                 {show("showBizName") && (
-                  <div className="text-gray-400 text-right truncate">{businessName}</div>
+                  <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
                 )}
               </div>
             </div>
@@ -660,26 +704,26 @@ export function LabelPreview({
           <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
             <div className="flex-1 min-w-0 flex flex-col justify-between">
               {show("showCustomerName") && (
-                <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
+                <div className="font-bold truncate" style={{ fontSize: pSize("showCustomerName", 3.2, 8) }}>
                   {f("customerName") || "Sarah Johnson"}
                 </div>
               )}
               {show("showGroup") && (
-                <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: Math.max(6, finalScale * 2.2) }}>
+                <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: pSize("showGroup", 2.2, 6) }}>
                   {f("group") || "VIP Member"}
                 </div>
               )}
               {show("showCustomerId") && (
-                <div className="text-gray-500">{f("customerId") || "#CUS-0042"}</div>
+                <div className="text-gray-500" style={{ fontSize: pSize("showCustomerId", 2.8, 6) }}>{f("customerId") || "#CUS-0042"}</div>
               )}
               {show("showLoyaltyNo") && (
-                <div className="text-gray-500">{f("loyaltyNo") || "LYL-20491"}</div>
+                <div className="text-gray-500" style={{ fontSize: pSize("showLoyaltyNo", 2.8, 6) }}>{f("loyaltyNo") || "LYL-20491"}</div>
               )}
               {show("showPhone") && (
-                <div className="text-gray-500">{f("phone") || "(03) 9000 0000"}</div>
+                <div className="text-gray-500" style={{ fontSize: pSize("showPhone", 2.8, 6) }}>{f("phone") || "(03) 9000 0000"}</div>
               )}
               {show("showBizName") && (
-                <div className="text-gray-400 text-right truncate">{businessName}</div>
+                <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
               )}
             </div>
             {customerQrImg}
@@ -689,29 +733,29 @@ export function LabelPreview({
         {type.id === "return" && (
           <>
             {show("showReturnNo") && (
-              <div className="font-bold" style={{ color: danger, fontSize: Math.max(7, finalScale * 2.8) }}>
+              <div className="font-bold" style={{ color: danger, fontSize: pSize("showReturnNo", 2.8, 7) }}>
                 RETURN {f("returnNo") || "RTN-0089"}
               </div>
             )}
             {show("showItem") && (
-              <div className="font-medium truncate">{f("item") || "Defective Keyboard"}</div>
+              <div className="font-medium truncate" style={{ fontSize: pSize("showItem", 2.8, 6) }}>{f("item") || "Defective Keyboard"}</div>
             )}
             {show("showReason") && (
-              <div className="text-gray-500 truncate">{f("reason") || "Not as described"}</div>
+              <div className="text-gray-500 truncate" style={{ fontSize: pSize("showReason", 2.8, 6) }}>{f("reason") || "Not as described"}</div>
             )}
             {show("showStatus") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: danger, fontSize: Math.max(6, finalScale * 2.2) }}>
+              <div className="px-1 rounded text-white truncate" style={{ background: danger, fontSize: pSize("showStatus", 2.2, 6) }}>
                 {f("status") || "Awaiting Inspection"}
               </div>
             )}
             {show("showDate") && (
-              <div className="text-gray-400">{f("date") || "18/05/2026"}</div>
+              <div className="text-gray-400" style={{ fontSize: pSize("showDate", 2.8, 6) }}>{f("date") || "18/05/2026"}</div>
             )}
             {show("showCustomer") && (
-              <div className="text-gray-500 truncate">{f("customer") || "Sarah Johnson"}</div>
+              <div className="text-gray-500 truncate" style={{ fontSize: pSize("showCustomer", 2.8, 6) }}>{f("customer") || "Sarah Johnson"}</div>
             )}
             {show("showBizName") && (
-              <div className="text-gray-400 text-right truncate">{businessName}</div>
+              <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
             )}
           </>
         )}
@@ -721,33 +765,33 @@ export function LabelPreview({
             <div className="flex-1 min-w-0 flex flex-col justify-between">
               {show("showJobNo") && (
                 show("splitJobNo") ? (
-                  <div className="font-bold" style={{ fontSize: Math.max(7, finalScale * 2.8), lineHeight: 1.05 }}>
+                  <div className="font-bold" style={{ fontSize: pSize("showJobNo", 2.8, 7), lineHeight: 1.05 }}>
                     <div>SERVICE</div>
                     <div className="truncate">{f("jobNo") || "SVC-0031"}</div>
                   </div>
                 ) : (
-                  <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>
+                  <div className="font-bold truncate" style={{ fontSize: pSize("showJobNo", 2.8, 7) }}>
                     SERVICE {f("jobNo") || "SVC-0031"}
                   </div>
                 )
               )}
               {show("showCustomer") && (
-                <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>
+                <div className="font-medium truncate" style={{ fontSize: pSize("showCustomer", 2.8, 6) }}>{f("customer") || "Mike Chen"}</div>
               )}
               {show("showDevice") && (
-                <div className="text-gray-500 truncate">{f("device") || "MacBook Pro 2023"}</div>
+                <div className="text-gray-500 truncate" style={{ fontSize: pSize("showDevice", 2.8, 6) }}>{f("device") || "MacBook Pro 2023"}</div>
               )}
               {show("showFault") && (
-                <div className="text-gray-400 truncate">Fault: {f("fault") || "Screen flickering"}</div>
+                <div className="text-gray-400 truncate" style={{ fontSize: pSize("showFault", 2.8, 6) }}>Fault: {f("fault") || "Screen flickering"}</div>
               )}
               {show("showDueDate") && (
-                <div className="font-medium truncate">Due: {f("dueDate") || "22/05/2026"}</div>
+                <div className="font-medium truncate" style={{ fontSize: pSize("showDueDate", 2.8, 6) }}>Due: {f("dueDate") || "22/05/2026"}</div>
               )}
               {show("showTech") && (
-                <div className="text-gray-400 truncate">Tech: {f("tech") || "Alex Taylor"}</div>
+                <div className="text-gray-400 truncate" style={{ fontSize: pSize("showTech", 2.8, 6) }}>Tech: {f("tech") || "Alex Taylor"}</div>
               )}
               {show("showBizName") && (
-                <div className="text-gray-400 text-right truncate">{businessName}</div>
+                <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
               )}
             </div>
             {serviceQrImg}
@@ -757,21 +801,21 @@ export function LabelPreview({
         {type.id === "address" && (
           <>
             {show("showName") && (
-              <div className="font-bold truncate">{f("name") || "Sarah Johnson"}</div>
+              <div className="font-bold truncate" style={{ fontSize: pSize("showName", 2.8, 6) }}>{f("name") || "Sarah Johnson"}</div>
             )}
             {show("showCompany") && (
-              <div className="truncate">{f("company") || "Demo Co Pty Ltd"}</div>
+              <div className="truncate" style={{ fontSize: pSize("showCompany", 2.8, 6) }}>{f("company") || "Demo Co Pty Ltd"}</div>
             )}
             {show("showStreet") && (
-              <div className="truncate">{f("street") || "123 Main Street"}</div>
+              <div className="truncate" style={{ fontSize: pSize("showStreet", 2.8, 6) }}>{f("street") || "123 Main Street"}</div>
             )}
             {show("showSuburb") && (
-              <div className="truncate">
+              <div className="truncate" style={{ fontSize: pSize("showSuburb", 2.8, 6) }}>
                 {[f("suburb") || "Melbourne", f("state") || "VIC", f("postcode") || "3000"].filter(Boolean).join(" ")}
               </div>
             )}
             {show("showBizName") && (
-              <div className="text-gray-400 text-right truncate">{businessName}</div>
+              <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
             )}
           </>
         )}
@@ -779,17 +823,17 @@ export function LabelPreview({
         {type.id === "pricetag" && (
           <>
             {show("showProductName") && (
-              <div className="font-bold truncate">{f("productName") || "Reusable Cup"}</div>
+              <div className="font-bold truncate" style={{ fontSize: pSize("showProductName", 2.8, 6) }}>{f("productName") || "Reusable Cup"}</div>
             )}
             {show("showSku") && (
-              <div className="text-gray-400">#{f("sku") || "HW-042"}</div>
+              <div className="text-gray-400" style={{ fontSize: pSize("showSku", 2.8, 6) }}>#{f("sku") || "HW-042"}</div>
             )}
             <div>
               {show("showWasPrice") && (
-                <div className="line-through text-gray-400">{f("wasPrice") || "$18.99"}</div>
+                <div className="line-through text-gray-400" style={{ fontSize: pSize("showWasPrice", 2.8, 6) }}>{f("wasPrice") || "$18.99"}</div>
               )}
               {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: accent }}>
+                <div className="font-bold" style={{ fontSize: pSize("showPrice", 4.5, 9), color: accent }}>
                   {f("price") || "$12.99"}
                 </div>
               )}
@@ -800,16 +844,16 @@ export function LabelPreview({
         {type.id === "shelf" && (
           <>
             {show("showProductName") && (
-              <div className="font-bold truncate">{f("productName") || "Flat White 250g"}</div>
+              <div className="font-bold truncate" style={{ fontSize: pSize("showProductName", 2.8, 6) }}>{f("productName") || "Flat White 250g"}</div>
             )}
             {show("showUnitPrice") && (
-              <div className="text-gray-400 truncate">{f("unitPrice") || "$2.20/100g"}</div>
+              <div className="text-gray-400 truncate" style={{ fontSize: pSize("showUnitPrice", 2.8, 6) }}>{f("unitPrice") || "$2.20/100g"}</div>
             )}
             {show("showSku") && (
-              <div className="text-gray-400">{f("sku") || "GR-250"}</div>
+              <div className="text-gray-400" style={{ fontSize: pSize("showSku", 2.8, 6) }}>{f("sku") || "GR-250"}</div>
             )}
             {show("showPrice") && (
-              <div className="font-bold" style={{ fontSize: Math.max(9, finalScale * 4.5), color: accent }}>
+              <div className="font-bold" style={{ fontSize: pSize("showPrice", 4.5, 9), color: accent }}>
                 {f("price") || "$5.50"}
               </div>
             )}
@@ -966,6 +1010,10 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const shorter = Math.min(pageW, pageH);
   const bp      = Math.max(4.5, shorter * 0.36);
 
+  // Per-field font size (pt): base multiplier × the user's chosen scale for that
+  // option, so the printed label matches the on-screen preview.
+  const hSize = (k: string, mult: number) => (bp * mult * fieldFontScale(f, k)).toFixed(1);
+
   // Scannable CODE128 barcode, generated from whatever value the type encodes
   // (plain text included). Rendered full-width at the bottom of the label.
   const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
@@ -996,13 +1044,13 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       case "product": {
         const productText = `
         <div>
-          ${show("showProductName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
-          ${show("showCategory") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
-          ${show("showSku") ? `<div style="color:#888">${f("sku")||"BEV-001"}</div>` : ""}
+          ${show("showProductName") ? `<div style="font-weight:700;font-size:${hSize("showProductName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
+          ${show("showCategory") ? `<div style="font-size:${hSize("showCategory",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
+          ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")||"BEV-001"}</div>` : ""}
         </div>
         <div>
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.35).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}
-          ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.35)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}
+          ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
         if (!productQrSrc) return productText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
@@ -1013,12 +1061,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 
       case "customer": {
         const customerText = `
-        ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
-        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
-        ${show("showCustomerId") ? `<div style="color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
-        ${show("showLoyaltyNo") ? `<div style="color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
-        ${show("showPhone") ? `<div style="color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
-        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+        ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${hSize("showCustomerName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
+        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${hSize("showGroup",0.85)}pt">${f("group")||"VIP Member"}</div>` : ""}
+        ${show("showCustomerId") ? `<div style="font-size:${hSize("showCustomerId",1)}pt;color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
+        ${show("showLoyaltyNo") ? `<div style="font-size:${hSize("showLoyaltyNo",1)}pt;color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
+        ${show("showPhone") ? `<div style="font-size:${hSize("showPhone",1)}pt;color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!customerQrSrc) return customerText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-self:stretch">${customerText}</div>
@@ -1027,25 +1075,25 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       }
 
       case "return": return `
-        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
-        ${show("showItem") ? `<div style="font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")||"Defective Keyboard"}</div>` : ""}
-        ${show("showReason") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("reason")||"Not as described"}</div>` : ""}
-        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${(bp*.85).toFixed(1)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
-        ${show("showDate") ? `<div style="color:#888">${f("date")||"18/05/2026"}</div>` : ""}
-        ${show("showCustomer") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
-        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${hSize("showReturnNo",1.1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
+        ${show("showItem") ? `<div style="font-size:${hSize("showItem",1)}pt;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")||"Defective Keyboard"}</div>` : ""}
+        ${show("showReason") ? `<div style="font-size:${hSize("showReason",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("reason")||"Not as described"}</div>` : ""}
+        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${hSize("showStatus",0.85)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
+        ${show("showDate") ? `<div style="font-size:${hSize("showDate",1)}pt;color:#888">${f("date")||"18/05/2026"}</div>` : ""}
+        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "repair": {
         const repairText = `
         ${show("showJobNo") ? (show("splitJobNo")
-          ? `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;line-height:1.05"><div>SERVICE</div><div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("jobNo")||"SVC-0031"}</div></div>`
-          : `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>`) : ""}
-        ${show("showCustomer") ? `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Mike Chen"}</div>` : ""}
-        ${show("showDevice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")||"MacBook Pro 2023"}</div>` : ""}
-        ${show("showFault") ? `<div style="color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Screen flickering"}</div>` : ""}
-        ${show("showDueDate") ? `<div style="font-weight:600">Due: ${f("dueDate")||"22/05/2026"}</div>` : ""}
-        ${show("showTech") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Alex Taylor"}</div>` : ""}
-        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+          ? `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;line-height:1.05"><div>SERVICE</div><div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("jobNo")||"SVC-0031"}</div></div>`
+          : `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>`) : ""}
+        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Mike Chen"}</div>` : ""}
+        ${show("showDevice") ? `<div style="font-size:${hSize("showDevice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("device")||"MacBook Pro 2023"}</div>` : ""}
+        ${show("showFault") ? `<div style="font-size:${hSize("showFault",1)}pt;color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Screen flickering"}</div>` : ""}
+        ${show("showDueDate") ? `<div style="font-size:${hSize("showDueDate",1)}pt;font-weight:600">Due: ${f("dueDate")||"22/05/2026"}</div>` : ""}
+        ${show("showTech") ? `<div style="font-size:${hSize("showTech",1)}pt;color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Alex Taylor"}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!serviceQrSrc) return repairText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
           <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-self:stretch">${repairText}</div>
@@ -1054,25 +1102,25 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       }
 
       case "address": return `
-        ${show("showName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")||"Sarah Johnson"}</div>` : ""}
-        ${show("showCompany") ? `<div style="white-space:nowrap;overflow:hidden">${f("company")||"Demo Co Pty Ltd"}</div>` : ""}
-        ${show("showStreet") ? `<div style="white-space:nowrap;overflow:hidden">${f("street")||"123 Main Street"}</div>` : ""}
-        ${show("showSuburb") ? `<div style="white-space:nowrap;overflow:hidden">${[f("suburb")||"Melbourne",f("state")||"VIC",f("postcode")||"3000"].filter(Boolean).join(" ")}</div>` : ""}
-        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+        ${show("showName") ? `<div style="font-size:${hSize("showName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")||"Sarah Johnson"}</div>` : ""}
+        ${show("showCompany") ? `<div style="font-size:${hSize("showCompany",1)}pt;white-space:nowrap;overflow:hidden">${f("company")||"Demo Co Pty Ltd"}</div>` : ""}
+        ${show("showStreet") ? `<div style="font-size:${hSize("showStreet",1)}pt;white-space:nowrap;overflow:hidden">${f("street")||"123 Main Street"}</div>` : ""}
+        ${show("showSuburb") ? `<div style="font-size:${hSize("showSuburb",1)}pt;white-space:nowrap;overflow:hidden">${[f("suburb")||"Melbourne",f("state")||"VIC",f("postcode")||"3000"].filter(Boolean).join(" ")}</div>` : ""}
+        ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "pricetag": return `
-        ${show("showProductName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Reusable Cup"}</div>` : ""}
-        ${show("showSku") ? `<div style="color:#888">#${f("sku")||"HW-042"}</div>` : ""}
+        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Reusable Cup"}</div>` : ""}
+        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">#${f("sku")||"HW-042"}</div>` : ""}
         <div>
-          ${show("showWasPrice") ? `<div style="text-decoration:line-through;color:#aaa">${f("wasPrice")||"$18.99"}</div>` : ""}
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${accent}">${f("price")||"$12.99"}</div>` : ""}
+          ${show("showWasPrice") ? `<div style="font-size:${hSize("showWasPrice",1)}pt;text-decoration:line-through;color:#aaa">${f("wasPrice")||"$18.99"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")||"$12.99"}</div>` : ""}
         </div>`;
 
       case "shelf": return `
-        ${show("showProductName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Flat White 250g"}</div>` : ""}
-        ${show("showUnitPrice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")||"$2.20/100g"}</div>` : ""}
-        ${show("showSku") ? `<div style="color:#888">${f("sku")||"GR-250"}</div>` : ""}
-        ${show("showPrice") ? `<div style="font-weight:700;font-size:${(bp*1.5).toFixed(1)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}`;
+        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Flat White 250g"}</div>` : ""}
+        ${show("showUnitPrice") ? `<div style="font-size:${hSize("showUnitPrice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")||"$2.20/100g"}</div>` : ""}
+        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")||"GR-250"}</div>` : ""}
+        ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}`;
 
       default: return "";
     }
@@ -1100,7 +1148,7 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   // Business website — a common footer line available on every sticker type.
   const websiteText = (website ?? "").trim();
   const websiteBlock = show("showWebsite") && websiteText
-    ? `<div style="color:#888;font-size:${(bp*.8).toFixed(1)}pt;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(websiteText)}</div>`
+    ? `<div style="color:#888;font-size:${hSize("showWebsite",0.8)}pt;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(websiteText)}</div>`
     : "";
 
   const labelBlock = `

@@ -47,6 +47,8 @@ export interface ReceiptTemplateOpts {
   showCustomerQr?: boolean;
   showLoyaltyEarned?: boolean;
   showBarcode?: boolean;
+  /** Print each product's serial number(s) / IMEI under its line on the receipt. */
+  showSerialNumber?: boolean;
   printCustomerCopy?: boolean;
   thankYouMsg?: string;
   footerText?: string;
@@ -130,7 +132,11 @@ function businessTemplateVars(biz?: ReceiptBusinessInfo): Record<string, string>
   const b = biz ?? {};
   const refCode = b.partnerReferralCode ?? "";
   const refUrl = refCode ? `${publicOrigin()}/register?ref=${encodeURIComponent(refCode)}` : "";
+  const now = new Date();
   return {
+    // Always-available date/time tags (resolve on every document type).
+    "date.today": now.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    "time.now": now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
     "business.name": b.businessName ?? "",
     "business.abn": b.abn ?? "",
     "business.email": b.email ?? "",
@@ -164,6 +170,11 @@ export function buildTemplateVars(tx: Transaction, biz?: ReceiptBusinessInfo): R
     "customer.id": c?.id != null ? `CUS-${c.id}` : "",
     "customer.total_spent": c?.totalSpent != null ? fmtAUD(Number(c.totalSpent)) : "",
     "transaction.number": tx.receiptNumber ? `#${tx.receiptNumber}` : `#${tx.id ?? ""}`,
+    // Document numbers — populated on the document that owns them (invoice /
+    // service ticket / appointment); resolve to "" on others.
+    "invoice.number": (tx as { invoiceNumber?: string | null }).invoiceNumber ?? "",
+    "service.number": (tx as { serviceNumber?: string | null }).serviceNumber ?? "",
+    "appointment.number": (tx as { appointmentNumber?: string | null }).appointmentNumber ?? "",
     "transaction.date": created.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
     "transaction.time": created.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
     "transaction.total": fmtAUD(Number(tx.total ?? 0)),
@@ -226,6 +237,7 @@ export async function printReceipt(
     showCustomerQr: false,
     showLoyaltyEarned: false,
     showBarcode: false,
+    showSerialNumber: true,
     printCustomerCopy: false,
     thankYouMsg: "Thank you for your purchase!",
     footerText: "",
@@ -248,7 +260,7 @@ export async function printReceipt(
     const lineTotal = item.totalPrice ?? (item.unitPrice ?? 0) * qty;
     const warranty = item.warranty && item.warranty.trim()
       ? `<div class="gray" style="font-size:10px">🛡 ${esc(item.warranty.trim())}</div>` : "";
-    const serials = item.serials && item.serials.length
+    const serials = tpl.showSerialNumber !== false && item.serials && item.serials.length
       ? `<div class="gray" style="font-size:10px">S/N: ${esc(item.serials.join(", "))}</div>` : "";
     return `<tr><td>${name}${warranty}${serials}</td><td class="tcenter">${qty}</td><td class="right">${fmtAUD(lineTotal)}</td></tr>`;
   }).join("");
@@ -968,6 +980,7 @@ export function printA4ServiceJob(
   // customer; any transaction/promo codes resolve to "".
   const svcVars: Record<string, string> = {
     ...businessTemplateVars(businessInfo),
+    "service.number": job.jobNumber ?? "",
     "customer.name": customerOverride?.name ?? job.customerName ?? "",
     "customer.email": customerOverride?.email ?? job.customerEmail ?? "",
     "customer.phone": customerOverride?.phone ?? job.customerPhone ?? "",

@@ -40,6 +40,7 @@ function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra)
     showCustomerQr: opts.showCustomerQr,
     showLoyaltyEarned: opts.showLoyaltyEarned,
     showBarcode: opts.showBarcode,
+    showSerialNumber: opts.showSerialNumber,
     printCustomerCopy: opts.printCustomerCopy,
     thankYouMsg: opts.thankYouMsg,
     footerText: opts.footerText,

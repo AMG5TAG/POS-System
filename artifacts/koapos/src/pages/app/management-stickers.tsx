@@ -19,6 +19,7 @@ import {
 import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
   useStickerTemplates, useStickerPrinter, DymoSize,
+  FONT_SIZE_OPTIONS, fieldHasFontSize, fontScaleKey,
 } from "@/lib/sticker-config";
 
 /* ─── On/Off pill toggle ──────────────────────────────────────────────────── */
@@ -60,6 +61,40 @@ function FieldPill({
         >
           Off
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Per-field font size selector ────────────────────────────────────────────
+ * Shown beneath a toggle (when on) so the option's text can be sized on the
+ * label. Writes the chosen scale into the template under its `fs_<key>` key. */
+
+function FieldFontSize({ value, onChange }: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const current = value || "1";
+  return (
+    <div className="flex items-center justify-between pb-2.5 pl-0.5 -mt-1 gap-3">
+      <span className="text-[11px] text-muted-foreground">Font size</span>
+      <div className="flex rounded-full border overflow-hidden text-[11px] font-semibold shrink-0">
+        {FONT_SIZE_OPTIONS.map((opt, i) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "px-2.5 py-1 transition-colors",
+              i > 0 && "border-l",
+              current === opt.value
+                ? "bg-primary text-primary-foreground"
+                : "pill-selector text-muted-foreground hover:bg-muted/60",
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -184,11 +219,14 @@ export default function ManagementStickersPage() {
 
   /* ── Template save / manage (in-page, replacing the old Templates screen) ── */
 
-  // Templates only persist the configurable on/off fields for a type — not the
-  // transient product auto-fill text (which is filled per-print), matching the
-  // original template semantics.
-  const templateFieldsForSave = () =>
-    Object.fromEntries(selectedType.fields.map((f) => [f.key, currentFields[f.key] ?? f.defaultValue]));
+  // Templates persist the configurable on/off fields for a type plus each
+  // option's `fs_<key>` font scale — not the transient product auto-fill text
+  // (which is filled per-print), matching the original template semantics.
+  const templateFieldsForSave = () => {
+    const base = Object.fromEntries(selectedType.fields.map((f) => [f.key, currentFields[f.key] ?? f.defaultValue]));
+    const fontScales = Object.entries(currentFields).filter(([k]) => k.startsWith("fs_"));
+    return { ...base, ...Object.fromEntries(fontScales) };
+  };
 
   const startNewTemplate = () => {
     setEditingTemplateId(null);
@@ -802,6 +840,13 @@ export default function ManagementStickersPage() {
                           isOn={(currentFields[field.key] ?? field.defaultValue) !== "false"}
                           onToggle={(v) => setField(field.key, v ? "true" : "false")}
                         />
+                        {fieldHasFontSize(field)
+                          && (currentFields[field.key] ?? field.defaultValue) !== "false" && (
+                          <FieldFontSize
+                            value={currentFields[fontScaleKey(field.key)] ?? "1"}
+                            onChange={(v) => setField(fontScaleKey(field.key), v)}
+                          />
+                        )}
                         {field.key === "showLogo"
                           && (currentFields[field.key] ?? field.defaultValue) !== "false"
                           && !profile.logo && (

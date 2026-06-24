@@ -4883,9 +4883,9 @@ export default function POSPage() {
       <Dialog open={!!serialPrompt} onOpenChange={(o) => { if (!o) setSerialPrompt(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial Numbers Required</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial / IMEI Required</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">These warranty items need a serial number per unit. Pick an in-stock serial or type one in.</p>
+          <p className="text-sm text-muted-foreground">These warranty items need a serial number or IMEI per unit. Select one from stock below, or type one in.</p>
           <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
             {Object.entries(serialInputs).map(([pidStr, arr]) => {
               const pid = Number(pidStr);
@@ -4897,28 +4897,51 @@ export default function POSPage() {
                   {arr.map((val, k) => {
                     const usedElsewhere = new Set(arr.filter((_, j) => j !== k).map((s) => s.trim()).filter(Boolean));
                     const options = avail.filter((s) => !usedElsewhere.has(s));
+                    const setVal = (v: string) => setSerialInputs((prev) => {
+                      const next = { ...prev, [pid]: [...prev[pid]] };
+                      next[pid][k] = v;
+                      return next;
+                    });
                     return (
-                      <div key={k} className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground w-10 shrink-0">#{k + 1}</span>
-                        <Input
-                          list={`serials-${pid}`}
-                          value={val}
-                          onChange={(e) => setSerialInputs((prev) => {
-                            const next = { ...prev, [pid]: [...prev[pid]] };
-                            next[pid][k] = e.target.value;
-                            return next;
-                          })}
-                          placeholder="Serial number"
-                          className="h-8 font-mono text-sm"
-                        />
-                        <datalist id={`serials-${pid}`}>
-                          {options.map((s) => <option key={s} value={s} />)}
-                        </datalist>
+                      <div key={k} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-10 shrink-0">#{k + 1}</span>
+                          <Input
+                            list={`serials-${pid}`}
+                            value={val}
+                            onChange={(e) => setVal(e.target.value)}
+                            placeholder="Serial number / IMEI"
+                            className="h-8 font-mono text-sm"
+                          />
+                          <datalist id={`serials-${pid}`}>
+                            {options.map((s) => <option key={s} value={s} />)}
+                          </datalist>
+                        </div>
+                        {/* Clickable list of in-stock serials/IMEIs for this unit. */}
+                        {options.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pl-12">
+                            {options.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setVal(val === s ? "" : s)}
+                                className={cn(
+                                  "text-[11px] font-mono px-1.5 py-0.5 rounded border transition-colors",
+                                  val === s
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "text-muted-foreground hover:bg-muted",
+                                )}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                   <p className="text-[11px] text-muted-foreground">
-                    {avail.length > 0 ? `${avail.length} in stock — start typing to pick one.` : "No serials in stock for this item; enter one to record it."}
+                    {avail.length > 0 ? `${avail.length} in stock — tap one above or type a serial / IMEI.` : "No serials in stock for this item; enter one to record it."}
                   </p>
                 </div>
               );

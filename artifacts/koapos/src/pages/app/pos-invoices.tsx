@@ -836,6 +836,7 @@ export default function POSInvoicesPage() {
     createdAt: inv.createdAt,
     // Extras consumed by the print path (not part of the base Transaction type):
     amountPaid: inv.amountPaid,
+    invoiceNumber: inv.invoiceNumber,
     discountLabel: inv.discountTotal
       ? `Discount${inv.discountType === "percent" && inv.discountValue ? ` (${inv.discountValue}%)` : ""}`
       : undefined,
