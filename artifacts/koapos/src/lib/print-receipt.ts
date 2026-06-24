@@ -122,6 +122,11 @@ function qrSvg(text: string, px = 96): string {
   }
 }
 
+/** Wrap an inline SVG string as a data URL usable in an <img src>. */
+function svgToDataUrl(svg: string): string | null {
+  return svg ? `data:image/svg+xml,${encodeURIComponent(svg)}` : null;
+}
+
 /* ─── Quick-code (merge variable) resolution ──────────────────────────────────
    Every quick code offered in Management → Templates → Sales resolves here, so
    the same codes work across all sales templates (thermal, A4 receipt, invoice,
@@ -422,6 +427,8 @@ function printA4Document(
   const customerName = customer
     ? customerDisplayName(customer, "") || customer.email || ""
     : "";
+  const custId = (customer as { id?: number } | null)?.id;
+  const customerCode = custId != null ? `CUS-${custId}` : null;
 
   const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; warranty?: string | null; serials?: string[] }>;
 
@@ -451,6 +458,11 @@ function printA4Document(
     paymentSectionHeading: r(baseOptions.paymentSectionHeading),
   };
 
+  // Customer-profile QR (synchronous SVG → data URL, ready before the print window).
+  const customerQrDataUrl = (baseOptions.showCustomerQr && customerCode)
+    ? svgToDataUrl(qrSvg(customerCode, 160))
+    : null;
+
   const html = buildInvoiceHtml({
     title,
     documentNumber: receiptNum,
@@ -471,6 +483,8 @@ function printA4Document(
           name: customerName,
           email: customer.email ?? null,
           phone: (customer as { phone?: string }).phone ?? null,
+          address: (customer as { address?: string | null }).address ?? null,
+          code: customerCode,
         }
       : null,
     items: items.map((item) => ({
@@ -490,6 +504,9 @@ function printA4Document(
     discountLabel: (tx as { discountLabel?: string | null }).discountLabel ?? undefined,
     total: tx.total ?? 0,
     amountPaid: (tx as { amountPaid?: number | null }).amountPaid ?? undefined,
+    loyaltyPointsEarned: Number((tx as { loyaltyEarned?: number }).loyaltyEarned ?? 0) || null,
+    paymentMethods: (baseOptions.showPaymentMethods && pmLabel) ? [pmLabel] : null,
+    customerQrDataUrl,
     options,
   });
 
