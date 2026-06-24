@@ -59,6 +59,12 @@ export interface PaymentProvider {
   capture(merchantId: number, externalRef: string): Promise<StatusResult>;
   refund(merchantId: number, externalRef: string, amount: number): Promise<RefundResult>;
   /**
+   * Void/cancel a charge that was never captured (customer abandoned, sale
+   * discarded), releasing any hold on the customer. Optional: providers whose
+   * charges auto-expire need not implement it. Resolves to the resulting status.
+   */
+  cancel?(merchantId: number, externalRef: string): Promise<StatusResult>;
+  /**
    * Extract the provider-side charge reference from an UNVERIFIED webhook body.
    * Used only to resolve which merchant the event belongs to (so their signing
    * secret can be loaded); trust is established by verifyWebhook afterwards.

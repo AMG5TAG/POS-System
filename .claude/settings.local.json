@@ -194,7 +194,8 @@
       "Bash(find / -path \"*.private/uploads*\")",
       "Bash(find / -iname \"send.png\" -path \"*uploads*\")",
       "Bash(find / -path \"*.private/uploads*\" -type f)",
-      "Bash(grep -rhn \"\\\\$29\\\\|\\\\$49\\\\|\\\\$79\\\\|\\\\$99\\\\|\\\\$19\\\\|/mo\\\\|per month\\\\|Starter\\\\|Growth\\\\|Pro\\\\|Enterprise\\\\|priceMonthly\\\\|monthlyPrice\" artifacts/koapos/src)"
+      "Bash(grep -rhn \"\\\\$29\\\\|\\\\$49\\\\|\\\\$79\\\\|\\\\$99\\\\|\\\\$19\\\\|/mo\\\\|per month\\\\|Starter\\\\|Growth\\\\|Pro\\\\|Enterprise\\\\|priceMonthly\\\\|monthlyPrice\" artifacts/koapos/src)",
+      "WebSearch"
     ]
   }
 }

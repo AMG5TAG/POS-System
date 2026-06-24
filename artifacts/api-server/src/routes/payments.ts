@@ -239,6 +239,42 @@ router.post("/payments/:id/refund", requireAuth, async (req, res): Promise<void>
   res.json({ status: "refunded" });
 });
 
+/* ── POST /payments/:id/cancel ──────────────────────────────────────────────────
+   Void an authorised-but-not-yet-captured charge (customer abandoned the QR, or
+   the sale was discarded before finalisation), releasing the hold on them. */
+router.post("/payments/:id/cancel", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid payment id" }); return; }
+
+  const [attempt] = await db.select().from(paymentAttemptsTable)
+    .where(and(eq(paymentAttemptsTable.id, id), eq(paymentAttemptsTable.merchantId, merchantId)));
+  if (!attempt) { res.status(404).json({ error: "Payment not found" }); return; }
+  if (attempt.status === "captured" || attempt.status === "refunded") {
+    res.status(400).json({ error: `Captured payments cannot be cancelled — refund instead (this one is "${attempt.status}").` });
+    return;
+  }
+  if (!attempt.externalRef) { res.status(400).json({ error: "Payment has no provider reference to cancel" }); return; }
+
+  const provider = getPaymentProvider(attempt.provider);
+  if (!provider) { res.status(500).json({ error: "Payment provider unavailable" }); return; }
+  if (!provider.cancel) { res.status(400).json({ error: `${providerLabel(attempt.provider)} does not support cancellation` }); return; }
+
+  const result = await provider.cancel(merchantId, attempt.externalRef).catch((e: unknown) => {
+    logger.error({ err: e, attemptId: attempt.id, provider: attempt.provider }, `${providerLabel(attempt.provider)}: cancel failed`);
+    return null;
+  });
+  if (!result || result.status === "failed") {
+    res.status(502).json({ error: result?.failureReason ?? `${providerLabel(attempt.provider)} cancel failed` });
+    return;
+  }
+
+  await db.update(paymentAttemptsTable).set({ status: "cancelled", providerData: result.raw as object })
+    .where(eq(paymentAttemptsTable.id, attempt.id));
+
+  res.json({ status: "cancelled" });
+});
+
 /* ── POST /webhooks/:provider ───────────────────────────────────────────────────
    Unauthenticated provider callback (zip, afterpay). Authenticity is established
    by HMAC signature over the raw body, not a session. */

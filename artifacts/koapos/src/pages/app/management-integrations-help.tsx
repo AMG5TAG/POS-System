@@ -79,12 +79,13 @@ const SECTIONS: HelpSection[] = [
       {
         q: "How do I connect Zip, Afterpay or Klarna (buy-now-pay-later)?",
         steps: [
-          "From your provider's merchant dashboard, copy your Merchant ID and API Key.",
+          "For Afterpay and Klarna: from the provider's merchant dashboard, copy your Merchant ID and API Key.",
+          "For Zip (In-store QR): copy your API Key, Location ID and Device Reference from your Zip onboarding details — Zip issues these with your sandbox/production credentials.",
           "Paste them into the integration dialog in KoaPOS.",
           "Copy the webhook URL shown in the dialog, add it in your provider dashboard, and paste back the signing secret it gives you.",
           "Save. At checkout, choose the provider — the customer scans the on-screen QR code in their app to approve, and the sale completes once approved.",
         ],
-        note: "Funds are only captured after the customer approves, so a sale is never recorded for an unapproved payment.",
+        note: "Funds are only captured after the customer approves, so a sale is never recorded for an unapproved payment. An unapproved or abandoned charge can be voided to release the customer's hold.",
         links: [
           { label: "Zip merchant portal", url: "https://merchant.zip.co/" },
           { label: "Afterpay merchant portal", url: "https://merchant.afterpay.com/" },
