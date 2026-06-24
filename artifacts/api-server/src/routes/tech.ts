@@ -1,5 +1,5 @@
 import { Router, type IRouter, type Request, type Response } from "express";
-import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, appointmentsTable, techAppSettingsTable, techAppEventsTable } from "@workspace/db";
+import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, appointmentsTable, techAppSettingsTable, techAppEventsTable, qrCodesTable } from "@workspace/db";
 import { eq, and, or, asc, desc, ilike } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
@@ -304,6 +304,23 @@ router.get("/tech/service-jobs/:id", async (req, res): Promise<void> => {
   if (job.merchantId !== tech.merchantId) {
     logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "denied_foreign", "Scanned a ticket belonging to another business");
     res.status(403).json({ error: "This service ticket belongs to another business", reason: "foreign_business" });
+    return;
+  }
+
+  /* Service-QR expiry: the printed QR is valid for 30 days from creation. Once
+     the persisted service QR has expired, the scanned code no longer resolves.
+     Jobs with no persisted QR (created before this feature) are unaffected. */
+  const [serviceQr] = await db
+    .select({ expiresAt: qrCodesTable.expiresAt })
+    .from(qrCodesTable)
+    .where(and(
+      eq(qrCodesTable.merchantId, tech.merchantId),
+      eq(qrCodesTable.entryId, `service-${id}`),
+      eq(qrCodesTable.qrType, "service"),
+    ));
+  if (serviceQr?.expiresAt && serviceQr.expiresAt.getTime() < Date.now()) {
+    logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "qr_expired", `Scanned an expired QR for job ${job.jobNumber}`);
+    res.status(410).json({ error: "This service QR code has expired.", reason: "qr_expired" });
     return;
   }
 

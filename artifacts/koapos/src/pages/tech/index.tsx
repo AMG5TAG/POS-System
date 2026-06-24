@@ -726,6 +726,8 @@ function ScanTab({ onOpenJob }: { onOpenJob: (id: number) => void }) {
       onOpenJob(id);
     } else if (r.status === 403) {
       setPrivacyScreen(true);
+    } else if (r.status === 410) {
+      setMessage("This service QR code has expired (over 30 days old). Ask staff to reprint the ticket.");
     } else if (r.status === 404) {
       setMessage("No service job matches that ticket.");
     } else if (r.status === 401) {
