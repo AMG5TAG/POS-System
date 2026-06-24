@@ -21,7 +21,7 @@ let browserPromise: Promise<Browser> | null = null;
  * in order, for an explicit override, a Chromium on PATH, then a recent build
  * in the Nix store, before deferring to Puppeteer's own bundled binary.
  */
-function resolveChromiumExecutable(): string | undefined {
+export function resolveChromiumExecutable(): string | undefined {
   // 1. Explicit operator override always wins.
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
 
