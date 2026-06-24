@@ -286,8 +286,9 @@ export const STICKER_TYPES: StickerType[] = [
  * definitions above. The logo toggle shows the business profile logo; the custom
  * text field prints whatever the user types (e.g. a promo line or care note). */
 export const COMMON_STICKER_FIELDS: StickerField[] = [
-  { key: "showLogo",   label: "Business Logo", defaultValue: "false", type: "toggle" },
-  { key: "customText", label: "Custom Text",   defaultValue: "",      type: "text"   },
+  { key: "showLogo",    label: "Business Logo",   defaultValue: "false", type: "toggle" },
+  { key: "showWebsite", label: "Business Website", defaultValue: "false", type: "toggle" },
+  { key: "customText",  label: "Custom Text",     defaultValue: "",      type: "text"   },
 ];
 STICKER_TYPES.forEach((t) => t.fields.push(...COMMON_STICKER_FIELDS));
 
@@ -393,7 +394,7 @@ const SAMPLE_SERVICE_QR_URL = `${publicOrigin()}/b/demo/t/techapp?job=0`;
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
 export function LabelPreview({
-  type, fields, size, businessName, brandColor, logoUrl,
+  type, fields, size, businessName, brandColor, logoUrl, businessWebsite,
   fillWidth, fillHeight,
   orientation = "horizontal",
   barcodePosition = "bottom",
@@ -405,6 +406,7 @@ export function LabelPreview({
   businessName: string;
   brandColor: string;
   logoUrl?: string;
+  businessWebsite?: string;
   fillWidth?: number;
   fillHeight?: number;
   orientation?: "horizontal" | "vertical";
@@ -522,6 +524,17 @@ export function LabelPreview({
       style={{ fontSize: Math.max(6, finalScale * 2.4), lineHeight: 1.2 }}
     >
       {customText}
+    </div>
+  ) : null;
+
+  // Business website — a common footer line available on every sticker type.
+  const website = (businessWebsite ?? "").trim();
+  const websiteEl = show("showWebsite") && website ? (
+    <div
+      className="text-gray-400 truncate"
+      style={{ fontSize: Math.max(6, finalScale * 2.2), lineHeight: 1.2 }}
+    >
+      {website}
     </div>
   ) : null;
 
@@ -717,6 +730,7 @@ export function LabelPreview({
         )}
 
         </div>
+        {websiteEl}
         {customTextEl}
       </div>
       {barcodeImg && barcodePosition === "bottom" && (
@@ -831,6 +845,8 @@ export interface BuildLabelHtmlArgs {
   brandColor: string;
   /** Business logo (URL or data URL) printed when the showLogo toggle is on. */
   logoUrl?: string;
+  /** Business website printed when the showWebsite toggle is on. */
+  website?: string;
   orientation: "horizontal" | "vertical";
   quantity: number;
   barcodePosition?: "top" | "bottom";
@@ -848,7 +864,7 @@ function escapeHtml(s: string): string {
 }
 
 export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
-  const { typeId, size, fields, businessName, brandColor, logoUrl, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
+  const { typeId, size, fields, businessName, brandColor, logoUrl, website, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
   // B&W (default) prints every accent in black; "color" keeps brand/status hues.
   const accent = colorMode === "color" ? brandColor : "#000";
   const danger = colorMode === "color" ? "#ef4444" : "#000";
@@ -867,10 +883,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   // (plain text included). Rendered full-width at the bottom of the label.
   const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
 
-  // Service QR — repair stickers can carry a Tech App deep link. Only printed
-  // when a real job URL is supplied (the editor preview shows a sample instead).
-  const serviceQrSrc = typeId === "repair" && show("showServiceQr") && f("serviceQrUrl")
-    ? qrDataUrl(f("serviceQrUrl"))
+  // Service QR — repair stickers can carry a Tech App deep link. Uses the real
+  // job URL when supplied (the actual print paths pass one); falls back to a
+  // sample so a test print from the Stickers editor still shows the code, matching
+  // the on-screen preview.
+  const serviceQrSrc = typeId === "repair" && show("showServiceQr")
+    ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
     : "";
   const qrMm = Math.max(8, Math.min(shorter * 0.7, pageH * 0.78));
 
@@ -964,6 +982,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
     ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;margin-top:1mm;line-height:1.2;word-break:break-word">${escapeHtml(customText)}</div>`
     : "";
 
+  // Business website — a common footer line available on every sticker type.
+  const websiteText = (website ?? "").trim();
+  const websiteBlock = show("showWebsite") && websiteText
+    ? `<div style="color:#888;font-size:${(bp*.8).toFixed(1)}pt;line-height:1.2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(websiteText)}</div>`
+    : "";
+
   const labelBlock = `
     <div style="
       width:${pageW}mm;height:${pageH}mm;
@@ -983,6 +1007,7 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between">
           ${inner}
         </div>
+        ${websiteBlock}
         ${customTextBlock}
       </div>
       ${barcodePosition === "bottom" ? barcodeBlock("0 2mm 1.5mm 2mm") : ""}
@@ -1096,6 +1121,7 @@ export function useStickerPrinter() {
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
   const logoUrl      = profile.logo || "";
+  const website      = profile.website || "";
 
   const defaultTemplateFor = (typeId: string): StickerTemplate | undefined =>
     templates.find((t) => t.typeId === typeId && t.isDefault) ?? templates.find((t) => t.typeId === typeId);
@@ -1120,6 +1146,7 @@ export function useStickerPrinter() {
       businessName,
       brandColor,
       logoUrl,
+      website,
       orientation: args.orientation ?? "horizontal",
       quantity: args.quantity ?? 1,
       barcodePosition: args.barcodePosition ?? "bottom",

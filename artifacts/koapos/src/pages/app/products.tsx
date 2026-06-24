@@ -626,6 +626,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
                 size={size}
                 businessName={businessName}
                 brandColor={brandColor}
+                businessWebsite={profile.website}
                 fillWidth={previewSize.w}
                 fillHeight={previewSize.h}
               />

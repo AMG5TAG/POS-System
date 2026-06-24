@@ -799,6 +799,7 @@ export default function ServiceJobNewPage() {
                 size={stickerSize}
                 businessName={businessName}
                 brandColor={brandColor}
+                businessWebsite={bizProfile?.website}
                 fillWidth={380}
                 fillHeight={140}
               />

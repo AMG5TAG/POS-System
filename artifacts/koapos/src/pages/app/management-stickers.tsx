@@ -640,6 +640,7 @@ export default function ManagementStickersPage() {
                     businessName={businessName}
                     brandColor={brandColor}
                     logoUrl={profile.logo}
+                    businessWebsite={profile.website}
                     orientation={orientation}
                     barcodePosition={barcodePosition}
                     colorMode={colorMode}
