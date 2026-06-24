@@ -1,8 +1,9 @@
 import { pgTable, serial, integer, text, numeric, timestamp } from "drizzle-orm/pg-core";
+import { merchantsTable } from "./merchants";
 
 export const modifierGroupsTable = pgTable("modifier_groups", {
   id:             serial("id").primaryKey(),
-  merchantId:     integer("merchant_id").notNull(),
+  merchantId:     integer("merchant_id").notNull().references(() => merchantsTable.id),
   name:           text("name").notNull(),
   isRequired:     text("is_required").notNull().default("false"),
   minSelections:  integer("min_selections").notNull().default(0),
@@ -15,9 +16,9 @@ export const modifierGroupsTable = pgTable("modifier_groups", {
 export const modifiersTable = pgTable("modifiers", {
   id:               serial("id").primaryKey(),
   groupId:          integer("group_id").notNull(),
-  merchantId:       integer("merchant_id").notNull(),
+  merchantId:       integer("merchant_id").notNull().references(() => merchantsTable.id),
   name:             text("name").notNull(),
-  priceAdjustment:  numeric("price_adjustment").notNull().default("0"),
+  priceAdjustment:  numeric("price_adjustment", { precision: 10, scale: 2 }).notNull().default("0"),
   isDefault:        text("is_default").notNull().default("false"),
   isActive:         text("is_active").notNull().default("true"),
   sortOrder:        integer("sort_order").notNull().default(0),
@@ -28,7 +29,7 @@ export const productModifierGroupsTable = pgTable("product_modifier_groups", {
   id:         serial("id").primaryKey(),
   productId:  integer("product_id").notNull(),
   groupId:    integer("group_id").notNull(),
-  merchantId: integer("merchant_id").notNull(),
+  merchantId: integer("merchant_id").notNull().references(() => merchantsTable.id),
   sortOrder:  integer("sort_order").notNull().default(0),
 });
 

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -26,7 +26,9 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   distributeDelivery: text("distribute_delivery").notNull().default("false"),
   createdAt:    timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:    timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  index("purchase_orders_merchant_id_idx").on(t.merchantId),
+]);
 
 export const purchaseOrderItemsTable = pgTable("purchase_order_items", {
   id:          serial("id").primaryKey(),

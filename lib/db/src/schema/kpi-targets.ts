@@ -9,7 +9,7 @@ export const kpiTargetsTable = pgTable("kpi_targets", {
   metric:     text("metric").notNull(),
   categoryId: text("category_id").notNull().default(""),
   period:     text("period").notNull().default("monthly"),
-  target:     numeric("target").notNull().default("0"),
+  target:     numeric("target", { precision: 12, scale: 2 }).notNull().default("0"),
   staffIds:   text("staff_ids").notNull().default("[]"),
   reward:     text("reward").notNull().default("null"),
   notes:      text("notes").notNull().default(""),
