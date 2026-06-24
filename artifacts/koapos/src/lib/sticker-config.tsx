@@ -192,6 +192,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showPhone",        label: "Phone",          defaultValue: "true", type: "toggle" },
       { key: "showGroup",        label: "Group",          defaultValue: "true", type: "toggle" },
       { key: "showBarcode",      label: "Barcode",        defaultValue: "false", type: "toggle" },
+      { key: "showCustomerQr",   label: "Customer QR",    defaultValue: "false", type: "toggle" },
       { key: "showBizName",      label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
   },
@@ -392,6 +393,20 @@ export function qrDataUrl(value: string, px = 256): string {
  *  when no real job URL has been supplied yet. */
 const SAMPLE_SERVICE_QR_URL = `${publicOrigin()}/b/demo/t/techapp?job=0`;
 
+/** Sample customer code used to render a representative QR in editor previews
+ *  when no real customer has been supplied yet. */
+const SAMPLE_CUSTOMER_QR = "CUS-0042";
+
+/**
+ * The value a customer sticker encodes into its QR code. Prefers an explicit
+ * value the print entry point supplies, then the customer ID, then the loyalty
+ * number — so a scanned loyalty sticker resolves to the same `CUS-…` code the
+ * receipt QR uses, letting staff pull up the customer at the POS.
+ */
+function customerQrValue(f: (k: string) => string): string {
+  return f("customerQrValue") || f("customerId") || f("loyaltyNo");
+}
+
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
 export function LabelPreview({
@@ -460,6 +475,13 @@ export function LabelPreview({
     ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
     : "";
 
+  // Customer QR — customer stickers can carry a code (the customer's `CUS-…` ID
+  // by default) that staff scan to pull the customer up at the POS. Falls back to
+  // a sample so the editor preview always shows a representative code.
+  const customerQrSrc = type.id === "customer" && show("showCustomerQr")
+    ? qrDataUrl(customerQrValue(f) || SAMPLE_CUSTOMER_QR)
+    : "";
+
   const labelW = rotated ? finalH : finalW;
   const labelH = rotated ? finalW : finalH;
 
@@ -488,6 +510,21 @@ export function LabelPreview({
     <img
       src={serviceQrSrc}
       alt="service qr"
+      style={{
+        width: Math.max(22, finalScale * 11),
+        height: Math.max(22, finalScale * 11),
+        objectFit: "contain",
+        flexShrink: 0,
+        alignSelf: "center",
+        imageRendering: "pixelated",
+      }}
+    />
+  ) : null;
+
+  const customerQrImg = customerQrSrc ? (
+    <img
+      src={customerQrSrc}
+      alt="customer qr"
       style={{
         width: Math.max(22, finalScale * 11),
         height: Math.max(22, finalScale * 11),
@@ -581,30 +618,33 @@ export function LabelPreview({
         )}
 
         {type.id === "customer" && (
-          <>
-            {show("showCustomerName") && (
-              <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
-                {f("customerName") || "Sarah Johnson"}
-              </div>
-            )}
-            {show("showGroup") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: Math.max(6, finalScale * 2.2) }}>
-                {f("group") || "VIP Member"}
-              </div>
-            )}
-            {show("showCustomerId") && (
-              <div className="text-gray-500">{f("customerId") || "#CUS-0042"}</div>
-            )}
-            {show("showLoyaltyNo") && (
-              <div className="text-gray-500">{f("loyaltyNo") || "LYL-20491"}</div>
-            )}
-            {show("showPhone") && (
-              <div className="text-gray-500">{f("phone") || "(03) 9000 0000"}</div>
-            )}
-            {show("showBizName") && (
-              <div className="text-gray-400 text-right truncate">{businessName}</div>
-            )}
-          </>
+          <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
+            <div className="flex-1 min-w-0 flex flex-col justify-between">
+              {show("showCustomerName") && (
+                <div className="font-bold truncate" style={{ fontSize: Math.max(8, finalScale * 3.2) }}>
+                  {f("customerName") || "Sarah Johnson"}
+                </div>
+              )}
+              {show("showGroup") && (
+                <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: Math.max(6, finalScale * 2.2) }}>
+                  {f("group") || "VIP Member"}
+                </div>
+              )}
+              {show("showCustomerId") && (
+                <div className="text-gray-500">{f("customerId") || "#CUS-0042"}</div>
+              )}
+              {show("showLoyaltyNo") && (
+                <div className="text-gray-500">{f("loyaltyNo") || "LYL-20491"}</div>
+              )}
+              {show("showPhone") && (
+                <div className="text-gray-500">{f("phone") || "(03) 9000 0000"}</div>
+              )}
+              {show("showBizName") && (
+                <div className="text-gray-400 text-right truncate">{businessName}</div>
+              )}
+            </div>
+            {customerQrImg}
+          </div>
         )}
 
         {type.id === "return" && (
@@ -898,6 +938,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const serviceQrSrc = typeId === "repair" && show("showServiceQr")
     ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
     : "";
+  // Customer QR — customer stickers can carry the customer's `CUS-…` code (or an
+  // explicit value the print path supplies) so staff scan the sticker to pull the
+  // customer up at the POS. Falls back to a sample so a test print still shows it.
+  const customerQrSrc = typeId === "customer" && show("showCustomerQr")
+    ? qrDataUrl(customerQrValue(f) || SAMPLE_CUSTOMER_QR)
+    : "";
   const qrMm = Math.max(8, Math.min(shorter * 0.7, pageH * 0.78));
 
   const inner = (() => {
@@ -913,13 +959,20 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
 
-      case "customer": return `
+      case "customer": {
+        const customerText = `
         ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${(bp*1.15).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
         ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${(bp*.85).toFixed(1)}pt">${f("group")||"VIP Member"}</div>` : ""}
         ${show("showCustomerId") ? `<div style="color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
         ${show("showLoyaltyNo") ? `<div style="color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
         ${show("showPhone") ? `<div style="color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+        if (!customerQrSrc) return customerText;
+        return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-self:stretch">${customerText}</div>
+          <img src="${customerQrSrc}" alt="customer qr" style="width:${qrMm.toFixed(1)}mm;height:${qrMm.toFixed(1)}mm;object-fit:contain;flex-shrink:0;image-rendering:pixelated"/>
+        </div>`;
+      }
 
       case "return": return `
         ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${(bp*1.1).toFixed(1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
