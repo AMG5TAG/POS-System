@@ -79,6 +79,30 @@ export interface InvoicePdfData {
   fontFamily?: string | null;
   /** Stored `selectedStyle` from the template. */
   styleVariant?: string | null;
+  /** Show the customer-profile QR (needs `customerQrValue`). */
+  showCustomerQr?: boolean;
+  /** Show the loyalty-earned banner (needs `loyaltyPointsEarned`). */
+  showLoyaltyEarned?: boolean;
+  /** Show accepted payment-method chips. */
+  showPaymentMethods?: boolean;
+  /** Show the bottom barcode. */
+  showBarcode?: boolean;
+  /** Show the referral footer. */
+  showReferralLink?: boolean;
+  /** Custom message block rendered in the footer. */
+  customMessage?: string | null;
+  /** Intro text for the referral footer. */
+  referralLinkText?: string | null;
+  /** Short code shown under the customer-profile QR, e.g. "CUS-42". */
+  customerCode?: string | null;
+  /** Value/URL encoded into the customer-profile QR (rendered server-side). */
+  customerQrValue?: string | null;
+  /** Loyalty points earned on this sale, for the banner. */
+  loyaltyPointsEarned?: number | null;
+  /** Accepted payment methods, e.g. ["EFTPOS","Cash"]. */
+  paymentMethods?: string[] | null;
+  referralCode?: string | null;
+  referralUrl?: string | null;
 }
 
 const FALLBACK_BRAND = "#4f46e5";
@@ -185,6 +209,7 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
       phone: data.customerPhone,
       address: data.customerAddress,
       company: data.customerCompany,
+      code: data.customerCode ?? null,
     },
     items: data.items.map((it) => ({
       description: it.description,
@@ -199,6 +224,10 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
     total: data.total,
     amountPaid: data.amountPaid,
     notes: data.notes,
+    loyaltyPointsEarned: data.loyaltyPointsEarned ?? null,
+    paymentMethods: data.paymentMethods ?? null,
+    referralCode: data.referralCode ?? null,
+    referralUrl: data.referralUrl ?? null,
     options: {
       showLogo: data.showLogo,
       showAbn: data.showAbn,
@@ -208,13 +237,20 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
       showSocialLinks: data.showSocialLinks,
       socialIconBrandColors: data.socialIconBrandColors,
       showAllCustomerDetails: data.showAllCustomerDetails,
+      showCustomerQr: data.showCustomerQr,
+      showLoyaltyEarned: data.showLoyaltyEarned,
+      showPaymentMethods: data.showPaymentMethods,
+      showBarcode: data.showBarcode,
+      showReferralLink: data.showReferralLink,
       headerText: data.headerText,
       thankYouMsg: data.thankYouMsg,
+      customMessage: data.customMessage,
       footerText: data.footerText,
       paymentTerms: data.paymentTerms,
       invoiceNotes: data.invoiceNotes,
       bankDetails: data.bankDetails,
       paymentSectionHeading: data.paymentSectionHeading,
+      referralLinkText: data.referralLinkText,
       fontFamily: data.fontFamily,
       styleVariant: data.styleVariant,
       socialLinks: data.socialLinks ?? null,
@@ -222,8 +258,28 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
   };
 }
 
+type QrFn = (text: string, opts?: Record<string, unknown>) => Promise<string>;
+
+/** Render a QR code to a PNG data URL (best-effort; null on failure). */
+async function genQrDataUrl(value: string): Promise<string | null> {
+  try {
+    const mod = await import("qrcode") as unknown as { toDataURL?: QrFn; default?: { toDataURL: QrFn } };
+    const toDataURL = mod.toDataURL ?? mod.default?.toDataURL;
+    if (!toDataURL) return null;
+    return await toDataURL(value, { margin: 0, width: 220 });
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : err }, "[invoicePdf] customer QR generation failed");
+    return null;
+  }
+}
+
 export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
-  const html = buildInvoiceHtml(mapToDoc(data));
+  const doc = mapToDoc(data);
+  // Encode the customer-profile QR server-side (the renderer is pure HTML).
+  if (data.showCustomerQr && data.customerQrValue) {
+    doc.customerQrDataUrl = await genQrDataUrl(data.customerQrValue);
+  }
+  const html = buildInvoiceHtml(doc);
   try {
     return await htmlToPdf(html);
   } catch (err) {

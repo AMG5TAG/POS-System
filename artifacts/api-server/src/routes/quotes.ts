@@ -414,6 +414,15 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
     socialLinks:            (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
     fontFamily:             tplRow?.fontFamily || null,
     styleVariant:           tplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(tplOpts.showCustomerQr),
+    showLoyaltyEarned:      Boolean(tplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
+    showBarcode:            Boolean(tplOpts.showBarcode),
+    showReferralLink:       Boolean(tplOpts.showReferralLink),
+    customMessage:          (tplOpts.customMessage as string | undefined) || null,
+    referralLinkText:       (tplOpts.referralLinkText as string | undefined) || null,
+    customerCode:           row.quote.customerId ? `CUS-${row.quote.customerId}` : null,
+    customerQrValue:        row.quote.customerId ? `CUS-${row.quote.customerId}` : null,
   });
 
   res.setHeader("Content-Type", "application/pdf");

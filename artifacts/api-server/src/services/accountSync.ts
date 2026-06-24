@@ -370,12 +370,15 @@ export async function syncCalendar(
   const accessToken = await resolveAccountToken(merchantId, provider);
 
   const now = new Date();
+  // Join the customer so each event can carry the customer's address (as the
+  // event location) and mobile (appended to the notes).
   const appointments = (await db
-    .select()
+    .select({ appt: appointmentsTable, custAddress: customersTable.address, custPhone: customersTable.phone })
     .from(appointmentsTable)
+    .leftJoin(customersTable, eq(appointmentsTable.customerId, customersTable.id))
     .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now)))
     .orderBy(appointmentsTable.scheduledAt))
-    .filter((a) => a.status !== "cancelled");
+    .filter((r) => r.appt.status !== "cancelled");
 
   if (appointments.length === 0) return { synced: 0, failed: 0, total: 0 };
 
@@ -385,16 +388,23 @@ export async function syncCalendar(
   let synced = 0;
   let failed = 0;
 
-  for (const a of appointments) {
+  for (const row of appointments) {
+    const a = row.appt;
     const start = new Date(a.scheduledAt);
     const end   = new Date(start.getTime() + (a.durationMinutes ?? 30) * 60_000);
+    // Customer address → event location; customer mobile → appended to notes.
+    const location  = (row.custAddress ?? "").trim();
+    const baseNotes = a.description ?? a.notes ?? "";
+    const mobile    = (row.custPhone ?? "").trim();
+    const notes     = mobile ? `${baseNotes ? `${baseNotes}\n\n` : ""}Mobile: ${mobile}` : baseNotes;
     try {
       if (provider === "microsoft_contacts") {
         const r = await fetch("https://graph.microsoft.com/v1.0/me/events", {
           method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
           body: JSON.stringify({
             subject:       a.title,
-            body:          { contentType: "text", content: a.description ?? a.notes ?? "" },
+            body:          { contentType: "text", content: notes },
+            ...(location ? { location: { displayName: location } } : {}),
             start:         { dateTime: toGraphTime(start), timeZone: "UTC" },
             end:           { dateTime: toGraphTime(end),   timeZone: "UTC" },
             transactionId: `koapos-appt-${a.id}`,
@@ -408,7 +418,8 @@ export async function syncCalendar(
           body: JSON.stringify({
             id:          `koapos${a.id}`,
             summary:     a.title,
-            description: a.description ?? a.notes ?? "",
+            description: notes,
+            ...(location ? { location } : {}),
             start:       { dateTime: start.toISOString() },
             end:         { dateTime: end.toISOString() },
           }),

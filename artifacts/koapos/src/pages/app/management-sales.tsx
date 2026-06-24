@@ -12,13 +12,15 @@ import {
   useGetSalesChart,
   useGetTopProducts,
   useListTransactions,
-  useListCustomers,
   useListStaff,
   useListInventory,
   useListCashDrawerEntries,
+  useListDailyCloses,
   useListWastage,
   useGetTaxSettings,
   useGetLoyaltySettings,
+  useListGiftCards,
+  useGetGiftCardSettings,
   useGetProfitLoss,
   useGetSalesSummary,
   useGetInventoryValuation,
@@ -44,6 +46,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn, formatCurrency, exportToCsv } from "@/lib/utils";
+import { useAllCustomers } from "@/hooks/use-all-customers";
 import {
   TrendingUp, CreditCard, Package2, Monitor, DollarSign, Users,
   BarChart3, Activity, Banknote, SlidersHorizontal, LayoutGrid,
@@ -470,33 +473,30 @@ function InventoryTab() {
 /* ─── Tab: Register Closures ─────────────────────────────────────────────── */
 
 function RegisterClosuresTab() {
-  const { data, isLoading } = useListCashDrawerEntries();
-  const entries = data ?? [];
+  // End-of-day register closures live in daily_closes (the same records the
+  // Daily Reports page shows), NOT the cash-drawer movement log.
+  // High limit so KPI aggregates cover the full history (≈3 years of daily closes).
+  const { data, isLoading } = useListDailyCloses({ limit: 1000, offset: 0 });
+  const closes = useMemo(
+    () => (data ?? []).slice().sort((a, b) => b.closeDate.localeCompare(a.closeDate)),
+    [data],
+  );
 
-  const byDate = useMemo(() => {
-    const map: Record<string, { date: string; in: number; out: number; count: number }> = {};
-    for (const e of entries) {
-      const d = e.shiftDate ?? e.createdAt?.split("T")[0] ?? "—";
-      if (!map[d]) map[d] = { date: d, in: 0, out: 0, count: 0 };
-      map[d].count++;
-      if (e.amount >= 0) map[d].in  += e.amount;
-      else               map[d].out += Math.abs(e.amount);
-    }
-    return Object.values(map).sort((a, b) => b.date.localeCompare(a.date));
-  }, [entries]);
+  const totalGross = closes.reduce((s, r) => s + ((r.breakdown as Record<string, number>)?.grossSales ?? 0), 0);
+  const totalVariance = closes.reduce((s, r) => s + Math.abs(r.variance), 0);
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiTile label="Closure Days" value={isLoading ? "—" : byDate.length.toString()} sub="Recorded shifts" accent />
-        <KpiTile label="Total In" value={isLoading ? "—" : formatCurrency(byDate.reduce((s, r) => s + r.in, 0))} sub="Cash counted in" />
-        <KpiTile label="Total Out" value={isLoading ? "—" : formatCurrency(byDate.reduce((s, r) => s + r.out, 0))} sub="Cash counted out" />
+        <KpiTile label="Closures" value={isLoading ? "—" : closes.length.toString()} sub="End-of-day records" accent />
+        <KpiTile label="Gross Sales" value={isLoading ? "—" : formatCurrency(totalGross)} sub="Across all closures" />
+        <KpiTile label="Total Variance" value={isLoading ? "—" : formatCurrency(totalVariance)} sub="Counted vs expected" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Daily Register Summary" action={<ExportBtn />} />
+        <SectionHeader title="Register Closures" action={<ExportBtn />} />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
-        ) : byDate.length === 0 ? (
+        ) : closes.length === 0 ? (
           <div className="flex flex-col items-center py-14 gap-3">
             <Monitor className="w-10 h-10 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">No register closures recorded yet.</p>
@@ -506,21 +506,21 @@ function RegisterClosuresTab() {
             <thead>
               <tr className="bg-muted/30 border-b">
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Date</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Entries</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Cash In</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Cash Out</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Net</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Closed By</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Expected</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Counted</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Variance</th>
               </tr>
             </thead>
             <tbody>
-              {byDate.map((row) => (
-                <tr key={row.date} className="border-b last:border-0 hover:bg-muted/20">
-                  <td className="px-5 py-3 font-medium">{row.date}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{row.count}</td>
-                  <td className="px-5 py-3 text-right text-emerald-600 font-medium">{formatCurrency(row.in)}</td>
-                  <td className="px-5 py-3 text-right text-red-500 font-medium">{formatCurrency(row.out)}</td>
-                  <td className={cn("px-5 py-3 text-right font-semibold", row.in - row.out >= 0 ? "text-emerald-600" : "text-red-500")}>
-                    {formatCurrency(row.in - row.out)}
+              {closes.map((row) => (
+                <tr key={row.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="px-5 py-3 font-medium">{row.closeDate}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{row.closedByName || "—"}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(row.expectedCash)}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(row.countedCash)}</td>
+                  <td className={cn("px-5 py-3 text-right font-semibold", row.variance === 0 ? "text-muted-foreground" : Math.abs(row.variance) > 5 ? "text-red-500" : "text-emerald-600")}>
+                    {formatCurrency(row.variance)}
                   </td>
                 </tr>
               ))}
@@ -737,8 +737,8 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
 /* ─── Tab: Customer Insights ─────────────────────────────────────────────── */
 
 function CustomerInsightsTab() {
-  const { data, isLoading } = useListCustomers({ limit: 200 });
-  const customers = data?.items ?? [];
+  // Aggregate across the whole customer base, not a single capped page.
+  const { customers, isLoading } = useAllCustomers();
   const topBySpend   = [...customers].sort((a, b) => (b.totalSpent ?? 0) - (a.totalSpent ?? 0)).slice(0, 10);
   const topByLoyalty = [...customers].sort((a, b) => (b.loyaltyPoints ?? 0) - (a.loyaltyPoints ?? 0)).slice(0, 5);
   const totalSpend   = customers.reduce((s, c) => s + (c.totalSpent ?? 0), 0);
@@ -887,7 +887,9 @@ function TopProductsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod })
 
 function UserActivityTab({ fromDate }: { fromDate: string }) {
   const { data: staffData, isLoading: staffLoading } = useListStaff();
-  const { data: txData,    isLoading: txLoading    } = useListTransactions({ limit: 500 });
+  // Filter by date server-side (before the row limit) so the period's activity
+  // isn't crowded out by newer out-of-range transactions.
+  const { data: txData,    isLoading: txLoading    } = useListTransactions({ limit: 500, from: fromDate || undefined });
   const staff = staffData ?? [];
   const txs   = (txData?.items ?? []).filter((tx) => !fromDate || (tx.createdAt ?? "") >= fromDate);
 
@@ -1533,37 +1535,69 @@ function GstBasTab({ summary, summaryLoading }: {
 /* ─── Tab: Gift Cards ────────────────────────────────────────────────────── */
 
 function GiftCardsTab() {
+  const { data, isLoading } = useListGiftCards({ limit: 1000 });
+  const { data: settings } = useGetGiftCardSettings();
+  const cards = data?.items ?? [];
+
+  const issued      = cards.reduce((s, c) => s + (c.initialValue ?? 0), 0);
+  const redeemed    = cards.reduce((s, c) => s + Math.max(0, (c.initialValue ?? 0) - (c.currentBalance ?? 0)), 0);
+  const outstanding = cards.reduce((s, c) => s + (c.status !== "expired" ? (c.currentBalance ?? 0) : 0), 0);
+  const expired     = cards.reduce((s, c) => s + (c.status === "expired" ? (c.currentBalance ?? 0) : 0), 0);
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiTile label="Cards Issued" value="0" sub="Total issued" accent />
-        <KpiTile label="Outstanding Balance" value={formatCurrency(0)} sub="Unredeemed value" />
-        <KpiTile label="Redeemed" value={formatCurrency(0)} sub="Lifetime" />
+        <KpiTile label="Cards Issued" value={isLoading ? "—" : cards.length.toString()} sub="Total issued" accent />
+        <KpiTile label="Outstanding Balance" value={isLoading ? "—" : formatCurrency(outstanding)} sub="Unredeemed liability" />
+        <KpiTile label="Redeemed" value={isLoading ? "—" : formatCurrency(redeemed)} sub="Lifetime" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Gift Card Activity" action={
-          <Button size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Issue Card</Button>
-        } />
-        <div className="flex flex-col items-center py-16 gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-            <Gift className="w-8 h-8 text-pink-500" />
+        <SectionHeader title="Gift Card Activity" action={<ExportBtn />} />
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
+        ) : cards.length === 0 ? (
+          <div className="flex flex-col items-center py-16 gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+              <Gift className="w-8 h-8 text-pink-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-lg">No gift cards yet</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">Issue gift cards at the POS register. They'll appear here for tracking and reporting.</p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="font-semibold text-lg">No gift cards yet</p>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xs">Issue gift cards at the POS register. They'll appear here for tracking and reporting.</p>
-          </div>
-          <Button variant="outline" size="sm">Learn about Gift Cards</Button>
-        </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-b">
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Card</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Issued To</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Initial</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Balance</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cards.map((c) => (
+                <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="px-5 py-3 font-medium font-mono text-xs">{c.cardNumber}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{c.issuedTo || "—"}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(c.initialValue ?? 0)}</td>
+                  <td className="px-5 py-3 text-right font-medium">{formatCurrency(c.currentBalance ?? 0)}</td>
+                  <td className="px-5 py-3 capitalize text-muted-foreground">{c.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border bg-card p-5 space-y-3">
           <p className="font-semibold">Configuration</p>
           <div className="space-y-3">
             {[
-              { label: "Expiry Period",  value: "Never"  },
-              { label: "Min. Value",     value: "$5.00"  },
-              { label: "Max. Value",     value: "$500.00"},
-              { label: "Partial Redemption", value: "Enabled" },
+              { label: "Expiry Period",      value: settings?.expiryMonths ? `${settings.expiryMonths} months` : "Never" },
+              { label: "Partial Redemption", value: settings?.allowPartialRedemptions === "false" ? "Disabled" : "Enabled" },
+              { label: "Card Prefix",        value: settings?.prefix || "—" },
             ].map((r) => (
               <div key={r.label} className="flex justify-between text-sm border-b pb-2 last:border-0 last:pb-0">
                 <span className="text-muted-foreground">{r.label}</span>
@@ -1576,10 +1610,10 @@ function GiftCardsTab() {
           <p className="font-semibold">Liability Summary</p>
           <p className="text-xs text-muted-foreground">Total outstanding gift card balances represent a liability on your books.</p>
           {[
-            { label: "Issued (all time)",  value: formatCurrency(0) },
-            { label: "Redeemed (all time)",value: formatCurrency(0) },
-            { label: "Expired",            value: formatCurrency(0) },
-            { label: "Outstanding (Liability)", value: formatCurrency(0) },
+            { label: "Issued (all time)",       value: formatCurrency(issued) },
+            { label: "Redeemed (all time)",     value: formatCurrency(redeemed) },
+            { label: "Expired",                 value: formatCurrency(expired) },
+            { label: "Outstanding (Liability)", value: formatCurrency(outstanding) },
           ].map((r) => (
             <div key={r.label} className="flex justify-between text-sm border-b pb-2 last:border-0 last:pb-0">
               <span className="text-muted-foreground">{r.label}</span>
@@ -1596,8 +1630,7 @@ function GiftCardsTab() {
 
 function StoreCreditTab() {
   const { data: loyaltyData } = useGetLoyaltySettings();
-  const { data: customerData, isLoading } = useListCustomers({ limit: 200 });
-  const customers    = customerData?.items ?? [];
+  const { customers, isLoading } = useAllCustomers();
   const totalPoints  = customers.reduce((s, c) => s + (c.loyaltyPoints ?? 0), 0);
   const dollarValue  = loyaltyData?.pointsPerDollar
     ? totalPoints / Number(loyaltyData.pointsPerDollar)

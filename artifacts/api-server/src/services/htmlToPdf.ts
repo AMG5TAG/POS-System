@@ -25,6 +25,11 @@ function resolveChromiumExecutable(): string | undefined {
   // 1. Explicit operator override always wins.
   if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
 
+  // 1b. Replit provisions a Playwright Chromium and exposes its path; reuse it
+  //     rather than relying on Puppeteer's (often-absent) bundled download.
+  const replitChromium = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  if (replitChromium && existsSync(replitChromium)) return replitChromium;
+
   // 2. A Chromium/Chrome on PATH (standard Linux/container installs).
   for (const name of ["chromium", "chromium-browser", "google-chrome-stable", "google-chrome"]) {
     try {

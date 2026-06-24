@@ -1017,6 +1017,17 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     socialLinks:            (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
     fontFamily:             tplRow?.fontFamily || null,
     styleVariant:           tplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(tplOpts.showCustomerQr),
+    showLoyaltyEarned:      Boolean(tplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
+    showBarcode:            Boolean(tplOpts.showBarcode),
+    showReferralLink:       Boolean(tplOpts.showReferralLink),
+    customMessage:          (tplOpts.customMessage as string | undefined) || null,
+    referralLinkText:       (tplOpts.referralLinkText as string | undefined) || null,
+    // The customer-profile QR encodes the customer code (a stable scan-to-lookup
+    // identifier). Once persisted per-customer QRs land, swap in that QR's URL.
+    customerCode:           row.invoice.customerId ? `CUS-${row.invoice.customerId}` : null,
+    customerQrValue:        row.invoice.customerId ? `CUS-${row.invoice.customerId}` : null,
   });
 
   res.setHeader("Content-Type", "application/pdf");

@@ -246,6 +246,9 @@ importers:
       puppeteer:
         specifier: ^24.10.0
         version: 24.43.1(typescript@5.9.3)
+      qrcode:
+        specifier: ^1.5.4
+        version: 1.5.4
       ssh2:
         specifier: ^1.17.0
         version: 1.17.0
