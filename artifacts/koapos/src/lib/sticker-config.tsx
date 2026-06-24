@@ -3,8 +3,10 @@ import {
   Package, User, RotateCcw, Wrench, MapPin, DollarSign, LayoutGrid,
 } from "lucide-react";
 import JsBarcode from "jsbarcode";
+import QRCode from "qrcode";
 import { useGetMerchant } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { publicOrigin } from "@/lib/public-url";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -226,6 +228,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" },
       { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" },
       { key: "showBarcode",  label: "Barcode",       defaultValue: "false", type: "toggle" },
+      { key: "showServiceQr", label: "Tech App QR",  defaultValue: "false", type: "toggle" },
       { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" },
     ],
   },
@@ -350,6 +353,43 @@ export function barcodeDataUrl(value: string): string {
   }
 }
 
+/**
+ * Render a QR code as a PNG data URL synchronously (so it's ready before a label
+ * is written to a print iframe — unlike `QRCode.toDataURL`, which is async). The
+ * repair/service sticker uses this to print a Tech App deep link the technician
+ * can scan to open the job. Returns "" when there's no value or no DOM (SSR).
+ */
+export function qrDataUrl(value: string, px = 256): string {
+  if (typeof document === "undefined" || !value) return "";
+  try {
+    const qr = QRCode.create(String(value), { errorCorrectionLevel: "M" });
+    const count = qr.modules.size;
+    const data = qr.modules.data;
+    const cell = Math.max(1, Math.floor(px / count));
+    const dim = cell * count;
+    const canvas = document.createElement("canvas");
+    canvas.width = dim;
+    canvas.height = dim;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return "";
+    ctx.fillStyle = "#ffffff";
+    ctx.fillRect(0, 0, dim, dim);
+    ctx.fillStyle = "#000000";
+    for (let y = 0; y < count; y++) {
+      for (let x = 0; x < count; x++) {
+        if (data[y * count + x]) ctx.fillRect(x * cell, y * cell, cell, cell);
+      }
+    }
+    return canvas.toDataURL("image/png");
+  } catch {
+    return "";
+  }
+}
+
+/** Sample Tech App URL used to render a representative QR in editor previews
+ *  when no real job URL has been supplied yet. */
+const SAMPLE_SERVICE_QR_URL = `${publicOrigin()}/b/demo/t/techapp?job=0`;
+
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
 export function LabelPreview({
@@ -410,6 +450,13 @@ export function LabelPreview({
   const barcodeValue = stickerBarcodeValue(type.id, f) || "1234567890";
   const barcodeUrl   = show("showBarcode") ? barcodeDataUrl(barcodeValue) : "";
 
+  // Service QR — repair stickers can carry a Tech App deep link the technician
+  // scans to open the job. Falls back to a sample URL so the editor preview
+  // always shows a representative code.
+  const serviceQrSrc = type.id === "repair" && show("showServiceQr")
+    ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
+    : "";
+
   const labelW = rotated ? finalH : finalW;
   const labelH = rotated ? finalW : finalH;
 
@@ -429,6 +476,21 @@ export function LabelPreview({
         display: "block",
         width: "100%",
         height: Math.max(9, finalScale * 4),
+        imageRendering: "pixelated",
+      }}
+    />
+  ) : null;
+
+  const serviceQrImg = serviceQrSrc ? (
+    <img
+      src={serviceQrSrc}
+      alt="service qr"
+      style={{
+        width: Math.max(22, finalScale * 11),
+        height: Math.max(22, finalScale * 11),
+        objectFit: "contain",
+        flexShrink: 0,
+        alignSelf: "center",
         imageRendering: "pixelated",
       }}
     />
@@ -562,31 +624,34 @@ export function LabelPreview({
         )}
 
         {type.id === "repair" && (
-          <>
-            {show("showJobNo") && (
-              <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>
-                SERVICE {f("jobNo") || "SVC-0031"}
-              </div>
-            )}
-            {show("showCustomer") && (
-              <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>
-            )}
-            {show("showDevice") && (
-              <div className="text-gray-500 truncate">{f("device") || "MacBook Pro 2023"}</div>
-            )}
-            {show("showFault") && (
-              <div className="text-gray-400 truncate">Fault: {f("fault") || "Screen flickering"}</div>
-            )}
-            {show("showDueDate") && (
-              <div className="font-medium truncate">Due: {f("dueDate") || "22/05/2026"}</div>
-            )}
-            {show("showTech") && (
-              <div className="text-gray-400 truncate">Tech: {f("tech") || "Alex Taylor"}</div>
-            )}
-            {show("showBizName") && (
-              <div className="text-gray-400 text-right truncate">{businessName}</div>
-            )}
-          </>
+          <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
+            <div className="flex-1 min-w-0 flex flex-col justify-between">
+              {show("showJobNo") && (
+                <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>
+                  SERVICE {f("jobNo") || "SVC-0031"}
+                </div>
+              )}
+              {show("showCustomer") && (
+                <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>
+              )}
+              {show("showDevice") && (
+                <div className="text-gray-500 truncate">{f("device") || "MacBook Pro 2023"}</div>
+              )}
+              {show("showFault") && (
+                <div className="text-gray-400 truncate">Fault: {f("fault") || "Screen flickering"}</div>
+              )}
+              {show("showDueDate") && (
+                <div className="font-medium truncate">Due: {f("dueDate") || "22/05/2026"}</div>
+              )}
+              {show("showTech") && (
+                <div className="text-gray-400 truncate">Tech: {f("tech") || "Alex Taylor"}</div>
+              )}
+              {show("showBizName") && (
+                <div className="text-gray-400 text-right truncate">{businessName}</div>
+              )}
+            </div>
+            {serviceQrImg}
+          </div>
         )}
 
         {type.id === "address" && (
@@ -802,6 +867,13 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   // (plain text included). Rendered full-width at the bottom of the label.
   const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
 
+  // Service QR — repair stickers can carry a Tech App deep link. Only printed
+  // when a real job URL is supplied (the editor preview shows a sample instead).
+  const serviceQrSrc = typeId === "repair" && show("showServiceQr") && f("serviceQrUrl")
+    ? qrDataUrl(f("serviceQrUrl"))
+    : "";
+  const qrMm = Math.max(8, Math.min(shorter * 0.7, pageH * 0.78));
+
   const inner = (() => {
     switch (typeId) {
       case "product": return `
@@ -832,7 +904,8 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         ${show("showCustomer") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
-      case "repair": return `
+      case "repair": {
+        const repairText = `
         ${show("showJobNo") ? `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>` : ""}
         ${show("showCustomer") ? `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Mike Chen"}</div>` : ""}
         ${show("showDevice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")||"MacBook Pro 2023"}</div>` : ""}
@@ -840,6 +913,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         ${show("showDueDate") ? `<div style="font-weight:600">Due: ${f("dueDate")||"22/05/2026"}</div>` : ""}
         ${show("showTech") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Alex Taylor"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${(bp*.85).toFixed(1)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
+        if (!serviceQrSrc) return repairText;
+        return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
+          <div style="flex:1;min-width:0;display:flex;flex-direction:column;justify-content:space-between;align-self:stretch">${repairText}</div>
+          <img src="${serviceQrSrc}" alt="service qr" style="width:${qrMm.toFixed(1)}mm;height:${qrMm.toFixed(1)}mm;object-fit:contain;flex-shrink:0;image-rendering:pixelated"/>
+        </div>`;
+      }
 
       case "address": return `
         ${show("showName") ? `<div style="font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")||"Sarah Johnson"}</div>` : ""}

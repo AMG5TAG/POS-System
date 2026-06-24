@@ -17,3 +17,19 @@ export function publicOrigin(): string {
     : DEFAULT_PUBLIC_DOMAIN;
   return `https://${host}`;
 }
+
+/**
+ * Public deep link that opens a service job in the Tech App
+ * (/b/:username/t/techapp?job=:id). The `?job=` parameter is also understood by
+ * the Tech App's in-app scanner. When no business username is configured the
+ * Tech App can't exist, so this falls back to the staff Service View.
+ *
+ * Single source of truth for the QR target printed on the A4 service sheet,
+ * the A4 service report and the repair/service sticker.
+ */
+export function techAppJobUrl(username: string | null | undefined, jobId: number | string): string {
+  const origin = publicOrigin();
+  return username
+    ? `${origin}/b/${encodeURIComponent(username)}/t/techapp?job=${jobId}`
+    : `${origin}/service-jobs/${jobId}`;
+}

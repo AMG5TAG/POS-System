@@ -114,6 +114,7 @@ export interface TplOpts {
   jobNoFontSize:        string;
   showLogins:           boolean;
   showFormsFiles:       boolean;
+  showServiceQr:        boolean;
   defaultPrintCopies:   string;
   // Customer PDF section toggles
   showTransactions:     boolean;
@@ -146,7 +147,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
-  showLogins: false, showFormsFiles: false, defaultPrintCopies: "1",
+  showLogins: false, showFormsFiles: false, showServiceQr: true, defaultPrintCopies: "1",
   showTransactions: true, showAppointments: true, showServiceJobs: true,
   showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
   showReferralLink: false, referralLinkText: "",
@@ -314,6 +315,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "callHistoryRows",      label: "Call History Rows",        type: "text",     placeholder: "6", hint: "Number of blank rows for manual notes" },
       { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
+      { section: "Sections", key: "showServiceQr",      label: "Show Tech App QR",         type: "toggle", hint: "Adds a QR that opens the job in the Tech App when scanned" },
       { section: "Footer",   key: "showSocialLinks",      label: "Show Business Socials",    type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss.", quickCodes: true },
@@ -1542,6 +1544,14 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
         </div>
       )}
 
+      {/* Tech App QR */}
+      {opts.showServiceQr && (
+        <div className="flex items-center gap-2 pt-1">
+          <QRCodeVisual label="Tech App" size={40} />
+          <p className="text-[8px] text-gray-500 leading-tight">Scan to open in the<br /><strong>Tech App</strong> — SVC-0001</p>
+        </div>
+      )}
+
       {/* Footer / warranty */}
       {(opts.warrantyText || opts.footerText) && (
         <div className="border-t pt-1 space-y-0.5 text-[8px] text-gray-400">
@@ -1811,6 +1821,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       brandColor: (profile.brandColors ?? [])[0] || "#efbf04",
       tagline: profile.tagline || "",
       logo: profile.logo || "",
+      techAppUsername: merchant?.username ?? undefined,
     };
     const receiptOpts: ReceiptTemplateOpts = {
       showLogo: opts.showLogo,
@@ -1843,6 +1854,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       showDeviceDetails: opts.showDeviceDetails,
       showWorkDescription: opts.showWorkDescription,
       warrantyText: opts.warrantyText,
+      showServiceQr: opts.showServiceQr,
     };
     const baseDate = new Date().toISOString();
     const demoTx: import("@workspace/api-client-react").Transaction = {

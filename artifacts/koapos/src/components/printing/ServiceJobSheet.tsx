@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
-import { publicOrigin } from "@/lib/public-url";
+import { techAppJobUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
 
 /**
@@ -183,13 +183,11 @@ export function ServiceJobSheet({
      when no business username is configured (the Tech App can't exist without
      one). The `?job=` deep link is also understood by the Tech App's in-app
      scanner. */
+  const showQr = opts.showServiceQr !== false; // default on; template toggle can hide it
   const qrTarget = useMemo(() => {
-    if (data.jobId == null) return null;
-    if (branding.techAppUsername) {
-      return `${publicOrigin()}/b/${encodeURIComponent(branding.techAppUsername)}/t/techapp?job=${data.jobId}`;
-    }
-    return `${publicOrigin()}/service-jobs/${data.jobId}`;
-  }, [data.jobId, branding.techAppUsername]);
+    if (data.jobId == null || !showQr) return null;
+    return techAppJobUrl(branding.techAppUsername, data.jobId);
+  }, [data.jobId, branding.techAppUsername, showQr]);
   const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   return (

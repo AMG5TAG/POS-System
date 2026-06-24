@@ -64,6 +64,7 @@ function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra)
     showDeviceDetails: opts.showDeviceDetails,
     showWorkDescription: opts.showWorkDescription,
     warrantyText: opts.warrantyText,
+    showServiceQr: opts.showServiceQr,
   };
 }
 
@@ -138,6 +139,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
     phone: m?.phone ?? "",
     address: [m?.address, m?.city, p?.state, p?.postcode].filter(Boolean).join(", "),
     partnerReferralCode: m?.partnerReferralCode ?? "",
+    techAppUsername: merchant?.username ?? undefined,
   };
 
   const isLoading =

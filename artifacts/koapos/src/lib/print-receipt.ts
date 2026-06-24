@@ -3,7 +3,7 @@ import { buildInvoiceHtml } from "@workspace/sales-documents";
 import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
-import { publicOrigin } from "@/lib/public-url";
+import { publicOrigin, techAppJobUrl } from "@/lib/public-url";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -16,6 +16,9 @@ export interface ReceiptBusinessInfo {
   phone?: string;
   address?: string;
   partnerReferralCode?: string;
+  /** Business username — forms the Tech App address (/b/:username/t/techapp).
+      When present, the service report QR deep-links into the Tech App for the job. */
+  techAppUsername?: string;
 }
 
 /** Normalized layout family shared by the Management preview and the printers. */
@@ -78,6 +81,8 @@ export interface ReceiptTemplateOpts {
   showDeviceDetails?: boolean;
   showWorkDescription?: boolean;
   warrantyText?: string;
+  /** Print the Tech App QR (deep-links into the job) on the A4 service report. */
+  showServiceQr?: boolean;
 }
 
 /* ─── shared helpers ────────────────────────────────────────────────────── */
@@ -90,6 +95,29 @@ function esc(s: string): string {
 
 function fmtAUD(n: number): string {
   return `$${n.toFixed(2)}`;
+}
+
+/**
+ * Build a crisp QR as an inline SVG string. Uses the synchronous `QRCode.create`
+ * (unlike the async `toDataURL`) so the markup is ready before the print window
+ * is written. Returns "" if the value is empty or QR generation fails.
+ */
+function qrSvg(text: string, px = 96): string {
+  if (!text) return "";
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel: "M" });
+    const n = qr.modules.size;
+    const cells = qr.modules.data;
+    let path = "";
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        if (cells[y * n + x]) path += `M${x} ${y}h1v1h-1z`;
+      }
+    }
+    return `<svg width="${px}" height="${px}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Service job QR code"><rect width="${n}" height="${n}" fill="#ffffff"/><path d="${path}" fill="#000000"/></svg>`;
+  } catch {
+    return "";
+  }
 }
 
 /* ─── Quick-code (merge variable) resolution ──────────────────────────────────
@@ -927,6 +955,7 @@ export function printA4ServiceJob(
     showWorkDescription: true,
     showAbn: true,
     showWebsite: true,
+    showServiceQr: true,
     footerText: "",
     headerText: "",
     warrantyText: "",
@@ -976,6 +1005,11 @@ export function printA4ServiceJob(
     isPartner   ? `<span class="badge badge-purple">Partner Repair</span>` : "",
   ].filter(Boolean).join(" ");
 
+  // Tech App QR — scanning opens the job in the Tech App (/b/:username/t/techapp?job=:id).
+  const qrMarkup = tpl.showServiceQr && job.id != null
+    ? qrSvg(techAppJobUrl(businessInfo?.techAppUsername, job.id), 96)
+    : "";
+
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
@@ -1014,6 +1048,10 @@ export function printA4ServiceJob(
     .badge-purple { background: #faf5ff; color: #7c3aed; border: 1px solid #e9d5ff; }
 
     .status-pill { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+    .qr-block { display: flex; align-items: center; gap: 14px; margin: 8px 0 24px; }
+    .qr-box { border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; background: #fff; line-height: 0; }
+    .qr-caption { font-size: 11px; color: #6b7280; line-height: 1.6; }
 
     .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.8; }
 
@@ -1111,6 +1149,12 @@ export function printA4ServiceJob(
   </div>` : ""}
 
   ${warrantyText ? `<div class="warranty-note">${esc(warrantyText)}</div>` : ""}
+
+  ${qrMarkup ? `
+  <div class="qr-block">
+    <div class="qr-box">${qrMarkup}</div>
+    <div class="qr-caption">Scan to open in the <strong>Tech App</strong><br>Job ${escJobNum}</div>
+  </div>` : ""}
 
   <div class="footer">
     ${footerText ? `<p>${esc(footerText)}</p>` : `<p>Thank you for choosing ${businessName}.</p>`}

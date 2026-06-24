@@ -57,6 +57,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
+import { techAppJobUrl } from "@/lib/public-url";
 
 const DEVICE_TYPES = [
   "AIO",
@@ -242,6 +243,9 @@ export default function ServiceJobNewPage() {
     device: successJob?.deviceDescription ?? successJob?.deviceType ?? stickerBaseFields.device ?? "",
     fault: successJob?.workDescription ?? stickerBaseFields.fault ?? "",
     dueDate: new Date().toLocaleDateString("en-AU"),
+    // Tech App deep link for the optional service QR (shown when the repair
+    // template enables it).
+    serviceQrUrl: successJob?.id != null ? techAppJobUrl(merchant?.username, successJob.id) : "",
   };
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
