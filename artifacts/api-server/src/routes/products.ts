@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
+import { registerProductQr, registerQrBestEffort } from "../services/entityQr";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -291,6 +292,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
   if (product && costPrice != null) {
     void logCostHistory(req.session.merchantId!, product.id, costPrice.toString(), price.toString(), "manual");
   }
+  registerQrBestEffort(registerProductQr(req.session.merchantId!, product.id, product.name));
   res.status(201).json(formatProduct(product, null, ptRecord));
 });
 

@@ -4,6 +4,7 @@ import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
+import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
 import { publicDomain } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
@@ -157,6 +158,7 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
         .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
+  registerQrBestEffort(registerServiceQr(merchantId, job.id, customer?.name ?? null));
   res.status(201).json(formatJob(job, customer));
 });
 

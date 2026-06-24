@@ -14,6 +14,7 @@ import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { publicOrigin } from "../lib/publicUrl";
+import { registerCustomerQr, registerQrBestEffort } from "../services/entityQr";
 import {
   ListCustomersQueryParams,
   CreateCustomerBody,
@@ -195,6 +196,7 @@ router.post("/customers", requireAuth, async (req, res): Promise<void> => {
       referredByCustomerId: parsed.data.referredByCustomerId ?? null,
     }).returning();
     triggerInstantSync(merchantId, "contacts");
+    registerQrBestEffort(registerCustomerQr(merchantId, customer.id, [customer.firstName, customer.lastName].filter(Boolean).join(" ")));
     res.status(201).json(formatCustomer(customer));
   } catch (err) {
     req.log.error({ err }, "Customer create failed");

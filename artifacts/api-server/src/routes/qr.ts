@@ -15,7 +15,15 @@ router.post("/qr-codes", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { entryId, label, url = "", qrType = "website", content = "{}", settings = "{}" } = req.body;
   if (!entryId || !label) { res.status(400).json({ error: "entryId and label are required" }); return; }
-  const [row] = await db.insert(qrCodesTable).values({ merchantId, entryId, label, url, qrType, content, settings }).returning();
+  // Idempotent on (merchantId, entryId, qrType): re-saving the same QR updates
+  // it in place rather than creating a duplicate.
+  const [row] = await db.insert(qrCodesTable)
+    .values({ merchantId, entryId, label, url, qrType, content, settings })
+    .onConflictDoUpdate({
+      target: [qrCodesTable.merchantId, qrCodesTable.entryId, qrCodesTable.qrType],
+      set: { label, url, content, settings },
+    })
+    .returning();
   res.status(201).json(row);
 });
 
