@@ -189,7 +189,10 @@ export const zipProvider: PaymentProvider = {
     // NOTE: refund path is not in the public QR docs — confirm against sandbox.
     const { ok, body } = await zipFetch(creds, `${ZIP_INSTORE_PATH}/${encodeURIComponent(externalRef)}/refund`, {
       method: "POST",
-      idempotencyKey: crypto.randomUUID(),
+      // Deterministic key so a retried refund (network timeout etc.) dedupes
+      // provider-side instead of issuing a second refund. Keyed by ref+amount so
+      // distinct partial refunds still go through.
+      idempotencyKey: `refund-${externalRef}-${amount.toFixed(2)}`,
       body: JSON.stringify({ amount: amount.toFixed(2), reference: externalRef }),
     });
     if (!ok) return { ok: false, status: "captured", error: body.decline_reason ?? "Zip refund failed", raw: body };

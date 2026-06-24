@@ -78,7 +78,10 @@ async function fetchMicrosoftContactIndex(accessToken: string): Promise<RemoteIn
         if (key && !byEmail.has(key)) byEmail.set(key, ref);
       }
     }
-    url = d["@odata.nextLink"] ?? null;
+    const next = d["@odata.nextLink"] ?? null;
+    // Only follow pagination links that stay on Microsoft Graph — never let a
+    // response redirect our Bearer token to an arbitrary host (SSRF / token leak).
+    url = next && next.startsWith("https://graph.microsoft.com/") ? next : null;
   }
   return { byEmail, byId };
 }

@@ -154,10 +154,18 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
   const { search, heardFrom, limit = 50, offset = 0 } = queryParams.data;
   const conditions = [eq(customersTable.merchantId, req.session.merchantId!)];
   if (search) {
+    // Match each whitespace-separated token against the full name independently
+    // so word order doesn't matter ("John Smith" and "Smith John" both match).
+    // concat_ws skips null name parts; a single token also covers first/last
+    // name on its own. Falls back to the raw term for email/phone lookups.
+    const fullName = sql`concat_ws(' ', ${customersTable.firstName}, ${customersTable.lastName})`;
+    const tokens = search.split(/\s+/).filter(Boolean);
+    const nameMatch = tokens.length
+      ? and(...tokens.map((t) => sql`${fullName} ILIKE ${`%${t}%`}`))
+      : undefined;
     conditions.push(
       or(
-        ilike(customersTable.firstName, `%${search}%`),
-        ilike(customersTable.lastName, `%${search}%`),
+        nameMatch,
         ilike(customersTable.email, `%${search}%`),
         ilike(customersTable.phone, `%${search}%`)
       )!
@@ -1008,6 +1016,7 @@ router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Pro
   const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const points = parseInt(String(req.body?.points ?? 100), 10);
+  if (isNaN(points)) { res.status(400).json({ error: "Invalid points" }); return; }
 
   const [customer] = await db
     .select({ id: customersTable.id, loyaltyPoints: customersTable.loyaltyPoints })
@@ -1018,7 +1027,7 @@ router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Pro
   const newPoints = (customer.loyaltyPoints ?? 0) + points;
   await db.update(customersTable)
     .set({ loyaltyPoints: newPoints, updatedAt: new Date() })
-    .where(eq(customersTable.id, customerId));
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
 
   res.json({ success: true, pointsAwarded: points, newTotal: newPoints });
 });

@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { buildInvoiceHtml, type InvoiceDocInput } from "@workspace/sales-documents";
 import { htmlToPdf } from "./htmlToPdf";
+import { logger } from "../lib/logger";
 
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
 
@@ -230,7 +231,7 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     // than failing the invoice send/print, fall back to the legacy pdfkit
     // layout. The output is less faithful to the template but still valid.
     // eslint-disable-next-line no-console
-    console.warn("[invoicePdf] HTML→PDF render failed, falling back to pdfkit:", err instanceof Error ? err.message : err);
+    logger.warn({ err: err instanceof Error ? err.message : err }, "[invoicePdf] HTML→PDF render failed, falling back to pdfkit");
     return buildInvoicePdfLegacy(data);
   }
 }

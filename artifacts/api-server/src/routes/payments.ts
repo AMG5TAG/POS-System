@@ -89,13 +89,17 @@ async function settleAttempt(attempt: PaymentAttempt, providerStatus: PaymentSta
     }
 
     // Capture funds now that the sale is committed (skip if already captured).
+    let captureSucceeded = true;
+    let captureFailureReason: string | null = null;
     if (provider.requiresCapture && providerStatus !== "captured" && attempt.externalRef) {
       const cap = await provider.capture(attempt.merchantId, attempt.externalRef).catch((e: unknown) => {
         logger.error({ attemptId: attempt.id, provider: attempt.provider, err: e }, `${label}: capture threw after sale finalisation — manual reconciliation required`);
         return null;
       });
       if (!cap || cap.status === "failed") {
-        logger.error({ attemptId: attempt.id, provider: attempt.provider, transactionId: result.transaction.id }, `${label}: capture failed after sale finalisation — sale stands, funds NOT captured`);
+        captureSucceeded = false;
+        captureFailureReason = cap?.failureReason ?? `${label}: capture failed after sale finalisation — funds NOT captured, reconcile manually`;
+        logger.error({ attemptId: attempt.id, provider: attempt.provider, transactionId: result.transaction.id }, captureFailureReason);
       }
     }
 
@@ -106,8 +110,17 @@ async function settleAttempt(attempt: PaymentAttempt, providerStatus: PaymentSta
         .where(eq(transactionsTable.id, result.transaction.id));
     }
 
+    // Only report "captured" when funds were actually captured. If capture
+    // failed the sale still stands, but we keep the attempt as "authorized"
+    // with the failure reason so it surfaces for reconciliation/retry rather
+    // than masquerading as paid.
     const [updated] = await db.update(paymentAttemptsTable)
-      .set({ status: "captured", transactionId: result.transaction.id, providerData: providerData as object, failureReason: null })
+      .set({
+        status: captureSucceeded ? "captured" : "authorized",
+        transactionId: result.transaction.id,
+        providerData: providerData as object,
+        failureReason: captureSucceeded ? null : captureFailureReason,
+      })
       .where(eq(paymentAttemptsTable.id, attempt.id)).returning();
     return updated ?? attempt;
   }

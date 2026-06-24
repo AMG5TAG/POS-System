@@ -87,6 +87,7 @@ const SECTIONS: HelpSection[] = [
         ],
         note: "Funds are only captured after the customer approves, so a sale is never recorded for an unapproved payment. An unapproved or abandoned charge can be voided to release the customer's hold.",
         links: [
+          { label: "Zip in-store developer guide", url: "https://developers.zip.co/v4/docs/getting-started" },
           { label: "Zip merchant portal", url: "https://merchant.zip.co/" },
           { label: "Afterpay merchant portal", url: "https://merchant.afterpay.com/" },
           { label: "Klarna merchant portal", url: "https://portal.klarna.com/" },
