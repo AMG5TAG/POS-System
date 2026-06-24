@@ -1,9 +1,24 @@
 import { Router, type IRouter } from "express";
-import { db, qrCodesTable, qrSettingsTable, qrSavedTemplatesTable } from "@workspace/db";
+import { db, qrCodesTable, qrSettingsTable, qrSavedTemplatesTable, productsTable, customersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { registerProductQrsBatch, registerCustomerQrsBatch } from "../services/entityQr";
 
 const router: IRouter = Router();
+
+// POST /qr-codes/backfill — persist a trackable QR for every existing product
+// and customer (idempotent; safe to re-run). Service-job QRs are not backfilled
+// since they expire 30 days after creation.
+router.post("/qr-codes/backfill", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const products = await db.select({ id: productsTable.id, name: productsTable.name })
+    .from(productsTable).where(eq(productsTable.merchantId, merchantId));
+  const customers = await db.select({ id: customersTable.id, firstName: customersTable.firstName, lastName: customersTable.lastName })
+    .from(customersTable).where(eq(customersTable.merchantId, merchantId));
+  await registerProductQrsBatch(merchantId, products);
+  await registerCustomerQrsBatch(merchantId, customers.map((c) => ({ id: c.id, name: [c.firstName, c.lastName].filter(Boolean).join(" ") })));
+  res.json({ products: products.length, customers: customers.length });
+});
 
 router.get("/qr-codes", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;

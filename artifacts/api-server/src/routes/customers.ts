@@ -14,7 +14,7 @@ import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { publicOrigin } from "../lib/publicUrl";
-import { registerCustomerQr, registerQrBestEffort } from "../services/entityQr";
+import { registerCustomerQr, registerCustomerQrsBatch, registerQrBestEffort } from "../services/entityQr";
 import {
   ListCustomersQueryParams,
   CreateCustomerBody,
@@ -394,8 +394,10 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
   const skipped = rawRows.length - toInsert.length - toUpdate.length;
 
   try {
-    await db.insert(customersTable).values(insertValues);
-    imported = insertValues.length;
+    const inserted = await db.insert(customersTable).values(insertValues)
+      .returning({ id: customersTable.id, firstName: customersTable.firstName, lastName: customersTable.lastName });
+    imported = inserted.length;
+    registerQrBestEffort(registerCustomerQrsBatch(merchantId, inserted.map((c) => ({ id: c.id, name: [c.firstName, c.lastName].filter(Boolean).join(" ") }))));
   } catch (err) {
     req.log.error({ err }, "Customer CSV bulk insert failed");
     res.status(500).json({ error: "Database error during bulk insert" }); return;

@@ -60,6 +60,36 @@ export async function registerServiceQr(merchantId: number, jobId: number, label
   await upsertQr(merchantId, `service-${jobId}`, "service", label || `Service ${jobId}`, url, expiresAt);
 }
 
+/** Batch-register product QRs (CSV import / backfill). Existing rows are left as-is. */
+export async function registerProductQrsBatch(merchantId: number, products: Array<{ id: number; name: string | null }>): Promise<void> {
+  if (!products.length) return;
+  const username = await merchantUsername(merchantId);
+  const rows = products.map((p) => ({
+    merchantId,
+    entryId: `product-${p.id}`,
+    qrType: "product",
+    label: p.name || `Product ${p.id}`,
+    url: username ? `${publicOrigin()}/b/${encodeURIComponent(username)}/p/${p.id}` : "",
+    expiresAt: null,
+  }));
+  await db.insert(qrCodesTable).values(rows).onConflictDoNothing();
+}
+
+/** Batch-register customer QRs (CSV import / backfill). Existing rows are left as-is. */
+export async function registerCustomerQrsBatch(merchantId: number, customers: Array<{ id: number; name: string | null }>): Promise<void> {
+  if (!customers.length) return;
+  const username = await merchantUsername(merchantId);
+  const rows = customers.map((c) => ({
+    merchantId,
+    entryId: `customer-${c.id}`,
+    qrType: "customer",
+    label: c.name || `Customer ${c.id}`,
+    url: username ? `${publicOrigin()}/b/${encodeURIComponent(username)}/c/${c.id}` : `CUS-${c.id}`,
+    expiresAt: null,
+  }));
+  await db.insert(qrCodesTable).values(rows).onConflictDoNothing();
+}
+
 /** Fire-and-forget wrapper: register a QR without letting failures bubble up. */
 export function registerQrBestEffort(p: Promise<void>): void {
   void p.catch(() => { /* QR persistence is non-critical */ });

@@ -5,7 +5,7 @@ import { z } from "zod/v4";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
-import { registerProductQr, registerQrBestEffort } from "../services/entityQr";
+import { registerProductQr, registerProductQrsBatch, registerQrBestEffort } from "../services/entityQr";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -527,8 +527,9 @@ router.post("/products/import", requireAuth, uploadMemoryProducts.single("file")
 
   try {
     const inserted = await db.insert(productsTable).values(insertValues)
-      .returning({ id: productsTable.id, costPrice: productsTable.costPrice, price: productsTable.price });
+      .returning({ id: productsTable.id, name: productsTable.name, costPrice: productsTable.costPrice, price: productsTable.price });
     imported = inserted.length;
+    registerQrBestEffort(registerProductQrsBatch(merchantId, inserted.map((p) => ({ id: p.id, name: p.name }))));
     // Record the imported cost as each product's first price-history entry.
     const historyRows = inserted
       .filter((p) => p.costPrice != null)
