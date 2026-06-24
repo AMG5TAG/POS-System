@@ -222,6 +222,7 @@ export const STICKER_TYPES: StickerType[] = [
     defaultSize: "S0722520",
     fields: [
       { key: "showJobNo",    label: "Job #",         defaultValue: "true", type: "toggle" },
+      { key: "splitJobNo",   label: "Job # on 2 Lines", defaultValue: "false", type: "toggle" },
       { key: "showCustomer", label: "Customer",      defaultValue: "true", type: "toggle" },
       { key: "showDevice",   label: "Device",        defaultValue: "true", type: "toggle" },
       { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" },
@@ -640,9 +641,16 @@ export function LabelPreview({
           <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
             <div className="flex-1 min-w-0 flex flex-col justify-between">
               {show("showJobNo") && (
-                <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>
-                  SERVICE {f("jobNo") || "SVC-0031"}
-                </div>
+                show("splitJobNo") ? (
+                  <div className="font-bold" style={{ fontSize: Math.max(7, finalScale * 2.8), lineHeight: 1.05 }}>
+                    <div>SERVICE</div>
+                    <div className="truncate">{f("jobNo") || "SVC-0031"}</div>
+                  </div>
+                ) : (
+                  <div className="font-bold truncate" style={{ fontSize: Math.max(7, finalScale * 2.8) }}>
+                    SERVICE {f("jobNo") || "SVC-0031"}
+                  </div>
+                )
               )}
               {show("showCustomer") && (
                 <div className="font-medium truncate">{f("customer") || "Mike Chen"}</div>
@@ -924,7 +932,9 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 
       case "repair": {
         const repairText = `
-        ${show("showJobNo") ? `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>` : ""}
+        ${show("showJobNo") ? (show("splitJobNo")
+          ? `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;line-height:1.05"><div>SERVICE</div><div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("jobNo")||"SVC-0031"}</div></div>`
+          : `<div style="font-weight:700;font-size:${(bp*1.1).toFixed(1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>`) : ""}
         ${show("showCustomer") ? `<div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Mike Chen"}</div>` : ""}
         ${show("showDevice") ? `<div style="color:#888;white-space:nowrap;overflow:hidden">${f("device")||"MacBook Pro 2023"}</div>` : ""}
         ${show("showFault") ? `<div style="color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Screen flickering"}</div>` : ""}
