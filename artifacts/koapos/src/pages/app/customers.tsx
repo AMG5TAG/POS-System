@@ -50,6 +50,7 @@ import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { useStickerPrinter } from "@/lib/sticker-config";
+import { useEntityQrLookup } from "@/hooks/use-entity-qr";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
@@ -1023,6 +1024,7 @@ function CustomerDetailInner({
   const mapUrl = useMapUrl();
   const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
   const { printStickers } = useStickerPrinter();
+  const qrLookup = useEntityQrLookup();
   const [tab, setTab] = useState<DetailTab>("details");
 
   /* Print a customer label using the saved "customer" sticker template. Real
@@ -1036,6 +1038,8 @@ function CustomerDetailInner({
       context: { customer: { name, id: `CUS-${customer.id}`, phone: customer.phone ?? "", email: customer.email ?? "", group }, merchant: {} },
       fieldsOverride: {
         customerName: name,
+        // Persisted (tracked) customer QR; falls back to the CUS-<id> code.
+        customerQrValue: qrLookup(`customer-${customer.id}`, `CUS-${customer.id}`),
         customerId: `CUS-${customer.id}`,
         loyaltyNo: customer.loyaltyPoints != null ? `${customer.loyaltyPoints} pts` : "",
         phone: customer.phone ?? "",

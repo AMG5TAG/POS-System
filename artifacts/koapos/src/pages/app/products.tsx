@@ -71,6 +71,7 @@ import {
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { publicProductUrl } from "@/lib/public-url";
+import { useEntityQrLookup } from "@/hooks/use-entity-qr";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -498,6 +499,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   const previewRef                = useRef<HTMLDivElement>(null);
   const previewSize               = useContainerSize(previewRef);
   const [, navigate]              = useLocation();
+  const qrLookup                  = useEntityQrLookup();
 
   if (!product) return null;
 
@@ -520,8 +522,8 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
     price:        product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
     barcode:      product.barcode ?? "",
     category:     product.category?.name ?? "",
-    // Public product-page URL for the optional QR toggle on the product sticker.
-    productQrUrl: publicProductUrl((merchant as { username?: string | null } | undefined)?.username, product.id),
+    // Persisted (tracked) product QR; falls back to the computed public URL.
+    productQrUrl: qrLookup(`product-${product.id}`, publicProductUrl((merchant as { username?: string | null } | undefined)?.username, product.id)),
   };
 
   const resolvedFields = defaultTpl

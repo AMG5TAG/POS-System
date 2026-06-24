@@ -44,11 +44,10 @@ export async function registerProductQr(merchantId: number, productId: number, n
   await upsertQr(merchantId, `product-${productId}`, "product", name || `Product ${productId}`, url, null);
 }
 
-/** Persist (or refresh) a customer's QR — a stable identifier for lookup/loyalty. */
+/** Persist (or refresh) a customer's QR — the stable "CUS-<id>" lookup code that
+    the printed customer sticker encodes (there is no public customer page). */
 export async function registerCustomerQr(merchantId: number, customerId: number, name: string | null): Promise<void> {
-  const username = await merchantUsername(merchantId);
-  const url = username ? `${publicOrigin()}/b/${encodeURIComponent(username)}/c/${customerId}` : `CUS-${customerId}`;
-  await upsertQr(merchantId, `customer-${customerId}`, "customer", name || `Customer ${customerId}`, url, null);
+  await upsertQr(merchantId, `customer-${customerId}`, "customer", name || `Customer ${customerId}`, `CUS-${customerId}`, null);
 }
 
 /** Persist (or refresh) a service job's QR — Tech App deep link, expiring in 30 days. */
@@ -78,13 +77,12 @@ export async function registerProductQrsBatch(merchantId: number, products: Arra
 /** Batch-register customer QRs (CSV import / backfill). Existing rows are left as-is. */
 export async function registerCustomerQrsBatch(merchantId: number, customers: Array<{ id: number; name: string | null }>): Promise<void> {
   if (!customers.length) return;
-  const username = await merchantUsername(merchantId);
   const rows = customers.map((c) => ({
     merchantId,
     entryId: `customer-${c.id}`,
     qrType: "customer",
     label: c.name || `Customer ${c.id}`,
-    url: username ? `${publicOrigin()}/b/${encodeURIComponent(username)}/c/${c.id}` : `CUS-${c.id}`,
+    url: `CUS-${c.id}`,
     expiresAt: null,
   }));
   await db.insert(qrCodesTable).values(rows).onConflictDoNothing();
