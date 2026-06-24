@@ -642,22 +642,20 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   );
 }
 
-/* ─── Product QR code dialog ─────────────────────────────────────────────────
- * Shows a QR code that opens the public, customer-facing product page when
- * scanned. The merchant's public username forms the URL namespace; without one
- * there's no public page, so we prompt the user to set a store address. */
+/* ─── Product QR code panel ──────────────────────────────────────────────────
+ * Inline panel (rendered in the product detail Settings tab) showing a QR code
+ * that opens the public, customer-facing product page when scanned. The
+ * merchant's public username forms the URL namespace; without one there's no
+ * public page, so we prompt the user to set a store address. */
 
-function ProductQrDialog({ open, onOpenChange, product }: {
-  open: boolean;
-  onOpenChange: (v: boolean) => void;
-  product: Product | null;
+function ProductQrPanel({ product, onClose }: {
+  product: Product;
+  onClose: () => void;
 }) {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const [, navigate]       = useLocation();
   const [copied, setCopied] = useState(false);
   const qrRef = useRef<SVGSVGElement>(null);
-
-  if (!product) return null;
 
   const username = (merchant as { username?: string | null } | undefined)?.username ?? "";
   const url = publicProductUrl(username, product.id);
@@ -695,52 +693,47 @@ function ProductQrDialog({ open, onOpenChange, product }: {
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-sm">
-        <DialogHeader>
-          <DialogTitle className="flex items-center gap-2">
-            <QrCode className="w-4 h-4" /> Product QR Code
-          </DialogTitle>
-        </DialogHeader>
+    <div className="rounded-xl border bg-muted/20 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <QrCode className="w-4 h-4 text-muted-foreground shrink-0" />
+        <p className="text-sm font-medium">Product QR Code</p>
+      </div>
 
-        {!username ? (
-          <div className="text-center py-6 space-y-3">
-            <QrCode className="w-10 h-10 text-muted-foreground/30 mx-auto" />
-            <p className="font-medium">Set a store address first</p>
-            <p className="text-sm text-muted-foreground">
-              Product QR codes link to your public store address. Add a business
-              username in Business settings to enable customer-facing product pages.
-            </p>
-            <Button size="sm" variant="outline"
-              onClick={() => { onOpenChange(false); navigate("/management/settings-integrations/business-details"); }}>
-              Open Business settings
+      {!username ? (
+        <div className="text-center py-2 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Product QR codes link to your public store address. Add a business
+            username in Business settings to enable customer-facing product pages.
+          </p>
+          <Button size="sm" variant="outline"
+            onClick={() => { onClose(); navigate("/management/settings-integrations/business-details"); }}>
+            Open Business settings
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-4 py-1">
+          <p className="text-sm text-muted-foreground text-center">
+            Scan to open the customer-facing page for <span className="font-medium text-foreground">{product.name}</span>.
+          </p>
+          <div className="p-3 bg-white rounded-xl border-2 border-gray-100">
+            <QRCodeSVG ref={qrRef} value={url} size={180} level="M" />
+          </div>
+          <p className="text-xs text-muted-foreground text-center break-all max-w-[18rem]">{url}</p>
+          <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy}>
+              {copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownload}>
+              <Download className="w-3.5 h-3.5" /> Download
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5 col-span-2"
+              onClick={() => window.open(url, "_blank", "noopener")}>
+              <ExternalLink className="w-3.5 h-3.5" /> Open page
             </Button>
           </div>
-        ) : (
-          <div className="flex flex-col items-center gap-4 py-2">
-            <p className="text-sm text-muted-foreground text-center">
-              Scan to open the customer-facing page for <span className="font-medium text-foreground">{product.name}</span>.
-            </p>
-            <div className="p-3 bg-white rounded-xl border-2 border-gray-100">
-              <QRCodeSVG ref={qrRef} value={url} size={200} level="M" />
-            </div>
-            <p className="text-xs text-muted-foreground text-center break-all max-w-[18rem]">{url}</p>
-            <div className="grid grid-cols-2 gap-2 w-full">
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy}>
-                {copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownload}>
-                <Download className="w-3.5 h-3.5" /> Download
-              </Button>
-              <Button variant="outline" size="sm" className="gap-1.5 col-span-2"
-                onClick={() => window.open(url, "_blank", "noopener")}>
-                <ExternalLink className="w-3.5 h-3.5" /> Open page
-              </Button>
-            </div>
-          </div>
-        )}
-      </DialogContent>
-    </Dialog>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -757,7 +750,6 @@ function ProductDetailDialog({
 }) {
   const [tab, setTab]                         = useState<DetailTab>("details");
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
-  const [qrOpen, setQrOpen]                     = useState(false);
   const [confirmDelete, setConfirmDelete]       = useState(false);
   const { data: floorPlanData }                 = useGetFloorPlan();
 
@@ -994,6 +986,7 @@ function ProductDetailDialog({
                 </div>
               </div>
             </div>
+            <ProductQrPanel product={product} onClose={onClose} />
           </div>
         )}
 
@@ -1020,9 +1013,6 @@ function ProductDetailDialog({
             </Button>
           </div>
           <div className="flex gap-2 items-center">
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setQrOpen(true)}>
-              <QrCode className="w-3.5 h-3.5" /> QR Code
-            </Button>
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
             </Button>
@@ -1030,7 +1020,6 @@ function ProductDetailDialog({
         </DialogFooter>
       </DialogContent>
       <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
-      <ProductQrDialog open={qrOpen} onOpenChange={setQrOpen} product={product} />
     </Dialog>
     <AlertDialog open={confirmDelete} onOpenChange={setConfirmDelete}>
       <AlertDialogContent>
