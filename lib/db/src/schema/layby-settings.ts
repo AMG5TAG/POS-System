@@ -8,7 +8,7 @@ export const laybySettingsTable = pgTable("layby_settings", {
   durationUnit:         text("duration_unit").notNull().default("weeks"),
   paymentFrequency:     text("payment_frequency").notNull().default("fortnightly"),
   minimumDepositType:   text("minimum_deposit_type").notNull().default("percentage"),
-  minimumDepositValue:  numeric("minimum_deposit_value").notNull().default("20"),
+  minimumDepositValue:  numeric("minimum_deposit_value", { precision: 10, scale: 2 }).notNull().default("20"),
   allowPartialPayments: text("allow_partial_payments").notNull().default("true"),
   autoEmailOnCreation:  text("auto_email_on_creation").notNull().default("true"),
   printTermsOnReceipt:  text("print_terms_on_receipt").notNull().default("true"),
