@@ -301,8 +301,9 @@ router.get("/reports/product-performance", requireAuth, requireManagerOrOwner, a
 // Monthly cost of goods: COGS actually sold (POS + paid invoices + completed
 // laybys, using the at-sale cost snapshot only) plus procurement spend from
 // purchase orders, broken down by supplier and split into goods vs shipping.
-// A PO's total_cost already includes the GST-grossed delivery charge, so shipping
-// is derived as total_cost − goods subtotal (avoids GST-mode branching). Draft
+// Shipping is the PO's recorded delivery charge (GST-grossed to match how it is
+// folded into total_cost); goods is the remainder (total_cost − shipping) so the
+// two reconcile to purchase spend even for POs with no captured line items. Draft
 // and Cancelled POs are excluded — they are not committed spend.
 router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = DateRangeParams.safeParse(req.query);
@@ -346,14 +347,15 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
     `),
     db.execute<{
       supplier_id: string | null; supplier_name: string | null; month: string;
-      total_cost: string; goods: string; items_ordered: string;
+      total_cost: string; delivery_charge: string; delivery_tax_mode: string; items_ordered: string;
     }>(sql`
       SELECT
         p.supplier_id,
         s.name AS supplier_name,
         to_char(LEFT(p.order_date, 10)::date, 'YYYY-MM') AS month,
         p.total_cost::numeric AS total_cost,
-        COALESCE((SELECT SUM(pi.quantity * pi.unit_cost) FROM purchase_order_items pi WHERE pi.po_id = p.id), 0) AS goods,
+        p.delivery_charge::numeric AS delivery_charge,
+        p.delivery_tax_mode AS delivery_tax_mode,
         COALESCE((SELECT SUM(pi.quantity) FROM purchase_order_items pi WHERE pi.po_id = p.id), 0) AS items_ordered
       FROM purchase_orders p
       LEFT JOIN suppliers s ON s.id = p.supplier_id
@@ -445,8 +447,14 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
 
   for (const r of poRows.rows) {
     const totalCost = Number(r.total_cost ?? 0);
-    const goods     = Number(r.goods ?? 0);
-    const shipping  = Math.max(0, totalCost - goods);
+    // Shipping is the delivery charge actually recorded on the PO, grossed for
+    // GST the same way it was folded into total_cost (exclusive → ×1.1). Deriving
+    // it as total_cost − line-item goods was unsafe: POs with no captured line
+    // items (goods = 0) reported the ENTIRE order total as shipping. Goods is the
+    // remainder so goods + shipping always reconcile to the purchase spend.
+    const deliveryCharge = Number(r.delivery_charge ?? 0);
+    const shipping = Math.max(0, r2(r.delivery_tax_mode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge));
+    const goods    = Math.max(0, r2(totalCost - shipping));
 
     const m = getMonth(r.month);
     m.purchaseSpend      += totalCost;
