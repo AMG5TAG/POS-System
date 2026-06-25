@@ -313,9 +313,9 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
 
   // ePay / digital top-up products are pass-through (you don't hold them as
   // stock), so they don't belong in cost of goods — a large ePay catalogue would
-  // otherwise dominate sold COGS and pile onto a single "ePay" supplier row.
-  // Excludes items whose product is flagged isEpay or carries the "ePay" supplier.
-  const notEpay = sql`COALESCE(p.is_epay, 'false') <> 'true' AND lower(trim(COALESCE(p.supplier, ''))) <> 'epay'`;
+  // otherwise dominate sold COGS. Scoped to the isEpay product flag only, so a
+  // physical product that merely carries an "ePay" supplier name still counts.
+  const notEpay = sql`COALESCE(p.is_epay, 'false') <> 'true'`;
 
   const [cogsRows, poRows, soldRows] = await Promise.all([
     db.execute<{ month: string; cogs_pos: string; cogs_invoice: string; cogs_layby: string }>(sql`
