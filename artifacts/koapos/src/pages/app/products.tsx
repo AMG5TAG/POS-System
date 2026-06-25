@@ -1165,6 +1165,7 @@ export default function ProductsPage() {
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter]       = useState("");
+  const [inStockOnly, setInStockOnly]   = useState(false);
   const [hideCosts, setHideCosts]       = useState(true);
   const { data: inventorySettings } = useGetInventorySettings();
   const showHideCostsBtn  = inventorySettings?.showCosts  !== "false";
@@ -1418,6 +1419,10 @@ export default function ProductsPage() {
     if (!tagFilter) return true;
     const ep = p as Product & { tags?: string[] };
     return (ep.tags ?? []).includes(tagFilter);
+  }).filter((p) => {
+    if (!inStockOnly) return true;
+    // Untracked items (services/digital) have unlimited stock, so they always count as in stock.
+    return !p.trackInventory || (p.stockQuantity ?? 0) > 0;
   });
 
   const allChecked = filtered.length > 0 && filtered.every((p) => checked.has(p.id));
@@ -1801,6 +1806,17 @@ export default function ProductsPage() {
               </SelectContent>
             </Select>
           )}
+
+          {/* In stock only — toggle to hide out-of-stock products */}
+          <Button
+            variant={inStockOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setInStockOnly((v) => !v)}
+            className="gap-1.5"
+            aria-pressed={inStockOnly}
+          >
+            <Boxes className="w-4 h-4" /> In Stock
+          </Button>
 
           {/* Hide / Show Costs — only visible when enabled in Management > Inventory */}
           {showHideCostsBtn && (
