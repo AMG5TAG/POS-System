@@ -59,6 +59,9 @@ interface QRSettings {
   /* Optional human-readable fallback code shown beneath the QR by the "code"
      template (7 alphanumeric chars). Empty for every other template. */
   customCode: string;
+  /* When true (and the QR type has a URL destination), the QR encodes a redirect
+     through /api/qr/r/:id so each scan is logged for Marketing Analytics. */
+  trackScans: boolean;
 }
 
 type QRCodeType =
@@ -104,7 +107,12 @@ const DEFAULT_SETTINGS: QRSettings = {
   logoUrl: "",
   logoSize: 0.35,
   customCode: "",
+  trackScans: false,
 };
+
+/* QR types whose destination is an http(s) URL we can redirect through — the
+   only ones a "track scans" dynamic QR makes sense for. */
+const TRACKABLE_TYPES = new Set<QRCodeType>(["website", "landing", "shortlink", "dynamic", "document", "social"]);
 
 const DARK_SWATCHES  = ["#000000", "#166534", "#1d4ed8", "#4338ca", "#7e22ce", "#be185d", "#b91c1c", "#c2410c"];
 const LIGHT_SWATCHES = ["transparent", "#ffffff", "#e8e4f7", "#fde8e8", "#fef3c7", "#e9d5ff", "#dcfce7", "#bae6fd"];
@@ -252,6 +260,7 @@ function apiToSettings(r: Record<string, unknown>, defaults: QRSettings = DEFAUL
     logoUrl:            String(r.logoUrl            ?? defaults.logoUrl),
     logoSize:           Number(r.logoSize           ?? defaults.logoSize),
     customCode:         String(r.customCode         ?? defaults.customCode),
+    trackScans:         Boolean(r.trackScans        ?? defaults.trackScans),
   };
 }
 
@@ -1278,6 +1287,19 @@ export default function MarketingQRCodesPage() {
 
   const qrData = useMemo(() => buildQRDataString(qrType, content), [qrType, content]);
 
+  // Dynamic ("trackable") QR: when enabled for a URL-type QR, the *encoded* data
+  // becomes a redirect through /api/qr/r/:id so each scan is logged. The id only
+  // exists after the QR is saved, so we encode the real destination until then.
+  const canTrack = TRACKABLE_TYPES.has(qrType);
+  const [trackedId, setTrackedId] = useState<number | null>(null);
+  const trackedUrl = trackedId != null ? `${publicOrigin()}/api/qr/r/${trackedId}` : null;
+  const isTracking = settings.trackScans && canTrack;
+  const effectiveData = isTracking && trackedUrl ? trackedUrl : qrData;
+  const needsSaveForTracking = isTracking && !trackedId;
+  // A saved tracked QR is tied to its destination; if that (or the toggle)
+  // changes, the saved id no longer matches — drop it so the user re-saves.
+  useEffect(() => { setTrackedId(null); }, [qrData, qrType, settings.trackScans]);
+
   const hasValidContent = useMemo(() => {
     if (qrType === "website" || qrType === "dynamic" || qrType === "document" || qrType === "frame") {
       return (content.url ?? "").trim().length > 5;
@@ -1340,11 +1362,16 @@ export default function MarketingQRCodesPage() {
         refetchCodes();
         const newEntry = apiToEntry(res as unknown as Record<string, unknown>);
         setPreview(newEntry);
-        toast.success("QR code saved");
+        if (settings.trackScans && canTrack && Number.isFinite(Number(newEntry.id))) {
+          setTrackedId(Number(newEntry.id));
+          toast.success("Tracked QR ready — download it now to capture scans");
+        } else {
+          toast.success("QR code saved");
+        }
       },
       onError: () => toast.error("Failed to save QR code"),
     });
-  }, [qrData, label, settings, hasValidContent, qrType, content, createCode, refetchCodes]);
+  }, [qrData, label, settings, hasValidContent, qrType, content, createCode, refetchCodes, canTrack]);
 
   /* Download helpers — export the framed SVG so the file matches the preview. */
   const downloadFile = useCallback((blob: Blob, name: string, ext: string) => {
@@ -1377,12 +1404,16 @@ export default function MarketingQRCodesPage() {
   }, [downloadFile]);
 
   const downloadLive = useCallback((format: "png" | "svg" = "png") =>
-    downloadFramed(settings, qrData || "https://koapos.com", label || "qrcode", format),
-    [settings, qrData, label, downloadFramed]);
+    downloadFramed(settings, effectiveData || "https://koapos.com", label || "qrcode", format),
+    [settings, effectiveData, label, downloadFramed]);
 
-  const downloadEntry = useCallback((entry: QREntry, format: "png" | "svg" = "png") =>
-    downloadFramed(entry.settings, entry.url, entry.label || "qrcode", format),
-    [downloadFramed]);
+  // Re-derive a saved QR's encoded data: tracked entries encode the redirect
+  // (/api/qr/r/:id) so re-downloads from history stay trackable.
+  const downloadEntry = useCallback((entry: QREntry, format: "png" | "svg" = "png") => {
+    const tracked = entry.settings.trackScans && TRACKABLE_TYPES.has(entry.qrType ?? "website");
+    const data = tracked ? `${publicOrigin()}/api/qr/r/${entry.id}` : entry.url;
+    return downloadFramed(entry.settings, data, entry.label || "qrcode", format);
+  }, [downloadFramed]);
 
   const deleteEntry = (id: string) => {
     deleteCode.mutate({ id: Number(id) }, {
@@ -1429,9 +1460,9 @@ export default function MarketingQRCodesPage() {
 
   /* Live preview — gated on a stable signature so it only re-renders when the
      QR actually changes, not on every parent render (e.g. as queries resolve). */
-  const liveSig = JSON.stringify({ settings, qrData });
+  const liveSig = JSON.stringify({ settings, effectiveData });
   useEffect(() => {
-    const opts = buildQROptions(settings, qrData || "https://koapos.com", Math.min(settings.size, 240));
+    const opts = buildQROptions(settings, effectiveData || "https://koapos.com", Math.min(settings.size, 240));
     if (!liveQrRef.current) {
       liveQrRef.current = new QRCodeStyling(opts);
       if (liveContainerRef.current) { liveContainerRef.current.innerHTML = ""; liveQrRef.current.append(liveContainerRef.current); }
@@ -1526,13 +1557,30 @@ export default function MarketingQRCodesPage() {
                     <div className="flex flex-wrap gap-1 justify-center">
                       <Badge variant="secondary" className="text-[10px]">{activeTypeMeta?.label}</Badge>
                       <Badge variant="outline" className="text-[10px]">ECC {settings.level} · {settings.size}px</Badge>
+                      {isTracking && trackedId && <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-emerald-200">Tracked</Badge>}
                     </div>
                   </div>
                 </div>
+
+                {/* Track scans (dynamic QR) — only for URL-type QR codes. */}
+                {canTrack && (
+                  <label className="flex items-start gap-2 rounded-lg border p-2.5 cursor-pointer hover:bg-muted/40 transition-colors">
+                    <input type="checkbox" checked={settings.trackScans} onChange={(e) => set("trackScans", e.target.checked)} className="mt-0.5 accent-primary" />
+                    <div className="text-xs">
+                      <p className="font-medium">Track scans (dynamic QR)</p>
+                      <p className="text-muted-foreground">
+                        Each scan's device &amp; location is recorded in Analytics.
+                        {needsSaveForTracking && <span className="text-amber-600"> Save to generate the tracked code, then download.</span>}
+                      </p>
+                    </div>
+                  </label>
+                )}
+
                 <div className="grid grid-cols-2 gap-2">
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="outline" className="gap-1.5" disabled={!hasValidContent}>
+                      <Button variant="outline" className="gap-1.5" disabled={!hasValidContent || needsSaveForTracking}
+                        title={needsSaveForTracking ? "Save first to download the tracked QR" : undefined}>
                         <Download className="w-4 h-4" /> Download <ChevronDown className="w-3.5 h-3.5 opacity-60" />
                       </Button>
                     </DropdownMenuTrigger>

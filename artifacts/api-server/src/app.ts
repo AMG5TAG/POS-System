@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { publicOrigin } from "./lib/publicUrl";
+import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
 const PgSession = connectPgSimple(session);
 
@@ -51,6 +52,9 @@ const allowedOrigins: Set<string> = new Set();
 if (isProduction) {
   // The app's public origin (koapos.com.au, or APP_BASE_URL/PUBLIC_DOMAIN override).
   allowedOrigins.add(publicOrigin());
+  // The branded short-link domain serves the SPA, which calls the API
+  // cross-origin to resolve a slug → destination before redirecting.
+  allowedOrigins.add(`https://${SHORT_DOMAIN}`);
   // The internal hosting domain, so same-host requests keep working post-deploy.
   if (process.env.REPLIT_DOMAINS) {
     for (const domain of process.env.REPLIT_DOMAINS.split(",")) {

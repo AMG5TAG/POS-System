@@ -1,1 +1,2 @@
 - [Tenant isolation: child mutations](tenant-isolation-child-mutations.md) — verify parent ownership by (id, merchantId) before touching child tables keyed on parentId
+- [DB schema build gotchas](db-schema-build-gotchas.md) — new table/column: rebuild lib/db .d.ts (project refs), add migration to db:push chain, or boot drift-check fails

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useListQrCodes,
   useListShortlinks,
@@ -1748,6 +1748,180 @@ function _countBy<T>(items: T[], key: (x: T) => string): { name: string; value: 
 
 const _CHART_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#f97316", "#14b8a6"];
 
+/* ─── Marketing engagement (real scans / clicks / views) ──────────────────── */
+
+interface MktAnalytics {
+  days: number;
+  totals: { total: number; unique: number; shortlink: number; landing: number; qr: number };
+  byDay: { date: string; shortlink: number; landing: number; qr: number }[];
+  byDevice: { name: string; value: number }[];
+  byCountry: { name: string; value: number }[];
+  topTargets: { kind: string; slug: string; count: number }[];
+}
+
+const _DEVICE_LABEL: Record<string, string> = {
+  mobile: "Mobile", tablet: "Tablet", desktop: "Desktop", bot: "Bot", unknown: "Unknown",
+};
+
+function EngagementAnalytics() {
+  const [days, setDays] = useState(30);
+  const { data, isLoading } = useQuery<MktAnalytics>({
+    queryKey: ["marketing-analytics", days],
+    queryFn: async () => {
+      const r = await fetch(`/api/marketing-analytics?days=${days}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load analytics");
+      return r.json() as Promise<MktAnalytics>;
+    },
+    staleTime: 60_000,
+  });
+
+  // Build a continuous date axis for the window from the sparse per-day rows.
+  const series = useMemo(() => {
+    const map = new Map((data?.byDay ?? []).map((d) => [d.date, d]));
+    const out: { label: string; Scans: number; Clicks: number; Views: number }[] = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const dt = new Date(today);
+      dt.setDate(today.getDate() - i);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const e = map.get(key);
+      out.push({
+        label: dt.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
+        Clicks: e?.shortlink ?? 0,
+        Views: e?.landing ?? 0,
+        Scans: e?.qr ?? 0,
+      });
+    }
+    return out;
+  }, [data, days]);
+
+  const totals = data?.totals;
+  const hasData = (totals?.total ?? 0) > 0;
+
+  const periodBtn = (d: number, label: string) => (
+    <button
+      key={d}
+      onClick={() => setDays(d)}
+      className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+        days === d ? "bg-primary text-primary-foreground" : "border text-muted-foreground hover:bg-muted/50")}
+    >{label}</button>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Engagement</h2>
+          <p className="text-xs text-muted-foreground">Real scans, clicks &amp; views — device and location where the network provides it.</p>
+        </div>
+        <div className="flex items-center gap-1.5">{periodBtn(7, "7d")}{periodBtn(30, "30d")}{periodBtn(90, "90d")}</div>
+      </div>
+
+      {isLoading ? (
+        <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">Loading engagement…</div>
+      ) : !hasData ? (
+        <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
+          No scans, clicks, or views recorded in this period yet. Engagement appears here once people use your
+          shortlinks, landing pages, or <span className="font-medium text-foreground">trackable</span> QR codes.
+        </div>
+      ) : (
+        <>
+          {/* KPI tiles */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <KpiTile label="Total Engagements" value={(totals?.total ?? 0).toLocaleString()} sub={`Last ${days} days`} accent />
+            <KpiTile label="Unique Visitors" value={(totals?.unique ?? 0).toLocaleString()} sub="Approx. (by network)" />
+            <KpiTile label="QR Scans" value={(totals?.qr ?? 0).toLocaleString()} sub="Trackable QRs" />
+            <KpiTile label="Shortlink Clicks" value={(totals?.shortlink ?? 0).toLocaleString()} sub="koast.al links" />
+            <KpiTile label="Landing Views" value={(totals?.landing ?? 0).toLocaleString()} sub="Public pages" />
+          </div>
+
+          {/* Engagement over time */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title={`Engagement — Last ${days} Days`} />
+            <div className="p-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={series}>
+                  <defs>
+                    <linearGradient id="gScans" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} /><stop offset="95%" stopColor="#6366f1" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="gClicks" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} /><stop offset="95%" stopColor="#22c55e" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="gViews" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
+                    interval={Math.max(0, Math.floor(series.length / 6))} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={24} />
+                  <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="Scans" stroke="#6366f1" fill="url(#gScans)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Clicks" stroke="#22c55e" fill="url(#gClicks)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Views" stroke="#f59e0b" fill="url(#gViews)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Devices + Countries */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="By Device" />
+              <div className="p-5">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={(data?.byDevice ?? []).map((d) => ({ name: _DEVICE_LABEL[d.name] ?? d.name, value: d.value }))}
+                      dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={45} paddingAngle={2}>
+                      {(data?.byDevice ?? []).map((_, i) => <Cell key={i} fill={_CHART_COLORS[i % _CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="By Location" />
+              <div className="p-5">
+                {(data?.byCountry ?? []).length === 0 ? (
+                  <div className="flex flex-col items-center py-10 gap-2 text-muted-foreground">
+                    <Globe className="w-8 h-8 opacity-20" />
+                    <p className="text-sm text-center">No location data.<br />The host network isn't passing geo headers.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={data?.byCountry ?? []} layout="vertical" barSize={14}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={70} />
+                      <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                      <Bar dataKey="value" name="Engagements" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Top targets */}
+          {(data?.topTargets ?? []).length > 0 && (
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="Top Performing" />
+              <div className="divide-y">
+                {(data?.topTargets ?? []).map((t, i) => (
+                  <div key={i} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                    <Badge variant="outline" className="text-[10px] capitalize">{t.kind}</Badge>
+                    <span className="flex-1 truncate font-medium">{t.slug}</span>
+                    <span className="tabular-nums text-muted-foreground">{t.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 export function AnalyticsTab() {
   const { data: qrResp }    = useListQrCodes();
   const { data: linksResp } = useListShortlinks();
@@ -1786,7 +1960,14 @@ export function AnalyticsTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+
+      {/* ── Real engagement (scans / clicks / views with device + location) ── */}
+      <EngagementAnalytics />
+
+      {/* ── Assets created (counts + styles) ── */}
+      <div className="space-y-6">
+      <h2 className="text-lg font-semibold">Your marketing assets</h2>
 
       {/* ── KPI tiles ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -2009,6 +2190,7 @@ export function AnalyticsTab() {
         </div>
       )}
 
+      </div>
     </div>
   );
 }

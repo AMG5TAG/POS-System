@@ -3,8 +3,28 @@ import { db, qrCodesTable, qrSettingsTable, qrSavedTemplatesTable, productsTable
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { registerProductQrsBatch, registerCustomerQrsBatch } from "../services/entityQr";
+import { recordMarketingEvent } from "../lib/marketingEvents";
+import { publicOrigin } from "../lib/publicUrl";
 
 const router: IRouter = Router();
+
+// Public, unauthenticated dynamic-QR redirect. A "trackable" QR encodes
+// /api/qr/r/:id instead of its raw destination, so each scan hits us first —
+// we log a scan event (device / geo / referrer) then 302 to the real URL. This
+// is the only way to measure QR scans: a QR pointing straight at an external URL
+// never touches our server.
+router.get("/qr/r/:id", async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id ?? ""), 10);
+  if (isNaN(id)) { res.redirect(302, publicOrigin()); return; }
+  const [row] = await db.select().from(qrCodesTable).where(eq(qrCodesTable.id, id)).limit(1);
+  if (!row) { res.status(404).type("text/plain").send("QR code not found"); return; }
+  if (row.expiresAt && new Date(row.expiresAt).getTime() < Date.now()) {
+    res.status(410).type("text/plain").send("This QR code has expired"); return;
+  }
+  recordMarketingEvent(req, { merchantId: row.merchantId, kind: "qr", targetId: row.id, targetSlug: row.label });
+  const dest = (row.url || "").trim() || publicOrigin();
+  res.redirect(302, dest);
+});
 
 // POST /qr-codes/backfill — persist a trackable QR for every existing product
 // and customer (idempotent; safe to re-run). Service-job QRs are not backfilled

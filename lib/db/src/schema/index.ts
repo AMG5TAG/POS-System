@@ -74,6 +74,7 @@ export * from "./email-campaigns";
 export * from "./landing-pages";
 export * from "./shortlinks";
 export * from "./shortlink-settings";
+export * from "./marketing-events";
 export * from "./online-store-settings";
 export * from "./online-store-thirdparty";
 export * from "./shipping-carriers";

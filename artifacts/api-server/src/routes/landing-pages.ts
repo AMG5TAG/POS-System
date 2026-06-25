@@ -3,6 +3,7 @@ import { db, landingPagesTable, merchantsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+import { recordMarketingEvent } from "../lib/marketingEvents";
 
 const PostLandingPage = z.object({
   pageId: z.string().min(1),
@@ -45,6 +46,7 @@ router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
   const slug = req.params.slug as string;
   const [row] = await db.select().from(landingPagesTable).where(eq(landingPagesTable.slug, slug)).limit(1);
   if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
+  recordMarketingEvent(req, { merchantId: row.merchantId, kind: "landing", targetId: row.id, targetSlug: row.slug });
   const [merchant] = await db.select({ partnerReferralCode: merchantsTable.partnerReferralCode })
     .from(merchantsTable).where(eq(merchantsTable.id, row.merchantId)).limit(1);
   res.json({ ...row, partnerReferralCode: merchant?.partnerReferralCode ?? null });
@@ -71,6 +73,7 @@ router.get(["/landing-pages/public/b/:username/l/:customName", "/landing-pages/p
     .where(and(eq(landingPagesTable.merchantId, merchant.id), eq(landingPagesTable.slug, customName)))
     .limit(1);
   if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
+  recordMarketingEvent(req, { merchantId: row.merchantId, kind: "landing", targetId: row.id, targetSlug: row.slug });
   res.json({ ...row, partnerReferralCode: merchant.partnerReferralCode ?? null });
 });
 

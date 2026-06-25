@@ -15,6 +15,8 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setOnUnauthorized } from "@workspace/api-client-react";
+import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
+import { publicOrigin } from "@/lib/public-url";
 import { shouldRetryRequest, retryBackoff } from "@/lib/query-retry";
 import { lazyWithRetry } from "@/lib/lazy-retry";
 
@@ -928,7 +930,50 @@ function RoutePrefetcher() {
   return null;
 }
 
+/** True when this SPA is being served from the branded short-link domain. */
+function isShortDomain(): boolean {
+  const h = window.location.hostname.toLowerCase();
+  return h === SHORT_DOMAIN || h.endsWith(`.${SHORT_DOMAIN}`);
+}
+
+/**
+ * Resolves a koast.al/<slug> short link to its destination and redirects.
+ *
+ * The short domain serves this very SPA, so without this the auth gate would
+ * treat /<slug> as an unknown protected path and bounce it to /login (the
+ * reported bug). Resolution is a same-origin call to the public resolver, so it
+ * works on whichever domain the deployment serves. Unknown slugs (and the bare
+ * domain) fall back to the main site.
+ */
+function ShortlinkRedirect() {
+  useEffect(() => {
+    const slug = window.location.pathname.replace(/^\/+/, "").split(/[/?#]/)[0];
+    const home = `${publicOrigin()}/`;
+    if (!slug) { window.location.replace(home); return; }
+    let cancelled = false;
+    // Resolve against the API's real origin (koapos.com.au) rather than a
+    // relative path — the short domain may not proxy /api to the API server.
+    fetch(`${publicOrigin()}/api/shortlinks/r/${encodeURIComponent(slug)}`, { credentials: "omit" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { longUrl?: string }) => {
+        if (cancelled) return;
+        window.location.replace(d?.longUrl || home);
+      })
+      .catch(() => { if (!cancelled) window.location.replace(home); });
+    return () => { cancelled = true; };
+  }, []);
+  return (
+    <div className="h-screen w-screen flex flex-col items-center justify-center gap-3 text-muted-foreground">
+      <Spinner size="lg" />
+      <span className="text-sm">Redirecting…</span>
+    </div>
+  );
+}
+
 function App() {
+  // The branded short-link domain serves this SPA only to resolve a slug and
+  // redirect — bypass the whole app (and its auth gate) when we're on it.
+  if (isShortDomain()) return <ShortlinkRedirect />;
   return (
     <ThemeProvider>
       <AccessibilityProvider>
