@@ -1032,17 +1032,20 @@ export default function POSPage() {
      The server recomputes this authoritatively and stores it; here it only
      drives the amount due / tender so the cashier collects the right amount. */
   const { data: surchargeConfig } = useGetPaymentSurcharges({ query: { queryKey: ["payment-surcharges"] } });
+  // Applies to both ordinary sales and invoice-balance payments. "split" has no
+  // config entry, so split payments yield 0 — matching the server, which only
+  // surcharges single-method payments.
   const saleSurcharge = useMemo(() => {
-    if (invoicePay) return 0; // invoice payments use their own flow
+    const base = invoicePay ? invoicePay.balance : total;
     const cfg = (surchargeConfig?.items ?? []).find((s) => s.paymentMethod === String(payMethod));
     if (!cfg || !cfg.enabled || !cfg.passOn) return 0;
-    return Math.round(((cfg.percent / 100) * total + cfg.fixed) * 100) / 100;
+    return Math.round(((cfg.percent / 100) * base + cfg.fixed) * 100) / 100;
   }, [surchargeConfig, payMethod, total, invoicePay]);
 
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
-     the locked remaining balance; otherwise it's the cart total plus any
-     passed-on surcharge for the chosen payment method. */
-  const effectiveTotal = invoicePay ? invoicePay.balance : Math.round((total + saleSurcharge) * 100) / 100;
+     the locked remaining balance; otherwise it's the cart total — either way
+     plus any passed-on surcharge for the chosen payment method. */
+  const effectiveTotal = Math.round(((invoicePay ? invoicePay.balance : total) + saleSurcharge) * 100) / 100;
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
@@ -3872,7 +3875,7 @@ export default function POSPage() {
                 <p className="text-4xl font-bold tabular-nums">{formatCurrency(effectiveTotal)}</p>
                 {saleSurcharge > 0 && (
                   <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
-                    {formatCurrency(total)} + {formatCurrency(saleSurcharge)} surcharge
+                    {formatCurrency((invoicePay ? invoicePay.balance : total))} + {formatCurrency(saleSurcharge)} surcharge
                   </p>
                 )}
                 {numpadInput && parseFloat(numpadInput) > 0 && (

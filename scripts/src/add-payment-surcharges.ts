@@ -33,7 +33,10 @@ async function main() {
     await pool.query(
       "ALTER TABLE transactions ADD COLUMN IF NOT EXISTS surcharge_amount numeric(10,2) NOT NULL DEFAULT 0"
     );
-    console.log("payment_method_surcharges table + transactions.surcharge_amount ready");
+    await pool.query(
+      "ALTER TABLE layby_payments ADD COLUMN IF NOT EXISTS surcharge_amount numeric(10,2) NOT NULL DEFAULT 0"
+    );
+    console.log("payment_method_surcharges table + transactions.surcharge_amount + layby_payments.surcharge_amount ready");
   } catch (e: unknown) {
     console.error((e as Error).message);
     process.exit(1);

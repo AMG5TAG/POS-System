@@ -37,6 +37,11 @@ export const laybyPaymentsTable = pgTable("layby_payments", {
   laybyId: integer("layby_id").notNull().references(() => laybysTable.id),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").notNull().default("cash"),
+  // Pass-on surcharge collected on top of `amount` for this installment when the
+  // payment method is configured to pass its acceptance cost to the customer
+  // (see payment_method_surcharges). 0 when none. Recorded on top of the amount
+  // applied to the balance — it does not reduce what's owed.
+  surchargeAmount: numeric("surcharge_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   note: text("note"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });

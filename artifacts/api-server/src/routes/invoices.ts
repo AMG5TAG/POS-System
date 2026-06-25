@@ -7,6 +7,7 @@ import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
+import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import crypto from "node:crypto";
 import {
   RecordInvoicePaymentBody,
@@ -104,7 +105,7 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; amount?: number; idempotencyKey?: string };
+type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; idempotencyKey?: string };
 
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -747,6 +748,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   // Captured for after-commit completion of any linked service job / appointment.
   let settledServiceJobId: number | null = null;
   let settledAppointmentId: number | null = null;
+  // Pass-on surcharges for the chosen method(s), collected on top of each leg's
+  // amount. Config is merchant-global, so it's read once outside the lock.
+  const surchargeMap = await getPassOnSurchargeMap(merchantId);
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -827,14 +831,21 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     const settleNote = fullyPaid
       ? `— paid in full`
       : `— balance $${balance.toFixed(2)} remaining`;
-    const legEvents: InvoiceEvent[] = legs.map((leg, i) => ({
-      type: "payment",
-      timestamp: ts,
-      detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}`,
-      amount: leg.amount,
-      ...(leg.method ? { method: leg.method } : {}),
-      ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
-    }));
+    const legEvents: InvoiceEvent[] = legs.map((leg, i) => {
+      // Surcharge applies to single-method payments only (a split's legs aren't
+      // surcharged, matching the POS terminal), so the amount collected stays in
+      // sync with what the UI shows.
+      const legSurcharge = isSplit ? 0 : surchargeForLeg(surchargeMap, leg.method, leg.amount);
+      return {
+        type: "payment",
+        timestamp: ts,
+        detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${legSurcharge > 0 ? ` + $${legSurcharge.toFixed(2)} surcharge` : ""}`,
+        amount: leg.amount,
+        ...(legSurcharge > 0 ? { surchargeAmount: legSurcharge } : {}),
+        ...(leg.method ? { method: leg.method } : {}),
+        ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
+      };
+    });
     const events: InvoiceEvent[] = [
       ...((cur.events as InvoiceEvent[] | null) ?? []),
       ...legEvents,
