@@ -11,9 +11,12 @@
  * Accounting conventions:
  *   - Prices/totals are GST-inclusive; `gross_revenue` is the inclusive amount,
  *     `ex_gst_revenue` = gross_revenue − tax_collected.
- *   - COGS uses the cost price snapshotted on each line item at sale time and
- *     falls back to the product's current cost_price when the snapshot is
- *     missing — matching the KPI and dashboard COGS calculations.
+ *   - COGS uses ONLY the cost price snapshotted on each line item at sale time
+ *     (the cost when the sale happened). It does NOT fall back to the product's
+ *     current cost_price — using today's cost would retroactively change the
+ *     profit on historical sales. Legacy lines recorded before cost snapshotting
+ *     existed have no snapshot and therefore contribute $0 COGS. Matches the KPI
+ *     and dashboard COGS calculations.
  *   - Payment surcharges the merchant ABSORBS (configured with pass_on = false)
  *     are a cost of business: `surcharge_cost` deducts them from net profit.
  *     Surcharges passed on to the customer are revenue-neutral and excluded.
@@ -133,7 +136,7 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
     ),
     pos_cogs AS (
       SELECT t.merchant_id, (t.created_at)::date AS sale_date,
-        SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)) AS total_cogs
+        SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)) AS total_cogs
       FROM transactions t
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
@@ -153,7 +156,7 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
     ),
     inv_cogs AS (
       SELECT i.merchant_id, (i.paid_at)::date AS sale_date,
-        SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)) AS total_cogs
+        SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)) AS total_cogs
       FROM invoices i
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
@@ -180,7 +183,7 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
     ),
     lay_cogs AS (
       SELECT l.merchant_id, (COALESCE(l.completed_at, l.updated_at))::date AS sale_date,
-        SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)) AS total_cogs
+        SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)) AS total_cogs
       FROM laybys l
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
@@ -231,7 +234,7 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
         p.sku                                  AS sku,
         (item->>'quantity')::numeric           AS quantity,
         (item->>'totalPrice')::numeric         AS revenue,
-        (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0) AS cogs
+        (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0) AS cogs
       FROM transactions t
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
@@ -246,14 +249,14 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
         p.sku                                   AS sku,
         (item->>'quantity')::numeric            AS quantity,
         (item->>'quantity')::numeric * (item->>'unitPrice')::numeric AS revenue,
-        (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0) AS cogs
+        (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0) AS cogs
       FROM invoices i
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
       WHERE i.status = 'paid' AND i.paid_at IS NOT NULL AND (item->>'productId') IS NOT NULL AND (item->>'productId') <> '0'
       UNION ALL
       -- Completed-layby line items (revenue = quantity × price; cost snapshot
-      -- captured at sale, falling back to the product's current cost)
+      -- captured at sale — no current-cost fallback)
       SELECT
         l.merchant_id,
         (COALESCE(l.completed_at, l.updated_at))::date AS sale_date,
@@ -262,7 +265,7 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
         p.sku                                    AS sku,
         (item->>'quantity')::numeric             AS quantity,
         (item->>'quantity')::numeric * (item->>'price')::numeric AS revenue,
-        (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0) AS cogs
+        (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0) AS cogs
       FROM laybys l
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id

@@ -559,13 +559,13 @@ router.post("/reports/run", requireAuth, requireManagerOrOwner, async (req, res)
     });
   } else {
     // product: unnest transaction line items. Revenue uses the canonical
-    // `totalPrice`/`productName` keys (not `price`/`name`), and COGS prefers the
-    // at-sale cost snapshot, falling back to the product's current cost.
+    // `totalPrice`/`productName` keys (not `price`/`name`), and COGS uses only
+    // the at-sale cost snapshot (no current-cost fallback).
     const result = await db.execute<Record<string, string>>(sql`
       SELECT COALESCE(p.name, item->>'productName', 'Unknown') AS product,
         SUM((item->>'quantity')::numeric)::int AS qty_sold,
         COALESCE(SUM((item->>'totalPrice')::numeric), 0) AS revenue,
-        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0) AS cogs
+        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)), 0) AS cogs
       FROM transactions t
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id

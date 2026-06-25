@@ -395,7 +395,7 @@ export async function computeActual(
         const cogsRows = await db.execute(sql`
           SELECT COALESCE(SUM(
             (item->>'quantity')::numeric
-            * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
+            * COALESCE((item->>'costPrice')::numeric, 0)
           ), 0)::float AS total_cogs
           FROM transactions t
           CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
@@ -419,7 +419,7 @@ export async function computeActual(
         const invCogs = await db.execute(sql`
           SELECT COALESCE(SUM(
             (item->>'quantity')::numeric
-            * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
+            * COALESCE((item->>'costPrice')::numeric, 0)
           ), 0)::float AS total_cogs
           FROM invoices inv
           CROSS JOIN LATERAL jsonb_array_elements(
@@ -432,7 +432,8 @@ export async function computeActual(
         totalCogs += Number((invCogs.rows[0] as { total_cogs: number })?.total_cogs ?? 0);
 
         // Completed laybys: ex-GST revenue derived from the merchant default
-        // tax rate (layby totals are GST-inclusive), COGS from product cost.
+        // tax rate (layby totals are GST-inclusive), COGS from the at-sale cost
+        // snapshot (no current-cost fallback).
         const laybyGross = await db.execute<{ gross: number }>(sql`
           SELECT COALESCE(SUM(l.total_amount::numeric), 0)::float AS gross
           FROM laybys l
@@ -447,7 +448,7 @@ export async function computeActual(
 
         const laybyCogs = await db.execute<{ total_cogs: number }>(sql`
           SELECT COALESCE(SUM(
-            (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)
+            (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)
           ), 0)::float AS total_cogs
           FROM laybys l
           CROSS JOIN LATERAL jsonb_array_elements(

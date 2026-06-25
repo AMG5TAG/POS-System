@@ -216,12 +216,13 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     }).from(invoicesTable).where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), periodCondInv)),
 
     // Items sold + COGS via LATERAL JSONB unnest + JOIN to products (single scan).
-    // COGS prefers the at-sale cost snapshot on the line item, falling back to
-    // the product's current cost — matching the report views and kpi-calc.
+    // COGS uses only the at-sale cost snapshot on the line item (no current-cost
+    // fallback, so historical profit doesn't shift) — matching the report views
+    // and kpi-calc. Lines with no snapshot contribute $0 COGS.
     db.execute(sql`
       SELECT
         COALESCE(SUM((item->>'quantity')::int), 0)::float                                                                       AS items_sold,
-        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0)::float    AS cost_total
+        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, 0)), 0)::float    AS cost_total
       FROM transactions t
       CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
       LEFT JOIN products p
@@ -240,7 +241,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     // even though invoice revenue is counted in totalSales).
     db.execute(sql`
       SELECT
-        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0)::float AS cost_total
+        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)), 0)::float AS cost_total
       FROM invoices i
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
@@ -293,7 +294,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     db.execute(sql`
       SELECT
         COALESCE(SUM((item->>'quantity')::int), 0)::float                                                                       AS items_sold,
-        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, p.cost_price::numeric, 0)), 0)::float    AS cost_total
+        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, 0)), 0)::float    AS cost_total
       FROM laybys l
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
