@@ -74,12 +74,12 @@ const TOOLTIP_ITEM_STYLE = { color: "hsl(var(--foreground))" } as const;
 
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 
-type Preset = "today" | "7" | "30" | "90" | "year" | "custom";
+type Preset = "today" | "7" | "month" | "90" | "year" | "custom";
 
 const DATE_PRESETS: { id: Preset; label: string }[] = [
   { id: "today", label: "Today"   },
   { id: "7",     label: "7 Days"  },
-  { id: "30",    label: "30 Days" },
+  { id: "month", label: "Month"   },
   { id: "90",    label: "90 Days" },
   { id: "year",  label: "Year"    },
 ];
@@ -90,9 +90,16 @@ function presetDates(p: Preset): { from: string; to: string } {
   const now = new Date();
   const to  = toISO(now);
   if (p === "today") return { from: to, to };
+  // "Month" is the calendar month-to-date: 1st → last day of the current month
+  // (not a rolling 30-day window).
+  if (p === "month") {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    const last  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+    return { from: toISO(first), to: toISO(last) };
+  }
   const d = new Date(now);
   if (p === "year") d.setFullYear(d.getFullYear() - 1);
-  else d.setDate(d.getDate() - (p === "7" ? 7 : p === "30" ? 30 : 90));
+  else d.setDate(d.getDate() - (p === "7" ? 7 : 90));
   return { from: toISO(d), to };
 }
 
@@ -2534,11 +2541,11 @@ export function AnalyticsTab() {
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportTabId>("sales");
-  const [preset, setPreset]       = useState<Preset>("30");
-  const init                      = presetDates("30");
+  const [preset, setPreset]       = useState<Preset>("month");
+  const init                      = presetDates("month");
   const [fromDate, setFromDate]   = useState(init.from);
   const [toDate,   setToDate]     = useState(init.to);
-  const [apiPeriod, setApiPeriod] = useState<GetDashboardSummaryPeriod>(presetToApiPeriod("30"));
+  const [apiPeriod, setApiPeriod] = useState<GetDashboardSummaryPeriod>(presetToApiPeriod("month"));
   const [refreshKey, setRefresh]  = useState(0);
 
   useEffect(() => {

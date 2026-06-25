@@ -41,6 +41,14 @@ export default function LandingPagePublicView() {
     catch { return []; }
   })();
 
+  /* Browser tab title: the page's own (editable) title, always suffixed with
+     "- KoaPOS". Restores the default on unmount. */
+  useEffect(() => {
+    const title = row?.title?.trim();
+    document.title = title ? `${title} - KoaPOS` : "KoaPOS";
+    return () => { document.title = "KoaPOS"; };
+  }, [row?.title]);
+
   /* Load Google Font if needed */
   useEffect(() => {
     if (!row?.font) return;

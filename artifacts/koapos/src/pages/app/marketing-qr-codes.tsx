@@ -19,6 +19,7 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { publicOrigin } from "@/lib/public-url";
+import { useLandingPageNames } from "@/lib/landing-page-names";
 import {
   useListQrCodes,
   useCreateQrCode,
@@ -1176,6 +1177,7 @@ export default function MarketingQRCodesPage() {
 
   // Landing pages & shortlinks the merchant has already created — selectable as QR targets.
   const { data: landingResponse }   = useListLandingPages({ query: { queryKey: ["landing-pages"] } });
+  const landingNames                 = useLandingPageNames();
   const { data: shortlinksResponse } = useListShortlinks({ query: { queryKey: ["shortlinks"] } });
   const { data: merchant }           = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { data: shortlinkSettings }  = useGetShortlinkSettings({ query: { queryKey: ["shortlink-settings"] } });
@@ -1221,13 +1223,16 @@ export default function MarketingQRCodesPage() {
       .filter((p) => String(p.isTemplate ?? "false") !== "true")
       .map((p) => {
         const slug = String(p.slug ?? "");
+        const id = String(p.id ?? slug);
+        // Prefer the page's internal Name (admin-side label); fall back to the
+        // public title, then the slug.
         return {
-          id:    String(p.id ?? slug),
-          label: String(p.title || slug || "Untitled page"),
+          id,
+          label: String(landingNames[id] || p.title || slug || "Untitled page"),
           url:   `${publicOrigin()}/b/${username || "your-username"}/l/${slug}`,
         };
       });
-  }, [landingResponse, merchant]);
+  }, [landingResponse, merchant, landingNames]);
 
   const shortlinkOptions = useMemo<LinkOption[]>(() => {
     const sl = shortlinkSettings as Record<string, unknown> | undefined;
@@ -1626,8 +1631,9 @@ export default function MarketingQRCodesPage() {
         {/* ── Styling controls ── */}
         <div className="space-y-4">
 
-          {/* Colours + Template side by side */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          {/* Colours then Template — Template is full-width so its frames wrap
+              into ~two rows instead of a single horizontally-scrolling strip. */}
+          <div className="grid grid-cols-1 gap-4 items-start">
             {/* Colors */}
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Colours</CardTitle></CardHeader>
@@ -1736,7 +1742,9 @@ export default function MarketingQRCodesPage() {
                 {/* Built-in templates. These are style swatches, so they use a
                     fixed sample string — keeping the live destination out of them
                     means typing the content doesn't re-render all of them. */}
-                <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
+                {/* Wrap into rows instead of a single horizontally-scrolling strip
+                    so every frame is visible at once (≈ two rows on a wide card). */}
+                <div className="flex flex-wrap gap-3 pb-1">
                   {TEMPLATES.map((t) => (
                     <TemplateMini key={t.id} template={t} settings={settings} data="https://koapos.com"
                       selected={settings.template === t.id} onClick={() => set("template", t.id)} fontFamily={brandFontFamily} />

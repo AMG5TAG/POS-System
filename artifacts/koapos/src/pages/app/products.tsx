@@ -68,7 +68,7 @@ import {
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
-  Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink,
+  Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink, Truck,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { publicProductUrl } from "@/lib/public-url";
@@ -876,6 +876,14 @@ function ProductDetailDialog({
               )}
               <InfoRow icon={Settings2} label="Tax Rate (GST)" value={`${product.taxRate ?? 10}%`} />
             </div>
+            {/* Supplier — who this product is bought from and at what code */}
+            {((product as Product & { supplier?: string | null }).supplier ||
+              (product as Product & { supplierCode?: string | null }).supplierCode) && (
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                <InfoRow icon={Truck} label="Supplier" value={(product as Product & { supplier?: string | null }).supplier} />
+                <InfoRow icon={Hash} label="Supplier Code" value={(product as Product & { supplierCode?: string | null }).supplierCode} />
+              </div>
+            )}
           </div>
         )}
 
