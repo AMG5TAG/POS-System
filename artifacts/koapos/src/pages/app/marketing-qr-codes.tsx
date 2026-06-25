@@ -624,6 +624,12 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
   const containerRef = useRef<HTMLDivElement>(null);
   const qrRef = useRef<QRCodeStyling | null>(null);
 
+  // Re-render the QR only when the inputs that actually affect it change. The
+  // page mounts 16+ of these (one per template, saved template and history
+  // entry), so an unconditional effect re-rendered every QR on every parent
+  // render — and the parent re-renders repeatedly as its queries resolve, making
+  // both initial load and typing sluggish. A stable signature gates the work.
+  const sig = JSON.stringify({ settings, data, size });
   useEffect(() => {
     const opts = buildQROptions(settings, data, size);
     if (!qrRef.current) {
@@ -635,7 +641,8 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
     } else {
       qrRef.current.update(opts);
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sig]);
 
   useEffect(() => {
     return () => {
@@ -1241,7 +1248,9 @@ export default function MarketingQRCodesPage() {
   const copyUrl = (u: string) =>
     navigator.clipboard.writeText(u).then(() => toast.success("Copied")).catch(() => toast.error("Copy failed"));
 
-  /* Live preview */
+  /* Live preview — gated on a stable signature so it only re-renders when the
+     QR actually changes, not on every parent render (e.g. as queries resolve). */
+  const liveSig = JSON.stringify({ settings, qrData });
   useEffect(() => {
     const opts = buildQROptions(settings, qrData || "https://koapos.com", Math.min(settings.size, 240));
     if (!liveQrRef.current) {
@@ -1250,7 +1259,8 @@ export default function MarketingQRCodesPage() {
     } else {
       liveQrRef.current.update(opts);
     }
-  });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [liveSig]);
 
   const previewSize = Math.min(settings.size, 240);
   const activeTypeMeta = QR_TYPES.find((t) => t.id === qrType);
@@ -1477,10 +1487,12 @@ export default function MarketingQRCodesPage() {
                   </div>
                 )}
 
-                {/* Built-in templates */}
+                {/* Built-in templates. These are style swatches, so they use a
+                    fixed sample string — keeping the live destination out of them
+                    means typing the content doesn't re-render all of them. */}
                 <div className="flex gap-3 overflow-x-auto pb-2" style={{ scrollbarWidth: "thin" }}>
                   {TEMPLATES.map((t) => (
-                    <TemplateMini key={t.id} template={t} settings={settings} data={qrData || "https://koapos.com"}
+                    <TemplateMini key={t.id} template={t} settings={settings} data="https://koapos.com"
                       selected={settings.template === t.id} onClick={() => set("template", t.id)} fontFamily={brandFontFamily} />
                   ))}
                 </div>
