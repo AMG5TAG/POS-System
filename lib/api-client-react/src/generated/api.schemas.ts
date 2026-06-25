@@ -4727,6 +4727,8 @@ export interface ProductPerformanceReport {
 }
 
 export interface CostOfGoodsTotals {
+  /** Sold COGS attributed to suppliers (equals cogsSold; rolls unmatched lines into Unassigned) */
+  soldCogs: number;
   /** Cost of goods sold across POS sales, paid invoices and completed laybys */
   cogsSold: number;
   cogsPos: number;
@@ -4757,11 +4759,14 @@ export interface CostOfGoodsMonth {
 export interface CostOfGoodsSupplier {
   supplierId?: number | null;
   supplierName: string;
+  /** Bought from this supplier (purchase orders, incl. shipping) */
   purchaseSpend: number;
   goodsSpend: number;
   shippingCost: number;
   purchaseOrderCount: number;
   itemsOrdered: number;
+  /** Cost of goods SOLD for products attributed to this supplier */
+  soldCogs: number;
 }
 
 export interface CostOfGoodsReport {

@@ -9404,6 +9404,7 @@ export const GetCostOfGoodsResponse = zod.object({
   "startDate": zod.coerce.date(),
   "endDate": zod.coerce.date(),
   "totals": zod.object({
+  "soldCogs": zod.number().describe('Sold COGS attributed to suppliers (equals cogsSold; rolls unmatched lines into Unassigned)'),
   "cogsSold": zod.number().describe('Cost of goods sold across POS sales, paid invoices and completed laybys'),
   "cogsPos": zod.number(),
   "cogsInvoice": zod.number(),
@@ -9427,11 +9428,12 @@ export const GetCostOfGoodsResponse = zod.object({
   "suppliers": zod.array(zod.object({
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string(),
-  "purchaseSpend": zod.number(),
+  "purchaseSpend": zod.number().describe('Bought from this supplier (purchase orders, incl. shipping)'),
   "goodsSpend": zod.number(),
   "shippingCost": zod.number(),
   "purchaseOrderCount": zod.number(),
-  "itemsOrdered": zod.number()
+  "itemsOrdered": zod.number(),
+  "soldCogs": zod.number().describe('Cost of goods SOLD for products attributed to this supplier')
 }))
 })
 

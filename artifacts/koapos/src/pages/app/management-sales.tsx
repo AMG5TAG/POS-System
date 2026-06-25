@@ -1015,15 +1015,18 @@ function CostOfGoodsTab({ startDate, endDate }: { startDate: string; endDate: st
             )}
           </div>
 
-          {/* ── Spend by supplier (purchase orders) ──────────────────────── */}
+          {/* ── Spend by supplier: bought-from (POs) vs sold-of (COGS) ───── */}
           <div className="rounded-xl border bg-card overflow-hidden">
-            <SectionHeader title="Spend by Supplier" action={<ExportBtn filename="cost-of-goods-suppliers" rows={suppliers as unknown as Record<string, unknown>[]} columns={[{ key: "supplierName", label: "Supplier" }, { key: "purchaseOrderCount", label: "POs" }, { key: "itemsOrdered", label: "Items" }, { key: "goodsSpend", label: "Goods" }, { key: "shippingCost", label: "Shipping" }, { key: "purchaseSpend", label: "Total Spend" }]} />} />
+            <SectionHeader title="Spend by Supplier" action={<ExportBtn filename="cost-of-goods-suppliers" rows={suppliers as unknown as Record<string, unknown>[]} columns={[{ key: "supplierName", label: "Supplier" }, { key: "purchaseOrderCount", label: "POs" }, { key: "itemsOrdered", label: "Items" }, { key: "goodsSpend", label: "Goods" }, { key: "shippingCost", label: "Shipping" }, { key: "purchaseSpend", label: "Purchase Spend" }, { key: "soldCogs", label: "Sold COGS" }]} />} />
+            <p className="px-5 py-2.5 text-xs text-muted-foreground border-b bg-muted/10">
+              <strong className="text-foreground/70">Purchase Spend</strong> = bought from the supplier (purchase orders, incl. shipping). <strong className="text-foreground/70">Sold COGS</strong> = cost of goods sold for products assigned to that supplier.
+            </p>
             {isLoading ? (
               <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Loading…</div>
             ) : suppliers.length === 0 ? (
               <div className="flex flex-col items-center py-14 gap-3">
                 <Package className="w-10 h-10 text-muted-foreground/30" />
-                <p className="text-sm text-muted-foreground">No purchase orders in this period.</p>
+                <p className="text-sm text-muted-foreground">No supplier activity in this period.</p>
               </div>
             ) : (
               <table className="w-full text-sm">
@@ -1032,20 +1035,22 @@ function CostOfGoodsTab({ startDate, endDate }: { startDate: string; endDate: st
                     <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Supplier</th>
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden sm:table-cell">POs</th>
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">Items</th>
-                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Goods</th>
-                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Shipping</th>
-                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Total Spend</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden lg:table-cell">Goods</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden lg:table-cell">Shipping</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Purchase Spend</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Sold COGS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {suppliers.map((s) => (
-                    <tr key={s.supplierId ?? s.supplierName} className="border-b last:border-0 hover:bg-muted/20">
+                    <tr key={s.supplierName} className="border-b last:border-0 hover:bg-muted/20">
                       <td className="px-5 py-3 font-medium">{s.supplierName}</td>
                       <td className="px-5 py-3 text-right text-muted-foreground hidden sm:table-cell">{s.purchaseOrderCount.toLocaleString()}</td>
                       <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{s.itemsOrdered.toLocaleString()}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.goodsSpend)}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.shippingCost)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{formatCurrency(s.goodsSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{formatCurrency(s.shippingCost)}</td>
                       <td className="px-5 py-3 text-right font-semibold">{formatCurrency(s.purchaseSpend)}</td>
+                      <td className="px-5 py-3 text-right font-semibold">{formatCurrency(s.soldCogs)}</td>
                     </tr>
                   ))}
                 </tbody>
@@ -1054,9 +1059,10 @@ function CostOfGoodsTab({ startDate, endDate }: { startDate: string; endDate: st
                     <td className="px-5 py-3">Total</td>
                     <td className="px-5 py-3 text-right hidden sm:table-cell">{poCount.toLocaleString()}</td>
                     <td className="px-5 py-3 text-right hidden md:table-cell">—</td>
-                    <td className="px-5 py-3 text-right">{formatCurrency(goodsSpend)}</td>
-                    <td className="px-5 py-3 text-right">{formatCurrency(shippingCost)}</td>
+                    <td className="px-5 py-3 text-right hidden lg:table-cell">{formatCurrency(goodsSpend)}</td>
+                    <td className="px-5 py-3 text-right hidden lg:table-cell">{formatCurrency(shippingCost)}</td>
                     <td className="px-5 py-3 text-right">{formatCurrency(purchaseSpend)}</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(cogsSold)}</td>
                   </tr>
                 </tfoot>
               </table>

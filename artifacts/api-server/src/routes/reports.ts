@@ -310,7 +310,7 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
   const { startDate, endDate } = parsed.data;
   const merchantId = req.session.merchantId!;
 
-  const [cogsRows, poRows] = await Promise.all([
+  const [cogsRows, poRows, soldRows] = await Promise.all([
     db.execute<{ month: string; cogs_pos: string; cogs_invoice: string; cogs_layby: string }>(sql`
       WITH cogs AS (
         SELECT to_char((t.created_at)::date, 'YYYY-MM') AS month, 'pos' AS src,
@@ -362,6 +362,38 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
         AND p.order_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
         AND LEFT(p.order_date, 10)::date BETWEEN ${startDate}::date AND ${endDate}::date
     `),
+    // Sold COGS attributed to each product's supplier (products.supplier is a
+    // free-text name on the product). Lines with no matching product or a blank
+    // supplier fall into "Unassigned" so the rows reconcile to total cogsSold.
+    db.execute<{ supplier: string; sold_cogs: string }>(sql`
+      SELECT COALESCE(NULLIF(TRIM(x.supplier), ''), 'Unassigned') AS supplier, SUM(x.cogs) AS sold_cogs
+      FROM (
+        SELECT p.supplier AS supplier,
+          (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0) AS cogs
+        FROM transactions t
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
+        LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
+        WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
+          AND (t.created_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
+        UNION ALL
+        SELECT p.supplier,
+          (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)
+        FROM invoices i
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
+        LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
+        WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
+          AND (i.paid_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
+        UNION ALL
+        SELECT p.supplier,
+          (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)
+        FROM laybys l
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
+        LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
+        WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+          AND (COALESCE(l.completed_at, l.updated_at))::date BETWEEN ${startDate}::date AND ${endDate}::date
+      ) x
+      GROUP BY 1
+    `),
   ]);
 
   // Merge COGS-sold months and purchase-order months into one monthly series.
@@ -386,12 +418,31 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
     m.cogsLayby   += r2(r.cogs_layby);
   }
 
-  // Supplier breakdown (and PO contribution to the monthly series).
+  // Supplier breakdown — keyed by normalised supplier name so purchase-order
+  // spend (suppliers.name) and sold COGS (products.supplier free text) merge
+  // into one row per supplier. Also folds the PO figures into the monthly series.
   type SupAgg = {
     supplierId: number | null; supplierName: string; purchaseSpend: number;
-    goodsSpend: number; shippingCost: number; purchaseOrderCount: number; itemsOrdered: number;
+    goodsSpend: number; shippingCost: number; purchaseOrderCount: number;
+    itemsOrdered: number; soldCogs: number;
   };
   const suppliers = new Map<string, SupAgg>();
+  const getSupplier = (name: string, supplierId: number | null): SupAgg => {
+    const key = name.trim().toLowerCase() || "unassigned";
+    let sup = suppliers.get(key);
+    if (!sup) {
+      sup = {
+        supplierId, supplierName: name,
+        purchaseSpend: 0, goodsSpend: 0, shippingCost: 0, purchaseOrderCount: 0,
+        itemsOrdered: 0, soldCogs: 0,
+      };
+      suppliers.set(key, sup);
+    } else if (sup.supplierId == null && supplierId != null) {
+      sup.supplierId = supplierId; // backfill the id if a later row carries it
+    }
+    return sup;
+  };
+
   for (const r of poRows.rows) {
     const totalCost = Number(r.total_cost ?? 0);
     const goods     = Number(r.goods ?? 0);
@@ -403,21 +454,17 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
     m.shippingCost       += shipping;
     m.purchaseOrderCount += 1;
 
-    const key = r.supplier_id != null ? `id:${r.supplier_id}` : "none";
-    let sup = suppliers.get(key);
-    if (!sup) {
-      sup = {
-        supplierId: r.supplier_id != null ? Number(r.supplier_id) : null,
-        supplierName: r.supplier_name ?? (r.supplier_id != null ? `Supplier #${r.supplier_id}` : "Unassigned"),
-        purchaseSpend: 0, goodsSpend: 0, shippingCost: 0, purchaseOrderCount: 0, itemsOrdered: 0,
-      };
-      suppliers.set(key, sup);
-    }
+    const name = r.supplier_name ?? (r.supplier_id != null ? `Supplier #${r.supplier_id}` : "Unassigned");
+    const sup = getSupplier(name, r.supplier_id != null ? Number(r.supplier_id) : null);
     sup.purchaseSpend      += totalCost;
     sup.goodsSpend         += goods;
     sup.shippingCost       += shipping;
     sup.purchaseOrderCount += 1;
     sup.itemsOrdered       += Number(r.items_ordered ?? 0);
+  }
+
+  for (const r of soldRows.rows) {
+    getSupplier(r.supplier || "Unassigned", null).soldCogs += r2(r.sold_cogs);
   }
 
   const monthly = [...months.values()]
@@ -443,8 +490,9 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
       shippingCost:       r2(s.shippingCost),
       purchaseOrderCount: s.purchaseOrderCount,
       itemsOrdered:       s.itemsOrdered,
+      soldCogs:           r2(s.soldCogs),
     }))
-    .sort((a, b) => b.purchaseSpend - a.purchaseSpend);
+    .sort((a, b) => (b.purchaseSpend + b.soldCogs) - (a.purchaseSpend + a.soldCogs));
 
   const totals = {
     cogsSold:           r2(monthly.reduce((s, m) => s + m.cogsSold, 0)),
@@ -455,6 +503,7 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
     goodsSpend:         r2(supplierList.reduce((s, x) => s + x.goodsSpend, 0)),
     shippingCost:       r2(supplierList.reduce((s, x) => s + x.shippingCost, 0)),
     purchaseOrderCount: supplierList.reduce((s, x) => s + x.purchaseOrderCount, 0),
+    soldCogs:           r2(supplierList.reduce((s, x) => s + x.soldCogs, 0)),
   };
 
   res.json({ startDate, endDate, totals, monthly, suppliers: supplierList });

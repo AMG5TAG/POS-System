@@ -14731,8 +14731,9 @@ components:
 
     CostOfGoodsTotals:
       type: object
-      required: [cogsSold, cogsPos, cogsInvoice, cogsLayby, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount]
+      required: [cogsSold, cogsPos, cogsInvoice, cogsLayby, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount, soldCogs]
       properties:
+        soldCogs:           { type: number, description: "Sold COGS attributed to suppliers (equals cogsSold; rolls unmatched lines into Unassigned)" }
         cogsSold:           { type: number, description: "Cost of goods sold across POS sales, paid invoices and completed laybys" }
         cogsPos:            { type: number }
         cogsInvoice:        { type: number }
@@ -14758,15 +14759,16 @@ components:
 
     CostOfGoodsSupplier:
       type: object
-      required: [supplierName, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount, itemsOrdered]
+      required: [supplierName, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount, itemsOrdered, soldCogs]
       properties:
         supplierId:         { type: integer, nullable: true }
         supplierName:       { type: string }
-        purchaseSpend:      { type: number }
+        purchaseSpend:      { type: number, description: "Bought from this supplier (purchase orders, incl. shipping)" }
         goodsSpend:         { type: number }
         shippingCost:       { type: number }
         purchaseOrderCount: { type: integer }
         itemsOrdered:       { type: integer }
+        soldCogs:           { type: number, description: "Cost of goods SOLD for products attributed to this supplier" }
 
     CostOfGoodsReport:
       type: object
