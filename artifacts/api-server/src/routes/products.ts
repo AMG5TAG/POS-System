@@ -47,6 +47,27 @@ function readWarranty(body: unknown): { warrantyDuration: number; warrantyUnit: 
   return { warrantyDuration, warrantyUnit };
 }
 
+// The CSV importer (and other clients) send a free-text `category` NAME rather
+// than a numeric `categoryId`. CreateProductBody/UpdateProductBody only know
+// about `categoryId` and strip unknown keys, so read `category` from the raw
+// body and resolve it to an existing category for the merchant — creating one
+// on the fly if it doesn't exist yet, mirroring the /products/import endpoint.
+// Returns: a category id, `null` to clear (empty string), or `undefined` when
+// no `category` field was supplied (leave categoryId untouched).
+async function resolveCategoryName(merchantId: number, body: unknown): Promise<number | null | undefined> {
+  const raw = (body as { category?: unknown })?.category;
+  if (typeof raw !== "string") return undefined;
+  const name = raw.trim();
+  if (!name) return null;
+  const [existing] = await db
+    .select()
+    .from(categoriesTable)
+    .where(and(eq(categoriesTable.merchantId, merchantId), sql`lower(${categoriesTable.name}) = ${name.toLowerCase()}`));
+  if (existing) return existing.id;
+  const [created] = await db.insert(categoriesTable).values({ merchantId, name }).returning();
+  return created.id;
+}
+
 function formatProduct(
   p: typeof productsTable.$inferSelect,
   category?: typeof categoriesTable.$inferSelect | null,
@@ -270,6 +291,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
   }
 
   const warranty = readWarranty(req.body) ?? { warrantyDuration: 0, warrantyUnit: "months" };
+  const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);
   const [product] = await db
     .insert(productsTable)
     .values({
@@ -277,6 +299,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       ...warranty,
       merchantId: req.session.merchantId!,
       productTypeId: ptRecord.id,
+      ...(resolvedCategoryId !== undefined ? { categoryId: resolvedCategoryId } : {}),
       price: price.toString(),
       costPrice: costPrice?.toString(),
       taxRate: taxRate?.toString(),
@@ -661,6 +684,8 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (tags !== undefined) updates.tags = tags;
   const warranty = readWarranty(req.body);
   if (warranty) { updates.warrantyDuration = warranty.warrantyDuration; updates.warrantyUnit = warranty.warrantyUnit; }
+  const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);
+  if (resolvedCategoryId !== undefined) updates.categoryId = resolvedCategoryId;
 
   // Capture the prior cost so we only write a price-history row on a real change.
   let previousCost: string | null = null;
