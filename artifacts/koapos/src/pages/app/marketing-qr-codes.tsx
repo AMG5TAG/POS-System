@@ -56,6 +56,9 @@ interface QRSettings {
   level: "L" | "M" | "Q" | "H";
   logoUrl: string;
   logoSize: number;
+  /* Optional human-readable fallback code shown beneath the QR by the "code"
+     template (7 alphanumeric chars). Empty for every other template. */
+  customCode: string;
 }
 
 type QRCodeType =
@@ -100,6 +103,7 @@ const DEFAULT_SETTINGS: QRSettings = {
   level: "M",
   logoUrl: "",
   logoSize: 0.35,
+  customCode: "",
 };
 
 const DARK_SWATCHES  = ["#000000", "#166534", "#1d4ed8", "#4338ca", "#7e22ce", "#be185d", "#b91c1c", "#c2410c"];
@@ -154,6 +158,17 @@ const TEMPLATES = [
   { id: "circle-dots",   label: "Dotted Ring",   circle: true  },
   { id: "dark-circle",   label: "Dark Circle",   circle: true  },
   { id: "circle-ring",   label: "Double Ring",   circle: true  },
+  // Custom fallback code beneath the QR (7 alphanumeric chars).
+  { id: "code",          label: "Code",          circle: false },
+  // Eight additional popular frames.
+  { id: "scan-me-top",   label: "Scan Top",      circle: false },
+  { id: "pill",          label: "Pill CTA",      circle: false },
+  { id: "card",          label: "Card",          circle: false },
+  { id: "bold-card",     label: "Bold Card",     circle: false },
+  { id: "square-ring",   label: "Double Box",    circle: false },
+  { id: "square-dashed", label: "Dashed Box",    circle: false },
+  { id: "square-dots",   label: "Dotted Box",    circle: false },
+  { id: "corner-ticks",  label: "Corners",       circle: false },
 ];
 
 const ECC_LEVELS = [
@@ -236,6 +251,7 @@ function apiToSettings(r: Record<string, unknown>, defaults: QRSettings = DEFAUL
     level:              (String(r.level             ?? defaults.level)) as QRSettings["level"],
     logoUrl:            String(r.logoUrl            ?? defaults.logoUrl),
     logoSize:           Number(r.logoSize           ?? defaults.logoSize),
+    customCode:         String(r.customCode         ?? defaults.customCode),
   };
 }
 
@@ -406,8 +422,9 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
   });
   const clip = (id: string, shape: string, inner: string, extra = "") =>
     `<defs><clipPath id="${id}">${shape}</clipPath></defs><g clip-path="url(#${id})"${extra}>${inner}</g>`;
+  const esc = (str: string) => str.replace(/[<>&]/g, (c) => (c === "<" ? "&lt;" : c === ">" ? "&gt;" : "&amp;"));
   const text = (x: number, y: number, fill: string, ls: number, str: string) =>
-    `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="${fill}" font-family="${font}" font-size="${fs}" font-weight="700" letter-spacing="${ls}">${str}</text>`;
+    `<text x="${x}" y="${y}" text-anchor="middle" dominant-baseline="central" fill="${fill}" font-family="${font}" font-size="${fs}" font-weight="700" letter-spacing="${ls}">${esc(str)}</text>`;
 
   if (tpl === "border") {
     const W = qrSize + 2 * (pad + bw);
@@ -470,6 +487,100 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
       `<circle cx="${c}" cy="${c}" r="${borderBox / 2 + off + bwr / 2}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>`);
   }
 
+  if (tpl === "code") {
+    const codeStr = (settings.customCode || "A1B2C3D").toUpperCase();
+    const textH = Math.round(fs * 1.6);
+    const W = qrSize + 2 * (pad + bw);
+    const H = bw * 2 + pad * 2 + qrSize + gap + textH;
+    const qrX = (W - qrSize) / 2, qrY = bw + pad;
+    const cfs = Math.round(fs * 1.15);
+    return wrap(W, H,
+      `<rect x="${bw / 2}" y="${bw / 2}" width="${W - bw}" height="${H - bw}" rx="${radius}" fill="${bg}" stroke="${pattern}" stroke-width="${bw}"/>` +
+      clip("fclip", `<rect x="${qrX}" y="${qrY}" width="${qrSize}" height="${qrSize}" rx="${innerR}"/>`, place(qrX, qrY)) +
+      `<text x="${W / 2}" y="${qrY + qrSize + gap + textH / 2}" text-anchor="middle" dominant-baseline="central" fill="${pattern}" font-family="ui-monospace, monospace" font-size="${cfs}" font-weight="700" letter-spacing="${0.18 * cfs}">${esc(codeStr)}</text>`);
+  }
+
+  if (tpl === "scan-me-top") {
+    const barH = Math.round(fs * 1.35) + 2 * Math.round(5 * s);
+    const H = qrSize + barH;
+    const body =
+      `<rect x="0" y="0" width="${qrSize}" height="${barH}" fill="${pattern}"/>` +
+      text(qrSize / 2, barH / 2, textOn, 0.15 * fs, "SCAN ME ▼") +
+      place(0, barH);
+    return wrap(qrSize, H, clip("fclip", `<rect width="${qrSize}" height="${H}" rx="${radius}"/>`, body));
+  }
+
+  if (tpl === "pill") {
+    const pillH = Math.round(fs * 2);
+    const pillW = Math.round(qrSize * 0.62);
+    const gap2 = Math.round(6 * s);
+    const H = qrSize + gap2 + pillH;
+    const pillX = (qrSize - pillW) / 2, pillY = qrSize + gap2;
+    return wrap(qrSize, H,
+      place(0, 0) +
+      `<rect x="${pillX}" y="${pillY}" width="${pillW}" height="${pillH}" rx="${pillH / 2}" fill="${pattern}"/>` +
+      text(qrSize / 2, pillY + pillH / 2, textOn, 0.1 * fs, "SCAN ME"));
+  }
+
+  if (tpl === "card") {
+    const cpad = Math.round(12 * s);
+    const box = qrSize + 2 * cpad;
+    const margin = Math.round(12 * s);
+    const total = box + margin * 2;
+    const cx = margin, cy = margin;
+    return {
+      svg:
+        `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="${total}" viewBox="0 0 ${total} ${total}">` +
+        `<defs><filter id="cardsh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="${Math.round(3 * s)}" stdDeviation="${Math.round(4 * s)}" flood-opacity="0.18"/></filter></defs>` +
+        `<rect x="${cx}" y="${cy}" width="${box}" height="${box}" rx="${radius}" fill="${bg}" filter="url(#cardsh)"/>` +
+        clip("fclip", `<rect x="${cx + cpad}" y="${cy + cpad}" width="${qrSize}" height="${qrSize}" rx="${innerR}"/>`, place(cx + cpad, cy + cpad)) +
+        `</svg>`,
+      width: total, height: total, droppedLogo,
+    };
+  }
+
+  if (tpl === "bold-card") {
+    const outerPad = Math.round(8 * s), innerPad = Math.round(6 * s);
+    const innerBox = qrSize + 2 * innerPad;
+    const W = innerBox + 2 * outerPad;
+    return wrap(W, W,
+      `<rect x="0" y="0" width="${W}" height="${W}" rx="${radius}" fill="${pattern}"/>` +
+      `<rect x="${outerPad}" y="${outerPad}" width="${innerBox}" height="${innerBox}" rx="${Math.round(10 * s)}" fill="${bg}"/>` +
+      clip("fclip", `<rect x="${outerPad + innerPad}" y="${outerPad + innerPad}" width="${qrSize}" height="${qrSize}" rx="${Math.round(6 * s)}"/>`, place(outerPad + innerPad, outerPad + innerPad)));
+  }
+
+  if (tpl === "square-ring") {
+    const pad6 = Math.round(6 * s), bwr = Math.max(2, Math.round(2 * s)), off = Math.round(4 * s);
+    const borderBox = qrSize + 2 * pad6 + 2 * bwr;
+    const W = borderBox + 2 * (off + bwr), c = W / 2, rr = Math.round(6 * s);
+    return wrap(W, W,
+      clip("fclip", `<rect x="${c - qrSize / 2}" y="${c - qrSize / 2}" width="${qrSize}" height="${qrSize}" rx="${rr}"/>`, place(c - qrSize / 2, c - qrSize / 2)) +
+      `<rect x="${(W - borderBox) / 2}" y="${(W - borderBox) / 2}" width="${borderBox}" height="${borderBox}" rx="${rr}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>` +
+      `<rect x="${bwr / 2}" y="${bwr / 2}" width="${W - bwr}" height="${W - bwr}" rx="${rr + off}" fill="none" stroke="${pattern}" stroke-width="${bwr}"/>`);
+  }
+
+  if (tpl === "square-dashed" || tpl === "square-dots") {
+    const pad6 = Math.round(6 * s), bwc = Math.max(2, Math.round(3 * s));
+    const W = qrSize + 2 * (pad6 + bwc), rr = Math.round(8 * s);
+    const dash = tpl === "square-dots"
+      ? `stroke-dasharray="${bwc} ${bwc * 1.8}" stroke-linecap="round"`
+      : `stroke-dasharray="${bwc * 3} ${bwc * 2}"`;
+    return wrap(W, W,
+      place(pad6 + bwc, pad6 + bwc) +
+      `<rect x="${bwc / 2}" y="${bwc / 2}" width="${W - bwc}" height="${W - bwc}" rx="${rr}" fill="none" stroke="${pattern}" stroke-width="${bwc}" ${dash}/>`);
+  }
+
+  if (tpl === "corner-ticks") {
+    const pd = Math.round(8 * s), tick = Math.round(16 * s), tb = Math.max(2, Math.round(3 * s));
+    const W = qrSize + 2 * pd, c = pattern;
+    const corners =
+      `<rect x="0" y="0" width="${tick}" height="${tb}" fill="${c}"/><rect x="0" y="0" width="${tb}" height="${tick}" fill="${c}"/>` +
+      `<rect x="${W - tick}" y="0" width="${tick}" height="${tb}" fill="${c}"/><rect x="${W - tb}" y="0" width="${tb}" height="${tick}" fill="${c}"/>` +
+      `<rect x="0" y="${W - tb}" width="${tick}" height="${tb}" fill="${c}"/><rect x="0" y="${W - tick}" width="${tb}" height="${tick}" fill="${c}"/>` +
+      `<rect x="${W - tick}" y="${W - tb}" width="${tick}" height="${tb}" fill="${c}"/><rect x="${W - tb}" y="${W - tick}" width="${tb}" height="${tick}" fill="${c}"/>`;
+    return wrap(W, W, place(pd, pd) + corners);
+  }
+
   // standard (and any unknown template): rounded-corner clip only.
   return wrap(qrSize, qrSize, clip("fclip", `<rect width="${qrSize}" height="${qrSize}" rx="${radius}"/>`, place(0, 0)));
 }
@@ -497,9 +608,9 @@ async function svgToImageBlob(svg: string, format: "png" | "svg", width: number,
 /* ── Template wrapper ──────────────────────────────────────────────────── */
 
 function TemplateWrapper({
-  template, bgColor, patternColor, children, scale = 1, fontFamily = DEFAULT_FONT_STACK,
+  template, bgColor, patternColor, children, scale = 1, fontFamily = DEFAULT_FONT_STACK, code = "",
 }: {
-  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number; fontFamily?: string;
+  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number; fontFamily?: string; code?: string;
 }) {
   const isCircle = TEMPLATES.find((t) => t.id === template)?.circle ?? false;
   const p  = Math.round(8 * scale);
@@ -546,6 +657,57 @@ function TemplateWrapper({
   if (template === "circle-ring") return (
     <div style={{ display: "inline-flex", alignItems: "center", justifyContent: "center", padding: Math.round(6 * scale), outline: `${Math.max(2, Math.round(2 * scale))}px solid ${patternColor}`, outlineOffset: Math.round(4 * scale), border: `${Math.max(2, Math.round(2 * scale))}px solid ${patternColor}`, borderRadius: "50%", lineHeight: 0 }}>{inner}</div>
   );
+  if (template === "code") return (
+    <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: Math.round(4 * scale), border: `${bw}px solid ${patternColor}`, borderRadius: br, padding: p, background: bgColor === "transparent" ? "white" : bgColor }}>
+      <div style={{ lineHeight: 0, borderRadius: Math.round(8 * scale), overflow: "hidden" }}>{children}</div>
+      <div style={{ fontSize: Math.round(fs * 1.15), fontWeight: 700, letterSpacing: "0.18em", color: patternColor, fontFamily: "ui-monospace, monospace" }}>{(code || "A1B2C3D").toUpperCase()}</div>
+    </div>
+  );
+  if (template === "scan-me-top") return (
+    <div style={{ display: "inline-flex", flexDirection: "column", borderRadius: br, overflow: "hidden" }}>
+      <div style={{ background: patternColor, color: bgColor === "transparent" ? "white" : bgColor, textAlign: "center", fontSize: fs, fontWeight: 700, letterSpacing: "0.15em", padding: `${Math.round(5 * scale)}px 0`, fontFamily }}>SCAN ME ▼</div>
+      {children}
+    </div>
+  );
+  if (template === "pill") return (
+    <div style={{ display: "inline-flex", flexDirection: "column", alignItems: "center", gap: Math.round(6 * scale) }}>
+      <div style={{ lineHeight: 0, borderRadius: br, overflow: "hidden" }}>{children}</div>
+      <div style={{ background: patternColor, color: bgColor === "transparent" ? "white" : bgColor, fontSize: fs, fontWeight: 700, letterSpacing: "0.1em", padding: `${Math.round(4 * scale)}px ${Math.round(12 * scale)}px`, borderRadius: 999, fontFamily }}>SCAN ME</div>
+    </div>
+  );
+  if (template === "card") return (
+    <div style={{ borderRadius: br, padding: Math.round(12 * scale), background: bgColor === "transparent" ? "white" : bgColor, boxShadow: `0 ${Math.round(3 * scale)}px ${Math.round(12 * scale)}px rgba(0,0,0,0.18)`, display: "inline-block", lineHeight: 0 }}>
+      <div style={{ lineHeight: 0, borderRadius: Math.round(8 * scale), overflow: "hidden" }}>{children}</div>
+    </div>
+  );
+  if (template === "bold-card") return (
+    <div style={{ background: patternColor, borderRadius: br, padding: Math.round(8 * scale), display: "inline-block", lineHeight: 0 }}>
+      <div style={{ background: bgColor === "transparent" ? "white" : bgColor, borderRadius: Math.round(10 * scale), padding: Math.round(6 * scale), lineHeight: 0 }}>
+        <div style={{ lineHeight: 0, borderRadius: Math.round(6 * scale), overflow: "hidden" }}>{children}</div>
+      </div>
+    </div>
+  );
+  if (template === "square-ring") return (
+    <div style={{ display: "inline-block", padding: Math.round(6 * scale), border: `${Math.max(2, Math.round(2 * scale))}px solid ${patternColor}`, outline: `${Math.max(2, Math.round(2 * scale))}px solid ${patternColor}`, outlineOffset: Math.round(4 * scale), borderRadius: Math.round(6 * scale), lineHeight: 0 }}>{children}</div>
+  );
+  if (template === "square-dashed") return (
+    <div style={{ display: "inline-block", padding: Math.round(6 * scale), border: `${Math.max(2, Math.round(3 * scale))}px dashed ${patternColor}`, borderRadius: Math.round(8 * scale), lineHeight: 0 }}>{children}</div>
+  );
+  if (template === "square-dots") return (
+    <div style={{ display: "inline-block", padding: Math.round(6 * scale), border: `${Math.max(2, Math.round(3 * scale))}px dotted ${patternColor}`, borderRadius: Math.round(8 * scale), lineHeight: 0 }}>{children}</div>
+  );
+  if (template === "corner-ticks") {
+    const tick = Math.round(16 * scale), tb = Math.max(2, Math.round(3 * scale)), pd = Math.round(8 * scale);
+    return (
+      <div style={{ position: "relative", display: "inline-block", padding: pd, lineHeight: 0 }}>
+        {children}
+        <span style={{ position: "absolute", top: 0, left: 0, width: tick, height: tick, borderTop: `${tb}px solid ${patternColor}`, borderLeft: `${tb}px solid ${patternColor}` }} />
+        <span style={{ position: "absolute", top: 0, right: 0, width: tick, height: tick, borderTop: `${tb}px solid ${patternColor}`, borderRight: `${tb}px solid ${patternColor}` }} />
+        <span style={{ position: "absolute", bottom: 0, left: 0, width: tick, height: tick, borderBottom: `${tb}px solid ${patternColor}`, borderLeft: `${tb}px solid ${patternColor}` }} />
+        <span style={{ position: "absolute", bottom: 0, right: 0, width: tick, height: tick, borderBottom: `${tb}px solid ${patternColor}`, borderRight: `${tb}px solid ${patternColor}` }} />
+      </div>
+    );
+  }
   return <div style={{ lineHeight: 0 }}>{children}</div>;
 }
 
@@ -620,37 +782,54 @@ function EyeIcon({ csStyle, cdStyle }: { csStyle: CornerSquareType; cdStyle: Cor
 
 /* ── Live QR preview ───────────────────────────────────────────────────── */
 
+/* Module-level cache of rendered QR SVG markup, keyed by the *resolved QR
+   options* (not the settings). The page mounts many <StyledQR> at once — one per
+   built-in template, saved template and history entry. The built-in template
+   swatches all encode the same sample data with the same colours/pattern; only
+   the frame differs, and the frame is applied by <TemplateWrapper> *outside* the
+   QR. So the underlying QR is identical across all square frames (and again
+   across all circle frames), yet without dedup we ran qr-code-styling's matrix +
+   SVG build ~9 times on load, blocking the main thread and making the page slow
+   to appear. Keying on the options collapses those to one render the rest reuse
+   via innerHTML. Skipped when a logo is set: qr-code-styling loads the logo image
+   asynchronously, so the markup isn't complete synchronously after append(). */
+const qrSvgCache = new Map<string, string>();
+const QR_CACHE_LIMIT = 300;
+
 function StyledQR({ settings, data, size }: { settings: QRSettings; data: string; size: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const qrRef = useRef<QRCodeStyling | null>(null);
 
-  // Re-render the QR only when the inputs that actually affect it change. The
-  // page mounts 16+ of these (one per template, saved template and history
-  // entry), so an unconditional effect re-rendered every QR on every parent
-  // render — and the parent re-renders repeatedly as its queries resolve, making
-  // both initial load and typing sluggish. A stable signature gates the work.
-  const sig = JSON.stringify({ settings, data, size });
+  const opts = useMemo(() => buildQROptions(settings, data, size), [settings, data, size]);
+  const cacheKey = useMemo(() => JSON.stringify(opts), [opts]);
+
   useEffect(() => {
-    const opts = buildQROptions(settings, data, size);
-    if (!qrRef.current) {
-      qrRef.current = new QRCodeStyling(opts);
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
-        qrRef.current.append(containerRef.current);
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Cache hit — reuse the rendered markup, skipping QR computation entirely.
+    const cached = qrSvgCache.get(cacheKey);
+    if (cached !== undefined) {
+      container.innerHTML = cached;
+      return;
+    }
+
+    // Miss — render once with qr-code-styling, then memoise the markup. Only
+    // logo-free codes are cached: append() builds their SVG synchronously, so the
+    // innerHTML read below captures the complete, final markup.
+    container.innerHTML = "";
+    new QRCodeStyling(opts).append(container);
+    if (!settings.logoUrl) {
+      const markup = container.innerHTML;
+      if (markup) {
+        if (qrSvgCache.size >= QR_CACHE_LIMIT) qrSvgCache.clear();
+        qrSvgCache.set(cacheKey, markup);
       }
-    } else {
-      qrRef.current.update(opts);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [sig]);
+  }, [cacheKey]);
 
   useEffect(() => {
-    return () => {
-      if (containerRef.current) {
-        containerRef.current.innerHTML = "";
-      }
-      qrRef.current = null;
-    };
+    return () => { if (containerRef.current) containerRef.current.innerHTML = ""; };
   }, []);
 
   return <div ref={containerRef} style={{ lineHeight: 0, display: "inline-block" }} />;
@@ -668,7 +847,7 @@ function TemplateMini({ template, settings, data, selected, onClick, fontFamily 
         selected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/40 hover:bg-muted/40")}
       style={{ width: 100 }}>
       <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
-        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6} fontFamily={fontFamily}>
+        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6} fontFamily={fontFamily} code={settings.customCode}>
           <StyledQR settings={previewSettings} data={data || "https://koapos.com"} size={72} />
         </TemplateWrapper>
       </div>
@@ -1338,7 +1517,7 @@ export default function MarketingQRCodesPage() {
               <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col items-center gap-4 py-2">
-                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily}>
+                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily} code={settings.customCode}>
                     <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
                   </TemplateWrapper>
                   <div className="text-center space-y-1">
@@ -1450,6 +1629,24 @@ export default function MarketingQRCodesPage() {
               </CardHeader>
               <CardContent className="space-y-4">
 
+                {/* Custom code — only relevant to the "Code" template. */}
+                {settings.template === "code" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Custom code <span className="text-muted-foreground font-normal">(7 letters/numbers)</span></Label>
+                    <Input
+                      value={settings.customCode}
+                      maxLength={7}
+                      onChange={(e) => set("customCode", e.target.value.replace(/[^a-zA-Z0-9]/g, "").toUpperCase().slice(0, 7))}
+                      placeholder="A1B2C3D"
+                      className="font-mono tracking-widest uppercase w-44"
+                      autoCapitalize="characters"
+                      autoCorrect="off"
+                      spellCheck={false}
+                    />
+                    <p className="text-[10px] text-muted-foreground">Shown beneath the QR as a manual fallback code customers can type.</p>
+                  </div>
+                )}
+
                 {/* Saved templates row */}
                 {savedTemplates.length > 0 && (
                   <div>
@@ -1466,6 +1663,7 @@ export default function MarketingQRCodesPage() {
                                 bgColor={tmpl.settings.bgColor}
                                 patternColor={tmpl.settings.patternColor}
                                 scale={0.6}
+                                code={tmpl.settings.customCode}
                               >
                                 <StyledQR settings={tmpl.settings} data={qrData || "https://koapos.com"} size={72} />
                               </TemplateWrapper>
@@ -1655,7 +1853,7 @@ export default function MarketingQRCodesPage() {
                     }}>
                     <CardContent className="p-3 flex items-start gap-3">
                       <div className="shrink-0 rounded overflow-hidden border flex items-center justify-center bg-white" style={{ width: 52, height: 52 }}>
-                        <TemplateWrapper template={entry.settings.template} bgColor={entry.settings.bgColor} patternColor={entry.settings.patternColor} scale={0.35}>
+                        <TemplateWrapper template={entry.settings.template} bgColor={entry.settings.bgColor} patternColor={entry.settings.patternColor} scale={0.35} code={entry.settings.customCode}>
                           <StyledQR settings={entry.settings} data={entry.url} size={52} />
                         </TemplateWrapper>
                       </div>

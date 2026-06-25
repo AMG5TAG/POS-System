@@ -131,10 +131,13 @@ function AllServiceJobsPanel() {
   const { data: jobs = [], isLoading } = useListServiceJobs({ query: { queryKey: ["service-jobs-panel"] } });
   const [selectedJob, setSelectedJob] = useState<ServiceJob | null>(null);
 
+  // Completed and cancelled jobs are closed — they linger on the dashboard only
+  // for the day they were closed (updated) or booked in, then drop off once the
+  // day has ended. Open jobs always stay visible.
+  const todayStr = new Date().toISOString().split("T")[0];
   const visible = jobs.filter((j) => {
     const s = j.status as string;
-    if (s === "completed") {
-      const todayStr = new Date().toISOString().split("T")[0];
+    if (s === "completed" || s === "cancelled") {
       return j.updatedAt.startsWith(todayStr) || j.bookInDate === todayStr;
     }
     return true;
@@ -148,7 +151,7 @@ function AllServiceJobsPanel() {
             <CardTitle className="text-sm font-semibold text-primary">All Service Jobs</CardTitle>
             <span className="text-xs text-muted-foreground font-medium">{jobs.filter((j) => !["completed", "cancelled"].includes(j.status as string)).length} total</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Completed shown for today only · Click any row to edit</p>
+          <p className="text-[11px] text-muted-foreground">Completed &amp; cancelled shown for today only · Click any row to edit</p>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto max-h-[400px]">
           {isLoading ? (

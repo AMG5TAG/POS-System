@@ -42,15 +42,50 @@ function looksLikeEmailField(type?: string, hints?: AutoCapitalizeHints): boolea
   return /e-?mail/.test(haystack);
 }
 
+/**
+ * True when the field looks like it holds a URL / website / domain regardless of
+ * its `type`. Many such fields are plain `type="text"` (e.g. a "https://…"
+ * placeholder), and capitalising the first letter corrupts the value
+ * ("https://" → "Https://"). Detected via input hints and common placeholders.
+ */
+function looksLikeUrlField(type?: string, hints?: AutoCapitalizeHints): boolean {
+  if (type === "url") return true;
+  if (hints?.inputMode === "url") return true;
+  if (hints?.autoComplete === "url") return true;
+  const haystack = `${hints?.name ?? ""} ${hints?.id ?? ""} ${hints?.placeholder ?? ""}`.toLowerCase();
+  return (
+    /\b(url|uri|website|web ?site|domain|hostname|host name|web ?address)\b/.test(haystack) ||
+    /https?:\/\//.test(haystack) ||
+    /www\./.test(haystack)
+  );
+}
+
 export function shouldAutoCapitalize(type?: string, hints?: AutoCapitalizeHints): boolean {
   if (type && EXCLUDED_TYPES.has(type)) return false;
   if (looksLikeEmailField(type, hints)) return false;
+  if (looksLikeUrlField(type, hints)) return false;
   return true;
+}
+
+/**
+ * True when a value itself looks like a URL, domain or email — content that must
+ * never be capitalised even if the field wasn't recognised as URL-typed. URLs and
+ * domains never contain whitespace, so a value with spaces is treated as prose.
+ */
+export function valueLooksLikeUrl(value: string): boolean {
+  const v = value.trim();
+  if (!v || /\s/.test(v)) return false;
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(v)) return true;                 // scheme://…
+  if (/^www\./i.test(v)) return true;                                  // www.example.com
+  if (/^[^@]+@[^@]+\.[^@]+$/.test(v)) return true;                     // an email address
+  if (/^[a-z0-9-]+(\.[a-z0-9-]+)+([/:?#].*)?$/i.test(v)) return true;  // bare host.tld[/path]
+  return false;
 }
 
 /** Uppercases the first character of the string, leaving the rest untouched. */
 export function capitalizeFirst(value: string): string {
   if (!value) return value;
+  if (valueLooksLikeUrl(value)) return value;
   const first = value.charAt(0);
   const upper = first.toUpperCase();
   return upper === first ? value : upper + value.slice(1);
