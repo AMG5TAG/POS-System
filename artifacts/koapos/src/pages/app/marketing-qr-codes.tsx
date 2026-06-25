@@ -1029,7 +1029,7 @@ export default function MarketingQRCodesPage() {
         return {
           id:    String(p.id ?? slug),
           label: String(p.title || slug || "Untitled page"),
-          url:   `${publicOrigin()}/b/${username || "your-username"}/a/${slug}`,
+          url:   `${publicOrigin()}/b/${username || "your-username"}/l/${slug}`,
         };
       });
   }, [landingResponse, merchant]);

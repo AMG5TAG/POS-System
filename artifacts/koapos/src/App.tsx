@@ -728,7 +728,10 @@ function Router() {
         <ProtectedRoute component={SettingsPage} />
       </Route>
 
-      {/* Public landing pages (no auth required) */}
+      {/* Public landing pages (no auth required). `/l/` is the current segment;
+          `/a/` is kept as a backward-compatible alias for links/QR codes that
+          were already shared before the change. */}
+      <Route path="/b/:businessUsername/l/:customName" component={LandingPagePublicView} />
       <Route path="/b/:businessUsername/a/:customName" component={LandingPagePublicView} />
       <Route path="/p/:slug" component={LandingPagePublicView} />
 

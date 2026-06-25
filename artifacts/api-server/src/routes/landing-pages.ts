@@ -51,8 +51,9 @@ router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
 });
 
 // Resolve a landing page by business username + custom name (public, no auth):
-//   /b/:username/a/:customName  →  https://koapos.com.au/b/USERNAME/a/CUSTOMNAME
-router.get("/landing-pages/public/b/:username/a/:customName", async (req, res): Promise<void> => {
+//   /b/:username/l/:customName  →  https://koapos.com.au/b/USERNAME/l/CUSTOMNAME
+// `/a/` is kept as a backward-compatible alias for previously shared links.
+router.get(["/landing-pages/public/b/:username/l/:customName", "/landing-pages/public/b/:username/a/:customName"], async (req, res): Promise<void> => {
   const username = String(req.params.username || "").trim().toLowerCase();
   const customName = String(req.params.customName || "").trim();
   if (!username || !customName) { res.status(404).json({ error: "Not found" }); return; }

@@ -171,6 +171,10 @@ router.use(productsPublicRouter);
 router.use(techRouter);
 router.use(mobilePosRouter);
 router.use(dashboardAppPublicRouter);
+// landingPagesRouter has public pages (/landing-pages/public/...) AND its own
+// per-route requireAuth on the authenticated endpoints, so it must sit before
+// the blanket guard or the public landing pages 401 for unauthenticated visitors.
+router.use(landingPagesRouter);
 router.use(servicePlansRouter);
 router.use(scheduledReportsRouter);
 router.use(locationsRouter);
@@ -207,7 +211,6 @@ router.use(xeroRouter);
 router.use(payrollRouter);
 router.use(marketingAutomationRouter);
 router.use(feedbackRouter);
-router.use(landingPagesRouter);
 router.use(camerasRouter);
 router.use(socialFeedRouter);
 router.use(socialMediaRouter);
