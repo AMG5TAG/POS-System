@@ -8,8 +8,9 @@ import {
   useDeleteProductPreOrder,
   getListProductPreOrdersQueryKey,
 } from "@workspace/api-client-react";
-import { useListProducts } from "@workspace/api-client-react";
+import { useGetLaybySettings, getGetLaybySettingsQueryKey, type Product } from "@workspace/api-client-react";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
+import { ProductSearchInput } from "@/components/products/ProductSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -36,6 +37,7 @@ const emptyForm = () => ({
   customerId: "",
   customerName: "",
   productId: "",
+  productName: "",
   quantity: "1",
   depositAmount: "",
   expectedDate: "",
@@ -59,16 +61,33 @@ export default function ProductsPreOrdersPage() {
   const updateMutation = useUpdateProductPreOrder({ mutation: { onSuccess: () => { invalidate(); } } });
   const deleteMutation = useDeleteProductPreOrder({ mutation: { onSuccess: () => { invalidate(); } } });
 
-  const { data: productsData } = useListProducts({ limit: 500 });
-  const products = productsData?.items ?? [];
+  const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
 
-  const openCreate = () => { setEditingId(null); setForm(emptyForm()); setDialogOpen(true); };
+  const { data: laybySettings } = useGetLaybySettings({ query: { queryKey: getGetLaybySettingsQueryKey() } });
+
+  /* Line total (qty × unit price) for the selected product */
+  const unitPrice = selectedProduct?.price ?? 0;
+  const quantity = parseInt(form.quantity) || 0;
+  const totalPrice = unitPrice * quantity;
+
+  /* Default deposit from the Laybys settings (Management → Staff & Operations → Sales Settings → Laybys) */
+  const depositIsPercent = (laybySettings?.minimumDepositType ?? "percentage") === "percentage";
+  const depositValue = laybySettings?.minimumDepositValue ?? 0;
+  const suggestedDeposit = depositIsPercent ? (totalPrice * depositValue) / 100 : depositValue;
+
+  const applySuggestedDeposit = () => {
+    setForm((f) => ({ ...f, depositAmount: suggestedDeposit.toFixed(2) }));
+  };
+
+  const openCreate = () => { setEditingId(null); setForm(emptyForm()); setSelectedProduct(null); setDialogOpen(true); };
   const openEdit = (o: (typeof orders)[0]) => {
     setEditingId(o.id);
+    setSelectedProduct(null);
     setForm({
       customerId: o.customerId ? String(o.customerId) : "",
       customerName: o.customerName,
       productId: o.productId ? String(o.productId) : "",
+      productName: o.productName ?? "",
       quantity: String(o.quantity),
       depositAmount: o.depositAmount ? String(o.depositAmount) : "",
       expectedDate: o.expectedDate ?? "",
@@ -80,9 +99,8 @@ export default function ProductsPreOrdersPage() {
 
   const handleSave = () => {
     if (!form.customerId && !form.customerName) { toast.error("Customer is required"); return; }
-    const product = products.find((p) => String(p.id) === form.productId);
-    const productName = product?.name ?? "";
-    if (!productName && !form.productId) { toast.error("Product is required"); return; }
+    const productName = selectedProduct?.name ?? form.productName ?? "";
+    if (!form.productId) { toast.error("Product is required"); return; }
 
     const payload = {
       customerId: form.customerId ? parseInt(form.customerId) : undefined,
@@ -215,10 +233,14 @@ export default function ProductsPreOrdersPage() {
             </div>
             <div className="space-y-1.5">
               <Label>Product</Label>
-              <Select value={form.productId} onValueChange={(v) => setForm({ ...form, productId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                <SelectContent>{products.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <ProductSearchInput
+                value={form.productId}
+                onChange={(id, p) => {
+                  setSelectedProduct(p);
+                  setForm((f) => ({ ...f, productId: id, productName: p?.name ?? (id ? f.productName : "") }));
+                }}
+                placeholder="Search product by name or SKU"
+              />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
@@ -230,6 +252,28 @@ export default function ProductsPreOrdersPage() {
                 <Input type="number" step="0.01" value={form.depositAmount} onChange={(e) => setForm({ ...form, depositAmount: e.target.value })} placeholder="0.00" />
               </div>
             </div>
+            {selectedProduct && totalPrice > 0 && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Total price</span>
+                  <span className="font-medium">{formatCurrency(totalPrice)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    Suggested deposit
+                    {depositIsPercent
+                      ? <span className="text-xs"> ({depositValue}% of total)</span>
+                      : <span className="text-xs"> (fixed default)</span>}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{formatCurrency(suggestedDeposit)}</span>
+                    <Button type="button" size="sm" variant="outline" className="h-7" onClick={applySuggestedDeposit}>
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Status</Label>

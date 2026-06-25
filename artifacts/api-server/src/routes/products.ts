@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import multer from "multer";
@@ -292,10 +292,24 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
 
   const warranty = readWarranty(req.body) ?? { warrantyDuration: 0, warrantyUnit: "months" };
   const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);
+
+  // When no low-stock amount was supplied, inherit the merchant's default
+  // (Management → Products & Inventory → Inventory). Null leaves it unset.
+  let resolvedLowStockThreshold = rest.lowStockThreshold ?? null;
+  if (resolvedLowStockThreshold == null) {
+    const [lowStock] = await db
+      .select({ globalThreshold: lowStockAlertSettingsTable.globalThreshold })
+      .from(lowStockAlertSettingsTable)
+      .where(eq(lowStockAlertSettingsTable.merchantId, req.session.merchantId!))
+      .limit(1);
+    resolvedLowStockThreshold = lowStock?.globalThreshold ?? null;
+  }
+
   const [product] = await db
     .insert(productsTable)
     .values({
       ...rest,
+      lowStockThreshold: resolvedLowStockThreshold,
       ...warranty,
       merchantId: req.session.merchantId!,
       productTypeId: ptRecord.id,

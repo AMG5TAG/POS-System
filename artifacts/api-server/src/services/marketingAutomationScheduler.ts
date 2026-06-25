@@ -12,7 +12,7 @@ import {
   socialPostsTable,
   socialAccountsTable,
 } from "@workspace/db";
-import { eq, and, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
+import { eq, and, gt, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
@@ -478,6 +478,160 @@ async function runDaysAfterSale(
   return sent;
 }
 
+// ─── Trigger: Warranty expiring ───────────────────────────────────────────────
+
+/** Product warranty expiry = sale date + duration. Mirrors the warranty helper. */
+function productWarrantyExpiry(saleDate: Date | string, duration: number, unit: string): Date | null {
+  if (!duration || duration <= 0) return null;
+  const start = new Date(saleDate);
+  if (isNaN(start.getTime())) return null;
+  const months = unit === "years" ? duration * 12 : duration;
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + months);
+  return end;
+}
+
+/**
+ * Remind customers whose product or repair warranty expires within the next
+ * `delayDays` days (the rule reuses delayDays as the "days before expiry"
+ * window; defaults to 30). Transactional service reminder — not marketing — so
+ * no opt-in is required, but a long dedup window keeps it to one nudge per item.
+ */
+async function runWarrantyExpiring(
+  merchantId: number,
+  rule: Rule,
+  biz: BizInfo,
+  logger: Logger,
+): Promise<number> {
+  const windowDays = rule.delayDays && rule.delayDays > 0 ? rule.delayDays : 30;
+  const dayMs = 24 * 3600 * 1000;
+  const now = Date.now();
+  const cutoff = now + windowDays * dayMs;
+  // Only ever remind once per warranty: dedup over a long horizon.
+  const dedupeMs = 365 * dayMs;
+
+  let sent = 0;
+
+  const sendReminder = async (opts: {
+    dedupeKey: string;
+    recordType: string;
+    customerId: number | null;
+    email: string | null;
+    phone: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    itemName: string;
+    expiry: Date;
+  }): Promise<void> => {
+    if (!opts.email && !opts.phone) return;
+    if (await alreadySent(rule.id, opts.dedupeKey, dedupeMs)) return;
+    const firstName = opts.firstName ?? "Valued Customer";
+    const expiryStr = opts.expiry.toLocaleDateString("en-AU");
+    const daysLeft = Math.max(0, Math.ceil((opts.expiry.getTime() - now) / dayMs));
+    const vars = {
+      first_name: firstName,
+      last_name: opts.lastName ?? "",
+      business_name: biz.name,
+      product_name: opts.itemName,
+      item_name: opts.itemName,
+      expiry_date: expiryStr,
+      days_left: String(daysLeft),
+    };
+    const subject = applyVars(rule.templateSubject ?? `Your warranty on {{item_name}} is expiring soon`, vars);
+    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that the warranty on your <strong>{{item_name}}</strong> from {{business_name}} expires on <strong>{{expiry_date}}</strong> ({{days_left}} days away).</p><p>If you're experiencing any issues, please get in touch before the warranty ends.</p>`, vars);
+    const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, the warranty on your {{item_name}} from {{business_name}} expires on {{expiry_date}} ({{days_left}} days away). Get in touch if you have any issues.`), vars);
+    // Transactional reminder about a customer's own purchase — no marketing footer.
+    const result = await dispatchMessage(merchantId, rule, opts.email, subject, html, text, biz, opts.customerId, false, opts.phone);
+    await logDispatch({ merchantId, ruleId: rule.id, customerId: opts.customerId, recordType: opts.recordType, recordId: opts.dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
+    if (result.success) sent++;
+  };
+
+  // ── Product warranties (from sales) ──────────────────────────────────────────
+  const products = await db
+    .select({ id: productsTable.id, name: productsTable.name, warrantyDuration: productsTable.warrantyDuration, warrantyUnit: productsTable.warrantyUnit })
+    .from(productsTable)
+    .where(and(eq(productsTable.merchantId, merchantId), gt(productsTable.warrantyDuration, 0)));
+  const productsById = new Map(products.map((p) => [p.id, p]));
+
+  if (productsById.size > 0) {
+    const rows = await db
+      .select({
+        txId: transactionsTable.id,
+        createdAt: transactionsTable.createdAt,
+        items: transactionsTable.items,
+        firstName: customersTable.firstName,
+        lastName: customersTable.lastName,
+        email: customersTable.email,
+        phone: customersTable.phone,
+        customerId: customersTable.id,
+      })
+      .from(transactionsTable)
+      .innerJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+      .where(eq(transactionsTable.merchantId, merchantId));
+
+    for (const row of rows) {
+      const lineItems = Array.isArray(row.items) ? (row.items as { productId?: number | null; productName?: string | null; name?: string | null }[]) : [];
+      for (let idx = 0; idx < lineItems.length; idx++) {
+        const it = lineItems[idx]!;
+        if (it.productId == null) continue;
+        const product = productsById.get(it.productId);
+        if (!product) continue;
+        const expiry = productWarrantyExpiry(row.createdAt, product.warrantyDuration, product.warrantyUnit);
+        if (!expiry) continue;
+        const t = expiry.getTime();
+        if (t < now || t > cutoff) continue;
+        await sendReminder({
+          dedupeKey: `warranty-prod-${row.txId}-${it.productId}-${idx}`,
+          recordType: "warranty_product",
+          customerId: row.customerId,
+          email: row.email ?? null,
+          phone: row.phone ?? null,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          itemName: it.productName || it.name || product.name,
+          expiry,
+        });
+      }
+    }
+  }
+
+  // ── Service / repair warranties (from completed service jobs) ────────────────
+  const jobs = await db
+    .select({
+      job: serviceJobsTable,
+      firstName: customersTable.firstName,
+      lastName: customersTable.lastName,
+      email: customersTable.email,
+      phone: customersTable.phone,
+      customerId: customersTable.id,
+    })
+    .from(serviceJobsTable)
+    .leftJoin(customersTable, eq(serviceJobsTable.customerId, customersTable.id))
+    .where(and(eq(serviceJobsTable.merchantId, merchantId), gt(serviceJobsTable.repairWarrantyDays, 0), isNotNull(serviceJobsTable.completedAt)));
+
+  for (const row of jobs) {
+    if (!row.job.completedAt) continue;
+    const expiry = new Date(new Date(row.job.completedAt).getTime() + row.job.repairWarrantyDays * dayMs);
+    const t = expiry.getTime();
+    if (t < now || t > cutoff) continue;
+    const deviceName = row.job.deviceDescription || row.job.deviceType || row.job.title;
+    await sendReminder({
+      dedupeKey: `warranty-job-${row.job.id}`,
+      recordType: "warranty_service",
+      customerId: row.customerId,
+      email: row.email ?? null,
+      phone: row.phone ?? null,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      itemName: `${deviceName} repair`,
+      expiry,
+    });
+  }
+
+  if (sent > 0) logger.info({ ruleId: rule.id, windowDays, sent, trigger: "warranty_expiring" }, "Automation: warranty-expiring reminders dispatched");
+  return sent;
+}
+
 // ─── Trigger: After a set time (one-off scheduled broadcast) ───────────────────
 
 async function runScheduledTime(
@@ -582,6 +736,7 @@ export async function runAutomationRule(
       case "new_service_job":  dispatched = await runNewServiceJob(merchantId, rule, biz, logger); break;
       case "invoice_overdue":  dispatched = await runInvoiceOverdue(merchantId, rule, biz, logger); break;
       case "days_after_sale":  dispatched = await runDaysAfterSale(merchantId, rule, biz, logger); break;
+      case "warranty_expiring": dispatched = await runWarrantyExpiring(merchantId, rule, biz, logger); break;
       case "scheduled_time":   dispatched = await runScheduledTime(merchantId, rule, biz, logger); break;
       default:
         return { dispatched: 0, trigger: rule.triggerEvent, error: `Unknown trigger: ${rule.triggerEvent}` };

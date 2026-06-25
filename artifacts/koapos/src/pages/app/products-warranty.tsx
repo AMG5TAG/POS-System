@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent } from "@/components/ui/card";
@@ -6,46 +7,62 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { ShieldCheck, Package, User, Receipt, Search } from "lucide-react";
+import { ShieldCheck, Package, Wrench, User, Receipt, Search, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
-import { customerDisplayName } from "@/lib/customer-name";
-import { warrantyExpiry, warrantyLabel, isUnderWarranty } from "@/lib/warranty";
+import { customFetch, type Transaction } from "@workspace/api-client-react";
 import { useDocumentTemplate } from "@/lib/use-document-template";
-import {
-  useListTransactions,
-  useListProducts,
-  useListCustomers,
-  customFetch,
-  type Transaction,
-} from "@workspace/api-client-react";
+import { cn } from "@/lib/utils";
 
-type TxItem = { productId?: number | null; productName?: string | null; name?: string | null; quantity?: number | null; serials?: string[] | null };
-type Tx = { id: number; receiptNumber?: string | null; customerId?: number | null; createdAt: string; total?: number | null; paymentMethod?: string | null; items?: unknown };
-type Prod = { id: number; name: string; sku?: string | null; price?: number | null; warrantyDuration?: number | null; warrantyUnit?: string | null };
-type Cust = { id: number; firstName?: string | null; lastName?: string | null; company?: string | null; email?: string | null; phone?: string | null };
-
-type WarrantyRow = {
+/* One active warranty (product sale or service repair) as computed by the API. */
+type WarrantyItem = {
+  type: "product" | "service";
   key: string;
-  tx: Tx;
-  product: Prod;
   itemName: string;
-  quantity: number;
+  sku: string | null;
   serials: string[];
-  expiry: Date;
-  customer: Cust | null;
+  quantity: number;
+  warrantyLabel: string;
+  soldAt: string;
+  expiry: string;
+  daysRemaining: number;
+  referenceId: number;
+  referenceNumber: string | null;
+  customer: { id: number; name: string; email: string | null; phone: string | null } | null;
 };
+
+/* Collapsible categories keyed by how much warranty time remains. An item lands
+   in the smallest bucket whose threshold (in days) is >= its remaining days. */
+const BUCKETS = [
+  { id: "3y", label: "3 Years",  maxDays: Infinity },
+  { id: "2y", label: "2 Years",  maxDays: 731 },
+  { id: "1y", label: "1 Year",   maxDays: 366 },
+  { id: "8m", label: "8 months", maxDays: 244 },
+  { id: "4m", label: "4 months", maxDays: 122 },
+  { id: "1m", label: "1 month",  maxDays: 31 },
+] as const;
+
+type BucketId = (typeof BUCKETS)[number]["id"];
+
+function bucketFor(days: number): BucketId {
+  if (days <= 31) return "1m";
+  if (days <= 122) return "4m";
+  if (days <= 244) return "8m";
+  if (days <= 366) return "1y";
+  if (days <= 731) return "2y";
+  return "3y";
+}
+
+/* The nearer-term buckets open by default — that's what merchants act on. */
+const DEFAULT_OPEN: Record<BucketId, boolean> = { "3y": false, "2y": false, "1y": true, "8m": true, "4m": true, "1m": true };
 
 function fmtDate(d: string | Date): string {
   return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
 }
 
-function daysUntil(d: Date): number {
-  return Math.ceil((d.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
-}
-
 export default function ProductsWarrantyPage() {
   const [, setLocation] = useLocation();
   const [search, setSearch] = useState("");
+  const [open, setOpen] = useState<Record<string, boolean>>(DEFAULT_OPEN);
   const { printInvoice } = useDocumentTemplate();
 
   // Open the sale's invoice in a print popup without leaving the Warranty page.
@@ -58,63 +75,39 @@ export default function ProductsWarrantyPage() {
     }
   };
 
-  const { data: txData, isLoading } = useListTransactions(
-    { limit: 200 },
-    { query: { queryKey: ["transactions", "warranty"] } },
-  );
-  const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
-  const { data: customersData } = useListCustomers({ limit: 1000 }, { query: { queryKey: ["customers", "warranty"] } });
-
-  const productsById = useMemo(() => {
-    const m = new Map<number, Prod>();
-    for (const p of (productsData?.items ?? []) as Prod[]) m.set(p.id, p);
-    return m;
-  }, [productsData]);
-
-  const customersById = useMemo(() => {
-    const m = new Map<number, Cust>();
-    for (const c of (customersData?.items ?? []) as Cust[]) m.set(c.id, c);
-    return m;
-  }, [customersData]);
-
-  // One row per sold line item whose product carries warranty that hasn't lapsed.
-  const rows = useMemo<WarrantyRow[]>(() => {
-    const out: WarrantyRow[] = [];
-    for (const tx of (txData?.items ?? []) as Tx[]) {
-      const items = Array.isArray(tx.items) ? (tx.items as TxItem[]) : [];
-      items.forEach((it, idx) => {
-        if (it.productId == null) return;
-        const product = productsById.get(it.productId);
-        if (!product || !product.warrantyDuration || product.warrantyDuration <= 0) return;
-        if (!isUnderWarranty(tx.createdAt, product.warrantyDuration, product.warrantyUnit)) return;
-        const expiry = warrantyExpiry(tx.createdAt, product.warrantyDuration, product.warrantyUnit);
-        if (!expiry) return;
-        out.push({
-          key: `${tx.id}-${it.productId}-${idx}`,
-          tx,
-          product,
-          itemName: it.productName || it.name || product.name,
-          quantity: it.quantity ?? 1,
-          serials: Array.isArray(it.serials) ? it.serials.filter(Boolean) as string[] : [],
-          expiry,
-          customer: tx.customerId != null ? customersById.get(tx.customerId) ?? null : null,
-        });
-      });
-    }
-    return out.sort((a, b) => a.expiry.getTime() - b.expiry.getTime());
-  }, [txData, productsById, customersById]);
+  // Server computes the full warranty history deterministically (single `now`),
+  // so the list is complete and stable across renders.
+  const { data, isLoading } = useQuery({
+    queryKey: ["warranties"],
+    queryFn: () => customFetch<{ items: WarrantyItem[] }>(`/api/warranties`, { method: "GET" }),
+  });
+  const items = useMemo(() => data?.items ?? [], [data]);
 
   const filtered = useMemo(() => {
     const q = search.trim().toLowerCase();
-    if (!q) return rows;
-    return rows.filter((r) =>
+    if (!q) return items;
+    return items.filter((r) =>
       r.itemName.toLowerCase().includes(q) ||
-      (r.product.sku ?? "").toLowerCase().includes(q) ||
-      (r.tx.receiptNumber ?? "").toLowerCase().includes(q) ||
+      (r.sku ?? "").toLowerCase().includes(q) ||
+      (r.referenceNumber ?? "").toLowerCase().includes(q) ||
       r.serials.some((s) => s.toLowerCase().includes(q)) ||
-      (r.customer ? customerDisplayName(r.customer) : "").toLowerCase().includes(q),
+      (r.customer?.name ?? "").toLowerCase().includes(q),
     );
-  }, [rows, search]);
+  }, [items, search]);
+
+  // Group the (already sorted soonest-first) items into the named buckets.
+  const grouped = useMemo(() => {
+    const map = new Map<BucketId, WarrantyItem[]>();
+    for (const it of filtered) {
+      const b = bucketFor(it.daysRemaining);
+      const arr = map.get(b) ?? [];
+      arr.push(it);
+      map.set(b, arr);
+    }
+    return map;
+  }, [filtered]);
+
+  const toggle = (id: string) => setOpen((o) => ({ ...o, [id]: !(o[id] ?? false) }));
 
   return (
     <AppLayout>
@@ -123,7 +116,7 @@ export default function ProductsWarrantyPage() {
           <ShieldCheck className="w-7 h-7 text-primary" />
           <div>
             <h1 className="text-2xl font-bold">Warranty</h1>
-            <p className="text-sm text-muted-foreground">Items sold that are currently under warranty, soonest to expire first.</p>
+            <p className="text-sm text-muted-foreground">Products sold and repairs completed that are still under warranty, grouped by time remaining.</p>
           </div>
         </div>
 
@@ -131,7 +124,7 @@ export default function ProductsWarrantyPage() {
           <div className="relative w-72 max-w-full">
             <Search className="w-4 h-4 absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground" />
             <Input
-              placeholder="Search product, SKU, receipt, customer..."
+              placeholder="Search product, SKU, reference, customer..."
               value={search}
               onChange={(e) => setSearch(e.target.value)}
               className="pl-8 h-9"
@@ -147,102 +140,123 @@ export default function ProductsWarrantyPage() {
             <CardContent className="flex flex-col items-center justify-center py-16 text-center text-muted-foreground gap-3">
               <ShieldCheck className="w-14 h-14 opacity-15" />
               <p className="text-sm">No items are currently under warranty.</p>
-              <p className="text-xs max-w-md">Set a warranty period on a product (Products → edit → Settings → Warranty), and it will appear here once that product is sold through the POS.</p>
+              <p className="text-xs max-w-md">Set a warranty period on a product (Products → edit → Settings → Warranty) and it appears here once sold; completed repairs with a repair-warranty period appear here too.</p>
             </CardContent>
           </Card>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b bg-muted/30 text-xs text-muted-foreground">
-                  <th className="p-3 text-left font-medium">Product</th>
-                  <th className="p-3 text-left font-medium hidden sm:table-cell">Customer</th>
-                  <th className="p-3 text-left font-medium hidden md:table-cell">Sold</th>
-                  <th className="p-3 text-left font-medium">Warranty until</th>
-                  <th className="p-3 text-right font-medium">Details</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {filtered.map((r) => {
-                  const days = daysUntil(r.expiry);
-                  const custName = r.customer ? customerDisplayName(r.customer) : null;
-                  return (
-                    <tr key={r.key} className="hover:bg-muted/20 transition-colors">
-                      <td className="p-3">
-                        <p className="font-medium truncate max-w-[200px]">{r.itemName}</p>
-                        <p className="text-[11px] text-muted-foreground">
-                          {warrantyLabel(r.product.warrantyDuration, r.product.warrantyUnit)}
-                          {r.product.sku ? ` · ${r.product.sku}` : ""}
-                        </p>
-                        {r.serials.length > 0 && (
-                          <p className="text-[11px] text-muted-foreground font-mono">S/N: {r.serials.join(", ")}</p>
-                        )}
-                      </td>
-                      <td className="p-3 hidden sm:table-cell">
-                        <span className="text-muted-foreground">{custName || "Walk-in"}</span>
-                      </td>
-                      <td className="p-3 hidden md:table-cell">
-                        <span className="text-muted-foreground text-xs">{fmtDate(r.tx.createdAt)}</span>
-                        {r.tx.receiptNumber && <span className="block text-[11px] text-muted-foreground/70">{r.tx.receiptNumber}</span>}
-                      </td>
-                      <td className="p-3">
-                        <span className="font-medium">{fmtDate(r.expiry)}</span>
-                        <Badge variant={days <= 30 ? "destructive" : "secondary"} className="ml-2 text-[10px]">
-                          {days} day{days === 1 ? "" : "s"} left
-                        </Badge>
-                      </td>
-                      <td className="p-3">
-                        <div className="flex items-center gap-1 justify-end">
-                          {/* Product */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button title="Product details" className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-                                <Package className="w-4 h-4" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 text-sm space-y-1">
-                              <p className="font-semibold">{r.product.name}</p>
-                              {r.product.sku && <p className="text-xs text-muted-foreground">SKU: {r.product.sku}</p>}
-                              {r.product.price != null && <p className="text-xs text-muted-foreground">Price: ${Number(r.product.price).toFixed(2)}</p>}
-                              <p className="text-xs text-muted-foreground">{warrantyLabel(r.product.warrantyDuration, r.product.warrantyUnit)}</p>
-                              <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/inventory/products")}>Open in Products</Button>
-                            </PopoverContent>
-                          </Popover>
-                          {/* Customer */}
-                          <Popover>
-                            <PopoverTrigger asChild>
-                              <button title="Customer details" className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
-                                <User className="w-4 h-4" />
-                              </button>
-                            </PopoverTrigger>
-                            <PopoverContent className="w-64 text-sm space-y-1">
-                              {r.customer ? (
-                                <>
-                                  <p className="font-semibold">{custName}</p>
-                                  {r.customer.email && <p className="text-xs text-muted-foreground">{r.customer.email}</p>}
-                                  {r.customer.phone && <p className="text-xs text-muted-foreground">{r.customer.phone}</p>}
-                                  <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/customers")}>Open in Customers</Button>
-                                </>
-                              ) : (
-                                <p className="text-xs text-muted-foreground">No customer was attached to this sale (walk-in).</p>
-                              )}
-                            </PopoverContent>
-                          </Popover>
-                          {/* Receipt — opens the invoice in a print popup */}
-                          <button
-                            title="View invoice"
-                            onClick={() => openReceipt(r.tx.id)}
-                            className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
-                          >
-                            <Receipt className="w-4 h-4" />
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+          <div className="space-y-3">
+            {BUCKETS.map((bucket) => {
+              const rows = grouped.get(bucket.id) ?? [];
+              if (rows.length === 0) return null;
+              const isOpen = open[bucket.id] ?? false;
+              return (
+                <div key={bucket.id} className="rounded-lg border overflow-hidden">
+                  <button
+                    type="button"
+                    onClick={() => toggle(bucket.id)}
+                    className="w-full flex items-center justify-between gap-3 px-4 py-3 bg-muted/30 hover:bg-muted/50 transition-colors"
+                  >
+                    <span className="flex items-center gap-2 font-semibold">
+                      <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", isOpen ? "" : "-rotate-90")} />
+                      {bucket.label} remaining
+                    </span>
+                    <Badge variant="secondary">{rows.length}</Badge>
+                  </button>
+                  {isOpen && (
+                    <table className="w-full text-sm border-t">
+                      <thead>
+                        <tr className="border-b bg-muted/10 text-xs text-muted-foreground">
+                          <th className="p-3 text-left font-medium">Item</th>
+                          <th className="p-3 text-left font-medium hidden sm:table-cell">Customer</th>
+                          <th className="p-3 text-left font-medium hidden md:table-cell">Since</th>
+                          <th className="p-3 text-left font-medium">Warranty until</th>
+                          <th className="p-3 text-right font-medium">Details</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y">
+                        {rows.map((r) => {
+                          const days = r.daysRemaining;
+                          return (
+                            <tr key={r.key} className="hover:bg-muted/20 transition-colors">
+                              <td className="p-3">
+                                <p className="font-medium truncate max-w-[220px] flex items-center gap-1.5">
+                                  {r.type === "service"
+                                    ? <Wrench className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
+                                    : <Package className="w-3.5 h-3.5 text-muted-foreground shrink-0" />}
+                                  {r.itemName}
+                                </p>
+                                <p className="text-[11px] text-muted-foreground">
+                                  {r.warrantyLabel}
+                                  {r.sku ? ` · ${r.sku}` : ""}
+                                </p>
+                                {r.serials.length > 0 && (
+                                  <p className="text-[11px] text-muted-foreground font-mono">S/N: {r.serials.join(", ")}</p>
+                                )}
+                              </td>
+                              <td className="p-3 hidden sm:table-cell">
+                                <span className="text-muted-foreground">{r.customer?.name || "Walk-in"}</span>
+                              </td>
+                              <td className="p-3 hidden md:table-cell">
+                                <span className="text-muted-foreground text-xs">{fmtDate(r.soldAt)}</span>
+                                {r.referenceNumber && <span className="block text-[11px] text-muted-foreground/70">{r.referenceNumber}</span>}
+                              </td>
+                              <td className="p-3">
+                                <span className="font-medium">{fmtDate(r.expiry)}</span>
+                                <Badge variant={days <= 30 ? "destructive" : "secondary"} className="ml-2 text-[10px]">
+                                  {days} day{days === 1 ? "" : "s"} left
+                                </Badge>
+                              </td>
+                              <td className="p-3">
+                                <div className="flex items-center gap-1 justify-end">
+                                  {/* Customer */}
+                                  <Popover>
+                                    <PopoverTrigger asChild>
+                                      <button title="Customer details" className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors">
+                                        <User className="w-4 h-4" />
+                                      </button>
+                                    </PopoverTrigger>
+                                    <PopoverContent className="w-64 text-sm space-y-1">
+                                      {r.customer ? (
+                                        <>
+                                          <p className="font-semibold">{r.customer.name}</p>
+                                          {r.customer.email && <p className="text-xs text-muted-foreground">{r.customer.email}</p>}
+                                          {r.customer.phone && <p className="text-xs text-muted-foreground">{r.customer.phone}</p>}
+                                          <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/customers")}>Open in Customers</Button>
+                                        </>
+                                      ) : (
+                                        <p className="text-xs text-muted-foreground">No customer was attached to this {r.type === "service" ? "repair" : "sale"} (walk-in).</p>
+                                      )}
+                                    </PopoverContent>
+                                  </Popover>
+                                  {/* Reference — invoice for sales, job link for repairs */}
+                                  {r.type === "product" ? (
+                                    <button
+                                      title="View invoice"
+                                      onClick={() => openReceipt(r.referenceId)}
+                                      className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                                    >
+                                      <Receipt className="w-4 h-4" />
+                                    </button>
+                                  ) : (
+                                    <button
+                                      title="Open service job"
+                                      onClick={() => setLocation("/services")}
+                                      className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                                    >
+                                      <Wrench className="w-4 h-4" />
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

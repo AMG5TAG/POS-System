@@ -134,6 +134,7 @@ import mobilePosRouter from "./mobile-pos";
 import mobilePosAppAdminRouter from "./mobile-pos-app-admin";
 import dashboardAppAdminRouter from "./dashboard-app-admin";
 import dashboardAppPublicRouter from "./dashboard-app-public";
+import warrantiesRouter from "./warranties";
 
 const router: IRouter = Router();
 
@@ -144,6 +145,7 @@ router.use(plansRouter);
 router.use(productsRouter);
 router.use(customersRouter);
 router.use(transactionsRouter);
+router.use(warrantiesRouter);
 router.use(paymentsRouter);
 router.use(staffRouter);
 router.use(staffAuthRouter);

@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Zap, Plus, Trash2, Pencil, Play, RefreshCw, Mail, MessageSquare,
   Clock, CheckCircle2, XCircle, AlertTriangle, Info, Cake, Calendar,
-  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Share2, Gift,
+  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Share2, Gift, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -80,13 +80,18 @@ const TRIGGER_EVENTS = [
   { value: "new_service_job", label: "New Service Job Created",     icon: Wrench,       desc: "Sent to the customer linked to a newly created service job" },
   { value: "invoice_overdue", label: "Invoice Overdue (Repair Reminder)", icon: FileWarning, desc: "Sent to customers with overdue unpaid invoices (max once per 7 days per invoice)" },
   { value: "days_after_sale", label: "X Days After Sale",                 icon: Clock,       desc: "Sent to opted-in customers a set number of days after they make a purchase" },
+  { value: "warranty_expiring", label: "Warranty Expiring",               icon: ShieldCheck, desc: "Reminds customers when a product or repair warranty is within N days of expiring" },
   { value: "scheduled_time",  label: "At a Set Time",                     icon: CalendarClock, desc: "One-off broadcast to opted-in customers at a date & time you choose" },
 ];
 
 /** Trigger types that use the time-window config fields. */
 const DELAY_TRIGGER = "days_after_sale";
+const WARRANTY_TRIGGER = "warranty_expiring";
 const SCHEDULED_TRIGGER = "scheduled_time";
 const BIRTHDAY_TRIGGER = "birthday";
+
+/** Triggers that store their day count in `delayDays`. */
+const usesDelayDays = (t: string) => t === DELAY_TRIGGER || t === WARRANTY_TRIGGER;
 
 const BIRTHDAY_DAYS_OPTIONS = [
   { value: "0",  label: "On their birthday" },
@@ -262,6 +267,9 @@ export default function ManagementMarketingAutomationPage() {
     if (form.triggerEvent === DELAY_TRIGGER && (!form.delayDays || Number(form.delayDays) <= 0)) {
       toast.error("Enter how many days after the sale to send"); return;
     }
+    if (form.triggerEvent === WARRANTY_TRIGGER && (!form.delayDays || Number(form.delayDays) <= 0)) {
+      toast.error("Enter how many days before expiry to remind the customer"); return;
+    }
     if (form.triggerEvent === SCHEDULED_TRIGGER && !form.scheduledAt) {
       toast.error("Choose a date & time to send"); return;
     }
@@ -279,7 +287,7 @@ export default function ManagementMarketingAutomationPage() {
         templateSubject: tpl.subject,
         templateBody: tpl.body,
         isActive: editRule ? editRule.isActive : true,
-        delayDays: form.triggerEvent === DELAY_TRIGGER ? Number(form.delayDays) || null : null,
+        delayDays: usesDelayDays(form.triggerEvent) ? Number(form.delayDays) || null : null,
         scheduledAt: form.triggerEvent === SCHEDULED_TRIGGER && form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
         birthdayDiscount: form.triggerEvent === BIRTHDAY_TRIGGER ? (form.birthdayDiscount.trim() || null) : null,
         birthdayDaysBefore: form.triggerEvent === BIRTHDAY_TRIGGER ? (Number(form.birthdayDaysBefore) || 0) : null,
@@ -578,6 +586,26 @@ export default function ManagementMarketingAutomationPage() {
                   />
                   <span className="text-sm text-muted-foreground">day(s) after a customer's purchase</span>
                 </div>
+              </div>
+            )}
+
+            {form.triggerEvent === WARRANTY_TRIGGER && (
+              <div className="space-y-1.5">
+                <Label>Days before expiry <span className="text-destructive">*</span></Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-28"
+                    placeholder="30"
+                    value={form.delayDays}
+                    onChange={(e) => setForm((f) => ({ ...f, delayDays: e.target.value.replace(/[^0-9]/g, "") }))}
+                  />
+                  <span className="text-sm text-muted-foreground">day(s) before a product or repair warranty expires</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Merge tags: <strong>{"{{item_name}}"}</strong>, <strong>{"{{expiry_date}}"}</strong>, <strong>{"{{days_left}}"}</strong>, <strong>{"{{first_name}}"}</strong>.
+                </p>
               </div>
             )}
 

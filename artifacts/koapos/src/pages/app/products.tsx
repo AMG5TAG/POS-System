@@ -36,6 +36,7 @@ import {
   useListSuppliers,
   useBulkUpdateProducts,
   useGetInventorySettings,
+  useGetLowStockAlertSettings,
 } from "@workspace/api-client-react";
 import {
   useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
@@ -1168,6 +1169,9 @@ export default function ProductsPage() {
   const [inStockOnly, setInStockOnly]   = useState(false);
   const [hideCosts, setHideCosts]       = useState(true);
   const { data: inventorySettings } = useGetInventorySettings();
+  const { data: lowStockSettings } = useGetLowStockAlertSettings({ query: { queryKey: ["low-stock-alert-settings"] } });
+  // Merchant-wide default low-stock amount; falls back to 5 when unset.
+  const defaultLowStock = lowStockSettings?.globalThreshold ?? 5;
   const showHideCostsBtn  = inventorySettings?.showCosts  !== "false";
   const enableGroupPricing = inventorySettings?.groupPricing !== "false";
   const stockColorsEnabled = inventorySettings?.stockColors === "true";
@@ -1430,9 +1434,11 @@ export default function ProductsPage() {
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openCreate = () => {
-    initialProductFormRef.current = defaultForm;
+    // Pre-fill the low-stock amount from the merchant default (Management → Inventory).
+    const startForm = { ...defaultForm, lowStockThreshold: String(defaultLowStock) };
+    initialProductFormRef.current = startForm;
     manualGroupsRef.current = new Set();
-    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
+    setEditingProduct(null); setForm(startForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
