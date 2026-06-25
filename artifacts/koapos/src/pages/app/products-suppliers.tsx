@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
   useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, useRequestUploadUrl, useConfirmUpload,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -16,7 +17,7 @@ import {
   Plus, Truck, Pencil, Trash2, Search, Globe, Mail, Phone,
   Check, ChevronRight, ChevronLeft, Building2, MapPin, Users,
   FileText, CreditCard, ImageIcon, X, LayoutGrid, Table2, BarChart3,
-  ChevronUp, ChevronDown, ChevronsUpDown, Upload,
+  ChevronUp, ChevronDown, ChevronsUpDown, Upload, Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -527,6 +528,23 @@ export default function ProductsSuppliersPage() {
     refetchSuppliers();
   };
 
+  // Flag every product carrying this supplier's name as an ePay (digital
+  // pass-through) product, which excludes them from Cost of Goods.
+  const flagSupplierEpay = async (s: Supplier) => {
+    if (!window.confirm(`Mark all products from "${s.name}" as ePay products?\n\nThey'll be treated as digital pass-through and excluded from Cost of Goods.`)) return;
+    try {
+      const r = await customFetch<{ updated: number }>("/api/products/epay-by-supplier", {
+        method: "PATCH",
+        body: JSON.stringify({ supplier: s.name, isEpay: true }),
+      });
+      if (r.updated === 0) toast.info(`No products are assigned to "${s.name}"`);
+      else toast.success(`Flagged ${r.updated} product${r.updated === 1 ? "" : "s"} from ${s.name} as ePay`);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    } catch {
+      toast.error("Failed to flag products as ePay");
+    }
+  };
+
   const getContacts = (s: Supplier): Contact[] => {
     try { return s.contacts ? JSON.parse(s.contacts) : []; } catch { return []; }
   };
@@ -709,6 +727,9 @@ export default function ProductsSuppliersPage() {
                         {/* Actions */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-0.5 justify-end">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark all products as ePay" onClick={(e) => { e.stopPropagation(); flagSupplierEpay(s); }}>
+                              <Smartphone className="w-3.5 h-3.5" />
+                            </Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
@@ -753,6 +774,7 @@ export default function ProductsSuppliersPage() {
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark all products as ePay" onClick={(e) => { e.stopPropagation(); flagSupplierEpay(s); }}><Smartphone className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Pencil className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                       </div>

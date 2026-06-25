@@ -600,6 +600,30 @@ router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...formatProduct(product, category, ptRecord), digitalCodesCount: digitalCodeCount });
 });
 
+// ── Bulk-set the ePay flag for every product under a supplier ────────────────────
+// Lets a merchant flag (or unflag) their whole "ePay" catalogue at once so those
+// pass-through products drop out of Cost of Goods. Registered before /products/:id.
+const EpayBySupplierBody = z.object({
+  supplier: z.string().trim().min(1),
+  isEpay: z.boolean(),
+});
+
+router.patch("/products/epay-by-supplier", requireAuth, async (req, res): Promise<void> => {
+  const parsed = EpayBySupplierBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { supplier, isEpay } = parsed.data;
+  const merchantId = req.session.merchantId!;
+  const updated = await db
+    .update(productsTable)
+    .set({ isEpay: isEpay ? "true" : "false" })
+    .where(and(
+      eq(productsTable.merchantId, merchantId),
+      sql`lower(trim(${productsTable.supplier})) = lower(trim(${supplier}))`,
+    ))
+    .returning({ id: productsTable.id });
+  res.json({ updated: updated.length });
+});
+
 // ── Bulk update ────────────────────────────────────────────────────────────────
 // IMPORTANT: must be registered before /products/:id to avoid ":id" matching "bulk"
 
