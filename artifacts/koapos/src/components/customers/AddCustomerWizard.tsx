@@ -30,6 +30,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 
 type Step = "personal" | "address" | "account";
@@ -436,7 +437,7 @@ export function AddCustomerWizard({
             <>
               <p className="text-xs font-bold tracking-widest text-foreground uppercase">Billing Address</p>
               <Field label="Street Address" full>
-                <Input value={form.billingStreet} onChange={(e) => setField("billingStreet", e.target.value)} placeholder="123 Main St" />
+                <Input value={form.billingStreet} onChange={(e) => setField("billingStreet", e.target.value)} onBlur={(e) => setField("billingStreet", expandStreetType(e.target.value))} placeholder="123 Main St" />
               </Field>
               <FieldRow>
                 <Field label="City">
@@ -451,7 +452,7 @@ export function AddCustomerWizard({
                   <Input value={form.billingPostcode} onChange={(e) => setField("billingPostcode", e.target.value)} placeholder="2000" />
                 </Field>
                 <Field label="Country">
-                  <Input value={form.billingCountry} onChange={(e) => setField("billingCountry", e.target.value)} placeholder="Australia" />
+                  <Input value={form.billingCountry} onChange={(e) => setField("billingCountry", e.target.value)} onBlur={(e) => setField("billingCountry", expandState(e.target.value))} placeholder="Australia" />
                 </Field>
               </FieldRow>
               <label className="flex items-center gap-2 text-sm cursor-pointer font-medium">
@@ -471,7 +472,7 @@ export function AddCustomerWizard({
                   {!form.shippingSameAsBilling && (
                     <>
                       <Field label="Street / PO Box" full>
-                        <Input value={form.shippingStreet} onChange={(e) => setField("shippingStreet", e.target.value)} placeholder="PO Box 123" />
+                        <Input value={form.shippingStreet} onChange={(e) => setField("shippingStreet", e.target.value)} onBlur={(e) => setField("shippingStreet", expandStreetType(e.target.value))} placeholder="PO Box 123" />
                       </Field>
                       <FieldRow>
                         <Field label="City">
@@ -486,7 +487,7 @@ export function AddCustomerWizard({
                           <Input value={form.shippingPostcode} onChange={(e) => setField("shippingPostcode", e.target.value)} placeholder="2000" />
                         </Field>
                         <Field label="Country">
-                          <Input value={form.shippingCountry} onChange={(e) => setField("shippingCountry", e.target.value)} placeholder="Australia" />
+                          <Input value={form.shippingCountry} onChange={(e) => setField("shippingCountry", e.target.value)} onBlur={(e) => setField("shippingCountry", expandState(e.target.value))} placeholder="Australia" />
                         </Field>
                       </FieldRow>
                     </>

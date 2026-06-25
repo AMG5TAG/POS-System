@@ -16,6 +16,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
+import { expandStreetType } from "@/lib/address-format";
 import {
   Truck, Package, Clock, CheckCircle2, XCircle, ChefHat, Bike,
   Plus, Eye, RefreshCw, Phone, MapPin, StickyNote, ChevronRight,
@@ -462,7 +463,7 @@ export default function OnlineDeliveryOrdersPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Delivery address</Label>
-              <Input className="h-8" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+              <Input className="h-8" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} onBlur={(e) => setForm((f) => ({ ...f, address: expandStreetType(e.target.value) }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

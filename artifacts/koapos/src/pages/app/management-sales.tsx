@@ -12,6 +12,7 @@ import {
   useGetSalesChart,
   useGetTopProducts,
   useListTransactions,
+  getListTransactionsQueryKey,
   useListStaff,
   useListInventory,
   useListCashDrawerEntries,
@@ -54,7 +55,7 @@ import {
   ShoppingCart, AlertCircle, CheckCircle2, Package, UserSquare2,
   ArrowUpRight, ArrowDownRight, Percent, Hash, Mail, Clock, Plus,
   FileText, Settings2, QrCode, Link2, Globe, ExternalLink,
-  MousePointerClick, Trash2,
+  MousePointerClick, Trash2, ChevronRight,
 } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
@@ -537,6 +538,9 @@ function RegisterClosuresTab() {
 function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: string }) {
   const { data, isLoading } = useGetProfitLoss({ startDate, endDate });
 
+  // Date of the daily-breakdown row the user clicked to drill into; null = closed.
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
   const grossRevenue    = data?.grossRevenue    ?? 0;
   const exGstRevenue    = data?.exGstRevenue    ?? 0;
   const taxCollected    = data?.taxCollected    ?? 0;
@@ -704,7 +708,7 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
           {/* ── Daily breakdown table ───────────────────────────────────────── */}
           {dailyRows.length > 0 && (
             <div className="rounded-xl border bg-card overflow-hidden">
-              <SectionHeader title="Daily Breakdown" />
+              <SectionHeader title="Daily Breakdown" action={<span className="text-xs text-muted-foreground">Click a day to see its sales &amp; products</span>} />
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/30 border-b">
@@ -714,11 +718,20 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">GST</th>
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">COGS</th>
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground">Net Profit</th>
+                    <th className="px-3 py-3 w-8" aria-hidden="true" />
                   </tr>
                 </thead>
                 <tbody>
                   {dailyRows.map((row) => (
-                    <tr key={row.date} className="border-b last:border-0 hover:bg-muted/20">
+                    <tr
+                      key={row.date}
+                      onClick={() => setSelectedDate(row.date)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedDate(row.date); } }}
+                      tabIndex={0}
+                      role="button"
+                      title={`View sales & products sold on ${row.date}`}
+                      className="group border-b last:border-0 cursor-pointer hover:bg-muted/30 focus:bg-muted/30 focus:outline-none"
+                    >
                       <td className="px-5 py-3 text-muted-foreground font-mono text-xs">{row.date}</td>
                       <td className="px-5 py-3 text-right text-muted-foreground">{row.transactionCount.toLocaleString()}</td>
                       <td className="px-5 py-3 text-right font-medium">{formatCurrency(row.grossRevenue)}</td>
@@ -727,15 +740,171 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
                       <td className={cn("px-5 py-3 text-right font-semibold", row.netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
                         {formatCurrency(row.netProfit)}
                       </td>
+                      <td className="px-3 py-3 text-right">
+                        <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+
+          <DailySalesDetailDialog
+            date={selectedDate}
+            onOpenChange={(open) => { if (!open) setSelectedDate(null); }}
+          />
         </>
       )}
     </div>
+  );
+}
+
+/* ── Drill-down: all sales & products sold on a single day ─────────────────── */
+
+function DailySalesDetailDialog({
+  date, onOpenChange,
+}: {
+  date: string | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  // Fetch the day's transactions only while the dialog is open. The backend
+  // filters by date range; we also pin to the exact day client-side so a
+  // boundary-inclusive `to` can't leak adjacent days into the list.
+  const txParams = { from: date ?? undefined, to: date ?? undefined, limit: 500 };
+  const { data, isLoading } = useListTransactions(
+    txParams,
+    { query: { enabled: !!date, queryKey: getListTransactionsQueryKey(txParams) } },
+  );
+
+  const txs = useMemo(
+    () => (data?.items ?? []).filter((tx) => (tx.createdAt ?? "").slice(0, 10) === date),
+    [data, date],
+  );
+
+  // Aggregate line items across the day into "products sold", ranked by revenue.
+  const products = useMemo(() => {
+    const map = new Map<string, { name: string; quantity: number; revenue: number }>();
+    for (const tx of txs) {
+      for (const it of tx.items ?? []) {
+        const key  = `${it.productId}|${it.productName}`;
+        const prev = map.get(key) ?? { name: it.productName, quantity: 0, revenue: 0 };
+        prev.quantity += it.quantity;
+        prev.revenue  += it.totalPrice;
+        map.set(key, prev);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue);
+  }, [txs]);
+
+  const totalRevenue = txs.reduce((s, tx) => s + tx.total, 0);
+  const unitsSold    = products.reduce((s, p) => s + p.quantity, 0);
+
+  return (
+    <Dialog open={!!date} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Sales on {date}</DialogTitle>
+          <DialogDescription>
+            {isLoading
+              ? "Loading…"
+              : `${txs.length.toLocaleString()} transaction${txs.length !== 1 ? "s" : ""} · ${unitsSold.toLocaleString()} item${unitsSold !== 1 ? "s" : ""} sold · ${formatCurrency(totalRevenue)}`}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Loading day…
+          </div>
+        ) : txs.length === 0 ? (
+          <div className="flex flex-col items-center py-14 gap-3">
+            <Receipt className="w-10 h-10 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No transactions recorded on this day.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Products sold */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b">
+                <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+                <p className="font-semibold text-sm">Products Sold</p>
+                <ExportBtn
+                  filename={`products-sold-${date}`}
+                  rows={products as unknown as Record<string, unknown>[]}
+                  columns={[{ key: "name", label: "Product" }, { key: "quantity", label: "Qty" }, { key: "revenue", label: "Revenue" }]}
+                />
+              </div>
+              {products.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No products on this day.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30 border-b">
+                      <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Product</th>
+                      <th className="text-right px-5 py-2.5 font-medium text-muted-foreground">Qty</th>
+                      <th className="text-right px-5 py-2.5 font-medium text-muted-foreground">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((p, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/20">
+                        <td className="px-5 py-2.5">{p.name}</td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground">{p.quantity.toLocaleString()}</td>
+                        <td className="px-5 py-2.5 text-right font-medium">{formatCurrency(p.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* All sales */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b">
+                <Receipt className="w-4 h-4 text-muted-foreground" />
+                <p className="font-semibold text-sm">All Sales</p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Receipt</th>
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Time</th>
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">Payment</th>
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Status</th>
+                    <th className="text-right px-5 py-2.5 font-medium text-muted-foreground">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txs.map((tx) => {
+                    const itemSummary = (tx.items ?? [])
+                      .map((it) => `${it.quantity}× ${it.productName}`)
+                      .join(", ");
+                    return (
+                      <tr key={tx.id} className="border-b last:border-0 hover:bg-muted/20 align-top">
+                        <td className="px-5 py-2.5">
+                          <div className="font-mono text-xs">{tx.receiptNumber || `#${tx.id}`}</div>
+                          {itemSummary && (
+                            <div className="text-xs text-muted-foreground/70 mt-0.5 max-w-xs truncate" title={itemSummary}>{itemSummary}</div>
+                          )}
+                        </td>
+                        <td className="px-5 py-2.5 text-muted-foreground whitespace-nowrap">
+                          {tx.createdAt ? new Date(tx.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </td>
+                        <td className="px-5 py-2.5 text-muted-foreground capitalize hidden sm:table-cell">{tx.paymentMethod.replace(/_/g, " ")}</td>
+                        <td className="px-5 py-2.5">
+                          <Badge variant={tx.status === "completed" ? "secondary" : "outline"} className="capitalize">{tx.status.replace(/_/g, " ")}</Badge>
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-medium whitespace-nowrap">{formatCurrency(tx.total)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
   );
 }
 

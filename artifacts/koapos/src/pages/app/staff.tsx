@@ -27,6 +27,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 import { parseStaffPosPrefs, type StaffPosPrefs } from "@/lib/pos-local-settings";
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
@@ -211,7 +212,7 @@ function AddressBlock({
   return (
     <div className="space-y-3">
       <p className="text-xs font-bold uppercase tracking-widest text-foreground/70">{title}</p>
-      <PillInput label="Street Address" value={addr.street} onChange={set("street")} />
+      <PillInput label="Street Address" value={addr.street} onChange={set("street")} onBlur={(e) => onChange({ ...addr, street: expandStreetType(e.target.value) })} />
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="City"  value={addr.city}  onChange={set("city")} />
         <div className="space-y-1.5">
@@ -221,7 +222,7 @@ function AddressBlock({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="Postcode" value={addr.postcode} onChange={set("postcode")} />
-        <PillInput label="Country"  value={addr.country}  onChange={set("country")} />
+        <PillInput label="Country"  value={addr.country}  onChange={set("country")} onBlur={(e) => onChange({ ...addr, country: expandState(e.target.value) })} />
       </div>
     </div>
   );

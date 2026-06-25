@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -259,7 +260,7 @@ function Step1({ form, set }: { form: SupplierForm; set: <K extends keyof Suppli
 function Step2({ form, set }: { form: SupplierForm; set: <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => void }) {
   return (
     <div className="space-y-4">
-      <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="123 Main St" />
+      <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} onBlur={(e) => set("street", expandStreetType(e.target.value))} placeholder="123 Main St" />
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="City"  value={form.city}  onChange={(e) => set("city",  e.target.value)} placeholder="Sydney" />
         <div className="space-y-1.5">
@@ -269,7 +270,7 @@ function Step2({ form, set }: { form: SupplierForm; set: <K extends keyof Suppli
       </div>
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="Postcode" value={form.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="2000" />
-        <PillInput label="Country"  value={form.country}  onChange={(e) => set("country",  e.target.value)} placeholder="Australia" />
+        <PillInput label="Country"  value={form.country}  onChange={(e) => set("country",  e.target.value)} onBlur={(e) => set("country", expandState(e.target.value))} placeholder="Australia" />
       </div>
     </div>
   );

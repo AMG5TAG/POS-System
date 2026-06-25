@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/lib/use-auth";
 import { useBusinessProfile, DAYS, type BusinessProfile, type CustomLink } from "@/lib/business-profile";
 import { validateABN } from "@/lib/abn";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -678,7 +679,7 @@ export default function SettingsBusinessPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Label>Street Address</Label>
-                <Input value={apiForm.address} onChange={(e) => patchApiForm({ address: e.target.value })} placeholder="123 Main St" />
+                <Input value={apiForm.address} onChange={(e) => patchApiForm({ address: e.target.value })} onBlur={(e) => patchApiForm({ address: expandStreetType(e.target.value) })} placeholder="123 Main St" />
               </div>
               <div>
                 <Label>Suburb / City</Label>
@@ -686,7 +687,7 @@ export default function SettingsBusinessPage() {
               </div>
               <div>
                 <Label>State</Label>
-                <Input value={ext.state} onChange={(e) => setExtField("state", e.target.value)} placeholder="NSW" />
+                <Input value={ext.state} onChange={(e) => setExtField("state", e.target.value)} onBlur={(e) => setExtField("state", expandState(e.target.value))} placeholder="NSW" />
               </div>
               <div>
                 <Label>Postcode</Label>
@@ -694,7 +695,7 @@ export default function SettingsBusinessPage() {
               </div>
               <div>
                 <Label>Country</Label>
-                <Input value={apiForm.country} onChange={(e) => patchApiForm({ country: e.target.value })} placeholder="Australia" />
+                <Input value={apiForm.country} onChange={(e) => patchApiForm({ country: e.target.value })} onBlur={(e) => patchApiForm({ country: expandState(e.target.value) })} placeholder="Australia" />
               </div>
               <div className="sm:col-span-2 flex flex-wrap gap-x-6 gap-y-2 pt-0.5">
                 <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
