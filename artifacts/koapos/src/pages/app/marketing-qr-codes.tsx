@@ -372,8 +372,18 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
 
   // Embed the QR as a nested <svg> at (x, y); force width/height so it renders
   // at qrSize regardless of how qr-code-styling emitted its root attributes.
+  // qr-code-styling already emits width/height (and sometimes x/y) on its root
+  // <svg>, so we must strip those before injecting ours — otherwise the tag ends
+  // up with duplicate attributes, which is invalid XML. The live preview tolerates
+  // it (lenient HTML parsing via append()), but the export is loaded as a strict
+  // image/svg+xml data URI, where duplicates make the image fail to load and the
+  // whole download silently aborts with "Download failed".
   const place = (x: number, y: number) =>
-    qrSvg.replace(/^<svg\s/i, `<svg x="${x}" y="${y}" width="${qrSize}" height="${qrSize}" `);
+    qrSvg.replace(/^<svg\b[^>]*>/i, (tag) =>
+      tag
+        .replace(/\s(?:x|y|width|height)\s*=\s*("[^"]*"|'[^']*')/gi, "")
+        .replace(/^<svg\b/i, `<svg x="${x}" y="${y}" width="${qrSize}" height="${qrSize}"`),
+    );
 
   const tpl     = settings.template;
   const pattern = settings.patternColor;
