@@ -4726,6 +4726,52 @@ export interface ProductPerformanceReport {
   items: ProductPerformanceItem[];
 }
 
+export interface CostOfGoodsTotals {
+  /** Cost of goods sold across POS sales, paid invoices and completed laybys */
+  cogsSold: number;
+  cogsPos: number;
+  cogsInvoice: number;
+  cogsLayby: number;
+  /** Total purchase-order spend (goods + shipping), incl. GST */
+  purchaseSpend: number;
+  /** Purchase-order goods cost (qty × unit cost), excl. shipping */
+  goodsSpend: number;
+  /** Total purchase-order delivery/shipping cost */
+  shippingCost: number;
+  purchaseOrderCount: number;
+}
+
+export interface CostOfGoodsMonth {
+  /** YYYY-MM */
+  month: string;
+  cogsSold: number;
+  cogsPos: number;
+  cogsInvoice: number;
+  cogsLayby: number;
+  purchaseSpend: number;
+  goodsSpend: number;
+  shippingCost: number;
+  purchaseOrderCount: number;
+}
+
+export interface CostOfGoodsSupplier {
+  supplierId?: number | null;
+  supplierName: string;
+  purchaseSpend: number;
+  goodsSpend: number;
+  shippingCost: number;
+  purchaseOrderCount: number;
+  itemsOrdered: number;
+}
+
+export interface CostOfGoodsReport {
+  startDate: string;
+  endDate: string;
+  totals: CostOfGoodsTotals;
+  monthly: CostOfGoodsMonth[];
+  suppliers: CostOfGoodsSupplier[];
+}
+
 export type PcSavedBuildBuild = { [key: string]: unknown };
 
 export interface PcSavedBuild {
@@ -6254,6 +6300,17 @@ registerId?: string;
 
 export type GetProductPerformanceParams = {
 startDate: string;
+endDate: string;
+};
+
+export type GetCostOfGoodsParams = {
+/**
+ * Start date (YYYY-MM-DD, inclusive)
+ */
+startDate: string;
+/**
+ * End date (YYYY-MM-DD, inclusive)
+ */
 endDate: string;
 };
 

@@ -9392,6 +9392,50 @@ export const GetProductPerformanceResponse = zod.object({
 })
 
 
+/**
+ * @summary Cost of goods report — monthly COGS (sales/invoices/laybys), supplier spend and purchase-order shipping for a date range
+ */
+export const GetCostOfGoodsQueryParams = zod.object({
+  "startDate": zod.date().describe('Start date (YYYY-MM-DD, inclusive)'),
+  "endDate": zod.date().describe('End date (YYYY-MM-DD, inclusive)')
+})
+
+export const GetCostOfGoodsResponse = zod.object({
+  "startDate": zod.coerce.date(),
+  "endDate": zod.coerce.date(),
+  "totals": zod.object({
+  "cogsSold": zod.number().describe('Cost of goods sold across POS sales, paid invoices and completed laybys'),
+  "cogsPos": zod.number(),
+  "cogsInvoice": zod.number(),
+  "cogsLayby": zod.number(),
+  "purchaseSpend": zod.number().describe('Total purchase-order spend (goods + shipping), incl. GST'),
+  "goodsSpend": zod.number().describe('Purchase-order goods cost (qty × unit cost), excl. shipping'),
+  "shippingCost": zod.number().describe('Total purchase-order delivery\/shipping cost'),
+  "purchaseOrderCount": zod.number()
+}),
+  "monthly": zod.array(zod.object({
+  "month": zod.string().describe('YYYY-MM'),
+  "cogsSold": zod.number(),
+  "cogsPos": zod.number(),
+  "cogsInvoice": zod.number(),
+  "cogsLayby": zod.number(),
+  "purchaseSpend": zod.number(),
+  "goodsSpend": zod.number(),
+  "shippingCost": zod.number(),
+  "purchaseOrderCount": zod.number()
+})),
+  "suppliers": zod.array(zod.object({
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string(),
+  "purchaseSpend": zod.number(),
+  "goodsSpend": zod.number(),
+  "shippingCost": zod.number(),
+  "purchaseOrderCount": zod.number(),
+  "itemsOrdered": zod.number()
+}))
+})
+
+
 export const GetPcBuilderSettingsResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),

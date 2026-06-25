@@ -65,6 +65,7 @@ import type {
   ConfirmUploadBody,
   ConfirmUploadResponse,
   ConvertQuoteInput,
+  CostOfGoodsReport,
   CreateDailyCloseInput,
   CreateLaybyBody,
   CreatePartnerReferralBody,
@@ -125,6 +126,7 @@ import type {
   GenerateMissingReferralCodes200,
   GetAuthEventsFlaggedCount200,
   GetAuthEventsUnreadCount200,
+  GetCostOfGoodsParams,
   GetDashboardActivityParams,
   GetDashboardCalendarParams,
   GetDashboardSummaryParams,
@@ -28737,6 +28739,90 @@ export function useGetProductPerformance<TData = Awaited<ReturnType<typeof getPr
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetProductPerformanceQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetCostOfGoodsUrl = (params: GetCostOfGoodsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/reports/cost-of-goods?${stringifiedParams}` : `/api/reports/cost-of-goods`
+}
+
+/**
+ * @summary Cost of goods report — monthly COGS (sales/invoices/laybys), supplier spend and purchase-order shipping for a date range
+ */
+export const getCostOfGoods = async (params: GetCostOfGoodsParams, options?: RequestInit): Promise<CostOfGoodsReport> => {
+
+  return customFetch<CostOfGoodsReport>(getGetCostOfGoodsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetCostOfGoodsQueryKey = (params?: GetCostOfGoodsParams,) => {
+    return [
+    `/api/reports/cost-of-goods`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetCostOfGoodsQueryOptions = <TData = Awaited<ReturnType<typeof getCostOfGoods>>, TError = ErrorType<void>>(params: GetCostOfGoodsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCostOfGoods>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetCostOfGoodsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getCostOfGoods>>> = ({ signal }) => getCostOfGoods(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getCostOfGoods>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetCostOfGoodsQueryResult = NonNullable<Awaited<ReturnType<typeof getCostOfGoods>>>
+export type GetCostOfGoodsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Cost of goods report — monthly COGS (sales/invoices/laybys), supplier spend and purchase-order shipping for a date range
+ */
+
+export function useGetCostOfGoods<TData = Awaited<ReturnType<typeof getCostOfGoods>>, TError = ErrorType<void>>(
+ params: GetCostOfGoodsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getCostOfGoods>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetCostOfGoodsQueryOptions(params,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

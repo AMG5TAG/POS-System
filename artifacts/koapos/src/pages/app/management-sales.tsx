@@ -23,6 +23,7 @@ import {
   useListGiftCards,
   useGetGiftCardSettings,
   useGetProfitLoss,
+  useGetCostOfGoods,
   useGetSalesSummary,
   useGetInventoryValuation,
   useGetProductPerformance,
@@ -110,6 +111,7 @@ const REPORT_TABS = [
   { id: "inventory",         label: "Inventory",         icon: Package2          },
   { id: "register-closures", label: "Register Closures", icon: Monitor           },
   { id: "profit-loss",       label: "Profit & Loss",     icon: DollarSign        },
+  { id: "cost-of-goods",     label: "Cost of Goods",     icon: Package           },
   { id: "customer-insights", label: "Customer Insights", icon: Users             },
   { id: "top-products",      label: "Top Products",      icon: BarChart3         },
   { id: "user-activity",     label: "User Activity",     icon: Activity          },
@@ -905,6 +907,164 @@ function DailySalesDetailDialog({
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ─── Tab: Cost of Goods ─────────────────────────────────────────────────── */
+
+function fmtMonth(m: string): string {
+  const [y, mo] = m.split("-");
+  if (!y || !mo) return m;
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-AU", { month: "short", year: "2-digit" });
+}
+
+function CostOfGoodsTab({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const { data, isLoading } = useGetCostOfGoods({ startDate, endDate });
+
+  const totals    = data?.totals;
+  const monthly   = data?.monthly   ?? [];
+  const suppliers = data?.suppliers ?? [];
+
+  const cogsSold      = totals?.cogsSold          ?? 0;
+  const purchaseSpend = totals?.purchaseSpend     ?? 0;
+  const goodsSpend    = totals?.goodsSpend        ?? 0;
+  const shippingCost  = totals?.shippingCost      ?? 0;
+  const poCount       = totals?.purchaseOrderCount ?? 0;
+
+  const chartData = monthly.map((m) => ({
+    label:         fmtMonth(m.month),
+    cogsSold:      m.cogsSold,
+    purchaseSpend: m.purchaseSpend,
+    shippingCost:  m.shippingCost,
+  }));
+
+  const hasData = monthly.length > 0 || suppliers.length > 0;
+
+  return (
+    <div className="space-y-5">
+      {/* ── KPI strip ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KpiTile label="COGS Sold"      value={isLoading ? "—" : formatCurrency(cogsSold)}      sub="Cost of items sold" accent />
+        <KpiTile label="Purchase Spend" value={isLoading ? "—" : formatCurrency(purchaseSpend)} sub={`${poCount.toLocaleString()} purchase order${poCount !== 1 ? "s" : ""}`} />
+        <KpiTile label="Goods Cost"     value={isLoading ? "—" : formatCurrency(goodsSpend)}    sub="Stock purchased (ex shipping)" />
+        <KpiTile label="Shipping Cost"  value={isLoading ? "—" : formatCurrency(shippingCost)}  sub="Delivery on purchase orders" />
+        <KpiTile label="Suppliers"      value={isLoading ? "—" : suppliers.length.toLocaleString()} sub="With spend in range" />
+      </div>
+
+      {/* empty state */}
+      {!isLoading && !hasData && (
+        <div className="rounded-xl border bg-card flex flex-col items-center py-16 gap-3">
+          <Package className="w-12 h-12 text-muted-foreground/25" />
+          <p className="text-sm font-medium text-muted-foreground">No cost-of-goods data for this period.</p>
+          <p className="text-xs text-muted-foreground/70">Record sales or purchase orders, or widen the date range.</p>
+        </div>
+      )}
+
+      {(isLoading || hasData) && (
+        <>
+          {/* ── Monthly spend ────────────────────────────────────────────── */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title="Monthly Spend" action={<ExportBtn filename="cost-of-goods-monthly" rows={monthly as unknown as Record<string, unknown>[]} columns={[{ key: "month", label: "Month" }, { key: "cogsSold", label: "COGS Sold" }, { key: "cogsPos", label: "COGS POS" }, { key: "cogsInvoice", label: "COGS Invoices" }, { key: "cogsLayby", label: "COGS Laybys" }, { key: "goodsSpend", label: "PO Goods" }, { key: "shippingCost", label: "Shipping" }, { key: "purchaseSpend", label: "PO Total" }, { key: "purchaseOrderCount", label: "PO Count" }]} />} />
+            <div className="p-5">
+              {isLoading ? (
+                <div className="h-44 flex items-center justify-center text-muted-foreground text-sm gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Loading…</div>
+              ) : chartData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-10">No monthly data for this period.</p>
+              ) : (
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => formatCurrency(v)} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="cogsSold"      name="COGS Sold"      fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="purchaseSpend" name="Purchase Spend" fill="#f59e0b"             radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="shippingCost"  name="Shipping"       fill="#94a3b8"             radius={[2, 2, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+            {monthly.length > 0 && (
+              <table className="w-full text-sm border-t">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Month</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">COGS Sold</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">PO Goods</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Shipping</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Purchase Spend</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden sm:table-cell">POs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthly.map((m) => (
+                    <tr key={m.month} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-5 py-3 font-medium">{fmtMonth(m.month)}</td>
+                      <td className="px-5 py-3 text-right">{formatCurrency(m.cogsSold)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{formatCurrency(m.goodsSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(m.shippingCost)}</td>
+                      <td className="px-5 py-3 text-right font-medium">{formatCurrency(m.purchaseSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden sm:table-cell">{m.purchaseOrderCount.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* ── Spend by supplier (purchase orders) ──────────────────────── */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title="Spend by Supplier" action={<ExportBtn filename="cost-of-goods-suppliers" rows={suppliers as unknown as Record<string, unknown>[]} columns={[{ key: "supplierName", label: "Supplier" }, { key: "purchaseOrderCount", label: "POs" }, { key: "itemsOrdered", label: "Items" }, { key: "goodsSpend", label: "Goods" }, { key: "shippingCost", label: "Shipping" }, { key: "purchaseSpend", label: "Total Spend" }]} />} />
+            {isLoading ? (
+              <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Loading…</div>
+            ) : suppliers.length === 0 ? (
+              <div className="flex flex-col items-center py-14 gap-3">
+                <Package className="w-10 h-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No purchase orders in this period.</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Supplier</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden sm:table-cell">POs</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">Items</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Goods</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Shipping</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Total Spend</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suppliers.map((s) => (
+                    <tr key={s.supplierId ?? s.supplierName} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-5 py-3 font-medium">{s.supplierName}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden sm:table-cell">{s.purchaseOrderCount.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{s.itemsOrdered.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.goodsSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(s.shippingCost)}</td>
+                      <td className="px-5 py-3 text-right font-semibold">{formatCurrency(s.purchaseSpend)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/20 border-t font-semibold">
+                    <td className="px-5 py-3">Total</td>
+                    <td className="px-5 py-3 text-right hidden sm:table-cell">{poCount.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right hidden md:table-cell">—</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(goodsSpend)}</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(shippingCost)}</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(purchaseSpend)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -2475,6 +2635,7 @@ export default function ReportsPage() {
         {activeTab === "inventory"         && <InventoryTab />}
         {activeTab === "register-closures" && <RegisterClosuresTab />}
         {activeTab === "profit-loss"       && <ProfitLossTab startDate={fromDate} endDate={toDate} />}
+        {activeTab === "cost-of-goods"     && <CostOfGoodsTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "customer-insights" && <CustomerInsightsTab />}
         {activeTab === "top-products"      && <TopProductsTab apiPeriod={apiPeriod} />}
         {activeTab === "user-activity"     && <UserActivityTab fromDate={fromDate} />}

@@ -7102,6 +7102,34 @@ paths:
         "401":
           description: Unauthorized
 
+  /reports/cost-of-goods:
+    get:
+      operationId: getCostOfGoods
+      tags: [reports]
+      summary: Cost of goods report — monthly COGS (sales/invoices/laybys), supplier spend and purchase-order shipping for a date range
+      security: [{ session: [] }]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+          description: Start date (YYYY-MM-DD, inclusive)
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+          description: End date (YYYY-MM-DD, inclusive)
+      responses:
+        "200":
+          description: Cost of goods report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CostOfGoodsReport" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
   /pc-builder-settings:
     get:
       operationId: getPcBuilderSettings
@@ -14700,6 +14728,59 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ProductPerformanceItem" }
+
+    CostOfGoodsTotals:
+      type: object
+      required: [cogsSold, cogsPos, cogsInvoice, cogsLayby, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount]
+      properties:
+        cogsSold:           { type: number, description: "Cost of goods sold across POS sales, paid invoices and completed laybys" }
+        cogsPos:            { type: number }
+        cogsInvoice:        { type: number }
+        cogsLayby:          { type: number }
+        purchaseSpend:      { type: number, description: "Total purchase-order spend (goods + shipping), incl. GST" }
+        goodsSpend:         { type: number, description: "Purchase-order goods cost (qty × unit cost), excl. shipping" }
+        shippingCost:       { type: number, description: "Total purchase-order delivery/shipping cost" }
+        purchaseOrderCount: { type: integer }
+
+    CostOfGoodsMonth:
+      type: object
+      required: [month, cogsSold, cogsPos, cogsInvoice, cogsLayby, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount]
+      properties:
+        month:              { type: string, description: "YYYY-MM" }
+        cogsSold:           { type: number }
+        cogsPos:            { type: number }
+        cogsInvoice:        { type: number }
+        cogsLayby:          { type: number }
+        purchaseSpend:      { type: number }
+        goodsSpend:         { type: number }
+        shippingCost:       { type: number }
+        purchaseOrderCount: { type: integer }
+
+    CostOfGoodsSupplier:
+      type: object
+      required: [supplierName, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount, itemsOrdered]
+      properties:
+        supplierId:         { type: integer, nullable: true }
+        supplierName:       { type: string }
+        purchaseSpend:      { type: number }
+        goodsSpend:         { type: number }
+        shippingCost:       { type: number }
+        purchaseOrderCount: { type: integer }
+        itemsOrdered:       { type: integer }
+
+    CostOfGoodsReport:
+      type: object
+      required: [startDate, endDate, totals, monthly, suppliers]
+      properties:
+        startDate: { type: string, format: date }
+        endDate:   { type: string, format: date }
+        totals:    { $ref: "#/components/schemas/CostOfGoodsTotals" }
+        monthly:
+          type: array
+          items: { $ref: "#/components/schemas/CostOfGoodsMonth" }
+        suppliers:
+          type: array
+          items: { $ref: "#/components/schemas/CostOfGoodsSupplier" }
 
     PcSavedBuild:
       type: object

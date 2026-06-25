@@ -297,6 +297,169 @@ router.get("/reports/product-performance", requireAuth, requireManagerOrOwner, a
   res.json({ startDate, endDate, items });
 });
 
+/* ── GET /reports/cost-of-goods ──────────────────────────────────────────── */
+// Monthly cost of goods: COGS actually sold (POS + paid invoices + completed
+// laybys, using the at-sale cost snapshot only) plus procurement spend from
+// purchase orders, broken down by supplier and split into goods vs shipping.
+// A PO's total_cost already includes the GST-grossed delivery charge, so shipping
+// is derived as total_cost − goods subtotal (avoids GST-mode branching). Draft
+// and Cancelled POs are excluded — they are not committed spend.
+router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const parsed = DateRangeParams.safeParse(req.query);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { startDate, endDate } = parsed.data;
+  const merchantId = req.session.merchantId!;
+
+  const [cogsRows, poRows] = await Promise.all([
+    db.execute<{ month: string; cogs_pos: string; cogs_invoice: string; cogs_layby: string }>(sql`
+      WITH cogs AS (
+        SELECT to_char((t.created_at)::date, 'YYYY-MM') AS month, 'pos' AS src,
+          SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)) AS cogs
+        FROM transactions t
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
+        WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
+          AND (t.created_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
+        GROUP BY 1, 2
+        UNION ALL
+        SELECT to_char((i.paid_at)::date, 'YYYY-MM'), 'invoice',
+          SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0))
+        FROM invoices i
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
+        WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
+          AND (i.paid_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
+        GROUP BY 1, 2
+        UNION ALL
+        SELECT to_char((COALESCE(l.completed_at, l.updated_at))::date, 'YYYY-MM'), 'layby',
+          SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0))
+        FROM laybys l
+        CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
+        WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+          AND (COALESCE(l.completed_at, l.updated_at))::date BETWEEN ${startDate}::date AND ${endDate}::date
+        GROUP BY 1, 2
+      )
+      SELECT month,
+        COALESCE(SUM(cogs) FILTER (WHERE src = 'pos'), 0)     AS cogs_pos,
+        COALESCE(SUM(cogs) FILTER (WHERE src = 'invoice'), 0) AS cogs_invoice,
+        COALESCE(SUM(cogs) FILTER (WHERE src = 'layby'), 0)   AS cogs_layby
+      FROM cogs
+      GROUP BY month
+    `),
+    db.execute<{
+      supplier_id: string | null; supplier_name: string | null; month: string;
+      total_cost: string; goods: string; items_ordered: string;
+    }>(sql`
+      SELECT
+        p.supplier_id,
+        s.name AS supplier_name,
+        to_char(LEFT(p.order_date, 10)::date, 'YYYY-MM') AS month,
+        p.total_cost::numeric AS total_cost,
+        COALESCE((SELECT SUM(pi.quantity * pi.unit_cost) FROM purchase_order_items pi WHERE pi.po_id = p.id), 0) AS goods,
+        COALESCE((SELECT SUM(pi.quantity) FROM purchase_order_items pi WHERE pi.po_id = p.id), 0) AS items_ordered
+      FROM purchase_orders p
+      LEFT JOIN suppliers s ON s.id = p.supplier_id
+      WHERE p.merchant_id = ${merchantId}
+        AND p.status NOT IN ('Draft', 'Cancelled')
+        AND p.order_date ~ '^[0-9]{4}-[0-9]{2}-[0-9]{2}'
+        AND LEFT(p.order_date, 10)::date BETWEEN ${startDate}::date AND ${endDate}::date
+    `),
+  ]);
+
+  // Merge COGS-sold months and purchase-order months into one monthly series.
+  type MonthAgg = {
+    month: string; cogsPos: number; cogsInvoice: number; cogsLayby: number;
+    purchaseSpend: number; goodsSpend: number; shippingCost: number; purchaseOrderCount: number;
+  };
+  const months = new Map<string, MonthAgg>();
+  const getMonth = (m: string): MonthAgg => {
+    let row = months.get(m);
+    if (!row) {
+      row = { month: m, cogsPos: 0, cogsInvoice: 0, cogsLayby: 0, purchaseSpend: 0, goodsSpend: 0, shippingCost: 0, purchaseOrderCount: 0 };
+      months.set(m, row);
+    }
+    return row;
+  };
+
+  for (const r of cogsRows.rows) {
+    const m = getMonth(r.month);
+    m.cogsPos     += r2(r.cogs_pos);
+    m.cogsInvoice += r2(r.cogs_invoice);
+    m.cogsLayby   += r2(r.cogs_layby);
+  }
+
+  // Supplier breakdown (and PO contribution to the monthly series).
+  type SupAgg = {
+    supplierId: number | null; supplierName: string; purchaseSpend: number;
+    goodsSpend: number; shippingCost: number; purchaseOrderCount: number; itemsOrdered: number;
+  };
+  const suppliers = new Map<string, SupAgg>();
+  for (const r of poRows.rows) {
+    const totalCost = Number(r.total_cost ?? 0);
+    const goods     = Number(r.goods ?? 0);
+    const shipping  = Math.max(0, totalCost - goods);
+
+    const m = getMonth(r.month);
+    m.purchaseSpend      += totalCost;
+    m.goodsSpend         += goods;
+    m.shippingCost       += shipping;
+    m.purchaseOrderCount += 1;
+
+    const key = r.supplier_id != null ? `id:${r.supplier_id}` : "none";
+    let sup = suppliers.get(key);
+    if (!sup) {
+      sup = {
+        supplierId: r.supplier_id != null ? Number(r.supplier_id) : null,
+        supplierName: r.supplier_name ?? (r.supplier_id != null ? `Supplier #${r.supplier_id}` : "Unassigned"),
+        purchaseSpend: 0, goodsSpend: 0, shippingCost: 0, purchaseOrderCount: 0, itemsOrdered: 0,
+      };
+      suppliers.set(key, sup);
+    }
+    sup.purchaseSpend      += totalCost;
+    sup.goodsSpend         += goods;
+    sup.shippingCost       += shipping;
+    sup.purchaseOrderCount += 1;
+    sup.itemsOrdered       += Number(r.items_ordered ?? 0);
+  }
+
+  const monthly = [...months.values()]
+    .sort((a, b) => a.month.localeCompare(b.month))
+    .map((m) => ({
+      month:              m.month,
+      cogsSold:           r2(m.cogsPos + m.cogsInvoice + m.cogsLayby),
+      cogsPos:            r2(m.cogsPos),
+      cogsInvoice:        r2(m.cogsInvoice),
+      cogsLayby:          r2(m.cogsLayby),
+      purchaseSpend:      r2(m.purchaseSpend),
+      goodsSpend:         r2(m.goodsSpend),
+      shippingCost:       r2(m.shippingCost),
+      purchaseOrderCount: m.purchaseOrderCount,
+    }));
+
+  const supplierList = [...suppliers.values()]
+    .map((s) => ({
+      supplierId:         s.supplierId,
+      supplierName:       s.supplierName,
+      purchaseSpend:      r2(s.purchaseSpend),
+      goodsSpend:         r2(s.goodsSpend),
+      shippingCost:       r2(s.shippingCost),
+      purchaseOrderCount: s.purchaseOrderCount,
+      itemsOrdered:       s.itemsOrdered,
+    }))
+    .sort((a, b) => b.purchaseSpend - a.purchaseSpend);
+
+  const totals = {
+    cogsSold:           r2(monthly.reduce((s, m) => s + m.cogsSold, 0)),
+    cogsPos:            r2(monthly.reduce((s, m) => s + m.cogsPos, 0)),
+    cogsInvoice:        r2(monthly.reduce((s, m) => s + m.cogsInvoice, 0)),
+    cogsLayby:          r2(monthly.reduce((s, m) => s + m.cogsLayby, 0)),
+    purchaseSpend:      r2(supplierList.reduce((s, x) => s + x.purchaseSpend, 0)),
+    goodsSpend:         r2(supplierList.reduce((s, x) => s + x.goodsSpend, 0)),
+    shippingCost:       r2(supplierList.reduce((s, x) => s + x.shippingCost, 0)),
+    purchaseOrderCount: supplierList.reduce((s, x) => s + x.purchaseOrderCount, 0),
+  };
+
+  res.json({ startDate, endDate, totals, monthly, suppliers: supplierList });
+});
+
 /* ── GET /reports/z-report ───────────────────────────────────────────────── */
 router.get("/reports/z-report", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = z.object({ date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() }).safeParse(req.query);
