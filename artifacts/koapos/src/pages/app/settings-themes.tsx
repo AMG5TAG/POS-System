@@ -280,7 +280,8 @@ export default function SettingsThemesPage() {
           </CardContent>
         </Card>
 
-        {/* ── Appearance & accessibility ─────────────────────────────────── */}
+        {/* ── Appearance & accessibility + Saved themes (side by side) ────── */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><Accessibility className="w-4 h-4" /> Appearance & accessibility</CardTitle>
@@ -320,7 +321,7 @@ export default function SettingsThemesPage() {
           </CardContent>
         </Card>
 
-        {/* ── Templates ──────────────────────────────────────────────────── */}
+        {/* ── Saved themes (Templates) ───────────────────────────────────── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-base"><Save className="w-4 h-4" /> Saved themes</CardTitle>
@@ -371,6 +372,7 @@ export default function SettingsThemesPage() {
             </Button>
           </CardContent>
         </Card>
+        </div>
       </div>
     </AppLayout>
   );
