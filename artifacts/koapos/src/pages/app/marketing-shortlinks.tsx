@@ -186,8 +186,11 @@ export default function MarketingShortlinksPage() {
                   <p className="text-[11px] text-muted-foreground">Comma-separated tags to help organise your links.</p>
                 </div>
 
-                <Button className="w-full gap-1.5" onClick={create} disabled={!isValidUrl || !!endingError || createShortlink.isPending}>
-                  <Link2 className="w-4 h-4" /> Create Shortlink
+                {/* Only disabled while a create is in flight. URL/ending validation
+                    is handled by create() with clear toast messages, so the button
+                    is never left mysteriously greyed-out with no explanation. */}
+                <Button className="w-full gap-1.5" onClick={create} disabled={createShortlink.isPending}>
+                  <Link2 className="w-4 h-4" /> {createShortlink.isPending ? "Creating…" : "Create Shortlink"}
                 </Button>
               </CardContent>
             </Card>
