@@ -251,6 +251,8 @@ import type {
   PartnerReferralListResponse,
   PartsLookupParams,
   PartsLookupResult,
+  PaymentSurchargeListResponse,
+  PaymentSurchargesInput,
   PaymentTotalsResult,
   PcBuilderSettings,
   PcBuilderSettingsInput,
@@ -19649,6 +19651,154 @@ export const useUpsertPosSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpsertPosSettingsMutationOptions(options));
+    }
+
+export const getGetPaymentSurchargesUrl = () => {
+
+
+
+
+  return `/api/payment-surcharges`
+}
+
+/**
+ * @summary Get per-payment-method surcharge config
+ */
+export const getPaymentSurcharges = async ( options?: RequestInit): Promise<PaymentSurchargeListResponse> => {
+
+  return customFetch<PaymentSurchargeListResponse>(getGetPaymentSurchargesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetPaymentSurchargesQueryKey = () => {
+    return [
+    `/api/payment-surcharges`
+    ] as const;
+    }
+
+
+export const getGetPaymentSurchargesQueryOptions = <TData = Awaited<ReturnType<typeof getPaymentSurcharges>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentSurcharges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetPaymentSurchargesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getPaymentSurcharges>>> = ({ signal }) => getPaymentSurcharges({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getPaymentSurcharges>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetPaymentSurchargesQueryResult = NonNullable<Awaited<ReturnType<typeof getPaymentSurcharges>>>
+export type GetPaymentSurchargesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get per-payment-method surcharge config
+ */
+
+export function useGetPaymentSurcharges<TData = Awaited<ReturnType<typeof getPaymentSurcharges>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getPaymentSurcharges>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetPaymentSurchargesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdatePaymentSurchargesUrl = () => {
+
+
+
+
+  return `/api/payment-surcharges`
+}
+
+/**
+ * @summary Bulk upsert per-payment-method surcharge config
+ */
+export const updatePaymentSurcharges = async (paymentSurchargesInput: PaymentSurchargesInput, options?: RequestInit): Promise<PaymentSurchargeListResponse> => {
+
+  return customFetch<PaymentSurchargeListResponse>(getUpdatePaymentSurchargesUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      paymentSurchargesInput,)
+  }
+);}
+
+
+
+
+export const getUpdatePaymentSurchargesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaymentSurcharges>>, TError,{data: BodyType<PaymentSurchargesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updatePaymentSurcharges>>, TError,{data: BodyType<PaymentSurchargesInput>}, TContext> => {
+
+const mutationKey = ['updatePaymentSurcharges'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updatePaymentSurcharges>>, {data: BodyType<PaymentSurchargesInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updatePaymentSurcharges(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdatePaymentSurchargesMutationResult = NonNullable<Awaited<ReturnType<typeof updatePaymentSurcharges>>>
+    export type UpdatePaymentSurchargesMutationBody = BodyType<PaymentSurchargesInput>
+    export type UpdatePaymentSurchargesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Bulk upsert per-payment-method surcharge config
+ */
+export const useUpdatePaymentSurcharges = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updatePaymentSurcharges>>, TError,{data: BodyType<PaymentSurchargesInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updatePaymentSurcharges>>,
+        TError,
+        {data: BodyType<PaymentSurchargesInput>},
+        TContext
+      > => {
+      return useMutation(getUpdatePaymentSurchargesMutationOptions(options));
     }
 
 export const getGetLaybySettingsUrl = () => {

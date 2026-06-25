@@ -22,6 +22,7 @@
     "add-auto-sync-settings-table": "tsx ./src/add-auto-sync-settings-table.ts",
     "add-backup-schedules-table": "tsx ./src/add-backup-schedules-table.ts",
     "add-overview-year-mode": "tsx ./src/add-overview-year-mode.ts",
+    "add-payment-surcharges": "tsx ./src/add-payment-surcharges.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

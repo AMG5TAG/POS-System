@@ -542,6 +542,7 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
   const taxCollected    = data?.taxCollected    ?? 0;
   const totalCogs       = data?.totalCogs       ?? 0;
   const netProfit       = data?.netProfit       ?? 0;
+  const surchargeCost   = data?.surchargeCost   ?? 0;
   const grossMarginPct  = data?.grossMarginPct  ?? 0;
   const refundTotal     = data?.refundTotal     ?? 0;
   const discountTotal   = data?.discountTotal   ?? 0;
@@ -561,6 +562,10 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
     { label: "GST Collected",             value: -taxCollected, bold: false },
     { label: "Revenue (ex-GST)",          value: exGstRevenue,  bold: true  },
     { label: "True COGS",                 value: -totalCogs,    bold: false },
+    // Only shown when the merchant absorbs surcharges, to avoid clutter otherwise.
+    ...(surchargeCost > 0
+      ? [{ label: "Payment surcharges (absorbed)", value: -surchargeCost, bold: false }]
+      : []),
     { label: "Net Profit",                value: netProfit,     bold: true, accent: true },
   ];
 

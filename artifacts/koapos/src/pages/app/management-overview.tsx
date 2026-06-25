@@ -356,6 +356,10 @@ export default function ManagementOverviewPage() {
   /* Cost of goods sold */
   const costTotal = summary?.costTotal ?? 0;
 
+  /* Absorbed payment surcharges (pass-on disabled) — a cost of business that
+     reduces profit alongside COGS. */
+  const surchargeCost = summary?.surchargeCost ?? 0;
+
   /* Loyalty / store credit dollar value */
   const customers     = customerData?.items ?? [];
   const totalPoints   = customers.reduce((s, c) => s + (c.loyaltyPoints ?? 0), 0);
@@ -518,11 +522,12 @@ export default function ManagementOverviewPage() {
               icon={TrendingUp}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600"
               // Matches the Sales Overview P&L definition exactly: Revenue (ex-GST)
-              // − COGS. Sales totals are already net of discounts, so discounts /
-              // refunds are NOT subtracted again here (doing so double-counted them
-              // and produced a lower figure than the Sales Overview screen).
-              value={isLoading ? "—" : formatCurrency(revenueExGst - costTotal)}
-              sub="Revenue ex-GST, less COGS"
+              // − COGS − absorbed payment surcharges. Sales totals are already net
+              // of discounts, so discounts / refunds are NOT subtracted again here
+              // (doing so double-counted them and produced a lower figure than the
+              // Sales Overview screen).
+              value={isLoading ? "—" : formatCurrency(revenueExGst - costTotal - surchargeCost)}
+              sub="Revenue ex-GST, less COGS & surcharges"
               valueClass="text-emerald-600"
               href="/management/marketing-reports/sales-overview"
             />

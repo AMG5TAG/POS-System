@@ -16,6 +16,12 @@ export const transactionsTable = pgTable("transactions", {
   discountTotal: numeric("discount_total", { precision: 10, scale: 2 }).notNull().default("0"),
   total: numeric("total", { precision: 10, scale: 2 }).notNull().default("0"),
   paymentMethod: text("payment_method").notNull().default("cash"),
+  // Customer-facing surcharge added to `total` at checkout when the chosen
+  // payment method is configured to pass its acceptance cost on to the customer
+  // (see payment_method_surcharges). 0 when the method has no surcharge or the
+  // cost is absorbed by the merchant. Recorded here because it is real money
+  // collected and must appear on receipts and reprints.
+  surchargeAmount: numeric("surcharge_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   amountTendered: numeric("amount_tendered", { precision: 10, scale: 2 }),
   changeDue: numeric("change_due", { precision: 10, scale: 2 }),
   notes: text("notes"),

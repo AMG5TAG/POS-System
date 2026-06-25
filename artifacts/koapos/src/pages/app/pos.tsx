@@ -21,6 +21,7 @@ import {
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useUpsertPosSettings, useVerifyStaffPin,
+  useGetPaymentSurcharges,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   useGetPosFavourites, useUpdatePosFavourites,
   useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
@@ -1026,9 +1027,22 @@ export default function POSPage() {
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
   }, [cart, overallDiscount, customerTier, customerGroupId]);
 
+  /* Per-payment-method surcharge. When the selected method is configured to pass
+     its acceptance cost on to the customer, it's added to the amount charged.
+     The server recomputes this authoritatively and stores it; here it only
+     drives the amount due / tender so the cashier collects the right amount. */
+  const { data: surchargeConfig } = useGetPaymentSurcharges({ query: { queryKey: ["payment-surcharges"] } });
+  const saleSurcharge = useMemo(() => {
+    if (invoicePay) return 0; // invoice payments use their own flow
+    const cfg = (surchargeConfig?.items ?? []).find((s) => s.paymentMethod === String(payMethod));
+    if (!cfg || !cfg.enabled || !cfg.passOn) return 0;
+    return Math.round(((cfg.percent / 100) * total + cfg.fixed) * 100) / 100;
+  }, [surchargeConfig, payMethod, total, invoicePay]);
+
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
-     the locked remaining balance; otherwise it's the cart total. */
-  const effectiveTotal = invoicePay ? invoicePay.balance : total;
+     the locked remaining balance; otherwise it's the cart total plus any
+     passed-on surcharge for the chosen payment method. */
+  const effectiveTotal = invoicePay ? invoicePay.balance : Math.round((total + saleSurcharge) * 100) / 100;
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
@@ -3856,6 +3870,11 @@ export default function POSPage() {
               <div className="rounded-xl bg-muted/40 border px-5 py-4 text-center">
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1">Amount Due</p>
                 <p className="text-4xl font-bold tabular-nums">{formatCurrency(effectiveTotal)}</p>
+                {saleSurcharge > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
+                    {formatCurrency(total)} + {formatCurrency(saleSurcharge)} surcharge
+                  </p>
+                )}
                 {numpadInput && parseFloat(numpadInput) > 0 && (
                   <p className="text-sm text-muted-foreground mt-1.5 tabular-nums">
                     {changeDue > 0

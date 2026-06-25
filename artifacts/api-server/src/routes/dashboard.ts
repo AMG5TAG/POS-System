@@ -333,6 +333,34 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const lowStockCount   = Number(lowStockResult[0]?.count ?? 0);
   const pendingInvoiceCount = Number(pendingInvoiceResult[0]?.count ?? 0);
 
+  // Absorbed payment surcharges (pass_on = false) are a cost of business across
+  // POS sales, paid invoices and completed laybys. Each "leg" is one payment, so
+  // the fixed fee applies once per leg. Filtered by the same period bounds as
+  // COGS so the overview's profit stays consistent with the P&L report.
+  const surchargeRows = await db.execute<{ surcharge_cost: string }>(sql`
+    WITH legs AS (
+      SELECT t.payment_method AS method, t.total::numeric AS amount
+      FROM transactions t
+      WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
+        AND t.created_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND t.created_at < ${periodEnd}` : sql``}
+      UNION ALL
+      SELECT method, amount FROM view_invoice_payment_legs
+      WHERE merchant_id = ${merchantId} AND paid_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND paid_at < ${periodEnd}` : sql``}
+      UNION ALL
+      SELECT method, amount FROM view_layby_payment_legs
+      WHERE merchant_id = ${merchantId} AND completed_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND completed_at < ${periodEnd}` : sql``}
+    )
+    SELECT COALESCE(SUM((s.percent / 100.0) * legs.amount + s.fixed), 0)::numeric AS surcharge_cost
+    FROM legs
+    JOIN payment_method_surcharges s
+      ON s.merchant_id = ${merchantId} AND s.payment_method = legs.method
+     AND s.enabled = 'true' AND s.pass_on = 'false'
+  `);
+  const surchargeCost = Number(surchargeRows.rows[0]?.surcharge_cost ?? 0);
+
   res.json({
     totalSales:         Math.round(totalSales * 100) / 100,
     posSales:           Math.round(posSales * 100) / 100,
@@ -352,6 +380,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     taxCollected:       Math.round(taxCollected * 100) / 100,
     itemsSold,
     costTotal:          Math.round(costTotal * 100) / 100,
+    surchargeCost:      Math.round(surchargeCost * 100) / 100,
     topPaymentMethod,
   });
 });

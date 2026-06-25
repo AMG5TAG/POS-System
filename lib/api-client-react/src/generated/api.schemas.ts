@@ -940,6 +940,8 @@ export interface Transaction {
   discountTotal?: number;
   total: number;
   paymentMethod: TransactionPaymentMethod;
+  /** Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost. */
+  surchargeAmount?: number;
   /** @nullable */
   amountTendered?: number | null;
   /** @nullable */
@@ -2212,6 +2214,8 @@ export interface DashboardSummary {
   discountTotal?: number;
   itemsSold?: number;
   costTotal?: number;
+  /** Absorbed payment surcharges (pass-on disabled) for the period — a cost of business. */
+  surchargeCost?: number;
   /** @nullable */
   topPaymentMethod?: string | null;
 }
@@ -3436,6 +3440,26 @@ export interface PosSettingsInput {
   buttonStyle?: string;
 }
 
+export interface PaymentSurcharge {
+  paymentMethod: string;
+  /** Surcharge as a percentage of the sale total (0–100). */
+  percent: number;
+  /** Fixed surcharge amount added per transaction. */
+  fixed: number;
+  /** When true the cost is added to the customer's bill; when false the merchant absorbs it as a cost of business in reports. */
+  passOn: boolean;
+  /** Whether this method's surcharge is active. */
+  enabled: boolean;
+}
+
+export interface PaymentSurchargeListResponse {
+  items: PaymentSurcharge[];
+}
+
+export interface PaymentSurchargesInput {
+  items: PaymentSurcharge[];
+}
+
 export interface LaybySettings {
   id: number;
   merchantId: number;
@@ -4477,6 +4501,7 @@ export interface DailySalesSummary {
   totalCogs: number;
   netProfit: number;
   refundTotal: number;
+  surchargeCost?: number;
   transactionCount: number;
 }
 
@@ -4491,6 +4516,7 @@ export interface ProfitLossReport {
   netProfit: number;
   grossMarginPct: number;
   refundTotal: number;
+  surchargeCost?: number;
   transactionCount: number;
   dailyBreakdown: DailySalesSummary[];
 }

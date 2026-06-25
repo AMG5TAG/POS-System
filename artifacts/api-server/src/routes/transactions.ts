@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, paymentMethodSurchargesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -68,6 +68,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     changeDue: t.changeDue ? parseFloat(t.changeDue) : null,
     notes: t.notes ?? null,
     loyaltyEarned: t.loyaltyEarned ? parseFloat(t.loyaltyEarned) : null,
+    surchargeAmount: t.surchargeAmount != null ? parseFloat(t.surchargeAmount) : 0,
     discountCapped: t.discountCapped === "true" ? true : t.discountCapped === "false" ? false : null,
     discountPct: t.discountPct != null ? parseFloat(t.discountPct) : null,
     items: rawItems,
@@ -360,6 +361,28 @@ export async function finalizeSale(
   }
   void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
 
+  // Per-payment-method surcharge. When the chosen method is configured to pass
+  // its acceptance cost on to the customer, record the surcharge that was added
+  // to the bill at checkout. Computed server-side from the merchant's config so
+  // a forged client value can't inflate it. `subtotal`/`total` deliberately stay
+  // the sale value (the surcharge is collected on top and is revenue-neutral —
+  // it offsets the processor fee); absorbed surcharges (passOn=false) are 0 here
+  // and surface only as a cost of business in reports.
+  let surchargeAmount = 0;
+  {
+    const [sc] = await db
+      .select()
+      .from(paymentMethodSurchargesTable)
+      .where(and(
+        eq(paymentMethodSurchargesTable.merchantId, merchantId),
+        eq(paymentMethodSurchargesTable.paymentMethod, paymentMethod),
+      ))
+      .limit(1);
+    if (sc && sc.enabled === "true" && sc.passOn === "true") {
+      surchargeAmount = round2((parseFloat(sc.percent) / 100) * total + parseFloat(sc.fixed));
+    }
+  }
+
   // Loyalty redemption — enforced server-side, not just in the UI.
   // The conversion from "balance units" to "dollars covered" depends on the
   // program type:
@@ -533,20 +556,22 @@ export async function finalizeSale(
   //     amount (no upper cap) and derive change ourselves. Reject under-tender.
   //   - Loyalty: tender equals the required points (in dollars), change = 0.
   //   - All other methods: force tendered = total, change = 0.
+  // What the customer actually pays = sale total plus any passed-on surcharge.
+  const payable = round2(total + surchargeAmount);
   let persistedTendered: number;
   let persistedChange: number;
   if (paymentMethod === "cash") {
-    const cashTendered = Math.max(0, amountTendered ?? total);
-    if (cashTendered < total - 0.009) {
+    const cashTendered = Math.max(0, amountTendered ?? payable);
+    if (cashTendered < payable - 0.009) {
       return { ok: false, status: 400, error: "Cash tendered is less than the sale total" };
     }
     persistedTendered = cashTendered;
-    persistedChange = Math.max(0, cashTendered - total);
+    persistedChange = Math.max(0, cashTendered - payable);
   } else if (paymentMethod === "loyalty") {
     persistedTendered = requiredLoyaltyPoints;
     persistedChange = 0;
   } else {
-    persistedTendered = total;
+    persistedTendered = payable;
     persistedChange = 0;
   }
   void changeDue; // client-supplied changeDue is intentionally ignored
@@ -579,6 +604,7 @@ export async function finalizeSale(
         discountTotal: discountTotal.toString(),
         total: total.toString(),
         paymentMethod,
+        surchargeAmount: surchargeAmount.toString(),
         amountTendered: persistedTendered.toString(),
         changeDue: persistedChange.toString(),
         notes: notes ?? null,

@@ -40,6 +40,7 @@ router.get("/reports/profit-loss", requireAuth, requireManagerOrOwner, async (re
     total_cogs:        string;
     net_profit:        string;
     refund_total:      string;
+    surcharge_cost:    string;
   }>(sql`
     SELECT
       sale_date::text,
@@ -50,7 +51,8 @@ router.get("/reports/profit-loss", requireAuth, requireManagerOrOwner, async (re
       discount_total,
       total_cogs,
       net_profit,
-      refund_total
+      refund_total,
+      surcharge_cost
     FROM view_daily_sales_summary
     WHERE merchant_id = ${merchantId}
       AND sale_date BETWEEN ${startDate}::date AND ${endDate}::date
@@ -66,6 +68,7 @@ router.get("/reports/profit-loss", requireAuth, requireManagerOrOwner, async (re
     totalCogs:        r2(r.total_cogs),
     netProfit:        r2(r.net_profit),
     refundTotal:      r2(r.refund_total),
+    surchargeCost:    r2(r.surcharge_cost),
     transactionCount: Number(r.transaction_count),
   }));
 
@@ -77,8 +80,9 @@ router.get("/reports/profit-loss", requireAuth, requireManagerOrOwner, async (re
     totalCogs:        acc.totalCogs        + d.totalCogs,
     netProfit:        acc.netProfit        + d.netProfit,
     refundTotal:      acc.refundTotal      + d.refundTotal,
+    surchargeCost:    acc.surchargeCost    + d.surchargeCost,
     transactionCount: acc.transactionCount + d.transactionCount,
-  }), { grossRevenue: 0, exGstRevenue: 0, taxCollected: 0, discountTotal: 0, totalCogs: 0, netProfit: 0, refundTotal: 0, transactionCount: 0 });
+  }), { grossRevenue: 0, exGstRevenue: 0, taxCollected: 0, discountTotal: 0, totalCogs: 0, netProfit: 0, refundTotal: 0, surchargeCost: 0, transactionCount: 0 });
 
   const grossMarginPct = totals.exGstRevenue > 0
     ? r2((totals.exGstRevenue - totals.totalCogs) / totals.exGstRevenue * 100)
@@ -95,6 +99,7 @@ router.get("/reports/profit-loss", requireAuth, requireManagerOrOwner, async (re
     netProfit:        r2(totals.netProfit),
     grossMarginPct,
     refundTotal:      r2(totals.refundTotal),
+    surchargeCost:    r2(totals.surchargeCost),
     transactionCount: totals.transactionCount,
     dailyBreakdown:   daily,
   });

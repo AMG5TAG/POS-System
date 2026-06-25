@@ -244,6 +244,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Business Details",  href: "/management/settings-integrations/business-details",      icon: Building2,
         matchPaths: ["/management/settings-integrations/business-details/regional"] },
       { name: "Tax",               href: "/management/settings-integrations/tax",           icon: Receipt        },
+      { name: "Surcharges",        href: "/management/settings-integrations/surcharges",    icon: Percent        },
       { name: "Themes",            href: "/management/settings-integrations/themes",        icon: Palette        },
       {
         name: "Templates", icon: LayoutTemplate,

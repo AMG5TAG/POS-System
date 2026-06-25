@@ -1262,6 +1262,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -1763,6 +1764,7 @@ export const ListTransactionsResponse = zod.object({
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -1897,6 +1899,7 @@ export const GetTransactionResponse = zod.object({
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -1999,6 +2002,7 @@ export const RefundTransactionResponse = zod.object({
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -2092,6 +2096,7 @@ export const VoidTransactionResponse = zod.object({
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -2816,6 +2821,7 @@ export const GetDashboardSummaryResponse = zod.object({
   "discountTotal": zod.number().optional(),
   "itemsSold": zod.number().optional(),
   "costTotal": zod.number().optional(),
+  "surchargeCost": zod.number().optional().describe('Absorbed payment surcharges (pass-on disabled) for the period — a cost of business.'),
   "topPaymentMethod": zod.string().nullish()
 })
 
@@ -2905,6 +2911,7 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "discountTotal": zod.number().optional(),
   "total": zod.number(),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
   "amountTendered": zod.number().nullish(),
   "changeDue": zod.number().nullish(),
   "notes": zod.string().nullish(),
@@ -6759,6 +6766,44 @@ export const UpsertPosSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get per-payment-method surcharge config
+ */
+export const GetPaymentSurchargesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "paymentMethod": zod.string(),
+  "percent": zod.number().describe('Surcharge as a percentage of the sale total (0–100).'),
+  "fixed": zod.number().describe('Fixed surcharge amount added per transaction.'),
+  "passOn": zod.boolean().describe('When true the cost is added to the customer\'s bill; when false the merchant absorbs it as a cost of business in reports.'),
+  "enabled": zod.boolean().describe('Whether this method\'s surcharge is active.')
+}))
+})
+
+
+/**
+ * @summary Bulk upsert per-payment-method surcharge config
+ */
+export const UpdatePaymentSurchargesBody = zod.object({
+  "items": zod.array(zod.object({
+  "paymentMethod": zod.string(),
+  "percent": zod.number().describe('Surcharge as a percentage of the sale total (0–100).'),
+  "fixed": zod.number().describe('Fixed surcharge amount added per transaction.'),
+  "passOn": zod.boolean().describe('When true the cost is added to the customer\'s bill; when false the merchant absorbs it as a cost of business in reports.'),
+  "enabled": zod.boolean().describe('Whether this method\'s surcharge is active.')
+}))
+})
+
+export const UpdatePaymentSurchargesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "paymentMethod": zod.string(),
+  "percent": zod.number().describe('Surcharge as a percentage of the sale total (0–100).'),
+  "fixed": zod.number().describe('Fixed surcharge amount added per transaction.'),
+  "passOn": zod.boolean().describe('When true the cost is added to the customer\'s bill; when false the merchant absorbs it as a cost of business in reports.'),
+  "enabled": zod.boolean().describe('Whether this method\'s surcharge is active.')
+}))
+})
+
+
+/**
  * @summary Get layby settings
  */
 export const GetLaybySettingsResponse = zod.object({
@@ -9224,6 +9269,7 @@ export const GetProfitLossResponse = zod.object({
   "netProfit": zod.number(),
   "grossMarginPct": zod.number(),
   "refundTotal": zod.number(),
+  "surchargeCost": zod.number().optional(),
   "transactionCount": zod.number(),
   "dailyBreakdown": zod.array(zod.object({
   "date": zod.coerce.date(),
@@ -9234,6 +9280,7 @@ export const GetProfitLossResponse = zod.object({
   "totalCogs": zod.number(),
   "netProfit": zod.number(),
   "refundTotal": zod.number(),
+  "surchargeCost": zod.number().optional(),
   "transactionCount": zod.number()
 }))
 })
@@ -9270,6 +9317,7 @@ export const GetSalesSummaryResponse = zod.object({
   "totalCogs": zod.number(),
   "netProfit": zod.number(),
   "refundTotal": zod.number(),
+  "surchargeCost": zod.number().optional(),
   "transactionCount": zod.number()
 }))
 })

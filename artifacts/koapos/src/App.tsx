@@ -111,6 +111,7 @@ const ManagementFormsPage = lazyWithRetry(() => import("@/pages/app/management-f
 const ManagementStickersPage = lazyWithRetry(() => import("@/pages/app/management-stickers"));
 const InventoryWastagePage = lazyWithRetry(() => import("@/pages/app/inventory-wastage"));
 const SettingsTaxPage = lazyWithRetry(() => import("@/pages/app/settings-tax"));
+const SettingsSurchargesPage = lazyWithRetry(() => import("@/pages/app/settings-surcharges"));
 const SettingsEmailPage = lazyWithRetry(() => import("@/pages/app/settings-email"));
 const SettingsSmsPage = lazyWithRetry(() => import("@/pages/app/settings-sms"));
 const SettingsProductTypesPage = lazyWithRetry(() => import("@/pages/app/settings-product-types"));
@@ -665,6 +666,9 @@ function Router() {
       </Route>
       <Route path="/management/settings-integrations/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
+      </Route>
+      <Route path="/management/settings-integrations/surcharges">
+        <ManagementProtectedRoute component={SettingsSurchargesPage} />
       </Route>
       <Route path="/management/settings-integrations/themes">
         <ManagementProtectedRoute component={SettingsThemesPage} />

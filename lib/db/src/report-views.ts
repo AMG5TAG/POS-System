@@ -14,14 +14,105 @@
  *   - COGS uses the cost price snapshotted on each line item at sale time and
  *     falls back to the product's current cost_price when the snapshot is
  *     missing — matching the KPI and dashboard COGS calculations.
- *   - `net_profit` = ex-GST revenue − COGS (GST is collected for the ATO).
+ *   - Payment surcharges the merchant ABSORBS (configured with pass_on = false)
+ *     are a cost of business: `surcharge_cost` deducts them from net profit.
+ *     Surcharges passed on to the customer are revenue-neutral and excluded.
+ *   - `net_profit` = ex-GST revenue − COGS − absorbed surcharge cost.
  *   - Coverage spans POS sales + paid invoices + completed laybys.
  *
- * Statements MUST be applied in this order: view_payment_method_breakdown
- * references view_invoice_payment_legs and view_layby_payment_legs, so the leg
- * views are created first. Every statement is idempotent (CREATE OR REPLACE).
+ * Statement order matters (every statement is idempotent — CREATE OR REPLACE):
+ *   - view_payment_method_breakdown references the invoice/layby leg views, so
+ *     those are created first.
+ *   - view_daily_surcharge_cost reads view_payment_method_breakdown, and
+ *     view_daily_sales_summary reads view_daily_surcharge_cost, so the summary
+ *     is created last among these.
  */
 export const REPORT_VIEW_STATEMENTS: readonly string[] = [
+  // ── Invoice payment legs (per-method amounts) ──────────────────────────────
+  `
+    CREATE OR REPLACE VIEW view_invoice_payment_legs AS
+    SELECT i.merchant_id, i.paid_at,
+      COALESCE(e->>'method', 'invoice') AS method,
+      (e->>'amount')::numeric           AS amount
+    FROM invoices i
+    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e
+    WHERE i.status = 'paid' AND i.paid_at IS NOT NULL
+      AND e->>'type' = 'payment' AND (e->>'amount') IS NOT NULL AND (e->>'amount')::numeric > 0
+    UNION ALL
+    SELECT i.merchant_id, i.paid_at,
+      COALESCE((SELECT e2->>'method' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e2
+                WHERE e2->>'type' = 'payment' AND (e2->>'method') IS NOT NULL
+                ORDER BY (e2->>'timestamp') DESC LIMIT 1), 'invoice') AS method,
+      (i.amount_paid::numeric - COALESCE((SELECT SUM((e3->>'amount')::numeric) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e3
+                WHERE e3->>'type' = 'payment' AND (e3->>'amount') IS NOT NULL), 0)) AS amount
+    FROM invoices i
+    WHERE i.status = 'paid' AND i.paid_at IS NOT NULL
+      AND (i.amount_paid::numeric - COALESCE((SELECT SUM((e3->>'amount')::numeric) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e3
+                WHERE e3->>'type' = 'payment' AND (e3->>'amount') IS NOT NULL), 0)) > 0.005;
+  `,
+
+  // ── Layby payment legs ─────────────────────────────────────────────────────
+  `
+    CREATE OR REPLACE VIEW view_layby_payment_legs AS
+    SELECT l.merchant_id, COALESCE(l.completed_at, l.updated_at) AS completed_at,
+      lp.payment_method AS method, lp.amount::numeric AS amount
+    FROM laybys l
+    JOIN layby_payments lp ON lp.layby_id = l.id
+    WHERE l.status = 'completed'
+    UNION ALL
+    SELECT l.merchant_id, COALESCE(l.completed_at, l.updated_at) AS completed_at,
+      COALESCE((SELECT lp2.payment_method FROM layby_payments lp2 WHERE lp2.layby_id = l.id ORDER BY lp2.created_at DESC LIMIT 1), 'layby') AS method,
+      (l.total_amount::numeric - COALESCE((SELECT SUM(lp3.amount::numeric) FROM layby_payments lp3 WHERE lp3.layby_id = l.id), 0)) AS amount
+    FROM laybys l
+    WHERE l.status = 'completed'
+      AND (l.total_amount::numeric - COALESCE((SELECT SUM(lp3.amount::numeric) FROM layby_payments lp3 WHERE lp3.layby_id = l.id), 0)) > 0.005;
+  `,
+
+  // ── Payment method breakdown (POS + invoice legs + layby legs) ─────────────
+  `
+    CREATE OR REPLACE VIEW view_payment_method_breakdown AS
+    WITH paid AS (
+      SELECT t.merchant_id, (t.created_at)::date AS sale_date, t.payment_method, t.total
+      FROM transactions t
+      WHERE t.status = 'completed'
+      UNION ALL
+      SELECT merchant_id, (paid_at)::date AS sale_date, method AS payment_method, amount AS total
+      FROM view_invoice_payment_legs
+      UNION ALL
+      SELECT merchant_id, (completed_at)::date AS sale_date, method AS payment_method, amount AS total
+      FROM view_layby_payment_legs
+    )
+    SELECT
+      merchant_id,
+      sale_date,
+      payment_method,
+      COUNT(*)                AS transaction_count,
+      COALESCE(SUM(total), 0) AS total_amount,
+      COALESCE(AVG(total), 0) AS avg_transaction_value
+    FROM paid
+    GROUP BY merchant_id, sale_date, payment_method;
+  `,
+
+  // ── Absorbed surcharge cost per day ────────────────────────────────────────
+  // For payment methods whose surcharge the merchant absorbs (pass_on = false),
+  // the acceptance cost is a cost of business: percent of the amount taken on
+  // that method + a fixed fee per transaction. Built on the breakdown view so it
+  // spans POS sales, paid invoices and completed laybys uniformly.
+  `
+    CREATE OR REPLACE VIEW view_daily_surcharge_cost AS
+    SELECT
+      b.merchant_id,
+      b.sale_date,
+      COALESCE(SUM((s.percent / 100.0) * b.total_amount + s.fixed * b.transaction_count), 0) AS surcharge_cost
+    FROM view_payment_method_breakdown b
+    JOIN payment_method_surcharges s
+      ON s.merchant_id = b.merchant_id
+     AND s.payment_method = b.payment_method
+     AND s.enabled = 'true'
+     AND s.pass_on = 'false'
+    GROUP BY b.merchant_id, b.sale_date;
+  `,
+
   // ── Daily sales summary (POS sales + paid invoices + completed laybys) ──
   // Laybys carry no GST split, so ex-GST/tax are derived from the merchant's
   // default tax rate (treating the layby total as GST-inclusive).
@@ -113,80 +204,18 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
       COALESCE(pos.discount_total, 0)    + COALESCE(inv.discount_total, 0)    + COALESCE(lay.discount_total, 0)    AS discount_total,
       COALESCE(pos_cogs.total_cogs, 0)   + COALESCE(inv_cogs.total_cogs, 0)   + COALESCE(lay_cogs.total_cogs, 0)   AS total_cogs,
       (COALESCE(pos.ex_gst_revenue, 0)   + COALESCE(inv.ex_gst_revenue, 0)    + COALESCE(lay.ex_gst_revenue, 0))
-        - (COALESCE(pos_cogs.total_cogs, 0) + COALESCE(inv_cogs.total_cogs, 0) + COALESCE(lay_cogs.total_cogs, 0)) AS net_profit,
-      COALESCE(pos.refund_total, 0)                                                   AS refund_total
+        - (COALESCE(pos_cogs.total_cogs, 0) + COALESCE(inv_cogs.total_cogs, 0) + COALESCE(lay_cogs.total_cogs, 0))
+        - COALESCE(sc.surcharge_cost, 0)                                                AS net_profit,
+      COALESCE(pos.refund_total, 0)                                                     AS refund_total,
+      COALESCE(sc.surcharge_cost, 0)                                                    AS surcharge_cost
     FROM days d
     LEFT JOIN pos      ON pos.merchant_id      = d.merchant_id AND pos.sale_date      = d.sale_date
     LEFT JOIN pos_cogs ON pos_cogs.merchant_id = d.merchant_id AND pos_cogs.sale_date = d.sale_date
     LEFT JOIN inv      ON inv.merchant_id      = d.merchant_id AND inv.sale_date      = d.sale_date
     LEFT JOIN inv_cogs ON inv_cogs.merchant_id = d.merchant_id AND inv_cogs.sale_date = d.sale_date
     LEFT JOIN lay      ON lay.merchant_id      = d.merchant_id AND lay.sale_date      = d.sale_date
-    LEFT JOIN lay_cogs ON lay_cogs.merchant_id = d.merchant_id AND lay_cogs.sale_date = d.sale_date;
-  `,
-
-  // ── Invoice payment legs (per-method amounts) ──────────────────────────────
-  `
-    CREATE OR REPLACE VIEW view_invoice_payment_legs AS
-    SELECT i.merchant_id, i.paid_at,
-      COALESCE(e->>'method', 'invoice') AS method,
-      (e->>'amount')::numeric           AS amount
-    FROM invoices i
-    CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e
-    WHERE i.status = 'paid' AND i.paid_at IS NOT NULL
-      AND e->>'type' = 'payment' AND (e->>'amount') IS NOT NULL AND (e->>'amount')::numeric > 0
-    UNION ALL
-    SELECT i.merchant_id, i.paid_at,
-      COALESCE((SELECT e2->>'method' FROM jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e2
-                WHERE e2->>'type' = 'payment' AND (e2->>'method') IS NOT NULL
-                ORDER BY (e2->>'timestamp') DESC LIMIT 1), 'invoice') AS method,
-      (i.amount_paid::numeric - COALESCE((SELECT SUM((e3->>'amount')::numeric) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e3
-                WHERE e3->>'type' = 'payment' AND (e3->>'amount') IS NOT NULL), 0)) AS amount
-    FROM invoices i
-    WHERE i.status = 'paid' AND i.paid_at IS NOT NULL
-      AND (i.amount_paid::numeric - COALESCE((SELECT SUM((e3->>'amount')::numeric) FROM jsonb_array_elements(CASE WHEN jsonb_typeof(i.events::jsonb) = 'array' THEN i.events::jsonb ELSE '[]'::jsonb END) e3
-                WHERE e3->>'type' = 'payment' AND (e3->>'amount') IS NOT NULL), 0)) > 0.005;
-  `,
-
-  // ── Layby payment legs ─────────────────────────────────────────────────────
-  `
-    CREATE OR REPLACE VIEW view_layby_payment_legs AS
-    SELECT l.merchant_id, COALESCE(l.completed_at, l.updated_at) AS completed_at,
-      lp.payment_method AS method, lp.amount::numeric AS amount
-    FROM laybys l
-    JOIN layby_payments lp ON lp.layby_id = l.id
-    WHERE l.status = 'completed'
-    UNION ALL
-    SELECT l.merchant_id, COALESCE(l.completed_at, l.updated_at) AS completed_at,
-      COALESCE((SELECT lp2.payment_method FROM layby_payments lp2 WHERE lp2.layby_id = l.id ORDER BY lp2.created_at DESC LIMIT 1), 'layby') AS method,
-      (l.total_amount::numeric - COALESCE((SELECT SUM(lp3.amount::numeric) FROM layby_payments lp3 WHERE lp3.layby_id = l.id), 0)) AS amount
-    FROM laybys l
-    WHERE l.status = 'completed'
-      AND (l.total_amount::numeric - COALESCE((SELECT SUM(lp3.amount::numeric) FROM layby_payments lp3 WHERE lp3.layby_id = l.id), 0)) > 0.005;
-  `,
-
-  // ── Payment method breakdown (POS + invoice legs + layby legs) ─────────────
-  `
-    CREATE OR REPLACE VIEW view_payment_method_breakdown AS
-    WITH paid AS (
-      SELECT t.merchant_id, (t.created_at)::date AS sale_date, t.payment_method, t.total
-      FROM transactions t
-      WHERE t.status = 'completed'
-      UNION ALL
-      SELECT merchant_id, (paid_at)::date AS sale_date, method AS payment_method, amount AS total
-      FROM view_invoice_payment_legs
-      UNION ALL
-      SELECT merchant_id, (completed_at)::date AS sale_date, method AS payment_method, amount AS total
-      FROM view_layby_payment_legs
-    )
-    SELECT
-      merchant_id,
-      sale_date,
-      payment_method,
-      COUNT(*)                AS transaction_count,
-      COALESCE(SUM(total), 0) AS total_amount,
-      COALESCE(AVG(total), 0) AS avg_transaction_value
-    FROM paid
-    GROUP BY merchant_id, sale_date, payment_method;
+    LEFT JOIN lay_cogs ON lay_cogs.merchant_id = d.merchant_id AND lay_cogs.sale_date = d.sale_date
+    LEFT JOIN view_daily_surcharge_cost sc ON sc.merchant_id = d.merchant_id AND sc.sale_date = d.sale_date;
   `,
 
   // ── Product performance ledger (POS + paid invoices + completed laybys) ────

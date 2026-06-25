@@ -5162,6 +5162,35 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PosSettings" }
 
+  /payment-surcharges:
+    get:
+      operationId: getPaymentSurcharges
+      summary: Get per-payment-method surcharge config
+      tags: [POS]
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSurchargeListResponse" }
+    put:
+      operationId: updatePaymentSurcharges
+      summary: Bulk upsert per-payment-method surcharge config
+      tags: [POS]
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentSurchargesInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSurchargeListResponse" }
+
   /layby-settings:
     get:
       operationId: getLaybySettings
@@ -10340,6 +10369,12 @@ components:
         paymentMethod:
           type: string
           enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip, afterpay, klarna]
+        surchargeAmount:
+          type: number
+          description: >-
+            Customer-facing surcharge added to the total at checkout when the
+            chosen payment method passes its acceptance cost on to the customer.
+            0 when the method has no surcharge or the merchant absorbs the cost.
         amountTendered:
           type: ["number", "null"]
         changeDue:
@@ -11771,6 +11806,9 @@ components:
           type: integer
         costTotal:
           type: number
+        surchargeCost:
+          type: number
+          description: Absorbed payment surcharges (pass-on disabled) for the period — a cost of business.
         topPaymentMethod:
           type: ["string", "null"]
 
@@ -13244,6 +13282,32 @@ components:
         roleDiscountLimits:          { type: string }
         buttonStyle:                 { type: string }
 
+    PaymentSurcharge:
+      type: object
+      required: [paymentMethod, percent, fixed, passOn, enabled]
+      properties:
+        paymentMethod: { type: string }
+        percent:       { type: number, description: "Surcharge as a percentage of the sale total (0–100)." }
+        fixed:         { type: number, description: "Fixed surcharge amount added per transaction." }
+        passOn:        { type: boolean, description: "When true the cost is added to the customer's bill; when false the merchant absorbs it as a cost of business in reports." }
+        enabled:       { type: boolean, description: "Whether this method's surcharge is active." }
+
+    PaymentSurchargeListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentSurcharge" }
+
+    PaymentSurchargesInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentSurcharge" }
+
     LaybySettings:
       type: object
       required: [id, merchantId, durationValue, durationUnit, paymentFrequency, minimumDepositType, minimumDepositValue, allowPartialPayments, autoEmailOnCreation, printTermsOnReceipt, termsAndConditions, updatedAt]
@@ -14422,6 +14486,7 @@ components:
         totalCogs:        { type: number }
         netProfit:        { type: number }
         refundTotal:      { type: number }
+        surchargeCost:    { type: number }
         transactionCount: { type: integer }
 
     ProfitLossReport:
@@ -14438,6 +14503,7 @@ components:
         netProfit:        { type: number }
         grossMarginPct:   { type: number }
         refundTotal:      { type: number }
+        surchargeCost:    { type: number }
         transactionCount: { type: integer }
         dailyBreakdown:
           type: array
