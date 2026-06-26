@@ -252,8 +252,8 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
         name: "Templates", icon: LayoutTemplate,
         children: [
           { name: "Sales",             href: "/management/products-inventory/sales",        icon: LayoutTemplate },
-          { name: "Stickers",          href: "/management/products-inventory/stickers",         icon: Printer,
-            matchPaths: ["/management/sticker-templates"] }, // legacy path → redirects to /management/stickers
+          { name: "Labels",            href: "/management/products-inventory/labels",           icon: Printer,
+            matchPaths: ["/management/products-inventory/stickers", "/management/sticker-templates"] }, // legacy paths → redirect to Labels
           { name: "Misc",              href: "/management/templates/misc",   icon: FileText },
         ],
       },
@@ -330,8 +330,8 @@ const SEARCH_INDEX = [
   { label: "KPIs & Targets",     href: "/management/marketing-reports/kpis-targets",             icon: Target,          group: "Management" },
   { label: "KoaPOS Partner Referrals",     href: "/management/settings-integrations/system/misc",                    icon: Sparkles,  group: "Management" },
   { label: "Layby",              href: "/management/customers/discounts-pricing/layby",            icon: Package2,        group: "Management" },
-  { label: "Labels",             href: "/management/products-inventory/stickers",         icon: Tag,             group: "Management" },
-  { label: "Sticker Templates",  href: "/management/products-inventory/stickers",         icon: LayoutTemplate,  group: "Management" },
+  { label: "Labels",             href: "/management/products-inventory/labels",           icon: Tag,             group: "Management" },
+  { label: "Label Templates",    href: "/management/products-inventory/labels",           icon: LayoutTemplate,  group: "Management" },
   { label: "Loyalty",            href: "/management/customers/loyalty",          icon: Gift,            group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing-reports/referrals",       icon: UserPlus, group: "Management" },
   { label: "Marketing · Social Feed Settings", href: "/management/marketing-reports/social-feed", icon: Share2, group: "Management" },

@@ -556,11 +556,13 @@ function Router() {
       <Route path="/management/templates/misc">
         <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
       </Route>
-      <Route path="/management/products-inventory/stickers">
+      <Route path="/management/products-inventory/labels">
         <ManagementProtectedRoute component={ManagementStickersPage} />
       </Route>
+      {/* Legacy "stickers" path → unified Labels page */}
+      <Route path="/management/products-inventory/stickers"><Redirect to="/management/products-inventory/labels" /></Route>
       {/* Sticker Templates merged into the unified Labels page */}
-      <Route path="/management/sticker-templates"><Redirect to="/management/products-inventory/stickers" /></Route>
+      <Route path="/management/sticker-templates"><Redirect to="/management/products-inventory/labels" /></Route>
       <Route path="/management/calculators">
         <Redirect to="/management/products-inventory/3d-prints" />
       </Route>
@@ -855,7 +857,7 @@ function Router() {
       <Route path="/management/modifier-groups"><Redirect to="/management/products-inventory/modifier-groups" /></Route>
       <Route path="/management/templates"><Redirect to="/management/products-inventory/sales" /></Route>
       <Route path="/management/misc-templates"><Redirect to="/management/templates/misc" /></Route>
-      <Route path="/management/stickers"><Redirect to="/management/products-inventory/stickers" /></Route>
+      <Route path="/management/stickers"><Redirect to="/management/products-inventory/labels" /></Route>
       <Route path="/management/calculators/3d-printing"><Redirect to="/management/products-inventory/3d-prints" /></Route>
       <Route path="/management/calculators/pc-builder"><Redirect to="/management/products-inventory/pc-builder" /></Route>
       <Route path="/management/staff/timesheet"><Redirect to="/management/staff-operations/timesheets" /></Route>
