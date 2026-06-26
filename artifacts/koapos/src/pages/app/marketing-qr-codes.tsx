@@ -13,7 +13,7 @@ import {
   QrCode, Download, Trash2, Copy, Clock, Plus, ExternalLink, Save,
   ChevronDown, ChevronUp, Globe, FileText, RefreshCcw, User, Share2,
   File, Wifi, Calendar, Mail, MessageSquare, Minimize2, LayoutTemplate,
-  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check, Building2, Rocket, Link2,
+  Lock, Grid3x3, Upload, X, Info, BookmarkPlus, Check, Building2, Rocket, Link2, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -48,6 +48,9 @@ interface QRSettings {
   patternColor: string;
   eyeColor: string;
   eyeDotColor: string;
+  /* Frame/border colour for templates that draw one. Empty string follows the
+     pattern colour, so existing codes keep their original look. */
+  borderColor: string;
   bgColor: string;
   dotStyle: DotType;
   cornerSquareStyle: CornerSquareType;
@@ -98,6 +101,7 @@ const DEFAULT_SETTINGS: QRSettings = {
   patternColor: "#000000",
   eyeColor: "#000000",
   eyeDotColor: "#000000",
+  borderColor: "",
   bgColor: "#ffffff",
   dotStyle: "square",
   cornerSquareStyle: "square",
@@ -251,6 +255,7 @@ function apiToSettings(r: Record<string, unknown>, defaults: QRSettings = DEFAUL
     patternColor:       String(r.patternColor       ?? defaults.patternColor),
     eyeColor:           String(r.eyeColor           ?? defaults.eyeColor),
     eyeDotColor:        String(r.eyeDotColor        ?? defaults.eyeDotColor),
+    borderColor:        String(r.borderColor        ?? defaults.borderColor),
     bgColor:            String(r.bgColor            ?? defaults.bgColor),
     dotStyle:           (String(r.dotStyle          ?? defaults.dotStyle)) as QRSettings["dotStyle"],
     cornerSquareStyle:  (String(r.cornerSquareStyle ?? defaults.cornerSquareStyle)) as QRSettings["cornerSquareStyle"],
@@ -412,7 +417,10 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
     );
 
   const tpl     = settings.template;
-  const pattern = settings.patternColor;
+  // Frame decorations (borders, rings, bars, ticks) use the dedicated border
+  // colour, falling back to the pattern colour when unset. The QR dots are drawn
+  // separately by StyledQR via settings.patternColor, so they're unaffected.
+  const pattern = settings.borderColor || settings.patternColor;
   const bg      = settings.bgColor === "transparent" ? "#ffffff" : settings.bgColor;
   const textOn  = settings.bgColor === "transparent" ? "#ffffff" : settings.bgColor;
   const font    = "system-ui, sans-serif";
@@ -618,10 +626,14 @@ async function svgToImageBlob(svg: string, format: "png" | "svg", width: number,
 /* ── Template wrapper ──────────────────────────────────────────────────── */
 
 function TemplateWrapper({
-  template, bgColor, patternColor, children, scale = 1, fontFamily = DEFAULT_FONT_STACK, code = "",
+  template, bgColor, patternColor: dotColor, borderColor = "", children, scale = 1, fontFamily = DEFAULT_FONT_STACK, code = "",
 }: {
-  template: string; bgColor: string; patternColor: string; children: React.ReactNode; scale?: number; fontFamily?: string; code?: string;
+  template: string; bgColor: string; patternColor: string; borderColor?: string; children: React.ReactNode; scale?: number; fontFamily?: string; code?: string;
 }) {
+  // Everything this wrapper draws is frame decoration — the QR dots come in as
+  // `children`. So the frame uses the border colour, falling back to the pattern
+  // colour when none is set.
+  const patternColor = borderColor || dotColor;
   const isCircle = TEMPLATES.find((t) => t.id === template)?.circle ?? false;
   const p  = Math.round(8 * scale);
   const br = Math.round(16 * scale);
@@ -857,7 +869,7 @@ function TemplateMini({ template, settings, data, selected, onClick, fontFamily 
         selected ? "border-primary bg-primary/5 shadow-sm" : "border-border hover:border-primary/40 hover:bg-muted/40")}
       style={{ width: 100 }}>
       <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
-        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} scale={0.6} fontFamily={fontFamily} code={settings.customCode}>
+        <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} borderColor={settings.borderColor} scale={0.6} fontFamily={fontFamily} code={settings.customCode}>
           <StyledQR settings={previewSettings} data={data || "https://koapos.com"} size={72} />
         </TemplateWrapper>
       </div>
@@ -1256,6 +1268,24 @@ export default function MarketingQRCodesPage() {
   const [advanced,     setAdvanced]     = useState(false);
   const [savingTemplate, setSavingTemplate] = useState(false);
   const [templateName,   setTemplateName]   = useState("");
+  const [historySearch,  setHistorySearch]  = useState("");
+
+  // Saved QR Codes list: custom-made (Static / custom-data) codes float to the
+  // top, then newest-first within each group, filtered by the search box.
+  const displayedHistory = useMemo(() => {
+    const q = historySearch.trim().toLowerCase();
+    const filtered = q
+      ? history.filter((e) =>
+          e.label.toLowerCase().includes(q) ||
+          e.url.toLowerCase().includes(q) ||
+          (QR_TYPES.find((t) => t.id === (e.qrType ?? "website"))?.label.toLowerCase().includes(q) ?? false))
+      : history;
+    const isCustom = (e: QREntry) => (e.qrType ?? "website") === "static";
+    return [...filtered].sort((a, b) => {
+      if (isCustom(a) !== isCustom(b)) return isCustom(a) ? -1 : 1;
+      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    });
+  }, [history, historySearch]);
 
   const liveQrRef        = useRef<QRCodeStyling | null>(null);
   const liveContainerRef = useRef<HTMLDivElement>(null);
@@ -1553,7 +1583,7 @@ export default function MarketingQRCodesPage() {
               <CardHeader className="pb-3"><CardTitle className="text-base">Live Preview</CardTitle></CardHeader>
               <CardContent className="space-y-4">
                 <div className="flex flex-col items-center gap-4 py-2">
-                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} fontFamily={brandFontFamily} code={settings.customCode}>
+                  <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} borderColor={settings.borderColor} fontFamily={brandFontFamily} code={settings.customCode}>
                     <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
                   </TemplateWrapper>
                   <div className="text-center space-y-1">
@@ -1643,6 +1673,11 @@ export default function MarketingQRCodesPage() {
                   onCopy={() => set("eyeColor", settings.patternColor)} copyLabel="Copy pattern color" />
                 <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={darkSwatches} onChange={(v) => set("eyeDotColor", v)}
                   onCopy={() => set("eyeDotColor", settings.patternColor)} copyLabel="Copy pattern color" />
+                {!["standard", "circle"].includes(settings.template) && (
+                  <ColourRow label="Border color" value={settings.borderColor || settings.patternColor} swatches={darkSwatches}
+                    onChange={(v) => set("borderColor", v)}
+                    onCopy={() => set("borderColor", "")} copyLabel="Match pattern color" />
+                )}
                 <ColourRow label="Background color" value={settings.bgColor} swatches={lightSwatches} onChange={(v) => set("bgColor", v)} />
               </CardContent>
             </Card>
@@ -1716,6 +1751,7 @@ export default function MarketingQRCodesPage() {
                                 template={tmpl.settings.template}
                                 bgColor={tmpl.settings.bgColor}
                                 patternColor={tmpl.settings.patternColor}
+                                borderColor={tmpl.settings.borderColor}
                                 scale={0.6}
                                 code={tmpl.settings.customCode}
                               >
@@ -1888,13 +1924,27 @@ export default function MarketingQRCodesPage() {
         {/* ── History ── */}
         {history.length > 0 && (
           <div>
-            <div className="flex items-center gap-2 mb-3">
-              <Clock className="w-4 h-4 text-muted-foreground" />
-              <h2 className="font-semibold text-sm">Saved QR Codes</h2>
-              <Badge variant="secondary" className="text-xs">{history.length}</Badge>
+            <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3 mb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="w-4 h-4 text-muted-foreground" />
+                <h2 className="font-semibold text-sm">Saved QR Codes</h2>
+                <Badge variant="secondary" className="text-xs">{history.length}</Badge>
+              </div>
+              <div className="relative sm:ml-auto w-full sm:w-64">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground" />
+                <Input
+                  value={historySearch}
+                  onChange={(e) => setHistorySearch(e.target.value)}
+                  placeholder="Search saved QR codes…"
+                  className="h-8 pl-8 text-xs"
+                />
+              </div>
             </div>
+            {displayedHistory.length === 0 ? (
+              <p className="text-xs text-muted-foreground py-6 text-center">No saved QR codes match “{historySearch}”.</p>
+            ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {history.map((entry) => {
+              {displayedHistory.map((entry) => {
                 const typeMeta = QR_TYPES.find((t) => t.id === (entry.qrType ?? "website"));
                 return (
                   <Card key={entry.id}
@@ -1909,7 +1959,7 @@ export default function MarketingQRCodesPage() {
                     }}>
                     <CardContent className="p-3 flex items-start gap-3">
                       <div className="shrink-0 rounded overflow-hidden border flex items-center justify-center bg-white" style={{ width: 52, height: 52 }}>
-                        <TemplateWrapper template={entry.settings.template} bgColor={entry.settings.bgColor} patternColor={entry.settings.patternColor} scale={0.35} code={entry.settings.customCode}>
+                        <TemplateWrapper template={entry.settings.template} bgColor={entry.settings.bgColor} patternColor={entry.settings.patternColor} borderColor={entry.settings.borderColor} scale={0.35} code={entry.settings.customCode}>
                           <StyledQR settings={entry.settings} data={entry.url} size={52} />
                         </TemplateWrapper>
                       </div>
@@ -1946,6 +1996,7 @@ export default function MarketingQRCodesPage() {
                 );
               })}
             </div>
+            )}
           </div>
         )}
       </div>
