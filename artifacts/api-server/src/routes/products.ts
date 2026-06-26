@@ -629,17 +629,18 @@ router.patch("/products/epay-by-supplier", requireAuth, async (req, res): Promis
 
 const BulkProductsBody = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(500),
-  action: z.enum(["price_percent", "price_flat", "set_category", "set_track_inventory", "delete"]),
+  action: z.enum(["price_percent", "price_flat", "set_category", "set_track_inventory", "set_product_type", "delete"]),
   value: z.number().nullable().optional(),
   categoryId: z.number().int().positive().nullable().optional(),
   trackInventory: z.boolean().nullable().optional(),
+  productTypeId: z.number().int().positive().nullable().optional(),
 });
 
 router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
   const parsed = BulkProductsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { ids, action, value, categoryId, trackInventory } = parsed.data;
+  const { ids, action, value, categoryId, trackInventory, productTypeId } = parsed.data;
   const merchantId = req.session.merchantId!;
 
   // Verify ownership — only operate on IDs that belong to this merchant
@@ -696,6 +697,19 @@ router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
     if (trackInventory == null) { res.status(400).json({ error: "trackInventory is required" }); return; }
     await db.update(productsTable)
       .set({ trackInventory: trackInventory ? "true" : "false" })
+      .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
+    res.json({ updated: validIds.length, deleted: 0 });
+    return;
+  }
+
+  if (action === "set_product_type") {
+    if (productTypeId == null) { res.status(400).json({ error: "productTypeId is required" }); return; }
+    // Only switch to a product type the merchant actually owns.
+    const [pt] = await db.select({ id: productTypesTable.id }).from(productTypesTable)
+      .where(and(eq(productTypesTable.id, productTypeId), eq(productTypesTable.merchantId, merchantId)));
+    if (!pt) { res.status(400).json({ error: "Product type not found" }); return; }
+    await db.update(productsTable)
+      .set({ productTypeId: pt.id })
       .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
     res.json({ updated: validIds.length, deleted: 0 });
     return;

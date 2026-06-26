@@ -196,7 +196,8 @@
       "Bash(find / -path \"*.private/uploads*\" -type f)",
       "Bash(grep -rhn \"\\\\$29\\\\|\\\\$49\\\\|\\\\$79\\\\|\\\\$99\\\\|\\\\$19\\\\|/mo\\\\|per month\\\\|Starter\\\\|Growth\\\\|Pro\\\\|Enterprise\\\\|priceMonthly\\\\|monthlyPrice\" artifacts/koapos/src)",
       "WebSearch",
-      "Bash(env -u PORT -u BASE_PATH pnpm run build)"
+      "Bash(env -u PORT -u BASE_PATH pnpm run build)",
+      "Bash(echo \"=== EXIT api-server: $? ===\")"
     ]
   }
 }

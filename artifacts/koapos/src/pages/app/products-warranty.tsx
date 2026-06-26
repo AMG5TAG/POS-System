@@ -31,14 +31,15 @@ type WarrantyItem = {
 };
 
 /* Collapsible categories keyed by how much warranty time remains. An item lands
-   in the smallest bucket whose threshold (in days) is >= its remaining days. */
+   in the smallest bucket whose threshold (in days) is >= its remaining days.
+   Ordered soonest-to-expire first so the longest remaining warranty sits at the bottom. */
 const BUCKETS = [
-  { id: "3y", label: "3 Years",  maxDays: Infinity },
-  { id: "2y", label: "2 Years",  maxDays: 731 },
-  { id: "1y", label: "1 Year",   maxDays: 366 },
-  { id: "8m", label: "8 months", maxDays: 244 },
-  { id: "4m", label: "4 months", maxDays: 122 },
   { id: "1m", label: "1 month",  maxDays: 31 },
+  { id: "4m", label: "4 months", maxDays: 122 },
+  { id: "8m", label: "8 months", maxDays: 244 },
+  { id: "1y", label: "1 Year",   maxDays: 366 },
+  { id: "2y", label: "2 Years",  maxDays: 731 },
+  { id: "3y", label: "3 Years",  maxDays: Infinity },
 ] as const;
 
 type BucketId = (typeof BUCKETS)[number]["id"];
@@ -52,8 +53,8 @@ function bucketFor(days: number): BucketId {
   return "3y";
 }
 
-/* The nearer-term buckets open by default — that's what merchants act on. */
-const DEFAULT_OPEN: Record<BucketId, boolean> = { "3y": false, "2y": false, "1y": true, "8m": true, "4m": true, "1m": true };
+/* All buckets start collapsed; merchants expand the ones they want to act on. */
+const DEFAULT_OPEN: Record<BucketId, boolean> = { "3y": false, "2y": false, "1y": false, "8m": false, "4m": false, "1m": false };
 
 function fmtDate(d: string | Date): string {
   return new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });

@@ -92,6 +92,7 @@ type BulkActionPending =
   | { type: "price_flat"; value: number }
   | { type: "set_category"; categoryId: number | null; categoryName: string }
   | { type: "set_track_inventory"; value: boolean }
+  | { type: "set_product_type"; productTypeId: number; typeName: string }
   | { type: "delete" };
 
 type ProductForm = {
@@ -1196,6 +1197,7 @@ export default function ProductsPage() {
   const [bulkCatPopover, setBulkCatPopover]       = useState(false);
   const [bulkCatInput, setBulkCatInput]           = useState("");
   const [bulkInvPopover, setBulkInvPopover]       = useState(false);
+  const [bulkTypePopover, setBulkTypePopover]     = useState(false);
 
   /* ── Brands state ── */
   const [tagInput, setTagInput] = useState("");
@@ -1622,6 +1624,8 @@ export default function ProductsPage() {
         body.categoryId = bulkActionPending.categoryId;
       } else if (bulkActionPending.type === "set_track_inventory") {
         body.trackInventory = bulkActionPending.value;
+      } else if (bulkActionPending.type === "set_product_type") {
+        body.productTypeId = bulkActionPending.productTypeId;
       }
       const result = await bulkUpdateMutation.mutateAsync({ data: body as unknown as Parameters<typeof bulkUpdateMutation.mutateAsync>[0]["data"] }) as { updated: number; deleted: number };
       const n = result.deleted > 0 ? result.deleted : result.updated;
@@ -1666,6 +1670,12 @@ export default function ProductsPage() {
   const applyBulkTrackInventory = (value: boolean) => {
     setBulkActionPending({ type: "set_track_inventory", value });
     setBulkInvPopover(false);
+    setBulkConfirmOpen(true);
+  };
+
+  const applyBulkType = (productTypeId: number, typeName: string) => {
+    setBulkActionPending({ type: "set_product_type", productTypeId, typeName });
+    setBulkTypePopover(false);
     setBulkConfirmOpen(true);
   };
 
@@ -1933,6 +1943,34 @@ export default function ProductsPage() {
               </PopoverContent>
             </Popover>
 
+            {/* Product type change */}
+            <Popover open={bulkTypePopover} onOpenChange={setBulkTypePopover}>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                  <Package className="w-3 h-3" /> Type
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-1.5" align="start">
+                <p className="text-xs font-medium px-1.5 py-1 text-muted-foreground">Change product type</p>
+                {productTypesList.filter((t) => t.isActive).length === 0 ? (
+                  <p className="px-1.5 py-2 text-xs text-muted-foreground">No product types defined.</p>
+                ) : (
+                  <div className="max-h-[240px] overflow-y-auto">
+                    {productTypesList.filter((t) => t.isActive).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => applyBulkType(t.id, t.name)}
+                        className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors"
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
             <div className="w-px h-4 bg-border shrink-0" />
 
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkSetActive(true)} disabled={updateMutation.isPending}>
@@ -2184,6 +2222,13 @@ export default function ProductsPage() {
                     <p className="text-sm text-muted-foreground">
                       Inventory tracking:{" "}
                       <span className="font-medium text-foreground">{bulkActionPending.value ? "Enabled" : "Disabled"}</span>
+                    </p>
+                  )}
+
+                  {bulkActionPending.type === "set_product_type" && (
+                    <p className="text-sm text-muted-foreground">
+                      New product type:{" "}
+                      <span className="font-medium text-foreground">{bulkActionPending.typeName}</span>
                     </p>
                   )}
 
