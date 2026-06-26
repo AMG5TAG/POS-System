@@ -1,6 +1,9 @@
-import { pgTable, text, serial, timestamp, integer } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 import { suppliersTable } from "./suppliers";
+
+export type ReturnAuthItem = { productId: number | null; name: string; quantity: number };
+export type ReturnAuthAttachment = { fileKey: string; filename: string; contentType: string; sizeBytes: number };
 
 /**
  * Return Merchandise Authorisation (RMA) for returns the merchant sends back to
@@ -14,8 +17,14 @@ export const productReturnAuthsTable = pgTable("product_return_auths", {
   raNumber:     text("ra_number").notNull(),
   supplierId:   integer("supplier_id").references(() => suppliersTable.id),
   supplierName: text("supplier_name").notNull(),
+  // Optional purchase order this return originated from.
+  purchaseOrderId: integer("purchase_order_id"),
   items:        text("items").notNull(),
   quantity:     integer("quantity").notNull().default(1),
+  // Structured list of the products being returned (catalogue or custom).
+  returnItems:  jsonb("return_items").$type<ReturnAuthItem[]>(),
+  // Uploaded supporting files (invoices, photos of the fault, etc.).
+  attachments:  jsonb("attachments").$type<ReturnAuthAttachment[]>(),
   reason:       text("reason"),
   // What the merchant is requesting from the supplier: Warranty / Replacement / Repair / Credit / Refund
   returnType:   text("return_type"),

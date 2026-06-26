@@ -6560,8 +6560,20 @@ export const ListProductReturnAuthsResponse = zod.object({
   "raNumber": zod.string(),
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string(),
+  "purchaseOrderId": zod.number().nullish(),
   "items": zod.string(),
   "quantity": zod.number(),
+  "returnItems": zod.array(zod.object({
+  "productId": zod.number().nullish(),
+  "name": zod.string(),
+  "quantity": zod.number()
+})).nullish(),
+  "attachments": zod.array(zod.object({
+  "fileKey": zod.string(),
+  "filename": zod.string(),
+  "contentType": zod.string().optional(),
+  "sizeBytes": zod.number().optional()
+})).nullish(),
   "reason": zod.string().nullish(),
   "returnType": zod.string().nullish(),
   "supplierRmaNumber": zod.string().nullish(),
@@ -6580,8 +6592,20 @@ export const ListProductReturnAuthsResponse = zod.object({
 export const CreateProductReturnAuthBody = zod.object({
   "supplierId": zod.number().optional(),
   "supplierName": zod.string(),
+  "purchaseOrderId": zod.number().nullish(),
   "items": zod.string(),
   "quantity": zod.number().optional(),
+  "returnItems": zod.array(zod.object({
+  "productId": zod.number().nullish(),
+  "name": zod.string(),
+  "quantity": zod.number()
+})).optional(),
+  "attachments": zod.array(zod.object({
+  "fileKey": zod.string(),
+  "filename": zod.string(),
+  "contentType": zod.string().optional(),
+  "sizeBytes": zod.number().optional()
+})).optional(),
   "reason": zod.string().optional(),
   "returnType": zod.string().optional(),
   "supplierRmaNumber": zod.string().optional(),
@@ -6601,8 +6625,20 @@ export const UpdateProductReturnAuthParams = zod.object({
 export const UpdateProductReturnAuthBody = zod.object({
   "supplierId": zod.number().optional(),
   "supplierName": zod.string(),
+  "purchaseOrderId": zod.number().nullish(),
   "items": zod.string(),
   "quantity": zod.number().optional(),
+  "returnItems": zod.array(zod.object({
+  "productId": zod.number().nullish(),
+  "name": zod.string(),
+  "quantity": zod.number()
+})).optional(),
+  "attachments": zod.array(zod.object({
+  "fileKey": zod.string(),
+  "filename": zod.string(),
+  "contentType": zod.string().optional(),
+  "sizeBytes": zod.number().optional()
+})).optional(),
   "reason": zod.string().optional(),
   "returnType": zod.string().optional(),
   "supplierRmaNumber": zod.string().optional(),
@@ -6617,8 +6653,20 @@ export const UpdateProductReturnAuthResponse = zod.object({
   "raNumber": zod.string(),
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string(),
+  "purchaseOrderId": zod.number().nullish(),
   "items": zod.string(),
   "quantity": zod.number(),
+  "returnItems": zod.array(zod.object({
+  "productId": zod.number().nullish(),
+  "name": zod.string(),
+  "quantity": zod.number()
+})).nullish(),
+  "attachments": zod.array(zod.object({
+  "fileKey": zod.string(),
+  "filename": zod.string(),
+  "contentType": zod.string().optional(),
+  "sizeBytes": zod.number().optional()
+})).nullish(),
   "reason": zod.string().nullish(),
   "returnType": zod.string().nullish(),
   "supplierRmaNumber": zod.string().nullish(),

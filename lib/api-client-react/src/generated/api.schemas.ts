@@ -3345,14 +3345,32 @@ export interface ProductPreOrderListResponse {
   total: number;
 }
 
+export interface ReturnAuthItem {
+  productId?: number | null;
+  name: string;
+  quantity: number;
+}
+
+export interface ReturnAuthAttachment {
+  fileKey: string;
+  filename: string;
+  contentType?: string;
+  sizeBytes?: number;
+}
+
 export interface ProductReturnAuth {
   id: number;
   merchantId: number;
   raNumber: string;
   supplierId?: number | null;
   supplierName: string;
+  purchaseOrderId?: number | null;
   items: string;
   quantity: number;
+  /** @nullable */
+  returnItems?: ReturnAuthItem[] | null;
+  /** @nullable */
+  attachments?: ReturnAuthAttachment[] | null;
   reason?: string | null;
   returnType?: string | null;
   supplierRmaNumber?: string | null;
@@ -3365,8 +3383,11 @@ export interface ProductReturnAuth {
 export interface ProductReturnAuthInput {
   supplierId?: number;
   supplierName: string;
+  purchaseOrderId?: number | null;
   items: string;
   quantity?: number;
+  returnItems?: ReturnAuthItem[];
+  attachments?: ReturnAuthAttachment[];
   reason?: string;
   returnType?: string;
   supplierRmaNumber?: string;

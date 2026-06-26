@@ -13267,6 +13267,23 @@ components:
             $ref: "#/components/schemas/ProductPreOrder"
         total: { type: integer }
 
+    ReturnAuthItem:
+      type: object
+      required: [name, quantity]
+      properties:
+        productId: { type: integer, nullable: true }
+        name:      { type: string }
+        quantity:  { type: integer }
+
+    ReturnAuthAttachment:
+      type: object
+      required: [fileKey, filename]
+      properties:
+        fileKey:     { type: string }
+        filename:    { type: string }
+        contentType: { type: string }
+        sizeBytes:   { type: integer }
+
     ProductReturnAuth:
       type: object
       required: [id, merchantId, raNumber, supplierName, items, quantity, status, createdAt]
@@ -13276,8 +13293,11 @@ components:
         raNumber:          { type: string }
         supplierId:        { type: integer, nullable: true }
         supplierName:      { type: string }
+        purchaseOrderId:   { type: integer, nullable: true }
         items:             { type: string }
         quantity:          { type: integer }
+        returnItems:       { type: ["array", "null"], items: { $ref: "#/components/schemas/ReturnAuthItem" } }
+        attachments:       { type: ["array", "null"], items: { $ref: "#/components/schemas/ReturnAuthAttachment" } }
         reason:            { type: string, nullable: true }
         returnType:        { type: string, nullable: true }
         supplierRmaNumber: { type: string, nullable: true }
@@ -13292,8 +13312,11 @@ components:
       properties:
         supplierId:        { type: integer }
         supplierName:      { type: string }
+        purchaseOrderId:   { type: integer, nullable: true }
         items:             { type: string }
         quantity:          { type: integer }
+        returnItems:       { type: array, items: { $ref: "#/components/schemas/ReturnAuthItem" } }
+        attachments:       { type: array, items: { $ref: "#/components/schemas/ReturnAuthAttachment" } }
         reason:            { type: string }
         returnType:        { type: string }
         supplierRmaNumber: { type: string }

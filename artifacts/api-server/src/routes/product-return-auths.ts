@@ -31,7 +31,7 @@ router.get("/return-auths", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/return-auths", requireAuth, async (req, res): Promise<void> => {
   const mid = req.session.merchantId!;
-  const { supplierId, supplierName, items, quantity, reason, returnType, supplierRmaNumber, trackingNumber, status, notes } = req.body;
+  const { supplierId, supplierName, purchaseOrderId, items, quantity, returnItems, attachments, reason, returnType, supplierRmaNumber, trackingNumber, status, notes } = req.body;
   if (!supplierName) { res.status(400).json({ error: "supplierName is required" }); return; }
   if (!items)        { res.status(400).json({ error: "items is required" }); return; }
 
@@ -49,8 +49,11 @@ router.post("/return-auths", requireAuth, async (req, res): Promise<void> => {
       raNumber,
       supplierId: supplierId ? parseInt(String(supplierId)) : null,
       supplierName,
+      purchaseOrderId: purchaseOrderId != null ? parseInt(String(purchaseOrderId)) : null,
       items,
       quantity: quantity != null ? Math.max(1, parseInt(String(quantity)) || 1) : 1,
+      returnItems: returnItems ?? null,
+      attachments: attachments ?? null,
       reason: reason ?? null,
       returnType: returnType ?? null,
       supplierRmaNumber: supplierRmaNumber ?? null,
@@ -67,14 +70,17 @@ router.patch("/return-auths/:id", requireAuth, async (req, res): Promise<void> =
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
   const mid = req.session.merchantId!;
-  const { supplierId, supplierName, items, quantity, reason, returnType, supplierRmaNumber, trackingNumber, status, notes } = req.body;
+  const { supplierId, supplierName, purchaseOrderId, items, quantity, returnItems, attachments, reason, returnType, supplierRmaNumber, trackingNumber, status, notes } = req.body;
   const [ra] = await db
     .update(productReturnAuthsTable)
     .set({
       ...(supplierId !== undefined && { supplierId: supplierId ? parseInt(String(supplierId)) : null }),
       ...(supplierName !== undefined && { supplierName }),
+      ...(purchaseOrderId !== undefined && { purchaseOrderId: purchaseOrderId != null ? parseInt(String(purchaseOrderId)) : null }),
       ...(items !== undefined && { items }),
       ...(quantity !== undefined && { quantity: Math.max(1, parseInt(String(quantity)) || 1) }),
+      ...(returnItems !== undefined && { returnItems }),
+      ...(attachments !== undefined && { attachments }),
       ...(reason !== undefined && { reason }),
       ...(returnType !== undefined && { returnType }),
       ...(supplierRmaNumber !== undefined && { supplierRmaNumber }),

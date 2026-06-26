@@ -26,6 +26,7 @@
     "add-marketing-events-table": "tsx ./src/add-marketing-events-table.ts",
     "repurpose-return-auths-supplier-rma": "tsx ./src/repurpose-return-auths-supplier-rma.ts",
     "add-time-cards": "tsx ./src/add-time-cards.ts",
+    "add-return-auth-po-files": "tsx ./src/add-return-auth-po-files.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
