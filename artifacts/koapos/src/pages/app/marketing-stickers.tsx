@@ -5,6 +5,7 @@ import {
   useCreateStickerTemplate,
   useUpdateStickerTemplate,
   useDeleteStickerTemplate,
+  useListQrCodes,
   useGetMerchant,
   type Product,
   type Customer,
@@ -29,6 +30,7 @@ import { toast } from "sonner";
 import {
   Sticker, Type, ImagePlus, QrCode, Barcode, Trash2, Printer, Save, Plus,
   Bold, AlignLeft, AlignCenter, AlignRight, Zap, FolderOpen, Building2,
+  Square, Minus,
 } from "lucide-react";
 
 /* ── Label sizes: DYMO LabelWriter series + Brother VC-500W continuous tape ── */
@@ -46,17 +48,22 @@ const SERIES_LABEL: Record<string, string> = {
 const SERIES_ORDER = ["LW", "LW550", "D1", "VC500W"];
 const DEFAULT_SIZE = "S0722370";
 
-type ElType = "text" | "image" | "qr" | "barcode";
+type ElType = "text" | "image" | "qr" | "barcode" | "rect" | "line";
 interface StickerEl {
   id: string;
   type: ElType;
   x: number; y: number; w: number;          // % of label
+  h?: number;                                // % of label height (rect)
   content?: string;                          // text / qr / barcode value (supports {{quick.codes}})
   src?: string;                              // image url
   fontSizeMm?: number;
   bold?: boolean;
   align?: "left" | "center" | "right";
-  color?: string;
+  color?: string;                            // text colour / line colour
+  fill?: string;                             // rect fill ("transparent" allowed)
+  borderColor?: string;                      // rect border
+  borderWidthMm?: number;                    // rect border thickness
+  thicknessMm?: number;                      // line thickness
 }
 interface Layout { sizeId: string; bg: string; orientation?: "portrait" | "landscape"; elements: StickerEl[]; }
 
@@ -146,6 +153,9 @@ export default function MarketingStickersPage() {
 
   const { data: templatesData, refetch: refetchTemplates } = useListStickerTemplates({ query: { queryKey: ["sticker-templates"] } });
   const templates = templatesData ?? [];
+
+  const { data: qrCodesData } = useListQrCodes({ query: { queryKey: ["qr-codes"] } });
+  const savedQrCodes = qrCodesData?.items ?? [];
   const createTpl = useCreateStickerTemplate();
   const updateTpl = useUpdateStickerTemplate();
   const deleteTpl = useDeleteStickerTemplate();
@@ -180,10 +190,12 @@ export default function MarketingStickersPage() {
     setLayout((l) => ({ ...l, elements: l.elements.filter((e) => e.id !== id) }));
 
   const addEl = (type: ElType) => {
-    const base: StickerEl = { id: uid(), type, x: 8, y: 8, w: type === "text" ? 70 : 36 };
+    const base: StickerEl = { id: uid(), type, x: 8, y: 8, w: type === "text" ? 70 : type === "line" || type === "rect" ? 60 : 36 };
     if (type === "text") Object.assign(base, { content: "Text", fontSizeMm: 3, bold: false, align: "left", color: "#000000" });
     if (type === "qr") base.content = "{{product.barcode}}";
     if (type === "barcode") base.content = "{{product.barcode}}";
+    if (type === "rect") Object.assign(base, { h: 20, fill: "transparent", borderColor: "#000000", borderWidthMm: 0.4 });
+    if (type === "line") Object.assign(base, { thicknessMm: 0.5, color: "#000000" });
     setLayout((l) => ({ ...l, elements: [...l.elements, base] }));
     setSelectedId(base.id);
   };
@@ -216,6 +228,8 @@ export default function MarketingStickersPage() {
       return <div style={{ fontSize: (el.fontSizeMm ?? 3) * scale, fontWeight: el.bold ? 700 : 400, textAlign: el.align, color: el.color, lineHeight: 1.1, whiteSpace: "pre-wrap", wordBreak: "break-word" }}>{txt || " "}</div>;
     }
     if (el.type === "image") return el.src ? <img src={el.src} alt="" style={{ width: "100%", display: "block" }} /> : <div className="text-[8px] text-muted-foreground border border-dashed rounded text-center py-2">image</div>;
+    if (el.type === "rect") return <div style={{ width: "100%", height: "100%", background: el.fill, border: (el.borderWidthMm ?? 0) > 0 ? `${(el.borderWidthMm ?? 0) * scale}px solid ${el.borderColor}` : "none", boxSizing: "border-box" }} />;
+    if (el.type === "line") return <div style={{ width: "100%", height: "100%", background: el.color }} />;
     const val = resolveInline(el.content ?? " ", subs) || " ";
     if (el.type === "qr") return <QRCodeSVG value={val} style={{ width: "100%", height: "auto" }} />;
     return <BarcodeImg value={val} />;
@@ -278,6 +292,11 @@ export default function MarketingStickersPage() {
         parts.push(`<img src="${url}" style="${common}height:auto;" />`);
       } else if (el.type === "barcode") {
         parts.push(`<img src="${barcodeDataUrl(resolveInline(el.content ?? "0", subs))}" style="${common}height:auto;" />`);
+      } else if (el.type === "rect") {
+        const border = (el.borderWidthMm ?? 0) > 0 ? `${el.borderWidthMm}mm solid ${el.borderColor}` : "none";
+        parts.push(`<div style="${common}height:${el.h ?? 20}%;background:${el.fill};border:${border};box-sizing:border-box;"></div>`);
+      } else if (el.type === "line") {
+        parts.push(`<div style="${common}height:${el.thicknessMm ?? 0.5}mm;background:${el.color};"></div>`);
       }
     }
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
@@ -323,6 +342,8 @@ export default function MarketingStickersPage() {
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("image")}><ImagePlus className="w-3.5 h-3.5" /> Image</Button>
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("qr")}><QrCode className="w-3.5 h-3.5" /> QR</Button>
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("barcode")}><Barcode className="w-3.5 h-3.5" /> Barcode</Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("rect")}><Square className="w-3.5 h-3.5" /> Shape</Button>
+                  <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("line")}><Minus className="w-3.5 h-3.5" /> Line</Button>
                   <div className="ml-auto flex items-center gap-2">
                     <Label className="text-xs text-muted-foreground">Live data</Label>
                     <Switch checked={showResolved} onCheckedChange={setShowResolved} />
@@ -341,7 +362,11 @@ export default function MarketingStickersPage() {
                         key={el.id}
                         onMouseDown={(e) => onElMouseDown(e, el)}
                         className={`absolute cursor-move ${selectedId === el.id ? "outline outline-2 outline-primary" : "hover:outline hover:outline-1 hover:outline-primary/40"}`}
-                        style={{ left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%` }}
+                        style={{
+                          left: `${el.x}%`, top: `${el.y}%`, width: `${el.w}%`,
+                          ...(el.type === "rect" ? { height: `${el.h ?? 20}%` } : {}),
+                          ...(el.type === "line" ? { height: (el.thicknessMm ?? 0.5) * scale } : {}),
+                        }}
                       >
                         {renderEl(el)}
                       </div>
@@ -414,10 +439,38 @@ export default function MarketingStickersPage() {
                   <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => { removeEl(selected.id); setSelectedId(null); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                 </div>
 
-                {selected.type === "image" ? (
-                  <ImageUploader value={selected.src ?? ""} onChange={(url) => updateEl(selected.id, { src: url })} aspectRatio="free" label="Image" />
-                ) : (
+                {selected.type === "image" && (
+                  <div className="space-y-2">
+                    <ImageUploader value={selected.src ?? ""} onChange={(url) => updateEl(selected.id, { src: url })} aspectRatio="free" label="Image" />
+                    <div className="flex items-center gap-2">
+                      <span className="h-px flex-1 bg-border" />
+                      <span className="text-[10px] uppercase tracking-wide text-muted-foreground">or paste a URL</span>
+                      <span className="h-px flex-1 bg-border" />
+                    </div>
+                    <Input
+                      value={selected.src ?? ""}
+                      onChange={(e) => updateEl(selected.id, { src: e.target.value.trim() })}
+                      placeholder="https://example.com/logo.png"
+                      className="h-8 text-xs"
+                    />
+                  </div>
+                )}
+
+                {(selected.type === "text" || selected.type === "qr" || selected.type === "barcode") && (
                   <>
+                    {selected.type === "qr" && savedQrCodes.length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-[11px] text-muted-foreground">Import from saved QR codes</Label>
+                        <Select value="" onValueChange={(v) => updateEl(selected.id, { content: v })}>
+                          <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Choose a saved QR code…" /></SelectTrigger>
+                          <SelectContent className="max-h-[260px]">
+                            {savedQrCodes.map((q) => (
+                              <SelectItem key={q.id} value={q.url || q.entryId}>{q.label || q.url}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    )}
                     <div className="flex items-center justify-between">
                       <Label className="text-[11px] text-muted-foreground">{selected.type === "text" ? "Text" : "Value"}</Label>
                       <QuickCodeMenu onPick={insertCode} />
@@ -442,8 +495,41 @@ export default function MarketingStickersPage() {
                   </>
                 )}
 
+                {selected.type === "rect" && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-[11px] text-muted-foreground w-24">Height {selected.h ?? 20}%</Label>
+                      <input type="range" min={2} max={100} step={1} value={selected.h ?? 20} onChange={(e) => updateEl(selected.id, { h: Number(e.target.value) })} className="flex-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-[11px] text-muted-foreground w-24">Border {selected.borderWidthMm ?? 0.4}mm</Label>
+                      <input type="range" min={0} max={3} step={0.1} value={selected.borderWidthMm ?? 0.4} onChange={(e) => updateEl(selected.id, { borderWidthMm: Number(e.target.value) })} className="flex-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">Fill</span>
+                      <input type="color" value={selected.fill && selected.fill !== "transparent" ? selected.fill : "#000000"} onChange={(e) => updateEl(selected.id, { fill: e.target.value })} className="h-7 w-9 rounded border cursor-pointer" />
+                      <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => updateEl(selected.id, { fill: "transparent" })}>No fill</Button>
+                      <span className="text-[11px] text-muted-foreground ml-auto">Border</span>
+                      <input type="color" value={selected.borderColor ?? "#000000"} onChange={(e) => updateEl(selected.id, { borderColor: e.target.value })} className="h-7 w-9 rounded border cursor-pointer" />
+                    </div>
+                  </>
+                )}
+
+                {selected.type === "line" && (
+                  <>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-[11px] text-muted-foreground w-24">Thickness {selected.thicknessMm ?? 0.5}mm</Label>
+                      <input type="range" min={0.2} max={5} step={0.1} value={selected.thicknessMm ?? 0.5} onChange={(e) => updateEl(selected.id, { thicknessMm: Number(e.target.value) })} className="flex-1" />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-[11px] text-muted-foreground">Colour</span>
+                      <input type="color" value={selected.color ?? "#000000"} onChange={(e) => updateEl(selected.id, { color: e.target.value })} className="h-7 w-9 rounded border cursor-pointer" />
+                    </div>
+                  </>
+                )}
+
                 <div className="flex items-center gap-2">
-                  <Label className="text-[11px] text-muted-foreground w-16">Width {selected.w}%</Label>
+                  <Label className="text-[11px] text-muted-foreground w-16">{selected.type === "line" ? "Length" : "Width"} {selected.w}%</Label>
                   <input type="range" min={8} max={100} step={1} value={selected.w} onChange={(e) => updateEl(selected.id, { w: Number(e.target.value) })} className="flex-1" />
                 </div>
               </CardContent></Card>
