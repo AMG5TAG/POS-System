@@ -129,7 +129,7 @@ type ProductForm = {
 };
 
 const defaultForm: ProductForm = {
-  name: "", description: "", price: "", costPrice: "", sku: "", barcode: "",
+  name: "", description: "", price: "", costPrice: "0", sku: "", barcode: "",
   categoryId: "", brandId: "",
   imageUrl: "", imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
   supplier: "", supplierCode: "",
@@ -2953,10 +2953,10 @@ export default function ProductsPage() {
 
                 {/* ePay switch */}
                 <div>
-                  <SectionHeader label="ePay Mode" />
+                  <SectionHeader label="Physical/Printed Mode" />
                   <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
                     <div>
-                      <p className="text-sm font-medium">ePay / Physical Card</p>
+                      <p className="text-sm font-medium">Physical or Printed Card</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         When enabled, no digital code is printed on the receipt — the card processes its own code at the terminal.
                       </p>

@@ -2101,6 +2101,7 @@ export default function POSPage() {
        doesn't keep reporting "Payment in progress" after a completed sale. */
     setNumpadInput("");
     setGcPayCardNumber("");
+    setDepositDesc("");
     setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
     paymentModalInitialMethodRef.current = null;
     /* Sale is over — any one-sale staff switch reverts to the day's staff. */

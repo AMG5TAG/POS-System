@@ -225,13 +225,13 @@ const ENTITIES: EntityConfig[] = [
       { key: "excludeFromLoyalty", label: "Exclude from Loyalty", type: "boolean", hint: "true or false" },
       { key: "supplier",          label: "Supplier",             hint: "Supplier / vendor name" },
       { key: "supplierCode",      label: "Supplier Code",        hint: "Supplier's product code or SKU" },
-      { key: "isEpay",            label: "ePay / Physical Card", type: "boolean", hint: "true if no digital code prints (card handles it)" },
+      { key: "physicalOrPrintedCard", label: "Physical or Printed Card", type: "boolean", hint: "true if no digital code prints (card handles it)" },
     ],
     sampleRows: [
-      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Acme Wholesale",  supplierCode: "AW-WH-001", isEpay: "false" },
-      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Oz Distributors", supplierCode: "OZD-UC-2M",  isEpay: "false" },
-      { name: "Steam Gift Card $50", sku: "SG-050", price: "50.00",  costPrice: "48.00", description: "Steam wallet $50 gift card",   barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Valve",           supplierCode: "STEAM-50",   isEpay: "false" },
-      { name: "Visa ePay Card $100", sku: "VP-100", price: "100.00", costPrice: "99.00", description: "Visa prepaid ePay card $100",  barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Visa",            supplierCode: "VISA-EPAY-100", isEpay: "true" },
+      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Acme Wholesale",  supplierCode: "AW-WH-001", physicalOrPrintedCard: "false" },
+      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Oz Distributors", supplierCode: "OZD-UC-2M",  physicalOrPrintedCard: "false" },
+      { name: "Steam Gift Card $50", sku: "SG-050", price: "50.00",  costPrice: "48.00", description: "Steam wallet $50 gift card",   barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Valve",           supplierCode: "STEAM-50",   physicalOrPrintedCard: "false" },
+      { name: "Visa ePay Card $100", sku: "VP-100", price: "100.00", costPrice: "99.00", description: "Visa prepaid ePay card $100",  barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Visa",            supplierCode: "VISA-EPAY-100", physicalOrPrintedCard: "true" },
     ],
     toExportRow: (item) => ({
       name:               String(item.name               ?? ""),
@@ -251,7 +251,7 @@ const ENTITIES: EntityConfig[] = [
       excludeFromLoyalty: String(item.excludeFromLoyalty ?? ""),
       supplier:           String(item.supplier           ?? ""),
       supplierCode:       String(item.supplierCode       ?? ""),
-      isEpay:             String((item as Record<string, unknown>).isEpay ?? "false"),
+      physicalOrPrintedCard: String((item as Record<string, unknown>).isEpay ?? "false"),
     }),
   },
   {
@@ -579,6 +579,7 @@ const ALIASES: Record<string, string[]> = {
   parentName:         ["parentname", "parent", "parentcategory", "parentcat", "parentgroup"],
   paymentMethod:      ["paymentmethod", "payment", "method", "tender", "paidby"],
   customerName:       ["customername", "customer", "buyer", "clientname", "client"],
+  physicalOrPrintedCard: ["physicalorprintedcard", "physicalcard", "printedcard", "isepay", "epay", "epayphysicalcard"],
 };
 
 function normalize(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, ""); }
@@ -909,6 +910,9 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (val !== undefined) {
           if (field.key === "agreedToMarketing") {
             payload[field.key] = MARKETING_TRUTHY.has(String(val).trim().toLowerCase()) ? "true" : "false";
+          } else if (field.key === "physicalOrPrintedCard") {
+            // CSV column is friendly-named, but the API field remains `isEpay`.
+            payload.isEpay = val;
           } else {
             payload[field.key] = val;
           }
