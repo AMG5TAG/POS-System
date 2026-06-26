@@ -1287,6 +1287,23 @@ export default function MarketingQRCodesPage() {
     });
   }, [history, historySearch]);
 
+  /* Lazy-render the saved list: show 10, then 10 more each time the sentinel
+     scrolls into view. Reset whenever the filtered set changes. */
+  const HISTORY_PAGE = 10;
+  const [historyVisible, setHistoryVisible] = useState(HISTORY_PAGE);
+  useEffect(() => { setHistoryVisible(HISTORY_PAGE); }, [historySearch, history.length]);
+  const historyHasMore = historyVisible < displayedHistory.length;
+  const historySentinelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const el = historySentinelRef.current;
+    if (!el || !historyHasMore) return;
+    const io = new IntersectionObserver((entries) => {
+      if (entries[0]?.isIntersecting) setHistoryVisible((c) => c + HISTORY_PAGE);
+    }, { rootMargin: "300px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, [historyHasMore, historyVisible]);
+
   const liveQrRef        = useRef<QRCodeStyling | null>(null);
   const liveContainerRef = useRef<HTMLDivElement>(null);
   const logoFileRef      = useRef<HTMLInputElement>(null);
@@ -1942,7 +1959,7 @@ export default function MarketingQRCodesPage() {
               <p className="text-xs text-muted-foreground py-6 text-center">No saved QR codes match “{historySearch}”.</p>
             ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-3">
-              {displayedHistory.map((entry) => {
+              {displayedHistory.slice(0, historyVisible).map((entry) => {
                 const typeMeta = QR_TYPES.find((t) => t.id === (entry.qrType ?? "website"));
                 return (
                   <Card key={entry.id}
@@ -1994,6 +2011,11 @@ export default function MarketingQRCodesPage() {
                 );
               })}
             </div>
+            )}
+            {historyHasMore && (
+              <div ref={historySentinelRef} className="flex items-center justify-center py-4 text-xs text-muted-foreground">
+                Loading more… ({historyVisible} of {displayedHistory.length})
+              </div>
             )}
           </div>
         )}
