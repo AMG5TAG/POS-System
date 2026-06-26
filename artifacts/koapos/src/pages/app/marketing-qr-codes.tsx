@@ -1573,6 +1573,22 @@ export default function MarketingQRCodesPage() {
                   <Label>Label <span className="text-muted-foreground font-normal text-xs">(optional)</span></Label>
                   <Input placeholder="e.g. Summer Sale 2026" value={label} onChange={(e) => setLabel(e.target.value)} />
                 </div>
+
+                {/* Colours */}
+                <div className="space-y-4 border-t pt-4">
+                  <Label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Colours</Label>
+                  <ColourRow label="Pattern color" value={settings.patternColor} swatches={darkSwatches} onChange={(v) => set("patternColor", v)} />
+                  <ColourRow label="Eye color" value={settings.eyeColor} swatches={darkSwatches} onChange={(v) => set("eyeColor", v)}
+                    onCopy={() => set("eyeColor", settings.patternColor)} copyLabel="Copy pattern color" />
+                  <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={darkSwatches} onChange={(v) => set("eyeDotColor", v)}
+                    onCopy={() => set("eyeDotColor", settings.patternColor)} copyLabel="Copy pattern color" />
+                  {!["standard", "circle"].includes(settings.template) && (
+                    <ColourRow label="Border color" value={settings.borderColor || settings.patternColor} swatches={darkSwatches}
+                      onChange={(v) => set("borderColor", v)}
+                      onCopy={() => set("borderColor", "")} copyLabel="Match pattern color" />
+                  )}
+                  <ColourRow label="Background color" value={settings.bgColor} swatches={lightSwatches} onChange={(v) => set("bgColor", v)} />
+                </div>
               </CardContent>
             </Card>
           </div>
@@ -1661,27 +1677,9 @@ export default function MarketingQRCodesPage() {
         {/* ── Styling controls ── */}
         <div className="space-y-4">
 
-          {/* Colours then Template — Template is full-width so its frames wrap
-              into ~two rows instead of a single horizontally-scrolling strip. */}
+          {/* Template — full-width so its frames wrap into ~two rows instead of a
+              single horizontally-scrolling strip. */}
           <div className="grid grid-cols-1 gap-4 items-start">
-            {/* Colors */}
-            <Card>
-              <CardHeader className="pb-3"><CardTitle className="text-base">Colours</CardTitle></CardHeader>
-              <CardContent className="space-y-4">
-                <ColourRow label="Pattern color" value={settings.patternColor} swatches={darkSwatches} onChange={(v) => set("patternColor", v)} />
-                <ColourRow label="Eye color" value={settings.eyeColor} swatches={darkSwatches} onChange={(v) => set("eyeColor", v)}
-                  onCopy={() => set("eyeColor", settings.patternColor)} copyLabel="Copy pattern color" />
-                <ColourRow label="Eye dot color" value={settings.eyeDotColor} swatches={darkSwatches} onChange={(v) => set("eyeDotColor", v)}
-                  onCopy={() => set("eyeDotColor", settings.patternColor)} copyLabel="Copy pattern color" />
-                {!["standard", "circle"].includes(settings.template) && (
-                  <ColourRow label="Border color" value={settings.borderColor || settings.patternColor} swatches={darkSwatches}
-                    onChange={(v) => set("borderColor", v)}
-                    onCopy={() => set("borderColor", "")} copyLabel="Match pattern color" />
-                )}
-                <ColourRow label="Background color" value={settings.bgColor} swatches={lightSwatches} onChange={(v) => set("bgColor", v)} />
-              </CardContent>
-            </Card>
-
             {/* Templates */}
             <Card>
               <CardHeader className="pb-3">
