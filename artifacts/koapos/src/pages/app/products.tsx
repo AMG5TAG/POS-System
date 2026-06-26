@@ -2268,7 +2268,7 @@ export default function ProductsPage() {
         if (!open && isDirtyProduct) { setPendingProductClose(true); return; }
         setDialogOpen(open);
       }}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle>
