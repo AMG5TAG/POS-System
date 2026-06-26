@@ -58,9 +58,9 @@ interface StickerEl {
   align?: "left" | "center" | "right";
   color?: string;
 }
-interface Layout { sizeId: string; bg: string; elements: StickerEl[]; }
+interface Layout { sizeId: string; bg: string; orientation?: "portrait" | "landscape"; elements: StickerEl[]; }
 
-const emptyLayout = (): Layout => ({ sizeId: DEFAULT_SIZE, bg: "#ffffff", elements: [] });
+const emptyLayout = (): Layout => ({ sizeId: DEFAULT_SIZE, bg: "#ffffff", orientation: "portrait", elements: [] });
 const uid = () => `el_${Math.random().toString(36).slice(2, 9)}`;
 
 function escapeHtml(s: string): string {
@@ -162,10 +162,15 @@ export default function MarketingStickersPage() {
   const selected = layout.elements.find((e) => e.id === selectedId) ?? null;
   const subs = useMemo(() => buildSubs({ businessName, abn: profile.abn ?? "", phone: merchantPhone, product, customer }), [businessName, profile.abn, merchantPhone, product, customer]);
 
-  /* Canvas scale: fit the label inside a ~320×360 box. */
-  const MAXW = 300, MAXH = 360;
-  const scale = Math.min(MAXW / size.widthMm, MAXH / size.heightMm);
-  const labelW = size.widthMm * scale, labelH = size.heightMm * scale;
+  /* Effective label dimensions — landscape swaps width/height. */
+  const landscape = layout.orientation === "landscape";
+  const effW = landscape ? size.heightMm : size.widthMm;
+  const effH = landscape ? size.widthMm : size.heightMm;
+
+  /* Canvas scale: fit the label inside a ~360×360 box. */
+  const MAXW = 360, MAXH = 360;
+  const scale = Math.min(MAXW / effW, MAXH / effH);
+  const labelW = effW * scale, labelH = effH * scale;
   const canvasRef = useRef<HTMLDivElement>(null);
 
   const update = (patch: Partial<Layout>) => setLayout((l) => ({ ...l, ...patch }));
@@ -222,7 +227,7 @@ export default function MarketingStickersPage() {
     if (!tpl) return;
     const f = tpl.fields as { layout?: Layout } | undefined;
     if (f?.layout?.elements) {
-      setLayout({ sizeId: f.layout.sizeId || tpl.sizeId || DEFAULT_SIZE, bg: f.layout.bg || "#ffffff", elements: f.layout.elements });
+      setLayout({ sizeId: f.layout.sizeId || tpl.sizeId || DEFAULT_SIZE, bg: f.layout.bg || "#ffffff", orientation: f.layout.orientation || "portrait", elements: f.layout.elements });
     } else {
       // Pull in a fixed-type Settings → Stickers template: stack its enabled fields as text.
       const fields = (tpl.fields ?? {}) as Record<string, unknown>;
@@ -276,9 +281,9 @@ export default function MarketingStickersPage() {
       }
     }
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
-      @page { size: ${size.widthMm}mm ${size.heightMm}mm; margin: 0; }
+      @page { size: ${effW}mm ${effH}mm; margin: 0; }
       html,body { margin:0; padding:0; }
-      .label { position:relative; width:${size.widthMm}mm; height:${size.heightMm}mm; overflow:hidden; background:${layout.bg}; font-family: system-ui, sans-serif; }
+      .label { position:relative; width:${effW}mm; height:${effH}mm; overflow:hidden; background:${layout.bg}; font-family: system-ui, sans-serif; }
     </style></head><body><div class="label">${parts.join("")}</div>
     <script>window.onload=function(){window.focus();window.print();}</script></body></html>`;
     const w = window.open("", "_blank");
@@ -346,7 +351,7 @@ export default function MarketingStickersPage() {
                     )}
                   </div>
                 </div>
-                <p className="text-center text-xs text-muted-foreground">{size.name} — {size.widthMm}×{size.heightMm}mm</p>
+                <p className="text-center text-xs text-muted-foreground">{size.name} — {effW}×{effH}mm {landscape ? "(horizontal)" : ""}</p>
               </CardContent>
             </Card>
           </div>
@@ -369,6 +374,13 @@ export default function MarketingStickersPage() {
                   ))}
                 </SelectContent>
               </Select>
+              <div className="space-y-1.5">
+                <Label className="text-xs text-muted-foreground">Orientation</Label>
+                <div className="grid grid-cols-2 gap-1.5">
+                  <Button type="button" size="sm" variant={!landscape ? "default" : "outline"} onClick={() => update({ orientation: "portrait" })}>Portrait</Button>
+                  <Button type="button" size="sm" variant={landscape ? "default" : "outline"} onClick={() => update({ orientation: "landscape" })}>Horizontal</Button>
+                </div>
+              </div>
               <div className="flex items-center gap-2">
                 <Label className="text-xs text-muted-foreground">Background</Label>
                 <input type="color" value={layout.bg} onChange={(e) => update({ bg: e.target.value })} className="h-7 w-10 rounded border cursor-pointer" />
