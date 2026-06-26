@@ -12,6 +12,7 @@ const DEFAULT_PRODUCT_TYPES: Array<{
   { name: "Service",  slug: "service",  sortOrder: 3, description: "Time-based or labour-based, non-shippable", trackStock: false, printCode: false, requiresShipping: false, hasVariants: false, isDigital: false, isService: true, isComposite: false },
   { name: "Composite", slug: "composite", sortOrder: 4, description: "Bundles or kits made from existing items, adjusting constituent stock", trackStock: true, printCode: false, requiresShipping: true, hasVariants: false, isDigital: false, isService: false, isComposite: true },
   { name: "Digital Code", slug: "digital_code", sortOrder: 5, description: "Digital product keys (game keys, software licences)", trackStock: true, printCode: true, requiresShipping: false, hasVariants: false, isDigital: true, isService: false, isComposite: false },
+  { name: "Time Card", slug: "time_card", sortOrder: 6, description: "Prepaid time sold to customers, started/paused/stopped on the dashboard", trackStock: false, printCode: false, requiresShipping: false, hasVariants: false, isDigital: false, isService: false, isComposite: false },
 ];
 
 async function main() {

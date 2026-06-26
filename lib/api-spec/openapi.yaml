@@ -5074,6 +5074,76 @@ paths:
         "204":
           description: Deleted
 
+  /time-card-sessions:
+    get:
+      operationId: listTimeCardSessions
+      tags: [time-card-sessions]
+      summary: List time card sessions
+      parameters:
+        - in: query
+          name: active
+          schema: { type: string }
+          description: "When 'true', only sessions that are not stopped"
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeCardSessionListResponse"
+    post:
+      operationId: createTimeCardSession
+      tags: [time-card-sessions]
+      summary: Create a time card session (from a sale)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeCardSessionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeCardSession"
+  /time-card-sessions/{id}:
+    patch:
+      operationId: updateTimeCardSession
+      tags: [time-card-sessions]
+      summary: Start, pause or stop a time card session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeCardSessionAction"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeCardSession"
+    delete:
+      operationId: deleteTimeCardSession
+      tags: [time-card-sessions]
+      summary: Delete a time card session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
   /pos-registers:
     get:
       operationId: listPosRegisters
@@ -9857,6 +9927,8 @@ components:
           type: ["string", "null"]
         notification:
           type: ["string", "null"]
+        timeCardMinutes:
+          type: ["integer", "null"]
         digitalCodesCount:
           type: ["integer", "null"]
         createdAt:
@@ -9953,6 +10025,8 @@ components:
           maxItems: 5
         notification:
           type: string
+        timeCardMinutes:
+          type: integer
 
     ProductUpdate:
       type: object
@@ -10010,6 +10084,8 @@ components:
           type: string
         notification:
           type: ["string", "null"]
+        timeCardMinutes:
+          type: integer
 
     ProductList:
       type: object
@@ -13233,6 +13309,53 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProductReturnAuth"
+        total: { type: integer }
+
+    TimeCardSession:
+      type: object
+      required: [id, merchantId, customerName, label, purchasedSeconds, status, elapsedSeconds, createdAt]
+      properties:
+        id:               { type: integer }
+        merchantId:       { type: integer }
+        transactionId:    { type: ["integer", "null"] }
+        productId:        { type: ["integer", "null"] }
+        customerId:       { type: ["integer", "null"] }
+        customerName:     { type: string }
+        label:            { type: string }
+        purchasedSeconds: { type: integer }
+        status:           { type: string }
+        elapsedSeconds:   { type: integer }
+        runningSince:     { type: ["string", "null"], format: date-time }
+        createdAt:        { type: string, format: date-time }
+        updatedAt:        { type: string, format: date-time }
+
+    TimeCardSessionInput:
+      type: object
+      required: [label, purchasedSeconds]
+      properties:
+        transactionId:    { type: integer }
+        productId:        { type: integer }
+        customerId:       { type: integer }
+        customerName:     { type: string }
+        label:            { type: string }
+        purchasedSeconds: { type: integer }
+
+    TimeCardSessionAction:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start, pause, stop]
+
+    TimeCardSessionListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeCardSession"
         total: { type: integer }
 
     PosRegister:

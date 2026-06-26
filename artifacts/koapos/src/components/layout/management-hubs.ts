@@ -93,6 +93,7 @@ export const PRODUCTS_HUB_TABS: HubTab[] = [
   { label: "Stickers",        href: "/management/products-inventory/stickers",                icon: Printer        },
   { label: "3D Prints",       href: "/management/products-inventory/3d-prints", icon: Cpu            },
   { label: "PC Builder",      href: "/management/products-inventory/pc-builder",  icon: HardDrive      },
+  { label: "Time Cards",      href: "/management/products-inventory/time-cards",  icon: Clock          },
 ];
 
 export const SETTINGS_HUB_TABS: HubTab[] = [

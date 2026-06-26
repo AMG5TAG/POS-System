@@ -426,6 +426,7 @@ export const ListProductsResponse = zod.object({
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
   "notification": zod.string().nullish(),
+  "timeCardMinutes": zod.number().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -465,7 +466,8 @@ export const CreateProductBody = zod.object({
   "supplierCode": zod.string().optional(),
   "isEpay": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(createProductBodyTagsMax).optional(),
-  "notification": zod.string().optional()
+  "notification": zod.string().optional(),
+  "timeCardMinutes": zod.number().optional()
 })
 
 
@@ -558,6 +560,7 @@ export const GetProductResponse = zod.object({
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
   "notification": zod.string().nullish(),
+  "timeCardMinutes": zod.number().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -598,7 +601,8 @@ export const UpdateProductBody = zod.object({
   "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional(),
   "stockLocation": zod.string().optional(),
   "overflowLocation": zod.string().optional(),
-  "notification": zod.string().nullish()
+  "notification": zod.string().nullish(),
+  "timeCardMinutes": zod.number().optional()
 })
 
 export const updateProductResponseTagsMax = 5;
@@ -645,6 +649,7 @@ export const UpdateProductResponse = zod.object({
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
   "notification": zod.string().nullish(),
+  "timeCardMinutes": zod.number().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -6628,6 +6633,82 @@ export const UpdateProductReturnAuthResponse = zod.object({
  * @summary Delete return authorisation
  */
 export const DeleteProductReturnAuthParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List time card sessions
+ */
+export const ListTimeCardSessionsQueryParams = zod.object({
+  "active": zod.coerce.string().optional().describe('When \'true\', only sessions that are not stopped')
+})
+
+export const ListTimeCardSessionsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "transactionId": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "label": zod.string(),
+  "purchasedSeconds": zod.number(),
+  "status": zod.string(),
+  "elapsedSeconds": zod.number(),
+  "runningSince": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create a time card session (from a sale)
+ */
+export const CreateTimeCardSessionBody = zod.object({
+  "transactionId": zod.number().optional(),
+  "productId": zod.number().optional(),
+  "customerId": zod.number().optional(),
+  "customerName": zod.string().optional(),
+  "label": zod.string(),
+  "purchasedSeconds": zod.number()
+})
+
+
+/**
+ * @summary Start, pause or stop a time card session
+ */
+export const UpdateTimeCardSessionParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateTimeCardSessionBody = zod.object({
+  "action": zod.enum(['start', 'pause', 'stop'])
+})
+
+export const UpdateTimeCardSessionResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "transactionId": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "customerId": zod.number().nullish(),
+  "customerName": zod.string(),
+  "label": zod.string(),
+  "purchasedSeconds": zod.number(),
+  "status": zod.string(),
+  "elapsedSeconds": zod.number(),
+  "runningSince": zod.coerce.date().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date().optional()
+})
+
+
+/**
+ * @summary Delete a time card session
+ */
+export const DeleteTimeCardSessionParams = zod.object({
   "id": zod.coerce.number()
 })
 

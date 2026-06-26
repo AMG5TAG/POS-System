@@ -25,6 +25,7 @@ import {
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   useGetPosFavourites, useUpdatePosFavourites,
   useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
+  useCreateTimeCardSession, getListTimeCardSessionsQueryKey,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse, customFetch,
@@ -903,6 +904,7 @@ export default function POSPage() {
     );
   }, [appointments, linkQuery]);
   const createTransactionMutation      = useCreateTransaction();
+  const createTimeCardSessionMutation  = useCreateTimeCardSession();
   const validateGiftCardMutation       = useValidateGiftCard();
   const recordInvoicePaymentMutation   = useRecordInvoicePayment();
 
@@ -2470,6 +2472,32 @@ export default function POSPage() {
         s.txCount = (s.txCount ?? 0) + 1;
         setSessionSnap(s);
         saveRegisterSession(s);
+      }
+    } catch { /* ignore */ }
+    // Time Cards: each sold "time_card" line spins up a timer (status "ready")
+    // that staff start from the dashboard / POS Time Cards screen.
+    try {
+      const custName = snap.customer
+        ? `${snap.customer.firstName ?? ""} ${snap.customer.lastName ?? ""}`.trim() || "Walk-in"
+        : "Walk-in";
+      for (const item of snap.cart) {
+        const ep = item.product as Product & { timeCardMinutes?: number | null };
+        if (ep.productType !== "time_card") continue;
+        const perCardSeconds = Math.max(0, (ep.timeCardMinutes ?? 0) * 60);
+        if (perCardSeconds <= 0) continue;
+        const purchasedSeconds = perCardSeconds * item.quantity;
+        void createTimeCardSessionMutation.mutateAsync({
+          data: {
+            transactionId: data.id,
+            productId: ep.id,
+            customerId: snap.customer?.id,
+            customerName: custName,
+            label: ep.name,
+            purchasedSeconds,
+          },
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: getListTimeCardSessionsQueryKey() });
+        }).catch(() => { /* non-fatal: sale already completed */ });
       }
     } catch { /* ignore */ }
     setCompletedCart(snap.cart);

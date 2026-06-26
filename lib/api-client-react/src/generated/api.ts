@@ -211,6 +211,7 @@ import type {
   ListSocialFeedPostsParams,
   ListStaffTimesheetsParams,
   ListSuppliersParams,
+  ListTimeCardSessionsParams,
   ListTradeInAsStockBody,
   ListTransactionsParams,
   ListWastageParams,
@@ -452,6 +453,10 @@ import type {
   TestEmailSettings200,
   TestSms200,
   TestSmsBody,
+  TimeCardSession,
+  TimeCardSessionAction,
+  TimeCardSessionInput,
+  TimeCardSessionListResponse,
   TopProduct,
   TradeInInput,
   TradeInList,
@@ -19215,6 +19220,303 @@ export const useDeleteProductReturnAuth = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeleteProductReturnAuthMutationOptions(options));
+    }
+
+export const getListTimeCardSessionsUrl = (params?: ListTimeCardSessionsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/time-card-sessions?${stringifiedParams}` : `/api/time-card-sessions`
+}
+
+/**
+ * @summary List time card sessions
+ */
+export const listTimeCardSessions = async (params?: ListTimeCardSessionsParams, options?: RequestInit): Promise<TimeCardSessionListResponse> => {
+
+  return customFetch<TimeCardSessionListResponse>(getListTimeCardSessionsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListTimeCardSessionsQueryKey = (params?: ListTimeCardSessionsParams,) => {
+    return [
+    `/api/time-card-sessions`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListTimeCardSessionsQueryOptions = <TData = Awaited<ReturnType<typeof listTimeCardSessions>>, TError = ErrorType<unknown>>(params?: ListTimeCardSessionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimeCardSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListTimeCardSessionsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listTimeCardSessions>>> = ({ signal }) => listTimeCardSessions(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listTimeCardSessions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListTimeCardSessionsQueryResult = NonNullable<Awaited<ReturnType<typeof listTimeCardSessions>>>
+export type ListTimeCardSessionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List time card sessions
+ */
+
+export function useListTimeCardSessions<TData = Awaited<ReturnType<typeof listTimeCardSessions>>, TError = ErrorType<unknown>>(
+ params?: ListTimeCardSessionsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listTimeCardSessions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListTimeCardSessionsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateTimeCardSessionUrl = () => {
+
+
+
+
+  return `/api/time-card-sessions`
+}
+
+/**
+ * @summary Create a time card session (from a sale)
+ */
+export const createTimeCardSession = async (timeCardSessionInput: TimeCardSessionInput, options?: RequestInit): Promise<TimeCardSession> => {
+
+  return customFetch<TimeCardSession>(getCreateTimeCardSessionUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timeCardSessionInput,)
+  }
+);}
+
+
+
+
+export const getCreateTimeCardSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTimeCardSession>>, TError,{data: BodyType<TimeCardSessionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createTimeCardSession>>, TError,{data: BodyType<TimeCardSessionInput>}, TContext> => {
+
+const mutationKey = ['createTimeCardSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createTimeCardSession>>, {data: BodyType<TimeCardSessionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createTimeCardSession(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateTimeCardSessionMutationResult = NonNullable<Awaited<ReturnType<typeof createTimeCardSession>>>
+    export type CreateTimeCardSessionMutationBody = BodyType<TimeCardSessionInput>
+    export type CreateTimeCardSessionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Create a time card session (from a sale)
+ */
+export const useCreateTimeCardSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createTimeCardSession>>, TError,{data: BodyType<TimeCardSessionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createTimeCardSession>>,
+        TError,
+        {data: BodyType<TimeCardSessionInput>},
+        TContext
+      > => {
+      return useMutation(getCreateTimeCardSessionMutationOptions(options));
+    }
+
+export const getUpdateTimeCardSessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/time-card-sessions/${id}`
+}
+
+/**
+ * @summary Start, pause or stop a time card session
+ */
+export const updateTimeCardSession = async (id: number,
+    timeCardSessionAction: TimeCardSessionAction, options?: RequestInit): Promise<TimeCardSession> => {
+
+  return customFetch<TimeCardSession>(getUpdateTimeCardSessionUrl(id),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      timeCardSessionAction,)
+  }
+);}
+
+
+
+
+export const getUpdateTimeCardSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTimeCardSession>>, TError,{id: number;data: BodyType<TimeCardSessionAction>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateTimeCardSession>>, TError,{id: number;data: BodyType<TimeCardSessionAction>}, TContext> => {
+
+const mutationKey = ['updateTimeCardSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateTimeCardSession>>, {id: number;data: BodyType<TimeCardSessionAction>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateTimeCardSession(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateTimeCardSessionMutationResult = NonNullable<Awaited<ReturnType<typeof updateTimeCardSession>>>
+    export type UpdateTimeCardSessionMutationBody = BodyType<TimeCardSessionAction>
+    export type UpdateTimeCardSessionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Start, pause or stop a time card session
+ */
+export const useUpdateTimeCardSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateTimeCardSession>>, TError,{id: number;data: BodyType<TimeCardSessionAction>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateTimeCardSession>>,
+        TError,
+        {id: number;data: BodyType<TimeCardSessionAction>},
+        TContext
+      > => {
+      return useMutation(getUpdateTimeCardSessionMutationOptions(options));
+    }
+
+export const getDeleteTimeCardSessionUrl = (id: number,) => {
+
+
+
+
+  return `/api/time-card-sessions/${id}`
+}
+
+/**
+ * @summary Delete a time card session
+ */
+export const deleteTimeCardSession = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteTimeCardSessionUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteTimeCardSessionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTimeCardSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteTimeCardSession>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteTimeCardSession'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteTimeCardSession>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteTimeCardSession(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteTimeCardSessionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteTimeCardSession>>>
+
+    export type DeleteTimeCardSessionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Delete a time card session
+ */
+export const useDeleteTimeCardSession = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteTimeCardSession>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteTimeCardSession>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteTimeCardSessionMutationOptions(options));
     }
 
 export const getListPosRegistersUrl = () => {

@@ -74,6 +74,7 @@ const POS_SUBNAV = [
   { name: "Refund",    href: "/pos/refund",     icon: RotateCcw },
   { name: "Cash",      href: "/pos/cash",       icon: Coins },
   { name: "End of Day", href: "/pos/eod",       icon: Moon },
+  { name: "Time Cards", href: "/pos/time-cards", icon: Clock },
 ];
 
 const CUSTOMERS_SUBNAV = [

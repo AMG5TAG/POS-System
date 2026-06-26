@@ -119,6 +119,8 @@ type ProductForm = {
   /* warranty offered from sale date — duration is a number, unit is months/years */
   warrantyDuration: string;
   warrantyUnit: string;
+  /* time card — prepaid minutes the card grants (time_card type only) */
+  timeCardMinutes: string;
   /* group pricing */
   groupPrices: Record<string, string>;
   /* digital code */
@@ -144,18 +146,19 @@ const defaultForm: ProductForm = {
   notification: "",
   warrantyDuration: "",
   warrantyUnit: "months",
+  timeCardMinutes: "",
   groupPrices: {},
   isEpay: false,
   stockLocationDisplay: "",
   stockLocationOverflow: "",
 };
 
-const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean; hideForTimeCard?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "media",         label: "Media"         },
   { key: "pricing",       label: "Pricing"       },
-  { key: "stock",         label: "Stock",         hideForDigitalCode: true },
-  { key: "compatibility", label: "Compatibility", hideForService: true },
+  { key: "stock",         label: "Stock",         hideForDigitalCode: true, hideForTimeCard: true },
+  { key: "compatibility", label: "Compatibility", hideForService: true, hideForTimeCard: true },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
   { key: "variants",      label: "Variants",     variantOnly: true },
@@ -1481,6 +1484,10 @@ export default function ProductsPage() {
         return d ? String(d) : "";
       })(),
       warrantyUnit: (ep as Product & { warrantyUnit?: string | null }).warrantyUnit ?? "months",
+      timeCardMinutes: (() => {
+        const m = (ep as Product & { timeCardMinutes?: number | null }).timeCardMinutes;
+        return m ? String(m) : "";
+      })(),
       groupPrices: Object.fromEntries(
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
@@ -1530,6 +1537,7 @@ export default function ProductsPage() {
       notification: form.notification,
       warrantyDuration: form.warrantyDuration ? parseInt(form.warrantyDuration) || 0 : 0,
       warrantyUnit: form.warrantyUnit === "years" ? "years" : "months",
+      timeCardMinutes: form.timeCardMinutes ? parseInt(form.timeCardMinutes) || 0 : 0,
       // Every customer group always gets a price so downstream features never
       // see a blank: a manually-typed value wins, otherwise the group's rule
       // price, otherwise the standard sell price.
@@ -1707,11 +1715,12 @@ export default function ProductsPage() {
   /* The tabs applicable to the current product type — the single source of
      truth for both the tab bar and Next/Previous navigation, so navigation can
      never land on a tab that isn't shown. */
-  const visibleFormTabs = FORM_TABS.filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode }) =>
+  const visibleFormTabs = FORM_TABS.filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode, hideForTimeCard }) =>
     (!digitalCodeOnly   || form.productType === "digital_code") &&
     (!variantOnly       || form.productType === "variant") &&
     (!hideForService    || form.productType !== "service") &&
-    (!hideForDigitalCode || form.productType !== "digital_code")
+    (!hideForDigitalCode || form.productType !== "digital_code") &&
+    (!hideForTimeCard   || form.productType !== "time_card")
   );
 
   /* If the active tab stops being applicable (e.g. after changing the product
@@ -2339,6 +2348,7 @@ export default function ProductsPage() {
                       autoFocus
                     />
                   </div>
+                  {form.productType !== "time_card" && (
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Description</Label>
                     <Textarea
@@ -2349,6 +2359,7 @@ export default function ProductsPage() {
                       className="mt-1.5 resize-none"
                     />
                   </div>
+                  )}
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Product Type</Label>
                     {productTypesList.length > 0 ? (
@@ -2396,6 +2407,34 @@ export default function ProductsPage() {
                       </div>
                     )}
                   </div>
+                  {form.productType === "time_card" && (
+                    <div className="col-span-2">
+                      <Label className="text-xs text-muted-foreground">Time Granted</Label>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Input
+                          type="number" min="0" className="w-24"
+                          value={Math.floor((parseInt(form.timeCardMinutes) || 0) / 60) || ""}
+                          onChange={(e) => {
+                            const h = parseInt(e.target.value) || 0;
+                            const m = (parseInt(form.timeCardMinutes) || 0) % 60;
+                            setField("timeCardMinutes", String(h * 60 + m));
+                          }}
+                        />
+                        <span className="text-sm text-muted-foreground">hours</span>
+                        <Input
+                          type="number" min="0" max="59" className="w-24"
+                          value={(parseInt(form.timeCardMinutes) || 0) % 60 || ""}
+                          onChange={(e) => {
+                            const m = parseInt(e.target.value) || 0;
+                            const h = Math.floor((parseInt(form.timeCardMinutes) || 0) / 60);
+                            setField("timeCardMinutes", String(h * 60 + m));
+                          }}
+                        />
+                        <span className="text-sm text-muted-foreground">minutes</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">Prepaid time this card grants. Sold at the POS, it starts a timer on the dashboard.</p>
+                    </div>
+                  )}
                   <div>
                     <Label className="text-xs text-muted-foreground">SKU Code</Label>
                     <div className="flex gap-1.5 mt-1.5">
@@ -2543,6 +2582,7 @@ export default function ProductsPage() {
                 )}
 
                 {/* Warranty — printed on receipts/invoices and tracked under Products > Warranty */}
+                {form.productType !== "time_card" && (
                 <div className="border-t pt-4">
                   <SectionHeader label="Warranty" />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -2566,6 +2606,7 @@ export default function ProductsPage() {
                     </Select>
                   </div>
                 </div>
+                )}
 
                 {/* Physical details — only for standard products */}
                 {form.productType === "standard" && (
@@ -2615,6 +2656,7 @@ export default function ProductsPage() {
             {formTab === "pricing" && (
               <div className="py-5 space-y-6">
                 {/* Supplier */}
+                {form.productType !== "time_card" && (
                 <div>
                   <SectionHeader label="Supplier" />
                   <div className="mt-3 grid grid-cols-2 gap-4">
@@ -2637,6 +2679,7 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Standard pricing */}
                 <div className="border-t pt-5">

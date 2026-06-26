@@ -113,6 +113,7 @@ function formatProduct(
     notification: p.notification ?? null,
     warrantyDuration: p.warrantyDuration ?? 0,
     warrantyUnit: p.warrantyUnit ?? "months",
+    timeCardMinutes: p.timeCardMinutes ?? 0,
     createdAt: p.createdAt.toISOString(),
   };
 }

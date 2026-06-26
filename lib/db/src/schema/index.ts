@@ -60,6 +60,7 @@ export * from "./contact-sync-links";
 export * from "./product-recalls";
 export * from "./product-pre-orders";
 export * from "./product-return-auths";
+export * from "./time-card-sessions";
 export * from "./pos-registers";
 export * from "./pos-settings";
 export * from "./layby-settings";

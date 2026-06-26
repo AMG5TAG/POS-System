@@ -55,6 +55,8 @@ const ProductsStocktakePage = lazyWithRetry(() => import("@/pages/app/products-s
 const ProductsPurchaseOrdersPage = lazyWithRetry(() => import("@/pages/app/products-purchase-orders"));
 const ProductsPreOrdersPage = lazyWithRetry(() => import("@/pages/app/products-pre-orders"));
 const ProductsReturnAuthPage = lazyWithRetry(() => import("@/pages/app/products-return-auth"));
+const POSTimeCardsPage = lazyWithRetry(() => import("@/pages/app/pos-time-cards"));
+const ManagementTimeCardsPage = lazyWithRetry(() => import("@/pages/app/management-time-cards"));
 const ProductsSuppliersPage = lazyWithRetry(() => import("@/pages/app/products-suppliers"));
 const ProductsBrandsPage = lazyWithRetry(() => import("@/pages/app/products-brands"));
 const ProductsCategoriesPage = lazyWithRetry(() => import("@/pages/app/products-categories"));
@@ -360,6 +362,9 @@ function Router() {
       <Route path="/pos/eod">
         <ProtectedRoute component={PosEodPage} />
       </Route>
+      <Route path="/pos/time-cards">
+        <ProtectedRoute component={POSTimeCardsPage} />
+      </Route>
       <Route path="/pos/sell">
         <ProtectedRoute component={POSPage} />
       </Route>
@@ -563,6 +568,9 @@ function Router() {
       </Route>
       <Route path="/management/products-inventory/pc-builder">
         <ManagementProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
+      </Route>
+      <Route path="/management/products-inventory/time-cards">
+        <ManagementProtectedRoute component={ManagementTimeCardsPage} />
       </Route>
 
       {/* Staff & Operations */}

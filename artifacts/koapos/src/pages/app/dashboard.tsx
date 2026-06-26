@@ -3,6 +3,7 @@ import { BirthdayBanner } from "@/components/birthday-banner";
 import { SecurityAlertBanner } from "@/components/security-alert-banner";
 import { AppLayout } from "@/components/layout/app-layout";
 import { DashboardClockBar } from "@/components/dashboard/DashboardClockBar";
+import { ActiveTimeCardWidget } from "@/components/dashboard/ActiveTimeCardWidget";
 import { ServiceJobsTiles } from "@/components/dashboard/ServiceJobsTiles";
 import { DashboardPanels } from "@/components/dashboard/DashboardPanels";
 import { DashboardCalendar } from "@/components/dashboard/DashboardCalendar";
@@ -89,6 +90,7 @@ export default function DashboardPage() {
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}
         />
+        <ActiveTimeCardWidget />
 
         {isLoading ? (
           <div className="space-y-6">

@@ -591,6 +591,8 @@ export interface Product {
   /** @nullable */
   notification?: string | null;
   /** @nullable */
+  timeCardMinutes?: number | null;
+  /** @nullable */
   digitalCodesCount?: number | null;
   createdAt: string;
 }
@@ -654,6 +656,7 @@ export interface ProductInput {
   /** @maxItems 5 */
   tags?: string[];
   notification?: string;
+  timeCardMinutes?: number;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -690,6 +693,7 @@ export interface ProductUpdate {
   overflowLocation?: string;
   /** @nullable */
   notification?: string | null;
+  timeCardMinutes?: number;
 }
 
 export interface ProductList {
@@ -3373,6 +3377,53 @@ export interface ProductReturnAuthInput {
 
 export interface ProductReturnAuthListResponse {
   items: ProductReturnAuth[];
+  total: number;
+}
+
+export interface TimeCardSession {
+  id: number;
+  merchantId: number;
+  /** @nullable */
+  transactionId?: number | null;
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  customerId?: number | null;
+  customerName: string;
+  label: string;
+  purchasedSeconds: number;
+  status: string;
+  elapsedSeconds: number;
+  /** @nullable */
+  runningSince?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface TimeCardSessionInput {
+  transactionId?: number;
+  productId?: number;
+  customerId?: number;
+  customerName?: string;
+  label: string;
+  purchasedSeconds: number;
+}
+
+export type TimeCardSessionActionAction = typeof TimeCardSessionActionAction[keyof typeof TimeCardSessionActionAction];
+
+
+export const TimeCardSessionActionAction = {
+  start: 'start',
+  pause: 'pause',
+  stop: 'stop',
+} as const;
+
+export interface TimeCardSessionAction {
+  action: TimeCardSessionActionAction;
+}
+
+export interface TimeCardSessionListResponse {
+  items: TimeCardSession[];
   total: number;
 }
 
@@ -6254,6 +6305,13 @@ status?: string;
 export type ListProductReturnAuthsParams = {
 search?: string;
 status?: string;
+};
+
+export type ListTimeCardSessionsParams = {
+/**
+ * When 'true', only sessions that are not stopped
+ */
+active?: string;
 };
 
 export type UpdateShippingCarrierBody = {
