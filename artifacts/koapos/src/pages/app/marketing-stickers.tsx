@@ -313,9 +313,9 @@ export default function MarketingStickersPage() {
           </div>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-[1fr_320px] gap-6 items-start">
-          {/* ── Canvas + toolbar ── */}
-          <div className="space-y-4">
+        <div className="space-y-6">
+          {/* ── Canvas + toolbar (full width) ── */}
+          <div>
             <Card>
               <CardContent className="p-4 space-y-3">
                 <div className="flex flex-wrap items-center gap-2">
@@ -356,8 +356,8 @@ export default function MarketingStickersPage() {
             </Card>
           </div>
 
-          {/* ── Side panel ── */}
-          <div className="space-y-4">
+          {/* ── Options, evenly distributed below the builder ── */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-4 items-start">
             {/* Label size */}
             <Card><CardContent className="p-4 space-y-3">
               <Label className="text-xs font-semibold">Label size</Label>
