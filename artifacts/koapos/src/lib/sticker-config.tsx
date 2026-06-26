@@ -202,15 +202,15 @@ export const STICKER_TYPES: StickerType[] = [
     label: "Return",
     icon: RotateCcw,
     color: "text-amber-500",
-    description: "Return authorisation labels for incoming goods",
+    description: "Supplier return (RMA) labels for goods sent back to suppliers",
     defaultSize: "S0722520",
     fields: [
-      { key: "showReturnNo",  label: "Return #",       defaultValue: "true", type: "toggle" },
+      { key: "showReturnNo",  label: "RMA #",          defaultValue: "true", type: "toggle" },
       { key: "showDate",      label: "Date",           defaultValue: "true", type: "toggle" },
       { key: "showItem",      label: "Item",           defaultValue: "true", type: "toggle" },
       { key: "showReason",    label: "Reason",         defaultValue: "true", type: "toggle" },
       { key: "showStatus",    label: "Status",         defaultValue: "true", type: "toggle" },
-      { key: "showCustomer",  label: "Customer",       defaultValue: "true", type: "toggle" },
+      { key: "showCustomer",  label: "Supplier",       defaultValue: "true", type: "toggle" },
       { key: "showBarcode",   label: "Barcode",        defaultValue: "false", type: "toggle" },
       { key: "showBizName",   label: "Business Name",  defaultValue: "true", type: "toggle" },
     ],
@@ -734,7 +734,7 @@ export function LabelPreview({
           <>
             {show("showReturnNo") && (
               <div className="font-bold" style={{ color: danger, fontSize: pSize("showReturnNo", 2.8, 7) }}>
-                RETURN {f("returnNo") || "RTN-0089"}
+                RMA {f("returnNo") || "RMA-0089"}
               </div>
             )}
             {show("showItem") && (
@@ -752,7 +752,7 @@ export function LabelPreview({
               <div className="text-gray-400" style={{ fontSize: pSize("showDate", 2.8, 6) }}>{f("date") || "18/05/2026"}</div>
             )}
             {show("showCustomer") && (
-              <div className="text-gray-500 truncate" style={{ fontSize: pSize("showCustomer", 2.8, 6) }}>{f("customer") || "Sarah Johnson"}</div>
+              <div className="text-gray-500 truncate" style={{ fontSize: pSize("showCustomer", 2.8, 6) }}>{f("customer") || "Acme Wholesale"}</div>
             )}
             {show("showBizName") && (
               <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>

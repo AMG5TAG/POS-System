@@ -6553,11 +6553,14 @@ export const ListProductReturnAuthsResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "raNumber": zod.string(),
-  "customerId": zod.number().nullish(),
-  "customerName": zod.string(),
-  "reason": zod.string().nullish(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string(),
   "items": zod.string(),
-  "refundAmount": zod.number(),
+  "quantity": zod.number(),
+  "reason": zod.string().nullish(),
+  "returnType": zod.string().nullish(),
+  "supplierRmaNumber": zod.string().nullish(),
+  "trackingNumber": zod.string().nullish(),
   "status": zod.string(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()
@@ -6570,11 +6573,14 @@ export const ListProductReturnAuthsResponse = zod.object({
  * @summary Create return authorisation
  */
 export const CreateProductReturnAuthBody = zod.object({
-  "customerId": zod.number().optional(),
-  "customerName": zod.string(),
-  "reason": zod.string().optional(),
+  "supplierId": zod.number().optional(),
+  "supplierName": zod.string(),
   "items": zod.string(),
-  "refundAmount": zod.number().optional(),
+  "quantity": zod.number().optional(),
+  "reason": zod.string().optional(),
+  "returnType": zod.string().optional(),
+  "supplierRmaNumber": zod.string().optional(),
+  "trackingNumber": zod.string().optional(),
   "status": zod.string().optional(),
   "notes": zod.string().optional()
 })
@@ -6588,11 +6594,14 @@ export const UpdateProductReturnAuthParams = zod.object({
 })
 
 export const UpdateProductReturnAuthBody = zod.object({
-  "customerId": zod.number().optional(),
-  "customerName": zod.string(),
-  "reason": zod.string().optional(),
+  "supplierId": zod.number().optional(),
+  "supplierName": zod.string(),
   "items": zod.string(),
-  "refundAmount": zod.number().optional(),
+  "quantity": zod.number().optional(),
+  "reason": zod.string().optional(),
+  "returnType": zod.string().optional(),
+  "supplierRmaNumber": zod.string().optional(),
+  "trackingNumber": zod.string().optional(),
   "status": zod.string().optional(),
   "notes": zod.string().optional()
 })
@@ -6601,11 +6610,14 @@ export const UpdateProductReturnAuthResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "raNumber": zod.string(),
-  "customerId": zod.number().nullish(),
-  "customerName": zod.string(),
-  "reason": zod.string().nullish(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string(),
   "items": zod.string(),
-  "refundAmount": zod.number(),
+  "quantity": zod.number(),
+  "reason": zod.string().nullish(),
+  "returnType": zod.string().nullish(),
+  "supplierRmaNumber": zod.string().nullish(),
+  "trackingNumber": zod.string().nullish(),
   "status": zod.string(),
   "notes": zod.string().nullish(),
   "createdAt": zod.coerce.date()

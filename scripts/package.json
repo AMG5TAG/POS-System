@@ -24,6 +24,7 @@
     "add-overview-year-mode": "tsx ./src/add-overview-year-mode.ts",
     "add-payment-surcharges": "tsx ./src/add-payment-surcharges.ts",
     "add-marketing-events-table": "tsx ./src/add-marketing-events-table.ts",
+    "repurpose-return-auths-supplier-rma": "tsx ./src/repurpose-return-auths-supplier-rma.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

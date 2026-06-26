@@ -13193,31 +13193,37 @@ components:
 
     ProductReturnAuth:
       type: object
-      required: [id, merchantId, raNumber, customerName, items, refundAmount, status, createdAt]
+      required: [id, merchantId, raNumber, supplierName, items, quantity, status, createdAt]
       properties:
-        id:           { type: integer }
-        merchantId:   { type: integer }
-        raNumber:     { type: string }
-        customerId:   { type: integer, nullable: true }
-        customerName: { type: string }
-        reason:       { type: string, nullable: true }
-        items:        { type: string }
-        refundAmount: { type: number }
-        status:       { type: string }
-        notes:        { type: string, nullable: true }
-        createdAt:    { type: string, format: date-time }
+        id:                { type: integer }
+        merchantId:        { type: integer }
+        raNumber:          { type: string }
+        supplierId:        { type: integer, nullable: true }
+        supplierName:      { type: string }
+        items:             { type: string }
+        quantity:          { type: integer }
+        reason:            { type: string, nullable: true }
+        returnType:        { type: string, nullable: true }
+        supplierRmaNumber: { type: string, nullable: true }
+        trackingNumber:    { type: string, nullable: true }
+        status:            { type: string }
+        notes:             { type: string, nullable: true }
+        createdAt:         { type: string, format: date-time }
 
     ProductReturnAuthInput:
       type: object
-      required: [customerName, items]
+      required: [supplierName, items]
       properties:
-        customerId:   { type: integer }
-        customerName: { type: string }
-        reason:       { type: string }
-        items:        { type: string }
-        refundAmount: { type: number }
-        status:       { type: string }
-        notes:        { type: string }
+        supplierId:        { type: integer }
+        supplierName:      { type: string }
+        items:             { type: string }
+        quantity:          { type: integer }
+        reason:            { type: string }
+        returnType:        { type: string }
+        supplierRmaNumber: { type: string }
+        trackingNumber:    { type: string }
+        status:            { type: string }
+        notes:             { type: string }
 
     ProductReturnAuthListResponse:
       type: object

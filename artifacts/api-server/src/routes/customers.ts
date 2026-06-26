@@ -5,7 +5,7 @@ import {
   transactionsTable, appointmentsTable, serviceJobsTable,
   laybysTable, invoicesTable, parkedSalesTable,
   formSubmissionsTable, marketingAutomationLogTable,
-  emailCampaignsTable, productPreOrdersTable, productReturnAuthsTable,
+  emailCampaignsTable, productPreOrdersTable,
   merchantsTable, staffTable,
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull, inArray } from "drizzle-orm";
@@ -787,8 +787,6 @@ async function executeMergePair(
       .where(and(eq(parkedSalesTable.customerId, secondaryId), eq(parkedSalesTable.merchantId, merchantId)));
     await tx.update(productPreOrdersTable).set({ customerId: primaryId })
       .where(eq(productPreOrdersTable.customerId, secondaryId));
-    await tx.update(productReturnAuthsTable).set({ customerId: primaryId })
-      .where(eq(productReturnAuthsTable.customerId, secondaryId));
 
     // Step B: Service / intake / attachments / forms
     await tx.update(serviceJobsTable).set({ customerId: primaryId })

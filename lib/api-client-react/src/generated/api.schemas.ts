@@ -3345,22 +3345,28 @@ export interface ProductReturnAuth {
   id: number;
   merchantId: number;
   raNumber: string;
-  customerId?: number | null;
-  customerName: string;
-  reason?: string | null;
+  supplierId?: number | null;
+  supplierName: string;
   items: string;
-  refundAmount: number;
+  quantity: number;
+  reason?: string | null;
+  returnType?: string | null;
+  supplierRmaNumber?: string | null;
+  trackingNumber?: string | null;
   status: string;
   notes?: string | null;
   createdAt: string;
 }
 
 export interface ProductReturnAuthInput {
-  customerId?: number;
-  customerName: string;
-  reason?: string;
+  supplierId?: number;
+  supplierName: string;
   items: string;
-  refundAmount?: number;
+  quantity?: number;
+  reason?: string;
+  returnType?: string;
+  supplierRmaNumber?: string;
+  trackingNumber?: string;
   status?: string;
   notes?: string;
 }
