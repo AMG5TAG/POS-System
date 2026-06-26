@@ -10201,6 +10201,8 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
         dateOfBirth:
           type: ["string", "null"]
         loyaltyPoints:
@@ -10278,6 +10280,8 @@ components:
           type: string
         notes:
           type: string
+        photoUrl:
+          type: string
         dateOfBirth:
           type: string
         company:
@@ -10337,6 +10341,8 @@ components:
         address:
           type: string
         notes:
+          type: string
+        photoUrl:
           type: string
         dateOfBirth:
           type: string

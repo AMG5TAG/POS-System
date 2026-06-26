@@ -750,6 +750,8 @@ export interface Customer {
   /** @nullable */
   notes?: string | null;
   /** @nullable */
+  photoUrl?: string | null;
+  /** @nullable */
   dateOfBirth?: string | null;
   loyaltyPoints?: number;
   totalSpent?: number;
@@ -812,6 +814,7 @@ export interface CustomerInput {
   phone?: string;
   address?: string;
   notes?: string;
+  photoUrl?: string;
   dateOfBirth?: string;
   company?: string;
   abn?: string;
@@ -844,6 +847,7 @@ export interface CustomerUpdate {
   phone?: string;
   address?: string;
   notes?: string;
+  photoUrl?: string;
   dateOfBirth?: string;
   company?: string;
   abn?: string;

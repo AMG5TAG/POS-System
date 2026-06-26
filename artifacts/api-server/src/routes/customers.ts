@@ -115,6 +115,7 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     phone: c.phone ?? null,
     address: c.address ?? null,
     notes: c.notes ?? null,
+    photoUrl: c.photoUrl ?? null,
     dateOfBirth: c.dateOfBirth ?? null,
     loyaltyPoints: c.loyaltyPoints,
     totalSpent: parseFloat(c.totalSpent),

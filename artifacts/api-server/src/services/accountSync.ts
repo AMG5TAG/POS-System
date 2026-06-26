@@ -12,8 +12,32 @@ import { db, customersTable, customerNotesTable, appointmentsTable, contactSyncL
 import { eq, and, desc, gte } from "drizzle-orm";
 import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "./microsoftToken";
 import { getValidGoogleToken, GoogleNotConnectedError } from "./googleToken";
+import { ObjectStorageService } from "../lib/objectStorage";
 
 const MS_CONTACTS_SCOPE = "Contacts.ReadWrite Calendars.ReadWrite offline_access";
+
+const objectStorage = new ObjectStorageService();
+
+/* Read a customer's profile picture and return raw bytes + content type, whether
+   it lives in our object storage (/api/storage/objects/...) or at an external URL.
+   Returns null on any failure so a missing/broken photo never breaks the sync. */
+async function readPhotoBytes(photoUrl: string): Promise<{ buf: Buffer; contentType: string } | null> {
+  try {
+    if (/^https?:\/\//i.test(photoUrl)) {
+      const r = await fetch(photoUrl);
+      if (!r.ok) return null;
+      return { buf: Buffer.from(await r.arrayBuffer()), contentType: r.headers.get("content-type") || "image/jpeg" };
+    }
+    const objectPath = photoUrl.replace(/^\/api\/storage/, "");
+    if (!objectPath.startsWith("/objects/")) return null;
+    const file = await objectStorage.getObjectEntityFile(objectPath);
+    const [buf] = await file.download();
+    const [md] = await file.getMetadata().catch(() => [{ contentType: "image/jpeg" }] as const);
+    return { buf, contentType: (md as { contentType?: string }).contentType || "image/jpeg" };
+  } catch {
+    return null;
+  }
+}
 
 export type SyncProvider = "google_contacts" | "microsoft_contacts";
 export type DuplicateStrategy = "overwrite" | "skip";
@@ -297,6 +321,34 @@ export async function syncContacts(
     return { ok: true, status: r.status, ref: { id: ref.id } };
   };
 
+  /* Push the customer's profile picture to the remote contact's photo. Contact
+     photos aren't part of the create/update body, so each provider needs a
+     dedicated call. Best-effort — failures are logged, never fatal. */
+  const syncPhoto = async (c: Customer, ref: ContactRef): Promise<void> => {
+    if (!c.photoUrl) return;
+    const photo = await readPhotoBytes(c.photoUrl);
+    if (!photo) return;
+    try {
+      if (provider === "google_contacts") {
+        if (!ref.resourceName) return;
+        await fetch(`https://people.googleapis.com/v1/${ref.resourceName}:updateContactPhoto`, {
+          method: "POST",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ photoBytes: photo.buf.toString("base64") }),
+        });
+      } else {
+        if (!ref.id) return;
+        await fetch(`https://graph.microsoft.com/v1.0/me/contacts/${ref.id}/photo/$value`, {
+          method: "PUT",
+          headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": photo.contentType },
+          body: photo.buf,
+        });
+      }
+    } catch (err) {
+      logger.warn({ merchantId, provider, err, customerId: c.id }, "Contact photo sync failed");
+    }
+  };
+
   // Brand-new customers → create the contact, then remember it so it is never
   // re-created on a later sync.
   for (const { c } of fresh) {
@@ -306,7 +358,7 @@ export async function syncContacts(
       if (r.ok) {
         created++;
         if (includeNotes && notesText) notesSynced++;
-        if (r.ref) await upsertLink(c.id, r.ref);
+        if (r.ref) { await upsertLink(c.id, r.ref); await syncPhoto(c, r.ref); }
       } else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact create failed"); failed++; }
     } catch (err) {
       logger.warn({ merchantId, provider, err, email: c.email }, "Contact create threw");
@@ -323,6 +375,7 @@ export async function syncContacts(
         updated++;
         if (includeNotes && notesText) notesSynced++;
         await upsertLink(c.id, r.ref ?? ref!);
+        await syncPhoto(c, r.ref ?? ref!);
       } else { logger.warn({ merchantId, provider, status: r.status, email: c.email }, "Contact update failed"); failed++; }
     } catch (err) {
       logger.warn({ merchantId, provider, err, email: c.email }, "Contact update threw");

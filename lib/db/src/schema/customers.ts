@@ -12,6 +12,8 @@ export const customersTable = pgTable("customers", {
   phone: text("phone"),
   address: text("address"),
   notes: text("notes"),
+  // Profile picture (storage URL); synced to Google/Outlook contact photos.
+  photoUrl: text("photo_url"),
   dateOfBirth: date("date_of_birth"),
   loyaltyPoints: doublePrecision("loyalty_points").notNull().default(0),
   totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).notNull().default("0"),

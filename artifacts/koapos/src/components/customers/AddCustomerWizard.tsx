@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
 import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
+import { ImageUploader } from "@/components/ui/image-uploader";
 
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
@@ -47,6 +48,7 @@ type CustomerForm = {
   shippingPostcode: string; shippingCountry: string;
   customerGroup: string; warningNote: string; agreedToMarketing: boolean; notes: string;
   heardFrom: string; heardFromDetails: string; referredByCustomerId: string;
+  photoUrl: string;
 };
 
 const defaultForm: CustomerForm = {
@@ -60,6 +62,7 @@ const defaultForm: CustomerForm = {
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: true, notes: "",
   heardFrom: "", heardFromDetails: "", referredByCustomerId: "",
+  photoUrl: "",
 };
 
 const WIZARD_STEPS: StepperStep[] = [
@@ -140,6 +143,7 @@ export function AddCustomerWizard({
         agreedToMarketing: c.agreedToMarketing === "true", notes: c.notes || "",
         heardFrom: c.heardFrom || "", heardFromDetails: c.heardFromDetails || "",
         referredByCustomerId: c.referredByCustomerId ? String(c.referredByCustomerId) : "",
+        photoUrl: (c as Customer & { photoUrl?: string | null }).photoUrl || "",
       };
     } else {
       const parts = (prefillName ?? "").trim().split(/\s+/).filter(Boolean);
@@ -182,6 +186,7 @@ export function AddCustomerWizard({
     heardFrom: form.heardFrom || undefined,
     heardFromDetails: form.heardFromDetails || undefined,
     referredByCustomerId: form.referredByCustomerId ? Number(form.referredByCustomerId) : undefined,
+    photoUrl: form.photoUrl || undefined,
   });
 
   const inv = () => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
@@ -241,6 +246,19 @@ export function AddCustomerWizard({
         <div className="space-y-4 pb-2">
           {step === "personal" && (
             <>
+              <div className="flex items-start gap-4">
+                <div className="w-24 shrink-0">
+                  <ImageUploader
+                    value={form.photoUrl}
+                    onChange={(url) => setField("photoUrl", url)}
+                    aspectRatio="square"
+                    label="Profile picture"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground pt-6">
+                  Optional. Synced to the customer's photo on Google &amp; Outlook contacts when contact sync is connected.
+                </p>
+              </div>
               <FieldRow>
                 <Field label="First Name">
                   <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" />

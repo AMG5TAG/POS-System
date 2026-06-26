@@ -92,6 +92,7 @@ type CustomerForm = {
   shippingStreet: string; shippingCity: string; shippingState: string;
   shippingPostcode: string; shippingCountry: string;
   customerGroup: string; warningNote: string; agreedToMarketing: boolean; notes: string;
+  photoUrl: string;
 };
 
 /* ─── Merge note helpers ─────────────────────────────────────────────────── */
@@ -136,6 +137,7 @@ const defaultForm: CustomerForm = {
   shippingStreet: "", shippingCity: "", shippingState: "",
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: false, notes: "",
+  photoUrl: "",
 };
 
 /* ─── Duplicate detection engine ─────────────────────────────────────────── */
