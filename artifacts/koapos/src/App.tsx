@@ -135,6 +135,7 @@ const ManagementAIPage = lazyWithRetry(() => import("@/pages/app/management-ai")
 
 const MarketingPage = lazyWithRetry(() => import("@/pages/app/marketing"));
 const MarketingQRCodesPage = lazyWithRetry(() => import("@/pages/app/marketing-qr-codes"));
+const MarketingStickersPage = lazyWithRetry(() => import("@/pages/app/marketing-stickers"));
 const MarketingShortlinksPage = lazyWithRetry(() => import("@/pages/app/marketing-shortlinks"));
 const MarketingLandingPagesPage = lazyWithRetry(() => import("@/pages/app/marketing-landing-pages"));
 const MarketingEmailCampaignsPage = lazyWithRetry(() => import("@/pages/app/marketing-email-campaigns"));
@@ -754,6 +755,9 @@ function Router() {
       {/* Marketing section */}
       <Route path="/marketing/overview">
         <ProtectedRoute component={MarketingPage} />
+      </Route>
+      <Route path="/marketing/stickers">
+        <ProtectedRoute component={MarketingStickersPage} />
       </Route>
       <Route path="/marketing/email">
         <Redirect to="/marketing/email/campaigns" />

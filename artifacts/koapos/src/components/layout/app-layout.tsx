@@ -18,7 +18,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift, Trophy,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
+  Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles, Sticker,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
   CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
 } from "lucide-react";
@@ -128,6 +128,7 @@ const MARKETING_SUBNAV: NavItem[] = [
   },
   { name: "Automation",    href: "/marketing/automation",       icon: Zap },
   { name: "Referrals",     href: "/marketing/referrals",        icon: UserPlus },
+  { name: "Stickers",      href: "/marketing/stickers",         icon: Sticker },
 ];
 
 const INVENTORY_SUBNAV = [
