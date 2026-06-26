@@ -311,12 +311,6 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
   const { startDate, endDate } = parsed.data;
   const merchantId = req.session.merchantId!;
 
-  // ePay / digital top-up products are pass-through (you don't hold them as
-  // stock), so they don't belong in cost of goods — a large ePay catalogue would
-  // otherwise dominate sold COGS. Scoped to the isEpay product flag only, so a
-  // physical product that merely carries an "ePay" supplier name still counts.
-  const notEpay = sql`COALESCE(p.is_epay, 'false') <> 'true'`;
-
   const [cogsRows, poRows, soldRows] = await Promise.all([
     db.execute<{ month: string; cogs_pos: string; cogs_invoice: string; cogs_layby: string }>(sql`
       WITH cogs AS (
@@ -324,30 +318,24 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
           SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)) AS cogs
         FROM transactions t
         CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) AS item
-        LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
         WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
           AND (t.created_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
-          AND ${notEpay}
         GROUP BY 1, 2
         UNION ALL
         SELECT to_char((i.paid_at)::date, 'YYYY-MM'), 'invoice',
           SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0))
         FROM invoices i
         CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
-        LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
         WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
           AND (i.paid_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
-          AND ${notEpay}
         GROUP BY 1, 2
         UNION ALL
         SELECT to_char((COALESCE(l.completed_at, l.updated_at))::date, 'YYYY-MM'), 'layby',
           SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0))
         FROM laybys l
         CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
-        LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
         WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
           AND (COALESCE(l.completed_at, l.updated_at))::date BETWEEN ${startDate}::date AND ${endDate}::date
-          AND ${notEpay}
         GROUP BY 1, 2
       )
       SELECT month,
@@ -389,7 +377,6 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
         LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = t.merchant_id
         WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
           AND (t.created_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
-          AND ${notEpay}
         UNION ALL
         SELECT p.supplier,
           (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)
@@ -398,7 +385,6 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
         LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
         WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
           AND (i.paid_at)::date BETWEEN ${startDate}::date AND ${endDate}::date
-          AND ${notEpay}
         UNION ALL
         SELECT p.supplier,
           (item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)
@@ -407,7 +393,6 @@ router.get("/reports/cost-of-goods", requireAuth, requireManagerOrOwner, async (
         LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
         WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
           AND (COALESCE(l.completed_at, l.updated_at))::date BETWEEN ${startDate}::date AND ${endDate}::date
-          AND ${notEpay}
       ) x
       GROUP BY 1
     `),
