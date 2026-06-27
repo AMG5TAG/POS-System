@@ -11,6 +11,9 @@ import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import crypto from "node:crypto";
 import {
   RecordInvoicePaymentBody,
+  ReverseInvoicePaymentBody,
+  ReverseInvoicePaymentParams,
+  ReverseInvoicePaymentResponse,
   AddInvoiceEventBody,
   SendInvoiceEmailBody,
   ListInvoicesQueryParams,
@@ -105,7 +108,35 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; idempotencyKey?: string };
+type InvoiceEvent = { id?: string; type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; reverses?: string; idempotencyKey?: string };
+
+// A planned instalment on an invoice's payment schedule. Coverage is derived
+// from amountPaid, so only the plan (label/amount/dueDate) is stored.
+type Instalment = { label?: string | null; amount: number; dueDate?: string | null };
+
+/* Normalise a client-supplied payment schedule into the stored shape, dropping
+   malformed entries. Returns null when there's nothing usable so the column
+   stays empty rather than holding an empty array. */
+function sanitizeSchedule(input: unknown): Instalment[] | null {
+  if (!Array.isArray(input)) return null;
+  const out: Instalment[] = [];
+  for (const raw of input) {
+    const r = raw as { label?: unknown; amount?: unknown; dueDate?: unknown };
+    const amount = round2(Number(r?.amount));
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    let dueDate: string | null = null;
+    if (typeof r.dueDate === "string" && r.dueDate.trim() !== "") {
+      const d = new Date(r.dueDate);
+      dueDate = Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    out.push({
+      label: typeof r.label === "string" && r.label.trim() !== "" ? r.label.trim() : null,
+      amount,
+      dueDate,
+    });
+  }
+  return out.length ? out : null;
+}
 
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -148,6 +179,7 @@ function fmt(
     discountTotal: inv.discountTotal  ? parseFloat(inv.discountTotal)  : null,
     items: (inv.items as LineItem[] | null) ?? [],
     events: (inv.events as InvoiceEvent[] | null) ?? [],
+    paymentSchedule: (inv.paymentSchedule as Instalment[] | null) ?? null,
     dueDate: inv.dueDate?.toISOString() ?? null,
     paidAt: inv.paidAt?.toISOString() ?? null,
     viewedAt: inv.viewedAt?.toISOString() ?? null,
@@ -194,8 +226,10 @@ async function completeLinkedRecords(merchantId: number, serviceJobId?: number |
   }
 }
 
-/** Credit loyalty points/value to a customer when an invoice is fully settled. */
-async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: number, customerId: number, invoiceTotal: number) {
+/** Credit (sign +1) or claw back (sign -1) loyalty points/value for an invoice.
+ *  Clawback mirrors the original credit so reversing a paid invoice removes
+ *  exactly what settling it awarded. */
+async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: number, customerId: number, invoiceTotal: number, sign: 1 | -1 = 1) {
   if (invoiceTotal <= 0) return;
   const [loyaltyRow] = await executor
     .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
@@ -239,7 +273,7 @@ async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: num
   if (earned > 0) {
     await executor
       .update(customersTable)
-      .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
+      .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} + ${earned * sign})` })
       .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
   }
 }
@@ -422,6 +456,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     invoiceDigits,
     recurring,
     discount: discountInput,
+    paymentSchedule,
     serviceJobId,
     appointmentId,
   } = bodyParsed.data;
@@ -467,6 +502,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     discountValue: discountInput?.value != null ? String(discountInput.value) : null,
     discountTotal: discountAmount > 0 ? String(discountAmount) : null,
     items: lines.length ? lines : null,
+    paymentSchedule: sanitizeSchedule(paymentSchedule),
     // dueDate / recurringStartDate columns are timestamps — they must be Date
     // objects, not the raw "YYYY-MM-DD" strings from the client.
     dueDate: dueDate ? new Date(dueDate) : null,
@@ -557,7 +593,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const { id } = paramsResult.data;
   const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
-  const { status, notes, dueDate, customerId, items, recurring, discount, serviceJobId, appointmentId } = bodyParsed.data;
+  const { status, notes, dueDate, customerId, items, recurring, discount, paymentSchedule, serviceJobId, appointmentId } = bodyParsed.data;
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
@@ -601,6 +637,9 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     updates.discountType  = discountInput?.type ?? null;
     updates.discountValue = discountInput?.value != null ? String(discountInput.value) : null;
     updates.discountTotal = discountAmount > 0 ? String(discountAmount) : null;
+  }
+  if (paymentSchedule !== undefined) {
+    updates.paymentSchedule = sanitizeSchedule(paymentSchedule);
   }
   if (recurring !== undefined) {
     updates.isRecurring = recurring?.enabled ? "true" : "false";
@@ -712,7 +751,8 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     res.status(400).json({ error: bodyParsed.error.message });
     return;
   }
-  const { amount, method, payments, giftCardPayment, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
+  const { amount, method, payments, giftCardPayment, note: rawNote, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
+  const note = typeof rawNote === "string" && rawNote.trim() !== "" ? rawNote.trim() : undefined;
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
@@ -831,15 +871,17 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     const settleNote = fullyPaid
       ? `— paid in full`
       : `— balance $${balance.toFixed(2)} remaining`;
+    const noteSuffix = note ? ` — ${note}` : "";
     const legEvents: InvoiceEvent[] = legs.map((leg, i) => {
       // Surcharge applies to single-method payments only (a split's legs aren't
       // surcharged, matching the POS terminal), so the amount collected stays in
       // sync with what the UI shows.
       const legSurcharge = isSplit ? 0 : surchargeForLeg(surchargeMap, leg.method, leg.amount);
       return {
+        id: crypto.randomUUID(),
         type: "payment",
         timestamp: ts,
-        detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${legSurcharge > 0 ? ` + $${legSurcharge.toFixed(2)} surcharge` : ""}`,
+        detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${legSurcharge > 0 ? ` + $${legSurcharge.toFixed(2)} surcharge` : ""}${i === 0 ? noteSuffix : ""}`,
         amount: leg.amount,
         ...(legSurcharge > 0 ? { surchargeAmount: legSurcharge } : {}),
         ...(leg.method ? { method: leg.method } : {}),
@@ -907,6 +949,116 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   const paymentBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
   assertValidInvoiceResponse(RecordInvoicePaymentResponse, paymentBody, "POST /invoices/:id/payment");
   res.json(paymentBody);
+});
+
+// POST /invoices/:id/payment/reverse — reverse or correct a recorded payment
+router.post("/invoices/:id/payment/reverse", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = ReverseInvoicePaymentParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+  const bodyParsed = ReverseInvoicePaymentBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { amount: rawAmount, eventId, reason } = bodyParsed.data;
+  const reverseAmount = round2(Number(rawAmount));
+  if (!Number.isFinite(reverseAmount) || reverseAmount <= 0) {
+    res.status(400).json({ error: "A positive reversal amount is required" });
+    return;
+  }
+
+  let notFound = false;
+  let payErrorStatus = 0;
+  let payErrorMessage = "";
+  // Read-modify-write under a row lock, mirroring the payment route, so a
+  // reversal can't race a concurrent payment and corrupt amountPaid / status.
+  await db.transaction(async (tx) => {
+    const [cur] = await tx
+      .select({
+        total: invoicesTable.total,
+        amountPaid: invoicesTable.amountPaid,
+        status: invoicesTable.status,
+        customerId: invoicesTable.customerId,
+        events: invoicesTable.events,
+        items: invoicesTable.items,
+      })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
+      .for("update");
+    if (!cur) { notFound = true; return; }
+
+    const total = parseFloat(cur.total ?? "0");
+    const prevPaid = parseFloat(cur.amountPaid ?? "0");
+    if (prevPaid <= 0) { payErrorStatus = 400; payErrorMessage = "This invoice has no recorded payments to reverse"; return; }
+    if (reverseAmount > prevPaid + 0.005) { payErrorStatus = 400; payErrorMessage = "Reversal exceeds the amount paid"; return; }
+
+    const newPaid = round2(Math.max(0, prevPaid - reverseAmount));
+    const wasFullyPaid = prevPaid >= total - 0.005;
+    const stillFullyPaid = newPaid >= total - 0.005;
+    // Revert to "partial" while a balance remains; once nothing's paid, drop back
+    // to "sent" (the invoice had been issued to collect payment).
+    const newStatus = stillFullyPaid ? "paid" : newPaid > 0 ? "partial" : "sent";
+
+    // The reversed leg's method, when we can resolve it, makes the trail read
+    // naturally ("Visa payment reversed") and lets reporting net it off by method.
+    const existingEvents = (cur.events as InvoiceEvent[] | null) ?? [];
+    const reversedLeg = eventId ? existingEvents.find((e) => e.id === eventId) : undefined;
+    const ts = new Date().toISOString();
+    const detail = `Payment of $${reverseAmount.toFixed(2)} reversed${reversedLeg?.method ? ` (${reversedLeg.method})` : ""}${reason ? ` — ${reason}` : ""}`;
+    const reversalEvent: InvoiceEvent = {
+      id: crypto.randomUUID(),
+      type: "payment-reversal",
+      timestamp: ts,
+      detail,
+      amount: -reverseAmount,
+      ...(reversedLeg?.method ? { method: reversedLeg.method } : {}),
+      ...(eventId ? { reverses: eventId } : {}),
+    };
+
+    await tx
+      .update(invoicesTable)
+      .set({
+        amountPaid: String(newPaid),
+        status: newStatus,
+        paidAt: stillFullyPaid ? new Date() : null,
+        events: [...existingEvents, reversalEvent],
+      })
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+
+    // Leaving the fully-paid state un-does the same side effects settling it
+    // applied: restore stock, back out lifetime spend, and claw back loyalty.
+    if (wasFullyPaid && !stillFullyPaid) {
+      await applyInvoiceStock(tx, merchantId, cur.items, 1);
+      await applyInvoiceCustomerSpend(tx, merchantId, cur.customerId, total, -1);
+      if (cur.customerId) {
+        await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total, -1);
+      }
+    }
+  });
+
+  if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (payErrorStatus) { res.status(payErrorStatus).json({ error: payErrorMessage }); return; }
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  const reverseBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(ReverseInvoicePaymentResponse, reverseBody, "POST /invoices/:id/payment/reverse");
+  res.json(reverseBody);
 });
 
 // DELETE /invoices/:id
@@ -1029,6 +1181,9 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     fontFamily:             tplRow?.fontFamily || null,
     styleVariant:           tplRow?.selectedStyle || null,
     showCustomerQr:         Boolean(tplOpts.showCustomerQr),
+    showCustomQr:           Boolean(tplOpts.showCustomQr),
+    customQrImage:          (tplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (tplOpts.customQrCaption as string | undefined) || null,
     showLoyaltyEarned:      Boolean(tplOpts.showLoyaltyEarned),
     showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
     showBarcode:            Boolean(tplOpts.showBarcode),
@@ -1223,6 +1378,9 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     socialLinks:            tpl.socialLinks ?? (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
     fontFamily:             emailTplRow?.fontFamily || null,
     styleVariant:           emailTplRow?.selectedStyle || null,
+    showCustomQr:           Boolean(emailTplOpts.showCustomQr),
+    customQrImage:          (emailTplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (emailTplOpts.customQrCaption as string | undefined) || null,
   });
 
   // Embed a 1×1 tracking pixel so viewedAt is set when the customer opens the email

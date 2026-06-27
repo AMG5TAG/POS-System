@@ -65,6 +65,10 @@ export interface InvoiceDocOptions {
   showAllCustomerDetails?: boolean;
   /** Show the customer-profile QR panel (needs `customerQrDataUrl`). */
   showCustomerQr?: boolean;
+  /** Show a merchant-supplied custom QR (needs `customQrDataUrl`). */
+  showCustomQr?: boolean;
+  /** Caption shown under the custom QR. */
+  customQrCaption?: string | null;
   /** Show the green "Loyalty Earned" banner (needs `loyaltyPointsEarned`). */
   showLoyaltyEarned?: boolean;
   /** Show accepted payment-method chips (needs `paymentMethods`). */
@@ -122,6 +126,8 @@ export interface InvoiceDocInput {
   paymentMethods?: string[] | null;
   /** Pre-rendered customer-profile QR (data URL), shown when showCustomerQr. */
   customerQrDataUrl?: string | null;
+  /** Merchant-supplied custom QR image (data/https URL), shown when showCustomQr. */
+  customQrDataUrl?: string | null;
   /** Pre-rendered barcode (data URL), shown when showBarcode. */
   barcodeDataUrl?: string | null;
   referralCode?: string | null;
@@ -344,6 +350,15 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
     ? `<div class="barcode"><img src="${esc(input.barcodeDataUrl)}" alt="barcode" /></div>`
     : "";
 
+  // ── Custom QR (merchant-supplied image) ──
+  const customQrSrc = input.customQrDataUrl && /^(https?:|data:image\/)/.test(input.customQrDataUrl) ? input.customQrDataUrl : "";
+  const customQrHtml = (opts.showCustomQr && customQrSrc)
+    ? `<div class="custom-qr">
+        <img src="${esc(customQrSrc)}" alt="custom qr" />
+        ${opts.customQrCaption ? `<div class="custom-qr-cap">${esc(opts.customQrCaption)}</div>` : ""}
+      </div>`
+    : "";
+
   // ── Referral ──
   const referralHtml = opts.showReferralLink
     ? `<div class="referral">
@@ -422,6 +437,10 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
     .barcode { text-align: center; margin-top: 18px; }
     .barcode img { height: 46px; max-width: 70%; object-fit: contain; }
 
+    .custom-qr { text-align: center; margin-top: 18px; }
+    .custom-qr img { width: 96px; height: 96px; object-fit: contain; border: 1px solid #e5e7eb; border-radius: 6px; padding: 4px; }
+    .custom-qr-cap { font-size: 11px; color: #6b7280; margin-top: 6px; }
+
     .referral { border-top: 1px solid #e5e7eb; margin-top: 16px; padding-top: 12px; text-align: center; font-size: 11px; color: #6b7280; line-height: 1.7; }
     .referral .mono { font-family: 'Courier New', monospace; font-size: 10px; color: #9ca3af; }
 
@@ -477,6 +496,7 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
   ${notesHtml}
   ${footerHtml}
   ${barcodeHtml}
+  ${customQrHtml}
   ${referralHtml}
 
 </div></div>

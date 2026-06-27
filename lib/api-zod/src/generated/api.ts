@@ -1219,6 +1219,8 @@ export const getCustomerHistoryResponseInvoicesItemItemsItemTaxRateMax = 100;
 
 export const getCustomerHistoryResponseInvoicesItemItemsItemCostPriceMin = 0;
 
+export const getCustomerHistoryResponseInvoicesItemPaymentScheduleItemAmountMin = 0;
+
 
 
 export const GetCustomerHistoryResponse = zod.object({
@@ -1384,13 +1386,20 @@ export const GetCustomerHistoryResponse = zod.object({
   "costPrice": zod.number().min(getCustomerHistoryResponseInvoicesItemItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(getCustomerHistoryResponseInvoicesItemPaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
@@ -10350,6 +10359,8 @@ export const listInvoicesResponseItemsItemItemsItemTaxRateMax = 100;
 
 export const listInvoicesResponseItemsItemItemsItemCostPriceMin = 0;
 
+export const listInvoicesResponseItemsItemPaymentScheduleItemAmountMin = 0;
+
 
 
 export const ListInvoicesResponse = zod.object({
@@ -10375,13 +10386,20 @@ export const ListInvoicesResponse = zod.object({
   "costPrice": zod.number().min(listInvoicesResponseItemsItemItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(listInvoicesResponseItemsItemPaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
@@ -10415,6 +10433,8 @@ export const createInvoiceBodyItemsItemTaxRateMax = 100;
 
 export const createInvoiceBodyItemsItemCostPriceMin = 0;
 
+export const createInvoiceBodyPaymentScheduleItemAmountMin = 0;
+
 
 
 export const CreateInvoiceBody = zod.object({
@@ -10441,6 +10461,11 @@ export const CreateInvoiceBody = zod.object({
   "startDate": zod.coerce.date().nullish(),
   "occurrences": zod.number().optional()
 }).optional(),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(createInvoiceBodyPaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "serviceJobId": zod.number().nullish(),
   "appointmentId": zod.number().nullish()
 })
@@ -10461,6 +10486,8 @@ export const getInvoiceResponseItemsItemTaxRateMin = 0;
 export const getInvoiceResponseItemsItemTaxRateMax = 100;
 
 export const getInvoiceResponseItemsItemCostPriceMin = 0;
+
+export const getInvoiceResponsePaymentScheduleItemAmountMin = 0;
 
 
 
@@ -10486,13 +10513,20 @@ export const GetInvoiceResponse = zod.object({
   "costPrice": zod.number().min(getInvoiceResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(getInvoiceResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
@@ -10528,6 +10562,8 @@ export const updateInvoiceBodyItemsItemTaxRateMax = 100;
 
 export const updateInvoiceBodyItemsItemCostPriceMin = 0;
 
+export const updateInvoiceBodyPaymentScheduleItemAmountMin = 0;
+
 
 
 export const UpdateInvoiceBody = zod.object({
@@ -10553,6 +10589,11 @@ export const UpdateInvoiceBody = zod.object({
   "startDate": zod.string().nullish(),
   "occurrences": zod.number().optional()
 }).nullish(),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(updateInvoiceBodyPaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "serviceJobId": zod.number().nullish(),
   "appointmentId": zod.number().nullish()
 })
@@ -10565,6 +10606,8 @@ export const updateInvoiceResponseItemsItemTaxRateMin = 0;
 export const updateInvoiceResponseItemsItemTaxRateMax = 100;
 
 export const updateInvoiceResponseItemsItemCostPriceMin = 0;
+
+export const updateInvoiceResponsePaymentScheduleItemAmountMin = 0;
 
 
 
@@ -10590,13 +10633,20 @@ export const UpdateInvoiceResponse = zod.object({
   "costPrice": zod.number().min(updateInvoiceResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(updateInvoiceResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
@@ -10640,6 +10690,8 @@ export const markInvoiceViewedResponseItemsItemTaxRateMax = 100;
 
 export const markInvoiceViewedResponseItemsItemCostPriceMin = 0;
 
+export const markInvoiceViewedResponsePaymentScheduleItemAmountMin = 0;
+
 
 
 export const MarkInvoiceViewedResponse = zod.object({
@@ -10664,13 +10716,20 @@ export const MarkInvoiceViewedResponse = zod.object({
   "costPrice": zod.number().min(markInvoiceViewedResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(markInvoiceViewedResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
@@ -10712,6 +10771,7 @@ export const RecordInvoicePaymentBody = zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
 }).optional(),
+  "note": zod.string().optional(),
   "idempotencyKey": zod.string().optional()
 })
 
@@ -10723,6 +10783,8 @@ export const recordInvoicePaymentResponseItemsItemTaxRateMin = 0;
 export const recordInvoicePaymentResponseItemsItemTaxRateMax = 100;
 
 export const recordInvoicePaymentResponseItemsItemCostPriceMin = 0;
+
+export const recordInvoicePaymentResponsePaymentScheduleItemAmountMin = 0;
 
 
 
@@ -10748,13 +10810,105 @@ export const RecordInvoicePaymentResponse = zod.object({
   "costPrice": zod.number().min(recordInvoicePaymentResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(recordInvoicePaymentResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Reverse or correct a recorded payment against an invoice
+ */
+export const ReverseInvoicePaymentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const reverseInvoicePaymentBodyAmountMin = 0;
+
+
+
+export const ReverseInvoicePaymentBody = zod.object({
+  "amount": zod.number().min(reverseInvoicePaymentBodyAmountMin),
+  "eventId": zod.string().optional(),
+  "reason": zod.string().optional()
+})
+
+export const reverseInvoicePaymentResponseItemsItemQuantityMin = 0.0001;
+
+export const reverseInvoicePaymentResponseItemsItemUnitPriceMin = 0;
+
+export const reverseInvoicePaymentResponseItemsItemTaxRateMin = 0;
+export const reverseInvoicePaymentResponseItemsItemTaxRateMax = 100;
+
+export const reverseInvoicePaymentResponseItemsItemCostPriceMin = 0;
+
+export const reverseInvoicePaymentResponsePaymentScheduleItemAmountMin = 0;
+
+
+
+export const ReverseInvoicePaymentResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(reverseInvoicePaymentResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(reverseInvoicePaymentResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(reverseInvoicePaymentResponseItemsItemTaxRateMin).max(reverseInvoicePaymentResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(reverseInvoicePaymentResponseItemsItemCostPriceMin).nullish()
+})),
+  "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(reverseInvoicePaymentResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),
@@ -10832,6 +10986,8 @@ export const addInvoiceEventResponseItemsItemTaxRateMax = 100;
 
 export const addInvoiceEventResponseItemsItemCostPriceMin = 0;
 
+export const addInvoiceEventResponsePaymentScheduleItemAmountMin = 0;
+
 
 
 export const AddInvoiceEventResponse = zod.object({
@@ -10856,13 +11012,20 @@ export const AddInvoiceEventResponse = zod.object({
   "costPrice": zod.number().min(addInvoiceEventResponseItemsItemCostPriceMin).nullish()
 })),
   "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
   "type": zod.string(),
   "timestamp": zod.coerce.date(),
   "detail": zod.string().nullish(),
   "method": zod.string().nullish(),
   "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
   "idempotencyKey": zod.string().nullish()
 })),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(addInvoiceEventResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
   "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "paidAt": zod.coerce.date().nullish(),

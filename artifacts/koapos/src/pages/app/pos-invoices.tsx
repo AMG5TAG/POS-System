@@ -6,6 +6,7 @@ import {
   useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings,
   useListInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice,
   useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
+  useRecordInvoicePayment, useReverseInvoicePayment,
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
   getInvoicePdf, type Transaction,
   useListServiceJobs, useListAppointments,
@@ -82,7 +83,8 @@ async function compressForPdf(
 
 type InvStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number; productId?: number | null; costPrice?: number | null };
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
+type InvoiceEvent = { id?: string | null; type: string; timestamp: string; detail?: string; method?: string; amount?: number | null; reverses?: string | null };
+type Instalment = { label?: string | null; amount: number; dueDate?: string | null };
 type DiscountType = "fixed" | "percent";
 type Invoice = {
   id: number;
@@ -103,6 +105,7 @@ type Invoice = {
   discountTotal: number | null;
   items: LineItem[];
   events: InvoiceEvent[];
+  paymentSchedule: Instalment[] | null;
   dueDate: string | null;
   paidAt: string | null;
   viewedAt: string | null;
@@ -127,6 +130,122 @@ const STATUS_COLORS: Record<InvStatus, "default" | "secondary" | "destructive" |
 const STATUS_LABELS: Record<InvStatus, string> = {
   draft: "Draft", sent: "Sent", paid: "Paid", partial: "Partially Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
+
+/* Derive each instalment's coverage from the invoice's single amountPaid total,
+   filling instalments in order (FIFO). Avoids tracking per-instalment payments —
+   amountPaid stays the one source of truth. */
+type InstalmentCoverage = Instalment & { covered: number; status: "paid" | "partial" | "due" };
+function instalmentCoverage(schedule: Instalment[], amountPaid: number): InstalmentCoverage[] {
+  let remaining = Math.max(0, amountPaid);
+  return schedule.map((inst) => {
+    const covered = Math.min(remaining, inst.amount);
+    remaining = Math.max(0, remaining - inst.amount);
+    const status = covered >= inst.amount - 0.005 ? "paid" : covered > 0 ? "partial" : "due";
+    return { ...inst, covered, status };
+  });
+}
+
+/* Editor for an invoice's planned instalment schedule. Used in both the create
+   and edit forms. The schedule is purely a plan — payments are still recorded
+   against the single amountPaid total. */
+function ScheduleEditor({ schedule, setSchedule, total }: {
+  schedule: Instalment[];
+  setSchedule: (s: Instalment[]) => void;
+  total: number;
+}) {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const sum = round2(schedule.reduce((s, i) => s + (Number(i.amount) || 0), 0));
+  const diff = round2(total - sum);
+
+  const splitEqually = (n: number) => {
+    if (n < 1 || total <= 0) { setSchedule([]); return; }
+    const each = Math.floor((total / n) * 100) / 100;
+    const rows: Instalment[] = [];
+    let acc = 0;
+    for (let k = 0; k < n; k++) {
+      const amount = k === n - 1 ? round2(total - acc) : each;
+      acc = round2(acc + amount);
+      rows.push({ label: `Instalment ${k + 1}`, amount, dueDate: null });
+    }
+    setSchedule(rows);
+  };
+
+  const updateRow = (i: number, patch: Partial<Instalment>) =>
+    setSchedule(schedule.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+
+  return (
+    <div className="rounded-lg border p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Label className="text-sm">Payment schedule</Label>
+          <p className="text-xs text-muted-foreground">Plan instalments (e.g. deposit + balance). Optional.</p>
+        </div>
+        <Switch
+          checked={schedule.length > 0}
+          onCheckedChange={(v) => (v ? splitEqually(2) : setSchedule([]))}
+        />
+      </div>
+
+      {schedule.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {[2, 3, 4].map((n) => (
+              <Button key={n} type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => splitEqually(n)}>
+                Split in {n}
+              </Button>
+            ))}
+          </div>
+          {schedule.map((inst, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <Input
+                className="flex-1 h-8"
+                placeholder={`Instalment ${i + 1}`}
+                value={inst.label ?? ""}
+                onChange={(e) => updateRow(i, { label: e.target.value })}
+              />
+              <Input
+                className="w-24 h-8"
+                type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
+                value={String(inst.amount)}
+                onChange={(e) => updateRow(i, { amount: parseFloat(e.target.value) || 0 })}
+              />
+              <Input
+                className="w-36 h-8"
+                type="date"
+                value={inst.dueDate ? inst.dueDate.slice(0, 10) : ""}
+                onChange={(e) => updateRow(i, { dueDate: e.target.value || null })}
+              />
+              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground"
+                onClick={() => setSchedule(schedule.filter((_, idx) => idx !== i))}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1"
+            onClick={() => setSchedule([...schedule, { label: "", amount: Math.max(0, diff), dueDate: null }])}>
+            <Plus className="w-3 h-3" /> Add instalment
+          </Button>
+          <p className={`text-xs ${Math.abs(diff) < 0.005 ? "text-muted-foreground" : "text-amber-600"}`}>
+            Scheduled {formatCurrency(sum)} of {formatCurrency(total)}
+            {Math.abs(diff) < 0.005 ? " · matches total"
+              : diff > 0 ? ` · ${formatCurrency(diff)} unscheduled`
+              : ` · ${formatCurrency(-diff)} over total`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* Manual payment methods offered in the Record Payment dialog. Card processing
+   (with surcharges/receipt) is handled separately via the POS terminal. */
+const PAY_METHODS: { value: string; label: string }[] = [
+  { value: "cash",          label: "Cash" },
+  { value: "bank-transfer", label: "Bank Transfer" },
+  { value: "eftpos",        label: "EFTPOS / Card" },
+  { value: "cheque",        label: "Cheque" },
+  { value: "other",         label: "Other" },
+];
 
 const FREQ_LABELS = { weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", annually: "Annually" };
 
@@ -161,6 +280,15 @@ export default function POSInvoicesPage() {
   const [sendInitialMethod, setSendInitialMethod] = useState<SendMethodKey | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  /* Record-payment dialog — partial or full payment against one invoice. */
+  const [payTarget, setPayTarget] = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("cash");
+  const [payNote, setPayNote] = useState("");
+  const [paySaving, setPaySaving] = useState(false);
+  /* Reverse-payment confirmation — the payment event being un-applied. */
+  const [reverseTarget, setReverseTarget] = useState<{ invoiceId: number; event: InvoiceEvent } | null>(null);
+  const [reverseSaving, setReverseSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [editForm, setEditForm] = useState({ customerId: "", dueDate: "", notes: "" });
@@ -186,6 +314,7 @@ export default function POSInvoicesPage() {
     lines: LineItem[];
     discount: typeof editDiscount;
     recurring: typeof editRecurring;
+    schedule: Instalment[];
   } | null>(null);
 
   const [discardConfirmTarget, setDiscardConfirmTarget] = useState<"create" | "edit" | null>(null);
@@ -198,6 +327,8 @@ export default function POSInvoicesPage() {
     startDate: "",
     occurrences: 1,
   });
+  const [schedule, setSchedule] = useState<Instalment[]>([]);
+  const [editSchedule, setEditSchedule] = useState<Instalment[]>([]);
   const [pdfGeneratingId, setPdfGeneratingId] = useState<number | null>(null);
   const [sendNowInvoice, setSendNowInvoice] = useState<Invoice | null>(null);
 
@@ -335,6 +466,8 @@ export default function POSInvoicesPage() {
   const deleteInvoiceMutation = useDeleteInvoice();
   const addEventMutation = useAddInvoiceEvent();
   const sendEmailMutation = useSendInvoiceEmail();
+  const recordPaymentMutation = useRecordInvoicePayment();
+  const reversePaymentMutation = useReverseInvoicePayment();
 
   const { data: detailInvoiceRaw } = useGetInvoice(
     detailInvoiceId ?? 0,
@@ -542,14 +675,16 @@ export default function POSInvoicesPage() {
     JSON.stringify(form) !== JSON.stringify(CREATE_PRISTINE_FORM) ||
     JSON.stringify(lines) !== JSON.stringify(CREATE_PRISTINE_LINES) ||
     JSON.stringify(discount) !== JSON.stringify(CREATE_PRISTINE_DISCOUNT) ||
-    JSON.stringify(recurring) !== JSON.stringify(CREATE_PRISTINE_RECURRING)
+    JSON.stringify(recurring) !== JSON.stringify(CREATE_PRISTINE_RECURRING) ||
+    schedule.length > 0
   );
 
   const isEditDirty = editOpen && editInitialRef.current !== null && (
     JSON.stringify(editForm) !== JSON.stringify(editInitialRef.current.form) ||
     JSON.stringify(editLines) !== JSON.stringify(editInitialRef.current.lines) ||
     JSON.stringify(editDiscount) !== JSON.stringify(editInitialRef.current.discount) ||
-    JSON.stringify(editRecurring) !== JSON.stringify(editInitialRef.current.recurring)
+    JSON.stringify(editRecurring) !== JSON.stringify(editInitialRef.current.recurring) ||
+    JSON.stringify(editSchedule) !== JSON.stringify(editInitialRef.current.schedule)
   );
 
   /* ── Open edit dialog ── */
@@ -571,14 +706,16 @@ export default function POSInvoicesPage() {
     const newDiscount = inv.discountType && inv.discountValue
       ? { enabled: true, type: inv.discountType as DiscountType, value: String(inv.discountValue) }
       : { enabled: false, type: "percent" as DiscountType, value: "" };
+    const newSchedule: Instalment[] = (inv.paymentSchedule ?? []).map((s) => ({ ...s }));
     setEditingInvoice(inv);
     setEditForm(newForm);
     setEditRecurring(newRecurring);
+    setEditSchedule(newSchedule);
     setEditLines(items);
     setEditLineSearch(items.map(() => ""));
     setEditLineDropOpen(items.map(() => false));
     setEditDiscount(newDiscount);
-    editInitialRef.current = { form: newForm, lines: items, discount: newDiscount, recurring: newRecurring };
+    editInitialRef.current = { form: newForm, lines: items, discount: newDiscount, recurring: newRecurring, schedule: newSchedule };
     setEditOpen(true);
   };
 
@@ -608,6 +745,9 @@ export default function POSInvoicesPage() {
             startDate: editRecurring.startDate || null,
             occurrences: editRecurring.occurrences,
           },
+          paymentSchedule: editSchedule
+            .filter((s) => (Number(s.amount) || 0) > 0)
+            .map((s) => ({ label: s.label?.trim() || null, amount: Number(s.amount) || 0, dueDate: s.dueDate || null })),
         } as Parameters<typeof updateInvoiceMutation.mutateAsync>[0]["data"],
       }) as unknown as Invoice;
       queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(updated.id) });
@@ -628,6 +768,7 @@ export default function POSInvoicesPage() {
     setLineSearch([""]);
     setLineDropOpen([false]);
     setRecurring({ enabled: false, frequency: "monthly", startDate: "", occurrences: 1 });
+    setSchedule([]);
     setDiscount({ enabled: false, type: "percent", value: "" });
     setCreateLinkedServiceJob(null);
     setCreateLinkedAppointment(null);
@@ -660,6 +801,11 @@ export default function POSInvoicesPage() {
             startDate: recurring.startDate || null,
             occurrences: recurring.occurrences,
           },
+        }),
+        ...(schedule.length > 0 && {
+          paymentSchedule: schedule
+            .filter((s) => (Number(s.amount) || 0) > 0)
+            .map((s) => ({ label: s.label?.trim() || null, amount: Number(s.amount) || 0, dueDate: s.dueDate || null })),
         }),
       };
       const created = await createInvoiceMutation.mutateAsync({ data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"] }) as unknown as Invoice;
@@ -716,25 +862,100 @@ export default function POSInvoicesPage() {
     }
   };
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const balanceDue = (inv: Invoice) => Math.max(0, round2(inv.total - (inv.amountPaid ?? 0)));
+
   /* ── Record a payment at the POS terminal ──
-     Hands the invoice's remaining balance + linked customer to the POS terminal,
-     which enters "Invoice Payment Mode" and processes via any payment method. */
-  const payAtTerminal = (inv: Invoice) => {
-    const balance = Math.max(0, inv.total - (inv.amountPaid ?? 0));
+     Hands a charge amount (defaulting to the full remaining balance, for a
+     partial payment the amount entered in the Record Payment dialog) + linked
+     customer to the POS terminal, which enters "Invoice Payment Mode" and
+     processes it via any payment method. */
+  const payAtTerminal = (inv: Invoice, chargeAmount?: number) => {
+    const balance = balanceDue(inv);
     if (balance <= 0) {
       toast.error("This invoice is already paid in full");
       return;
     }
+    const amount = chargeAmount != null ? Math.min(round2(chargeAmount), balance) : balance;
+    if (!(amount > 0)) { toast.error("Enter an amount greater than zero"); return; }
     setPendingInvoicePayment({
       invoiceId: inv.id,
       invoiceNumber: inv.invoiceNumber,
       balance,
+      amount,
       customerId: inv.customerId ?? null,
       customerName: inv.customerName,
       customerEmail: inv.customerEmail ?? null,
       customerPhone: inv.customerPhone ?? null,
     });
     navigate("/pos/sell");
+  };
+
+  /* ── Record Payment dialog ── */
+  const openPayDialog = (inv: Invoice) => {
+    const balance = balanceDue(inv);
+    if (balance <= 0) { toast.error("This invoice is already paid in full"); return; }
+    setPayTarget(inv);
+    setPayAmount(balance.toFixed(2));
+    setPayMethod("cash");
+    setPayNote("");
+  };
+
+  /* Record a (partial or full) payment directly via the API — used for manual
+     methods (cash, bank transfer, cheque…). Card processing goes via the
+     terminal instead (see "Charge at terminal" in the dialog). */
+  const recordPayment = async () => {
+    if (!payTarget) return;
+    const balance = balanceDue(payTarget);
+    const amount = round2(parseFloat(payAmount) || 0);
+    if (!(amount > 0)) { toast.error("Enter an amount greater than zero"); return; }
+    if (amount > balance + 0.005) { toast.error(`Amount can't exceed the ${formatCurrency(balance)} balance due`); return; }
+    setPaySaving(true);
+    try {
+      await recordPaymentMutation.mutateAsync({
+        id: payTarget.id,
+        data: {
+          amount,
+          method: payMethod,
+          note: payNote.trim() || undefined,
+          idempotencyKey: crypto.randomUUID(),
+        } as Parameters<typeof recordPaymentMutation.mutateAsync>[0]["data"],
+      });
+      const fully = amount >= balance - 0.005;
+      toast.success(fully ? "Payment recorded — invoice paid in full" : `Payment of ${formatCurrency(amount)} recorded`);
+      setPayTarget(null);
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(payTarget.id) });
+      invalidateInvoices();
+      invalidateSalesKpiQueries(queryClient);
+    } catch {
+      toast.error("Failed to record payment");
+    } finally {
+      setPaySaving(false);
+    }
+  };
+
+  /* Reverse / correct a recorded payment leg. */
+  const reversePayment = async () => {
+    if (!reverseTarget) return;
+    const { invoiceId, event } = reverseTarget;
+    const amount = round2(Math.abs(event.amount ?? 0));
+    if (!(amount > 0)) { toast.error("This payment has no amount to reverse"); return; }
+    setReverseSaving(true);
+    try {
+      await reversePaymentMutation.mutateAsync({
+        id: invoiceId,
+        data: { amount, eventId: event.id ?? undefined } as Parameters<typeof reversePaymentMutation.mutateAsync>[0]["data"],
+      });
+      toast.success(`Payment of ${formatCurrency(amount)} reversed`);
+      setReverseTarget(null);
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invoiceId) });
+      invalidateInvoices();
+      invalidateSalesKpiQueries(queryClient);
+    } catch {
+      toast.error("Failed to reverse payment");
+    } finally {
+      setReverseSaving(false);
+    }
   };
 
   /* ── Delete ── */
@@ -1499,6 +1720,42 @@ export default function POSInvoicesPage() {
                   </div>
                 </div>
 
+                {/* Payment schedule (instalments) — coverage derived from amountPaid */}
+                {detailInvoice.paymentSchedule && detailInvoice.paymentSchedule.length > 0 && (() => {
+                  const rows = instalmentCoverage(detailInvoice.paymentSchedule, detailInvoice.amountPaid ?? 0);
+                  return (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium flex items-center gap-1.5">
+                        <ListChecks className="w-3.5 h-3.5" /> Payment Schedule
+                      </p>
+                      <div className="space-y-1.5">
+                        {rows.map((inst, i) => (
+                          <div key={i} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{inst.label || `Instalment ${i + 1}`}</span>
+                                <Badge
+                                  variant="outline"
+                                  className={`h-4 px-1.5 text-[10px] ${
+                                    inst.status === "paid" ? "text-green-700 border-green-300"
+                                      : inst.status === "partial" ? "text-amber-700 border-amber-300"
+                                      : "text-muted-foreground"
+                                  }`}>
+                                  {inst.status === "paid" ? "Paid" : inst.status === "partial" ? `Part-paid ${formatCurrency(inst.covered)}` : "Due"}
+                                </Badge>
+                              </div>
+                              {inst.dueDate && (
+                                <p className="text-[11px] text-muted-foreground/80">Due {formatDateOnly(inst.dueDate)}</p>
+                              )}
+                            </div>
+                            <span className="font-medium shrink-0">{formatCurrency(inst.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {detailInvoice.notes && (
                   <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1 text-xs uppercase tracking-wide">Notes</p>
@@ -1506,12 +1763,59 @@ export default function POSInvoicesPage() {
                   </div>
                 )}
 
-                {/* Activity history */}
-                {detailInvoice.events && detailInvoice.events.length > 0 && (
+                {/* Payments — recorded legs + reversals, each reversible */}
+                {(() => {
+                  const payEvents = (detailInvoice.events ?? []).filter((e) => e.type === "payment" || e.type === "payment-reversal");
+                  if (payEvents.length === 0) return null;
+                  const reversedIds = new Set(
+                    (detailInvoice.events ?? [])
+                      .filter((e) => e.type === "payment-reversal" && e.reverses)
+                      .map((e) => e.reverses as string),
+                  );
+                  const canReverse = detailInvoice.status !== "cancelled";
+                  return (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Payments</p>
+                      <div className="space-y-1.5">
+                        {[...payEvents].reverse().map((ev, i) => {
+                          const isReversal = ev.type === "payment-reversal";
+                          const amt = Math.abs(ev.amount ?? 0);
+                          const alreadyReversed = !!ev.id && reversedIds.has(ev.id);
+                          return (
+                            <div key={ev.id ?? i} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                              <span className={`shrink-0 ${isReversal ? "text-destructive" : "text-green-600"}`}>
+                                {isReversal ? <RefreshCw className="w-3.5 h-3.5" /> : <Banknote className="w-3.5 h-3.5" />}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`font-medium ${isReversal ? "text-destructive" : "text-foreground"}`}>
+                                    {isReversal ? "−" : "+"}{formatCurrency(amt)}
+                                  </span>
+                                  {ev.method && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{ev.method}</Badge>}
+                                  {alreadyReversed && <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-destructive border-destructive/30">Reversed</Badge>}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground/80 truncate">{formatDate(ev.timestamp)}{ev.detail ? ` · ${ev.detail}` : ""}</p>
+                              </div>
+                              {!isReversal && !alreadyReversed && canReverse && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive shrink-0"
+                                  onClick={() => setReverseTarget({ invoiceId: detailInvoice.id, event: ev })}>
+                                  Reverse
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Activity history (non-payment events) */}
+                {detailInvoice.events && detailInvoice.events.some((e) => e.type !== "payment" && e.type !== "payment-reversal") && (
                   <div className="space-y-2 text-sm">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Activity</p>
                     <div className="space-y-1.5">
-                      {[...detailInvoice.events].reverse().map((ev, i) => (
+                      {[...detailInvoice.events].filter((e) => e.type !== "payment" && e.type !== "payment-reversal").reverse().map((ev, i) => (
                         <div key={i} className="flex items-start gap-2 text-muted-foreground text-xs">
                           <span className="mt-0.5 shrink-0">
                             {ev.type === "email" && <Mail className="w-3.5 h-3.5" />}
@@ -1548,7 +1852,7 @@ export default function POSInvoicesPage() {
                   )}
                   {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue" || detailInvoice.status === "partial") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
-                      onClick={() => payAtTerminal(detailInvoice)}>
+                      onClick={() => openPayDialog(detailInvoice)}>
                       <Banknote className="w-4 h-4" /> Record Payment
                     </Button>
                   )}
@@ -1578,6 +1882,111 @@ export default function POSInvoicesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Record Payment dialog (partial or full) ─── */}
+      <Dialog open={!!payTarget} onOpenChange={(o) => { if (!o && !paySaving) setPayTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-green-600" /> Record Payment
+            </DialogTitle>
+          </DialogHeader>
+          {payTarget && (() => {
+            const balance = balanceDue(payTarget);
+            const entered = round2(parseFloat(payAmount) || 0);
+            const overpay = entered > balance + 0.005;
+            const settles = entered > 0 && !overpay && entered >= balance - 0.005;
+            return (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-muted/40 border px-3 py-2.5 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice</span><span className="font-medium">{payTarget.invoiceNumber}</span></div>
+                  {(payTarget.amountPaid ?? 0) > 0 && (
+                    <div className="flex justify-between text-green-700"><span>Already paid</span><span>{formatCurrency(payTarget.amountPaid)}</span></div>
+                  )}
+                  <div className="flex justify-between font-semibold text-amber-700"><span>Balance due</span><span>{formatCurrency(balance)}</span></div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Amount</Label>
+                  <Input
+                    type="number" inputMode="decimal" min="0" step="0.01"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className={overpay ? "border-destructive" : ""}
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setPayAmount(round2(balance * 0.25).toFixed(2))}>25%</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setPayAmount(round2(balance * 0.5).toFixed(2))}>50%</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setPayAmount(balance.toFixed(2))}>Balance</Button>
+                  </div>
+                  {overpay && <p className="text-xs text-destructive">Amount exceeds the balance due.</p>}
+                  {!overpay && entered > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {settles ? "Settles the invoice in full." : `Leaves ${formatCurrency(round2(balance - entered))} outstanding.`}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Method</Label>
+                  <Select value={payMethod} onValueChange={setPayMethod}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Note <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="e.g. deposit, cheque #123" />
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <Button className="w-full gap-1.5" disabled={paySaving || overpay || !(entered > 0)} onClick={recordPayment}>
+                    {paySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Record {entered > 0 && !overpay ? formatCurrency(entered) : "payment"}
+                  </Button>
+                  <Button variant="outline" className="w-full gap-1.5" disabled={paySaving || overpay || !(entered > 0)}
+                    onClick={() => { const inv = payTarget; const amt = entered; setPayTarget(null); if (inv) payAtTerminal(inv, amt); }}>
+                    <ExternalLink className="w-4 h-4" /> Charge at terminal instead
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground text-center">
+                  Use the terminal for card payments so surcharges and receipts apply.
+                </p>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Reverse payment confirmation ─── */}
+      <AlertDialog open={!!reverseTarget} onOpenChange={(o) => { if (!o && !reverseSaving) setReverseTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverse this payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reverseTarget && (
+                <>This removes <strong>{formatCurrency(Math.abs(reverseTarget.event.amount ?? 0))}</strong> from the amount paid and
+                {" "}re-opens the balance. If the invoice was fully paid, stock, customer spend and loyalty are restored. This is logged in the activity trail.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reverseSaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={reverseSaving}
+              onClick={(e) => { e.preventDefault(); void reversePayment(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {reverseSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reverse payment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Send dialog (email / print / print-as-quote) ─── */}
       <SendDialog
@@ -1877,6 +2286,9 @@ export default function POSInvoicesPage() {
               )}
             </div>
 
+            {/* Payment schedule (instalments) */}
+            <ScheduleEditor schedule={schedule} setSchedule={setSchedule} total={invTotal} />
+
             {/* Invoice number preview */}
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
               <Clock className="w-3.5 h-3.5 shrink-0" />
@@ -2150,6 +2562,9 @@ export default function POSInvoicesPage() {
                 </div>
               )}
             </div>
+
+            {/* Payment schedule (instalments) */}
+            <ScheduleEditor schedule={editSchedule} setSchedule={setEditSchedule} total={editInvTotal} />
 
           </div>
 

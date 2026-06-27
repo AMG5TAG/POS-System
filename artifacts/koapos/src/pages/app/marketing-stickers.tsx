@@ -30,8 +30,9 @@ import { toast } from "sonner";
 import {
   Sticker, Type, ImagePlus, QrCode, Barcode, Trash2, Printer, Save, Plus,
   Bold, AlignLeft, AlignCenter, AlignRight, Zap, FolderOpen, Building2,
-  Square, Minus,
+  Square, Minus, ZoomIn, ZoomOut,
 } from "lucide-react";
+import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 
 /* ── Label sizes: DYMO LabelWriter series + Brother VC-500W continuous tape ── */
 const BROTHER_SIZES: DymoSize[] = [
@@ -167,6 +168,23 @@ export default function MarketingStickersPage() {
   const [showResolved, setShowResolved] = useState(true);
   const [templateName, setTemplateName] = useState("");
   const [editingTplId, setEditingTplId] = useState<string | null>(null);
+  const [previewZoom, setPreviewZoom] = useState(1);
+  const adjustZoom = (delta: number) => setPreviewZoom((z) => Math.min(3, Math.max(0.5, Math.round((z + delta) * 100) / 100)));
+
+  /* ── Unsaved-changes tracking ──
+     The saved snapshot captures the design (layout) + template name. It's reset
+     after a save/load/new; any divergence marks the sticker dirty and arms the
+     navigation guard. Live-data preview toggles (product/customer/zoom) aren't
+     part of the saved template, so they never count as changes. */
+  const snapshotOf = (l: Layout, name: string) => JSON.stringify({ layout: l, templateName: name.trim() });
+  const [savedSnapshot, setSavedSnapshot] = useState(() => snapshotOf(emptyLayout(), ""));
+  const isDirty = snapshotOf(layout, templateName) !== savedSnapshot;
+  const { ConfirmDialog: UnsavedGuard } = useUnsavedChangesGuard(isDirty, {
+    title: "Unsaved sticker changes",
+    description: "You have an unsaved sticker design. If you leave now, your changes will be lost.",
+    actionLabel: "Leave anyway",
+    cancelLabel: "Stay on page",
+  });
 
   const size = SIZES.find((s) => s.id === layout.sizeId) ?? SIZES[0];
   const selected = layout.elements.find((e) => e.id === selectedId) ?? null;
@@ -177,9 +195,11 @@ export default function MarketingStickersPage() {
   const effW = landscape ? size.heightMm : size.widthMm;
   const effH = landscape ? size.widthMm : size.heightMm;
 
-  /* Canvas scale: fit the label inside a ~360×360 box. */
+  /* Canvas scale: fit the label inside a ~360×360 box, then apply the zoom
+     factor. Folding zoom into `scale` keeps the drag math (which works off
+     labelW/labelH) correct without any per-zoom adjustment. */
   const MAXW = 360, MAXH = 360;
-  const scale = Math.min(MAXW / effW, MAXH / effH);
+  const scale = Math.min(MAXW / effW, MAXH / effH) * previewZoom;
   const labelW = effW * scale, labelH = effH * scale;
   const canvasRef = useRef<HTMLDivElement>(null);
 
@@ -240,8 +260,9 @@ export default function MarketingStickersPage() {
     const tpl = templates.find((t) => t.id === tplId);
     if (!tpl) return;
     const f = tpl.fields as { layout?: Layout } | undefined;
+    let nextLayout: Layout;
     if (f?.layout?.elements) {
-      setLayout({ sizeId: f.layout.sizeId || tpl.sizeId || DEFAULT_SIZE, bg: f.layout.bg || "#ffffff", orientation: f.layout.orientation || "portrait", elements: f.layout.elements });
+      nextLayout = { sizeId: f.layout.sizeId || tpl.sizeId || DEFAULT_SIZE, bg: f.layout.bg || "#ffffff", orientation: f.layout.orientation || "portrait", elements: f.layout.elements };
     } else {
       // Pull in a fixed-type Settings → Stickers template: stack its enabled fields as text.
       const fields = (tpl.fields ?? {}) as Record<string, unknown>;
@@ -253,11 +274,14 @@ export default function MarketingStickersPage() {
           y += 16;
         }
       }
-      setLayout({ sizeId: tpl.sizeId || DEFAULT_SIZE, bg: "#ffffff", elements: els });
+      nextLayout = { sizeId: tpl.sizeId || DEFAULT_SIZE, bg: "#ffffff", elements: els };
     }
+    const nextName = tpl.typeId === "custom" ? tpl.name : `${tpl.name} (copy)`;
+    setLayout(nextLayout);
     setEditingTplId(tpl.typeId === "custom" ? tpl.id : null);
-    setTemplateName(tpl.typeId === "custom" ? tpl.name : `${tpl.name} (copy)`);
+    setTemplateName(nextName);
     setSelectedId(null);
+    setSavedSnapshot(snapshotOf(nextLayout, nextName));
   };
 
   const saveTemplate = async () => {
@@ -272,11 +296,16 @@ export default function MarketingStickersPage() {
         setEditingTplId((created as { id?: string })?.id ?? null);
         toast.success("Template saved");
       }
+      setSavedSnapshot(snapshotOf(layout, templateName));
       refetchTemplates();
     } catch { toast.error("Couldn't save the template"); }
   };
 
-  const newSticker = () => { setLayout(emptyLayout()); setSelectedId(null); setEditingTplId(null); setTemplateName(""); };
+  const newSticker = () => {
+    const fresh = emptyLayout();
+    setLayout(fresh); setSelectedId(null); setEditingTplId(null); setTemplateName("");
+    setSavedSnapshot(snapshotOf(fresh, ""));
+  };
 
   /* ── Print ── */
   const handlePrint = async () => {
@@ -344,17 +373,39 @@ export default function MarketingStickersPage() {
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("barcode")}><Barcode className="w-3.5 h-3.5" /> Barcode</Button>
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("rect")}><Square className="w-3.5 h-3.5" /> Shape</Button>
                   <Button variant="outline" size="sm" className="gap-1.5" onClick={() => addEl("line")}><Minus className="w-3.5 h-3.5" /> Line</Button>
-                  <div className="ml-auto flex items-center gap-2">
-                    <Label className="text-xs text-muted-foreground">Live data</Label>
-                    <Switch checked={showResolved} onCheckedChange={setShowResolved} />
+                  <div className="ml-auto flex items-center gap-3">
+                    {/* Zoom controls */}
+                    <div className="flex items-center gap-1">
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(-0.25)} disabled={previewZoom <= 0.5} aria-label="Zoom out">
+                        <ZoomOut className="w-3.5 h-3.5" />
+                      </Button>
+                      <button
+                        type="button"
+                        onClick={() => setPreviewZoom(1)}
+                        className="text-xs tabular-nums text-muted-foreground w-10 text-center hover:text-foreground"
+                        title="Reset zoom"
+                      >
+                        {Math.round(previewZoom * 100)}%
+                      </button>
+                      <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(0.25)} disabled={previewZoom >= 3} aria-label="Zoom in">
+                        <ZoomIn className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <Label className="text-xs text-muted-foreground">Live data</Label>
+                      <Switch checked={showResolved} onCheckedChange={setShowResolved} />
+                    </div>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-center bg-muted/30 rounded-lg p-6 min-h-[420px]">
+                <div className="bg-muted/30 rounded-lg min-h-[420px] max-h-[600px] overflow-auto">
+                  {/* Inner wrapper grows with the zoomed canvas so it stays centred
+                      when small and scrolls in both axes when larger than the box. */}
+                  <div className="flex items-center justify-center p-6" style={{ minWidth: "100%", minHeight: 420 }}>
                   <div
                     ref={canvasRef}
                     onMouseDown={() => setSelectedId(null)}
-                    className="relative shadow-md border"
+                    className="relative shadow-md border shrink-0"
                     style={{ width: labelW, height: labelH, background: layout.bg }}
                   >
                     {layout.elements.map((el) => (
@@ -374,6 +425,7 @@ export default function MarketingStickersPage() {
                     {layout.elements.length === 0 && (
                       <div className="absolute inset-0 flex items-center justify-center text-[11px] text-muted-foreground text-center px-2">Add an element to start designing</div>
                     )}
+                  </div>
                   </div>
                 </div>
                 <p className="text-center text-xs text-muted-foreground">{size.name} — {effW}×{effH}mm {landscape ? "(horizontal)" : ""}</p>
@@ -563,6 +615,7 @@ export default function MarketingStickersPage() {
           </div>
         </div>
       </div>
+      <UnsavedGuard />
     </AppLayout>
   );
 }

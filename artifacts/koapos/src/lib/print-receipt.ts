@@ -45,6 +45,12 @@ export interface ReceiptTemplateOpts {
   showWebsite?: boolean;
   showPaymentMethods?: boolean;
   showCustomerQr?: boolean;
+  /** Show a merchant-supplied custom QR code (needs `customQrImage`). */
+  showCustomQr?: boolean;
+  /** Custom QR image — a data: URL (uploaded) or https URL. */
+  customQrImage?: string;
+  /** Caption printed under the custom QR. */
+  customQrCaption?: string;
   showLoyaltyEarned?: boolean;
   showBarcode?: boolean;
   /** Print each product's serial number(s) / IMEI under its line on the receipt. */
@@ -371,6 +377,22 @@ export async function printReceipt(
     }
   `;
 
+  /* ── Customer details ────────────────────────────────────────────────── */
+  const cust = tx.customer;
+  const custName = cust ? esc(customerDisplayName(cust, "") || cust.email || "") : "";
+  const custEmail = cust ? esc(cust.email ?? "") : "";
+  const custPhone = cust ? esc((cust as { phone?: string }).phone ?? "") : "";
+  const custAddress = cust ? esc((cust as { address?: string | null }).address ?? "") : "";
+  const customerDetailsHtml = (tpl.showAllCustomerDetails && (custName || custEmail || custPhone || custAddress))
+    ? `<div class="receipt"><div class="bdr-t pt mt small">
+        <div class="gray" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Customer</div>
+        ${custName ? `<div class="bold">${custName}</div>` : ""}
+        ${custEmail ? `<div class="gray">${custEmail}</div>` : ""}
+        ${custPhone ? `<div class="gray">${custPhone}</div>` : ""}
+        ${custAddress ? `<div class="gray">${custAddress}</div>` : ""}
+      </div></div>`
+    : "";
+
   /* ── Customer QR code ────────────────────────────────────────────────── */
   let qrBlock = "";
   if (tpl.showCustomerQr && tx.customer?.id) {
@@ -386,7 +408,18 @@ export async function printReceipt(
     } catch { /* silently skip if QR generation fails */ }
   }
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}${qrBlock}</body></html>`;
+  /* ── Custom QR code (merchant-supplied image) ────────────────────────── */
+  const customQrSrc = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
+  const customQrBlock = (tpl.showCustomQr && customQrSrc)
+    ? `<div class="center mt bdr-t pt">
+        <div style="display:inline-block;border:1px solid #e5e7eb;padding:4px;border-radius:4px">
+          <img src="${esc(customQrSrc)}" style="width:72px;height:72px;display:block" alt="QR">
+        </div>
+        ${tpl.customQrCaption ? `<p class="gray small" style="margin-top:4px">${esc(tpl.customQrCaption)}</p>` : ""}
+      </div>`
+    : "";
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}${customerDetailsHtml}${qrBlock}${customQrBlock}</body></html>`;
 
   openPrintWindow(html, `Receipt ${escReceiptNum}`);
 
@@ -507,6 +540,7 @@ function printA4Document(
     loyaltyPointsEarned: Number((tx as { loyaltyEarned?: number }).loyaltyEarned ?? 0) || null,
     paymentMethods: (baseOptions.showPaymentMethods && pmLabel) ? [pmLabel] : null,
     customerQrDataUrl,
+    customQrDataUrl: baseOptions.customQrImage ?? null,
     options,
   });
 
@@ -630,6 +664,14 @@ export async function printA4Receipt(
     ? `<div class="loyalty"><span>★ Loyalty Earned</span><span>+${loyaltyEarned} pts</span></div>`
     : "";
 
+  const customQrSrcA4 = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
+  const customQrHtmlA4 = (tpl.showCustomQr && customQrSrcA4)
+    ? `<div style="text-align:center;margin-top:14px">
+         <img src="${esc(customQrSrcA4)}" alt="custom qr" style="width:88px;height:88px;object-fit:contain;border:1px solid #e5e7eb;border-radius:6px;padding:4px">
+         ${tpl.customQrCaption ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">${esc(tpl.customQrCaption)}</div>` : ""}
+       </div>`
+    : "";
+
   const paymentTypes = (tpl.paymentTypes && tpl.paymentTypes.length)
     ? tpl.paymentTypes
     : ["EFTPOS", "Cash", "Visa", "Mastercard"];
@@ -654,6 +696,7 @@ export async function printA4Receipt(
   const paidBadge = `<span class="paid">✓ Paid — ${esc(pmLabel) || "Payment received"}</span>`;
 
   const footerBlock = `
+    ${customQrHtmlA4}
     <div class="ftr">
       ${terms ? `<p>${terms}</p>` : ""}
       ${notesHtml}
@@ -1040,6 +1083,15 @@ export function printA4ServiceJob(
     ? qrSvg(techAppJobUrl(businessInfo?.techAppUsername, job.id), 96)
     : "";
 
+  // Merchant-supplied custom QR image.
+  const customQrSrcSvc = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
+  const customQrMarkupSvc = (tpl.showCustomQr && customQrSrcSvc)
+    ? `<div class="qr-block">
+        <div class="qr-box"><img src="${esc(customQrSrcSvc)}" alt="custom qr" style="width:96px;height:96px;object-fit:contain;display:block"></div>
+        ${tpl.customQrCaption ? `<div class="qr-caption">${esc(tpl.customQrCaption)}</div>` : ""}
+      </div>`
+    : "";
+
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: ${fontFamily}; font-size: 13px; color: #1f2937; background: #fff; }
@@ -1185,6 +1237,8 @@ export function printA4ServiceJob(
     <div class="qr-box">${qrMarkup}</div>
     <div class="qr-caption">Scan to open in the <strong>Tech App</strong><br>Job ${escJobNum}</div>
   </div>` : ""}
+
+  ${customQrMarkupSvc}
 
   <div class="footer">
     ${footerText ? `<p>${esc(footerText)}</p>` : `<p>Thank you for choosing ${businessName}.</p>`}

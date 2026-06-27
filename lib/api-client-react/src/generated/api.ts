@@ -167,6 +167,7 @@ import type {
   InvoiceInput,
   InvoiceList,
   InvoicePaymentInput,
+  InvoicePaymentReverseInput,
   InvoiceUpdate,
   KpiProgressResponse,
   KpiSettings,
@@ -32699,6 +32700,78 @@ export const useRecordInvoicePayment = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRecordInvoicePaymentMutationOptions(options));
+    }
+
+export const getReverseInvoicePaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/invoices/${id}/payment/reverse`
+}
+
+/**
+ * @summary Reverse or correct a recorded payment against an invoice
+ */
+export const reverseInvoicePayment = async (id: number,
+    invoicePaymentReverseInput: InvoicePaymentReverseInput, options?: RequestInit): Promise<Invoice> => {
+
+  return customFetch<Invoice>(getReverseInvoicePaymentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      invoicePaymentReverseInput,)
+  }
+);}
+
+
+
+
+export const getReverseInvoicePaymentMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseInvoicePayment>>, TError,{id: number;data: BodyType<InvoicePaymentReverseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reverseInvoicePayment>>, TError,{id: number;data: BodyType<InvoicePaymentReverseInput>}, TContext> => {
+
+const mutationKey = ['reverseInvoicePayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reverseInvoicePayment>>, {id: number;data: BodyType<InvoicePaymentReverseInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  reverseInvoicePayment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReverseInvoicePaymentMutationResult = NonNullable<Awaited<ReturnType<typeof reverseInvoicePayment>>>
+    export type ReverseInvoicePaymentMutationBody = BodyType<InvoicePaymentReverseInput>
+    export type ReverseInvoicePaymentMutationError = ErrorType<void>
+
+    /**
+ * @summary Reverse or correct a recorded payment against an invoice
+ */
+export const useReverseInvoicePayment = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reverseInvoicePayment>>, TError,{id: number;data: BodyType<InvoicePaymentReverseInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reverseInvoicePayment>>,
+        TError,
+        {id: number;data: BodyType<InvoicePaymentReverseInput>},
+        TContext
+      > => {
+      return useMutation(getReverseInvoicePaymentMutationOptions(options));
     }
 
 export const getSendInvoiceEmailUrl = (id: number,) => {

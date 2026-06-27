@@ -2285,12 +2285,21 @@ export interface InvoiceLineItem {
 }
 
 export interface InvoiceEvent {
+  id?: string | null;
   type: string;
   timestamp: string;
   detail?: string | null;
   method?: string | null;
   amount?: number | null;
+  reverses?: string | null;
   idempotencyKey?: string | null;
+}
+
+export interface InvoiceInstalment {
+  label?: string | null;
+  /** @minimum 0 */
+  amount: number;
+  dueDate?: string | null;
 }
 
 export interface Invoice {
@@ -2308,6 +2317,7 @@ export interface Invoice {
   discountTotal?: number | null;
   items: InvoiceLineItem[];
   events: InvoiceEvent[];
+  paymentSchedule?: InvoiceInstalment[] | null;
   notes?: string | null;
   dueDate?: string | null;
   paidAt?: string | null;
@@ -5422,6 +5432,7 @@ export interface InvoiceInput {
   invoicePrefix?: string;
   invoiceDigits?: number;
   recurring?: InvoiceRecurringInput;
+  paymentSchedule?: InvoiceInstalment[] | null;
   serviceJobId?: number | null;
   appointmentId?: number | null;
 }
@@ -5453,6 +5464,7 @@ export interface InvoiceUpdate {
   items?: InvoiceLineItem[];
   discount?: InvoiceDiscountInput;
   recurring?: InvoiceRecurringUpdate | null;
+  paymentSchedule?: InvoiceInstalment[] | null;
   serviceJobId?: number | null;
   appointmentId?: number | null;
 }
@@ -5467,10 +5479,18 @@ export interface InvoicePaymentInput {
   method?: string;
   payments?: PaymentLeg[];
   giftCardPayment?: GiftCardPaymentRef;
+  note?: string;
   idempotencyKey?: string;
 }
 
 export type InvoicePaymentResult = Invoice;
+
+export interface InvoicePaymentReverseInput {
+  /** @minimum 0 */
+  amount: number;
+  eventId?: string;
+  reason?: string;
+}
 
 export type SendInvoiceEmailInputTemplateSocialLinks = {[key: string]: string};
 

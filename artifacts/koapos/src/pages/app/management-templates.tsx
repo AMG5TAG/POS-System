@@ -36,6 +36,7 @@ import {
   Check, Star, Sparkles, Minimize2, Zap, Building2,
   Copy, User, ShoppingCart, Percent, Eye, EyeOff,
   Settings2, ClipboardList, FileSearch, Save, ShieldCheck, FileDown,
+  Upload, X, ZoomIn, ZoomOut,
 } from "lucide-react";
 import {
   printReceipt,
@@ -98,6 +99,10 @@ export interface TplOpts {
   showLoyaltyEarned:    boolean;
   showCustomerQr:       boolean;
   showAllCustomerDetails: boolean;
+  // Custom QR — a merchant-supplied QR code image shown on the document
+  showCustomQr:         boolean;
+  customQrImage:        string;  // data: URL (uploaded) or https URL
+  customQrCaption:      string;
   sendAfterSale:        boolean;
   sendForLayby:         boolean;
   printCustomerCopy:    boolean;
@@ -144,6 +149,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false, socialIconBrandColors: false,
   showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
+  showCustomQr: false, customQrImage: "", customQrCaption: "",
   sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
   showSerialNumber: true,
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
@@ -227,7 +233,7 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
 interface FieldDef {
   key: keyof TplOpts;
   label: string;
-  type: "text" | "textarea" | "toggle" | "select" | "fontpicker";
+  type: "text" | "textarea" | "toggle" | "select" | "fontpicker" | "image";
   options?: { value: string; label: string }[];
   placeholder?: string;
   hint?: string;
@@ -249,8 +255,12 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",   key: "showLoyaltyEarned",  label: "Show Loyalty Earned", type: "toggle" },
       { section: "Body",   key: "showSerialNumber",   label: "Show Serial Numbers", type: "toggle", hint: "Prints the S/N or IMEI under each product line" },
       { section: "Body",   key: "showBarcode",        label: "Show Sale Barcode",   type: "toggle", hint: "Scannable barcode to retrieve this sale" },
+      { section: "Body",   key: "showAllCustomerDetails", label: "Show Customer Details", type: "toggle", hint: "Prints the customer's name, email, phone and address" },
       { section: "Body",   key: "showCustomerQr",     label: "Show Customer QR",    type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Body",   key: "loyaltyQrText",      label: "QR Scan Label",       type: "text",   placeholder: "Scan to view customer loyalty profile" },
+      { section: "Custom QR", key: "showCustomQr",     label: "Show Custom QR Code", type: "toggle", hint: "Attach your own QR (menu, payment, review link…)" },
+      { section: "Custom QR", key: "customQrImage",    label: "Custom QR Image",     type: "image",  hint: "Upload a QR image or paste an image URL" },
+      { section: "Custom QR", key: "customQrCaption",  label: "QR Caption",          type: "text",   placeholder: "e.g. Scan to view our menu" },
       { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
       { section: "Footer", key: "footerText",         label: "Footer Text",         type: "text",     placeholder: "e.g. Returns within 30 days", quickCodes: true },
       { section: "Footer", key: "showWebsite",        label: "Show Website",        type: "toggle" },
@@ -267,6 +277,9 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
       { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",     type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",             type: "text",   placeholder: "Scan to view customer loyalty profile" },
+      { section: "Custom QR", key: "showCustomQr",           label: "Show Custom QR Code",       type: "toggle", hint: "Attach your own QR (menu, payment, review link…)" },
+      { section: "Custom QR", key: "customQrImage",          label: "Custom QR Image",           type: "image",  hint: "Upload a QR image or paste an image URL" },
+      { section: "Custom QR", key: "customQrCaption",        label: "QR Caption",                type: "text",   placeholder: "e.g. Scan to view our menu" },
       { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Body",     key: "showLoyaltyEarned",       label: "Show Loyalty Earned",       type: "toggle" },
@@ -292,6 +305,9 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
       { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. QUOTE / ESTIMATE", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
+      { section: "Custom QR", key: "showCustomQr",           label: "Show Custom QR Code",       type: "toggle", hint: "Attach your own QR (menu, payment, review link…)" },
+      { section: "Custom QR", key: "customQrImage",          label: "Custom QR Image",           type: "image",  hint: "Upload a QR image or paste an image URL" },
+      { section: "Custom QR", key: "customQrCaption",        label: "QR Caption",                type: "text",   placeholder: "e.g. Scan to view our menu" },
       { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
       { section: "Body",     key: "showGstBreakdown",        label: "Show GST Breakdown",        type: "toggle" },
       { section: "Footer",   key: "customMessage",           label: "Custom Footer HTML",        type: "textarea", placeholder: "e.g. Thank you for your enquiry…", quickCodes: true },
@@ -320,6 +336,9 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
       { section: "Sections", key: "showServiceQr",      label: "Show Tech App QR",         type: "toggle", hint: "Adds a QR that opens the job in the Tech App when scanned" },
+      { section: "Custom QR", key: "showCustomQr",         label: "Show Custom QR Code",      type: "toggle", hint: "Attach your own QR (booking, payment, review link…)" },
+      { section: "Custom QR", key: "customQrImage",        label: "Custom QR Image",          type: "image",  hint: "Upload a QR image or paste an image URL" },
+      { section: "Custom QR", key: "customQrCaption",      label: "QR Caption",               type: "text",   placeholder: "e.g. Scan to book your next service" },
       { section: "Footer",   key: "showSocialLinks",      label: "Show Business Socials",    type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss.", quickCodes: true },
@@ -792,6 +811,43 @@ function OptionsPanel({
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
+                    ) : f.type === "image" ? (
+                      <div className="space-y-1.5">
+                        {val ? (
+                          <div className="flex items-center gap-2">
+                            <img src={val} alt="Custom QR" className="w-14 h-14 object-contain border rounded bg-white p-0.5" />
+                            <Button
+                              size="sm" variant="outline" type="button"
+                              className="h-7 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/5"
+                              onClick={() => update(f.key, "" as TplOpts[typeof f.key])}
+                            >
+                              <X className="w-3 h-3" /> Remove
+                            </Button>
+                          </div>
+                        ) : null}
+                        <label className="text-xs cursor-pointer inline-flex items-center gap-1.5 rounded-md border border-input bg-background px-2.5 h-8 hover:bg-muted/50">
+                          <Upload className="w-3.5 h-3.5" /> {val ? "Replace image" : "Upload image"}
+                          <input
+                            type="file" accept="image/*" className="hidden"
+                            onChange={(e) => {
+                              const file = e.target.files?.[0];
+                              e.target.value = "";
+                              if (!file) return;
+                              if (file.size > 512 * 1024) { toast.error("QR image must be under 512KB"); return; }
+                              const reader = new FileReader();
+                              reader.onload = () => update(f.key, String(reader.result) as TplOpts[typeof f.key]);
+                              reader.onerror = () => toast.error("Couldn't read that image");
+                              reader.readAsDataURL(file);
+                            }}
+                          />
+                        </label>
+                        <Input
+                          value={val.startsWith("data:") ? "" : val}
+                          onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
+                          placeholder="…or paste an image URL"
+                          className="text-xs h-8 placeholder:text-[10px]"
+                        />
+                      </div>
                     ) : f.type === "textarea" ? (
                       <Textarea
                         ref={(el) => { inputRefs.current[f.key] = el; }}
@@ -985,6 +1041,23 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
     </div>
   ) : null;
 
+  const CustomerBlock = () => opts.showAllCustomerDetails ? (
+    <div className="border-t pt-1.5 mt-1 text-[9px] leading-tight">
+      <p className="text-gray-400 uppercase tracking-wide text-[8px]">Customer</p>
+      <p className="font-semibold text-gray-700">Sarah Johnson</p>
+      <p className="text-gray-500">sarah@email.com</p>
+      <p className="text-gray-500">(03) 9000 1111</p>
+      <p className="text-gray-500">42 Collins St, Melbourne VIC 3000</p>
+    </div>
+  ) : null;
+
+  const CustomQrBlock = () => (opts.showCustomQr && opts.customQrImage) ? (
+    <div className="flex flex-col items-center border-t pt-1.5 mt-1 gap-0.5">
+      <img src={opts.customQrImage} alt="Custom QR" className="w-10 h-10 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
+      {opts.customQrCaption ? <p className="text-[8px] text-gray-400 text-center">{opts.customQrCaption}</p> : null}
+    </div>
+  ) : null;
+
   const BarcodeBlock = () => opts.showBarcode ? (
     <div className="border-t pt-1.5 mt-1 text-center">
       <Barcode value="TXN-1042" format="CODE128" width={1.2} height={24} displayValue={false} />
@@ -1025,6 +1098,9 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {footer    && <p className="text-center text-gray-500">{resolveCode(footer, businessName, abn, website, email)}</p>}
         {opts.showWebsite && website && <p className="text-center text-gray-400">{website}</p>}
         <SocialsBlock />
+        <CustomerBlock />
+        <QrBlock />
+        <CustomQrBlock />
         <BarcodeBlock />
         <ReferralBlock />
       </div>
@@ -1058,6 +1134,9 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           {opts.showWebsite && website && <p className="text-blue-500">{website}</p>}
           <SocialsBlock />
         </div>
+        <CustomerBlock />
+        <QrBlock />
+        <CustomQrBlock />
         <BarcodeBlock />
         <ReferralBlock />
       </div>
@@ -1091,6 +1170,9 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         {opts.showWebsite && website && <p>{website}</p>}
         <SocialsBlock />
       </div>
+      <CustomerBlock />
+      <QrBlock />
+      <CustomQrBlock />
       <BarcodeBlock />
       <ReferralBlock />
     </div>
@@ -1143,6 +1225,13 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
     <div className="text-center shrink-0">
       <p className="text-[8px] text-gray-400 uppercase tracking-wide mb-1">Customer Profile</p>
       <QRCodeVisual label="CUS-0042" size={42} />
+    </div>
+  ) : null;
+
+  const CustomQrBlock = () => (opts.showCustomQr && opts.customQrImage) ? (
+    <div className="border-t pt-1.5 mt-1.5 flex flex-col items-center gap-0.5">
+      <img src={opts.customQrImage} alt="Custom QR" className="w-12 h-12 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
+      {opts.customQrCaption && <p className="text-[8px] text-gray-400 text-center">{opts.customQrCaption}</p>}
     </div>
   ) : null;
 
@@ -1231,6 +1320,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, email)}</p>}
         <SocialsBlock />
         <BarcodeBlock />
+        <CustomQrBlock />
         <ReferralBlock />
       </div>
     );
@@ -1284,6 +1374,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <MessagesBlock />
         <SocialsBlock />
         <BarcodeBlock />
+        <CustomQrBlock />
         <ReferralBlock />
       </div>
     );
@@ -1333,6 +1424,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
         <SocialsBlock />
       </div>
       <BarcodeBlock />
+      <CustomQrBlock />
       <ReferralBlock />
     </div>
   );
@@ -1567,6 +1659,14 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
         </div>
       )}
 
+      {/* Custom QR */}
+      {opts.showCustomQr && opts.customQrImage && (
+        <div className="flex items-center gap-2 pt-1">
+          <img src={opts.customQrImage} alt="Custom QR" className="w-10 h-10 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
+          {opts.customQrCaption && <p className="text-[8px] text-gray-500 leading-tight">{opts.customQrCaption}</p>}
+        </div>
+      )}
+
       {/* Footer / warranty */}
       {(opts.warrantyText || opts.footerText) && (
         <div className="border-t pt-1 space-y-0.5 text-[8px] text-gray-400">
@@ -1760,6 +1860,8 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
   const sectionCategories = SECTION_CATEGORIES[section];
   const [activeCategory, setActiveCategory] = useState<Category>(sectionCategories[0]);
   const [previewId, setPreviewId]           = useState<string>(DEFAULT_STYLE[sectionCategories[0]]);
+  const [previewZoom, setPreviewZoom]       = useState(1);
+  const adjustZoom = (delta: number) => setPreviewZoom((z) => Math.min(3, Math.max(0.5, Math.round((z + delta) * 100) / 100)));
 
   const [focusedFieldLabel, setFocusedFieldLabel] = useState<string | null>(null);
   const insertFnRef = useRef<((code: string) => void) | null>(null);
@@ -1845,6 +1947,9 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       showWebsite: opts.showWebsite,
       showPaymentMethods: opts.showPaymentMethods,
       showCustomerQr: opts.showCustomerQr,
+      showCustomQr: opts.showCustomQr,
+      customQrImage: opts.customQrImage,
+      customQrCaption: opts.customQrCaption,
       showLoyaltyEarned: opts.showLoyaltyEarned,
       showBarcode: opts.showBarcode,
       printCustomerCopy: opts.printCustomerCopy,
@@ -2076,22 +2181,45 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
                     </span>
                     <Badge variant="outline" className="text-xs shrink-0">{CATEGORY_META[activeCategory].label}</Badge>
                   </div>
+                  {/* Zoom controls */}
+                  <div className="flex items-center gap-1 shrink-0">
+                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(-0.25)} disabled={previewZoom <= 0.5} aria-label="Zoom out">
+                      <ZoomOut className="w-3.5 h-3.5" />
+                    </Button>
+                    <button
+                      type="button"
+                      onClick={() => setPreviewZoom(1)}
+                      className="text-xs tabular-nums text-muted-foreground w-10 text-center hover:text-foreground"
+                      title="Reset zoom"
+                    >
+                      {Math.round(previewZoom * 100)}%
+                    </button>
+                    <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(0.25)} disabled={previewZoom >= 3} aria-label="Zoom in">
+                      <ZoomIn className="w-3.5 h-3.5" />
+                    </Button>
+                  </div>
                 </div>
 
                 {/* Preview box */}
-                <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px]">
+                <div className="rounded-xl border bg-gray-50 p-6 flex items-start justify-center min-h-[460px] overflow-auto">
+                  <div style={{ transform: `scale(${previewZoom})`, transformOrigin: "top center" }} className="transition-transform">
                   {activeCategory === "Thermal_Receipt" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-56">{renderPreview()}</div>
                   )}
                   {(activeCategory === "Invoice" || activeCategory === "A4_Receipt" || activeCategory === "Quote") && (
-                    <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-80">{renderPreview()}</div>
+                    /* A4 portrait page (210 × 297) so the preview reads as a real
+                       A4 sheet. min-height holds the ratio when content is short;
+                       longer content grows the page rather than clipping. */
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-80 min-h-[452px] flex flex-col">{renderPreview()}</div>
                   )}
                   {activeCategory === "Service_Ticket" && (
-                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-full max-w-xl">{renderPreview()}</div>
+                    /* A4 portrait page — same 210 × 297 ratio as the other A4 docs. */
+                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-80 min-h-[452px] flex flex-col">{renderPreview()}</div>
                   )}
                   {activeCategory === "Customer_PDF" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-full max-w-md">{renderPreview()}</div>
                   )}
+                  </div>
                 </div>
 
                 {/* Info bar */}

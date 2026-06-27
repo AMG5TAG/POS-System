@@ -1037,17 +1037,21 @@ export default function POSPage() {
   // Applies to both ordinary sales and invoice-balance payments. "split" has no
   // config entry, so split payments yield 0 — matching the server, which only
   // surcharges single-method payments.
+  /* In Invoice Payment Mode the amount charged is the payment amount handed over
+     from the invoices page (a partial payment when less than the balance),
+     capped at the outstanding balance. Falls back to the full balance. */
+  const invoiceCharge = invoicePay ? Math.min(invoicePay.amount ?? invoicePay.balance, invoicePay.balance) : 0;
   const saleSurcharge = useMemo(() => {
-    const base = invoicePay ? invoicePay.balance : total;
+    const base = invoicePay ? invoiceCharge : total;
     const cfg = (surchargeConfig?.items ?? []).find((s) => s.paymentMethod === String(payMethod));
     if (!cfg || !cfg.enabled || !cfg.passOn) return 0;
     return Math.round(((cfg.percent / 100) * base + cfg.fixed) * 100) / 100;
-  }, [surchargeConfig, payMethod, total, invoicePay]);
+  }, [surchargeConfig, payMethod, total, invoicePay, invoiceCharge]);
 
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
-     the locked remaining balance; otherwise it's the cart total — either way
-     plus any passed-on surcharge for the chosen payment method. */
-  const effectiveTotal = Math.round(((invoicePay ? invoicePay.balance : total) + saleSurcharge) * 100) / 100;
+     the (possibly partial) invoice payment amount; otherwise it's the cart total
+     — either way plus any passed-on surcharge for the chosen payment method. */
+  const effectiveTotal = Math.round(((invoicePay ? invoiceCharge : total) + saleSurcharge) * 100) / 100;
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
@@ -2689,7 +2693,9 @@ export default function POSPage() {
     if (invoicePay) {
       if (invoicePayPending) return;
       const inv = invoicePay;
-      const amount = inv.balance;
+      // The (possibly partial) amount handed over from the invoices page, capped
+      // at the outstanding balance.
+      const amount = Math.min(inv.amount ?? inv.balance, inv.balance);
       // When settling via split, send structured legs so each method is recorded
       // and reported separately (gift cards use the single-payment path).
       const invoiceSplitLegs = paymentMethod === "split"
@@ -3474,13 +3480,21 @@ export default function POSPage() {
                 {invoicePay.customerName && (
                   <p className="text-xs text-muted-foreground">Customer: {invoicePay.customerName}</p>
                 )}
+                {invoiceCharge < invoicePay.balance - 0.005 && (
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-muted-foreground">Balance due</span>
+                    <span className="text-sm font-medium">{formatCurrency(invoicePay.balance)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-baseline border-t pt-2">
-                  <span className="text-sm text-muted-foreground">Balance due</span>
-                  <span className="text-lg font-bold text-primary">{formatCurrency(invoicePay.balance)}</span>
+                  <span className="text-sm text-muted-foreground">{invoiceCharge < invoicePay.balance - 0.005 ? "Paying now" : "Balance due"}</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(invoiceCharge)}</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground max-w-xs">
-                The terminal is locked to this invoice balance. Choose any payment method and tap Charge to record the payment.
+                {invoiceCharge < invoicePay.balance - 0.005
+                  ? `Recording a partial payment of ${formatCurrency(invoiceCharge)}. ${formatCurrency(invoicePay.balance - invoiceCharge)} will remain outstanding.`
+                  : "The terminal is locked to this invoice balance. Choose any payment method and tap Charge to record the payment."}
               </p>
             </div>
           ) : cart.length === 0 ? (
@@ -3904,7 +3918,7 @@ export default function POSPage() {
                 <p className="text-4xl font-bold tabular-nums">{formatCurrency(effectiveTotal)}</p>
                 {saleSurcharge > 0 && (
                   <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
-                    {formatCurrency((invoicePay ? invoicePay.balance : total))} + {formatCurrency(saleSurcharge)} surcharge
+                    {formatCurrency((invoicePay ? invoiceCharge : total))} + {formatCurrency(saleSurcharge)} surcharge
                   </p>
                 )}
                 {numpadInput && parseFloat(numpadInput) > 0 && (

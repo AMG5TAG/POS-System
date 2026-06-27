@@ -27,6 +27,10 @@ export const invoicesTable = pgTable("invoices", {
   viewedAt: timestamp("viewed_at", { withTimezone: true }),
   notes: text("notes"),
   events: json("events"),
+  // Optional planned instalment schedule: an array of { label?, amount, dueDate? }.
+  // Payments are still tracked by the single `amountPaid` total; instalment
+  // coverage (paid / partial / due) is derived from it cumulatively (FIFO).
+  paymentSchedule: json("payment_schedule"),
   discountType:  text("discount_type"),
   discountValue: numeric("discount_value", { precision: 10, scale: 2 }),
   discountTotal: numeric("discount_total", { precision: 10, scale: 2 }),

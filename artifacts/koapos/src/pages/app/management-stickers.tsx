@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Printer, Tag, Info, Barcode, Search, X, ChevronRight, LayoutTemplate, Check,
-  Save, Star, Copy, Trash2, Plus,
+  Save, Star, Copy, Trash2, Plus, ZoomIn, ZoomOut,
 } from "lucide-react";
 import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
@@ -134,6 +134,8 @@ export default function ManagementStickersPage() {
   const [orientation,   setOrientation]     = useState<"horizontal" | "vertical">("horizontal");
   const [barcodePosition, setBarcodePosition] = useState<"top" | "bottom">("bottom");
   const [colorMode,     setColorMode]       = useState<"bw" | "color">("bw");
+  const [previewZoom,   setPreviewZoom]     = useState(1);
+  const adjustZoom = (delta: number) => setPreviewZoom((z) => Math.min(3, Math.max(0.5, Math.round((z + delta) * 100) / 100)));
   const [quantity,      setQuantity]        = useState(1);
   const [showTplPicker, setShowTplPicker]   = useState(false);
 
@@ -704,28 +706,49 @@ export default function ManagementStickersPage() {
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Label Preview</p>
-              <Badge variant="outline" className="text-[10px]">
-                {selectedSize.widthMm}×{selectedSize.heightMm}mm · #{selectedSize.id}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {/* Zoom controls */}
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(-0.25)} disabled={previewZoom <= 0.5} aria-label="Zoom out">
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewZoom(1)}
+                    className="text-xs tabular-nums text-muted-foreground w-10 text-center hover:text-foreground"
+                    title="Reset zoom"
+                  >
+                    {Math.round(previewZoom * 100)}%
+                  </button>
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(0.25)} disabled={previewZoom >= 3} aria-label="Zoom in">
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <Badge variant="outline" className="text-[10px]">
+                  {selectedSize.widthMm}×{selectedSize.heightMm}mm · #{selectedSize.id}
+                </Badge>
+              </div>
             </div>
 
             {/* Preview card — flex-1 so it fills column height */}
             <Card className="flex-1 flex flex-col">
               <CardContent className="p-5 flex flex-col flex-1 gap-4">
                 {/* Preview canvas — flex-1 to fill card */}
-                <div className="flex-1 flex items-center justify-center rounded-xl border bg-gray-50 min-h-48">
-                  <LabelPreview
-                    type={selectedType}
-                    fields={currentFields}
-                    size={selectedSize}
-                    businessName={businessName}
-                    brandColor={brandColor}
-                    logoUrl={profile.logo}
-                    businessWebsite={profile.website}
-                    orientation={orientation}
-                    barcodePosition={barcodePosition}
-                    colorMode={colorMode}
-                  />
+                <div className="flex-1 flex items-center justify-center rounded-xl border bg-gray-50 min-h-48 overflow-auto">
+                  <div style={{ transform: `scale(${previewZoom})`, transformOrigin: "center" }} className="transition-transform">
+                    <LabelPreview
+                      type={selectedType}
+                      fields={currentFields}
+                      size={selectedSize}
+                      businessName={businessName}
+                      brandColor={brandColor}
+                      logoUrl={profile.logo}
+                      businessWebsite={profile.website}
+                      orientation={orientation}
+                      barcodePosition={barcodePosition}
+                      colorMode={colorMode}
+                    />
+                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground text-center">

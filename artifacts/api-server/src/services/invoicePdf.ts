@@ -81,6 +81,12 @@ export interface InvoicePdfData {
   styleVariant?: string | null;
   /** Show the customer-profile QR (needs `customerQrValue`). */
   showCustomerQr?: boolean;
+  /** Show a merchant-supplied custom QR image (needs `customQrImage`). */
+  showCustomQr?: boolean;
+  /** Custom QR image — a data:/https URL stored on the template. */
+  customQrImage?: string | null;
+  /** Caption shown under the custom QR. */
+  customQrCaption?: string | null;
   /** Show the loyalty-earned banner (needs `loyaltyPointsEarned`). */
   showLoyaltyEarned?: boolean;
   /** Show accepted payment-method chips. */
@@ -238,6 +244,8 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
       socialIconBrandColors: data.socialIconBrandColors,
       showAllCustomerDetails: data.showAllCustomerDetails,
       showCustomerQr: data.showCustomerQr,
+      showCustomQr: data.showCustomQr,
+      customQrCaption: data.customQrCaption,
       showLoyaltyEarned: data.showLoyaltyEarned,
       showPaymentMethods: data.showPaymentMethods,
       showBarcode: data.showBarcode,
@@ -278,6 +286,10 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
   // Encode the customer-profile QR server-side (the renderer is pure HTML).
   if (data.showCustomerQr && data.customerQrValue) {
     doc.customerQrDataUrl = await genQrDataUrl(data.customerQrValue);
+  }
+  // Custom QR is already an image (uploaded data URL / https URL) — pass through.
+  if (data.showCustomQr && data.customQrImage) {
+    doc.customQrDataUrl = data.customQrImage;
   }
   const html = buildInvoiceHtml(doc);
   try {

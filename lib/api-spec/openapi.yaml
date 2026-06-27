@@ -8088,6 +8088,35 @@ paths:
         "404":
           description: Invoice not found
 
+  /invoices/{id}/payment/reverse:
+    post:
+      operationId: reverseInvoicePayment
+      tags: [invoices]
+      summary: Reverse or correct a recorded payment against an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoicePaymentReverseInput"
+      responses:
+        "200":
+          description: Updated invoice after the payment was reversed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          description: Validation error
+        "404":
+          description: Invoice not found
+
   /invoices/{id}/send-email:
     post:
       operationId: sendInvoiceEmail
@@ -15533,14 +15562,31 @@ components:
       type: object
       required: [type, timestamp]
       properties:
+        # Stable id stamped on payment events so a payment can be targeted for
+        # reversal/correction. Older events may not carry one.
+        id:             { type: string, nullable: true }
         type:           { type: string }
         timestamp:      { type: string, format: date-time }
         detail:         { type: string, nullable: true }
         method:         { type: string, nullable: true }
         # Per-leg payment amount. One payment event is recorded per method, so a
         # split payment produces several events whose amounts sum to the payment.
+        # Reversal events carry a negative amount.
         amount:         { type: number, nullable: true }
+        # For a payment-reversal event: the id of the payment event it reverses.
+        reverses:       { type: string, nullable: true }
         idempotencyKey: { type: string, nullable: true }
+
+    # A single planned instalment on an invoice's payment schedule. Coverage
+    # (paid / partial / due) is derived from the invoice's amountPaid, not stored
+    # per instalment.
+    InvoiceInstalment:
+      type: object
+      required: [amount]
+      properties:
+        label:   { type: string, nullable: true }
+        amount:  { type: number, minimum: 0 }
+        dueDate: { type: string, format: date-time, nullable: true }
 
     # A single payment leg — one method and the amount tendered on it. Used to
     # express split payments (multiple methods settling one payment) on both
@@ -15574,6 +15620,10 @@ components:
         events:
           type: array
           items: { $ref: "#/components/schemas/InvoiceEvent" }
+        paymentSchedule:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InvoiceInstalment" }
         notes:                { type: string, nullable: true }
         dueDate:              { type: string, format: date-time, nullable: true }
         paidAt:               { type: string, format: date-time, nullable: true }
@@ -15624,6 +15674,10 @@ components:
         invoicePrefix: { type: string }
         invoiceDigits: { type: integer }
         recurring:     { $ref: "#/components/schemas/InvoiceRecurringInput" }
+        paymentSchedule:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InvoiceInstalment" }
         serviceJobId:  { type: integer, nullable: true }
         appointmentId: { type: integer, nullable: true }
 
@@ -15656,6 +15710,10 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/InvoiceRecurringUpdate"
+        paymentSchedule:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InvoiceInstalment" }
         serviceJobId:  { type: integer, nullable: true }
         appointmentId: { type: integer, nullable: true }
 
@@ -15678,11 +15736,25 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PaymentLeg" }
         giftCardPayment: { $ref: "#/components/schemas/GiftCardPaymentRef" }
+        # Optional free-text note recorded against the payment (e.g. "deposit",
+        # "cheque #123"). Appended to the recorded payment event's detail.
+        note:            { type: string }
         idempotencyKey:  { type: string }
 
     InvoicePaymentResult:
       allOf:
         - $ref: "#/components/schemas/Invoice"
+
+    # Reverse (or correct) a previously recorded payment. `amount` is the value to
+    # un-apply from the invoice's amountPaid; `eventId` optionally targets the
+    # specific payment event being reversed (for the activity trail).
+    InvoicePaymentReverseInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:  { type: number, minimum: 0 }
+        eventId: { type: string }
+        reason:  { type: string }
 
     SendInvoiceEmailInput:
       type: object
