@@ -24,6 +24,7 @@ export * from "./brands";
 export * from "./suppliers";
 export * from "./loyalty-settings";
 export * from "./service-settings";
+export * from "./invoice-settings";
 export * from "./payment-method-surcharges";
 export * from "./mobile-pos-app";
 export * from "./tags";

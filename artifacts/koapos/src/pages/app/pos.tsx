@@ -50,9 +50,10 @@ import {
 } from "@/pages/app/management-registers";
 import {
   loadRegisterSession, saveRegisterSession, clearRegisterSession, getOrCreateDeviceId,
-  ACTIVE_REGISTER_ID_KEY, parseStaffPosPrefs,
+  ACTIVE_REGISTER_ID_KEY, parseStaffPosPrefs, parseCustomPaymentMethods,
   type RegisterSession,
 } from "@/lib/pos-local-settings";
+import { resolveCustomPaymentIcon } from "@/lib/custom-payment-icons";
 import { useStaffSession } from "@/lib/staff-day-session";
 import { loyaltyUnitName, loyaltyProgramName } from "@/lib/loyalty-naming";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
@@ -3942,9 +3943,19 @@ export default function POSPage() {
                   label: INTEGRATION_PAYMENT_LABELS[key] ?? key,
                   isIntegration: true,
                 }));
+                // Merchant-defined tenders (Management → POS Registers). Sourced
+                // from server settings so they appear without a localStorage sync.
+                const customMethods = parseCustomPaymentMethods(posSettingsData?.customPaymentMethods)
+                  .filter(m => m.enabled);
                 const allMethods = [
                   ...builtIn.map(m => ({ id: m.id as PaymentMethodId, label: m.label, Icon: m.icon, isIntegration: false })),
                   ...integrationMethods.map(m => ({ ...m, Icon: CreditCard })),
+                  ...customMethods.map(m => ({
+                    id: `__custom__${m.id}` as PaymentMethodId,
+                    label: m.label,
+                    Icon: resolveCustomPaymentIcon(m.icon),
+                    isIntegration: false,
+                  })),
                   { id: "gift_card" as PaymentMethodId, label: "Gift Card", Icon: Gift, isIntegration: false },
                   // Creating an invoice is only offered for a normal sale — not
                   // when the terminal is locked to settling an existing invoice.
@@ -4447,15 +4458,26 @@ export default function POSPage() {
                   // so we don't depend on async setState reaching the payload.
                   const isIntegration = String(payMethod).startsWith("__intg__");
                   const intgKey = isIntegration ? String(payMethod).slice("__intg__".length) : null;
+                  // Merchant-defined custom tenders carry no payment-method enum
+                  // value, so they record as a generic "other" tender with the
+                  // method name preserved in an audit note.
+                  const isCustom = String(payMethod).startsWith("__custom__");
+                  const customId = isCustom ? String(payMethod).slice("__custom__".length) : null;
                   // Async BNPL integrations (Zip, Afterpay) have a real payment
                   // flow — recorded as a first-class tender (handleCheckout routes
                   // them to the pending dialog). Other integrations are still
                   // recorded as a generic "other" tender with an audit note.
                   const isAsyncProvider = !!intgKey && ASYNC_PAYMENT_PROVIDERS.has(intgKey);
                   const apiMethod: TransactionInputPaymentMethod =
-                    isAsyncProvider ? intgKey as TransactionInputPaymentMethod : isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
+                    isAsyncProvider ? intgKey as TransactionInputPaymentMethod
+                    : (isIntegration || isCustom) ? "other"
+                    : payMethod as TransactionInputPaymentMethod;
                   let extraNote: string | undefined;
-                  if (isIntegration && !isAsyncProvider) {
+                  if (isCustom) {
+                    const label = parseCustomPaymentMethods(posSettingsData?.customPaymentMethods)
+                      .find(m => m.id === customId)?.label ?? "Custom";
+                    extraNote = `[Payment via ${label}]`;
+                  } else if (isIntegration && !isAsyncProvider) {
                     const label = INTEGRATION_PAYMENT_LABELS[intgKey!] ?? intgKey!;
                     extraNote = `[Payment via ${label} (${intgKey})]`;
                   } else if (payMethod === "direct_deposit" && depositDesc.trim()) {

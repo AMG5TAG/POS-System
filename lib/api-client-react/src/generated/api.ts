@@ -168,6 +168,8 @@ import type {
   InvoiceList,
   InvoicePaymentInput,
   InvoicePaymentReverseInput,
+  InvoiceSettings,
+  InvoiceSettingsInput,
   InvoiceUpdate,
   KpiProgressResponse,
   KpiSettings,
@@ -6415,6 +6417,154 @@ export const useUpdateServiceSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateServiceSettingsMutationOptions(options));
+    }
+
+export const getGetInvoiceSettingsUrl = () => {
+
+
+
+
+  return `/api/invoice-settings`
+}
+
+/**
+ * @summary Get merchant invoicing settings
+ */
+export const getInvoiceSettings = async ( options?: RequestInit): Promise<InvoiceSettings> => {
+
+  return customFetch<InvoiceSettings>(getGetInvoiceSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetInvoiceSettingsQueryKey = () => {
+    return [
+    `/api/invoice-settings`
+    ] as const;
+    }
+
+
+export const getGetInvoiceSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getInvoiceSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInvoiceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetInvoiceSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getInvoiceSettings>>> = ({ signal }) => getInvoiceSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getInvoiceSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetInvoiceSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getInvoiceSettings>>>
+export type GetInvoiceSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get merchant invoicing settings
+ */
+
+export function useGetInvoiceSettings<TData = Awaited<ReturnType<typeof getInvoiceSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getInvoiceSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetInvoiceSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateInvoiceSettingsUrl = () => {
+
+
+
+
+  return `/api/invoice-settings`
+}
+
+/**
+ * @summary Update merchant invoicing settings
+ */
+export const updateInvoiceSettings = async (invoiceSettingsInput: InvoiceSettingsInput, options?: RequestInit): Promise<InvoiceSettings> => {
+
+  return customFetch<InvoiceSettings>(getUpdateInvoiceSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      invoiceSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateInvoiceSettingsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInvoiceSettings>>, TError,{data: BodyType<InvoiceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateInvoiceSettings>>, TError,{data: BodyType<InvoiceSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateInvoiceSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateInvoiceSettings>>, {data: BodyType<InvoiceSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateInvoiceSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateInvoiceSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateInvoiceSettings>>>
+    export type UpdateInvoiceSettingsMutationBody = BodyType<InvoiceSettingsInput>
+    export type UpdateInvoiceSettingsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Update merchant invoicing settings
+ */
+export const useUpdateInvoiceSettings = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateInvoiceSettings>>, TError,{data: BodyType<InvoiceSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateInvoiceSettings>>,
+        TError,
+        {data: BodyType<InvoiceSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateInvoiceSettingsMutationOptions(options));
     }
 
 export const getGetLoyaltyLeaderboardUrl = () => {

@@ -7,6 +7,8 @@ import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
+import { getInvoiceSettings } from "./invoice-settings";
+import { sendInvoiceSms } from "../services/invoiceSms";
 import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import crypto from "node:crypto";
 import {
@@ -462,6 +464,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
+  const invSettings = await getInvoiceSettings(merchantId);
 
   // Validate client-supplied foreign keys against this merchant before insert.
   // A stale value (e.g. a cached day-staff id from before a data restore) would
@@ -485,7 +488,9 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     .from(invoicesTable)
     .where(eq(invoicesTable.merchantId, merchantId));
 
-  const prefix = (invoicePrefix ?? "KI").toUpperCase();
+  // Prefer the merchant's invoice-settings prefix; fall back to the client value
+  // then the historical "KI" default so existing numbering is preserved.
+  const prefix = (invSettings.numberPrefix || invoicePrefix || "KI").toUpperCase();
   const digits = Math.max(1, Math.min(10, invoiceDigits ?? 5));
   const invNumber = `${prefix}${String(Number(countRow.count) + 1).padStart(digits, "0")}`;
 
@@ -539,6 +544,28 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     : fmt(inv);
   assertValidInvoiceResponse(GetInvoiceResponse, createInvoiceBody, "POST /invoices");
   res.status(201).json(createInvoiceBody);
+
+  // Fire-and-forget auto-send: deliver the new invoice to the customer when the
+  // merchant has enabled it, via the configured channel(s). Runs after responding
+  // so invoice creation never blocks on PDF generation / email delivery.
+  const autoSendBase = publicOrigin(req);
+  void (async () => {
+    try {
+      if (!invSettings.autoSendOnCreate) return;
+      const method = invSettings.defaultSendMethod;
+      const custEmail = row?.customerEmail ?? null;
+      if ((method === "email" || method === "both") && custEmail) {
+        const r = await sendInvoiceEmailInternal(merchantId, inv.id, { to: custEmail, baseUrl: autoSendBase, kind: "invoice" });
+        if (!r.success) console.warn(`[invoices] auto-send email failed for invoice ${inv.id}: ${r.error}`);
+      }
+      if (method === "sms" || method === "both") {
+        const r = await sendInvoiceSms(merchantId, inv.id, "invoice");
+        if (!r.success && !r.skipped) console.warn(`[invoices] auto-send SMS failed for invoice ${inv.id}: ${r.error}`);
+      }
+    } catch (err) {
+      console.warn(`[invoices] auto-send error for invoice ${inv.id}:`, err);
+    }
+  })();
 });
 
 // PATCH /invoices/:id/viewed
@@ -1212,6 +1239,51 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { email, template } = bodyParsed.data;
 
+  const result = await sendInvoiceEmailInternal(merchantId, id, {
+    to: email,
+    template,
+    baseUrl: publicOrigin(req),
+    kind: "invoice",
+  });
+  if (result.notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (!result.success) {
+    req.log.warn({ invoiceId: id, email, error: result.error }, "Invoice email failed");
+    res.status(400).json({ error: result.error ?? "Failed to send invoice email" });
+    return;
+  }
+  req.log.info({ invoiceId: id, email }, "Invoice emailed");
+  res.json({ success: true });
+});
+
+/** Template-options type accepted by {@link sendInvoiceEmailInternal}. */
+type SendInvoiceEmailOk = Extract<ReturnType<typeof SendInvoiceEmailBody.safeParse>, { success: true }>["data"];
+type InvoiceEmailTemplate = NonNullable<SendInvoiceEmailOk["template"]>;
+
+/** Fill the merchant's invoice-settings subject/message placeholders. */
+function applyInvoicePlaceholders(s: string, vars: { number: string; business: string; total: string; dueDate: string }): string {
+  return s
+    .replace(/{number}/g, vars.number)
+    .replace(/{business}/g, vars.business)
+    .replace(/{total}/g, vars.total)
+    .replace(/{dueDate}/g, vars.dueDate);
+}
+
+/**
+ * Build and send an invoice email, applying the merchant's invoice settings
+ * (default subject/message templates, attach-PDF toggle, BCC the business). Shared
+ * by the manual send route, auto-send-on-create, and the reminder/overdue scheduler.
+ *
+ * `kind` tunes the framing: "invoice" (default), "reminder" (before due) or
+ * "overdue" (past due). `baseUrl` enables the open-tracking pixel when present
+ * (omitted for background sends where there is no request origin).
+ */
+export async function sendInvoiceEmailInternal(
+  merchantId: number,
+  id: number,
+  opts: { to: string; template?: InvoiceEmailTemplate | null; baseUrl?: string | null; kind?: "invoice" | "reminder" | "overdue" },
+): Promise<{ success: boolean; error?: string; notFound?: boolean }> {
+  const { to: email, template, baseUrl = null, kind = "invoice" } = opts;
+
   const [row] = await db
     .select({
       invoice: invoicesTable,
@@ -1230,12 +1302,13 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
-  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (!row) return { success: false, notFound: true };
 
-  const [merchant, bp, emailTplRow] = await Promise.all([
+  const [merchant, bp, emailTplRow, settings] = await Promise.all([
     db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId)).then((r) => r[0]),
     db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).then((r) => r[0]),
     db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Invoice"))).then((r) => r[0]),
+    getInvoiceSettings(merchantId),
   ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
   const inv = row.invoice;
@@ -1256,10 +1329,29 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     .replace(/{{customer\.name}}/g, cName || "")
     .replace(/{{[^}]+}}/g, "");
 
-  const subject  = resolve(tpl.subjectLine || `Invoice ${inv.invoiceNumber} from ${bizName}`);
+  const dueDateStr = inv.dueDate
+    ? new Date(inv.dueDate).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const phVars = { number: inv.invoiceNumber, business: bizName, total: totalStr, dueDate: dueDateStr || "—" };
+  const settingsSubject = settings.emailSubject.trim()
+    ? applyInvoicePlaceholders(settings.emailSubject, phVars)
+    : `Invoice ${inv.invoiceNumber} from ${bizName}`;
+  const settingsMessage = settings.emailMessage.trim()
+    ? applyInvoicePlaceholders(settings.emailMessage, phVars)
+    : "";
+
+  const baseSubject = resolve(tpl.subjectLine || settingsSubject);
+  const subject = kind === "reminder" ? `Reminder: ${baseSubject}`
+    : kind === "overdue" ? `Overdue: ${baseSubject}`
+    : baseSubject;
   const greeting = resolve(tpl.customGreeting || (cName ? `Hi ${cName.split(" ")[0]},` : "Hi,"));
   const signOff  = resolve(tpl.customSignOff  || `— The team at ${bizName}`);
-  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage) : "";
+  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage)
+    : kind === "reminder"
+      ? `This is a friendly reminder that invoice ${inv.invoiceNumber} for ${totalStr} is due${dueDateStr ? ` on ${dueDateStr}` : " soon"}.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+    : kind === "overdue"
+      ? `Invoice ${inv.invoiceNumber} for ${totalStr} is now overdue${dueDateStr ? ` (was due ${dueDateStr})` : ""}. Please arrange payment at your earliest convenience.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+    : settingsMessage;
   const thankYou = resolve(tpl.thankYouMsg || "Thank you for your business!");
   const footer   = tpl.footerText ? resolve(tpl.footerText) : "";
 
@@ -1329,7 +1421,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     || row.customerAddress
     || null;
   const emailTplOpts = (emailTplRow?.options ?? {}) as Record<string, unknown>;
-  const pdfBuffer = await buildInvoicePdf({
+  const pdfBuffer = settings.attachPdf ? await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
     createdAt:     inv.createdAt.toISOString(),
@@ -1381,37 +1473,40 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     showCustomQr:           Boolean(emailTplOpts.showCustomQr),
     customQrImage:          (emailTplOpts.customQrImage as string | undefined) || null,
     customQrCaption:        (emailTplOpts.customQrCaption as string | undefined) || null,
-  });
+  }) : null;
 
-  // Embed a 1×1 tracking pixel so viewedAt is set when the customer opens the email
-  const baseUrl = publicOrigin(req);
-  const pingUrl = `${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}`;
-  const htmlWithPixel = html + `\n<img src="${pingUrl}" width="1" height="1" alt="" style="display:none" />`;
+  // Embed a 1×1 open-tracking pixel when sending in a request context (manual
+  // send). Background sends (auto-send / scheduler) pass no baseUrl, so no pixel.
+  const htmlWithPixel = baseUrl
+    ? html + `\n<img src="${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}" width="1" height="1" alt="" style="display:none" />`
+    : html;
+
+  // BCC the business's own contact address when the merchant has opted in.
+  const bcc = settings.bccBusinessEmail ? (bp?.contactEmail || merchant?.email || undefined) : undefined;
 
   const result = await sendEmail(merchantId, {
     to: email,
     subject,
     html: htmlWithPixel,
     text: `${greeting}\n\nInvoice ${inv.invoiceNumber} from ${bizName}\nTotal: ${totalStr}\n\n${cMsg}\n\n${signOff}\n${thankYou}`,
-    attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
+    ...(bcc ? { bcc } : {}),
+    ...(pdfBuffer ? { attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }] } : {}),
   });
 
   if (!result.success) {
-    req.log.warn({ invoiceId: id, email, error: result.error }, "Invoice email failed");
-    res.status(400).json({ error: result.error ?? "Failed to send invoice email" });
-    return;
+    return { success: false, error: result.error ?? "Failed to send invoice email" };
   }
 
-  // Mark as sent if still draft
+  // Mark as sent if still draft (only a first send promotes the status).
   if (inv.status === "draft") {
     await db.update(invoicesTable).set({ status: "sent" }).where(eq(invoicesTable.id, id));
   }
 
-  await appendInvoiceEvent(id, merchantId, { type: "email", timestamp: new Date().toISOString(), detail: email });
+  const eventType = kind === "reminder" ? "reminder" : kind === "overdue" ? "overdue" : "email";
+  await appendInvoiceEvent(id, merchantId, { type: eventType, timestamp: new Date().toISOString(), detail: email });
 
-  req.log.info({ invoiceId: id, email }, "Invoice emailed");
-  res.json({ success: true });
-});
+  return { success: true };
+}
 
 // POST /invoices/:id/event  — record a client-side event (download, print, etc.)
 router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> => {

@@ -10,6 +10,7 @@ import {
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
   getInvoicePdf, type Transaction,
   useListServiceJobs, useListAppointments,
+  useGetInvoiceSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -265,6 +266,16 @@ function getInvoicePrefix(): { invoicePrefix: string; invoiceDigits: number } {
   return { invoicePrefix: "KI", invoiceDigits: 5 };
 }
 
+/** ISO yyyy-mm-dd for `days` from today — used to default an invoice's due date
+ *  from the merchant's "default due date" setting. */
+function dueDateFromToday(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + Math.max(0, Math.round(days)));
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
 export default function POSInvoicesPage() {
@@ -497,6 +508,8 @@ export default function POSInvoicesPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
   const { profile } = useBusinessProfile();
   const { data: loyaltySettings } = useGetLoyaltySettings();
+  // Merchant invoicing defaults (Management → Invoices & Services → Invoices).
+  const { data: invoiceSettings } = useGetInvoiceSettings();
   // invoiceOpts still drives the email composer defaults below. The printed /
   // downloaded invoice + quote now render through the centralized document
   // template controller (shared buildInvoiceHtml layout + backend PDF).
@@ -782,11 +795,16 @@ export default function POSInvoicesPage() {
     setSaving(true);
     try {
       const prefixSettings = getInvoicePrefix();
+      // Fall back to the merchant's invoicing defaults when the cashier leaves
+      // the due date / notes blank on the create form.
+      const defaultedDueDate = form.dueDate
+        || (invoiceSettings ? dueDateFromToday(invoiceSettings.defaultDueDays) : undefined);
+      const defaultedNotes = form.notes || invoiceSettings?.defaultNotes || undefined;
       const body = {
         customerId: form.customerId ? parseInt(form.customerId) : undefined,
         staffId: dayStaff?.staffId ?? null,
-        dueDate: form.dueDate || undefined,
-        notes: form.notes || undefined,
+        dueDate: defaultedDueDate || undefined,
+        notes: defaultedNotes,
         items: validLines,
         invoicePrefix: prefixSettings.invoicePrefix,
         invoiceDigits: prefixSettings.invoiceDigits,

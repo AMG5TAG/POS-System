@@ -2578,6 +2578,110 @@ export const UpdateServiceSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get merchant invoicing settings
+ */
+export const getInvoiceSettingsResponseDefaultDueDaysMin = 0;
+
+export const getInvoiceSettingsResponseReminderDaysBeforeMin = 0;
+
+export const getInvoiceSettingsResponseOverdueDaysAfterMin = 0;
+
+export const getInvoiceSettingsResponseOverdueRepeatDaysMin = 0;
+
+export const getInvoiceSettingsResponseLateFeePercentMin = 0;
+
+
+
+export const GetInvoiceSettingsResponse = zod.object({
+  "defaultDueDays": zod.number().min(getInvoiceSettingsResponseDefaultDueDaysMin).describe('Days from issue date used to pre-fill a new invoice\'s due date. 0 = due on receipt.'),
+  "numberPrefix": zod.string().describe('Prefix shown before invoice numbers (e.g. INV-).'),
+  "defaultNotes": zod.string().describe('Notes pre-filled on every new invoice and printed on the PDF.'),
+  "defaultTerms": zod.string().describe('Payment terms \/ conditions printed in the invoice footer.'),
+  "reminderEnabled": zod.boolean().describe('Email the customer a reminder before the invoice falls due.'),
+  "reminderDaysBefore": zod.number().min(getInvoiceSettingsResponseReminderDaysBeforeMin).describe('How many days before the due date the reminder is sent.'),
+  "overdueEnabled": zod.boolean().describe('Email the customer when an invoice becomes overdue.'),
+  "overdueDaysAfter": zod.number().min(getInvoiceSettingsResponseOverdueDaysAfterMin).describe('Days after the due date before the first overdue notice is sent.'),
+  "overdueRepeatDays": zod.number().min(getInvoiceSettingsResponseOverdueRepeatDaysMin).describe('Repeat the overdue notice every N days. 0 = send once only.'),
+  "lateFeeEnabled": zod.boolean().describe('Apply a late fee to overdue invoices.'),
+  "lateFeePercent": zod.number().min(getInvoiceSettingsResponseLateFeePercentMin).describe('Late fee as a percentage of the invoice total.'),
+  "autoSendOnCreate": zod.boolean().describe('Automatically send the invoice to the customer as soon as it is created.'),
+  "defaultSendMethod": zod.enum(['email', 'sms', 'both']).describe('Default delivery channel pre-selected when sending an invoice.'),
+  "attachPdf": zod.boolean().describe('Attach a PDF copy of the invoice to outgoing emails.'),
+  "bccBusinessEmail": zod.boolean().describe('Send a blind copy of every invoice email to the business email address.'),
+  "emailSubject": zod.string().describe('Default email subject. Supports {number} and {business} placeholders.'),
+  "emailMessage": zod.string().describe('Default email body. Supports {number}, {business}, {total} and {dueDate} placeholders.')
+})
+
+
+/**
+ * @summary Update merchant invoicing settings
+ */
+export const updateInvoiceSettingsBodyDefaultDueDaysMin = 0;
+
+export const updateInvoiceSettingsBodyReminderDaysBeforeMin = 0;
+
+export const updateInvoiceSettingsBodyOverdueDaysAfterMin = 0;
+
+export const updateInvoiceSettingsBodyOverdueRepeatDaysMin = 0;
+
+export const updateInvoiceSettingsBodyLateFeePercentMin = 0;
+
+
+
+export const UpdateInvoiceSettingsBody = zod.object({
+  "defaultDueDays": zod.number().min(updateInvoiceSettingsBodyDefaultDueDaysMin).optional(),
+  "numberPrefix": zod.string().optional(),
+  "defaultNotes": zod.string().optional(),
+  "defaultTerms": zod.string().optional(),
+  "reminderEnabled": zod.boolean().optional(),
+  "reminderDaysBefore": zod.number().min(updateInvoiceSettingsBodyReminderDaysBeforeMin).optional(),
+  "overdueEnabled": zod.boolean().optional(),
+  "overdueDaysAfter": zod.number().min(updateInvoiceSettingsBodyOverdueDaysAfterMin).optional(),
+  "overdueRepeatDays": zod.number().min(updateInvoiceSettingsBodyOverdueRepeatDaysMin).optional(),
+  "lateFeeEnabled": zod.boolean().optional(),
+  "lateFeePercent": zod.number().min(updateInvoiceSettingsBodyLateFeePercentMin).optional(),
+  "autoSendOnCreate": zod.boolean().optional(),
+  "defaultSendMethod": zod.enum(['email', 'sms', 'both']).optional(),
+  "attachPdf": zod.boolean().optional(),
+  "bccBusinessEmail": zod.boolean().optional(),
+  "emailSubject": zod.string().optional(),
+  "emailMessage": zod.string().optional()
+})
+
+export const updateInvoiceSettingsResponseDefaultDueDaysMin = 0;
+
+export const updateInvoiceSettingsResponseReminderDaysBeforeMin = 0;
+
+export const updateInvoiceSettingsResponseOverdueDaysAfterMin = 0;
+
+export const updateInvoiceSettingsResponseOverdueRepeatDaysMin = 0;
+
+export const updateInvoiceSettingsResponseLateFeePercentMin = 0;
+
+
+
+export const UpdateInvoiceSettingsResponse = zod.object({
+  "defaultDueDays": zod.number().min(updateInvoiceSettingsResponseDefaultDueDaysMin).describe('Days from issue date used to pre-fill a new invoice\'s due date. 0 = due on receipt.'),
+  "numberPrefix": zod.string().describe('Prefix shown before invoice numbers (e.g. INV-).'),
+  "defaultNotes": zod.string().describe('Notes pre-filled on every new invoice and printed on the PDF.'),
+  "defaultTerms": zod.string().describe('Payment terms \/ conditions printed in the invoice footer.'),
+  "reminderEnabled": zod.boolean().describe('Email the customer a reminder before the invoice falls due.'),
+  "reminderDaysBefore": zod.number().min(updateInvoiceSettingsResponseReminderDaysBeforeMin).describe('How many days before the due date the reminder is sent.'),
+  "overdueEnabled": zod.boolean().describe('Email the customer when an invoice becomes overdue.'),
+  "overdueDaysAfter": zod.number().min(updateInvoiceSettingsResponseOverdueDaysAfterMin).describe('Days after the due date before the first overdue notice is sent.'),
+  "overdueRepeatDays": zod.number().min(updateInvoiceSettingsResponseOverdueRepeatDaysMin).describe('Repeat the overdue notice every N days. 0 = send once only.'),
+  "lateFeeEnabled": zod.boolean().describe('Apply a late fee to overdue invoices.'),
+  "lateFeePercent": zod.number().min(updateInvoiceSettingsResponseLateFeePercentMin).describe('Late fee as a percentage of the invoice total.'),
+  "autoSendOnCreate": zod.boolean().describe('Automatically send the invoice to the customer as soon as it is created.'),
+  "defaultSendMethod": zod.enum(['email', 'sms', 'both']).describe('Default delivery channel pre-selected when sending an invoice.'),
+  "attachPdf": zod.boolean().describe('Attach a PDF copy of the invoice to outgoing emails.'),
+  "bccBusinessEmail": zod.boolean().describe('Send a blind copy of every invoice email to the business email address.'),
+  "emailSubject": zod.string().describe('Default email subject. Supports {number} and {business} placeholders.'),
+  "emailMessage": zod.string().describe('Default email body. Supports {number}, {business}, {total} and {dueDate} placeholders.')
+})
+
+
+/**
  * Returns the top 10 customers by loyalty points for the merchant.
  * @summary Top loyalty earners
  */
@@ -6864,6 +6968,7 @@ export const GetPosSettingsResponse = zod.object({
   "merchantId": zod.number(),
   "enabledPaymentMethods": zod.string(),
   "enabledIntegrationPayments": zod.string(),
+  "customPaymentMethods": zod.string(),
   "gridColumns": zod.number(),
   "gridTileSize": zod.string(),
   "gridShowPrices": zod.string(),
@@ -6889,6 +6994,7 @@ export const GetPosSettingsResponse = zod.object({
 export const UpsertPosSettingsBody = zod.object({
   "enabledPaymentMethods": zod.string().optional(),
   "enabledIntegrationPayments": zod.string().optional(),
+  "customPaymentMethods": zod.string().optional(),
   "gridColumns": zod.number().optional(),
   "gridTileSize": zod.string().optional(),
   "gridShowPrices": zod.string().optional(),
@@ -6911,6 +7017,7 @@ export const UpsertPosSettingsResponse = zod.object({
   "merchantId": zod.number(),
   "enabledPaymentMethods": zod.string(),
   "enabledIntegrationPayments": zod.string(),
+  "customPaymentMethods": zod.string(),
   "gridColumns": zod.number(),
   "gridTileSize": zod.string(),
   "gridShowPrices": zod.string(),

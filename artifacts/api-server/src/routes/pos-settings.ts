@@ -28,6 +28,7 @@ router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
   const {
     enabledPaymentMethods,
     enabledIntegrationPayments,
+    customPaymentMethods,
     gridColumns,
     gridTileSize,
     gridShowPrices,
@@ -47,6 +48,7 @@ router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
   const patch = {
     ...(enabledPaymentMethods !== undefined && { enabledPaymentMethods }),
     ...(enabledIntegrationPayments !== undefined && { enabledIntegrationPayments }),
+    ...(customPaymentMethods !== undefined && { customPaymentMethods }),
     ...(gridColumns !== undefined && { gridColumns }),
     ...(gridTileSize !== undefined && { gridTileSize }),
     ...(gridShowPrices !== undefined && { gridShowPrices }),

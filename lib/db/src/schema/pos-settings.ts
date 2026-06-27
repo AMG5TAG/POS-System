@@ -6,6 +6,9 @@ export const posSettingsTable = pgTable("pos_settings", {
   merchantId:                integer("merchant_id").notNull().references(() => merchantsTable.id),
   enabledPaymentMethods:     text("enabled_payment_methods").notNull().default("[]"),
   enabledIntegrationPayments:text("enabled_integration_payments").notNull().default("[]"),
+  /** Merchant-defined payment methods (JSON array of {id,label,description,icon,enabled}).
+   *  Recorded at checkout as an "other" tender with an audit note carrying the label. */
+  customPaymentMethods:      text("custom_payment_methods").notNull().default("[]"),
   gridColumns:               integer("grid_columns").notNull().default(3),
   gridTileSize:              text("grid_tile_size").notNull().default("normal"),
   gridShowPrices:            text("grid_show_prices").notNull().default("true"),

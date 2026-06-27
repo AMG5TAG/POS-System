@@ -169,8 +169,9 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   {
-    name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/service-options",
+    name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/invoices",
     children: [
+      { name: "Invoices", href: "/management/invoices-services/invoices", icon: FileText },
       { name: "Service Options", href: "/management/invoices-services/service-options", icon: Wrench },
     ],
   },
@@ -406,6 +407,7 @@ const SEGMENT_LABEL: Record<string, string> = {
   "settings-integrations": "Settings & Integrations",
   "invoices-services": "Invoices & Services",
   "service-options": "Service Options",
+  "invoices": "Invoices",
   "mobile-pos": "Mobile POS",
 };
 

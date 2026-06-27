@@ -96,6 +96,7 @@ const ManagementRegistersPage = lazyWithRetry(() => import("@/pages/app/manageme
 const ManagementIntegrationsPage = lazyWithRetry(() => import("@/pages/app/management-integrations"));
 const ManagementIntegrationsHelpPage = lazyWithRetry(() => import("@/pages/app/management-integrations-help"));
 const ManagementServiceOptionsPage = lazyWithRetry(() => import("@/pages/app/management-service-options"));
+const ManagementInvoiceSettingsPage = lazyWithRetry(() => import("@/pages/app/management-invoice-settings"));
 const ManagementXeroPage = lazyWithRetry(() => import("@/pages/app/management-xero"));
 const ManagementImportExportPage = lazyWithRetry(() => import("@/pages/app/management-import-export"));
 const ManagementLoyaltyPage = lazyWithRetry(() => import("@/pages/app/management-loyalty"));
@@ -505,6 +506,9 @@ function Router() {
       </Route>
       <Route path="/management/customers/loyalty">
         <ManagementProtectedRoute component={ManagementLoyaltyPage} />
+      </Route>
+      <Route path="/management/invoices-services/invoices">
+        <ManagementProtectedRoute component={ManagementInvoiceSettingsPage} />
       </Route>
       <Route path="/management/invoices-services/service-options">
         <ManagementProtectedRoute component={ManagementServiceOptionsPage} />

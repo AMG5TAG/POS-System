@@ -1,6 +1,7 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { scheduleRecurringInvoices } from "./services/recurringInvoiceScheduler";
+import { scheduleInvoiceReminders } from "./services/invoiceReminderScheduler";
 import { scheduleMarketingAutomation } from "./services/marketingAutomationScheduler";
 import { scheduleReferralDigest } from "./services/referralDigestScheduler";
 import { scheduleLowStockAlerts } from "./services/lowStockAlertScheduler";
@@ -51,6 +52,7 @@ async function bootstrap() {
 
     logger.info({ port }, "Server listening");
   scheduleRecurringInvoices(logger);
+  scheduleInvoiceReminders(logger);
   scheduleMarketingAutomation(logger);
   scheduleReferralDigest(logger);
   scheduleLowStockAlerts(logger);

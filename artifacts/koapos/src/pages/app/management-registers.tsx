@@ -34,7 +34,12 @@ import {
 import { KEYBOARD_SHORTCUTS } from "@/lib/keyboard-shortcuts";
 import {
   getEnabledPaymentMethods, getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
+  parseCustomPaymentMethods, type CustomPaymentMethod,
 } from "@/lib/pos-local-settings";
+import {
+  CUSTOM_PAYMENT_ICONS, CUSTOM_PAYMENT_ICON_KEYS, DEFAULT_CUSTOM_PAYMENT_ICON,
+  resolveCustomPaymentIcon,
+} from "@/lib/custom-payment-icons";
 
 export {
   FORCE_STAFF_LOGIN_KEY,
@@ -241,6 +246,178 @@ function PaymentMethodsSection() {
           </>
         )}
       </div>
+    </div>
+  );
+}
+
+/* ─── Custom Payment Methods section ─────────────────────────────────────── */
+
+function genCustomPaymentId(): string {
+  try {
+    if (typeof crypto?.randomUUID === "function") return `cust_${crypto.randomUUID().slice(0, 8)}`;
+  } catch { /* ignore */ }
+  return `cust_${Math.random().toString(36).slice(2, 10)}`;
+}
+
+interface CustomMethodDraft { label: string; description: string; icon: string; }
+const EMPTY_CUSTOM_DRAFT: CustomMethodDraft = { label: "", description: "", icon: DEFAULT_CUSTOM_PAYMENT_ICON };
+
+function CustomPaymentMethodsSection() {
+  const { settings, upsert } = usePosSettings();
+  const methods = useMemo(
+    () => parseCustomPaymentMethods(settings?.customPaymentMethods),
+    [settings],
+  );
+
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<CustomMethodDraft>(EMPTY_CUSTOM_DRAFT);
+
+  const persist = (next: CustomPaymentMethod[], onDone?: () => void) => {
+    upsert.mutate(
+      { data: { customPaymentMethods: JSON.stringify(next) } },
+      { onSuccess: () => onDone?.() },
+    );
+  };
+
+  const openAdd = () => { setEditingId(null); setDraft(EMPTY_CUSTOM_DRAFT); setDialogOpen(true); };
+  const openEdit = (m: CustomPaymentMethod) => {
+    setEditingId(m.id);
+    setDraft({ label: m.label, description: m.description, icon: m.icon });
+    setDialogOpen(true);
+  };
+
+  const save = () => {
+    const label = draft.label.trim();
+    if (!label) { toast.error("Give the payment method a name"); return; }
+    const dupe = methods.some(m => m.label.toLowerCase() === label.toLowerCase() && m.id !== editingId);
+    if (dupe) { toast.error(`"${label}" already exists`); return; }
+    const icon = CUSTOM_PAYMENT_ICONS[draft.icon] ? draft.icon : DEFAULT_CUSTOM_PAYMENT_ICON;
+
+    let next: CustomPaymentMethod[];
+    if (editingId) {
+      next = methods.map(m => m.id === editingId
+        ? { ...m, label, description: draft.description.trim(), icon }
+        : m);
+    } else {
+      next = [...methods, { id: genCustomPaymentId(), label, description: draft.description.trim(), icon, enabled: true }];
+    }
+    persist(next, () => {
+      toast.success(editingId ? `${label} updated` : `${label} added`);
+      setDialogOpen(false);
+    });
+  };
+
+  const toggle = (id: string, enabled: boolean) => {
+    const m = methods.find(x => x.id === id);
+    persist(methods.map(x => x.id === id ? { ...x, enabled } : x), () =>
+      toast.success(`${m?.label ?? "Method"} ${enabled ? "enabled" : "disabled"}`));
+  };
+
+  const remove = (m: CustomPaymentMethod) => {
+    persist(methods.filter(x => x.id !== m.id), () => toast.success(`${m.label} removed`));
+  };
+
+  return (
+    <div className="border rounded-xl overflow-hidden">
+      <div className="px-5 py-4 border-b bg-muted/20 flex items-center justify-between gap-3">
+        <div>
+          <p className="font-semibold text-sm">Custom Payment Methods</p>
+          <p className="text-xs text-muted-foreground mt-0.5">Add your own tenders (e.g. Cheque, Bank Cheque, On Account). They appear at checkout and record as an "Other" payment.</p>
+        </div>
+        <Button size="sm" variant="outline" className="gap-1.5 shrink-0" onClick={openAdd}>
+          <Plus className="w-3.5 h-3.5" /> Add
+        </Button>
+      </div>
+      {methods.length === 0 ? (
+        <div className="px-5 py-6 text-center text-xs text-muted-foreground">
+          No custom payment methods yet.
+        </div>
+      ) : (
+        <div className="divide-y">
+          {methods.map((m) => {
+            const Icon = resolveCustomPaymentIcon(m.icon);
+            return (
+              <div key={m.id} className="flex items-center gap-4 px-5 py-3.5">
+                <div className={`p-2 rounded-lg shrink-0 transition-colors ${m.enabled ? "bg-primary/10 text-primary" : "bg-muted text-muted-foreground"}`}>
+                  <Icon className="w-4 h-4" />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={`text-sm font-medium transition-colors ${!m.enabled && "text-muted-foreground"}`}>{m.label}</p>
+                  {m.description && <p className="text-xs text-muted-foreground truncate">{m.description}</p>}
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground" onClick={() => openEdit(m)}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-destructive" onClick={() => remove(m)}>
+                  <Trash2 className="h-3.5 w-3.5" />
+                </Button>
+                <Switch checked={m.enabled} onCheckedChange={(v) => toggle(m.id, v)} />
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editingId ? "Edit Payment Method" : "New Payment Method"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4 py-1">
+            <div className="space-y-1.5">
+              <Label htmlFor="cpm-name">Name</Label>
+              <Input
+                id="cpm-name"
+                placeholder="e.g. Cheque"
+                value={draft.label}
+                maxLength={40}
+                onChange={(e) => setDraft(d => ({ ...d, label: e.target.value }))}
+                onKeyDown={(e) => { if (e.key === "Enter") save(); }}
+                autoFocus
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="cpm-desc">Description <span className="text-muted-foreground font-normal">(optional)</span></Label>
+              <Input
+                id="cpm-desc"
+                placeholder="Shown under the name in settings"
+                value={draft.description}
+                maxLength={80}
+                onChange={(e) => setDraft(d => ({ ...d, description: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Icon</Label>
+              <div className="grid grid-cols-7 gap-1.5">
+                {CUSTOM_PAYMENT_ICON_KEYS.map((key) => {
+                  const Icon = CUSTOM_PAYMENT_ICONS[key];
+                  const active = draft.icon === key;
+                  return (
+                    <button
+                      key={key}
+                      type="button"
+                      onClick={() => setDraft(d => ({ ...d, icon: key }))}
+                      className={cn(
+                        "flex items-center justify-center aspect-square rounded-lg border transition-all",
+                        active ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40 hover:bg-muted/60",
+                      )}
+                    >
+                      <Icon className="w-4 h-4" />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
+            <Button onClick={save} disabled={upsert.isPending}>
+              {upsert.isPending ? "Saving…" : editingId ? "Save changes" : "Add method"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
@@ -1227,6 +1404,7 @@ export default function ManagementRegistersPage() {
               </div>
             )}
             <PaymentMethodsSection />
+            <CustomPaymentMethodsSection />
             <div className="rounded-xl border divide-y">
               <ForceStaffLoginToggle />
               <StaffLoginMessageToggle />

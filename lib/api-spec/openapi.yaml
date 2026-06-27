@@ -38,6 +38,8 @@ tags:
     description: Service job management
   - name: service-settings
     description: Per-merchant service job menu options
+  - name: invoice-settings
+    description: Per-merchant invoicing defaults, reminders and sending options
   - name: Storage
     description: Object storage upload and serving endpoints.
   - name: cameras
@@ -1732,6 +1734,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceSettings"
+
+  /invoice-settings:
+    get:
+      operationId: getInvoiceSettings
+      tags: [invoice-settings]
+      summary: Get merchant invoicing settings
+      responses:
+        "200":
+          description: Invoice settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSettings"
+    put:
+      operationId: updateInvoiceSettings
+      tags: [invoice-settings]
+      summary: Update merchant invoicing settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceSettingsInput"
+      responses:
+        "200":
+          description: Updated invoice settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSettings"
 
   /loyalty/leaderboard:
     get:
@@ -12364,6 +12396,57 @@ components:
         repairWarrantyDays: { type: integer, minimum: 0 }
         reworkWarrantyDays: { type: integer, minimum: 0 }
 
+    InvoiceSettings:
+      type: object
+      required:
+        [defaultDueDays, numberPrefix, defaultNotes, defaultTerms,
+         reminderEnabled, reminderDaysBefore,
+         overdueEnabled, overdueDaysAfter, overdueRepeatDays, lateFeeEnabled, lateFeePercent,
+         autoSendOnCreate, defaultSendMethod, attachPdf, bccBusinessEmail, emailSubject, emailMessage]
+      properties:
+        # ── Defaults ──
+        defaultDueDays:     { type: integer, minimum: 0, description: "Days from issue date used to pre-fill a new invoice's due date. 0 = due on receipt." }
+        numberPrefix:       { type: string, description: "Prefix shown before invoice numbers (e.g. INV-)." }
+        defaultNotes:       { type: string, description: "Notes pre-filled on every new invoice and printed on the PDF." }
+        defaultTerms:       { type: string, description: "Payment terms / conditions printed in the invoice footer." }
+        # ── Payment reminders ──
+        reminderEnabled:    { type: boolean, description: "Email the customer a reminder before the invoice falls due." }
+        reminderDaysBefore: { type: integer, minimum: 0, description: "How many days before the due date the reminder is sent." }
+        # ── Overdue notifications ──
+        overdueEnabled:     { type: boolean, description: "Email the customer when an invoice becomes overdue." }
+        overdueDaysAfter:   { type: integer, minimum: 0, description: "Days after the due date before the first overdue notice is sent." }
+        overdueRepeatDays:  { type: integer, minimum: 0, description: "Repeat the overdue notice every N days. 0 = send once only." }
+        lateFeeEnabled:     { type: boolean, description: "Apply a late fee to overdue invoices." }
+        lateFeePercent:     { type: number, minimum: 0, description: "Late fee as a percentage of the invoice total." }
+        # ── Sending ──
+        autoSendOnCreate:   { type: boolean, description: "Automatically send the invoice to the customer as soon as it is created." }
+        defaultSendMethod:  { type: string, enum: [email, sms, both], description: "Default delivery channel pre-selected when sending an invoice." }
+        attachPdf:          { type: boolean, description: "Attach a PDF copy of the invoice to outgoing emails." }
+        bccBusinessEmail:   { type: boolean, description: "Send a blind copy of every invoice email to the business email address." }
+        emailSubject:       { type: string, description: "Default email subject. Supports {number} and {business} placeholders." }
+        emailMessage:       { type: string, description: "Default email body. Supports {number}, {business}, {total} and {dueDate} placeholders." }
+
+    InvoiceSettingsInput:
+      type: object
+      properties:
+        defaultDueDays:     { type: integer, minimum: 0 }
+        numberPrefix:       { type: string }
+        defaultNotes:       { type: string }
+        defaultTerms:       { type: string }
+        reminderEnabled:    { type: boolean }
+        reminderDaysBefore: { type: integer, minimum: 0 }
+        overdueEnabled:     { type: boolean }
+        overdueDaysAfter:   { type: integer, minimum: 0 }
+        overdueRepeatDays:  { type: integer, minimum: 0 }
+        lateFeeEnabled:     { type: boolean }
+        lateFeePercent:     { type: number, minimum: 0 }
+        autoSendOnCreate:   { type: boolean }
+        defaultSendMethod:  { type: string, enum: [email, sms, both] }
+        attachPdf:          { type: boolean }
+        bccBusinessEmail:   { type: boolean }
+        emailSubject:       { type: string }
+        emailMessage:       { type: string }
+
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:
       type: object
@@ -13453,12 +13536,13 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, quickViewShowSupplier, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, customPaymentMethods, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, quickViewShowSupplier, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
         enabledPaymentMethods:       { type: string }
         enabledIntegrationPayments:  { type: string }
+        customPaymentMethods:        { type: string }
         gridColumns:                 { type: integer }
         gridTileSize:                { type: string }
         gridShowPrices:              { type: string }
@@ -13481,6 +13565,7 @@ components:
       properties:
         enabledPaymentMethods:       { type: string }
         enabledIntegrationPayments:  { type: string }
+        customPaymentMethods:        { type: string }
         gridColumns:                 { type: integer }
         gridTileSize:                { type: string }
         gridShowPrices:              { type: string }

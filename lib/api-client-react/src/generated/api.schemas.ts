@@ -2616,6 +2616,104 @@ export interface ServiceSettingsInput {
   reworkWarrantyDays?: number;
 }
 
+/**
+ * Default delivery channel pre-selected when sending an invoice.
+ */
+export type InvoiceSettingsDefaultSendMethod = typeof InvoiceSettingsDefaultSendMethod[keyof typeof InvoiceSettingsDefaultSendMethod];
+
+
+export const InvoiceSettingsDefaultSendMethod = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface InvoiceSettings {
+  /**
+     * Days from issue date used to pre-fill a new invoice's due date. 0 = due on receipt.
+     * @minimum 0
+     */
+  defaultDueDays: number;
+  /** Prefix shown before invoice numbers (e.g. INV-). */
+  numberPrefix: string;
+  /** Notes pre-filled on every new invoice and printed on the PDF. */
+  defaultNotes: string;
+  /** Payment terms / conditions printed in the invoice footer. */
+  defaultTerms: string;
+  /** Email the customer a reminder before the invoice falls due. */
+  reminderEnabled: boolean;
+  /**
+     * How many days before the due date the reminder is sent.
+     * @minimum 0
+     */
+  reminderDaysBefore: number;
+  /** Email the customer when an invoice becomes overdue. */
+  overdueEnabled: boolean;
+  /**
+     * Days after the due date before the first overdue notice is sent.
+     * @minimum 0
+     */
+  overdueDaysAfter: number;
+  /**
+     * Repeat the overdue notice every N days. 0 = send once only.
+     * @minimum 0
+     */
+  overdueRepeatDays: number;
+  /** Apply a late fee to overdue invoices. */
+  lateFeeEnabled: boolean;
+  /**
+     * Late fee as a percentage of the invoice total.
+     * @minimum 0
+     */
+  lateFeePercent: number;
+  /** Automatically send the invoice to the customer as soon as it is created. */
+  autoSendOnCreate: boolean;
+  /** Default delivery channel pre-selected when sending an invoice. */
+  defaultSendMethod: InvoiceSettingsDefaultSendMethod;
+  /** Attach a PDF copy of the invoice to outgoing emails. */
+  attachPdf: boolean;
+  /** Send a blind copy of every invoice email to the business email address. */
+  bccBusinessEmail: boolean;
+  /** Default email subject. Supports {number} and {business} placeholders. */
+  emailSubject: string;
+  /** Default email body. Supports {number}, {business}, {total} and {dueDate} placeholders. */
+  emailMessage: string;
+}
+
+export type InvoiceSettingsInputDefaultSendMethod = typeof InvoiceSettingsInputDefaultSendMethod[keyof typeof InvoiceSettingsInputDefaultSendMethod];
+
+
+export const InvoiceSettingsInputDefaultSendMethod = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface InvoiceSettingsInput {
+  /** @minimum 0 */
+  defaultDueDays?: number;
+  numberPrefix?: string;
+  defaultNotes?: string;
+  defaultTerms?: string;
+  reminderEnabled?: boolean;
+  /** @minimum 0 */
+  reminderDaysBefore?: number;
+  overdueEnabled?: boolean;
+  /** @minimum 0 */
+  overdueDaysAfter?: number;
+  /** @minimum 0 */
+  overdueRepeatDays?: number;
+  lateFeeEnabled?: boolean;
+  /** @minimum 0 */
+  lateFeePercent?: number;
+  autoSendOnCreate?: boolean;
+  defaultSendMethod?: InvoiceSettingsInputDefaultSendMethod;
+  attachPdf?: boolean;
+  bccBusinessEmail?: boolean;
+  emailSubject?: string;
+  emailMessage?: string;
+}
+
 export interface CashDrawerEntry {
   id: number;
   type: string;
@@ -3494,6 +3592,7 @@ export interface PosSettings {
   merchantId: number;
   enabledPaymentMethods: string;
   enabledIntegrationPayments: string;
+  customPaymentMethods: string;
   gridColumns: number;
   gridTileSize: string;
   gridShowPrices: string;
@@ -3515,6 +3614,7 @@ export interface PosSettings {
 export interface PosSettingsInput {
   enabledPaymentMethods?: string;
   enabledIntegrationPayments?: string;
+  customPaymentMethods?: string;
   gridColumns?: number;
   gridTileSize?: string;
   gridShowPrices?: string;
