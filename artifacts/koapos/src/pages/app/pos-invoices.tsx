@@ -10,7 +10,7 @@ import {
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
   getInvoicePdf, type Transaction,
   useListServiceJobs, useListAppointments,
-  useGetInvoiceSettings,
+  useGetInvoiceSettings, useGetPosSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -45,6 +45,11 @@ import {
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { SendDialog, type SendMethodKey } from "@/components/send/send-dialog";
+import {
+  getEnabledPaymentMethods, getEnabledIntegrationPayments, parseCustomPaymentMethods,
+  INTEGRATION_PAYMENT_LABELS, ASYNC_PAYMENT_PROVIDERS,
+} from "@/lib/pos-local-settings";
+import { ALL_PAYMENT_METHODS } from "@/pages/app/management-registers";
 
 /* ── PDF image compression helper ───────────────────────────────────────── */
 
@@ -238,15 +243,9 @@ function ScheduleEditor({ schedule, setSchedule, total }: {
   );
 }
 
-/* Manual payment methods offered in the Record Payment dialog. Card processing
-   (with surcharges/receipt) is handled separately via the POS terminal. */
-const PAY_METHODS: { value: string; label: string }[] = [
-  { value: "cash",          label: "Cash" },
-  { value: "bank-transfer", label: "Bank Transfer" },
-  { value: "eftpos",        label: "EFTPOS / Card" },
-  { value: "cheque",        label: "Cheque" },
-  { value: "other",         label: "Other" },
-];
+/* The Record Payment dialog mirrors the tenders the current POS register offers
+   (built-in + integration + custom methods), built per-render from the same
+   settings the POS checkout reads — see `payMethods` in the page component. */
 
 const FREQ_LABELS = { weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", annually: "Annually" };
 
@@ -479,6 +478,26 @@ export default function POSInvoicesPage() {
   const sendEmailMutation = useSendInvoiceEmail();
   const recordPaymentMutation = useRecordInvoicePayment();
   const reversePaymentMutation = useReverseInvoicePayment();
+
+  /* Tenders offered in the Record Payment dialog, mirroring the POS register
+     this terminal is signed in to: the enabled built-in methods (localStorage,
+     same as POS checkout) + enabled integration providers + merchant-defined
+     custom methods (server pos_settings). "split" is omitted — it's a composite
+     of other tenders, not a single payment. */
+  const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const payMethods = useMemo<{ value: string; label: string }[]>(() => {
+    const enabledIds = getEnabledPaymentMethods();
+    const builtIn = ALL_PAYMENT_METHODS
+      .filter((m) => enabledIds.includes(m.id) && m.id !== "split")
+      .map((m) => ({ value: m.id, label: m.label }));
+    const integrations = getEnabledIntegrationPayments()
+      .map((key) => ({ value: `__intg__${key}`, label: INTEGRATION_PAYMENT_LABELS[key] ?? key }));
+    const custom = parseCustomPaymentMethods(posSettingsData?.customPaymentMethods)
+      .filter((m) => m.enabled)
+      .map((m) => ({ value: `__custom__${m.id}`, label: m.label }));
+    const all = [...builtIn, ...integrations, ...custom];
+    return all.length ? all : [{ value: "cash", label: "Cash" }];
+  }, [posSettingsData]);
 
   const { data: detailInvoiceRaw } = useGetInvoice(
     detailInvoiceId ?? 0,
@@ -915,7 +934,7 @@ export default function POSInvoicesPage() {
     if (balance <= 0) { toast.error("This invoice is already paid in full"); return; }
     setPayTarget(inv);
     setPayAmount(balance.toFixed(2));
-    setPayMethod("cash");
+    setPayMethod(payMethods[0]?.value ?? "cash");
     setPayNote("");
   };
 
@@ -930,12 +949,27 @@ export default function POSInvoicesPage() {
     if (amount > balance + 0.005) { toast.error(`Amount can't exceed the ${formatCurrency(balance)} balance due`); return; }
     setPaySaving(true);
     try {
+      // Map the chosen tender to a stored method, mirroring the POS checkout so
+      // the payment-method breakdown reports invoice legs alongside POS sales.
+      // Built-in tenders store their id; async BNPL integrations store their
+      // provider key; other integrations and custom tenders record as a generic
+      // "other" leg with the label captured in an audit note.
+      const selected = payMethods.find((m) => m.value === payMethod);
+      const isIntg = payMethod.startsWith("__intg__");
+      const isCustom = payMethod.startsWith("__custom__");
+      const intgKey = isIntg ? payMethod.slice("__intg__".length) : "";
+      const isAsyncIntg = isIntg && ASYNC_PAYMENT_PROVIDERS.has(intgKey);
+      const apiMethod = isAsyncIntg ? intgKey : (isIntg || isCustom) ? "other" : payMethod;
+      const labelNote = (isCustom || (isIntg && !isAsyncIntg))
+        ? `[Payment via ${selected?.label ?? "Other"}]`
+        : "";
+      const note = [payNote.trim(), labelNote].filter(Boolean).join(" ") || undefined;
       await recordPaymentMutation.mutateAsync({
         id: payTarget.id,
         data: {
           amount,
-          method: payMethod,
-          note: payNote.trim() || undefined,
+          method: apiMethod,
+          note,
           idempotencyKey: crypto.randomUUID(),
         } as Parameters<typeof recordPaymentMutation.mutateAsync>[0]["data"],
       });
@@ -1953,7 +1987,7 @@ export default function POSInvoicesPage() {
                   <Select value={payMethod} onValueChange={setPayMethod}>
                     <SelectTrigger><SelectValue /></SelectTrigger>
                     <SelectContent>
-                      {PAY_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                      {payMethods.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
                     </SelectContent>
                   </Select>
                 </div>
