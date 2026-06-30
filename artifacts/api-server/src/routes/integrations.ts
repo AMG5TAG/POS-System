@@ -14,7 +14,7 @@ const router: IRouter = Router();
 */
 export const INTEGRATIONS = [
   /* ── ACCOUNTING & FINANCE ──────────────────────────────────────────────── */
-  { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically. Connect with your own Xero app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: false },
+  { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Connect in one click to push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.", authType: "oauth" as const, fields: [] as F[], useVault: false },
   { key: "quickbooks",      label: "QuickBooks Online",     section: "accounting", category: "Accounting & Finance", description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online. Connect with your own QuickBooks app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true  },
   { key: "myob",            label: "MYOB",                  section: "accounting", category: "Accounting & Finance", description: "Sync sales data and end-of-day takings to MYOB AccountRight or Essentials. Connect with your own MYOB app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true },
 
@@ -377,10 +377,14 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
       fields: "fields" in intg ? intg.fields : [],
       comingSoon, useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
       disconnectedReason, disconnectedAt, byoOAuth,
+      // Xero connects via its dedicated /api/xero/* routes using the single
+      // platform-registered app, so "configured" is the platform env-var check.
       // For BYO-OAuth, "configured" means the merchant has saved their own app
       // credentials (a "<key>__app" vault row exists); otherwise it's the
       // platform env-var check for classic OAuth integrations.
-      oauthConfigured: byoOAuth ? vaultMap.has(`${intg.key}__app`) : (oauthProv ? isOAuthConfigured(oauthProv) : null),
+      oauthConfigured: intg.key === "xero"
+        ? isOAuthConfigured("xero")
+        : (byoOAuth ? vaultMap.has(`${intg.key}__app`) : (oauthProv ? isOAuthConfigured(oauthProv) : null)),
     };
   });
 

@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
@@ -471,6 +472,25 @@ export default function SettingsCustomersPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Applied automatically when a new customer is added.</p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-1.5">
+              <Label>Default Customer Image</Label>
+              <div className="flex items-start gap-4">
+                <div className="w-24 shrink-0">
+                  <ImageUploader
+                    value={settings.defaultCustomerImageUrl}
+                    onChange={(url) => save({ defaultCustomerImageUrl: url })}
+                    aspectRatio="square"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground pt-1 max-w-xs">
+                  Fallback avatar shown for customers who don't have their own photo. Drop or click to upload an
+                  image, or use the URL option to link an external image.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>

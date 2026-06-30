@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ReferralRevenueWidget } from "@/components/dashboard/ReferralRevenueWidget";
 import {
-  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw, Radio,
+  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw, Radio, Cake,
 } from "lucide-react";
 
 const WIDGETS: {
@@ -74,6 +74,12 @@ const WIDGETS: {
     description: "Which referral sources bring in the highest-paying customers",
     icon: Radio,
   },
+  {
+    key: "showBirthdayNotifications",
+    label: "Birthday Notifications",
+    description: "Banner highlighting customers with a birthday today",
+    icon: Cake,
+  },
 ];
 
 export default function DashboardPage() {
@@ -85,7 +91,7 @@ export default function DashboardPage() {
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
-<BirthdayBanner />
+        {config.showBirthdayNotifications && <BirthdayBanner />}
         <SecurityAlertBanner />
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}

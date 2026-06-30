@@ -81,6 +81,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
+import { CustomerAvatar } from "@/components/customers/CustomerAvatar";
 import QRCode from "qrcode";
 
 /* ─── Denomination constants (open-till count) ───────────────────────────── */
@@ -3323,9 +3324,19 @@ export default function POSPage() {
               {/* Customer chip or search button — takes remaining space */}
               {activeCustomerName ? (
                 <div className={cn("flex-1 flex items-center gap-2 rounded-lg px-2.5 py-1.5 min-w-0", !walkIn && selectedCustomer?.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40")}>
-                  <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", walkIn ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-primary/15 text-primary")}>
-                    {walkIn ? "?" : ((selectedCustomer?.firstName?.[0] ?? "") + (selectedCustomer?.lastName?.[0] ?? "")).toUpperCase() || "?"}
-                  </div>
+                  {walkIn ? (
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      ?
+                    </div>
+                  ) : (
+                    <CustomerAvatar
+                      firstName={selectedCustomer?.firstName}
+                      lastName={selectedCustomer?.lastName}
+                      photoUrl={selectedCustomer?.photoUrl}
+                      className="w-6 h-6"
+                      textClassName="text-[10px]"
+                    />
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{activeCustomerName}</p>
                     {walkIn && <p className="text-[10px] text-amber-600 dark:text-amber-400">Walk-in · No loyalty</p>}
@@ -3415,16 +3426,21 @@ export default function POSPage() {
                   ) : (
                     filteredCustomers.map(c => {
                       const name = customerDisplayName(c);
-                      const initials = (((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")) || c.company?.[0] || "?").toUpperCase();
                       return (
                         <button
                           key={c.id}
                           onClick={() => selectCustomer(c)}
                           className="w-full text-left px-3 py-2.5 hover:bg-muted/40 flex items-center gap-2.5 transition-colors"
                         >
-                          <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>
-                            {initials}
-                          </div>
+                          <CustomerAvatar
+                            firstName={c.firstName}
+                            lastName={c.lastName}
+                            company={c.company}
+                            photoUrl={c.photoUrl}
+                            className="w-7 h-7"
+                            textClassName="text-[10px]"
+                            variant={c.warningNote ? "warning" : "default"}
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{name}</p>
                             <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>

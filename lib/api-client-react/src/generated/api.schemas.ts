@@ -2148,6 +2148,7 @@ export interface DashboardConfigResponse {
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
   showReferralRevenue: boolean;
+  showBirthdayNotifications: boolean;
   updatedAt: string;
 }
 
@@ -2159,6 +2160,7 @@ export interface UpsertDashboardConfigBody {
   showServiceJobsPanel?: boolean;
   showCalendar?: boolean;
   showReferralRevenue?: boolean;
+  showBirthdayNotifications?: boolean;
 }
 
 export type DailyCloseCurrentByPaymentMethod = {[key: string]: number};
@@ -5186,6 +5188,8 @@ export interface CustomerSettings {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  /** Fallback avatar shown for customers without their own photo. Uploaded image or external URL. */
+  defaultCustomerImageUrl?: string;
   updatedAt?: string;
 }
 
@@ -5206,6 +5210,7 @@ export interface CustomerSettingsInput {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  defaultCustomerImageUrl?: string;
 }
 
 export type StickerTemplateFields = { [key: string]: unknown };

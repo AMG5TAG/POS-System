@@ -15,6 +15,7 @@ export type DashboardConfig = {
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
   showReferralRevenue: boolean;
+  showBirthdayNotifications: boolean;
 };
 
 const DEFAULTS: DashboardConfig = {
@@ -25,6 +26,7 @@ const DEFAULTS: DashboardConfig = {
   showServiceJobsPanel: true,
   showCalendar: true,
   showReferralRevenue: true,
+  showBirthdayNotifications: true,
 };
 
 function toConfig(data: DashboardConfigResponse | undefined): DashboardConfig {
@@ -37,6 +39,7 @@ function toConfig(data: DashboardConfigResponse | undefined): DashboardConfig {
     showServiceJobsPanel: data.showServiceJobsPanel,
     showCalendar: data.showCalendar,
     showReferralRevenue: data.showReferralRevenue,
+    showBirthdayNotifications: data.showBirthdayNotifications,
   };
 }
 

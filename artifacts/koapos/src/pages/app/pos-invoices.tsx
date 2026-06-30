@@ -1535,7 +1535,12 @@ export default function POSInvoicesPage() {
                         ? (METHOD_LABELS[rawMethod] ?? rawMethod.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
                         : "—";
                       return (
-                        <tr key={inv.id} className="bg-background hover:bg-muted/30 transition-colors">
+                        <tr
+                          key={inv.id}
+                          className="bg-background hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={() => openDetail(inv)}
+                          title="View invoice details"
+                        >
                           <td className="p-3">
                             <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
                           </td>
@@ -1571,7 +1576,7 @@ export default function POSInvoicesPage() {
                                 className="h-7 px-2 text-[11px] font-medium gap-1"
                                 title="Download PDF"
                                 disabled={pdfGeneratingId !== null}
-                                onClick={() => { void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}
+                                onClick={(e) => { e.stopPropagation(); void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}
                               >
                                 {pdfGeneratingId === inv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                                 <span className="hidden sm:inline">PDF</span>
@@ -1581,7 +1586,7 @@ export default function POSInvoicesPage() {
                                 size="sm"
                                 className="h-7 px-2 text-[11px] font-medium gap-1"
                                 title="View audit log"
-                                onClick={() => openDetail(inv)}
+                                onClick={(e) => { e.stopPropagation(); openDetail(inv); }}
                               >
                                 <ClipboardList className="w-3 h-3" />
                                 <span className="hidden sm:inline">Audit Log</span>

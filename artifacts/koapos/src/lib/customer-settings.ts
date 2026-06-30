@@ -39,6 +39,8 @@ export interface CustomerSettings {
   weeklyDigestSendDay: number;
   /** Automatic per-group default pricing rules (see group-pricing.ts). */
   groupPricing: GroupPricingRule[];
+  /** Fallback avatar for customers without their own photo (uploaded image or external URL). */
+  defaultCustomerImageUrl: string;
 }
 
 export const DEFAULT_CUSTOMER_GROUPS: CustomerGroup[] = [
@@ -74,6 +76,7 @@ const DEFAULT_SETTINGS: CustomerSettings = {
   weeklyDigestOptIn: false,
   weeklyDigestSendDay: 1,
   groupPricing: [],
+  defaultCustomerImageUrl: "",
 };
 
 export function useCustomerSettings() {

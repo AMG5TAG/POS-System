@@ -35,6 +35,7 @@ import {
 import { useMapUrl } from "@/lib/map-provider";
 import { loadCustomerFilesCloudSettings } from "@/lib/cloud-files-settings";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
+import { CustomerAvatar } from "@/components/customers/CustomerAvatar";
 import { CustomerStoreCreditPanel } from "@/components/customers/CustomerStoreCreditPanel";
 import { AppleLogoIcon, GoogleWalletLogo } from "@/components/provider-icons";
 import { Button } from "@/components/ui/button";
@@ -773,7 +774,6 @@ function ManualMergePickerDialog({
             ) : (
               results.map((c) => {
                 const name = customerDisplayName(c);
-                const initials = ([c.firstName?.[0], c.lastName?.[0]].filter(Boolean).join("") || c.company?.[0] || "?").toUpperCase();
                 return (
                   <button
                     key={c.id}
@@ -781,9 +781,14 @@ function ManualMergePickerDialog({
                     onClick={() => onSelect(c)}
                     className="w-full flex items-center gap-3 px-2 py-3 text-left hover:bg-muted/50 transition-colors rounded-md"
                   >
-                    <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-xs shrink-0">
-                      {initials}
-                    </div>
+                    <CustomerAvatar
+                      firstName={c.firstName}
+                      lastName={c.lastName}
+                      company={c.company}
+                      photoUrl={c.photoUrl}
+                      className="w-9 h-9"
+                      textClassName="text-xs"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm truncate">{name}</p>
                       <p className="text-xs text-muted-foreground truncate">
@@ -1240,7 +1245,6 @@ function CustomerDetailInner({
   };
 
   const fullName = customerDisplayName(customer);
-  const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
   const mergeNoteCount = notes.filter((n: CustomerNote) => isMergeNote(n.note)).length;
   const displayedNotes = showMergeOnly
     ? notes.filter((n: CustomerNote) => isMergeNote(n.note))
@@ -1358,9 +1362,14 @@ function CustomerDetailInner({
       <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
         <DialogTitle>
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-base shrink-0">
-              {initials}
-            </div>
+            <CustomerAvatar
+              firstName={customer.firstName}
+              lastName={customer.lastName}
+              company={customer.company}
+              photoUrl={customer.photoUrl}
+              className="w-12 h-12"
+              textClassName="text-base"
+            />
             <div className="min-w-0">
               <div className="flex items-center gap-2 flex-wrap min-w-0">
                 <p className="font-bold text-3xl leading-tight truncate">{fullName}</p>

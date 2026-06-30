@@ -11828,7 +11828,7 @@ components:
 
     DashboardConfigResponse:
       type: object
-      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, updatedAt]
+      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, showBirthdayNotifications, updatedAt]
       properties:
         id:
           type: integer
@@ -11847,6 +11847,8 @@ components:
         showCalendar:
           type: boolean
         showReferralRevenue:
+          type: boolean
+        showBirthdayNotifications:
           type: boolean
         updatedAt:
           type: string
@@ -11867,6 +11869,8 @@ components:
         showCalendar:
           type: boolean
         showReferralRevenue:
+          type: boolean
+        showBirthdayNotifications:
           type: boolean
 
     DailyCloseCurrent:
@@ -15286,6 +15290,7 @@ components:
         enableLoyalty:           { type: boolean }
         weeklyDigestOptIn:       { type: boolean }
         weeklyDigestSendDay:     { type: integer, minimum: 0, maximum: 6, description: "Day of week to send digest (0=Sunday … 6=Saturday)" }
+        defaultCustomerImageUrl: { type: string, description: "Fallback avatar shown for customers without their own photo. Uploaded image or external URL." }
         updatedAt:               { type: string, format: date-time }
 
     CustomerSettingsInput:
@@ -15298,6 +15303,7 @@ components:
         enableLoyalty:           { type: boolean }
         weeklyDigestOptIn:       { type: boolean }
         weeklyDigestSendDay:     { type: integer, minimum: 0, maximum: 6, description: "Day of week to send digest (0=Sunday … 6=Saturday)" }
+        defaultCustomerImageUrl: { type: string }
 
     StickerTemplate:
       type: object

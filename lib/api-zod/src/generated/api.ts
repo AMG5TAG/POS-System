@@ -4619,6 +4619,7 @@ export const GetDashboardConfigResponse = zod.object({
   "showServiceJobsPanel": zod.boolean(),
   "showCalendar": zod.boolean(),
   "showReferralRevenue": zod.boolean(),
+  "showBirthdayNotifications": zod.boolean(),
   "updatedAt": zod.string()
 })
 
@@ -4633,7 +4634,8 @@ export const UpsertDashboardConfigBody = zod.object({
   "showNotifications": zod.boolean().optional(),
   "showServiceJobsPanel": zod.boolean().optional(),
   "showCalendar": zod.boolean().optional(),
-  "showReferralRevenue": zod.boolean().optional()
+  "showReferralRevenue": zod.boolean().optional(),
+  "showBirthdayNotifications": zod.boolean().optional()
 })
 
 export const UpsertDashboardConfigResponse = zod.object({
@@ -4646,6 +4648,7 @@ export const UpsertDashboardConfigResponse = zod.object({
   "showServiceJobsPanel": zod.boolean(),
   "showCalendar": zod.boolean(),
   "showReferralRevenue": zod.boolean(),
+  "showBirthdayNotifications": zod.boolean(),
   "updatedAt": zod.string()
 })
 
@@ -10075,6 +10078,7 @@ export const GetCustomerSettingsResponse = zod.object({
   "enableLoyalty": zod.boolean().optional(),
   "weeklyDigestOptIn": zod.boolean().optional(),
   "weeklyDigestSendDay": zod.number().min(getCustomerSettingsResponseWeeklyDigestSendDayMin).max(getCustomerSettingsResponseWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
+  "defaultCustomerImageUrl": zod.string().optional().describe('Fallback avatar shown for customers without their own photo. Uploaded image or external URL.'),
   "updatedAt": zod.coerce.date().optional()
 })
 
@@ -10098,7 +10102,8 @@ export const UpdateCustomerSettingsBody = zod.object({
   "loyaltyPointsPerDollar": zod.number().optional(),
   "enableLoyalty": zod.boolean().optional(),
   "weeklyDigestOptIn": zod.boolean().optional(),
-  "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsBodyWeeklyDigestSendDayMin).max(updateCustomerSettingsBodyWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)')
+  "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsBodyWeeklyDigestSendDayMin).max(updateCustomerSettingsBodyWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
+  "defaultCustomerImageUrl": zod.string().optional()
 })
 
 export const updateCustomerSettingsResponseWeeklyDigestSendDayMin = 0;
@@ -10118,6 +10123,7 @@ export const UpdateCustomerSettingsResponse = zod.object({
   "enableLoyalty": zod.boolean().optional(),
   "weeklyDigestOptIn": zod.boolean().optional(),
   "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsResponseWeeklyDigestSendDayMin).max(updateCustomerSettingsResponseWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
+  "defaultCustomerImageUrl": zod.string().optional().describe('Fallback avatar shown for customers without their own photo. Uploaded image or external URL.'),
   "updatedAt": zod.coerce.date().optional()
 })
 
