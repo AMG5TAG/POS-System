@@ -388,8 +388,8 @@ function IntegrationCard({
           {intg.description}
         </p>
 
-        {/* OAuth not configured warning */}
-        {intg.authType === "oauth" && intg.oauthConfigured === false && !isConnected && !intg.comingSoon && (
+        {/* OAuth not configured warning (Xero routes to its wizard, which has its own messaging) */}
+        {intg.authType === "oauth" && intg.key !== "xero" && intg.oauthConfigured === false && !isConnected && !intg.comingSoon && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>OAuth credentials not configured — see .env.example</span>
@@ -455,7 +455,7 @@ function IntegrationCard({
               size="sm"
               className={cn("gap-1.5 w-full", needsReconnect && "bg-amber-600 hover:bg-amber-700 text-white")}
               onClick={onOAuth}
-              disabled={busy || intg.oauthConfigured === false}
+              disabled={busy || (intg.oauthConfigured === false && intg.key !== "xero")}
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : needsReconnect ? <RefreshCw className="w-3.5 h-3.5" /> : <ExternalLink className="w-3.5 h-3.5" />}
               {needsReconnect ? "Reconnect" : "Connect Account"}
@@ -683,7 +683,11 @@ export default function ManagementIntegrationsPage() {
   };
 
   const handleOAuth = (intg: Integration) => {
-    if (intg.key === "xero") { window.location.href = "/api/xero/auth/start"; return; }
+    // Xero has a dedicated setup wizard (org selection + GL account mapping). Send
+    // users there rather than firing the OAuth redirect directly — the wizard shows
+    // a clear state when the platform Xero app isn't configured yet, instead of the
+    // backend silently bouncing back here (which looks like the page just refreshed).
+    if (intg.key === "xero") { setLocation("/management/settings-integrations/integrations/xero"); return; }
     // apple_account uses the named /apple/start route (form_post callback requires exact redirect_uri)
     if (intg.key === "apple_account") { window.location.href = "/api/integrations/oauth/apple/start"; return; }
     window.location.href = `/api/integrations/oauth/${intg.key}/start`;

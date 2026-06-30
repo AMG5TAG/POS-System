@@ -209,7 +209,10 @@ router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
 router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
   const cc = await getXeroClientCreds(req.session.merchantId!);
   if (!cc) {
-    res.redirect("/management/integrations?error=xero_not_configured");
+    // Platform Xero app isn't configured (no XERO_CLIENT_ID/SECRET). Send the user
+    // to the wizard, which shows a clear "Xero isn't available yet" message, rather
+    // than bouncing back to the integrations list (which looks like a page refresh).
+    res.redirect("/management/settings-integrations/integrations/xero?error=xero_not_configured");
     return;
   }
   const clientId = cc.clientId;
