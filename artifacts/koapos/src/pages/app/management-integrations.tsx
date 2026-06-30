@@ -53,7 +53,7 @@ interface Integration {
   disconnectedAt: string | null;
   oauthConfigured: boolean | null;
   /** Bring-your-own OAuth app: collect the merchant's own client id/secret,
-   *  then run the OAuth redirect using those (Xero / QuickBooks / MYOB). */
+   *  then run the OAuth redirect using those (e.g. QuickBooks). */
   byoOAuth?: boolean;
 }
 
@@ -118,7 +118,6 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   /* Accounting & Finance */
   xero:                 { type: "img",  bg: "bg-[#13B5EA]",     src: SI("xero",          "ffffff") },
   quickbooks:           { type: "img",  bg: "bg-[#2CA01C]",     src: SI("quickbooks",    "ffffff") },
-  myob:                 { type: "img",  bg: "bg-[#6A1F70]",     src: SI("myob",          "ffffff") },
   /* E-Commerce & Marketplaces */
   shopify:              { type: "img",  bg: "bg-[#96BF48]",     src: SI("shopify",       "ffffff") },
   ebay:                 { type: "img",  bg: "bg-white border",  src: SI("ebay",          "E53238") },
@@ -185,7 +184,7 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
   useEffect(() => { if (integration) { setValues({}); setByoSubmitting(false); } }, [integration]);
   if (!integration) return null;
   const handleSave = () => {
-    // Bring-your-own OAuth app (Xero / QuickBooks / MYOB): save the merchant's
+    // Bring-your-own OAuth app (e.g. QuickBooks): save the merchant's
     // own client id/secret, then hand off to the provider's OAuth consent flow.
     if (integration.byoOAuth) {
       if (!values.clientId?.trim() || !values.clientSecret?.trim()) {

@@ -902,7 +902,7 @@ export default function ManagementXeroPage() {
             <div className="rounded-xl border bg-background p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</p>
               {[
-                { label: "API credentials",    done: !!status?.configured },
+                { label: "Xero available",     done: !!status?.configured },
                 { label: "OAuth connected",    done: !!status?.connected },
                 { label: "Organisation set",   done: !!status?.tenantId },
                 { label: "Accounts mapped",    done: !!status?.mappings?.revenueAccount },

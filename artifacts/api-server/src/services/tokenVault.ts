@@ -407,7 +407,7 @@ export async function readCredentialVault<T = Record<string, unknown>>(
 }
 
 /* ── Bring-your-own OAuth app credentials ──────────────────────────────────────
-   OAuth-based integrations (Xero, QuickBooks, MYOB) have no static API key, so
+   OAuth-based integrations (e.g. QuickBooks) have no static API key, so
    instead of a platform-wide OAuth app we let each merchant supply their OWN
    app's client id + secret. They're stored encrypted in the vault under a
    dedicated "<key>__app" provider slot, and the OAuth start/callback/refresh

@@ -6,7 +6,7 @@ import { XERO_OAUTH_SCOPES } from "./xeroPayrollAdapter";
  *
  * Each payroll provider differs in authorize/token URLs, scopes, how the token
  * request is authenticated (HTTP Basic vs. client creds in the body), and how
- * the "connection" (Xero tenant / MYOB company file) is resolved after sign-in.
+ * the "connection" (e.g. the Xero tenant) is resolved after sign-in.
  * The route layer drives all of this through `OAuthProviderConfig` so adding a
  * provider is a single registry entry, not a route rewrite.
  */
@@ -34,8 +34,6 @@ export interface OAuthProviderConfig {
   buildAuth(opts: { accessToken: string; tenantId: string; region: PayrollRegion; clientId: string }): PayrollAuth;
 }
 
-const MYOB_API_ROOT = "https://api.myob.com/accountright";
-
 export const PAYROLL_PROVIDERS: Record<string, OAuthProviderConfig> = {
   xero_payroll: {
     key: "xero_payroll",
@@ -56,37 +54,6 @@ export const PAYROLL_PROVIDERS: Record<string, OAuthProviderConfig> = {
     },
     buildAuth({ accessToken, tenantId, region }) {
       return { accessToken, tenantId, region };
-    },
-  },
-
-  myob_payroll: {
-    key: "myob_payroll",
-    label: "MYOB",
-    authUrl: "https://secure.myob.com/oauth2/account/authorize",
-    tokenUrl: "https://secure.myob.com/oauth2/v1/authorize",
-    // MYOB issues a refresh token for the CompanyFile scope by default.
-    scopes: "CompanyFile",
-    clientIdEnv: "MYOB_CLIENT_ID",
-    clientSecretEnv: "MYOB_CLIENT_SECRET",
-    tokenAuth: "body",
-    async resolveTenant(accessToken, clientId) {
-      // Lists the cloud company files visible to the signed-in MYOB account.
-      const r = await fetch(`${MYOB_API_ROOT}/`, {
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          "x-myobapi-key": clientId,
-          "x-myobapi-version": "v2",
-          Accept: "application/json",
-        },
-      });
-      if (!r.ok) return { tenantId: "", tenantName: "" };
-      const files = (await r.json()) as Array<{ Id: string; Name: string; Uri: string }>;
-      const f = files[0];
-      // Store the company-file URI as the connection id; the adapter calls it directly.
-      return { tenantId: f?.Uri ?? "", tenantName: f?.Name ?? "" };
-    },
-    buildAuth({ accessToken, tenantId, region, clientId }) {
-      return { accessToken, tenantId, region, apiKey: clientId };
     },
   },
 };

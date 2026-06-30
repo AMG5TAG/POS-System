@@ -5,7 +5,7 @@
  * pay calculation, STP/ATO lodgement, superannuation and multi-region
  * compliance. Each provider is implemented as a `PayrollProvider` adapter; the
  * route layer talks only to this interface and never to a provider's API
- * directly, so adding MYOB / QuickBooks / Deputy later is purely additive.
+ * directly, so adding QuickBooks / Deputy later is purely additive.
  *
  * Monetary amounts in DTOs are integer cents to match the DB mirror tables.
  */
@@ -16,9 +16,8 @@ export type PayrollRegion = "AU" | "NZ" | "UK";
  *  by refreshing the merchant's stored OAuth token before delegating.
  *
  *  `tenantId` is the provider's connection identifier interpreted by each
- *  adapter: a Xero tenant GUID, or a MYOB company-file URI. `apiKey` carries
- *  the OAuth client id where the provider requires it as an API header (MYOB's
- *  `x-myobapi-key`). */
+ *  adapter (e.g. a Xero tenant GUID). `apiKey` carries the OAuth client id
+ *  where a provider requires it as an API header. */
 export interface PayrollAuth {
   accessToken: string;
   tenantId: string;

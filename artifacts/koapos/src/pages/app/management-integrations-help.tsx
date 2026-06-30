@@ -28,9 +28,9 @@ interface HelpSection {
 const SECTIONS: HelpSection[] = [
   {
     id: "accounting",
-    title: "Accounting & Finance — Xero, QuickBooks, MYOB",
+    title: "Accounting & Finance — Xero, QuickBooks",
     icon: Landmark,
-    intro: "Xero connects in one click using KoaPOS's secure platform connection — no developer app needed. QuickBooks and MYOB connect with your own developer app.",
+    intro: "Xero connects in one click using KoaPOS's secure platform connection — no developer app needed. QuickBooks connects with your own developer app.",
     faqs: [
       {
         q: "How do I connect Xero?",
@@ -45,9 +45,9 @@ const SECTIONS: HelpSection[] = [
         ],
       },
       {
-        q: "How do I connect QuickBooks / MYOB?",
+        q: "How do I connect QuickBooks?",
         steps: [
-          "Sign in to the provider's developer portal (QuickBooks: developer.intuit.com · MYOB: developer.myob.com) and create a new app.",
+          "Sign in to the QuickBooks developer portal (developer.intuit.com) and create a new app.",
           "Copy the app's Client ID and Client Secret.",
           "In KoaPOS, open the integration and click Connect, then paste the Client ID and Client Secret.",
           "Copy the redirect (callback) URL shown in the dialog and add it to your app's allowed redirect URIs.",
@@ -56,7 +56,6 @@ const SECTIONS: HelpSection[] = [
         note: "Your keys are encrypted and stored against your account only.",
         links: [
           { label: "QuickBooks developer", url: "https://developer.intuit.com/app/developer/dashboard" },
-          { label: "MYOB developer", url: "https://developer.myob.com/" },
         ],
       },
       {

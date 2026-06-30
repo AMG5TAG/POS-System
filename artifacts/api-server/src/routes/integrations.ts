@@ -16,8 +16,6 @@ export const INTEGRATIONS = [
   /* ── ACCOUNTING & FINANCE ──────────────────────────────────────────────── */
   { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Connect in one click to push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.", authType: "oauth" as const, fields: [] as F[], useVault: false },
   { key: "quickbooks",      label: "QuickBooks Online",     section: "accounting", category: "Accounting & Finance", description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online. Connect with your own QuickBooks app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true  },
-  { key: "myob",            label: "MYOB",                  section: "accounting", category: "Accounting & Finance", description: "Sync sales data and end-of-day takings to MYOB AccountRight or Essentials. Connect with your own MYOB app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true },
-
   /* ── E-COMMERCE & MARKETPLACES ─────────────────────────────────────────── */
   { key: "shopify",         label: "Shopify",               section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Sync your Shopify online store inventory, orders, and customer data with KoaPOS.",                    authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "ebay",            label: "eBay",                  section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "List products, sync stock, and manage eBay orders directly from KoaPOS.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
@@ -173,12 +171,6 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
     if (!cc) return null;
     return `https://appcenter.intuit.com/connect/oauth2?${new URLSearchParams({ client_id: cc.clientId, redirect_uri: cb, response_type: "code", scope: "com.intuit.quickbooks.accounting", state })}`;
   }
-  if (key === "myob") {
-    // Bring-your-own OAuth app: merchant supplies their own MYOB app credentials.
-    const cc = await getOAuthAppCreds(merchantId, "myob");
-    if (!cc) return null;
-    return `https://secure.myob.com/oauth2/account/authorize?${new URLSearchParams({ client_id: cc.clientId, redirect_uri: cb, response_type: "code", scope: "CompanyFile", state })}`;
-  }
   if (key === "meta_business" || key === "instagram_business") {
     const appId = process.env.META_APP_ID; if (!appId) return null;
     const scope = key === "instagram_business"
@@ -269,13 +261,6 @@ async function exchangeToken(key: string, code: string, cb: string, merchantId: 
       accountHandle = profile.email ?? (profile.givenName ? `${profile.givenName} ${profile.familyName ?? ""}`.trim() : undefined);
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: extra?.realmId, accountHandle };
-  }
-  if (key === "myob") {
-    // Bring-your-own OAuth app: merchant supplies their own MYOB app credentials.
-    const cc = await getOAuthAppCreds(merchantId, "myob");
-    if (!cc) throw new Error("MYOB app credentials not configured for this merchant");
-    const d = await fetch("https://secure.myob.com/oauth2/v1/authorize", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb, client_id: cc.clientId, client_secret: cc.clientSecret, scope: "CompanyFile" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number; user?: { uid?: string; username?: string } };
-    return { accessToken: d.access_token ?? "", refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: d.user?.uid, accountHandle: d.user?.username };
   }
   if (key === "meta_business" || key === "instagram_business") {
     const d = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${new URLSearchParams({ client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "", redirect_uri: cb, code })}`).then((r) => r.json()) as { access_token?: string; expires_in?: number };
@@ -426,7 +411,7 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
 
 /* ── POST /integrations/:key/oauth-app ──────────────────────────────────────────
    Store a merchant's OWN OAuth app credentials (client id + secret) for a
-   bring-your-own-OAuth integration (Xero / QuickBooks / MYOB). The OAuth start
+   bring-your-own-OAuth integration (e.g. QuickBooks). The OAuth start
    flow then uses these instead of any platform-level env vars. After saving, the
    client redirects the browser to the provider's OAuth start endpoint. */
 router.post("/integrations/:key/oauth-app", requireAuth, async (req, res): Promise<void> => {
