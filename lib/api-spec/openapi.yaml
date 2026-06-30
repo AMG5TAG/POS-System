@@ -15606,7 +15606,7 @@ components:
     # ── Integrations ─────────────────────────────────────────────────────────
     IntegrationStatus:
       type: object
-      required: [key, label, section, category, description, authType, connected, enabled, comingSoon]
+      required: [key, label, section, category, description, authType, connected, enabled]
       properties:
         key:             { type: string }
         label:           { type: string }
@@ -15616,7 +15616,6 @@ components:
         authType:        { type: string, enum: [oauth, credentials] }
         connected:       { type: boolean }
         enabled:         { type: boolean }
-        comingSoon:      { type: boolean }
         connectedAt:     { type: string, format: date-time, nullable: true }
         oauthConfigured: { type: boolean }
 

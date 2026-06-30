@@ -5,7 +5,7 @@
  * pay calculation, STP/ATO lodgement, superannuation and multi-region
  * compliance. Each provider is implemented as a `PayrollProvider` adapter; the
  * route layer talks only to this interface and never to a provider's API
- * directly, so adding QuickBooks / Deputy later is purely additive.
+ * directly, so adding Deputy or other providers later is purely additive.
  *
  * Monetary amounts in DTOs are integer cents to match the DB mirror tables.
  */

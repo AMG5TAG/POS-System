@@ -11,14 +11,10 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { getOAuthAppCreds } from "../services/tokenVault";
 
-/* Per-merchant Xero OAuth app credentials (the merchant's own developer app),
-   falling back to platform env vars so any existing platform-app setup keeps
-   working. */
-async function getXeroClientCreds(merchantId: number): Promise<{ clientId: string; clientSecret: string } | null> {
-  const own = await getOAuthAppCreds(merchantId, "xero");
-  if (own) return own;
+/* Platform-registered Xero OAuth app credentials. Xero connects in one click
+   against this single app — there is no per-merchant developer app. */
+function getXeroClientCreds(_merchantId: number): { clientId: string; clientSecret: string } | null {
   const clientId = process.env.XERO_CLIENT_ID;
   const clientSecret = process.env.XERO_CLIENT_SECRET;
   if (clientId && clientSecret) return { clientId, clientSecret };

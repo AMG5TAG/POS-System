@@ -3,7 +3,7 @@ import { db, merchantIntegrationsTable, oauthTokenVaultTable } from "@workspace/
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault, upsertCredentialVault, getOAuthAppCreds, saveOAuthAppCreds } from "../services/tokenVault";
+import { upsertVault, deleteVault, upsertCredentialVault } from "../services/tokenVault";
 import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError } from "../services/accountSync";
 
 const router: IRouter = Router();
@@ -15,14 +15,8 @@ const router: IRouter = Router();
 export const INTEGRATIONS = [
   /* ── ACCOUNTING & FINANCE ──────────────────────────────────────────────── */
   { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Connect in one click to push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.", authType: "oauth" as const, fields: [] as F[], useVault: false },
-  { key: "quickbooks",      label: "QuickBooks Online",     section: "accounting", category: "Accounting & Finance", description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online. Connect with your own QuickBooks app credentials.", authType: "credentials" as const, byoOAuth: true, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }] as F[], useVault: true  },
   /* ── E-COMMERCE & MARKETPLACES ─────────────────────────────────────────── */
-  { key: "shopify",         label: "Shopify",               section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Sync your Shopify online store inventory, orders, and customer data with KoaPOS.",                    authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "ebay",            label: "eBay",                  section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "List products, sync stock, and manage eBay orders directly from KoaPOS.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "amazon",          label: "Amazon",                section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Connect your Amazon Seller account to sync listings, inventory, and fulfilled orders.",               authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "woocommerce",     label: "WooCommerce",           section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Sync products, stock, and orders between your WooCommerce store and KoaPOS.",                        authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "australia_post",  label: "Australia Post",        section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Calculate real-time postage rates, print labels, and book pickups at online checkout.",              authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }, { name: "accountNumber", label: "Account Number", type: "text" }] as F[], useVault: false },
-  { key: "sendle",          label: "Sendle",                section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Carbon-neutral door-to-door parcel delivery across Australia — no fixed contracts.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
   /* ── PAYMENTS & TERMINALS ──────────────────────────────────────────────── */
   { key: "stripe_own",      label: "Stripe",                section: "payments",   category: "Payments & Terminals", description: "Connect your own Stripe account with your API keys to accept card payments and manage payouts.",            authType: "credentials" as const, fields: [{ name: "secretKey", label: "Secret Key", type: "password" }, { name: "publishableKey", label: "Publishable Key", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true  },
@@ -35,7 +29,6 @@ export const INTEGRATIONS = [
   { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }, { name: "locationId", label: "Location ID", type: "text" }, { name: "deviceRefCode", label: "Device Reference", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "apple_wallet",    label: "Apple Wallet",          section: "payments",   category: "Payments & Terminals", description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",                  authType: "credentials" as const, fields: [{ name: "passTypeId", label: "Pass Type ID", type: "text" }, { name: "teamId", label: "Apple Team ID", type: "text" }, { name: "certificateBase64", label: "Certificate (Base64)", type: "password" }] as F[], useVault: false },
-  { key: "google_pay",      label: "Google Wallet",         section: "payments",   category: "Payments & Terminals", description: "Issue loyalty cards and offers to Google Wallet.",                                                        authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
   /* ── MARKETING & SOCIALS ───────────────────────────────────────────────── */
   { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing & Socials", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
@@ -46,19 +39,15 @@ export const INTEGRATIONS = [
   { key: "instagram_business",  label: "Instagram Business",      section: "marketing", category: "Marketing & Socials", description: "Schedule posts, manage DMs, and track insights on Instagram Business.",                       authType: "oauth" as const, oauthProvider: "meta"      as const, useVault: true  },
   { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing & Socials", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "youtube_channel",     label: "YouTube Channel",         section: "marketing", category: "Marketing & Socials", description: "Publish video content, manage community posts, and pull channel analytics.",                  authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "mailchimp",           label: "Mailchimp",               section: "marketing", category: "Marketing & Socials", description: "Add customers to Mailchimp audiences and trigger post-purchase email flows.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
   /* ── CLOUD STORAGE & PRODUCTIVITY ─────────────────────────────────────── */
   { key: "google_drive",        label: "Google Workspace",    section: "cloud", category: "Cloud Storage & Productivity", description: "Back up reports to Google Drive and sync contacts and appointments with Google Workspace.",   authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "onedrive",            label: "Microsoft OneDrive",  section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data to Microsoft OneDrive — ideal for Microsoft 365 businesses.",       authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
   { key: "dropbox",             label: "Dropbox",             section: "cloud", category: "Cloud Storage & Productivity", description: "Send automated backups of reports and exports directly to your Dropbox.",                    authType: "oauth" as const, oauthProvider: "dropbox"   as const, useVault: true  },
-  { key: "proton_drive",        label: "Proton Drive",        section: "cloud", category: "Cloud Storage & Productivity", description: "Store encrypted backups in Proton Drive for maximum privacy and security.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "google_contacts",     label: "Google Account",      section: "cloud", category: "Cloud Storage & Productivity", description: "Sync your customer list with Google Contacts and push appointments to Google Calendar.",    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "microsoft_contacts",  label: "Microsoft Account",   section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar.",          authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
   { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple to sync customers to iCloud Contacts and push appointments to Apple Calendar.", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
   { key: "openai",              label: "OpenAI (Your Key)",   section: "cloud", category: "Cloud Storage & Productivity", description: "Use your own OpenAI API key for AI Insights, demand forecasting, and product descriptions.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
-  { key: "zapier",              label: "Zapier",              section: "cloud", category: "Cloud Storage & Productivity", description: "Connect KoaPOS to 6,000+ apps — automate workflows triggered by sales and inventory.",      authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "deputy",              label: "Deputy",              section: "cloud", category: "Cloud Storage & Productivity", description: "Sync staff rosters, clock-ins, and timesheets with Deputy for seamless Australian payroll.", authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 ] as const;
 
 type F = { name: string; label: string; type: string };
@@ -77,7 +66,6 @@ function isOAuthConfigured(provider: string): boolean {
     case "microsoft":  return !!process.env.MICROSOFT_CLIENT_ID;
     case "dropbox":    return !!process.env.DROPBOX_APP_KEY;
     case "xero":       return !!process.env.XERO_CLIENT_ID;
-    case "quickbooks": return !!process.env.QUICKBOOKS_CLIENT_ID;
     case "meta":       return !!process.env.META_APP_ID;
     case "twitter":    return !!process.env.TWITTER_CLIENT_ID;
     case "linkedin":   return !!process.env.LINKEDIN_CLIENT_ID;
@@ -141,7 +129,7 @@ function cbUrl(key: string, req: import("express").Request): string {
 // everything else on the Integrations page. OAuth redirects land the user back
 // on whichever page the integration lives.
 const SYNC_INTEGRATION_KEYS = new Set([
-  "google_drive", "onedrive", "dropbox", "proton_drive",
+  "google_drive", "onedrive", "dropbox",
   "google_contacts", "microsoft_contacts", "apple_account",
 ]);
 function manageUrl(key: string): string {
@@ -163,13 +151,6 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
   if (key === "dropbox") {
     const k = process.env.DROPBOX_APP_KEY; if (!k) return null;
     return `https://www.dropbox.com/oauth2/authorize?${new URLSearchParams({ client_id: k, redirect_uri: cb, response_type: "code", token_access_type: "offline", state })}`;
-  }
-  if (key === "quickbooks") {
-    // Bring-your-own OAuth app: merchant's own client id (env fallback).
-    const cc = await getOAuthAppCreds(merchantId, "quickbooks")
-      ?? (process.env.QUICKBOOKS_CLIENT_ID ? { clientId: process.env.QUICKBOOKS_CLIENT_ID, clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET ?? "" } : null);
-    if (!cc) return null;
-    return `https://appcenter.intuit.com/connect/oauth2?${new URLSearchParams({ client_id: cc.clientId, redirect_uri: cb, response_type: "code", scope: "com.intuit.quickbooks.accounting", state })}`;
   }
   if (key === "meta_business" || key === "instagram_business") {
     const appId = process.env.META_APP_ID; if (!appId) return null;
@@ -248,20 +229,6 @@ async function exchangeToken(key: string, code: string, cb: string, merchantId: 
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id, accountHandle };
   }
-  if (key === "quickbooks") {
-    // Bring-your-own OAuth app: merchant's own client id/secret (env fallback).
-    const cc = await getOAuthAppCreds(merchantId, "quickbooks")
-      ?? { clientId: process.env.QUICKBOOKS_CLIENT_ID ?? "", clientSecret: process.env.QUICKBOOKS_CLIENT_SECRET ?? "" };
-    const basicCreds = Buffer.from(`${cc.clientId}:${cc.clientSecret}`).toString("base64");
-    const d = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basicCreds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountHandle: string | undefined;
-    if (accessToken) {
-      const profile = await fetch("https://accounts.platform.intuit.com/v1/openid_connect/userinfo", { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }).then((r) => r.json()).catch(() => ({})) as { email?: string; givenName?: string; familyName?: string };
-      accountHandle = profile.email ?? (profile.givenName ? `${profile.givenName} ${profile.familyName ?? ""}`.trim() : undefined);
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: extra?.realmId, accountHandle };
-  }
   if (key === "meta_business" || key === "instagram_business") {
     const d = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${new URLSearchParams({ client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "", redirect_uri: cb, code })}`).then((r) => r.json()) as { access_token?: string; expires_in?: number };
     const accessToken = d.access_token ?? "";
@@ -330,29 +297,25 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
   const result = INTEGRATIONS.map((intg) => {
     const row        = rowMap.get(intg.key);
     const vaultRow   = vaultMap.get(intg.key);
-    const comingSoon = "comingSoon" in intg ? (intg.comingSoon as boolean) : false;
     const oauthProv  = "oauthProvider" in intg ? intg.oauthProvider : null;
-    const byoOAuth   = "byoOAuth" in intg ? !!intg.byoOAuth : false;
 
     let status = "disconnected", connectedAt: string | null = null, accountHandle: string | null = null, accountId: string | null = null;
     let disconnectedReason: string | null = null;
     let disconnectedAt: string | null = null;
-    if (!comingSoon) {
-      if (intg.useVault && vaultRow?.connectedAt && !vaultRow.disconnectedReason) {
-        status = "connected"; connectedAt = vaultRow.connectedAt.toISOString();
-        accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
-      } else if (intg.useVault && vaultRow?.disconnectedReason) {
-        // Vault row was invalidated (e.g. encryption key rotation) — surface a
-        // notice so the merchant knows their previous connection needs re-auth.
-        disconnectedReason = vaultRow.disconnectedReason;
-        disconnectedAt = vaultRow.disconnectedAt?.toISOString() ?? null;
-        accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
-      } else if (row?.status === "connected") {
-        status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null;
-        // For Xero: surface the tenant name stored in credentials as accountHandle
-        if (intg.key === "xero" && row.credentials) {
-          try { const c = JSON.parse(row.credentials) as { tenantName?: string; tenantId?: string }; accountHandle = c.tenantName ?? null; accountId = c.tenantId ?? null; } catch { /* ignore */ }
-        }
+    if (intg.useVault && vaultRow?.connectedAt && !vaultRow.disconnectedReason) {
+      status = "connected"; connectedAt = vaultRow.connectedAt.toISOString();
+      accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
+    } else if (intg.useVault && vaultRow?.disconnectedReason) {
+      // Vault row was invalidated (e.g. encryption key rotation) — surface a
+      // notice so the merchant knows their previous connection needs re-auth.
+      disconnectedReason = vaultRow.disconnectedReason;
+      disconnectedAt = vaultRow.disconnectedAt?.toISOString() ?? null;
+      accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
+    } else if (row?.status === "connected") {
+      status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null;
+      // For Xero: surface the tenant name stored in credentials as accountHandle
+      if (intg.key === "xero" && row.credentials) {
+        try { const c = JSON.parse(row.credentials) as { tenantName?: string; tenantId?: string }; accountHandle = c.tenantName ?? null; accountId = c.tenantId ?? null; } catch { /* ignore */ }
       }
     }
 
@@ -360,16 +323,14 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
       key: intg.key, label: intg.label, section: intg.section, category: intg.category,
       description: intg.description, authType: intg.authType,
       fields: "fields" in intg ? intg.fields : [],
-      comingSoon, useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
-      disconnectedReason, disconnectedAt, byoOAuth,
+      useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
+      disconnectedReason, disconnectedAt,
       // Xero connects via its dedicated /api/xero/* routes using the single
       // platform-registered app, so "configured" is the platform env-var check.
-      // For BYO-OAuth, "configured" means the merchant has saved their own app
-      // credentials (a "<key>__app" vault row exists); otherwise it's the
-      // platform env-var check for classic OAuth integrations.
+      // Other OAuth integrations use the platform env-var check too.
       oauthConfigured: intg.key === "xero"
         ? isOAuthConfigured("xero")
-        : (byoOAuth ? vaultMap.has(`${intg.key}__app`) : (oauthProv ? isOAuthConfigured(oauthProv) : null)),
+        : (oauthProv ? isOAuthConfigured(oauthProv) : null),
     };
   });
 
@@ -383,8 +344,6 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   const key = String(req.params.key) as IntegrationKey;
   const intg = INTEGRATIONS.find((i) => i.key === key);
   if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
-  if ("comingSoon" in intg && intg.comingSoon) { res.status(400).json({ error: "Coming soon" }); return; }
-  if ("byoOAuth" in intg && intg.byoOAuth) { res.status(400).json({ error: "Use the OAuth app connect flow" }); return; }
   if (intg.authType !== "credentials") { res.status(400).json({ error: "Use OAuth flow" }); return; }
   const body = (req.body ?? {}) as Record<string, unknown>;
 
@@ -409,22 +368,6 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   res.json({ status: "connected" });
 });
 
-/* ── POST /integrations/:key/oauth-app ──────────────────────────────────────────
-   Store a merchant's OWN OAuth app credentials (client id + secret) for a
-   bring-your-own-OAuth integration (e.g. QuickBooks). The OAuth start
-   flow then uses these instead of any platform-level env vars. After saving, the
-   client redirects the browser to the provider's OAuth start endpoint. */
-router.post("/integrations/:key/oauth-app", requireAuth, async (req, res): Promise<void> => {
-  const merchantId = req.session.merchantId!;
-  const key = String(req.params.key);
-  const intg = INTEGRATIONS.find((i) => i.key === key);
-  if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
-  if (!("byoOAuth" in intg && intg.byoOAuth)) { res.status(400).json({ error: "Not a bring-your-own-OAuth integration" }); return; }
-  const { clientId, clientSecret } = (req.body ?? {}) as { clientId?: string; clientSecret?: string };
-  if (!clientId || !clientSecret) { res.status(400).json({ error: "clientId and clientSecret are required" }); return; }
-  await saveOAuthAppCreds(merchantId, key, String(clientId).trim(), String(clientSecret).trim());
-  res.json({ ok: true });
-});
 
 /* ── DELETE /integrations/:key ─────────────────────────────────────────────── */
 

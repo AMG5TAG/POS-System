@@ -5477,7 +5477,6 @@ export interface IntegrationStatus {
   authType: IntegrationStatusAuthType;
   connected: boolean;
   enabled: boolean;
-  comingSoon: boolean;
   connectedAt?: string | null;
   oauthConfigured?: boolean;
 }

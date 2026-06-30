@@ -7,7 +7,7 @@ export { XERO_OAUTH_SCOPES };
 
 /**
  * Resolve the adapter for a provider key. v1 ships Xero Payroll;
- * QuickBooks / Deputy slot in here behind the same `PayrollProvider` interface.
+ * Deputy and others slot in here behind the same `PayrollProvider` interface.
  */
 export function getPayrollProvider(providerKey: string): PayrollProvider | null {
   switch (providerKey) {

@@ -406,34 +406,6 @@ export async function readCredentialVault<T = Record<string, unknown>>(
   }
 }
 
-/* ── Bring-your-own OAuth app credentials ──────────────────────────────────────
-   OAuth-based integrations (e.g. QuickBooks) have no static API key, so
-   instead of a platform-wide OAuth app we let each merchant supply their OWN
-   app's client id + secret. They're stored encrypted in the vault under a
-   dedicated "<key>__app" provider slot, and the OAuth start/callback/refresh
-   flows read them per-merchant (falling back to platform env vars when absent,
-   so any existing platform-app setup keeps working). */
-
-const APP_CREDS_SUFFIX = "__app";
-
-export async function saveOAuthAppCreds(merchantId: number, key: string, clientId: string, clientSecret: string): Promise<void> {
-  await upsertCredentialVault(merchantId, `${key}${APP_CREDS_SUFFIX}`, { clientId, clientSecret });
-}
-
-export async function getOAuthAppCreds(merchantId: number, key: string): Promise<{ clientId: string; clientSecret: string } | null> {
-  const c = await readCredentialVault<{ clientId?: string; clientSecret?: string }>(merchantId, `${key}${APP_CREDS_SUFFIX}`).catch(() => null);
-  if (c?.clientId && c.clientSecret) return { clientId: c.clientId, clientSecret: c.clientSecret };
-  return null;
-}
-
-export async function hasOAuthAppCreds(merchantId: number, key: string): Promise<boolean> {
-  return (await getOAuthAppCreds(merchantId, key)) !== null;
-}
-
-export async function deleteOAuthAppCreds(merchantId: number, key: string): Promise<void> {
-  await deleteVault(merchantId, `${key}${APP_CREDS_SUFFIX}`);
-}
-
 /* ── Vault health status ───────────────────────────────────────────────────── */
 
 export interface VaultStatus {

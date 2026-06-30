@@ -393,7 +393,6 @@ const FEATURE_SECTIONS: FeatureSection[] = [
     emoji: "🔌",
     features: [
       "Xero: connect in one click and sync sales, COGS, and GST to your Xero account",
-      "QuickBooks Online: accounting sync",
       "Tyro EFTPOS: fully integrated countertop payments",
       "CommBank Smart Terminal: integrated EFTPOS",
       "Square: payment terminal integration",

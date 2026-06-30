@@ -12,7 +12,7 @@ import { merchantsTable } from "./merchants";
 export const payrollSettingsTable = pgTable("payroll_settings", {
   id:           serial("id").primaryKey(),
   merchantId:   integer("merchant_id").notNull().references(() => merchantsTable.id),
-  providerKey:  text("provider_key").notNull().default("xero_payroll"), // xero_payroll | quickbooks | deputy
+  providerKey:  text("provider_key").notNull().default("xero_payroll"), // xero_payroll | deputy
   region:       text("region").notNull().default("AU"),                 // AU | NZ | UK
   status:       text("status").notNull().default("disconnected"),       // connected | disconnected
   payCalendarId: text("pay_calendar_id"),                               // provider pay-calendar/run-schedule id

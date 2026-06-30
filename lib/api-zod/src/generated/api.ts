@@ -10416,7 +10416,6 @@ export const ListIntegrationsResponseItem = zod.object({
   "authType": zod.enum(['oauth', 'credentials']),
   "connected": zod.boolean(),
   "enabled": zod.boolean(),
-  "comingSoon": zod.boolean(),
   "connectedAt": zod.coerce.date().nullish(),
   "oauthConfigured": zod.boolean().optional()
 })

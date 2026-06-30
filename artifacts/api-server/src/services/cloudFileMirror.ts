@@ -7,8 +7,6 @@ import { logger } from "../lib/logger";
 /**
  * Cloud storage providers that can receive mirrored customer files. These are
  * the connected, OAuth-vault-backed storage integrations from the Sync page.
- * (proton_drive is "coming soon" / credentials-only and is intentionally
- * excluded — it cannot accept uploads yet.)
  */
 export const CLOUD_FILE_STORAGE_KEYS = ["onedrive", "google_drive", "dropbox"] as const;
 export type CloudFileStorageKey = (typeof CLOUD_FILE_STORAGE_KEYS)[number];

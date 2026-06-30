@@ -28,9 +28,9 @@ interface HelpSection {
 const SECTIONS: HelpSection[] = [
   {
     id: "accounting",
-    title: "Accounting & Finance — Xero, QuickBooks",
+    title: "Accounting & Finance — Xero",
     icon: Landmark,
-    intro: "Xero connects in one click using KoaPOS's secure platform connection — no developer app needed. QuickBooks connects with your own developer app.",
+    intro: "Xero connects in one click using KoaPOS's secure platform connection — no developer app needed.",
     faqs: [
       {
         q: "How do I connect Xero?",
@@ -42,20 +42,6 @@ const SECTIONS: HelpSection[] = [
         note: "No developer app or keys required — KoaPOS handles the connection for you.",
         links: [
           { label: "About Xero OAuth2", url: "https://developer.xero.com/documentation/guides/oauth2/overview/" },
-        ],
-      },
-      {
-        q: "How do I connect QuickBooks?",
-        steps: [
-          "Sign in to the QuickBooks developer portal (developer.intuit.com) and create a new app.",
-          "Copy the app's Client ID and Client Secret.",
-          "In KoaPOS, open the integration and click Connect, then paste the Client ID and Client Secret.",
-          "Copy the redirect (callback) URL shown in the dialog and add it to your app's allowed redirect URIs.",
-          "Click Save & Authorise — you'll be sent to the provider to log in and approve access.",
-        ],
-        note: "Your keys are encrypted and stored against your account only.",
-        links: [
-          { label: "QuickBooks developer", url: "https://developer.intuit.com/app/developer/dashboard" },
         ],
       },
       {
@@ -123,20 +109,13 @@ const SECTIONS: HelpSection[] = [
     intro: "Sync inventory, orders and shipping with online storefronts, marketplaces and carriers.",
     faqs: [
       {
-        q: "How do I connect a shipping carrier (Australia Post, Sendle)?",
+        q: "How do I connect Australia Post?",
         steps: [
-          "Get your API Key (and Account Number for Australia Post) from the carrier's account portal.",
+          "Get your API Key and Account Number from your Australia Post developer account.",
           "Paste them into the integration dialog and Save to enable live rates and labels at checkout.",
         ],
         links: [
           { label: "Australia Post developer", url: "https://developers.auspost.com.au/" },
-          { label: "Sendle dashboard", url: "https://dashboard.sendle.com/" },
-        ],
-      },
-      {
-        q: "What about Shopify, eBay, Amazon, WooCommerce?",
-        steps: [
-          "These are rolling out — a “Coming soon” badge means the connection isn't available yet.",
         ],
       },
     ],

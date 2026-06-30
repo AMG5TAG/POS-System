@@ -146,7 +146,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
    boundary moved out. */
 export interface FinalizeSaleSyncContext { host: string; cookie: string; }
 export interface FinalizeSaleOptions {
-  /** Present → fire Xero/QuickBooks live sync (needs a session cookie). Omit to skip. */
+  /** Present → fire Xero live sync (needs a session cookie). Omit to skip. */
   syncContext?: FinalizeSaleSyncContext;
 }
 type CreateTransactionInput = Extract<ReturnType<typeof CreateTransactionBody.safeParse>, { success: true }>["data"];
@@ -886,10 +886,10 @@ export async function finalizeSale(
       .catch(() => { /* non-blocking */ });
   }
 
-  /* Fire-and-forget Xero / QuickBooks live sync if the merchant has enabled it
-     and a session context was supplied (the internal sync endpoints require the
-     cashier's auth cookie). Async/webhook callers omit syncContext, so this is
-     skipped for sales finalised out-of-band. */
+  /* Fire-and-forget Xero live sync if the merchant has enabled it and a session
+     context was supplied (the internal sync endpoint requires the cashier's auth
+     cookie). Async/webhook callers omit syncContext, so this is skipped for sales
+     finalised out-of-band. */
   const syncContext = opts.syncContext;
   if (syncContext) {
     void (async () => {
@@ -900,19 +900,6 @@ export async function finalizeSale(
         const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
         if (xeroCreds.syncSettings?.syncOnSale) {
           await fetch(`https://${syncContext.host}/api/xero/sync-sale`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", Cookie: syncContext.cookie },
-            body: JSON.stringify({ transactionId: transaction.id }),
-          });
-        }
-      } catch { /* silent */ }
-      try {
-        const [qbRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
-          .from(merchantIntegrationsTable)
-          .where(and(eq(merchantIntegrationsTable.merchantId, merchantId), eq(merchantIntegrationsTable.integrationKey, "quickbooks")));
-        const qbCreds = qbRow?.credentials ? JSON.parse(qbRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
-        if (qbCreds.syncSettings?.syncOnSale) {
-          await fetch(`https://${syncContext.host}/api/quickbooks/sync-sale`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Cookie: syncContext.cookie },
             body: JSON.stringify({ transactionId: transaction.id }),

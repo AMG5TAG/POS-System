@@ -25,7 +25,7 @@ import type { SocialFeedSettingsInput } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
-  ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
+  ShieldCheck, ChevronDown, ChevronRight, Zap,
   CreditCard, KeyRound, RefreshCw,
   Landmark, ShoppingBag, Megaphone, Cloud,
   Settings, Users, HelpCircle,
@@ -43,7 +43,6 @@ interface Integration {
   description: string;
   authType: "oauth" | "credentials";
   fields: IntegrationField[];
-  comingSoon: boolean;
   useVault: boolean;
   status: "connected" | "disconnected";
   connectedAt: string | null;
@@ -52,9 +51,6 @@ interface Integration {
   disconnectedReason: string | null;
   disconnectedAt: string | null;
   oauthConfigured: boolean | null;
-  /** Bring-your-own OAuth app: collect the merchant's own client id/secret,
-   *  then run the OAuth redirect using those (e.g. QuickBooks). */
-  byoOAuth?: boolean;
 }
 
 function disconnectReasonMessage(reason: string | null): string | null {
@@ -117,7 +113,6 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   deputy:               { type: "img",  bg: "bg-[#FF8C00]",     src: SI("deputy",        "ffffff") },
   /* Accounting & Finance */
   xero:                 { type: "img",  bg: "bg-[#13B5EA]",     src: SI("xero",          "ffffff") },
-  quickbooks:           { type: "img",  bg: "bg-[#2CA01C]",     src: SI("quickbooks",    "ffffff") },
   /* E-Commerce & Marketplaces */
   shopify:              { type: "img",  bg: "bg-[#96BF48]",     src: SI("shopify",       "ffffff") },
   ebay:                 { type: "img",  bg: "bg-white border",  src: SI("ebay",          "E53238") },
@@ -179,42 +174,10 @@ function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: stri
 
 function ConnectModal({ integration, onClose, onSaved }: { integration: Integration | null; onClose: () => void; onSaved: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
-  const [byoSubmitting, setByoSubmitting] = useState(false);
   const connectMutation = useConnectIntegration();
-  useEffect(() => { if (integration) { setValues({}); setByoSubmitting(false); } }, [integration]);
+  useEffect(() => { if (integration) { setValues({}); } }, [integration]);
   if (!integration) return null;
   const handleSave = () => {
-    // Bring-your-own OAuth app (e.g. QuickBooks): save the merchant's
-    // own client id/secret, then hand off to the provider's OAuth consent flow.
-    if (integration.byoOAuth) {
-      if (!values.clientId?.trim() || !values.clientSecret?.trim()) {
-        toast.error("Enter your Client ID and Client Secret");
-        return;
-      }
-      setByoSubmitting(true);
-      void (async () => {
-        try {
-          const r = await fetch(`/api/integrations/${integration.key}/oauth-app`, {
-            method: "POST",
-            credentials: "include",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({ clientId: values.clientId, clientSecret: values.clientSecret }),
-          });
-          if (!r.ok) {
-            const d = await r.json().catch(() => ({})) as { error?: string };
-            throw new Error(d.error ?? "Failed to save credentials");
-          }
-          // Redirect into the OAuth consent flow using the merchant's own app.
-          window.location.href = integration.key === "xero"
-            ? "/api/xero/auth/start"
-            : `/api/integrations/oauth/${integration.key}/start`;
-        } catch (e) {
-          toast.error(e instanceof Error ? e.message : "Failed to save credentials");
-          setByoSubmitting(false);
-        }
-      })();
-      return;
-    }
     connectMutation.mutate(
       { key: integration.key, data: values as unknown as Parameters<typeof connectMutation.mutate>[0]["data"] },
       {
@@ -274,43 +237,12 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
               </div>
             );
           })()}
-          {integration.byoOAuth && (() => {
-            const callbackUrl = integration.key === "xero"
-              ? `${window.location.origin}/api/xero/auth/callback`
-              : `${window.location.origin}/api/integrations/oauth/${integration.key}/callback`;
-            return (
-              <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
-                <p className="text-[11px] font-medium text-muted-foreground">
-                  Create an app in your {integration.label} developer portal, paste its Client ID & Secret above, and register this redirect (callback) URL on the app:
-                </p>
-                <div className="flex items-center gap-2">
-                  <code className="flex-1 text-[11px] bg-background border rounded px-2 py-1 truncate" title={callbackUrl}>
-                    {callbackUrl}
-                  </code>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-7 px-2 text-[11px] shrink-0"
-                    onClick={() => {
-                      void navigator.clipboard.writeText(callbackUrl)
-                        .then(() => toast.success("Redirect URL copied"))
-                        .catch(() => toast.error("Couldn't copy — select and copy manually"));
-                    }}
-                  >
-                    Copy
-                  </Button>
-                </div>
-                <p className="text-[11px] text-muted-foreground">Saving will take you to {integration.label} to authorise access.</p>
-              </div>
-            );
-          })()}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
-          <Button onClick={handleSave} disabled={connectMutation.isPending || byoSubmitting} className="gap-1.5">
-            {(connectMutation.isPending || byoSubmitting) && <Loader2 className="w-4 h-4 animate-spin" />}
-            {integration.byoOAuth ? "Save & Authorise" : "Save & Connect"}
+          <Button onClick={handleSave} disabled={connectMutation.isPending} className="gap-1.5">
+            {connectMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save & Connect
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -340,7 +272,6 @@ function IntegrationCard({
         : needsReconnect
         ? "border-amber-300 dark:border-amber-700 shadow-sm shadow-amber-100 dark:shadow-amber-950"
         : "border-border hover:-translate-y-0.5",
-      intg.comingSoon && "opacity-60",
     )}>
       {/* Connected accent strip */}
       {isConnected && <div className="h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />}
@@ -349,19 +280,13 @@ function IntegrationCard({
       <div className="p-5 flex flex-col gap-4 flex-1">
         {/* Logo + title row */}
         <div className="flex items-start gap-3.5">
-          {/* Logo with Coming Soon overlay badge */}
           <div className="relative shrink-0">
             <IntegrationLogo integrationKey={intg.key} size="lg" />
-            {intg.comingSoon && (
-              <span className="absolute -bottom-1.5 -right-1.5 inline-flex items-center gap-0.5 rounded-full bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow">
-                <Clock className="w-2 h-2" /> Soon
-              </span>
-            )}
           </div>
           <div className="flex-1 min-w-0 pt-1 min-h-[40px]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm leading-tight">{intg.label}</span>
-              {!intg.comingSoon && intg.authType === "oauth" && (
+              {intg.authType === "oauth" && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900">
                   <ShieldCheck className="w-3 h-3" /> OAuth
                 </span>
@@ -377,7 +302,7 @@ function IntegrationCard({
               </p>
             ) : (
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
-                {intg.comingSoon ? "Coming soon" : intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
+                {intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
               </p>
             )}
           </div>
@@ -389,7 +314,7 @@ function IntegrationCard({
         </p>
 
         {/* OAuth not configured warning (Xero routes to its wizard, which has its own messaging) */}
-        {intg.authType === "oauth" && intg.key !== "xero" && intg.oauthConfigured === false && !isConnected && !intg.comingSoon && (
+        {intg.authType === "oauth" && intg.key !== "xero" && intg.oauthConfigured === false && !isConnected && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>OAuth credentials not configured — see .env.example</span>
@@ -406,11 +331,7 @@ function IntegrationCard({
 
         {/* Action row */}
         <div className={cn("pt-3 border-t flex items-center justify-between gap-2", isConnected && "border-emerald-200 dark:border-emerald-800")}>
-          {intg.comingSoon ? (
-            <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground w-full" disabled>
-              <Clock className="w-3.5 h-3.5" /> Coming Soon
-            </Button>
-          ) : isConnected ? (
+          {isConnected ? (
             <div className="flex items-center justify-between w-full gap-2">
               <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 px-2 py-0.5 text-[11px]">
                 <CheckCircle2 className="w-3 h-3" /> Connected
