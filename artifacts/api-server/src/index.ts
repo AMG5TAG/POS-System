@@ -13,6 +13,7 @@ import { schedulePasswordResetTokensCleanup } from "./services/passwordResetToke
 import { scheduleBackups } from "./services/backupScheduler";
 import { scheduleSocialPosts } from "./services/socialPostScheduler";
 import { scheduleAutoSync } from "./services/autoSyncScheduler";
+import { scheduleKpiResets } from "./services/kpiResetScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 import { checkSchemaDrift } from "./services/schemaDriftCheck";
 
@@ -61,6 +62,7 @@ async function bootstrap() {
   scheduleBackups(logger);
   scheduleSocialPosts(logger);
   scheduleAutoSync(logger);
+  scheduleKpiResets(logger);
   ensureLoginCleanupFunction(logger).then(() => {
     scheduleLoginAttemptsCleanup(logger);
   }).catch((err) => {

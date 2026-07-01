@@ -11,11 +11,12 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { formatLoyaltyAmount } from "@/lib/loyalty-naming";
 import {
   Receipt, RotateCcw, CreditCard, Banknote,
-  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle,
+  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle, PencilLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { ModifyCompletedSaleDialog } from "@/components/modify-completed-sale-dialog";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -56,8 +57,8 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 /* ─── Receipt detail dialog ──────────────────────────────────────────────── */
 
 function ReceiptDialog({
-  tx, onClose, onRefund, loyalty, staffList,
-}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; loyalty?: LoyaltySettings | null; staffList?: Staff[] }) {
+  tx, onClose, onRefund, onModify, loyalty, staffList,
+}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; onModify: (tx: Transaction) => void; loyalty?: LoyaltySettings | null; staffList?: Staff[] }) {
   if (!tx) return null;
 
   const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
@@ -148,10 +149,16 @@ function ReceiptDialog({
 
         <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
           {tx.status === "completed" ? (
-            <Button variant="destructive" size="sm" className="gap-1.5"
-              onClick={() => { onRefund(tx); onClose(); }}>
-              <RotateCcw className="w-3.5 h-3.5" /> Refund
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="destructive" size="sm" className="gap-1.5"
+                onClick={() => { onRefund(tx); onClose(); }}>
+                <RotateCcw className="w-3.5 h-3.5" /> Refund
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5"
+                onClick={() => { onModify(tx); onClose(); }}>
+                <PencilLine className="w-3.5 h-3.5" /> Modify
+              </Button>
+            </div>
           ) : <div />}
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </DialogFooter>
@@ -166,6 +173,7 @@ export default function TransactionsPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter]   = useState<string>("");
   const [selectedTx, setSelectedTx]       = useState<Transaction | null>(null);
+  const [modifyTx, setModifyTx]           = useState<Transaction | null>(null);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [refundReason, setRefundReason]   = useState("");
   const [refundingTx, setRefundingTx]     = useState<Transaction | null>(null);
@@ -323,8 +331,14 @@ export default function TransactionsPage() {
         tx={selectedTx}
         onClose={() => setSelectedTx(null)}
         onRefund={(tx) => { setRefundingTx(tx); setRefundDialogOpen(true); }}
+        onModify={(tx) => setModifyTx(tx)}
         loyalty={loyaltySettings}
         staffList={staffData}
+      />
+
+      <ModifyCompletedSaleDialog
+        tx={modifyTx}
+        onClose={() => setModifyTx(null)}
       />
 
       <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>

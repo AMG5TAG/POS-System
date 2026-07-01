@@ -18,6 +18,7 @@
     "add-staff-password-hash": "tsx ./src/add-staff-password-hash.ts",
     "add-po-distribute-delivery": "tsx ./src/add-po-distribute-delivery.ts",
     "add-service-settings-table": "tsx ./src/add-service-settings-table.ts",
+  "add-kpi-history-table": "tsx ./src/add-kpi-history-table.ts",
     "add-register-session-staff-id": "tsx ./src/add-register-session-staff-id.ts",
     "add-mobile-pos-app-table": "tsx ./src/add-mobile-pos-app-table.ts",
     "add-auto-sync-settings-table": "tsx ./src/add-auto-sync-settings-table.ts",

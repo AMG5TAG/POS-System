@@ -39,7 +39,7 @@ const DEFAULTS = {
   contactEmail: "", website: "", state: "", postcode: "",
   openingHours: {} as Record<string, unknown>,
   paymentTypes: ["Cash", "EFTPOS", "Mastercard", "Visa"],
-  socialLinks: { facebook: "", instagram: "", twitter: "", linkedin: "", youtube: "", tiktok: "" },
+  socialLinks: { facebook: "", instagram: "", twitter: "", linkedin: "", youtube: "", tiktok: "", bluesky: "", reddit: "", threads: "" },
   customLinks: [] as unknown[],
 };
 

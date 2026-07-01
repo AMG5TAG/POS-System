@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { FontPicker } from "@/components/ui/font-picker";
+import { BlueSkyIcon, RedditIcon, ThreadsIcon } from "@/components/social-icons";
 
 const BUSINESS_TABS = [
   { href: "#business-info",  label: "Business Info",  icon: Building2   },
@@ -48,7 +49,7 @@ function stripSocialHandle(value: string): string {
     .trim()
     .replace(/^https?:\/\//i, "")
     .replace(/^(?:www\.)?/, "")
-    .replace(/^[a-z0-9-]+\.[a-z]{2,}\/(?:in\/|@)?/i, "")
+    .replace(/^[a-z0-9-]+\.[a-z]{2,}\/(?:in\/|user\/|profile\/|@)?/i, "")
     .replace(/\/$/, "");
 }
 
@@ -816,6 +817,9 @@ export default function SettingsBusinessPage() {
                 { key: "linkedin",  label: "LinkedIn",   icon: Linkedin,  baseUrl: "linkedin.com/in/", placeholder: "yourhandle"   },
                 { key: "youtube",   label: "YouTube",    icon: Youtube,   baseUrl: "youtube.com/@",    placeholder: "yourchannel"  },
                 { key: "tiktok",    label: "TikTok",     icon: Globe,     baseUrl: "tiktok.com/@",     placeholder: "yourhandle"   },
+                { key: "bluesky",   label: "Bluesky",    icon: BlueSkyIcon, baseUrl: "bsky.app/profile/", placeholder: "yourhandle"  },
+                { key: "reddit",    label: "Reddit",     icon: RedditIcon,  baseUrl: "reddit.com/user/",  placeholder: "yourusername" },
+                { key: "threads",   label: "Threads",    icon: ThreadsIcon, baseUrl: "threads.net/@",     placeholder: "yourhandle"   },
               ] as { key: keyof typeof ext.socialLinks; label: string; icon: React.ElementType; baseUrl: string; placeholder: string }[]
             ).map(({ key, label, icon: Icon, baseUrl, placeholder }) => (
               <div key={key} className="flex items-center gap-3">
@@ -828,6 +832,9 @@ export default function SettingsBusinessPage() {
                     value={stripSocialHandle(ext.socialLinks[key])}
                     onChange={(e) => setSocial(key, stripSocialHandle(e.target.value))}
                     placeholder={placeholder}
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm rounded-none"
                     aria-label={label}
                   />

@@ -68,6 +68,7 @@ export * from "./layby-settings";
 export * from "./tech-app";
 export * from "./kpi-settings";
 export * from "./kpi-targets";
+export * from "./kpi-history";
 export * from "./qr-codes";
 export * from "./qr-settings";
 export * from "./qr-saved-templates";

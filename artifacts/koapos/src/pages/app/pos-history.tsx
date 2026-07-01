@@ -26,12 +26,13 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { customerDisplayName } from "@/lib/customer-name";
 import {
   History, Eye, CreditCard, Banknote, Search,
-  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Tag,
+  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Tag, PencilLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { SendButton } from "@/components/send/send-dialog";
+import { ModifyCompletedSaleDialog } from "@/components/modify-completed-sale-dialog";
 
 /** How many records to load per page; "Load more" fetches another page. */
 const PAGE_SIZE = 200;
@@ -228,6 +229,7 @@ export default function POSHistoryPage() {
   const [sort, setSort] = useState<SortState>(null);
   const [viewingTx, setViewingTx] = useState<Transaction | null>(null);
   const [refundTx, setRefundTx] = useState<Transaction | null>(null);
+  const [modifyTx, setModifyTx] = useState<Transaction | null>(null);
   const [deleteTx, setDeleteTx] = useState<Transaction | null>(null);
   const [limit, setLimit] = useState(PAGE_SIZE);
   const { printReceipt, isLoading: tplLoading } = useDocumentTemplate();
@@ -374,7 +376,7 @@ export default function POSHistoryPage() {
                   <th className="text-right p-3 font-medium">
                     <SortHeaderButton label="Total" sortKey="total" sort={sort} onClick={handleSort} className="ml-auto" />
                   </th>
-                  <th className="p-3 w-36" />
+                  <th className="p-3 w-44" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -464,6 +466,16 @@ export default function POSHistoryPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7 text-primary hover:text-primary"
+                          title="Modify sale"
+                          disabled={tx.status !== "completed"}
+                          onClick={() => setModifyTx(tx)}
+                        >
+                          <PencilLine className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7 text-amber-600 hover:text-amber-700"
                           title="Refund"
                           disabled={tx.status !== "completed"}
@@ -503,6 +515,11 @@ export default function POSHistoryPage() {
         tx={viewingTx}
         txDetail={viewDetail}
         onClose={() => setViewingTx(null)}
+      />
+
+      <ModifyCompletedSaleDialog
+        tx={modifyTx}
+        onClose={() => setModifyTx(null)}
       />
 
       <RefundDialog

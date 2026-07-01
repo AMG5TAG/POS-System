@@ -41,6 +41,9 @@ export interface BusinessProfile {
     linkedin: string;
     youtube: string;
     tiktok: string;
+    bluesky: string;
+    reddit: string;
+    threads: string;
   };
   customLinks: CustomLink[];
 }
@@ -68,7 +71,7 @@ export const DEFAULT_BUSINESS_PROFILE: BusinessProfile = {
   postcode: "",
   openingHours: DEFAULT_HOURS,
   paymentTypes: ["Cash", "EFTPOS", "Mastercard", "Visa"],
-  socialLinks: { facebook: "", instagram: "", twitter: "", linkedin: "", youtube: "", tiktok: "" },
+  socialLinks: { facebook: "", instagram: "", twitter: "", linkedin: "", youtube: "", tiktok: "", bluesky: "", reddit: "", threads: "" },
   customLinks: [],
 };
 

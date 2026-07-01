@@ -98,6 +98,68 @@ export function getPeriodStartForKpi(period: string, weekStartDay = "monday", st
   }
 }
 
+const MONTH_LONG = [
+  "January", "February", "March", "April", "May", "June",
+  "July", "August", "September", "October", "November", "December",
+];
+const MONTH_SHORT = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
+
+/** The period immediately before `now` for a KPI of the given `period`,
+ *  expressed as a half-inclusive UTC window `[start, end]` in the merchant's
+ *  timezone plus a human label. `start` is the previous period's local-midnight
+ *  start; `end` is the last instant before the current period begins, so a
+ *  `<= end` comparison captures exactly the completed period. Used to snapshot a
+ *  just-finished period (day/week/month/quarter/year) into history. */
+export function getPreviousPeriodWindow(
+  period: string,
+  weekStartDay = "monday",
+  timeZone?: string | null,
+  now: Date = new Date(),
+): { start: Date; end: Date; label: string } {
+  const tz = safeZone(timeZone);
+  // Current period's start (handles weekly anchoring and calendar boundaries).
+  const currentStart = getPeriodStartForKpi(period, weekStartDay, null, tz);
+  const end = new Date(currentStart.getTime() - 1);
+  // Local calendar date of the current period start.
+  const c = getZonedParts(currentStart, tz);
+
+  let py = c.year, pmo = c.month, pd = c.day;
+  const shiftDays = (days: number) => {
+    const proxy = new Date(Date.UTC(c.year, c.month - 1, c.day) - days * 86_400_000);
+    py = proxy.getUTCFullYear(); pmo = proxy.getUTCMonth() + 1; pd = proxy.getUTCDate();
+  };
+
+  switch (period) {
+    case "daily":  shiftDays(1); break;
+    case "weekly": shiftDays(7); break;
+    case "quarterly":
+      pd = 1; pmo = c.month - 3;
+      if (pmo < 1) { pmo += 12; py -= 1; }
+      break;
+    case "annual":
+      pd = 1; pmo = 1; py = c.year - 1;
+      break;
+    case "monthly":
+    default:
+      pd = 1; pmo = c.month === 1 ? 12 : c.month - 1; py = c.month === 1 ? c.year - 1 : c.year;
+      break;
+  }
+
+  const start = zonedWallClockToUtc(py, pmo, pd, 0, 0, 0, tz);
+
+  let label: string;
+  switch (period) {
+    case "daily":     label = `${pd} ${MONTH_SHORT[pmo - 1]} ${py}`; break;
+    case "weekly":    label = `Week of ${pd} ${MONTH_SHORT[pmo - 1]} ${py}`; break;
+    case "quarterly": label = `Q${Math.floor((pmo - 1) / 3) + 1} ${py}`; break;
+    case "annual":    label = `${py}`; break;
+    case "monthly":
+    default:          label = `${MONTH_LONG[pmo - 1]} ${py}`; break;
+  }
+
+  return { start, end, label };
+}
+
 /** Inclusive upper bound of a fixed-budget window (end of the given local day),
  *  or null for a rolling period that runs up to "now". */
 export function getPeriodEndForKpi(endDate?: string | null, timeZone?: string | null): Date | null {
@@ -142,9 +204,13 @@ export async function computeActual(
   kpi: KpiCalcInput,
   weekStartDay = "monday",
   timeZone?: string | null,
+  // Explicit window override — when provided, the actual is computed over this
+  // fixed [start, end] window instead of the KPI's current rolling period. Used
+  // to snapshot a completed period (e.g. last month) into history.
+  window?: { start: Date; end: Date | null },
 ): Promise<number | null> {
-  const periodStart = getPeriodStartForKpi(kpi.period, weekStartDay, kpi.startDate, timeZone);
-  const periodEnd = getPeriodEndForKpi(kpi.endDate, timeZone);
+  const periodStart = window ? window.start : getPeriodStartForKpi(kpi.period, weekStartDay, kpi.startDate, timeZone);
+  const periodEnd = window ? window.end : getPeriodEndForKpi(kpi.endDate, timeZone);
   const staffIds = parseStaffIds(kpi.staffIds);
   const isStaff = staffIds.length > 0;
   const metric = kpi.metric;

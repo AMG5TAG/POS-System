@@ -1532,6 +1532,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/Transaction"
 
+  /transactions/{id}/modify:
+    post:
+      operationId: modifyCompletedSale
+      tags: [transactions]
+      summary: >-
+        Amend a completed sale in limited ways — add free ($0) products, link a
+        customer, and/or link an appointment or service job. Never changes the
+        money collected.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModifyCompletedSaleInput"
+      responses:
+        "200":
+          description: Modified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "409":
+          description: Sale is not in a state that can be modified (only completed sales)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   # ── Staff ─────────────────────────────────────────────────────────────────
   /staff:
     get:
@@ -5434,6 +5468,23 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /kpi-history:
+    get:
+      operationId: listKpiHistory
+      summary: List archived KPI period snapshots (e.g. completed months), newest first
+      tags: [KPIs]
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiHistoryListResponse" }
 
   /qr-codes:
     get:
@@ -10652,6 +10703,51 @@ components:
             amount:
               type: number
 
+    ModifyCompletedSaleItem:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          description: >-
+            Catalog product id to add as a free line. Use 0 for a custom
+            free line (supply productName). The line is always recorded at $0
+            regardless of the product's catalog price.
+        productName:
+          type: string
+          description: Name for a custom free line (productId 0). Ignored for catalog products.
+        quantity:
+          type: integer
+          minimum: 1
+
+    ModifyCompletedSaleInput:
+      type: object
+      description: >-
+        Limited post-sale amendments to a completed sale. Every field is
+        optional; only the fields present are applied. Added items are always
+        recorded at $0 (complimentary) so the sale total never changes.
+      properties:
+        customerId:
+          type: ["integer", "null"]
+          description: >-
+            Link (or change) the customer on the sale. Pass null to detach the
+            current customer. Omit to leave the customer unchanged.
+        addItems:
+          type: array
+          description: Free products to add to the sale; each is forced to $0.
+          items:
+            $ref: "#/components/schemas/ModifyCompletedSaleItem"
+        serviceJobNumber:
+          type: string
+          description: >-
+            Link the sale to a service job by its job number. The job is marked
+            completed and a reference is appended to the sale notes.
+        appointmentId:
+          type: integer
+          description: >-
+            Link the sale to an appointment by id. The appointment is marked
+            completed and a reference is appended to the sale notes.
+
     RefundInput:
       type: object
       required: [reason]
@@ -13780,6 +13876,36 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/KpiTarget" }
+        total: { type: integer }
+
+    KpiHistoryEntry:
+      type: object
+      required: [id, merchantId, targetId, name, metric, period, target, periodStart, periodEnd, periodLabel, createdAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        targetId:    { type: string }
+        kpiTargetId: { type: integer, nullable: true }
+        name:        { type: string }
+        metric:      { type: string }
+        categoryId:  { type: string }
+        period:      { type: string }
+        target:      { type: number }
+        actual:      { type: number, nullable: true }
+        staffIds:    { type: string }
+        reward:      { type: string }
+        periodStart: { type: string, format: date-time }
+        periodEnd:   { type: string, format: date-time }
+        periodLabel: { type: string }
+        createdAt:   { type: string, format: date-time }
+
+    KpiHistoryListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/KpiHistoryEntry" }
         total: { type: integer }
 
     QrCode:

@@ -10,6 +10,8 @@ import {
   RefundTransactionBody,
   DeleteTransactionParams,
   SendTransactionReceiptParams,
+  ModifyCompletedSaleParams,
+  ModifyCompletedSaleBody,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
 import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
@@ -1022,6 +1024,151 @@ router.post("/transactions/:id/void", requireAuth, async (req, res): Promise<voi
     cust = c ?? null;
   }
   res.json(formatTransaction(updated, cust));
+});
+
+// POST /transactions/:id/modify — limited post-sale amendments to a COMPLETED
+// sale: add free ($0) products, link/detach a customer, and/or link an
+// appointment or service job. Deliberately narrow so a finalised sale can be
+// annotated (comp an item, attach a customer, connect it to the job it settled)
+// without ever changing the money collected — added items are forced to $0, so
+// subtotal/tax/total are untouched. Refunded/voided sales cannot be modified.
+router.post("/transactions/:id/modify", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const params = ModifyCompletedSaleParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const parsed = ModifyCompletedSaleBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const id = params.data.id;
+  const { customerId, addItems, serviceJobNumber, appointmentId } = parsed.data;
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Lock the row so a concurrent modify/void can't race the items/notes edit.
+      const [transaction] = await tx
+        .select()
+        .from(transactionsTable)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .for("update");
+      if (!transaction) throw new HttpError(404, "Transaction not found");
+      if (transaction.status !== "completed") {
+        throw new HttpError(409, "Only completed sales can be modified.");
+      }
+
+      const updates: Partial<typeof transactionsTable.$inferInsert> = {};
+
+      // ── Add free ($0) products ──────────────────────────────────────────────
+      // Catalog products are resolved for their name (and stock deduction); the
+      // price is forced to 0 regardless of the catalog price. productId 0 is a
+      // custom free line carrying a client-supplied name.
+      if (addItems && addItems.length > 0) {
+        const existingItems = Array.isArray(transaction.items)
+          ? [...(transaction.items as Array<Record<string, unknown>>)]
+          : [];
+        const catalogIds = [...new Set(addItems.filter((i) => i.productId !== 0).map((i) => i.productId))];
+        const products = catalogIds.length > 0
+          ? await tx.select().from(productsTable).where(and(inArray(productsTable.id, catalogIds), eq(productsTable.merchantId, merchantId)))
+          : [];
+        const productMap = new Map(products.map((p) => [p.id, p]));
+        const missing = catalogIds.filter((pid) => !productMap.has(pid));
+        if (missing.length > 0) throw new HttpError(400, `Unknown product id(s): ${missing.join(", ")}`);
+
+        // Aggregate per product so multiple lines of the same product deduct once
+        // from the pre-read stock value (avoids lost updates).
+        const qtyByProduct = new Map<number, number>();
+        for (const item of addItems) {
+          if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+            throw new HttpError(400, "Item quantity must be a positive integer.");
+          }
+          let name: string;
+          if (item.productId === 0) {
+            name = (item.productName?.trim() || "Free item").slice(0, 200);
+          } else {
+            name = productMap.get(item.productId)!.name;
+            qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.quantity);
+          }
+          existingItems.push({
+            productId: item.productId,
+            productName: name,
+            quantity: item.quantity,
+            unitPrice: 0,
+            totalPrice: 0,
+            taxAmount: 0,
+            // Marks the line as a post-sale complimentary add so reports/receipts
+            // can distinguish it from an item that was actually paid for.
+            comp: true,
+          });
+        }
+        for (const [pid, qty] of qtyByProduct) {
+          const product = productMap.get(pid)!;
+          if (product.trackInventory === "true") {
+            const newQty = Math.max(0, product.stockQuantity - qty);
+            await tx.update(productsTable).set({ stockQuantity: newQty }).where(eq(productsTable.id, pid));
+          }
+        }
+        updates.items = existingItems;
+      }
+
+      // ── Link / detach customer ──────────────────────────────────────────────
+      // undefined → leave unchanged; null → detach; number → link (tenant-scoped).
+      if (customerId !== undefined) {
+        if (customerId === null) {
+          updates.customerId = null;
+        } else {
+          const [c] = await tx
+            .select({ id: customersTable.id })
+            .from(customersTable)
+            .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+          if (!c) throw new HttpError(404, "Customer not found");
+          updates.customerId = customerId;
+        }
+      }
+
+      // ── Link appointment / service job ──────────────────────────────────────
+      // Uses the same notes-marker convention as a live sale (see finalizeSale),
+      // and marks the linked entity completed. Markers are de-duplicated so
+      // re-linking the same job/appointment doesn't append twice.
+      let notes = transaction.notes ?? "";
+      const appendMarker = (marker: string) => {
+        if (!notes.includes(marker)) notes = notes ? `${notes} ${marker}` : marker;
+      };
+      if (serviceJobNumber) {
+        const jobNum = serviceJobNumber.trim();
+        const [job] = await tx.select().from(serviceJobsTable)
+          .where(and(eq(serviceJobsTable.jobNumber, jobNum), eq(serviceJobsTable.merchantId, merchantId)));
+        if (!job) throw new HttpError(404, "Service job not found");
+        await tx.update(serviceJobsTable).set({ status: "completed" })
+          .where(and(eq(serviceJobsTable.id, job.id), eq(serviceJobsTable.merchantId, merchantId)));
+        appendMarker(`[Service #${job.jobNumber}: ${job.deviceType || job.deviceDescription || "service"}]`);
+      }
+      if (appointmentId != null) {
+        const [appt] = await tx.select().from(appointmentsTable)
+          .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
+        if (!appt) throw new HttpError(404, "Appointment not found");
+        await tx.update(appointmentsTable).set({ status: "completed" })
+          .where(and(eq(appointmentsTable.id, appt.id), eq(appointmentsTable.merchantId, merchantId)));
+        appendMarker(`[Appt #${appt.id}: ${appt.title}]`);
+      }
+      if (notes !== (transaction.notes ?? "")) updates.notes = notes;
+
+      if (Object.keys(updates).length === 0) return transaction;
+
+      const [updated] = await tx.update(transactionsTable).set(updates)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .returning();
+      return updated;
+    });
+
+    let customer: typeof customersTable.$inferSelect | null = null;
+    if (result.customerId) {
+      const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, result.customerId), eq(customersTable.merchantId, merchantId)));
+      customer = c ?? null;
+    }
+    res.json(formatTransaction(result, customer));
+  } catch (err) {
+    if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+    req.log.error({ err, transactionId: id }, "Failed to modify completed sale");
+    res.status(500).json({ error: "Failed to modify sale" });
+  }
 });
 
 router.delete("/transactions/:id", requireAuth, async (req, res): Promise<void> => {

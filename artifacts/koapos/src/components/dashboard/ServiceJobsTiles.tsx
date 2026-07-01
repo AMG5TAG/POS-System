@@ -174,7 +174,7 @@ function KpiDashboardTile({ href }: { href?: string }) {
   if (!result?.kpi) {
     return (
       <div
-        onClick={() => navigate("/management/marketing-reports/kpis-targets")}
+        onClick={() => navigate("/management/staff-operations/kpis-targets")}
         className="rounded-2xl border border-dashed bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
       >
         <Target className="w-5 h-5 text-muted-foreground/50" />
@@ -203,7 +203,7 @@ function KpiDashboardTile({ href }: { href?: string }) {
 
   return (
     <div
-      onClick={() => navigate(href ?? "/management/marketing-reports/kpis-targets")}
+      onClick={() => navigate(href ?? "/management/staff-operations/kpis-targets")}
       className={cn("rounded-2xl border p-4 flex flex-col gap-1.5 min-h-[100px] w-full cursor-pointer hover:shadow-sm transition-all", statusColor.bg, statusColor.border)}
     >
       <div className="flex items-center justify-between gap-1">

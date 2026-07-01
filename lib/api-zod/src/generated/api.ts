@@ -2151,6 +2151,111 @@ export const VoidTransactionResponse = zod.object({
 
 
 /**
+ * @summary Amend a completed sale in limited ways — add free ($0) products, link a customer, and/or link an appointment or service job. Never changes the money collected.
+ */
+export const ModifyCompletedSaleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+
+
+export const ModifyCompletedSaleBody = zod.object({
+  "customerId": zod.number().nullish().describe('Link (or change) the customer on the sale. Pass null to detach the current customer. Omit to leave the customer unchanged.'),
+  "addItems": zod.array(zod.object({
+  "productId": zod.number().describe('Catalog product id to add as a free line. Use 0 for a custom free line (supply productName). The line is always recorded at $0 regardless of the product\'s catalog price.'),
+  "productName": zod.string().optional().describe('Name for a custom free line (productId 0). Ignored for catalog products.'),
+  "quantity": zod.number().min(1)
+})).optional().describe('Free products to add to the sale; each is forced to $0.'),
+  "serviceJobNumber": zod.string().optional().describe('Link the sale to a service job by its job number. The job is marked completed and a reference is appended to the sale notes.'),
+  "appointmentId": zod.number().optional().describe('Link the sale to an appointment by id. The appointment is marked completed and a reference is appended to the sale notes.')
+}).describe('Limited post-sale amendments to a completed sale. Every field is optional; only the fields present are applied. Added items are always recorded at $0 (complimentary) so the sale total never changes.')
+
+
+export const modifyCompletedSaleResponseItemsItemUnitPriceMin = 0;
+
+
+
+export const ModifyCompletedSaleResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "customer": zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "photoUrl": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish(),
+  "tierName": zod.string().nullish(),
+  "tierUpdatedAt": zod.coerce.date().nullish()
+}).optional(),
+  "staffId": zod.number().nullish(),
+  "receiptNumber": zod.string().optional(),
+  "status": zod.enum(['completed', 'refunded', 'partial_refund', 'voided']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "discountTotal": zod.number().optional(),
+  "total": zod.number(),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "surchargeAmount": zod.number().optional().describe('Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost.'),
+  "amountTendered": zod.number().nullish(),
+  "changeDue": zod.number().nullish(),
+  "notes": zod.string().nullish(),
+  "loyaltyEarned": zod.number().nullish(),
+  "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
+  "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(modifyCompletedSaleResponseItemsItemUnitPriceMin),
+  "totalPrice": zod.number(),
+  "taxAmount": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+})),
+  "issuedGiftCards": zod.array(zod.object({
+  "cardNumber": zod.string(),
+  "balance": zod.number()
+})).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List staff members
  */
 export const ListStaffResponseItem = zod.object({
@@ -7371,6 +7476,36 @@ export const UpdateKpiTargetResponse = zod.object({
  */
 export const DeleteKpiTargetParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary List archived KPI period snapshots (e.g. completed months), newest first
+ */
+export const ListKpiHistoryQueryParams = zod.object({
+  "limit": zod.coerce.number().optional()
+})
+
+export const ListKpiHistoryResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "targetId": zod.string(),
+  "kpiTargetId": zod.number().nullish(),
+  "name": zod.string(),
+  "metric": zod.string(),
+  "categoryId": zod.string().optional(),
+  "period": zod.string(),
+  "target": zod.number(),
+  "actual": zod.number().nullish(),
+  "staffIds": zod.string().optional(),
+  "reward": zod.string().optional(),
+  "periodStart": zod.coerce.date(),
+  "periodEnd": zod.coerce.date(),
+  "periodLabel": zod.string(),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number()
 })
 
 

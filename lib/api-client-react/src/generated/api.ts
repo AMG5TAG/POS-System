@@ -171,6 +171,7 @@ import type {
   InvoiceSettings,
   InvoiceSettingsInput,
   InvoiceUpdate,
+  KpiHistoryListResponse,
   KpiProgressResponse,
   KpiSettings,
   KpiSettingsInput,
@@ -198,6 +199,7 @@ import type {
   ListGiftCardsParams,
   ListInventoryParams,
   ListInvoicesParams,
+  ListKpiHistoryParams,
   ListLaybys200,
   ListLaybysParams,
   ListLowStockAlertLog200,
@@ -238,6 +240,7 @@ import type {
   Merchant,
   MerchantUpdate,
   MergeCustomerProfilesBody,
+  ModifyCompletedSaleInput,
   Module,
   OkResult,
   OnlineStoreSettings,
@@ -5529,6 +5532,78 @@ export const useVoidTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getVoidTransactionMutationOptions(options));
+    }
+
+export const getModifyCompletedSaleUrl = (id: number,) => {
+
+
+
+
+  return `/api/transactions/${id}/modify`
+}
+
+/**
+ * @summary Amend a completed sale in limited ways — add free ($0) products, link a customer, and/or link an appointment or service job. Never changes the money collected.
+ */
+export const modifyCompletedSale = async (id: number,
+    modifyCompletedSaleInput: ModifyCompletedSaleInput, options?: RequestInit): Promise<Transaction> => {
+
+  return customFetch<Transaction>(getModifyCompletedSaleUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      modifyCompletedSaleInput,)
+  }
+);}
+
+
+
+
+export const getModifyCompletedSaleMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifyCompletedSale>>, TError,{id: number;data: BodyType<ModifyCompletedSaleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof modifyCompletedSale>>, TError,{id: number;data: BodyType<ModifyCompletedSaleInput>}, TContext> => {
+
+const mutationKey = ['modifyCompletedSale'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof modifyCompletedSale>>, {id: number;data: BodyType<ModifyCompletedSaleInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  modifyCompletedSale(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ModifyCompletedSaleMutationResult = NonNullable<Awaited<ReturnType<typeof modifyCompletedSale>>>
+    export type ModifyCompletedSaleMutationBody = BodyType<ModifyCompletedSaleInput>
+    export type ModifyCompletedSaleMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Amend a completed sale in limited ways — add free ($0) products, link a customer, and/or link an appointment or service job. Never changes the money collected.
+ */
+export const useModifyCompletedSale = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof modifyCompletedSale>>, TError,{id: number;data: BodyType<ModifyCompletedSaleInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof modifyCompletedSale>>,
+        TError,
+        {id: number;data: BodyType<ModifyCompletedSaleInput>},
+        TContext
+      > => {
+      return useMutation(getModifyCompletedSaleMutationOptions(options));
     }
 
 export const getListStaffUrl = () => {
@@ -20989,6 +21064,90 @@ export const useDeleteKpiTarget = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteKpiTargetMutationOptions(options));
     }
+
+export const getListKpiHistoryUrl = (params?: ListKpiHistoryParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/kpi-history?${stringifiedParams}` : `/api/kpi-history`
+}
+
+/**
+ * @summary List archived KPI period snapshots (e.g. completed months), newest first
+ */
+export const listKpiHistory = async (params?: ListKpiHistoryParams, options?: RequestInit): Promise<KpiHistoryListResponse> => {
+
+  return customFetch<KpiHistoryListResponse>(getListKpiHistoryUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListKpiHistoryQueryKey = (params?: ListKpiHistoryParams,) => {
+    return [
+    `/api/kpi-history`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListKpiHistoryQueryOptions = <TData = Awaited<ReturnType<typeof listKpiHistory>>, TError = ErrorType<unknown>>(params?: ListKpiHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listKpiHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListKpiHistoryQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listKpiHistory>>> = ({ signal }) => listKpiHistory(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listKpiHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListKpiHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof listKpiHistory>>>
+export type ListKpiHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List archived KPI period snapshots (e.g. completed months), newest first
+ */
+
+export function useListKpiHistory<TData = Awaited<ReturnType<typeof listKpiHistory>>, TError = ErrorType<unknown>>(
+ params?: ListKpiHistoryParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listKpiHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListKpiHistoryQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListQrCodesUrl = () => {
 

@@ -1025,6 +1025,32 @@ export interface TransactionInput {
   giftCardPayment?: TransactionInputGiftCardPayment;
 }
 
+export interface ModifyCompletedSaleItem {
+  /** Catalog product id to add as a free line. Use 0 for a custom free line (supply productName). The line is always recorded at $0 regardless of the product's catalog price. */
+  productId: number;
+  /** Name for a custom free line (productId 0). Ignored for catalog products. */
+  productName?: string;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+/**
+ * Limited post-sale amendments to a completed sale. Every field is optional; only the fields present are applied. Added items are always recorded at $0 (complimentary) so the sale total never changes.
+ */
+export interface ModifyCompletedSaleInput {
+  /**
+     * Link (or change) the customer on the sale. Pass null to detach the current customer. Omit to leave the customer unchanged.
+     * @nullable
+     */
+  customerId?: number | null;
+  /** Free products to add to the sale; each is forced to $0. */
+  addItems?: ModifyCompletedSaleItem[];
+  /** Link the sale to a service job by its job number. The job is marked completed and a reference is appended to the sale notes. */
+  serviceJobNumber?: string;
+  /** Link the sale to an appointment by id. The appointment is marked completed and a reference is appended to the sale notes. */
+  appointmentId?: number;
+}
+
 export interface RefundInput {
   reason: string;
   amount?: number;
@@ -3859,6 +3885,30 @@ export interface KpiTargetListResponse {
   total: number;
 }
 
+export interface KpiHistoryEntry {
+  id: number;
+  merchantId: number;
+  targetId: string;
+  kpiTargetId?: number | null;
+  name: string;
+  metric: string;
+  categoryId?: string;
+  period: string;
+  target: number;
+  actual?: number | null;
+  staffIds?: string;
+  reward?: string;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  createdAt: string;
+}
+
+export interface KpiHistoryListResponse {
+  items: KpiHistoryEntry[];
+  total: number;
+}
+
 export interface QrCode {
   id: number;
   merchantId: number;
@@ -6461,6 +6511,10 @@ export type ListTimeCardSessionsParams = {
  * When 'true', only sessions that are not stopped
  */
 active?: string;
+};
+
+export type ListKpiHistoryParams = {
+limit?: number;
 };
 
 export type UpdateShippingCarrierBody = {

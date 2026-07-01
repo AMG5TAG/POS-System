@@ -646,7 +646,7 @@ function Router() {
       <Route path="/management/marketing-reports/reports/daily">
         <ManagementProtectedRoute component={ManagementDailyReportsPage} />
       </Route>
-      <Route path="/management/marketing-reports/kpis-targets">
+      <Route path="/management/staff-operations/kpis-targets">
         <ManagementProtectedRoute component={ManagementKpisPage} />
       </Route>
       <Route path="/management/marketing-reports/referrals">
@@ -881,7 +881,8 @@ function Router() {
       <Route path="/management/reports/staff-leaderboard"><Redirect to="/management/marketing-reports/reports/staff-leaderboard" /></Route>
       <Route path="/management/reports/product-performance"><Redirect to="/management/marketing-reports/reports/product-performance" /></Route>
       <Route path="/management/daily-reports"><Redirect to="/management/marketing-reports/reports/daily" /></Route>
-      <Route path="/management/kpis"><Redirect to="/management/marketing-reports/kpis-targets" /></Route>
+      <Route path="/management/kpis"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
+      <Route path="/management/marketing-reports/kpis-targets"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing/referrals"><Redirect to="/management/marketing-reports/referrals" /></Route>
       <Route path="/management/marketing/social-feed"><Redirect to="/management/marketing-reports/social-feed" /></Route>
       <Route path="/management/online-store"><Redirect to="/management/marketing-reports/online-store" /></Route>
