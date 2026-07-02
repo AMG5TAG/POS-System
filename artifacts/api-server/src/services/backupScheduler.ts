@@ -6,6 +6,7 @@
  */
 import type { Logger } from "pino";
 import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { db, merchantBackupConfigsTable, merchantBackupSchedulesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
@@ -83,9 +84,9 @@ async function runDueBackups(logger: Logger): Promise<void> {
 }
 
 export function scheduleBackups(logger: Logger): void {
-  runDueBackups(logger).catch((err) =>
+  jitteredStart(() => runDueBackups(logger).catch((err) =>
     logger.error({ err }, "Backup scheduler startup run error"),
-  );
+  ));
   trackedInterval(
     () =>
       runDueBackups(logger).catch((err) =>

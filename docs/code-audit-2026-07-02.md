@@ -83,7 +83,7 @@ test suites, dependency audit, live health checks).
 | 8 | ✅ **FIXED** — Staff PINs are now bcrypt-hashed at rest (`lib/staff-pin.ts`: `hashPin` on create/update, `matchStaffByPin`/`pinMatches` for verification, with a plaintext fallback so no one is locked out mid-transition). Lookup-by-PIN sites (staff verify-pin, mobile-pos, tech, staff-timesheets ×3) load-and-compare instead of `WHERE pin = ?`. One-off `hash-staff-pins` backfill (idempotent, wired into `db:push`) hashed the 6 existing PINs. Verified end-to-end: create→hash→verify(correct/incorrect). | `staff.ts`, `tech.ts`, `mobile-pos.ts`, `staff-timesheets.ts`, `lib/staff-pin.ts`, `scripts/hash-staff-pins.ts` |
 | 9 | ✅ **FIXED** — Public dashboard is now addressed by an unguessable 48-char token (`dashboard_app_settings.public_token`, unique-indexed) at `/d/:token` instead of the guessable username. Admin link + send-link emit the token URL; the old `/public/b/:username/dashboard` route is removed. Backfill script `add-dashboard-public-token` (idempotent, in `db:push`) tokenised the existing row. Verified: valid token→200, bad token→403, old URL no longer serves data. ⚠️ Breaking: previously-shared username links must be re-copied from Management. | `dashboard-app-public.ts`, `dashboard-app-admin.ts`, `App.tsx`, `dashboard-app/index.tsx`, schema + backfill |
 | 10 | ✅ **FIXED** — Added `helmet` (CSP off for this JSON API, CORP cross-origin so the SPA can load API PDFs/QR); verified headers on `/api/healthz`. Added SIGTERM/SIGINT graceful shutdown: `trackedInterval` registry (`lib/shutdown.ts`) clears all 12 scheduler intervals, `server.close()` drains connections, `closePdfBrowser()` releases Chromium, hard-timeout force-exit. Verified live. | `app.ts`, `index.ts`, `services/*Scheduler.ts` |
-| 11 | Low: service-job email interpolates notes/business name unescaped (HTML-escape like `invoice-html.ts` does); mobile-POS `/sale` trusts client prices despite "server-authoritative" comment; time-card FK refs unvalidated. | `service-jobs.ts:407-448`, `mobile-pos.ts:388`, `time-card-sessions.ts:46` |
+| 11 | ✅ **FIXED** — Service-job email now HTML-escapes all user values (`lib/html-escape.ts`). Mobile-POS `/sale` + `/invoice` are now server-authoritative (product-linked lines repriced from the catalog via `priceMposLines`; unknown ids rejected) and their receipt/invoice numbers use max+1 + `withUniqueRetry`. Time-card FK refs (`transactionId`/`productId`/`customerId`) validated against the merchant (`scopedFk`). | `service-jobs.ts`, `mobile-pos.ts`, `time-card-sessions.ts` |
 
 ### P3 — unfinished features
 
@@ -91,8 +91,8 @@ test suites, dependency audit, live health checks).
 |---|---|---|
 | 12 | ✅ **FIXED (wired up)** — New `scheduledReportsScheduler` (hourly `trackedInterval`) finds due reports by frequency, builds the artifact (PDF via `htmlToPdf`, CSV fallback if Chromium absent) via the extracted `runReport` helper (`lib/report-run.ts`, shared with `POST /reports/run`), emails it to the recipient, and stamps `lastRunAt`. Registered in `index.ts`. **Verified end-to-end**: a due report ran on boot → "sent" + `lastRunAt` stamped. | `services/scheduledReportsScheduler.ts`, `lib/report-run.ts`, `index.ts` |
 | 13 | ✅ **FIXED (wired up)** — `publishTwitter` posts text/link via X API v2 `/2/tweets` with automatic OAuth2 token refresh; `publishLinkedin` posts as the connected organization page via `/v2/ugcPosts`. Both read the live vault token (`twitter_x`/`linkedin_business`), never throw, and return structured `PublishResult`s. `/social/accounts/sync` now discovers X + LinkedIn destinations from the vault so `runPublish` finds them. (Image upload for X/LinkedIn is a documented follow-up; text/link posting works.) | `services/socialPublisher.ts`, `routes/social-media.ts` |
-| 14 | KPI metric `upsell_rate` always computes `null`; social-feed page is a stub (documented); dead `ComingSoonCard` + `comingSoon` branches in import-export; 12 unused shadcn/ui components (incl. dead `toaster.tsx` — app uses sonner). | `kpi-calc.ts:534`, `management-marketing-social-feed.tsx`, `management-import-export.tsx:1393`, `components/ui/*` |
-| 15 | Hardcoded one-merchant data patch runs on every boot (bounded/idempotent, but belongs in a migration). | `recurringInvoiceScheduler.ts:249-303` |
+| 14 | ✅ **Mostly fixed** — Removed dead `ComingSoonCard` + all `comingSoon` branches (import-export) and deleted **14 unused files** (12 zero-import shadcn components + the dead `toast.tsx`/`toaster.tsx`/`use-toast` cluster; app uses sonner). **Correction:** the social-feed page is NOT a stub — it's fully implemented and routed. **Left as-is:** `upsell_rate` genuinely can't be computed (no upsell signal in the data model) — removing it from the KPI picker risks breaking already-configured KPIs, so it stays documented as unavailable rather than a quick cleanup. | `management-import-export.tsx`, `components/ui/*`, `hooks/use-toast.ts` |
+| 15 | ✅ **FIXED** — Extracted the Koastal Komputers recurring-invoice correction out of the boot path into a one-off idempotent script (`scripts/patch-koastal-recurring-invoices.ts`, wired into `db:push`); removed the on-boot call. Verified it runs as a 0-row no-op. | `recurringInvoiceScheduler.ts`, `scripts/patch-koastal-recurring-invoices.ts` |
 
 ### P4 — performance
 
@@ -101,8 +101,8 @@ test suites, dependency audit, live health checks).
 | 16 | ✅ **FIXED** — Added a reusable `useDebounce` hook (`hooks/use-debounce.ts`, 250 ms) and applied it to Products, Customers, and both POS searches (product + customer), so the list query fires on pause instead of per keystroke. | `products.tsx`, `pos.tsx`, `customers.tsx` |
 | 17 | **Partially fixed** — POS grid images are now `loading="lazy"` (was `eager`). Still open: virtualising the up-to-1000-row Products & Transactions tables and memoising POS tiles. | `products.tsx:2046`, `transactions.tsx:278`, `pos.tsx:3116-3129` |
 | 18 | ✅ **Mostly fixed** — Warranty-expiring now bounds the transaction scan to sales at most `maxWarranty` old (was ALL history). Birthday now pushes today's MM-DD match into SQL (exact string match on the text DOB column). Anniversary still filters in JS (createdAt is a timestamp; a safe SQL bound would need explicit UTC handling — left as-is). | `marketingAutomationScheduler.ts` |
-| 19 | **N+1 in schedulers**: KPI reset runs ~11 queries per KPI per hour across all merchants; new-product automation queries per product×customer pair. | `kpiResetScheduler.ts:85-132`, `marketingAutomationScheduler.ts:298` |
-| 20 | Dashboard calendar fetches all customers (all columns) to match birthdays in JS; missing indexes: `time_card_sessions.merchantId`, partial index for the payment-attempts expiry sweep; all 12 schedulers fire simultaneously at boot with no jitter. | `dashboard.ts:839`, schema files, `services/*Scheduler.ts` |
+| 19 | **Partially fixed** — new-product automation now pushes the opt-in (`agreedToMarketing`) filter into SQL so the product×customer loop only iterates eligible customers. **Deferred:** the KPI-reset per-KPI N+1 (up to ~9 queries/KPI) is a heavier, money-adjacent refactor (set-based `INSERT…SELECT` + grouped aggregates) — left for a focused change. | `marketingAutomationScheduler.ts`, `kpiResetScheduler.ts` |
+| 20 | ✅ **FIXED** — Dashboard calendar now projects only needed columns + pushes the month match into SQL (was `SELECT *` over all customers). Added the missing `time_card_sessions` (merchantId, merchant+created) indexes and a partial `payment_attempts` expiry-sweep index. Added startup jitter to the 6 heavy digest/report/backup schedulers (`lib/scheduler-jitter.ts`); time-sensitive sweeps (payment expiry) stay immediate. | `dashboard.ts`, schema files, `services/*Scheduler.ts` |
 
 ## Verified clean (worth knowing)
 
@@ -133,11 +133,12 @@ test suites, dependency audit, live health checks).
 7. ✅ Wired up scheduled reports (#12, verified e2e) and X/LinkedIn text/link
    posting (#13). Remaining follow-up: image/video upload for X + LinkedIn.
 
-### Still open (not in the fix order above)
-- #11 low-severity hardening (unescaped service-job email interpolation, mobile-POS
-  `/sale` trusting client prices, time-card FK validation).
-- #14 dead code / unused components / `upsell_rate` always null.
-- #15 hardcoded one-merchant boot patch → migration.
-- #17 remainder: virtualise the 1000-row Products/Transactions tables, memoise POS tiles.
-- #19, #20 scheduler N+1s, dashboard calendar all-customers fetch, missing indexes,
-  scheduler boot jitter.
+### Still open (after the second remediation pass)
+- **#17** — virtualise the up-to-1000-row Products/Transactions tables and memoise
+  POS tiles (large frontend change; POS images are already lazy-loaded).
+- **#19 (partial)** — the KPI-reset per-KPI N+1 batching (set-based insert + grouped
+  aggregates). Deferred as a focused, money-adjacent refactor.
+- **#14 (by design)** — `upsell_rate` stays until the data model captures an upsell
+  signal; removing it from the picker would break already-configured KPIs.
+- Other dashboard `SELECT *` scans (service jobs / invoices in the calendar handler)
+  could also be projected, though they're bounded by date.

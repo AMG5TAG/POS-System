@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable, posFavouritesTable } from "@workspace/db";
 import { matchStaffByPin } from "../lib/staff-pin";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
@@ -363,6 +364,32 @@ async function resolveSaleLinks(
   return { serviceJobId: safeServiceJobId, appointmentId: safeAppointmentId, tags };
 }
 
+/* Server-authoritative line pricing for the mobile POS: a line carrying a real
+ * productId is repriced from the catalog (price/taxRate/name/cost from the DB row),
+ * so a tampered client can't set its own price. Custom lines (no productId) keep
+ * the client-entered price. Returns any productIds that don't belong to the
+ * merchant so the caller can reject the sale. Mirrors the main POS finalizeSale. */
+type MposLineIn = { productId?: number | null; name: string; unitPrice: number; quantity: number; taxRate?: number };
+interface MposLinePriced { productId: number | null; name: string; unitPrice: number; quantity: number; taxRate: number; costPrice: number }
+
+async function priceMposLines(merchantId: number, items: MposLineIn[]): Promise<{ priced: MposLinePriced[]; missing: number[] }> {
+  const ids = [...new Set(items.filter((i) => i.productId != null && i.productId > 0).map((i) => i.productId as number))];
+  const rows = ids.length
+    ? await db.select({ id: productsTable.id, name: productsTable.name, price: productsTable.price, taxRate: productsTable.taxRate, costPrice: productsTable.costPrice })
+        .from(productsTable).where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)))
+    : [];
+  const map = new Map(rows.map((p) => [p.id, p]));
+  const missing = ids.filter((id) => !map.has(id));
+  const priced = items.map((i): MposLinePriced => {
+    const p = i.productId != null && i.productId > 0 ? map.get(i.productId) : undefined;
+    if (p) {
+      return { productId: p.id, name: p.name, quantity: i.quantity, unitPrice: parseFloat(p.price), taxRate: p.taxRate != null ? parseFloat(p.taxRate) : 10, costPrice: p.costPrice != null ? parseFloat(p.costPrice) : 0 };
+    }
+    return { productId: null, name: i.name, quantity: i.quantity, unitPrice: Math.max(0, i.unitPrice), taxRate: i.taxRate ?? 0, costPrice: 0 };
+  });
+  return { priced, missing };
+}
+
 router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
   const mpos = await requireMpos(req, res);
   if (!mpos) return;
@@ -386,26 +413,26 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
   const links = await resolveSaleLinks(mpos.merchantId, parsed.data.serviceJobId, parsed.data.appointmentId);
   const finalNotes = [...links.tags, notes?.trim() || null].filter(Boolean).join(" | ") || null;
 
-  // Server-authoritative totals (GST-inclusive pricing, matching the main POS).
+  // Server-authoritative pricing + totals (GST-inclusive, matching the main POS):
+  // product-linked lines are repriced from the catalog, not the client body.
+  const { priced, missing } = await priceMposLines(mpos.merchantId, items);
+  if (missing.length) { res.status(400).json({ error: `Unknown product id(s): ${missing.join(", ")}` }); return; }
   const round2 = (n: number) => Math.round(n * 100) / 100;
-  const total = round2(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
-  const taxTotal = round2(items.reduce((s, i) => {
-    const r = i.taxRate ?? 0;
-    return s + (i.unitPrice * i.quantity) * (r / (100 + r));
-  }, 0));
+  const total = round2(priced.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
+  const taxTotal = round2(priced.reduce((s, i) => s + (i.unitPrice * i.quantity) * (i.taxRate / (100 + i.taxRate)), 0));
   const subtotal = round2(total - taxTotal);
-
-  // Receipt number: KR + zero-padded running count for this merchant.
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(transactionsTable)
-    .where(eq(transactionsTable.merchantId, mpos.merchantId));
-  const receiptNumber = `KR${String(Number(countRow.count) + 1).padStart(5, "0")}`;
 
   const tendered = paymentMethod === "cash" && amountTendered != null ? amountTendered : null;
   const changeDue = tendered != null ? round2(Math.max(0, tendered - total)) : null;
 
-  const result = await db.transaction(async (tx) => {
+  // Receipt number = KR + max+1, retried on the (merchantId, receiptNumber) unique
+  // index so a concurrent sale can't collide (the whole txn rolls back + retries).
+  const result = await withUniqueRetry("transactions_merchant_receipt_unique", (tryIndex) => db.transaction(async (tx) => {
+    const existingReceipts = await tx
+      .select({ n: transactionsTable.receiptNumber })
+      .from(transactionsTable)
+      .where(eq(transactionsTable.merchantId, mpos.merchantId));
+    const receiptNumber = `KR${String(nextSequential(existingReceipts.map((r) => r.n), tryIndex)).padStart(5, "0")}`;
     const [txn] = await tx.insert(transactionsTable).values({
       merchantId: mpos.merchantId,
       customerId: safeCustomerId,
@@ -419,7 +446,7 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
       amountTendered: tendered != null ? String(tendered) : null,
       changeDue: changeDue != null ? String(changeDue) : null,
       notes: finalNotes,
-      items: items.map((i) => ({ productId: i.productId ?? null, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate ?? 0 })),
+      items: priced.map((i) => ({ productId: i.productId, name: i.name, quantity: i.quantity, unitPrice: i.unitPrice, taxRate: i.taxRate })),
     }).returning();
 
     // A linked service job / appointment is marked completed by the sale,
@@ -434,7 +461,7 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
     }
 
     // Decrement tracked stock for product-linked lines.
-    for (const i of items) {
+    for (const i of priced) {
       if (i.productId == null) continue;
       const [p] = await tx
         .select({ stockQuantity: productsTable.stockQuantity, trackInventory: productsTable.trackInventory })
@@ -447,7 +474,7 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
         .where(eq(productsTable.id, i.productId));
     }
     return txn;
-  });
+  }));
 
   res.status(201).json({
     id: result.id,
@@ -502,55 +529,47 @@ router.post("/mobile-pos/invoices", async (req, res): Promise<void> => {
     safeAppointmentId = ap ? parsed.data.appointmentId : null;
   }
 
-  // Server-authoritative totals (GST-inclusive pricing, matching the POS).
+  // Server-authoritative pricing + totals: product-linked lines are repriced (and
+  // cost-snapshotted) from the catalog, not the client body.
+  const { priced, missing } = await priceMposLines(mpos.merchantId, items);
+  if (missing.length) { res.status(400).json({ error: `Unknown product id(s): ${missing.join(", ")}` }); return; }
   const round2 = (n: number) => Math.round(n * 100) / 100;
-  const total = round2(items.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
-  const taxTotal = round2(items.reduce((s, i) => {
-    const r = i.taxRate ?? 0;
-    return s + (i.unitPrice * i.quantity) * (r / (100 + r));
-  }, 0));
+  const total = round2(priced.reduce((s, i) => s + i.unitPrice * i.quantity, 0));
+  const taxTotal = round2(priced.reduce((s, i) => s + (i.unitPrice * i.quantity) * (i.taxRate / (100 + i.taxRate)), 0));
   const subtotal = round2(total - taxTotal);
 
-  // Snapshot cost prices for product-linked lines so COGS reporting stays accurate.
-  const productIds = [...new Set(items.map((i) => i.productId).filter((id): id is number => id != null))];
-  const costById = new Map<number, number>();
-  if (productIds.length) {
-    const rows = await db
-      .select({ id: productsTable.id, costPrice: productsTable.costPrice })
-      .from(productsTable)
-      .where(and(eq(productsTable.merchantId, mpos.merchantId), inArray(productsTable.id, productIds)));
-    for (const r of rows) costById.set(r.id, r.costPrice != null ? parseFloat(r.costPrice) : 0);
-  }
-
-  // Invoice number: KI + zero-padded running count for this merchant (matches the main app).
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(invoicesTable)
-    .where(eq(invoicesTable.merchantId, mpos.merchantId));
-  const invoiceNumber = `KI${String(Number(countRow.count) + 1).padStart(5, "0")}`;
-
-  const [inv] = await db.insert(invoicesTable).values({
-    merchantId: mpos.merchantId,
-    customerId: safeCustomerId,
-    staffId: mpos.staffId,
-    invoiceNumber,
-    status: "draft",
-    subtotal: String(subtotal),
-    taxTotal: String(taxTotal),
-    total: String(total),
-    items: items.map((i) => ({
-      description: i.name,
-      quantity: i.quantity,
-      unitPrice: i.unitPrice,
-      taxRate: i.taxRate ?? 0,
-      productId: i.productId ?? null,
-      costPrice: i.productId != null ? (costById.get(i.productId) ?? null) : null,
-    })),
-    dueDate: dueDate ? new Date(dueDate) : null,
-    notes: notes ?? null,
-    serviceJobId: safeServiceJobId,
-    appointmentId: safeAppointmentId,
-  }).returning();
+  // Invoice number = KI + max+1, retried on the (merchantId, invoiceNumber) unique
+  // index so a concurrent create can't produce a duplicate.
+  const inv = await withUniqueRetry("invoices_merchant_invoice_number_unique", async (tryIndex) => {
+    const existingNums = await db
+      .select({ n: invoicesTable.invoiceNumber })
+      .from(invoicesTable)
+      .where(eq(invoicesTable.merchantId, mpos.merchantId));
+    const invoiceNumber = `KI${String(nextSequential(existingNums.map((r) => r.n), tryIndex)).padStart(5, "0")}`;
+    const [row] = await db.insert(invoicesTable).values({
+      merchantId: mpos.merchantId,
+      customerId: safeCustomerId,
+      staffId: mpos.staffId,
+      invoiceNumber,
+      status: "draft",
+      subtotal: String(subtotal),
+      taxTotal: String(taxTotal),
+      total: String(total),
+      items: priced.map((i) => ({
+        description: i.name,
+        quantity: i.quantity,
+        unitPrice: i.unitPrice,
+        taxRate: i.taxRate,
+        productId: i.productId,
+        costPrice: i.productId != null ? i.costPrice : null,
+      })),
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: notes ?? null,
+      serviceJobId: safeServiceJobId,
+      appointmentId: safeAppointmentId,
+    }).returning();
+    return row;
+  });
 
   res.status(201).json({
     id: inv.id,

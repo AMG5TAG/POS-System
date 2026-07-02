@@ -4,6 +4,7 @@ import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
+import { escapeHtml } from "../lib/html-escape";
 import { sendEmail } from "../services/email";
 import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
@@ -404,9 +405,12 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
 
   const { db: dbInstance, merchantsTable } = await import("@workspace/db");
   const [merchant] = await dbInstance.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
-  const bizName = merchant?.businessName ?? "Your Business";
+  const bizName = escapeHtml(merchant?.businessName ?? "Your Business");
 
-  const formatVal = (v: string | null | undefined) => v && v.trim() ? v : "—";
+  // Escape every user-controlled value before it lands in the HTML email — job
+  // notes/device fields/customer details are free text and would otherwise allow
+  // markup injection into the message.
+  const formatVal = (v: string | null | undefined) => v && v.trim() ? escapeHtml(v) : "—";
   const fmtDate = (d: string | null | undefined) => {
     if (!d) return "—";
     const [y, m, day] = d.split("-");
@@ -427,7 +431,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Phone</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(customer?.phone)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Email</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(toEmail)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Book-In Date</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${fmtDate(job.bookInDate)}</td></tr>
-    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Status</td><td style="padding:6px 0;border-bottom:1px solid #eee;"><span style="text-transform:capitalize;">${job.status.replace(/-/g, " ")}</span></td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Status</td><td style="padding:6px 0;border-bottom:1px solid #eee;"><span style="text-transform:capitalize;">${escapeHtml(job.status.replace(/-/g, " "))}</span></td></tr>
   </table>
 
   <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Device</h3>
@@ -447,7 +451,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Critical</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${job.isCritical === "true" ? "Yes" : "No"}</td></tr>
   </table>
 
-  ${job.notes ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Notes</h3><div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:12px;font-size:13px;white-space:pre-wrap;">${job.notes}</div>` : ""}
+  ${job.notes ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Notes</h3><div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:12px;font-size:13px;white-space:pre-wrap;">${escapeHtml(job.notes)}</div>` : ""}
   ${photos.length ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Photos</h3><p style="font-size:12px;color:#666;">${photos.length} photo(s) attached to this job.</p>` : ""}
 
   <p style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">This email was sent automatically from ${bizName} via KoaPOS.</p>

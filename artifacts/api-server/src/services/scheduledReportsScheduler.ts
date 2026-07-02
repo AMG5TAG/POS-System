@@ -2,6 +2,7 @@ import type { Logger } from "pino";
 import { db, scheduledReportsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { runReport, type ReportColumn, type ReportGroupBy } from "../lib/report-run";
 import { htmlToPdf } from "./htmlToPdf";
 import { sendEmail } from "./email";
@@ -144,7 +145,7 @@ async function runDueReports(logger: Logger): Promise<void> {
 }
 
 export function scheduleScheduledReports(logger: Logger): void {
-  runDueReports(logger).catch((err) => logger.error({ err }, "Scheduled reports scheduler startup error"));
+  jitteredStart(() => runDueReports(logger).catch((err) => logger.error({ err }, "Scheduled reports scheduler startup error")));
   trackedInterval(
     () => runDueReports(logger).catch((err) => logger.error({ err }, "Scheduled reports scheduler error")),
     HOUR,

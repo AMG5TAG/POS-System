@@ -835,11 +835,26 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     if (dayMap[key]) dayMap[key].invoices += 1;
   }
 
-  // Customer birthdays (match by month/day — dateOfBirth is stored as "YYYY-MM-DD" local date)
+  // Customer birthdays (match by month/day — dateOfBirth is stored as "YYYY-MM-DD"
+  // local date). Bound to this month in SQL (chars 6-7 of the text date are "MM",
+  // a pure string match — no timezone-sensitive date functions) and project only
+  // the columns used, instead of pulling the whole customer table each load.
+  const mm = String(month).padStart(2, "0");
   const customers = await db
-    .select()
+    .select({
+      id: customersTable.id,
+      firstName: customersTable.firstName,
+      lastName: customersTable.lastName,
+      phone: customersTable.phone,
+      email: customersTable.email,
+      dateOfBirth: customersTable.dateOfBirth,
+    })
     .from(customersTable)
-    .where(eq(customersTable.merchantId, merchantId));
+    .where(and(
+      eq(customersTable.merchantId, merchantId),
+      isNotNull(customersTable.dateOfBirth),
+      sql`substring(${customersTable.dateOfBirth} from 6 for 2) = ${mm}`,
+    ));
 
   for (const c of customers) {
     if (!c.dateOfBirth) continue;

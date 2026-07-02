@@ -1,9 +1,24 @@
 import { Router, type IRouter } from "express";
-import { db, timeCardSessionsTable } from "@workspace/db";
+import { db, timeCardSessionsTable, transactionsTable, productsTable, customersTable } from "@workspace/db";
 import { eq, and, desc, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
+
+/** Confirm a client-supplied FK id belongs to this merchant, returning the id or
+ *  null on mismatch — so a client can't attach another merchant's transaction /
+ *  product / customer to a time-card session. */
+async function scopedFk(
+  table: typeof transactionsTable | typeof productsTable | typeof customersTable,
+  merchantId: number,
+  raw: unknown,
+): Promise<number | null> {
+  if (raw == null) return null;
+  const id = parseInt(String(raw), 10);
+  if (!Number.isFinite(id)) return null;
+  const [row] = await db.select({ id: table.id }).from(table).where(and(eq(table.id, id), eq(table.merchantId, merchantId)));
+  return row ? id : null;
+}
 
 /* Recompute elapsed seconds for a running session up to `now`, returning the
    fields to persist for a given transition. */
@@ -47,11 +62,18 @@ router.post("/time-card-sessions", requireAuth, async (req, res): Promise<void> 
   if (!label) { res.status(400).json({ error: "label is required" }); return; }
   if (!purchasedSeconds || purchasedSeconds <= 0) { res.status(400).json({ error: "purchasedSeconds must be > 0" }); return; }
 
+  // Validate FK refs belong to this merchant; drop cross-tenant ids to null.
+  const [safeTransactionId, safeProductId, safeCustomerId] = await Promise.all([
+    scopedFk(transactionsTable, mid, transactionId),
+    scopedFk(productsTable, mid, productId),
+    scopedFk(customersTable, mid, customerId),
+  ]);
+
   const [row] = await db.insert(timeCardSessionsTable).values({
     merchantId: mid,
-    transactionId: transactionId != null ? parseInt(String(transactionId)) : null,
-    productId: productId != null ? parseInt(String(productId)) : null,
-    customerId: customerId != null ? parseInt(String(customerId)) : null,
+    transactionId: safeTransactionId,
+    productId: safeProductId,
+    customerId: safeCustomerId,
     customerName: customerName || "Walk-in",
     label,
     purchasedSeconds: Math.round(Number(purchasedSeconds)),

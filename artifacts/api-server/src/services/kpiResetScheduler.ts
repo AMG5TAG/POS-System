@@ -11,6 +11,7 @@
  */
 import type { Logger } from "pino";
 import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { db, kpiTargetsTable, kpiHistoryTable, kpiSettingsTable, merchantsTable } from "@workspace/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { computeActual, getPreviousPeriodWindow } from "../routes/kpi-calc";
@@ -139,9 +140,9 @@ async function runDueKpiResets(logger: Logger): Promise<void> {
 }
 
 export function scheduleKpiResets(logger: Logger): void {
-  runDueKpiResets(logger).catch((err) =>
+  jitteredStart(() => runDueKpiResets(logger).catch((err) =>
     logger.error({ err }, "KPI reset scheduler startup run error"),
-  );
+  ));
   trackedInterval(
     () => runDueKpiResets(logger).catch((err) =>
       logger.error({ err }, "KPI reset scheduler run error"),

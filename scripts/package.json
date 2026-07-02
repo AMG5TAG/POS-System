@@ -36,6 +36,7 @@
     "add-service-job-reopen-link": "tsx ./src/add-service-job-reopen-link.ts",
     "add-dashboard-public-token": "tsx ./src/add-dashboard-public-token.ts",
     "hash-staff-pins": "tsx ./src/hash-staff-pins.ts",
+    "patch-koastal-recurring-invoices": "tsx ./src/patch-koastal-recurring-invoices.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

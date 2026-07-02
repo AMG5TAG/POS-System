@@ -1,6 +1,7 @@
 import { db, customersTable, merchantsTable, customerSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { sendEmail } from "./email";
 import type { Logger } from "pino";
 
@@ -401,10 +402,11 @@ export async function sendReferralDigests(logger: Logger): Promise<void> {
 
 export function scheduleReferralDigest(logger: Logger): void {
   const ONE_DAY = 24 * 60 * 60 * 1000;
-  // Run once on startup so a digest isn't skipped if the server restarts on the scheduled day.
-  sendReferralDigests(logger).catch((err) =>
+  // Run once on startup so a digest isn't skipped if the server restarts on the
+  // scheduled day; staggered to avoid a boot-time DB stampede.
+  jitteredStart(() => sendReferralDigests(logger).catch((err) =>
     logger.error({ err }, "Referral digest startup run error"),
-  );
+  ));
   trackedInterval(
     () =>
       sendReferralDigests(logger).catch((err) =>

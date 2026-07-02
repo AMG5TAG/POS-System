@@ -13,6 +13,7 @@ import {
   socialAccountsTable,
 } from "@workspace/db";
 import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { eq, and, gt, gte, lt, lte, isNotNull, desc, sql } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { sendEmail } from "./email";
@@ -298,16 +299,20 @@ async function runNewProduct(
 
   if (newProducts.length === 0) return 0;
 
+  // Only opted-in customers with an email (Spam Act 2003 s 16) — filter in SQL so
+  // the product×customer loop below doesn't iterate the whole customer table.
   const customers = await db
     .select()
     .from(customersTable)
-    .where(and(eq(customersTable.merchantId, merchantId), isNotNull(customersTable.email)));
+    .where(and(
+      eq(customersTable.merchantId, merchantId),
+      isNotNull(customersTable.email),
+      eq(customersTable.agreedToMarketing, "true"),
+    ));
 
   let sent = 0;
   for (const product of newProducts) {
-    // Broadcast to all opted-in customers — require explicit opt-in (Spam Act 2003 s 16)
     for (const c of customers) {
-      if (c.agreedToMarketing !== "true") continue;
       const dedupeKey = `product-${product.id}-customer-${c.id}`;
       if (await alreadySent(rule.id, dedupeKey, 30 * 24 * 3600 * 1000)) continue;
       const firstName = c.firstName ?? "Valued Customer";
@@ -790,10 +795,11 @@ export async function processAllMerchantAutomations(logger: Logger): Promise<voi
 }
 
 export function scheduleMarketingAutomation(logger: Logger): void {
-  // Run once on startup (in case the server restarted during a scheduled window)
-  processAllMerchantAutomations(logger).catch((err) =>
+  // Run once on startup (in case the server restarted during a scheduled window),
+  // staggered so it doesn't hit the DB in the same instant as the other schedulers.
+  jitteredStart(() => processAllMerchantAutomations(logger).catch((err) =>
     logger.error({ err }, "Marketing automation startup run error"),
-  );
+  ));
   // Then hourly — frequent enough that "after a set time" sends land within the
   // hour, while per-record dedup keeps daily/event triggers idempotent.
   trackedInterval(

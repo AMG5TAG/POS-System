@@ -7,7 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import {
   Download, Upload, Users, Package, Truck, Bookmark, Check, FileText,
-  AlertCircle, X, ArrowRight, Clock, ChevronLeft, ChevronRight,
+  AlertCircle, X, ArrowRight, ChevronLeft, ChevronRight,
   Tag, FolderOpen, History, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -36,7 +36,6 @@ interface EntityConfig {
   label: string;
   pluralLabel: string;
   icon: React.ComponentType<{ className?: string }>;
-  comingSoon?: boolean;
   exportOnly?: boolean;
   description: string;
   fields: FieldDef[];
@@ -1388,22 +1387,6 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
   );
 }
 
-/* ─── Coming Soon card ───────────────────────────────────────────────────── */
-
-function ComingSoonCard({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center col-span-2">
-      <Clock className="w-10 h-10 text-muted-foreground/30" />
-      <div>
-        <p className="font-medium text-muted-foreground">{label} Import/Export</p>
-        <p className="text-sm text-muted-foreground/70 mt-1">
-          Full support is coming soon. For now, manage {label.toLowerCase()} directly from the {label} screen.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementImportExportPage() {
@@ -1435,13 +1418,12 @@ export default function ManagementImportExportPage() {
                   <button
                     key={e.key}
                     type="button"
-                    onClick={() => !e.comingSoon && setActiveKey(e.key)}
+                    onClick={() => setActiveKey(e.key)}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors border-b last:border-b-0 text-left",
                       isActive
                         ? "bg-primary/5 text-primary font-semibold"
                         : "hover:bg-muted/50 text-foreground",
-                      e.comingSoon && "opacity-50 cursor-default",
                     )}
                   >
                     <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
@@ -1449,9 +1431,6 @@ export default function ManagementImportExportPage() {
                       <p className="font-medium leading-tight">{e.label}</p>
                       <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{e.description}</p>
                     </div>
-                    {e.comingSoon && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0">Soon</Badge>
-                    )}
                     {e.exportOnly && (
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0">Export</Badge>
                     )}
@@ -1464,12 +1443,7 @@ export default function ManagementImportExportPage() {
           {/* Column 2: Export */}
           <div className="flex flex-col gap-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Export</p>
-            {entity.comingSoon ? (
-              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
-                <Download className="w-10 h-10 text-muted-foreground/30" />
-                <p className="font-medium text-muted-foreground">Coming Soon</p>
-              </div>
-            ) : entity.key === "group-export" ? (
+            {entity.key === "group-export" ? (
               <GroupExportCard />
             ) : (
               <ExportCard entity={entity} />
@@ -1479,12 +1453,7 @@ export default function ManagementImportExportPage() {
           {/* Column 3: Import */}
           <div className="flex flex-col gap-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Import</p>
-            {entity.comingSoon ? (
-              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
-                <Upload className="w-10 h-10 text-muted-foreground/30" />
-                <p className="font-medium text-muted-foreground">Coming Soon</p>
-              </div>
-            ) : entity.exportOnly ? (
+            {entity.exportOnly ? (
               <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
                 <Upload className="w-10 h-10 text-muted-foreground/30" />
                 <div>

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, index } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 /**
@@ -24,7 +24,11 @@ export const timeCardSessionsTable = pgTable("time_card_sessions", {
   runningSince:    timestamp("running_since", { withTimezone: true }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  // Every read filters by merchant (the list also orders by createdAt).
+  index("time_card_sessions_merchant_id_idx").on(t.merchantId),
+  index("time_card_sessions_merchant_created_idx").on(t.merchantId, t.createdAt),
+]);
 
 export type TimeCardSession = typeof timeCardSessionsTable.$inferSelect;
 export type InsertTimeCardSession = typeof timeCardSessionsTable.$inferInsert;

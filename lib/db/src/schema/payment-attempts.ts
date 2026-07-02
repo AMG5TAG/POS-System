@@ -1,4 +1,5 @@
 import { pgTable, text, serial, timestamp, integer, numeric, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
 import { transactionsTable } from "./transactions";
@@ -68,6 +69,11 @@ export const paymentAttemptsTable = pgTable("payment_attempts", {
   // created at the provider; Postgres treats NULLs as distinct, so unpersisted
   // attempts never collide — only a repeated (provider, externalRef) does.
   uniqueIndex("payment_attempts_provider_external_ref_idx").on(t.provider, t.externalRef),
+  // The 5-minute expiry sweep filters non-terminal attempts by expires_at /
+  // created_at with no merchantId, which the merchant-leading indexes can't
+  // serve. This partial index covers exactly the rows the sweep scans.
+  index("payment_attempts_expiry_sweep_idx").on(t.status, t.expiresAt)
+    .where(sql`status IN ('pending', 'authorized')`),
 ]);
 
 export type PaymentAttempt = typeof paymentAttemptsTable.$inferSelect;

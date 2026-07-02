@@ -1,6 +1,7 @@
 import { db, invoicesTable, customersTable, merchantsTable, posCodePrefixesTable } from "@workspace/db";
 import { eq, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
 import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { sendEmail } from "./email";
 import type { Logger } from "pino";
 
@@ -247,53 +248,10 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
   }
 }
 
-/**
- * One-time data correction for the Koastal Komputers merchant: reset ALL of
- * their recurring invoices back to unviewed and unpaid (status "sent", clearing
- * viewedAt / paidAt and zeroing amountPaid) so the ledger reflects reality.
- */
-const RECURRING_RESET_CUTOFF = new Date("2026-05-30T00:00:00.000Z");
-
-export async function patchFutureRecurringInvoiceStates(logger: Logger): Promise<void> {
-  const targetEmail = "admin@koastalkomputers.com.au";
-
-  const [merchant] = await db
-    .select({ id: merchantsTable.id })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.email, targetEmail));
-  if (!merchant) return;
-
-  const result = await db
-    .update(invoicesTable)
-    .set({ status: "sent", viewedAt: null, paidAt: null, amountPaid: "0", updatedAt: new Date() })
-    .where(
-      and(
-        eq(invoicesTable.merchantId, merchant.id),
-        eq(invoicesTable.isRecurring, "true"),
-        isNull(invoicesTable.parentInvoiceId),
-        lte(invoicesTable.updatedAt, RECURRING_RESET_CUTOFF),
-        or(
-          eq(invoicesTable.status, "paid"),
-          eq(invoicesTable.status, "partial"),
-          isNotNull(invoicesTable.viewedAt),
-          isNotNull(invoicesTable.paidAt),
-        ),
-      ),
-    )
-    .returning({ id: invoicesTable.id });
-
-  if (result.length > 0) {
-    logger.info({ merchantId: merchant.id, count: result.length }, "Reset recurring invoices to unviewed and unpaid");
-  }
-}
-
 export function scheduleRecurringInvoices(logger: Logger): void {
-  patchFutureRecurringInvoiceStates(logger).catch((err) =>
-    logger.error({ err }, "Failed to reset recurring invoice states"),
-  );
-  processRecurringInvoices(logger).catch((err) =>
+  jitteredStart(() => processRecurringInvoices(logger).catch((err) =>
     logger.error({ err }, "Recurring invoice scheduler startup error"),
-  );
+  ));
   trackedInterval(
     () =>
       processRecurringInvoices(logger).catch((err) =>
