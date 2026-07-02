@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, json, index, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, json, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -47,6 +47,9 @@ export const invoicesTable = pgTable("invoices", {
   index("invoices_merchant_id_idx").on(t.merchantId),
   index("invoices_merchant_id_status_idx").on(t.merchantId, t.status),
   index("invoices_merchant_id_paid_at_idx").on(t.merchantId, t.paidAt),
+  // Invoice numbers are unique per merchant — the generator now derives max+1
+  // (not count+1) and retries on conflict, and this index makes it authoritative.
+  uniqueIndex("invoices_merchant_invoice_number_unique").on(t.merchantId, t.invoiceNumber),
 ]);
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true });

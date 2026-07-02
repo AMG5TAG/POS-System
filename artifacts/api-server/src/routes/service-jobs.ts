@@ -1,8 +1,9 @@
 import { Router, type IRouter } from "express";
 import { db, serviceJobsTable, customersTable, merchantsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { sendEmail } from "../services/email";
 import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
@@ -63,13 +64,8 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
   };
 }
 
-function nextJobNumber(existing: Array<{ jobNumber: string }>, prefix = "SJ", digits = 4): string {
-  let max = 0;
-  for (const job of existing) {
-    const n = parseInt(job.jobNumber.replace(/\D/g, ""), 10);
-    if (!isNaN(n) && n > max) max = n;
-  }
-  return `${prefix}${String(max + 1).padStart(digits, "0")}`;
+function nextJobNumber(existing: Array<{ jobNumber: string }>, prefix = "SJ", digits = 4, tryIndex = 0): string {
+  return `${prefix}${String(nextSequential(existing.map((j) => j.jobNumber), tryIndex)).padStart(digits, "0")}`;
 }
 
 router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
@@ -83,7 +79,8 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   const customerIds = [...new Set(jobs.filter((j) => j.customerId).map((j) => j.customerId!))];
   const customers =
     customerIds.length > 0
-      ? await db.select().from(customersTable).where(eq(customersTable.merchantId, merchantId))
+      ? await db.select().from(customersTable)
+          .where(and(eq(customersTable.merchantId, merchantId), inArray(customersTable.id, customerIds)))
       : [];
   const customerMap = new Map<number, CustomerInfo>(
     customers.map((c) => [c.id, {
@@ -101,11 +98,6 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 
-  const existing = await db
-    .select({ jobNumber: serviceJobsTable.jobNumber })
-    .from(serviceJobsTable)
-    .where(eq(serviceJobsTable.merchantId, merchantId));
-
   const today = new Date().toISOString().split("T")[0];
 
   const jobPrefix = typeof body.jobNumberPrefix === "string" && body.jobNumberPrefix ? body.jobNumberPrefix : "SJ";
@@ -118,14 +110,22 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
     ? Math.max(0, Math.round(Number(body.repairWarrantyDays) || 0))
     : warrantyDefaults.repairWarrantyDays;
 
-  const [job] = await db
+  // Derive the job number from max+1 and retry on the unique-index conflict so a
+  // concurrent create can't produce a duplicate SJ####. `existing` is re-read per
+  // attempt so a committed concurrent job is reflected in the next number.
+  const job = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
+    const existing = await db
+      .select({ jobNumber: serviceJobsTable.jobNumber })
+      .from(serviceJobsTable)
+      .where(eq(serviceJobsTable.merchantId, merchantId));
+    const [created] = await db
     .insert(serviceJobsTable)
     .values({
       merchantId,
       repairWarrantyDays,
       customerId: body.customerId ? Number(body.customerId) : null,
       staffId: body.staffId ? Number(body.staffId) : null,
-      jobNumber: nextJobNumber(existing, jobPrefix, jobDigits),
+      jobNumber: nextJobNumber(existing, jobPrefix, jobDigits, tryIndex),
       title: body.title ? String(body.title) : "Service Job",
       status: typeof body.status === "string" ? body.status : "pending",
       bookInDate: typeof body.bookInDate === "string" ? body.bookInDate : today,
@@ -150,6 +150,8 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       referredByCustomerId: body.referredByCustomerId != null ? Number(body.referredByCustomerId) : null,
     })
     .returning();
+    return created;
+  });
 
   const customer: CustomerInfo | null = job.customerId
     ? await db
@@ -479,30 +481,32 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
     .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId))).limit(1);
   if (!orig) { res.status(404).json({ error: "Service job not found" }); return; }
 
-  const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
-    .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
-  const jobNumber = nextJobNumber(existing);
   const today = new Date().toISOString().split("T")[0];
 
   const { reworkWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
 
-  const [created] = await db.insert(serviceJobsTable).values({
-    merchantId,
-    customerId: orig.customerId ?? null,
-    staffId: orig.staffId ?? null,
-    jobNumber,
-    title: `Rework of ${orig.jobNumber}`,
-    status: "pending",
-    bookInDate: today,
-    deviceType: orig.deviceType ?? null,
-    deviceDescription: orig.deviceDescription ?? null,
-    serialNumber: orig.serialNumber ?? null,
-    condition: orig.condition ?? null,
-    workDescription: orig.workDescription ?? null,
-    isUnderWarranty: "true",
-    repairWarrantyDays: reworkWarrantyDays,
-    reworkOfJobId: orig.id,
-  }).returning();
+  const created = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
+    const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
+      .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
+    const [row] = await db.insert(serviceJobsTable).values({
+      merchantId,
+      customerId: orig.customerId ?? null,
+      staffId: orig.staffId ?? null,
+      jobNumber: nextJobNumber(existing, "SJ", 4, tryIndex),
+      title: `Rework of ${orig.jobNumber}`,
+      status: "pending",
+      bookInDate: today,
+      deviceType: orig.deviceType ?? null,
+      deviceDescription: orig.deviceDescription ?? null,
+      serialNumber: orig.serialNumber ?? null,
+      condition: orig.condition ?? null,
+      workDescription: orig.workDescription ?? null,
+      isUnderWarranty: "true",
+      repairWarrantyDays: reworkWarrantyDays,
+      reworkOfJobId: orig.id,
+    }).returning();
+    return row;
+  });
 
   let customer: CustomerInfo | null = null;
   if (created.customerId) {
@@ -527,29 +531,31 @@ router.post("/service-jobs/:id/reopen", requireAuth, async (req, res): Promise<v
   if (!orig) { res.status(404).json({ error: "Service job not found" }); return; }
   if (orig.status !== "completed") { res.status(409).json({ error: "Only completed repairs can be reopened" }); return; }
 
-  const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
-    .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
-  const jobNumber = nextJobNumber(existing);
   const today = new Date().toISOString().split("T")[0];
 
   const { repairWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
 
-  const [created] = await db.insert(serviceJobsTable).values({
-    merchantId,
-    customerId: orig.customerId ?? null,
-    staffId: orig.staffId ?? null,
-    jobNumber,
-    title: `Reopen of ${orig.jobNumber}`,
-    status: "pending",
-    bookInDate: today,
-    deviceType: orig.deviceType ?? null,
-    deviceDescription: orig.deviceDescription ?? null,
-    serialNumber: orig.serialNumber ?? null,
-    condition: orig.condition ?? null,
-    workDescription: orig.workDescription ?? null,
-    repairWarrantyDays,
-    reopenedFromJobId: orig.id,
-  }).returning();
+  const created = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
+    const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
+      .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
+    const [row] = await db.insert(serviceJobsTable).values({
+      merchantId,
+      customerId: orig.customerId ?? null,
+      staffId: orig.staffId ?? null,
+      jobNumber: nextJobNumber(existing, "SJ", 4, tryIndex),
+      title: `Reopen of ${orig.jobNumber}`,
+      status: "pending",
+      bookInDate: today,
+      deviceType: orig.deviceType ?? null,
+      deviceDescription: orig.deviceDescription ?? null,
+      serialNumber: orig.serialNumber ?? null,
+      condition: orig.condition ?? null,
+      workDescription: orig.workDescription ?? null,
+      repairWarrantyDays,
+      reopenedFromJobId: orig.id,
+    }).returning();
+    return row;
+  });
 
   let customer: CustomerInfo | null = null;
   if (created.customerId) {

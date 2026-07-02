@@ -2,8 +2,16 @@ import { Router, type IRouter } from "express";
 import { db, staffTimesheetsTable, staffTable } from "@workspace/db";
 import { and, eq, gte, lte, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { matchStaffByPin } from "../lib/staff-pin";
 
 const router: IRouter = Router();
+
+/** Find a merchant's staff member by PIN. PINs are hashed at rest, so we load
+ *  the merchant's staff and compare rather than querying `WHERE pin = ?`. */
+async function lookupStaffByPin(merchantId: number, pin: string) {
+  const staff = await db.select().from(staffTable).where(eq(staffTable.merchantId, merchantId));
+  return matchStaffByPin(staff, pin);
+}
 
 const serialize = (row: typeof staffTimesheetsTable.$inferSelect) => ({
   id:        row.id,
@@ -57,11 +65,7 @@ router.get("/staff-timesheets/status", requireAuth, async (req, res): Promise<vo
   const pad = (n: number) => String(n).padStart(2, "0");
   const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 
-  const [member] = await db
-    .select()
-    .from(staffTable)
-    .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.pin, pin.trim())))
-    .limit(1);
+  const member = await lookupStaffByPin(merchantId, pin.trim());
 
   if (!member) { res.status(404).json({ error: "No staff found with that PIN" }); return; }
 
@@ -98,11 +102,7 @@ router.post("/staff-timesheets/clock-in", requireAuth, async (req, res): Promise
   const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-  const [member] = await db
-    .select()
-    .from(staffTable)
-    .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.pin, pin.trim())))
-    .limit(1);
+  const member = await lookupStaffByPin(merchantId, pin.trim());
 
   if (!member) { res.status(404).json({ error: "No staff found with that PIN" }); return; }
 
@@ -144,11 +144,7 @@ router.post("/staff-timesheets/clock-out", requireAuth, async (req, res): Promis
   const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-  const [member] = await db
-    .select()
-    .from(staffTable)
-    .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.pin, pin.trim())))
-    .limit(1);
+  const member = await lookupStaffByPin(merchantId, pin.trim());
 
   if (!member) { res.status(404).json({ error: "No staff found with that PIN" }); return; }
 

@@ -15,6 +15,7 @@ import {
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
 import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
+import { isUniqueViolation } from "../lib/document-numbers";
 
 const router: IRouter = Router();
 
@@ -551,7 +552,9 @@ export async function finalizeSale(
   }
   void loyaltyEarned; // client value is purely informational — server is authoritative
 
-  const receiptNumber = providedReceiptNumber || generateReceiptNumber();
+  // `let` so the sale transaction can be retried with a fresh receipt number if
+  // the random one collides with an existing sale (unique index enforces it).
+  let receiptNumber = providedReceiptNumber || generateReceiptNumber();
 
   // Persist sanitized monetary fields, never raw client input.
   //   - Cash: cashier hands over >= total; we accept the actual tendered
@@ -589,10 +592,18 @@ export async function finalizeSale(
   // All side-effects (transaction row + inventory + customer stats + linked
   // entity completion) commit together or roll back together. Prevents
   // partial commits where a sale is recorded but stock/customer state drift.
-  let transaction: typeof transactionsTable.$inferSelect;
+  // Definite-assignment: the retry loop below either assigns this and breaks, or
+  // throws — so it is always set by the time it is read after the loop.
+  let transaction!: typeof transactionsTable.$inferSelect;
   const updatedStockItems: Array<{ id: number; name: string; sku: string | null; stockQuantity: number; previousStockQuantity: number; lowStockThreshold: number | null; trackInventory: string }> = [];
   try {
-    transaction = await db.transaction(async (tx) => {
+    // Retry the whole sale transaction if the (random) receipt number collides
+    // with an existing sale. The transaction fully rolls back on the unique
+    // violation, so regenerating the number and re-running is safe. Only retried
+    // for auto-generated numbers; a caller-provided receiptNumber is not.
+    for (let receiptAttempt = 0; ; receiptAttempt++) {
+      try {
+        transaction = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(transactionsTable)
       .values({
@@ -856,7 +867,16 @@ export async function finalizeSale(
     }
 
     return row;
-    });
+        });
+        break;
+      } catch (err) {
+        if (!providedReceiptNumber && receiptAttempt < 5 && isUniqueViolation(err, "transactions_merchant_receipt_unique")) {
+          receiptNumber = generateReceiptNumber();
+          continue;
+        }
+        throw err;
+      }
+    }
   } catch (err) {
     if (err instanceof HttpError) {
       return { ok: false, status: err.status, error: err.message };
@@ -963,6 +983,84 @@ router.get("/transactions/:id", requireAuth, async (req, res): Promise<void> => 
   res.json(formatTransaction(transaction, customer));
 });
 
+/** Reverse the stock, loyalty and lifetime-spend side effects that finalizeSale
+ *  applied to a completed sale, when that sale is refunded or voided. Mirrors the
+ *  invoice "left paid" reversal (applyInvoiceStock / applyInvoiceCustomerSpend):
+ *    • restock every inventory-tracked line item;
+ *    • subtract the sale total and one visit from the customer's lifetime figures;
+ *    • undo loyalty movement — restore points *redeemed* on a loyalty-tendered
+ *      sale, or claw back points *earned* on any other sale.
+ *  Gift-card redemption/issuance, serials and digital codes are deliberately NOT
+ *  reversed here (matching prior behaviour). Callers must guard against calling
+ *  this twice on the same sale (status transition to refunded/voided) so effects
+ *  are reversed exactly once. Runs inside the caller's db.transaction. */
+async function reverseSaleEffects(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  merchantId: number,
+  transaction: typeof transactionsTable.$inferSelect,
+): Promise<void> {
+  // Restock inventory-tracked lines, aggregating repeated products so the
+  // pre-read stock value is only adjusted once (avoids lost updates).
+  const qtyByProduct = new Map<number, number>();
+  const items = Array.isArray(transaction.items)
+    ? transaction.items as Array<{ productId?: unknown; quantity?: unknown }>
+    : [];
+  for (const it of items) {
+    const pid = typeof it.productId === "number" ? it.productId : Number(it.productId);
+    const qty = Number(it.quantity) || 0;
+    if (Number.isInteger(pid) && pid > 0 && qty > 0) {
+      qtyByProduct.set(pid, (qtyByProduct.get(pid) ?? 0) + qty);
+    }
+  }
+  for (const [productId, qty] of qtyByProduct) {
+    const [product] = await tx
+      .select({ stockQuantity: productsTable.stockQuantity, trackInventory: productsTable.trackInventory })
+      .from(productsTable)
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)))
+      .for("update");
+    if (product?.trackInventory !== "true") continue;
+    await tx
+      .update(productsTable)
+      .set({ stockQuantity: product.stockQuantity + qty })
+      .where(eq(productsTable.id, productId));
+  }
+
+  if (!transaction.customerId) return;
+
+  // Reverse lifetime spend + visit count (clamped at 0, matching invoices).
+  const total = parseFloat(transaction.total) || 0;
+  if (total > 0) {
+    await tx
+      .update(customersTable)
+      .set({
+        totalSpent: sql`GREATEST(0, ${customersTable.totalSpent} - ${total})`,
+        visitCount: sql`GREATEST(0, ${customersTable.visitCount} - 1)`,
+      })
+      .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+  }
+
+  // Undo the loyalty movement finalizeSale made. A loyalty-tendered sale spent
+  // points (persistedTendered == requiredLoyaltyPoints, stored in amountTendered)
+  // — give them back. Any other sale earned points (loyaltyEarned) — claw back.
+  if (transaction.paymentMethod === "loyalty") {
+    const redeemed = parseFloat(transaction.amountTendered ?? "0") || 0;
+    if (redeemed > 0) {
+      await tx
+        .update(customersTable)
+        .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${redeemed}` })
+        .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+    }
+  } else {
+    const earned = parseFloat(transaction.loyaltyEarned ?? "0") || 0;
+    if (earned > 0) {
+      await tx
+        .update(customersTable)
+        .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${earned})` })
+        .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+    }
+  }
+}
+
 router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<void> => {
   const params = RefundTransactionParams.safeParse(req.params);
   if (!params.success) {
@@ -974,29 +1072,43 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const merchantId = req.session.merchantId!;
+  const id = params.data.id;
 
-  const [transaction] = await db
-    .select()
-    .from(transactionsTable)
-    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)));
+  try {
+    const updated = await db.transaction(async (tx) => {
+      // Lock the sale row so a concurrent refund/void/modify can't race the
+      // reversal and double-apply (or skip) the stock/loyalty/spend changes.
+      const [transaction] = await tx
+        .select()
+        .from(transactionsTable)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .for("update");
+      if (!transaction) throw new HttpError(404, "Transaction not found");
+      // Only a completed sale can be refunded: this blocks re-refunding (which
+      // would reverse effects twice) and refunding an already-voided sale.
+      if (transaction.status !== "completed") {
+        throw new HttpError(409, `Only completed sales can be refunded (this sale is ${transaction.status}).`);
+      }
+      await reverseSaleEffects(tx, merchantId, transaction);
+      const [row] = await tx
+        .update(transactionsTable)
+        .set({ status: "refunded", notes: parsed.data.reason })
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .returning();
+      return row;
+    });
 
-  if (!transaction) {
-    res.status(404).json({ error: "Transaction not found" });
-    return;
+    let cust: typeof customersTable.$inferSelect | null = null;
+    if (updated.customerId) {
+      const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
+      cust = c ?? null;
+    }
+    res.json(formatTransaction(updated, cust));
+  } catch (err) {
+    if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+    throw err;
   }
-
-  const [updated] = await db
-    .update(transactionsTable)
-    .set({ status: "refunded", notes: parsed.data.reason })
-    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)))
-    .returning();
-
-  let cust: typeof customersTable.$inferSelect | null = null;
-  if (updated.customerId) {
-    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
-    cust = c ?? null;
-  }
-  res.json(formatTransaction(updated, cust));
 });
 
 // POST /transactions/:id/void — cancel a completed sale (e.g. mistaken entry).

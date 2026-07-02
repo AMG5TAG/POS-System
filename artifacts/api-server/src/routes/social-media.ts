@@ -29,36 +29,53 @@ router.get("/social/accounts", async (req, res) => {
   res.json({ accounts: rows });
 });
 
-/* Refresh the publishable destinations from the connected Meta integration.
- * Pulls Facebook Pages (and their linked Instagram Business accounts) via the
- * Graph API using the vault token captured by the Integrations OAuth. */
+/* Refresh the publishable destinations from the connected integrations. Pulls
+ * Facebook Pages (and their linked Instagram Business accounts) via the Graph
+ * API, and adds the connected X and LinkedIn destinations straight from the
+ * vault (the OAuth connect flow already stored their account id + token). */
 router.post("/social/accounts/sync", async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const meta = await readVault(merchantId, "meta_business").catch(() => null);
-  if (!meta?.accessToken) {
-    res.status(400).json({ error: "Connect Meta Business in Integrations first.", synced: 0 });
+  const [meta, tw, li] = await Promise.all([
+    readVault(merchantId, "meta_business").catch(() => null),
+    readVault(merchantId, "twitter_x").catch(() => null),
+    readVault(merchantId, "linkedin_business").catch(() => null),
+  ]);
+  if (!meta?.accessToken && !tw?.accessToken && !li?.accessToken) {
+    res.status(400).json({ error: "Connect Meta, X, or LinkedIn in Integrations first.", synced: 0 });
     return;
   }
 
-  let discovered: Array<{ platform: string; externalId: string; name: string; accessToken: string | null; avatarUrl: string | null }> = [];
-  try {
-    const r = await fetch(`${GRAPH}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(meta.accessToken)}`);
-    const data = (await r.json().catch(() => ({}))) as {
-      data?: Array<{ id: string; name: string; access_token?: string; picture?: { data?: { url?: string } };
-        instagram_business_account?: { id: string; username?: string; profile_picture_url?: string } }>;
-      error?: { message?: string };
-    };
-    if (data.error) { res.status(400).json({ error: data.error.message ?? "Meta API error", synced: 0 }); return; }
-    for (const page of data.data ?? []) {
-      discovered.push({ platform: "facebook", externalId: page.id, name: page.name, accessToken: page.access_token ?? null, avatarUrl: page.picture?.data?.url ?? null });
-      if (page.instagram_business_account) {
-        const ig = page.instagram_business_account;
-        discovered.push({ platform: "instagram", externalId: ig.id, name: ig.username ? `@${ig.username}` : page.name, accessToken: page.access_token ?? null, avatarUrl: ig.profile_picture_url ?? null });
+  const discovered: Array<{ platform: string; externalId: string; name: string; accessToken: string | null; avatarUrl: string | null }> = [];
+
+  // Meta: discover Pages + linked Instagram Business accounts via Graph. A Meta
+  // API hiccup is non-fatal — X/LinkedIn below can still sync.
+  if (meta?.accessToken) {
+    try {
+      const r = await fetch(`${GRAPH}/me/accounts?fields=id,name,access_token,picture,instagram_business_account{id,username,profile_picture_url}&access_token=${encodeURIComponent(meta.accessToken)}`);
+      const data = (await r.json().catch(() => ({}))) as {
+        data?: Array<{ id: string; name: string; access_token?: string; picture?: { data?: { url?: string } };
+          instagram_business_account?: { id: string; username?: string; profile_picture_url?: string } }>;
+        error?: { message?: string };
+      };
+      for (const page of data.data ?? []) {
+        discovered.push({ platform: "facebook", externalId: page.id, name: page.name, accessToken: page.access_token ?? null, avatarUrl: page.picture?.data?.url ?? null });
+        if (page.instagram_business_account) {
+          const ig = page.instagram_business_account;
+          discovered.push({ platform: "instagram", externalId: ig.id, name: ig.username ? `@${ig.username}` : page.name, accessToken: page.access_token ?? null, avatarUrl: ig.profile_picture_url ?? null });
+        }
       }
+    } catch {
+      req.log?.warn("social sync: could not reach the Meta Graph API");
     }
-  } catch {
-    res.status(502).json({ error: "Could not reach the Meta Graph API.", synced: 0 });
-    return;
+  }
+
+  // X + LinkedIn: single destination each, taken directly from the vault (the
+  // connect flow stored accountId = X user id / LinkedIn organization id).
+  if (tw?.accessToken && tw.accountId) {
+    discovered.push({ platform: "twitter", externalId: tw.accountId, name: tw.accountHandle || "X account", accessToken: tw.accessToken, avatarUrl: null });
+  }
+  if (li?.accessToken && li.accountId) {
+    discovered.push({ platform: "linkedin", externalId: li.accountId, name: li.accountHandle || "LinkedIn Page", accessToken: li.accessToken, avatarUrl: null });
   }
 
   // Upsert discovered accounts; mark missing ones revoked.

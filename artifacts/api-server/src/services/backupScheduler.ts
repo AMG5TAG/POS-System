@@ -5,6 +5,7 @@
  * with no encryption password are skipped (they cannot be encrypted).
  */
 import type { Logger } from "pino";
+import { trackedInterval } from "../lib/shutdown";
 import { db, merchantBackupConfigsTable, merchantBackupSchedulesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
@@ -85,7 +86,7 @@ export function scheduleBackups(logger: Logger): void {
   runDueBackups(logger).catch((err) =>
     logger.error({ err }, "Backup scheduler startup run error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       runDueBackups(logger).catch((err) =>
         logger.error({ err }, "Backup scheduler run error"),

@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -68,6 +68,9 @@ export const serviceJobsTable = pgTable("service_jobs", {
 }, (t) => [
   index("service_jobs_merchant_id_idx").on(t.merchantId),
   index("service_jobs_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),
+  // Job numbers are unique per merchant — enforced in the DB so a concurrent
+  // create can't race past the read-max+1 generator (retried on conflict).
+  uniqueIndex("service_jobs_merchant_job_number_unique").on(t.merchantId, t.jobNumber),
 ]);
 
 export const insertServiceJobSchema = createInsertSchema(serviceJobsTable).omit({ id: true, createdAt: true, updatedAt: true });

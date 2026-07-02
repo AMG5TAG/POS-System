@@ -84,7 +84,7 @@
   "dependencies": {
     "@types/dompurify": "^3.2.0",
     "@types/qrcode": "^1.5.6",
-    "dompurify": "^3.4.7",
+    "dompurify": "^3.4.11",
     "exceljs": "^4.4.0",
     "jsbarcode": "^3.12.3",
     "jspdf": "^4.2.1",

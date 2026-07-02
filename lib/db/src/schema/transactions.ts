@@ -48,6 +48,10 @@ export const transactionsTable = pgTable("transactions", {
   // Postgres treats NULLs as distinct, so rows without an idempotency key never
   // collide; only repeated keys for the same merchant are deduplicated.
   uniqueIndex("transactions_merchant_idempotency_idx").on(t.merchantId, t.idempotencyKey),
+  // Receipt numbers are unique per merchant. The generator is random, so a
+  // collision aborts the sale transaction with a unique violation — finalizeSale
+  // regenerates and retries the whole transaction on this specific constraint.
+  uniqueIndex("transactions_merchant_receipt_unique").on(t.merchantId, t.receiptNumber),
 ]);
 
 export const insertTransactionSchema = createInsertSchema(transactionsTable).omit({ id: true, createdAt: true });

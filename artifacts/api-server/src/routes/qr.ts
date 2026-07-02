@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, qrCodesTable, qrSettingsTable, qrSavedTemplatesTable, productsTable, customersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { stripManagedFields } from "../lib/settings-body";
 import { registerProductQrsBatch, registerCustomerQrsBatch } from "../services/entityQr";
 import { recordMarketingEvent } from "../lib/marketingEvents";
 import { publicOrigin } from "../lib/publicUrl";
@@ -107,7 +108,7 @@ router.get("/qr-settings", requireAuth, async (req, res): Promise<void> => {
 
 router.put("/qr-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof qrSettingsTable.$inferInsert>;
+  const body = stripManagedFields(req.body ?? {}) as Partial<typeof qrSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(qrSettingsTable).where(eq(qrSettingsTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(qrSettingsTable).set(body).where(eq(qrSettingsTable.merchantId, merchantId)).returning();

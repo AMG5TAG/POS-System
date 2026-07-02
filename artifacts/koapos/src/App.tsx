@@ -316,7 +316,7 @@ function Router() {
       <Route path="/b/:businessUsername/t/webapp">
         <PublicRoute component={TechAppPage} />
       </Route>
-      <Route path="/b/:businessUsername/t/dashboard">
+      <Route path="/d/:token">
         <PublicRoute component={DashboardAppPage} />
       </Route>
       <Route path="/b/:businessUsername/t/posapp">

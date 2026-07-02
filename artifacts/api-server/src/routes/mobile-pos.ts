@@ -1,5 +1,6 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable, posFavouritesTable } from "@workspace/db";
+import { matchStaffByPin } from "../lib/staff-pin";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
@@ -104,7 +105,7 @@ router.post("/mobile-pos/b/:username/login", async (req, res): Promise<void> => 
     .select()
     .from(staffTable)
     .where(and(eq(staffTable.merchantId, merchant.id), eq(staffTable.isActive, "true")));
-  const match = staff.find((s) => s.pin && s.pin === parsed.data.pin);
+  const match = await matchStaffByPin(staff, parsed.data.pin);
   if (!match) { recordPinFailure(merchant.id); res.status(401).json({ error: "Invalid PIN" }); return; }
   req.session.mpos = { staffId: match.id, merchantId: merchant.id };
   res.json({

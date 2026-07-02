@@ -41,6 +41,12 @@ export const viewLaybyPaymentLegs = pgView("view_layby_payment_legs", {
   amount:      numeric("amount"),
 }).existing();
 
+export const viewDailySurchargeCost = pgView("view_daily_surcharge_cost", {
+  merchantId:    integer("merchant_id"),
+  saleDate:      date("sale_date"),
+  surchargeCost: numeric("surcharge_cost"),
+}).existing();
+
 export const viewPaymentMethodBreakdown = pgView("view_payment_method_breakdown", {
   merchantId:          integer("merchant_id"),
   saleDate:            date("sale_date"),

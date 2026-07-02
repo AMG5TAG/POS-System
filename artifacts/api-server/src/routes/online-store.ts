@@ -3,6 +3,7 @@ import dns from "node:dns/promises";
 import { db, onlineStoreSettingsTable, onlineStoreThirdpartyTable, merchantsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { stripManagedFields } from "../lib/settings-body";
 
 const router: IRouter = Router();
 
@@ -60,7 +61,7 @@ router.get("/online-store-settings", requireAuth, async (req, res): Promise<void
 
 router.put("/online-store-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof onlineStoreSettingsTable.$inferInsert>;
+  const body = stripManagedFields(req.body ?? {}) as Partial<typeof onlineStoreSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(onlineStoreSettingsTable).where(eq(onlineStoreSettingsTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(onlineStoreSettingsTable).set(body).where(eq(onlineStoreSettingsTable.merchantId, merchantId)).returning();
@@ -141,7 +142,7 @@ router.get("/online-store-thirdparty", requireAuth, async (req, res): Promise<vo
 
 router.put("/online-store-thirdparty", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof onlineStoreThirdpartyTable.$inferInsert>;
+  const body = stripManagedFields(req.body ?? {}) as Partial<typeof onlineStoreThirdpartyTable.$inferInsert>;
   const [existing] = await db.select().from(onlineStoreThirdpartyTable).where(eq(onlineStoreThirdpartyTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(onlineStoreThirdpartyTable).set(body).where(eq(onlineStoreThirdpartyTable.merchantId, merchantId)).returning();

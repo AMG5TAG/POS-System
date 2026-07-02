@@ -7,6 +7,7 @@ import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useOfflineQueue } from "@/hooks/use-offline-queue";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { warrantyLabel } from "@/lib/warranty";
@@ -234,6 +235,8 @@ export default function POSPage() {
   const [, setLocation] = useLocation();
   /* product browse */
   const [search, setSearch] = useState("");
+  // Debounced so the product query fires on pause, not on every keystroke.
+  const debouncedSearch = useDebounce(search);
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
   /* Which register THIS device operates — persisted per device so each
@@ -527,6 +530,7 @@ export default function POSPage() {
   const hasAutoParkedRef = useRef(false);
   const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+  const debouncedCustomerSearch = useDebounce(customerSearch);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
@@ -865,8 +869,8 @@ export default function POSPage() {
   );
 
   const { data: productsData } = useListProducts(
-    { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
-    { query: { queryKey: ["products", search, effectiveCategoryId] } }
+    { search: debouncedSearch || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
+    { query: { queryKey: ["products", debouncedSearch, effectiveCategoryId] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: pricingRulesData } = useQuery<{ rules: PricingRule[] }>({
@@ -879,8 +883,8 @@ export default function POSPage() {
   });
   const activePricingRules = (pricingRulesData?.rules ?? []).filter(r => r.isActive === "true");
   const { data: customersData } = useListCustomers(
-    { search: customerSearch || undefined, limit: 100 },
-    { query: { queryKey: ["customers-pos", customerSearch], enabled: customerOpen } }
+    { search: debouncedCustomerSearch || undefined, limit: 100 },
+    { query: { queryKey: ["customers-pos", debouncedCustomerSearch], enabled: customerOpen } }
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
@@ -3126,7 +3130,7 @@ export default function POSPage() {
                     {(() => {
                       const imgSrc = productImageSrc(product.imageUrl, defaultProductImage);
                       return imgSrc
-                        ? <img src={imgSrc} alt={product.name} loading="eager" decoding="async" draggable={false} className="w-full h-full object-contain" />
+                        ? <img src={imgSrc} alt={product.name} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-contain" />
                         : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
                     })()}
                     {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (

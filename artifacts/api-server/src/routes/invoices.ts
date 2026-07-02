@@ -8,6 +8,7 @@ import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 import { getInvoiceSettings } from "./invoice-settings";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { sendInvoiceSms } from "../services/invoiceSms";
 import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import crypto from "node:crypto";
@@ -483,42 +484,48 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
   const lines = await snapshotInvoiceLineCosts(merchantId, rawLines);
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(invoicesTable)
-    .where(eq(invoicesTable.merchantId, merchantId));
-
   // Prefer the merchant's invoice-settings prefix; fall back to the client value
   // then the historical "KI" default so existing numbering is preserved.
   const prefix = (invSettings.numberPrefix || invoicePrefix || "KI").toUpperCase();
   const digits = Math.max(1, Math.min(10, invoiceDigits ?? 5));
-  const invNumber = `${prefix}${String(Number(countRow.count) + 1).padStart(digits, "0")}`;
 
-  const [inv] = await db.insert(invoicesTable).values({
-    merchantId,
-    customerId: safeCustomerId,
-    staffId: safeStaffId,
-    invoiceNumber: invNumber,
-    status: "draft",
-    subtotal: String(subtotal),
-    taxTotal: String(taxTotal),
-    total: String(total),
-    discountType:  discountInput?.type ?? null,
-    discountValue: discountInput?.value != null ? String(discountInput.value) : null,
-    discountTotal: discountAmount > 0 ? String(discountAmount) : null,
-    items: lines.length ? lines : null,
-    paymentSchedule: sanitizeSchedule(paymentSchedule),
-    // dueDate / recurringStartDate columns are timestamps — they must be Date
-    // objects, not the raw "YYYY-MM-DD" strings from the client.
-    dueDate: dueDate ? new Date(dueDate) : null,
-    notes: notes ?? null,
-    serviceJobId: safeServiceJobId,
-    appointmentId: safeAppointmentId,
-    isRecurring: recurring ? "true" : "false",
-    recurringFrequency: recurring?.frequency ?? null,
-    recurringOccurrences: recurring?.occurrences ?? null,
-    recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
-  }).returning();
+  // Number = <prefix><max existing suffix + 1>. Derived per attempt so a
+  // concurrent create (or a deleted-then-reused count) can't collide; the unique
+  // (merchantId, invoiceNumber) index makes it authoritative and the retry bumps
+  // the suffix on the rare conflict.
+  const inv = await withUniqueRetry("invoices_merchant_invoice_number_unique", async (tryIndex) => {
+    const existing = await db
+      .select({ n: invoicesTable.invoiceNumber })
+      .from(invoicesTable)
+      .where(eq(invoicesTable.merchantId, merchantId));
+    const invNumber = `${prefix}${String(nextSequential(existing.map((r) => r.n), tryIndex)).padStart(digits, "0")}`;
+    const [created] = await db.insert(invoicesTable).values({
+      merchantId,
+      customerId: safeCustomerId,
+      staffId: safeStaffId,
+      invoiceNumber: invNumber,
+      status: "draft",
+      subtotal: String(subtotal),
+      taxTotal: String(taxTotal),
+      total: String(total),
+      discountType:  discountInput?.type ?? null,
+      discountValue: discountInput?.value != null ? String(discountInput.value) : null,
+      discountTotal: discountAmount > 0 ? String(discountAmount) : null,
+      items: lines.length ? lines : null,
+      paymentSchedule: sanitizeSchedule(paymentSchedule),
+      // dueDate / recurringStartDate columns are timestamps — they must be Date
+      // objects, not the raw "YYYY-MM-DD" strings from the client.
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: notes ?? null,
+      serviceJobId: safeServiceJobId,
+      appointmentId: safeAppointmentId,
+      isRecurring: recurring ? "true" : "false",
+      recurringFrequency: recurring?.frequency ?? null,
+      recurringOccurrences: recurring?.occurrences ?? null,
+      recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
+    }).returning();
+    return created;
+  });
 
   // Fetch with full customer details
   const [row] = await db

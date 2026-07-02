@@ -22,7 +22,7 @@ async function main() {
       await client.query(stmt);
     }
     await client.query("COMMIT");
-    console.log("Report views created/updated: view_daily_sales_summary, view_invoice_payment_legs, view_layby_payment_legs, view_payment_method_breakdown, view_product_performance_ledger");
+    console.log("Report views created/updated: view_invoice_payment_legs, view_layby_payment_legs, view_payment_method_breakdown, view_daily_surcharge_cost, view_daily_sales_summary, view_product_performance_ledger");
   } catch (err) {
     await client.query("ROLLBACK");
     throw err;

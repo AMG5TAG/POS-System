@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { withUniqueRetry, nextSequential, isUniqueViolation } from "../lib/document-numbers";
 import {
   ListPurchaseOrdersQueryParams,
   CreatePurchaseOrderBody,
@@ -108,13 +109,8 @@ async function syncCostPricesFromPO(
   }
 }
 
-function nextPoNumber(existing: Array<{ poNumber: string }>, prefix = "KP", digits = 5): string {
-  let max = 0;
-  for (const po of existing) {
-    const n = parseInt(po.poNumber.replace(/\D/g, ""), 10);
-    if (!isNaN(n) && n > max) max = n;
-  }
-  return `${prefix}${String(max + 1).padStart(digits, "0")}`;
+function nextPoNumber(existing: Array<{ poNumber: string }>, prefix = "KP", digits = 5, tryIndex = 0): string {
+  return `${prefix}${String(nextSequential(existing.map((p) => p.poNumber), tryIndex)).padStart(digits, "0")}`;
 }
 
 async function getPOWithItems(id: number, merchantId: number) {
@@ -161,16 +157,13 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreatePurchaseOrderBody.parse(req.body);
 
-  let poNumber = body.poNumber;
-  if (!poNumber) {
-    const existing = await db
-      .select({ poNumber: purchaseOrdersTable.poNumber })
-      .from(purchaseOrdersTable)
-      .where(eq(purchaseOrdersTable.merchantId, merchantId));
-    const prefix = (body as { poNumberPrefix?: string }).poNumberPrefix ?? "KP";
-    const digits = (body as { poNumberDigits?: number }).poNumberDigits ?? 5;
-    poNumber = nextPoNumber(existing, prefix, digits);
-  }
+  // A client-supplied PO number is used verbatim (no retry — a duplicate is a
+  // client error surfaced as 409); an auto number is max+1 and retried on the
+  // unique-index conflict so concurrent creates land on distinct numbers.
+  const autoNumber = !body.poNumber;
+  const poPrefix = (body as { poNumberPrefix?: string }).poNumberPrefix ?? "KP";
+  const poDigits = (body as { poNumberDigits?: number }).poNumberDigits ?? 5;
+  let poNumber = body.poNumber ?? "";
 
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
@@ -178,22 +171,42 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
   const distributeDelivery = req.body?.distributeDelivery === true;
   const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
   const totalCost = itemsSubtotal + deliveryGross;
-  const [po] = await db.insert(purchaseOrdersTable).values({
-    merchantId,
-    supplierId: body.supplierId ?? null,
-    poNumber,
-    orderNumber: body.orderNumber ?? null,
-    status: body.status ?? "Draft",
-    orderDate: body.orderDate,
-    expectedDate: body.expectedDate ?? null,
-    receivedDate: body.receivedDate ?? null,
-    notes: body.notes ?? null,
-    invoiceUrls: body.invoiceUrls?.length ? JSON.stringify(body.invoiceUrls) : null,
-    totalCost: String(totalCost),
-    deliveryCharge: String(deliveryCharge),
-    deliveryTaxMode,
-    distributeDelivery: distributeDelivery ? "true" : "false",
-  }).returning();
+
+  let po: typeof purchaseOrdersTable.$inferSelect;
+  try {
+    po = await withUniqueRetry("purchase_orders_merchant_po_number_unique", async (tryIndex) => {
+      if (autoNumber) {
+        const existing = await db
+          .select({ poNumber: purchaseOrdersTable.poNumber })
+          .from(purchaseOrdersTable)
+          .where(eq(purchaseOrdersTable.merchantId, merchantId));
+        poNumber = nextPoNumber(existing, poPrefix, poDigits, tryIndex);
+      }
+      const [row] = await db.insert(purchaseOrdersTable).values({
+        merchantId,
+        supplierId: body.supplierId ?? null,
+        poNumber,
+        orderNumber: body.orderNumber ?? null,
+        status: body.status ?? "Draft",
+        orderDate: body.orderDate,
+        expectedDate: body.expectedDate ?? null,
+        receivedDate: body.receivedDate ?? null,
+        notes: body.notes ?? null,
+        invoiceUrls: body.invoiceUrls?.length ? JSON.stringify(body.invoiceUrls) : null,
+        totalCost: String(totalCost),
+        deliveryCharge: String(deliveryCharge),
+        deliveryTaxMode,
+        distributeDelivery: distributeDelivery ? "true" : "false",
+      }).returning();
+      return row;
+    }, autoNumber ? 6 : 1);
+  } catch (err) {
+    if (isUniqueViolation(err, "purchase_orders_merchant_po_number_unique")) {
+      res.status(409).json({ error: `Purchase order number "${poNumber}" already exists` });
+      return;
+    }
+    throw err;
+  }
   if (body.items?.length) {
     await db.insert(purchaseOrderItemsTable).values(
       body.items.map((i) => ({

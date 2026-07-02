@@ -60,18 +60,18 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
 }
 
 export default function DashboardAppPage() {
-  const [, params] = useRoute("/b/:businessUsername/t/dashboard");
-  const username = params?.businessUsername ?? "";
+  const [, params] = useRoute("/d/:token");
+  const token = params?.token ?? "";
 
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "disabled" | "notfound" | "error">("loading");
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (initial = false) => {
-    if (!username) return;
+    if (!token) return;
     if (!initial) setRefreshing(true);
     try {
-      const r = await fetch(`/api/public/b/${encodeURIComponent(username)}/dashboard`);
+      const r = await fetch(`/api/public/dashboard/${encodeURIComponent(token)}`);
       if (r.status === 403) { setStatus("disabled"); return; }
       if (r.status === 404) { setStatus("notfound"); return; }
       if (!r.ok) { setStatus("error"); return; }
@@ -82,7 +82,7 @@ export default function DashboardAppPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [username]);
+  }, [token]);
 
   useEffect(() => { void load(true); }, [load]);
 

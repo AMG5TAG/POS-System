@@ -8,38 +8,41 @@ import { eq, and, gte, lte, lt, ne, notInArray, desc, sql } from "drizzle-orm";
 import { customerDisplayName } from "../lib/customer-name";
 
 /**
- * Public, read-only snapshot for the shared Dashboard app
- * (/b/:username/t/dashboard). NO authentication — the merchant opts in via the
- * `enabled` flag and chooses exactly which sections are exposed. Only the data
- * for enabled widgets is ever computed or returned.
+ * Public, read-only snapshot for the shared Dashboard app (/d/:token). NO
+ * authentication — the merchant opts in via the `enabled` flag and chooses
+ * exactly which sections are exposed. The link is addressed by an unguessable
+ * per-merchant token (not the guessable business username) so it can't be found
+ * by trying usernames. Only the data for enabled widgets is ever computed.
  */
 
 const router: IRouter = Router();
 
 const FINISHED = ["completed", "cancelled"];
 
-router.get("/public/b/:username/dashboard", async (req, res): Promise<void> => {
-  const username = String(req.params.username || "").trim();
-  if (!username) { res.status(404).json({ error: "Not found" }); return; }
-
-  const [merchant] = await db
-    .select({ id: merchantsTable.id, businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.username, username))
-    .limit(1);
-  if (!merchant) { res.status(404).json({ error: "Dashboard not found" }); return; }
+router.get("/public/dashboard/:token", async (req, res): Promise<void> => {
+  const token = String(req.params.token || "").trim();
+  if (!token) { res.status(404).json({ error: "Not found" }); return; }
 
   const [settings] = await db
     .select()
     .from(dashboardAppSettingsTable)
-    .where(eq(dashboardAppSettingsTable.merchantId, merchant.id))
+    .where(eq(dashboardAppSettingsTable.publicToken, token))
     .limit(1);
 
-  // Master switch: when off (or never configured) the public link is inert.
+  // Master switch: when off (or the token doesn't resolve) the link is inert.
+  // Both cases return 403 so a valid-but-disabled token can't be distinguished
+  // from a bad one by the response.
   if (!settings?.enabled) {
     res.status(403).json({ error: "This dashboard is not currently shared." });
     return;
   }
+
+  const [merchant] = await db
+    .select({ id: merchantsTable.id, businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.id, settings.merchantId))
+    .limit(1);
+  if (!merchant) { res.status(404).json({ error: "Dashboard not found" }); return; }
 
   const merchantId = merchant.id;
   const now = new Date();

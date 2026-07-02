@@ -11,6 +11,7 @@
  * duplicate prompt is possible in the background).
  */
 import type { Logger } from "pino";
+import { trackedInterval } from "../lib/shutdown";
 import { db, merchantAutoSyncSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError, type SyncProvider } from "./accountSync";
@@ -117,7 +118,7 @@ async function fireInstant(merchantId: number, kind: SyncKind, key: string, logg
 export function scheduleAutoSync(logger: Logger): void {
   schedulerLogger = logger;
   runDuePolls(logger).catch((err) => logger.error({ err }, "Auto sync scheduler startup run error"));
-  setInterval(
+  trackedInterval(
     () => runDuePolls(logger).catch((err) => logger.error({ err }, "Auto sync scheduler run error")),
     HOUR,
   );

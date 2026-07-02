@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
 import type { Logger } from "pino";
 
 /**
@@ -44,7 +45,7 @@ export function schedulePaymentAttemptsExpiry(logger: Logger): void {
   expireStalePaymentAttempts(logger).catch((err) =>
     logger.error({ err }, "Payment attempts expiry startup run error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       expireStalePaymentAttempts(logger).catch((err) =>
         logger.error({ err }, "Payment attempts expiry scheduled run error"),

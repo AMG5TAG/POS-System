@@ -2,6 +2,7 @@ import { useState, useCallback, useEffect, useRef, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListProducts,
   useListCategories,
@@ -1147,6 +1148,9 @@ export default function ProductsPage() {
   // (or the sell price when no rule applies).
   const manualGroupsRef = useRef<Set<string>>(new Set());
   const [search, setSearch]             = useState("");
+  // Debounced so the (limit:1000) product query fires when typing pauses, not on
+  // every keystroke. The input stays bound to `search` for instant feedback.
+  const debouncedSearch = useDebounce(search);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [pendingProductClose, setPendingProductClose] = useState(false);
@@ -1377,8 +1381,8 @@ export default function ProductsPage() {
   }, [dialogOpen, editingProduct, productTypesList, form.productTypeId]);
 
   const { data: productsData, isLoading } = useListProducts(
-    { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
-    { query: { queryKey: ["products", search, categoryFilter] } }
+    { search: debouncedSearch || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
+    { query: { queryKey: ["products", debouncedSearch, categoryFilter] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: floorPlanZones } = useListFloorPlanZones();

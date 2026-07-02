@@ -1,5 +1,6 @@
 import { db, invoicesTable, customersTable, invoiceSettingsTable } from "@workspace/db";
 import { eq, and, isNotNull, inArray } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
 import type { Logger } from "pino";
 import { getInvoiceSettings } from "../routes/invoice-settings";
 import { sendInvoiceEmailInternal } from "../routes/invoices";
@@ -181,7 +182,7 @@ export function scheduleInvoiceReminders(logger: Logger): void {
   processInvoiceNotifications(logger).catch((err) =>
     logger.error({ err }, "Invoice reminder scheduler startup error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       processInvoiceNotifications(logger).catch((err) =>
         logger.error({ err }, "Invoice reminder scheduler error"),

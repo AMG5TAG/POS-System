@@ -12,7 +12,8 @@ import {
   socialPostsTable,
   socialAccountsTable,
 } from "@workspace/db";
-import { eq, and, gt, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
+import { eq, and, gt, gte, lt, lte, isNotNull, desc, sql } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
@@ -55,7 +56,10 @@ function legalEmailFooterText(bizName: string, bizAddress: string, unsub: string
   return `\n\n---\n${bizName}${bizAddress ? ` · ${bizAddress}` : ""}\nTo unsubscribe: ${unsub}`;
 }
 
-/** Check if this rule+record combo was already dispatched (within window) */
+/** Check if this rule+record combo was already *successfully* dispatched (within
+ *  window). Only "sent" rows dedupe — a prior "failed" row must NOT block a
+ *  retry, otherwise a transient SMS/email failure permanently drops that
+ *  customer (the log records failed attempts too). */
 async function alreadySent(
   ruleId: number,
   recordId: string,
@@ -69,6 +73,7 @@ async function alreadySent(
       and(
         eq(marketingAutomationLogTable.ruleId, ruleId),
         eq(marketingAutomationLogTable.recordId, recordId),
+        eq(marketingAutomationLogTable.status, "sent"),
         gte(marketingAutomationLogTable.sentAt, cutoff),
       ),
     )
@@ -192,10 +197,14 @@ async function runBirthday(
         eq(customersTable.merchantId, merchantId),
         isNotNull(customersTable.dateOfBirth),
         isNotNull(customersTable.email),
+        // Bound to today's birthdays in SQL. dateOfBirth is text "YYYY-MM-DD",
+        // so chars 6–10 are "MM-DD" — a pure string match, no timezone-sensitive
+        // date functions (the reason the fine-grained check below stays in JS).
+        sql`substring(${customersTable.dateOfBirth} from 6 for 5) = ${`${mm}-${dd}`}`,
       ),
     );
 
-  // Filter in JS because Postgres date functions vary by timezone setting
+  // Re-check in JS (belt-and-suspenders against any non-standard stored format)
   const matches = customers.filter((c) => {
     if (!c.dateOfBirth) return false;
     const dob = String(c.dateOfBirth);
@@ -554,6 +563,15 @@ async function runWarrantyExpiring(
   const productsById = new Map(products.map((p) => [p.id, p]));
 
   if (productsById.size > 0) {
+    // Bound the scan instead of reading every sale ever: a warranty can only
+    // expire in [now, cutoff] if the sale is at most `maxWarranty` old (expiry =
+    // createdAt + duration ≥ now ⇒ createdAt ≥ now − maxWarranty). Use a generous
+    // 31-day month so the bound is a safe superset; exact expiry is still checked
+    // per row below.
+    const maxWarrantyMonths = Math.max(
+      ...products.map((p) => (p.warrantyUnit === "years" ? p.warrantyDuration * 12 : p.warrantyDuration)),
+    );
+    const earliestSale = new Date(now - maxWarrantyMonths * 31 * dayMs - windowDays * dayMs);
     const rows = await db
       .select({
         txId: transactionsTable.id,
@@ -567,7 +585,10 @@ async function runWarrantyExpiring(
       })
       .from(transactionsTable)
       .innerJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
-      .where(eq(transactionsTable.merchantId, merchantId));
+      .where(and(
+        eq(transactionsTable.merchantId, merchantId),
+        gte(transactionsTable.createdAt, earliestSale),
+      ));
 
     for (const row of rows) {
       const lineItems = Array.isArray(row.items) ? (row.items as { productId?: number | null; productName?: string | null; name?: string | null }[]) : [];
@@ -775,7 +796,7 @@ export function scheduleMarketingAutomation(logger: Logger): void {
   );
   // Then hourly — frequent enough that "after a set time" sends land within the
   // hour, while per-record dedup keeps daily/event triggers idempotent.
-  setInterval(
+  trackedInterval(
     () =>
       processAllMerchantAutomations(logger).catch((err) =>
         logger.error({ err }, "Marketing automation scheduled run error"),

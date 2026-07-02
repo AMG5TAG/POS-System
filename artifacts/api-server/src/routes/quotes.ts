@@ -4,6 +4,7 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { applyEstimateApprovalToJob, markJobAwaitingApproval } from "../services/quoteApproval";
 import {
@@ -242,34 +243,38 @@ router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
   const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(quotesTable)
-    .where(eq(quotesTable.merchantId, merchantId));
-
   const prefix = (quotePrefix ?? "QT-").toUpperCase();
   const digits = Math.max(1, Math.min(10, quoteDigits ?? 4));
-  const quoteNumber = `${prefix}${String(Number(countRow.count) + 1).padStart(digits, "0")}`;
 
   const depositRequired = await resolveDepositRequired(merchantId, total, (req.body as { depositRequired?: unknown }).depositRequired);
 
-  const [created] = await db.insert(quotesTable).values({
-    merchantId,
-    customerId: customerId ?? null,
-    serviceJobId: serviceJobId ?? null,
-    quoteNumber,
-    status: "draft",
-    subtotal: String(subtotal),
-    taxTotal: String(taxTotal),
-    total: String(total),
-    discountType:  discountInput?.type ?? null,
-    discountValue: discountInput?.value != null ? String(discountInput.value) : null,
-    discountTotal: discountAmount > 0 ? String(discountAmount) : null,
-    depositRequired,
-    items: lines.length ? lines : null,
-    expiryDate: expiryDate ? new Date(expiryDate) : null,
-    notes: notes ?? null,
-  }).returning();
+  // Number = <prefix><max existing suffix + 1> (max+1, not count+1, so a delete
+  // never re-issues a number), retried on the unique-index conflict.
+  const created = await withUniqueRetry("quotes_merchant_quote_number_unique", async (tryIndex) => {
+    const existing = await db
+      .select({ n: quotesTable.quoteNumber })
+      .from(quotesTable)
+      .where(eq(quotesTable.merchantId, merchantId));
+    const quoteNumber = `${prefix}${String(nextSequential(existing.map((r) => r.n), tryIndex)).padStart(digits, "0")}`;
+    const [row] = await db.insert(quotesTable).values({
+      merchantId,
+      customerId: customerId ?? null,
+      serviceJobId: serviceJobId ?? null,
+      quoteNumber,
+      status: "draft",
+      subtotal: String(subtotal),
+      taxTotal: String(taxTotal),
+      total: String(total),
+      discountType:  discountInput?.type ?? null,
+      discountValue: discountInput?.value != null ? String(discountInput.value) : null,
+      discountTotal: discountAmount > 0 ? String(discountAmount) : null,
+      depositRequired,
+      items: lines.length ? lines : null,
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      notes: notes ?? null,
+    }).returning();
+    return row;
+  });
 
   const row = await loadQuoteRow(created.id, merchantId);
   const body = row ? fmtRow(row) : fmt(created);

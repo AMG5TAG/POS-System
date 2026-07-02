@@ -13060,6 +13060,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PaymentLeg" }
         note:          { type: string }
+        # Dedupes a retried/double-clicked payment: the same key applied twice
+        # records the installment only once. Generated once per payment attempt
+        # by the client and reused across manual retries.
+        idempotencyKey: { type: string }
 
     Camera:
       type: object

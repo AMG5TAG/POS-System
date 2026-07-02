@@ -1,5 +1,6 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
@@ -13,6 +14,18 @@ const PgSession = connectPgSimple(session);
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Security headers. CSP is disabled here because this is a JSON/redirect API —
+// the SPA is served (and sets its own CSP) elsewhere, and a restrictive default
+// CSP would risk breaking HTML/redirect responses. CORP is set to cross-origin
+// so the SPA (a different origin, behind the proxy) can load API-served
+// resources like generated PDFs and QR images.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
 
 app.use(
   pinoHttp({

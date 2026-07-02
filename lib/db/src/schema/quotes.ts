@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, json, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, json, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -32,6 +32,8 @@ export const quotesTable = pgTable("quotes", {
 }, (t) => [
   index("quotes_merchant_id_idx").on(t.merchantId),
   index("quotes_merchant_id_status_idx").on(t.merchantId, t.status),
+  // Quote numbers are unique per merchant — max+1 generator + retry on conflict.
+  uniqueIndex("quotes_merchant_quote_number_unique").on(t.merchantId, t.quoteNumber),
 ]);
 
 export const insertQuoteSchema = createInsertSchema(quotesTable).omit({ id: true, createdAt: true, updatedAt: true });

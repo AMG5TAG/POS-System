@@ -1,5 +1,6 @@
 import { db, customersTable, merchantsTable, customerSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
 import { sendEmail } from "./email";
 import type { Logger } from "pino";
 
@@ -404,7 +405,7 @@ export function scheduleReferralDigest(logger: Logger): void {
   sendReferralDigests(logger).catch((err) =>
     logger.error({ err }, "Referral digest startup run error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       sendReferralDigests(logger).catch((err) =>
         logger.error({ err }, "Referral digest scheduled run error"),

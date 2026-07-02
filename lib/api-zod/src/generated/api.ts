@@ -5902,7 +5902,8 @@ export const AddLaybyPaymentBody = zod.object({
   "method": zod.string(),
   "amount": zod.number().min(addLaybyPaymentBodyPaymentsItemAmountMin)
 })).optional(),
-  "note": zod.string().optional()
+  "note": zod.string().optional(),
+  "idempotencyKey": zod.string().optional()
 })
 
 

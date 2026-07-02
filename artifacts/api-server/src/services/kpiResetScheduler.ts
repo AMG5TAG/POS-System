@@ -10,6 +10,7 @@
  * ticks — and a server restart — never double-record a period.
  */
 import type { Logger } from "pino";
+import { trackedInterval } from "../lib/shutdown";
 import { db, kpiTargetsTable, kpiHistoryTable, kpiSettingsTable, merchantsTable } from "@workspace/db";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { computeActual, getPreviousPeriodWindow } from "../routes/kpi-calc";
@@ -41,13 +42,13 @@ async function pruneHistory(logger: Logger): Promise<void> {
             ) AS rn
           FROM kpi_history
         ) ranked
-        WHERE rn > CASE ranked.period
+        WHERE rn > (CASE ranked.period
           WHEN 'daily'     THEN ${RETENTION.daily}
           WHEN 'weekly'    THEN ${RETENTION.weekly}
           WHEN 'monthly'   THEN ${RETENTION.monthly}
           WHEN 'quarterly' THEN ${RETENTION.quarterly}
           WHEN 'annual'    THEN ${RETENTION.annual}
-          ELSE ${DEFAULT_RETENTION} END
+          ELSE ${DEFAULT_RETENTION} END)::int
       )
       RETURNING id
     `);
@@ -141,7 +142,7 @@ export function scheduleKpiResets(logger: Logger): void {
   runDueKpiResets(logger).catch((err) =>
     logger.error({ err }, "KPI reset scheduler startup run error"),
   );
-  setInterval(
+  trackedInterval(
     () => runDueKpiResets(logger).catch((err) =>
       logger.error({ err }, "KPI reset scheduler run error"),
     ),

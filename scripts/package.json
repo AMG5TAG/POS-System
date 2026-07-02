@@ -34,10 +34,13 @@
     "add-invoice-settings-table": "tsx ./src/add-invoice-settings-table.ts",
     "add-dashboard-section-order": "tsx ./src/add-dashboard-section-order.ts",
     "add-service-job-reopen-link": "tsx ./src/add-service-job-reopen-link.ts",
+    "add-dashboard-public-token": "tsx ./src/add-dashboard-public-token.ts",
+    "hash-staff-pins": "tsx ./src/hash-staff-pins.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
+    "bcryptjs": "^3.0.3",
     "drizzle-orm": "catalog:"
   },
   "devDependencies": {

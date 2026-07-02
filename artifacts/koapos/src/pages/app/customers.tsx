@@ -4,6 +4,7 @@ import { useCustomerSettings } from "@/lib/customer-settings";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { customerDisplayName } from "@/lib/customer-name";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useDebounce } from "@/hooks/use-debounce";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant,
@@ -2689,6 +2690,8 @@ export default function CustomersPage() {
   const { settings: customerSettings } = useCustomerSettings();
   const customerGroups = customerSettings.groups.map(g => g.name);
   const [search, setSearch]             = useState("");
+  // Debounced so the (limit:1000) customer query fires on pause, not per keystroke.
+  const debouncedSearch = useDebounce(search);
   const [heardFromFilter, setHeardFromFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -2723,7 +2726,7 @@ export default function CustomersPage() {
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
 
   const { data: customersData, isLoading } = useListCustomers(
-    { search: search || undefined, heardFrom: heardFromFilter === "all" ? undefined : heardFromFilter, limit: 1000 },
+    { search: debouncedSearch || undefined, heardFrom: heardFromFilter === "all" ? undefined : heardFromFilter, limit: 1000 },
   );
 
   const deleteMutation = useDeleteCustomer();

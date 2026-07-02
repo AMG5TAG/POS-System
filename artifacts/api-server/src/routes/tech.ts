@@ -3,6 +3,7 @@ import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, appoi
 import { eq, and, or, asc, desc, ilike } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
+import { matchStaffByPin } from "../lib/staff-pin";
 import { sendSms } from "../services/sms";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { publicDomain } from "../lib/publicUrl";
@@ -221,7 +222,7 @@ router.post("/tech/b/:username/login", async (req, res): Promise<void> => {
     .select()
     .from(staffTable)
     .where(and(eq(staffTable.merchantId, merchant.id), eq(staffTable.isActive, "true")));
-  const match = staff.find((s) => s.pin && s.pin === parsed.data.pin);
+  const match = await matchStaffByPin(staff, parsed.data.pin);
   if (!match) {
     recordPinFailure(merchant.id);
     res.status(401).json({ error: "Invalid PIN" });

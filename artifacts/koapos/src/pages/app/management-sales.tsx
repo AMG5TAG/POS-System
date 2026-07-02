@@ -84,7 +84,13 @@ const DATE_PRESETS: { id: Preset; label: string }[] = [
   { id: "year",  label: "Year"    },
 ];
 
-function toISO(d: Date): string { return d.toISOString().split("T")[0]; }
+// Build the YYYY-MM-DD string from LOCAL date components — toISOString() would
+// convert to UTC first, which in AEST (UTC+10/+11) shifts dates back a day for
+// most of the local morning ("Today" would query yesterday until ~10-11am).
+function toISO(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 function presetDates(p: Preset): { from: string; to: string } {
   const now = new Date();
@@ -2071,10 +2077,13 @@ function _groupByDay(items: { createdAt: string }[], days = 30): Record<string, 
   const now = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now); d.setDate(d.getDate() - i);
-    result[d.toISOString().split("T")[0]] = 0;
+    result[toISO(d)] = 0; // local-date key, matching how records are bucketed below
   }
   for (const item of items) {
-    const day = (item.createdAt ?? "").split("T")[0];
+    // createdAt is a UTC ISO timestamp — convert to the LOCAL day so evening
+    // events (post-2pm UTC = post-midnight AEST) land in the right bucket.
+    if (!item.createdAt) continue;
+    const day = toISO(new Date(item.createdAt));
     if (day in result) result[day]++;
   }
   return result;

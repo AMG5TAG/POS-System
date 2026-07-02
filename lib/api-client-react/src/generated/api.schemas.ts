@@ -3131,6 +3131,7 @@ export interface AddLaybyPaymentBody {
   paymentMethod?: string;
   payments?: PaymentLeg[];
   note?: string;
+  idempotencyKey?: string;
 }
 
 export interface Camera {

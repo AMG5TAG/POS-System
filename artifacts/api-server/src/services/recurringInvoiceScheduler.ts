@@ -1,5 +1,6 @@
 import { db, invoicesTable, customersTable, merchantsTable, posCodePrefixesTable } from "@workspace/db";
 import { eq, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
 import { sendEmail } from "./email";
 import type { Logger } from "pino";
 
@@ -293,7 +294,7 @@ export function scheduleRecurringInvoices(logger: Logger): void {
   processRecurringInvoices(logger).catch((err) =>
     logger.error({ err }, "Recurring invoice scheduler startup error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       processRecurringInvoices(logger).catch((err) =>
         logger.error({ err }, "Recurring invoice scheduler error"),

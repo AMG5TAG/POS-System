@@ -1,5 +1,6 @@
 import { db, socialPostsTable } from "@workspace/db";
 import { eq, and, lte } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
 import { runPublish } from "../routes/social-media";
 import type { Logger } from "pino";
 
@@ -21,7 +22,7 @@ async function publishDuePosts(logger: Logger): Promise<void> {
 
 export function scheduleSocialPosts(logger: Logger): void {
   const ONE_MINUTE = 60 * 1000;
-  setInterval(
+  trackedInterval(
     () => publishDuePosts(logger).catch((err) => logger.error({ err }, "Social post scheduler run error")),
     ONE_MINUTE,
   );
