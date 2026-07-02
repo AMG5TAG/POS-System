@@ -835,11 +835,11 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     if (dayMap[key]) dayMap[key].invoices += 1;
   }
 
-  // Customer birthdays (match by month/day — dateOfBirth is stored as "YYYY-MM-DD"
-  // local date). Bound to this month in SQL (chars 6-7 of the text date are "MM",
-  // a pure string match — no timezone-sensitive date functions) and project only
-  // the columns used, instead of pulling the whole customer table each load.
-  const mm = String(month).padStart(2, "0");
+  // Customer birthdays (match by month/day). `dateOfBirth` is a Postgres `date`
+  // column, so match the month with extract() — comparing on the date's own
+  // month is timezone-independent and index-friendly, and (unlike substring)
+  // is valid for the date type. Project only the columns used, instead of
+  // pulling the whole customer table each load.
   const customers = await db
     .select({
       id: customersTable.id,
@@ -853,7 +853,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     .where(and(
       eq(customersTable.merchantId, merchantId),
       isNotNull(customersTable.dateOfBirth),
-      sql`substring(${customersTable.dateOfBirth} from 6 for 2) = ${mm}`,
+      sql`extract(month from ${customersTable.dateOfBirth}) = ${month}`,
     ));
 
   for (const c of customers) {

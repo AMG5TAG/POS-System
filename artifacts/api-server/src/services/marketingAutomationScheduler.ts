@@ -198,10 +198,11 @@ async function runBirthday(
         eq(customersTable.merchantId, merchantId),
         isNotNull(customersTable.dateOfBirth),
         isNotNull(customersTable.email),
-        // Bound to today's birthdays in SQL. dateOfBirth is text "YYYY-MM-DD",
-        // so chars 6–10 are "MM-DD" — a pure string match, no timezone-sensitive
-        // date functions (the reason the fine-grained check below stays in JS).
-        sql`substring(${customersTable.dateOfBirth} from 6 for 5) = ${`${mm}-${dd}`}`,
+        // Bound to today's birthday (month + day) in SQL. dateOfBirth is a
+        // Postgres `date` column, so match with extract() — substring() is not
+        // valid for the date type. Comparing on the date's own month/day is
+        // timezone-independent (the reason the fine-grained check below stays in JS).
+        sql`extract(month from ${customersTable.dateOfBirth}) = ${target.getMonth() + 1} and extract(day from ${customersTable.dateOfBirth}) = ${target.getDate()}`,
       ),
     );
 
