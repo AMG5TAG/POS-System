@@ -4725,6 +4725,7 @@ export const GetDashboardConfigResponse = zod.object({
   "showCalendar": zod.boolean(),
   "showReferralRevenue": zod.boolean(),
   "showBirthdayNotifications": zod.boolean(),
+  "sectionOrder": zod.array(zod.string()).nullish().describe('Custom vertical order of dashboard content sections; null = default order'),
   "updatedAt": zod.string()
 })
 
@@ -4740,7 +4741,8 @@ export const UpsertDashboardConfigBody = zod.object({
   "showServiceJobsPanel": zod.boolean().optional(),
   "showCalendar": zod.boolean().optional(),
   "showReferralRevenue": zod.boolean().optional(),
-  "showBirthdayNotifications": zod.boolean().optional()
+  "showBirthdayNotifications": zod.boolean().optional(),
+  "sectionOrder": zod.array(zod.string()).optional().describe('Custom vertical order of dashboard content sections')
 })
 
 export const UpsertDashboardConfigResponse = zod.object({
@@ -4754,6 +4756,7 @@ export const UpsertDashboardConfigResponse = zod.object({
   "showCalendar": zod.boolean(),
   "showReferralRevenue": zod.boolean(),
   "showBirthdayNotifications": zod.boolean(),
+  "sectionOrder": zod.array(zod.string()).nullish().describe('Custom vertical order of dashboard content sections; null = default order'),
   "updatedAt": zod.string()
 })
 

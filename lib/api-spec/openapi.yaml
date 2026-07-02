@@ -11946,6 +11946,12 @@ components:
           type: boolean
         showBirthdayNotifications:
           type: boolean
+        sectionOrder:
+          type: array
+          nullable: true
+          description: Custom vertical order of dashboard content sections; null = default order
+          items:
+            type: string
         updatedAt:
           type: string
 
@@ -11968,6 +11974,11 @@ components:
           type: boolean
         showBirthdayNotifications:
           type: boolean
+        sectionOrder:
+          type: array
+          description: Custom vertical order of dashboard content sections
+          items:
+            type: string
 
     DailyCloseCurrent:
       type: object

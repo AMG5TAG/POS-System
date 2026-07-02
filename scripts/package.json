@@ -32,6 +32,7 @@
     "add-customer-photo": "tsx ./src/add-customer-photo.ts",
     "add-custom-payment-methods": "tsx ./src/add-custom-payment-methods.ts",
     "add-invoice-settings-table": "tsx ./src/add-invoice-settings-table.ts",
+    "add-dashboard-section-order": "tsx ./src/add-dashboard-section-order.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

@@ -2175,6 +2175,8 @@ export interface DashboardConfigResponse {
   showCalendar: boolean;
   showReferralRevenue: boolean;
   showBirthdayNotifications: boolean;
+  /** Custom vertical order of dashboard content sections; null = default order */
+  sectionOrder?: string[] | null;
   updatedAt: string;
 }
 
@@ -2187,6 +2189,8 @@ export interface UpsertDashboardConfigBody {
   showCalendar?: boolean;
   showReferralRevenue?: boolean;
   showBirthdayNotifications?: boolean;
+  /** Custom vertical order of dashboard content sections */
+  sectionOrder?: string[];
 }
 
 export type DailyCloseCurrentByPaymentMethod = {[key: string]: number};

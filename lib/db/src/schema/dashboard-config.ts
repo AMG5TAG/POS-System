@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, serial, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, jsonb, pgTable, serial, timestamp } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const dashboardConfigTable = pgTable("dashboard_config", {
@@ -12,6 +12,9 @@ export const dashboardConfigTable = pgTable("dashboard_config", {
   showCalendar: boolean("show_calendar").notNull().default(true),
   showReferralRevenue: boolean("show_referral_revenue").notNull().default(true),
   showBirthdayNotifications: boolean("show_birthday_notifications").notNull().default(true),
+  // Custom vertical order of the dashboard's content sections (array of stable
+  // section ids). Null = default order. Merchant-wide, so it syncs across devices.
+  sectionOrder: jsonb("section_order").$type<string[]>(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).defaultNow().notNull().$onUpdate(() => new Date()),
 });
 
