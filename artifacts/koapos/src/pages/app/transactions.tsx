@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListTransactions, useRefundTransaction, useGetLoyaltySettings, useListStaff, Transaction, Staff, LoyaltySettings } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -42,7 +43,7 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 }) {
   const isActive = active === sortKey;
   return (
-    <th className={cn("p-3 font-medium whitespace-nowrap cursor-pointer select-none group", align === "right" ? "text-right" : "text-left", className)}
+    <th className={cn("p-3 font-medium whitespace-nowrap cursor-pointer select-none group bg-muted/50", align === "right" ? "text-right" : "text-left", className)}
       onClick={() => onSort(sortKey)}>
       <span className={cn("inline-flex items-center gap-1 hover:text-foreground transition-colors", align === "right" && "flex-row-reverse")}>
         {label}
@@ -203,6 +204,21 @@ export default function TransactionsPage() {
     return sortDir === "asc" ? r : -r;
   });
 
+  // Virtualise the rows: with up to 1000 transactions, rendering every <tr>
+  // stalls the page. The bounded scroll container below windows to just the
+  // visible rows (+ overscan); sort/selection are unaffected (we key by id).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 53,
+    overscan: 12,
+    getItemKey: (i) => sorted[i].id,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const padTop = virtualRows.length ? virtualRows[0].start : 0;
+  const padBottom = virtualRows.length ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0;
+
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => { if (prev === key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); return prev; } setSortDir("asc"); return key; });
   }, []);
@@ -259,15 +275,15 @@ export default function TransactionsPage() {
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border overflow-x-auto">
+          <div ref={scrollRef} className="rounded-lg border overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
+              <thead className="bg-muted/50 border-b sticky top-0 z-10">
                 <tr>
-                  <th className="p-3 w-10">
+                  <th className="p-3 w-10 bg-muted/50">
                     <input type="checkbox" checked={allChecked} onChange={toggleAll}
                       className="rounded border-muted-foreground/40 accent-primary" />
                   </th>
-                  <th className="p-3 text-left font-medium whitespace-nowrap">Receipt</th>
+                  <th className="p-3 text-left font-medium whitespace-nowrap bg-muted/50">Receipt</th>
                   <SortTh {...sh("Date", "date", "hidden md:table-cell")} />
                   <SortTh {...sh("Payment", "payment", "hidden sm:table-cell")} />
                   <SortTh {...sh("Status", "status", "hidden lg:table-cell")} />
@@ -275,11 +291,15 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {sorted.map((tx) => {
+                {padTop > 0 && <tr aria-hidden><td colSpan={99} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                {virtualRows.map((vr) => {
+                  const tx = sorted[vr.index];
                   const isChecked   = checked.has(tx.id);
                   const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
                   return (
                     <tr key={tx.id}
+                      data-index={vr.index}
+                      ref={rowVirtualizer.measureElement}
                       className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
                       onClick={() => setSelectedTx(tx)}
                     >
@@ -321,6 +341,7 @@ export default function TransactionsPage() {
                     </tr>
                   );
                 })}
+                {padBottom > 0 && <tr aria-hidden><td colSpan={99} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
               </tbody>
             </table>
           </div>
