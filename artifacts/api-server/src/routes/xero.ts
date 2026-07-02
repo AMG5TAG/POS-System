@@ -32,6 +32,15 @@ const XERO_API         = "https://api.xero.com/api.xro/2.0";
 const XERO_SCOPES      =
   "openid profile email accounting.transactions accounting.contacts accounting.settings offline_access";
 
+/* Canonical Xero setup-wizard route. Every OAuth redirect MUST target this exact
+   path — never the legacy /management/xero or /management/integrations aliases.
+   Those aliases are client-side wouter <Redirect>s that navigate with a hardcoded
+   `to` and DROP the query string, so ?success=/?error= would be lost before the
+   wizard reads it: a failed connect would then silently bounce the user back to
+   the Connect step with no message, looking exactly like "the page just refreshed".
+   The error codes below match the wizard's error map in management-xero.tsx. */
+const XERO_WIZARD_PATH = "/management/settings-integrations/integrations/xero";
+
 /* ── Credential shape stored in merchantIntegrationsTable.credentials ─────── */
 
 type XeroCredentials = {
@@ -208,7 +217,7 @@ router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
     // Platform Xero app isn't configured (no XERO_CLIENT_ID/SECRET). Send the user
     // to the wizard, which shows a clear "Xero isn't available yet" message, rather
     // than bouncing back to the integrations list (which looks like a page refresh).
-    res.redirect("/management/settings-integrations/integrations/xero?error=xero_not_configured");
+    res.redirect(`${XERO_WIZARD_PATH}?error=not_configured`);
     return;
   }
   const clientId = cc.clientId;
@@ -232,19 +241,19 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
   const { code, state, error } = req.query as Record<string, string>;
 
   if (error || !code) {
-    res.redirect("/management/xero?error=oauth_denied");
+    res.redirect(`${XERO_WIZARD_PATH}?error=oauth_denied`);
     return;
   }
 
   const merchantId = parseInt(state ?? "", 10);
   if (isNaN(merchantId)) {
-    res.redirect("/management/xero?error=invalid_state");
+    res.redirect(`${XERO_WIZARD_PATH}?error=invalid_state`);
     return;
   }
 
   const cc = await getXeroClientCreds(merchantId);
   if (!cc) {
-    res.redirect("/management/integrations?error=xero_not_configured");
+    res.redirect(`${XERO_WIZARD_PATH}?error=not_configured`);
     return;
   }
   const { clientId, clientSecret } = cc;
@@ -263,10 +272,10 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
       },
       body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }),
     });
-    if (!r.ok) { res.redirect("/management/xero?error=token_failed"); return; }
+    if (!r.ok) { res.redirect(`${XERO_WIZARD_PATH}?error=token_failed`); return; }
     tokens = (await r.json()) as typeof tokens;
   } catch {
-    res.redirect("/management/xero?error=token_failed");
+    res.redirect(`${XERO_WIZARD_PATH}?error=token_failed`);
     return;
   }
 
@@ -301,7 +310,7 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
     });
   }
 
-  res.redirect("/management/xero?success=connected");
+  res.redirect(`${XERO_WIZARD_PATH}?success=connected`);
 });
 
 /* ── DELETE /api/xero/disconnect ─────────────────────────────────────────── */

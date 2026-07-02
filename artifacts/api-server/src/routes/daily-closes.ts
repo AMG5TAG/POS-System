@@ -1,9 +1,9 @@
 import { Router } from "express";
-import { eq, and, gte, lt, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lt, desc, sql, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
-import { db, dailyClosesTable, transactionsTable, merchantsTable, invoicesTable } from "@workspace/db";
+import { db, dailyClosesTable, transactionsTable, merchantsTable, invoicesTable, posRegisterSessionsTable } from "@workspace/db";
 import type { DailyClose } from "@workspace/db";
 import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
 
@@ -208,12 +208,16 @@ router.get("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res)
 });
 
 // ── POST /daily-closes ──────────────────────────────────────────────────────
+// The unified "Close Day" action: records the store-wide cash reconciliation AND
+// closes every open register session in one manager operation. Set
+// closeOpenSessions:false to record the reconciliation without touching tills.
 const CreateDailyCloseBody = z.object({
   closeDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   expectedCash: z.number(),
   countedCash: z.number(),
   notes: z.string().optional(),
   breakdown: z.record(z.string(), z.number()).optional(),
+  closeOpenSessions: z.boolean().optional(),
 });
 
 router.post("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
@@ -237,7 +241,7 @@ router.post("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res
     .limit(1);
   const resolvedName = merchant?.ownerName || merchant?.businessName || null;
 
-  const { closeDate, expectedCash, countedCash, notes, breakdown } = parsed.data;
+  const { closeDate, expectedCash, countedCash, notes, breakdown, closeOpenSessions } = parsed.data;
   const variance = parseFloat((countedCash - expectedCash).toFixed(2));
 
   const [row] = await db
@@ -255,12 +259,29 @@ router.post("/daily-closes", requireAuth, requireManagerOrOwner, async (req, res
     })
     .returning();
 
+  // Close every open register session as part of the day close (default on).
+  // Cardless/invoice-only stations carry no cash to count, so this just stamps
+  // closedAt; the single cash drawer's counted Z-read is the reconciliation above.
+  let registersClosed = 0;
+  if (closeOpenSessions !== false) {
+    const closed = await db
+      .update(posRegisterSessionsTable)
+      .set({ closedAt: new Date(), closingNotes: `Closed via Close Day (${closeDate})` })
+      .where(and(
+        eq(posRegisterSessionsTable.merchantId, merchantId),
+        isNull(posRegisterSessionsTable.closedAt),
+      ))
+      .returning();
+    registersClosed = closed.length;
+  }
+
   res.status(201).json({
     ...row,
     expectedCash: parseFloat(row.expectedCash ?? "0"),
     countedCash: parseFloat(row.countedCash ?? "0"),
     variance: parseFloat(row.variance ?? "0"),
     createdAt: row.createdAt.toISOString(),
+    registersClosed,
   });
 });
 
