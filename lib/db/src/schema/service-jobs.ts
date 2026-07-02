@@ -29,6 +29,10 @@ export const serviceJobsTable = pgTable("service_jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   // If this job is a no-charge rework, the original job it redoes.
   reworkOfJobId: integer("rework_of_job_id"),
+  // If this job was opened by reopening a completed job (a fresh, chargeable
+  // repair), the original job it continues from. Distinct from reworkOfJobId:
+  // a rework is a no-charge redo, a reopen is a new repair linked for history.
+  reopenedFromJobId: integer("reopened_from_job_id"),
   // Estimate approval (customer authorised the quoted work before it begins).
   // Set when a linked quote is accepted via the portal or recorded in-store.
   estimateApprovedAt: timestamp("estimate_approved_at", { withTimezone: true }),

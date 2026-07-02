@@ -8462,6 +8462,76 @@ export const useCreateServiceJobRework = <TError = ErrorType<unknown>,
       return useMutation(getCreateServiceJobReworkMutationOptions(options));
     }
 
+export const getReopenServiceJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/service-jobs/${id}/reopen`
+}
+
+/**
+ * @summary Reopen a completed job as a new repair linked to the original
+ */
+export const reopenServiceJob = async (id: number, options?: RequestInit): Promise<ServiceJob> => {
+
+  return customFetch<ServiceJob>(getReopenServiceJobUrl(id),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getReopenServiceJobMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenServiceJob>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof reopenServiceJob>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['reopenServiceJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof reopenServiceJob>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  reopenServiceJob(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReopenServiceJobMutationResult = NonNullable<Awaited<ReturnType<typeof reopenServiceJob>>>
+
+    export type ReopenServiceJobMutationError = ErrorType<void>
+
+    /**
+ * @summary Reopen a completed job as a new repair linked to the original
+ */
+export const useReopenServiceJob = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof reopenServiceJob>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof reopenServiceJob>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getReopenServiceJobMutationOptions(options));
+    }
+
 export const getRecordServiceJobDepositUrl = (id: number,) => {
 
 

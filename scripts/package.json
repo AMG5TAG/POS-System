@@ -33,6 +33,7 @@
     "add-custom-payment-methods": "tsx ./src/add-custom-payment-methods.ts",
     "add-invoice-settings-table": "tsx ./src/add-invoice-settings-table.ts",
     "add-dashboard-section-order": "tsx ./src/add-dashboard-section-order.ts",
+    "add-service-job-reopen-link": "tsx ./src/add-service-job-reopen-link.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

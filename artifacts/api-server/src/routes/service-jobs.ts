@@ -37,6 +37,7 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
     repairWarrantyDays: job.repairWarrantyDays ?? 0,
     completedAt: job.completedAt ? job.completedAt.toISOString() : null,
     reworkOfJobId: job.reworkOfJobId ?? null,
+    reopenedFromJobId: job.reopenedFromJobId ?? null,
     estimateApprovedAt: job.estimateApprovedAt ? job.estimateApprovedAt.toISOString() : null,
     estimateApprovedVia: job.estimateApprovedVia ?? null,
     depositRequired: job.depositRequired != null ? parseFloat(job.depositRequired) : null,
@@ -208,11 +209,17 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
       .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)))
       .limit(1);
 
+    // A completed repair is a finished record — its completion date anchors the
+    // repair-warranty window and it lives in Service History. It cannot be moved
+    // to another status; staff must Reopen it, which spawns a new linked repair.
+    if (current && current.status === "completed" && body.status !== "completed") {
+      res.status(409).json({ error: "Completed repairs can't be changed to another status. Use Reopen to create a new linked repair." });
+      return;
+    }
     // Stamp completion time on the first transition into "completed" (anchors
-    // the repair-warranty window); clear it if reopened.
-    if (current && body.status !== current.status) {
-      if (body.status === "completed" && current.status !== "completed") updates.completedAt = new Date();
-      else if (body.status !== "completed" && current.status === "completed") updates.completedAt = null;
+    // the repair-warranty window).
+    if (current && body.status !== current.status && body.status === "completed") {
+      updates.completedAt = new Date();
     }
     if (current && body.status !== current.status) {
       const STATUS_LABELS: Record<string, string> = {
@@ -503,6 +510,55 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
       .where(and(eq(customersTable.id, created.customerId), eq(customersTable.merchantId, merchantId))).limit(1);
     if (c) customer = { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null };
   }
+  res.status(201).json(formatJob(created, customer));
+});
+
+// POST /service-jobs/:id/reopen — open a NEW repair continuing from a completed
+// job, linked back to the original via reopenedFromJobId. Unlike /rework this is
+// a fresh, chargeable repair (not forced under-warranty); the original stays
+// completed and untouched in Service History.
+router.post("/service-jobs/:id/reopen", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [orig] = await db.select().from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId))).limit(1);
+  if (!orig) { res.status(404).json({ error: "Service job not found" }); return; }
+  if (orig.status !== "completed") { res.status(409).json({ error: "Only completed repairs can be reopened" }); return; }
+
+  const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
+    .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
+  const jobNumber = nextJobNumber(existing);
+  const today = new Date().toISOString().split("T")[0];
+
+  const { repairWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
+
+  const [created] = await db.insert(serviceJobsTable).values({
+    merchantId,
+    customerId: orig.customerId ?? null,
+    staffId: orig.staffId ?? null,
+    jobNumber,
+    title: `Reopen of ${orig.jobNumber}`,
+    status: "pending",
+    bookInDate: today,
+    deviceType: orig.deviceType ?? null,
+    deviceDescription: orig.deviceDescription ?? null,
+    serialNumber: orig.serialNumber ?? null,
+    condition: orig.condition ?? null,
+    workDescription: orig.workDescription ?? null,
+    repairWarrantyDays,
+    reopenedFromJobId: orig.id,
+  }).returning();
+
+  let customer: CustomerInfo | null = null;
+  if (created.customerId) {
+    const [c] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.id, created.customerId), eq(customersTable.merchantId, merchantId))).limit(1);
+    if (c) customer = { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null };
+  }
+
+  registerQrBestEffort(registerServiceQr(merchantId, created.id, customer?.name ?? null));
   res.status(201).json(formatJob(created, customer));
 });
 

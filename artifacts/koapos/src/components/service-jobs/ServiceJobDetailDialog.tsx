@@ -32,7 +32,7 @@ import { ServiceJobTimePanel } from "@/components/service-jobs/ServiceJobTimePan
 import { ServiceJobSignaturePanel } from "@/components/service-jobs/ServiceJobSignaturePanel";
 import { ServiceJobShippingPanel } from "@/components/service-jobs/ServiceJobShippingPanel";
 import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDialog";
-import { History, ListChecks, Clock, PenLine, Truck, Wallet, Send } from "lucide-react";
+import { History, ListChecks, Clock, PenLine, Truck, Wallet, Send, Lock } from "lucide-react";
 import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
@@ -223,6 +223,9 @@ export function ServiceJobDetailDialog({
   };
 
   const handleStatusChange = (status: string) => {
+    // Completed repairs are locked — they can only be continued by reopening
+    // (which spawns a new linked repair), not by moving them to another status.
+    if (job.status === "completed") return;
     setLocalStatus(status);
     updateMutation.mutate(
       { id: job.id, data: { status } as never },
@@ -312,16 +315,26 @@ export function ServiceJobDetailDialog({
                 <div className="min-w-0 flex-1">
                   <p className="font-bold text-2xl leading-tight truncate font-mono">{job.jobNumber}</p>
                   <div className="flex items-center gap-2 mt-1 flex-wrap">
-                    <Select value={localStatus} onValueChange={handleStatusChange}>
-                      <SelectTrigger className={cn("h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
-                          <SelectItem key={val} value={val} className="text-xs">{cfg.label}</SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
+                    {job.status === "completed" ? (
+                      <span
+                        title="Completed repairs are locked. Use “Reopen as new repair” to continue work."
+                        className={cn("inline-flex items-center gap-1 h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}
+                      >
+                        <Lock className="w-3 h-3" />
+                        {getStatus(localStatus).label}
+                      </span>
+                    ) : (
+                      <Select value={localStatus} onValueChange={handleStatusChange}>
+                        <SelectTrigger className={cn("h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
+                            <SelectItem key={val} value={val} className="text-xs">{cfg.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
                     <button
                       type="button"
                       onClick={() => setShowAll((v) => !v)}

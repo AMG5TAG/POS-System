@@ -1445,6 +1445,8 @@ export interface ServiceJob {
   /** @nullable */
   reworkOfJobId?: number | null;
   /** @nullable */
+  reopenedFromJobId?: number | null;
+  /** @nullable */
   estimateApprovedAt?: string | null;
   /** @nullable */
   estimateApprovedVia?: ServiceJobEstimateApprovedVia;

@@ -1351,6 +1351,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "repairWarrantyDays": zod.number().optional(),
   "completedAt": zod.coerce.date().nullish(),
   "reworkOfJobId": zod.number().nullish(),
+  "reopenedFromJobId": zod.number().nullish(),
   "estimateApprovedAt": zod.coerce.date().nullish(),
   "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
   "depositRequired": zod.number().nullish(),
@@ -3341,6 +3342,7 @@ export const ListServiceJobsResponseItem = zod.object({
   "repairWarrantyDays": zod.number().optional(),
   "completedAt": zod.coerce.date().nullish(),
   "reworkOfJobId": zod.number().nullish(),
+  "reopenedFromJobId": zod.number().nullish(),
   "estimateApprovedAt": zod.coerce.date().nullish(),
   "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
   "depositRequired": zod.number().nullish(),
@@ -3461,6 +3463,7 @@ export const UpdateServiceJobResponse = zod.object({
   "repairWarrantyDays": zod.number().optional(),
   "completedAt": zod.coerce.date().nullish(),
   "reworkOfJobId": zod.number().nullish(),
+  "reopenedFromJobId": zod.number().nullish(),
   "estimateApprovedAt": zod.coerce.date().nullish(),
   "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
   "depositRequired": zod.number().nullish(),
@@ -3506,6 +3509,14 @@ export const SendServiceJobEmailResponse = zod.object({
  * @summary Open a no-charge rework job linked to the original
  */
 export const CreateServiceJobReworkParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Reopen a completed job as a new repair linked to the original
+ */
+export const ReopenServiceJobParams = zod.object({
   "id": zod.coerce.number()
 })
 
