@@ -330,6 +330,11 @@ export default function ServiceJobsPage() {
         fault:    job.workDescription ?? "",
         dueDate:  "",
         tech:     "",
+        // Device credentials (opt-in via the "Username"/"Password" label toggles).
+        // Both are stored newline-joined on the job; collapse to one line for the
+        // sticker and drop blanks so an empty credential doesn't print " / ".
+        username: (job.accounts ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
+        password: (job.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
         // Tech App deep link for the optional service QR (shown when the saved
         // repair template enables it).
         serviceQrUrl: job.id != null ? techAppJobUrl(merchant?.username, job.id) : "",

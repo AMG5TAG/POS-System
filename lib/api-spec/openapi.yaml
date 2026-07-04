@@ -13676,7 +13676,7 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, customPaymentMethods, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, quickViewShowSupplier, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, customPaymentMethods, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, quickViewShowSupplier, forceStaffLogin, promptCloseAllRegisters, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
@@ -13690,6 +13690,7 @@ components:
         gridCartPosition:            { type: string }
         quickViewShowSupplier:       { type: string }
         forceStaffLogin:             { type: string }
+        promptCloseAllRegisters:     { type: string }
         staffLoginMessage:           { type: string }
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }
@@ -13713,6 +13714,7 @@ components:
         gridCartPosition:            { type: string }
         quickViewShowSupplier:       { type: string }
         forceStaffLogin:             { type: string }
+        promptCloseAllRegisters:     { type: string }
         staffLoginMessage:           { type: string }
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }

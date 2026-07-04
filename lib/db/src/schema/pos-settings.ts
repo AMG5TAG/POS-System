@@ -16,6 +16,9 @@ export const posSettingsTable = pgTable("pos_settings", {
   gridCartPosition:          text("grid_cart_position").notNull().default("right"),
   quickViewShowSupplier:     text("quick_view_show_supplier").notNull().default("true"),
   forceStaffLogin:           text("force_staff_login").notNull().default("false"),
+  /** When "true", closing one register prompts the user to also close every other
+   *  register still open for the merchant (across devices). */
+  promptCloseAllRegisters:   text("prompt_close_all_registers").notNull().default("false"),
   staffLoginMessage:         text("staff_login_message").notNull().default("{}"),
   activeRegisterId:          text("active_register_id").notNull().default(""),
   hardwareConfig:            text("hardware_config").notNull().default("{}"),

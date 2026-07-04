@@ -230,6 +230,8 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showFault",    label: "Fault",         defaultValue: "true", type: "toggle" },
       { key: "showDueDate",  label: "Due Date",      defaultValue: "true", type: "toggle" },
       { key: "showTech",     label: "Technician",    defaultValue: "true", type: "toggle" },
+      { key: "showUsername", label: "Username",      defaultValue: "false", type: "toggle" },
+      { key: "showPassword", label: "Password",      defaultValue: "false", type: "toggle" },
       { key: "showBarcode",  label: "Barcode",       defaultValue: "false", type: "toggle" },
       { key: "showServiceQr", label: "Tech App QR",  defaultValue: "false", type: "toggle" },
       { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" },
@@ -790,6 +792,12 @@ export function LabelPreview({
               {show("showTech") && (
                 <div className="text-gray-400 truncate" style={{ fontSize: pSize("showTech", 2.8, 6) }}>Tech: {f("tech") || "Alex Taylor"}</div>
               )}
+              {show("showUsername") && (
+                <div className="text-gray-500 truncate" style={{ fontSize: pSize("showUsername", 2.8, 6) }}>User: {f("username") || "user@demo"}</div>
+              )}
+              {show("showPassword") && (
+                <div className="text-gray-500 truncate" style={{ fontSize: pSize("showPassword", 2.8, 6) }}>Pass: {f("password") || "1234"}</div>
+              )}
               {show("showBizName") && (
                 <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
               )}
@@ -1093,6 +1101,8 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         ${show("showFault") ? `<div style="font-size:${hSize("showFault",1)}pt;color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Screen flickering"}</div>` : ""}
         ${show("showDueDate") ? `<div style="font-size:${hSize("showDueDate",1)}pt;font-weight:600">Due: ${f("dueDate")||"22/05/2026"}</div>` : ""}
         ${show("showTech") ? `<div style="font-size:${hSize("showTech",1)}pt;color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Alex Taylor"}</div>` : ""}
+        ${show("showUsername") ? `<div style="font-size:${hSize("showUsername",1)}pt;color:#666;white-space:nowrap;overflow:hidden">User: ${f("username")||"user@demo"}</div>` : ""}
+        ${show("showPassword") ? `<div style="font-size:${hSize("showPassword",1)}pt;color:#666;white-space:nowrap;overflow:hidden">Pass: ${f("password")||"1234"}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!serviceQrSrc) return repairText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">

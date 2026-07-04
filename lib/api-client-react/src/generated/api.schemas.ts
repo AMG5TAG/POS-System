@@ -3635,6 +3635,7 @@ export interface PosSettings {
   gridCartPosition: string;
   quickViewShowSupplier: string;
   forceStaffLogin: string;
+  promptCloseAllRegisters: string;
   staffLoginMessage: string;
   activeRegisterId: string;
   hardwareConfig: string;
@@ -3657,6 +3658,7 @@ export interface PosSettingsInput {
   gridCartPosition?: string;
   quickViewShowSupplier?: string;
   forceStaffLogin?: string;
+  promptCloseAllRegisters?: string;
   staffLoginMessage?: string;
   activeRegisterId?: string;
   hardwareConfig?: string;

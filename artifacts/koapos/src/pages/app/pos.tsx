@@ -17,7 +17,7 @@ import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   useListProducts, useListCategories, useCreateTransaction,
-  useListCustomers, useGetLoyaltySettings, useListStaff,
+  useListCustomers, useGetCustomer, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
@@ -557,6 +557,10 @@ export default function POSPage() {
   const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null);
   const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
+  /* A linked service/appointment adopts its customer as the sale's customer. The
+     linked object carries only a customerId; when that customer isn't already in
+     the loaded picker list we fetch it by id (see useGetCustomer below). */
+  const [pendingLinkCustomerId, setPendingLinkCustomerId] = useState<number | null>(null);
 
   /* AI upsell coach */
   const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
@@ -605,6 +609,10 @@ export default function POSPage() {
   const [openDenomCounts, setOpenDenomCounts] = useState<Record<number, string>>({});
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
+  /* Other registers still open when this one closes — populated (when the
+     "prompt to close all open registers" setting is on) to drive the close-all
+     confirmation dialog. */
+  const [closeAllCandidates, setCloseAllCandidates] = useState<Array<{ id: number; registerId: string; openedBy: string }>>([]);
 
   /* Device locking — tracks the server-side session ID for the local till and
      whether another device has an open till for this register. */
@@ -750,6 +758,28 @@ export default function POSPage() {
         txCount: session?.txCount ?? 0,
       }});
     }
+
+    /* When enabled, offer to also close every OTHER register still open for the
+       business (across devices). The current session (sid) is excluded — it was
+       just closed above. */
+    if (promptCloseAllRegisters) {
+      const items = (allSessionsData as { items?: Array<{ id: number; registerId?: string; openedBy?: string; closedAt?: string | null }> })?.items ?? [];
+      const others = items
+        .filter((s) => !s.closedAt && s.id !== sid)
+        .map((s) => ({ id: s.id, registerId: s.registerId ?? "", openedBy: s.openedBy ?? "" }));
+      if (others.length > 0) setCloseAllCandidates(others);
+    }
+  };
+
+  /* Close every other open register the prompt surfaced (one PATCH each). */
+  const handleCloseAllRegisters = () => {
+    const closedAt = new Date().toISOString();
+    const count = closeAllCandidates.length;
+    closeAllCandidates.forEach((s) => updateServerSession.mutate({ id: s.id, data: { closedAt } }));
+    setCloseAllCandidates([]);
+    queryClient.invalidateQueries({ queryKey: ["pos-all-sessions"] });
+    queryClient.invalidateQueries({ queryKey: ["pos-open-sessions", activeRegisterId] });
+    toast.success(`Closed ${count} other open ${count === 1 ? "register" : "registers"}`);
   };
 
   const printEodReport = () => {
@@ -867,6 +897,13 @@ export default function POSPage() {
     { registerId: activeRegisterId },
     { query: { queryKey: ["pos-open-sessions", activeRegisterId], refetchInterval: 30_000 } }
   );
+  /* Merchant-wide sessions (all registers) — only fetched when the "prompt to
+     close all open registers" setting is on, to drive that prompt on close. */
+  const promptCloseAllRegisters = posSettingsData?.promptCloseAllRegisters === "true";
+  const { data: allSessionsData } = useListPosRegisterSessions(
+    undefined,
+    { query: { queryKey: ["pos-all-sessions"], enabled: promptCloseAllRegisters, refetchInterval: 30_000 } }
+  );
 
   const { data: productsData } = useListProducts(
     { search: debouncedSearch || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
@@ -890,6 +927,11 @@ export default function POSPage() {
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
+  /* Resolve the full Customer for a linked service/appointment whose customer
+     wasn't in the loaded picker list. Gated on pendingLinkCustomerId. */
+  const { data: linkCustomerData } = useGetCustomer(pendingLinkCustomerId ?? 0, {
+    query: { queryKey: ["customer-link", pendingLinkCustomerId], enabled: pendingLinkCustomerId != null },
+  });
 
   /* Filter the full service-job / appointment lists by the link-dialog search. */
   const linkQuery = linkSearch.trim().toLowerCase();
@@ -1376,6 +1418,16 @@ export default function POSPage() {
       setPendingRestoreCustomerId(null);
     }
   }, [pendingRestoreCustomerId, customersData]);
+
+  /* Adopt the customer fetched for a linked service/appointment (the case where
+     the customer wasn't already in the loaded picker list). */
+  useEffect(() => {
+    if (pendingLinkCustomerId == null || linkCustomerData?.id !== pendingLinkCustomerId) return;
+    setSelectedCustomer(linkCustomerData);
+    setWalkIn(null);
+    if (linkCustomerData.warningNote) setWarningCustomer(linkCustomerData);
+    setPendingLinkCustomerId(null);
+  }, [pendingLinkCustomerId, linkCustomerData]);
 
   /* ── Keep cart/customer refs in sync for stale-closure-safe beacon calls ─── */
   useEffect(() => { cartRef.current = cart; }, [cart]);
@@ -2351,6 +2403,33 @@ export default function POSPage() {
     setSelectedCustomer(c); setWalkIn(null);
     setCustomerOpen(false); setCustomerSearch("");
     if (c.warningNote) setWarningCustomer(c);
+  };
+
+  /* Adopt a linked service/appointment's customer as the sale's customer. The
+     linked object carries only a customerId (+ denormalised name), so resolve
+     the full Customer: use the already-loaded picker list when possible, else
+     fetch by id via pendingLinkCustomerId → useGetCustomer. A link with no
+     customer, or one that already matches, leaves the current selection alone. */
+  const adoptLinkedCustomer = (customerId: number | null | undefined) => {
+    if (customerId == null || selectedCustomer?.id === customerId) return;
+    const found = customersData?.items?.find((c) => c.id === customerId);
+    if (found) {
+      setSelectedCustomer(found);
+      setWalkIn(null);
+      if (found.warningNote) setWarningCustomer(found);
+    } else {
+      setPendingLinkCustomerId(customerId);
+    }
+  };
+
+  const linkService = (sj: ServiceJob) => {
+    setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false);
+    adoptLinkedCustomer(sj.customerId);
+  };
+
+  const linkAppointment = (apt: Appointment) => {
+    setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false);
+    adoptLinkedCustomer(apt.customerId);
   };
 
   const confirmWalkIn = () => {
@@ -4891,7 +4970,7 @@ export default function POSPage() {
                 {filteredServiceJobs.length === 0
                   ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No service jobs match your search." : "No service jobs found."}</div>
                   : <div className="divide-y">{filteredServiceJobs.map(sj => (
-                      <button key={sj.id} onClick={() => { setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false); }}
+                      <button key={sj.id} onClick={() => linkService(sj)}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
                         <LinkIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         <div className="flex-1 min-w-0">
@@ -4909,7 +4988,7 @@ export default function POSPage() {
                 {filteredAppointments.length === 0
                   ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No appointments match your search." : "No appointments found."}</div>
                   : <div className="divide-y">{filteredAppointments.map(apt => (
-                      <button key={apt.id} onClick={() => { setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false); }}
+                      <button key={apt.id} onClick={() => linkAppointment(apt)}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedAppointment?.id === apt.id && "bg-primary/10 text-primary")}>
                         <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         <div className="flex-1 min-w-0">
@@ -5807,6 +5886,35 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Close all open registers — offered after this register is closed when the
+          "prompt to close all open registers" setting is on and others remain open.
+          Rendered last so it stacks ON TOP of the End-of-Day dialog that
+          handleCloseRegister also opens (later-in-DOM wins for equal z-index). */}
+      <AlertDialog open={closeAllCandidates.length > 0} onOpenChange={(o) => { if (!o) setCloseAllCandidates([]); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close all open registers?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {closeAllCandidates.length} other {closeAllCandidates.length === 1 ? "register is" : "registers are"} still open for your business. Close {closeAllCandidates.length === 1 ? "it" : "them all"} now?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-40 overflow-y-auto rounded-md border divide-y text-sm">
+            {closeAllCandidates.map((s) => (
+              <div key={s.id} className="flex items-center justify-between px-3 py-2 gap-2">
+                <span className="font-medium truncate">{s.registerId || "Register"}</span>
+                {s.openedBy && <span className="text-xs text-muted-foreground truncate">{s.openedBy}</span>}
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them open</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCloseAllRegisters}>
+              Close {closeAllCandidates.length === 1 ? "register" : "all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       </POSPageExpander>
 

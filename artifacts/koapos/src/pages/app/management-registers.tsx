@@ -569,6 +569,25 @@ function ForceStaffLoginToggle() {
   );
 }
 
+/* ─── Prompt to close all open registers toggle ──────────────────────────── */
+
+function PromptCloseAllRegistersToggle() {
+  const { settings, upsert } = usePosSettings();
+  const enabled = settings?.promptCloseAllRegisters === "true";
+  const toggle = (v: boolean) => {
+    upsert.mutate({ data: { promptCloseAllRegisters: String(v) } });
+  };
+  return (
+    <div className="flex items-center justify-between p-4">
+      <div>
+        <p className="text-sm font-medium">Prompt to close all open registers</p>
+        <p className="text-xs text-muted-foreground mt-0.5">When a register is closed, ask whether to also close every other register still open for the business — including tills open on other devices.</p>
+      </div>
+      <Switch checked={enabled} onCheckedChange={toggle} />
+    </div>
+  );
+}
+
 interface StaffLoginMsg { text: string; requireAck: boolean; enabled: boolean; }
 
 function StaffLoginMessageToggle() {
@@ -1407,6 +1426,7 @@ export default function ManagementRegistersPage() {
             <CustomPaymentMethodsSection />
             <div className="rounded-xl border divide-y">
               <ForceStaffLoginToggle />
+              <PromptCloseAllRegistersToggle />
               <StaffLoginMessageToggle />
             </div>
             <div id="hardware"><HardwareSection /></div>

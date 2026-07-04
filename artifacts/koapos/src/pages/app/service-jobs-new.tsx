@@ -233,7 +233,15 @@ export default function ServiceJobNewPage() {
   const repairTemplates = stickerTemplates.filter((t) => t.typeId === "repair");
   const activeStickerTpl = repairTemplates.find((t) => t.id === selectedStickerTplId) ?? null;
   const stickerSize = DYMO_SIZES.find((s) => s.id === (activeStickerTpl?.sizeId ?? repairStickerType.defaultSize)) ?? DYMO_SIZES.find((s) => s.id === "30256")!;
-  const stickerBaseFields = activeStickerTpl?.fields ?? Object.fromEntries(repairStickerType.fields.map((f) => [f.key, f.defaultValue]));
+  // Start from the type's field defaults so every toggle key has a value, then
+  // overlay the saved template. This keeps the on-screen preview in sync with the
+  // actual print (printStickers merges the same defaults) — without it, a saved
+  // template missing a newer toggle (e.g. Username/Password) would read as "on"
+  // in the preview but "off" when printed.
+  const stickerBaseFields = {
+    ...Object.fromEntries(repairStickerType.fields.map((f) => [f.key, f.defaultValue])),
+    ...(activeStickerTpl?.fields ?? {}),
+  };
   const stickerFields = {
     ...stickerBaseFields,
     jobNo: successJob?.jobNumber ?? `SVC-${successJob?.id ?? 0}`,
@@ -243,6 +251,11 @@ export default function ServiceJobNewPage() {
     device: successJob?.deviceDescription ?? successJob?.deviceType ?? stickerBaseFields.device ?? "",
     fault: successJob?.workDescription ?? stickerBaseFields.fault ?? "",
     dueDate: new Date().toLocaleDateString("en-AU"),
+    // Device credentials (opt-in via the "Username"/"Password" label toggles).
+    // Stored newline-joined on the job; collapse to one line for the sticker and
+    // drop blanks so an empty credential doesn't render a stray " / ".
+    username: (successJob?.accounts ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
+    password: (successJob?.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
     // Tech App deep link for the optional service QR (shown when the repair
     // template enables it).
     serviceQrUrl: successJob?.id != null ? techAppJobUrl(merchant?.username, successJob.id) : "",
