@@ -140,6 +140,8 @@ const STATUS_LABELS: Record<InvStatus, string> = {
 /* Today's local calendar date as YYYY-MM-DD (en-CA yields ISO ordering), for
    seeding / bounding the native date input without a UTC off-by-one. */
 const todayLocalISODate = () => new Date().toLocaleDateString("en-CA");
+/* An ISO timestamp collapsed to a local YYYY-MM-DD (matches the date input). */
+const localISODate = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
 
 /* Derive each instalment's coverage from the invoice's single amountPaid total,
    filling instalments in order (FIFO). Avoids tracking per-instalment payments —
@@ -944,7 +946,13 @@ export default function POSInvoicesPage() {
     setPayAmount(balance.toFixed(2));
     setPayMethod(payMethods[0]?.value ?? "cash");
     setPayNote("");
-    setPayDate(todayLocalISODate());
+    // Direct deposits default to the day of the sale (the invoice's createdAt),
+    // not today — the money is booked to when the sale happened for accounting.
+    // If the sale was made today the sale date already is today. Clamp to today
+    // so a future-dated createdAt can never exceed the input's max.
+    const saleDate = localISODate(inv.createdAt);
+    const today = todayLocalISODate();
+    setPayDate(saleDate > today ? today : saleDate);
   };
 
   /* Record a (partial or full) payment directly via the API — used for manual

@@ -2767,12 +2767,17 @@ export default function CustomersPage() {
   const sorted = [...customers].sort((a, b) => {
     let av: string | number = "", bv: string | number = "";
     switch (sortKey) {
-      case "name":          av = `${a.firstName ?? ""} ${a.lastName ?? ""}`.toLowerCase(); bv = `${b.firstName ?? ""} ${b.lastName ?? ""}`.toLowerCase(); break;
+      case "name":          av = `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim().toLowerCase(); bv = `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim().toLowerCase(); break;
       case "email":         av = (a.email ?? "").toLowerCase();   bv = (b.email ?? "").toLowerCase();   break;
       case "company":       av = (a.company ?? "").toLowerCase(); bv = (b.company ?? "").toLowerCase(); break;
       case "loyaltyPoints": av = a.loyaltyPoints ?? 0;            bv = b.loyaltyPoints ?? 0;            break;
       case "visitCount":    av = a.visitCount ?? 0;               bv = b.visitCount ?? 0;               break;
     }
+    // Blank text values always sink to the bottom, regardless of sort
+    // direction — an empty name/email/company shouldn't lead an A→Z sort.
+    // Numeric columns default to 0, so `=== ""` never matches them.
+    if (av === "" && bv !== "") return 1;
+    if (bv === "" && av !== "") return -1;
     const r = av < bv ? -1 : av > bv ? 1 : 0;
     return sortDir === "asc" ? r : -r;
   });
