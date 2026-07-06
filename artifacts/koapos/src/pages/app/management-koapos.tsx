@@ -161,11 +161,11 @@ export function KoaPOSReferralsContent() {
                 >
                   <Mail className="w-3.5 h-3.5" /> Email Invite
                 </Button>
-                <a href="https://koapos.com" target="_blank" rel="noopener noreferrer" className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full gap-1.5 h-8">
+                <Button asChild variant="outline" size="sm" className="flex-1 w-full gap-1.5 h-8">
+                  <a href="https://koapos.com" target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="w-3.5 h-3.5" /> View KoaPOS Site
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               </div>
             </CardContent>
           </Card>

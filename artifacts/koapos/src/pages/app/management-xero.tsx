@@ -472,12 +472,12 @@ export default function ManagementXeroPage() {
                     <p className="text-sm text-center text-muted-foreground max-w-sm">
                       You'll be redirected to Xero to grant access. KoaPOS will only access accounting data — never bank account details.
                     </p>
-                    <a href="/api/xero/auth/start">
-                      <Button className="gap-2 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white px-6">
+                    <Button asChild className="gap-2 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white px-6">
+                      <a href="/api/xero/auth/start">
                         <ExternalLink className="w-4 h-4" />
                         Connect with Xero
-                      </Button>
-                    </a>
+                      </a>
+                    </Button>
                   </div>
                 )}
 

@@ -193,9 +193,9 @@ function BirthdayDialog({ birthday, onClose }: { birthday: CalendarBirthday; onC
               </Button>
             )}
             {birthday.phone && (
-              <a href={`sms:${birthday.phone}`}>
-                <Button variant="outline" className="w-full">Send SMS</Button>
-              </a>
+              <Button asChild variant="outline" className="w-full">
+                <a href={`sms:${birthday.phone}`}>Send SMS</a>
+              </Button>
             )}
             {!birthday.email && !birthday.phone && (
               <p className="text-sm text-muted-foreground">No contact info available for this customer.</p>

@@ -463,11 +463,11 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
           </div>
           <div className="flex flex-wrap gap-2 justify-end">
             {appt.customerPhone && (
-              <a href={`sms:${appt.customerPhone}`}>
-                <Button variant="outline" size="sm" className="gap-1.5">
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <a href={`sms:${appt.customerPhone}`}>
                   <MessageSquare className="w-3.5 h-3.5" /> SMS
-                </Button>
-              </a>
+                </a>
+              </Button>
             )}
             {appt.customerEmail && (
               <Button variant="outline" size="sm" className="gap-1.5"
@@ -706,11 +706,11 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             <p className="text-xs text-muted-foreground">{anySent ? "Also notify via:" : "Notify the customer:"}</p>
             <div className="flex gap-2 flex-wrap">
               {canSendSms && (
-                <a href={`sms:${bookedAppt.customerPhone}`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <a href={`sms:${bookedAppt.customerPhone}`}>
                     <MessageSquare className="w-3.5 h-3.5" /> SMS
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
               {canSendEmail && (
                 <Button variant="outline" size="sm" className="gap-1.5"
