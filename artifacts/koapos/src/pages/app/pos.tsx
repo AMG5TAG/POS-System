@@ -229,6 +229,9 @@ function formatKode(profit: number): string {
   return `KK${sign}${String(n).padStart(3, "0")}`;
 }
 
+/* Today as a local YYYY-MM-DD (matches a native date input's value). */
+const todayLocalISODate = () => new Date().toLocaleDateString("en-CA");
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function POSPage() {
@@ -410,6 +413,10 @@ export default function POSPage() {
   /* Reference/description captured when tendering via Direct Deposit (e.g. the
      bank reference or payer name) so the payment can be reconciled later. */
   const [depositDesc, setDepositDesc] = useState("");
+  /* Accounting date the deposit actually landed. Defaults to today (the sale is
+     rung up now) but is back-datable so a deposit that cleared earlier books the
+     sale to that calendar day for reporting. */
+  const [depositDate, setDepositDate] = useState(todayLocalISODate());
   const [splitLegs, setSplitLegs] = useState<{ method: PaymentMethodId; amount: string }[]>([
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
@@ -1565,6 +1572,7 @@ export default function POSPage() {
       paymentModalInitialMethodRef.current = initialMethod;
       setNumpadInput("");
       setDepositDesc("");
+      setDepositDate(todayLocalISODate());
       setReceiptMode("idle");
       setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
       setGcPayCardNumber("");
@@ -2949,6 +2957,12 @@ export default function POSPage() {
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
       ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
       ...(giftCardPayment ? { giftCardPayment } : {}),
+      // Direct deposits that cleared on an earlier day are booked to that day for
+      // accounting. Only sent when actually back-dated — a same-day sale keeps its
+      // real timestamp rather than being anchored to noon UTC.
+      ...(paymentMethod === "direct_deposit" && depositDate && depositDate !== todayLocalISODate()
+        ? { paidAt: depositDate }
+        : {}),
     };
 
     const completionSnapshot: SaleCompletionSnapshot = {
@@ -4427,6 +4441,22 @@ export default function POSPage() {
                       {!depositDesc.trim() && (
                         <p className="text-xs text-muted-foreground">Required to record this deposit.</p>
                       )}
+                      <div className="space-y-1.5 pt-1">
+                        <Label htmlFor="deposit-date" className="flex items-center gap-1.5 text-sm">
+                          <Banknote className="w-4 h-4 text-muted-foreground" /> Date paid
+                        </Label>
+                        <Input
+                          id="deposit-date"
+                          type="date"
+                          value={depositDate}
+                          max={todayLocalISODate()}
+                          onChange={(e) => setDepositDate(e.target.value)}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Books this sale to the day the deposit landed — for accurate
+                          daily sales &amp; reporting.
+                        </p>
+                      </div>
                     </div>
                   )}
 

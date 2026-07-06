@@ -185,4 +185,34 @@ describe("POST /api/transactions — body validation", () => {
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
+
+  it("returns 400 when paidAt is not a valid date", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .send({
+        items: [{ productId: 1, productName: "A", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+        paymentMethod: "direct_deposit",
+        subtotal: 10,
+        taxTotal: 0,
+        total: 10,
+        paidAt: "not-a-date",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/paidAt/i);
+  });
+
+  it("returns 400 when paidAt is in the future", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .send({
+        items: [{ productId: 1, productName: "A", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+        paymentMethod: "direct_deposit",
+        subtotal: 10,
+        taxTotal: 0,
+        total: 10,
+        paidAt: "2099-01-01",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/future/i);
+  });
 });

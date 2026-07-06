@@ -174,12 +174,32 @@ export async function finalizeSale(
     idempotencyKey: rawIdempotencyKey, giftCardPayment,
     requestedDiscountTotal: clientRequestedDiscountTotal,
     discountPct: clientDiscountPct,
+    paidAt: rawPaidAt,
   } = body;
 
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
       : null;
+
+  // Optional accounting date: book the sale to the day the money actually landed
+  // (e.g. a direct deposit that cleared earlier) rather than "now", so every
+  // revenue report reads off the correct calendar day. A bare YYYY-MM-DD is
+  // anchored at noon UTC so `(created_at)::date` lands on the chosen day in every
+  // real (±12h) timezone. Mirrors the invoice payment paidAt handling. Future
+  // dates are rejected.
+  let saleCreatedAt: Date | undefined;
+  if (typeof rawPaidAt === "string" && rawPaidAt.trim() !== "") {
+    const raw = rawPaidAt.trim();
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw);
+    if (Number.isNaN(d.getTime())) {
+      return { ok: false, status: 400, error: "Invalid paidAt date" };
+    }
+    if (d.getTime() > Date.now() + 86_400_000) {
+      return { ok: false, status: 400, error: "paidAt cannot be in the future" };
+    }
+    saleCreatedAt = d;
+  }
 
   if (clientItems.length === 0) {
     return { ok: false, status: 400, error: "Transaction must include at least one item" };
@@ -632,6 +652,10 @@ export async function finalizeSale(
           clientRequestedDiscountTotal > discountTotal + 0.01
         ) ? "true" : null,
         discountPct: (clientDiscountPct != null && clientDiscountPct > 0) ? clientDiscountPct.toString() : null,
+        // Back-date the sale when an accounting date was supplied (e.g. a direct
+        // deposit that cleared on an earlier day); otherwise the column defaults
+        // to now().
+        ...(saleCreatedAt ? { createdAt: saleCreatedAt } : {}),
       })
       .returning();
 

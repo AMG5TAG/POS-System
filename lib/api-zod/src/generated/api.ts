@@ -1857,7 +1857,8 @@ export const CreateTransactionBody = zod.object({
   "giftCardPayment": zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
-}).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.')
+}).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.'),
+  "paidAt": zod.string().optional().describe('Optional accounting date for the sale. The transaction\'s createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of \"now\". Used for tenders that actually landed on an earlier day, e.g. a direct deposit \/ bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future.')
 })
 
 
