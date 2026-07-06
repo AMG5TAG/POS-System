@@ -197,7 +197,8 @@
       "Bash(grep -rhn \"\\\\$29\\\\|\\\\$49\\\\|\\\\$79\\\\|\\\\$99\\\\|\\\\$19\\\\|/mo\\\\|per month\\\\|Starter\\\\|Growth\\\\|Pro\\\\|Enterprise\\\\|priceMonthly\\\\|monthlyPrice\" artifacts/koapos/src)",
       "WebSearch",
       "Bash(env -u PORT -u BASE_PATH pnpm run build)",
-      "Bash(echo \"=== EXIT api-server: $? ===\")"
+      "Bash(echo \"=== EXIT api-server: $? ===\")",
+      "Bash(ps -eo pid,ppid,etime,cmd)"
     ]
   }
 }
