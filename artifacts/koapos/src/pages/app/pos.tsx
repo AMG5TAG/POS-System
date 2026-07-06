@@ -2796,14 +2796,22 @@ export default function POSPage() {
             .map(l => ({ method: l.method as string, amount: parseFloat(l.amount) || 0 }))
             .filter(l => l.amount > 0)
         : [];
+      // Direct deposits that cleared earlier settle the invoice on that day for
+      // accounting. paidAt only takes effect when the payment settles the invoice
+      // in full (the server ignores it on partial legs). Only sent when actually
+      // back-dated, mirroring the cart-sale path.
+      const invoicePaidAt =
+        paymentMethod === "direct_deposit" && depositDate && depositDate !== todayLocalISODate()
+          ? depositDate
+          : undefined;
       setInvoicePayPending(true);
       void (async () => {
         try {
           await recordInvoicePaymentMutation.mutateAsync({
             id: inv.invoiceId,
             data: invoiceSplitLegs.length > 0 && !giftCardPayment
-              ? { amount, payments: invoiceSplitLegs, idempotencyKey }
-              : { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
+              ? { amount, payments: invoiceSplitLegs, idempotencyKey, ...(invoicePaidAt ? { paidAt: invoicePaidAt } : {}) }
+              : { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}), ...(invoicePaidAt ? { paidAt: invoicePaidAt } : {}) },
           });
           idempotencyKeyRef.current = null;
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
