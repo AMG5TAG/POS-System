@@ -5671,6 +5671,7 @@ export interface InvoicePaymentInput {
   giftCardPayment?: GiftCardPaymentRef;
   note?: string;
   idempotencyKey?: string;
+  paidAt?: string;
 }
 
 export type InvoicePaymentResult = Invoice;

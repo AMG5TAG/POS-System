@@ -785,8 +785,28 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     res.status(400).json({ error: bodyParsed.error.message });
     return;
   }
-  const { amount, method, payments, giftCardPayment, note: rawNote, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
+  const { amount, method, payments, giftCardPayment, note: rawNote, idempotencyKey: rawIdempotencyKey, paidAt: rawPaidAt } = bodyParsed.data;
   const note = typeof rawNote === "string" && rawNote.trim() !== "" ? rawNote.trim() : undefined;
+
+  // Optional accounting date: when this payment settles the invoice in full, stamp
+  // paidAt (and thus the reporting sale date) with the day the money actually
+  // landed — e.g. a direct deposit that cleared earlier — rather than "now".
+  // A bare YYYY-MM-DD is anchored at noon UTC so `(paid_at)::date` lands on the
+  // chosen calendar day in every real (±12h) timezone. Future dates are rejected.
+  let settledAt: Date | undefined;
+  if (typeof rawPaidAt === "string" && rawPaidAt.trim() !== "") {
+    const raw = rawPaidAt.trim();
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw);
+    if (Number.isNaN(d.getTime())) {
+      res.status(400).json({ error: "Invalid paidAt date" });
+      return;
+    }
+    if (d.getTime() > Date.now() + 86_400_000) {
+      res.status(400).json({ error: "paidAt cannot be in the future" });
+      return;
+    }
+    settledAt = d;
+  }
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
@@ -901,7 +921,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     // per-method reporting can attribute each leg correctly. The settlement
     // summary (paid in full / balance remaining) is noted on the first leg, and
     // the idempotency key is stamped on the first leg only.
-    const ts = new Date().toISOString();
+    const ts = (settledAt ?? new Date()).toISOString();
     const settleNote = fullyPaid
       ? `— paid in full`
       : `— balance $${balance.toFixed(2)} remaining`;
@@ -932,7 +952,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       .set({
         amountPaid: String(newPaid),
         status: newStatus,
-        paidAt: fullyPaid ? new Date() : null,
+        paidAt: fullyPaid ? (settledAt ?? new Date()) : null,
         events,
       })
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));

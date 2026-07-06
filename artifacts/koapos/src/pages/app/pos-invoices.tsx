@@ -137,6 +137,10 @@ const STATUS_LABELS: Record<InvStatus, string> = {
   draft: "Draft", sent: "Sent", paid: "Paid", partial: "Partially Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
+/* Today's local calendar date as YYYY-MM-DD (en-CA yields ISO ordering), for
+   seeding / bounding the native date input without a UTC off-by-one. */
+const todayLocalISODate = () => new Date().toLocaleDateString("en-CA");
+
 /* Derive each instalment's coverage from the invoice's single amountPaid total,
    filling instalments in order (FIFO). Avoids tracking per-instalment payments —
    amountPaid stays the one source of truth. */
@@ -295,6 +299,10 @@ export default function POSInvoicesPage() {
   const [payAmount, setPayAmount] = useState("");
   const [payMethod, setPayMethod] = useState("cash");
   const [payNote, setPayNote] = useState("");
+  /* Accounting date paid — surfaced for direct deposit (bank transfers often land
+     on an earlier day). Defaults to today; drives the invoice's paidAt / reported
+     sale date on full settlement. Held as YYYY-MM-DD for the native date input. */
+  const [payDate, setPayDate] = useState("");
   const [paySaving, setPaySaving] = useState(false);
   /* Reverse-payment confirmation — the payment event being un-applied. */
   const [reverseTarget, setReverseTarget] = useState<{ invoiceId: number; event: InvoiceEvent } | null>(null);
@@ -936,6 +944,7 @@ export default function POSInvoicesPage() {
     setPayAmount(balance.toFixed(2));
     setPayMethod(payMethods[0]?.value ?? "cash");
     setPayNote("");
+    setPayDate(todayLocalISODate());
   };
 
   /* Record a (partial or full) payment directly via the API — used for manual
@@ -964,6 +973,9 @@ export default function POSInvoicesPage() {
         ? `[Payment via ${selected?.label ?? "Other"}]`
         : "";
       const note = [payNote.trim(), labelNote].filter(Boolean).join(" ") || undefined;
+      // Direct deposits frequently clear on an earlier day than they're recorded;
+      // pass the chosen date so the sale is booked to that day for accounting.
+      const paidAt = payMethod === "direct_deposit" && payDate ? payDate : undefined;
       await recordPaymentMutation.mutateAsync({
         id: payTarget.id,
         data: {
@@ -971,6 +983,7 @@ export default function POSInvoicesPage() {
           method: apiMethod,
           note,
           idempotencyKey: crypto.randomUUID(),
+          ...(paidAt ? { paidAt } : {}),
         } as Parameters<typeof recordPaymentMutation.mutateAsync>[0]["data"],
       });
       const fully = amount >= balance - 0.005;
@@ -1996,6 +2009,22 @@ export default function POSInvoicesPage() {
                     </SelectContent>
                   </Select>
                 </div>
+
+                {payMethod === "direct_deposit" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Date paid</Label>
+                    <Input
+                      type="date"
+                      value={payDate}
+                      max={todayLocalISODate()}
+                      onChange={(e) => setPayDate(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Books this sale to the day the deposit landed — for accurate daily
+                      sales &amp; reporting.
+                    </p>
+                  </div>
+                )}
 
                 <div className="space-y-1.5">
                   <Label className="text-xs">Note <span className="text-muted-foreground">(optional)</span></Label>

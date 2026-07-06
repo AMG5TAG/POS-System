@@ -223,6 +223,7 @@ router.get("/mobile-pos/customers", async (req, res): Promise<void> => {
         ilike(customersTable.lastName, `%${search}%`),
         ilike(customersTable.company, `%${search}%`),
         ilike(customersTable.phone, `%${search}%`),
+        ilike(customersTable.email, `%${search}%`),
       )!,
     ))
     .limit(20);

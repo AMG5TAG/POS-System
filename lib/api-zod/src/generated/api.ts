@@ -11067,7 +11067,8 @@ export const RecordInvoicePaymentBody = zod.object({
   "amount": zod.number()
 }).optional(),
   "note": zod.string().optional(),
-  "idempotencyKey": zod.string().optional()
+  "idempotencyKey": zod.string().optional(),
+  "paidAt": zod.string().optional()
 })
 
 export const recordInvoicePaymentResponseItemsItemQuantityMin = 0.0001;

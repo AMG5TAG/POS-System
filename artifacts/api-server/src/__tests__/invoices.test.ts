@@ -162,4 +162,60 @@ describe.skipIf(!hasDb)("invoices — partial payments & reversal (real DB)", ()
     const res = await request(app).post(`/api/invoices/999999999/payment/reverse`).send({ amount: 10 });
     expect(res.status).toBe(404);
   });
+
+  // Backdated settlement — the direct-deposit "date paid" flow. Uses its own
+  // invoice so it doesn't disturb the partial/reversal fixture above, and cleans
+  // it up here (the outer afterAll owns the shared pool).
+  describe("backdated paidAt for direct-deposit settlement", () => {
+    let bdInvoiceId = 0;
+
+    beforeAll(async () => {
+      const [invoice] = await db.insert(invoicesTable).values({
+        merchantId: h.merchantId,
+        customerId,
+        invoiceNumber: `TEST-BD-${Date.now()}`,
+        status: "sent",
+        subtotal: "200", taxTotal: "0", total: "200", amountPaid: "0",
+        items: [{ description: "Consulting", quantity: 1, unitPrice: 200, taxRate: 0 }],
+      }).returning();
+      bdInvoiceId = invoice.id;
+    });
+
+    afterAll(async () => {
+      if (bdInvoiceId) await db.delete(invoicesTable).where(eq(invoicesTable.id, bdInvoiceId));
+    });
+
+    it("rejects a future paidAt date", async () => {
+      const future = new Date(Date.now() + 7 * 86_400_000).toISOString().slice(0, 10);
+      const res = await request(app).post(`/api/invoices/${bdInvoiceId}/payment`)
+        .send({ amount: 200, method: "direct_deposit", paidAt: future });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/future/i);
+    });
+
+    it("rejects an unparseable paidAt date", async () => {
+      const res = await request(app).post(`/api/invoices/${bdInvoiceId}/payment`)
+        .send({ amount: 200, method: "direct_deposit", paidAt: "not-a-date" });
+      expect(res.status).toBe(400);
+      expect(res.body.error).toMatch(/invalid paidat/i);
+    });
+
+    it("books the settlement to the supplied date (paidAt + event timestamp)", async () => {
+      const res = await request(app).post(`/api/invoices/${bdInvoiceId}/payment`)
+        .send({ amount: 200, method: "direct_deposit", paidAt: "2026-06-15" });
+      expect(res.status).toBe(200);
+      expect(res.body.status).toBe("paid");
+
+      // paidAt lands on the chosen calendar day (stored noon UTC → date-safe).
+      expect(new Date(res.body.paidAt).toISOString().slice(0, 10)).toBe("2026-06-15");
+
+      // The reporting view keys the sale off paid_at::date — confirm at the DB level.
+      const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, bdInvoiceId));
+      expect(inv.paidAt.toISOString().slice(0, 10)).toBe("2026-06-15");
+
+      // The payment leg's own timestamp is stamped with the chosen date too.
+      const leg = (inv.events as { type: string; timestamp: string }[]).find((e) => e.type === "payment");
+      expect(leg!.timestamp.slice(0, 10)).toBe("2026-06-15");
+    });
+  });
 });
