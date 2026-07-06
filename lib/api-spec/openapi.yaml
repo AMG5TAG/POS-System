@@ -12538,6 +12538,8 @@ components:
         [defaultDueDays, numberPrefix, defaultNotes, defaultTerms,
          reminderEnabled, reminderDaysBefore,
          overdueEnabled, overdueDaysAfter, overdueRepeatDays, lateFeeEnabled, lateFeePercent,
+         surchargeEnabled, surchargePercent, surchargeAfterReminders,
+         debtCollectionEnabled, debtCollectionThreshold,
          autoSendOnCreate, defaultSendMethod, attachPdf, bccBusinessEmail, emailSubject, emailMessage]
       properties:
         # ── Defaults ──
@@ -12552,8 +12554,13 @@ components:
         overdueEnabled:     { type: boolean, description: "Email the customer when an invoice becomes overdue." }
         overdueDaysAfter:   { type: integer, minimum: 0, description: "Days after the due date before the first overdue notice is sent." }
         overdueRepeatDays:  { type: integer, minimum: 0, description: "Repeat the overdue notice every N days. 0 = send once only." }
-        lateFeeEnabled:     { type: boolean, description: "Apply a late fee to overdue invoices." }
+        lateFeeEnabled:     { type: boolean, description: "Apply a one-time late fee to an invoice as soon as it becomes overdue." }
         lateFeePercent:     { type: number, minimum: 0, description: "Late fee as a percentage of the invoice total." }
+        surchargeEnabled:   { type: boolean, description: "Apply an additional one-time surcharge once an invoice has had a set number of overdue reminders." }
+        surchargePercent:   { type: number, minimum: 0, description: "Surcharge as a percentage of the invoice total, added after the overdue-reminder threshold is reached." }
+        surchargeAfterReminders: { type: integer, minimum: 0, description: "Number of overdue reminders that must be sent before the surcharge is applied. 0 = apply as soon as overdue." }
+        debtCollectionEnabled:   { type: boolean, description: "Email a debt-collection escalation notice to a customer once they accumulate too many overdue invoices." }
+        debtCollectionThreshold: { type: integer, minimum: 1, description: "Number of overdue invoices a single customer must reach before the debt-collection email is sent." }
         # ── Sending ──
         autoSendOnCreate:   { type: boolean, description: "Automatically send the invoice to the customer as soon as it is created." }
         defaultSendMethod:  { type: string, enum: [email, sms, both], description: "Default delivery channel pre-selected when sending an invoice." }
@@ -12576,6 +12583,11 @@ components:
         overdueRepeatDays:  { type: integer, minimum: 0 }
         lateFeeEnabled:     { type: boolean }
         lateFeePercent:     { type: number, minimum: 0 }
+        surchargeEnabled:   { type: boolean }
+        surchargePercent:   { type: number, minimum: 0 }
+        surchargeAfterReminders: { type: integer, minimum: 0 }
+        debtCollectionEnabled:   { type: boolean }
+        debtCollectionThreshold: { type: integer, minimum: 1 }
         autoSendOnCreate:   { type: boolean }
         defaultSendMethod:  { type: string, enum: [email, sms, both] }
         attachPdf:          { type: boolean }

@@ -1165,6 +1165,30 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
   const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
   let bpBrandColors: string[] = [];
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* use default */ }
+
+  // Resolve Sales-Template quick codes ({{invoice.number}}, {{customer.name}}, …)
+  // in the downloadable PDF's template-driven text fields.
+  const pdfQuickCodeVars = buildInvoiceQuickCodeVars({
+    invoiceNumber:     inv.invoiceNumber,
+    totalStr:          `$${Number(inv.total).toFixed(2)}`,
+    subtotalStr:       `$${Number(inv.subtotal).toFixed(2)}`,
+    gstStr:            `$${Number(inv.taxTotal).toFixed(2)}`,
+    invoiceDateStr:    inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : "",
+    businessName:      merchant?.businessName ?? "Your Business",
+    businessEmail:     bp?.contactEmail ?? merchant?.email ?? "",
+    businessWebsite:   bp?.website ?? "",
+    businessAbn:       bp?.abn ?? "",
+    businessPhone:     merchant?.phone ?? "",
+    businessTagline:   bp?.tagline ?? "",
+    businessAddress:   [merchant?.address, merchant?.city].filter(Boolean).join(", "),
+    customerName:      inv.customerName ?? "",
+    customerFirstName: (inv.customerName ?? "").split(" ")[0] ?? "",
+    customerEmail:     inv.customerEmail ?? "",
+    customerPhone:     inv.customerPhone ?? "",
+  });
+  const pdfResolveNullable = (s: string | null | undefined): string | null =>
+    typeof s === "string" ? applyQuickCodes(s, pdfQuickCodeVars) : (s ?? null);
+
   const pdfBuffer = await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
@@ -1201,13 +1225,13 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     showTagline:           Boolean(tplOpts.showTagline),
     businessTagline:       bp?.tagline || null,
     showGstBreakdown:      tplOpts.showGstBreakdown !== undefined ? Boolean(tplOpts.showGstBreakdown) : true,
-    headerText:            tplRow?.headerHtml || (tplOpts.headerText as string | undefined) || null,
-    thankYouMsg:           (tplOpts.thankYouMsg as string | undefined) || null,
-    footerText:            tplRow?.footerHtml || (tplOpts.footerText as string | undefined) || null,
-    paymentTerms:          (tplOpts.paymentTerms as string | undefined) || null,
-    invoiceNotes:          (tplOpts.invoiceNotes as string | undefined) || null,
-    bankDetails:           (tplOpts.bankDetails as string | undefined) || null,
-    paymentSectionHeading: (tplOpts.paymentSectionHeading as string | undefined) || null,
+    headerText:            pdfResolveNullable(tplRow?.headerHtml || (tplOpts.headerText as string | undefined) || null),
+    thankYouMsg:           pdfResolveNullable((tplOpts.thankYouMsg as string | undefined) || null),
+    footerText:            pdfResolveNullable(tplRow?.footerHtml || (tplOpts.footerText as string | undefined) || null),
+    paymentTerms:          pdfResolveNullable((tplOpts.paymentTerms as string | undefined) || null),
+    invoiceNotes:          pdfResolveNullable((tplOpts.invoiceNotes as string | undefined) || null),
+    bankDetails:           pdfResolveNullable((tplOpts.bankDetails as string | undefined) || null),
+    paymentSectionHeading: pdfResolveNullable((tplOpts.paymentSectionHeading as string | undefined) || null),
     showAllCustomerDetails: Boolean(tplOpts.showAllCustomerDetails),
     showSocialLinks:        Boolean(tplOpts.showSocialLinks),
     socialIconBrandColors:  Boolean(tplOpts.socialIconBrandColors),
@@ -1222,7 +1246,7 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
     showBarcode:            Boolean(tplOpts.showBarcode),
     showReferralLink:       Boolean(tplOpts.showReferralLink),
-    customMessage:          (tplOpts.customMessage as string | undefined) || null,
+    customMessage:          pdfResolveNullable((tplOpts.customMessage as string | undefined) || null),
     referralLinkText:       (tplOpts.referralLinkText as string | undefined) || null,
     // The customer-profile QR encodes the customer code (a stable scan-to-lookup
     // identifier). Once persisted per-customer QRs land, swap in that QR's URL.
@@ -1276,6 +1300,52 @@ function applyInvoicePlaceholders(s: string, vars: { number: string; business: s
 }
 
 /**
+ * Substitute Sales-Template "quick codes" — the `{{dotted.token}}` placeholders
+ * the template editor inserts (e.g. `{{invoice.number}}`, `{{customer.name}}`).
+ * Uses the same token syntax and empty-on-unknown behaviour as the print path
+ * (koapos `applyTemplateVars`), so a token is either filled from `vars` or
+ * rendered blank — never left as a raw `{{…}}` string in the customer's document.
+ */
+function applyQuickCodes(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_m, key: string) => vars[key.toLowerCase()] ?? "");
+}
+
+/** Build the quick-code token map for an invoice from its resolved parts. */
+function buildInvoiceQuickCodeVars(p: {
+  invoiceNumber: string;
+  totalStr: string; subtotalStr: string; gstStr: string;
+  invoiceDateStr: string;
+  businessName: string; businessEmail: string; businessWebsite: string;
+  businessAbn: string; businessPhone: string; businessTagline: string; businessAddress: string;
+  customerName: string; customerFirstName: string; customerEmail: string; customerPhone: string;
+}): Record<string, string> {
+  const now = new Date();
+  return {
+    "business.name": p.businessName,
+    "business.email": p.businessEmail,
+    "business.website": p.businessWebsite,
+    "business.abn": p.businessAbn,
+    "business.phone": p.businessPhone,
+    "business.tagline": p.businessTagline,
+    "business.address": p.businessAddress,
+    "customer.name": p.customerName,
+    "customer.first_name": p.customerFirstName,
+    "customer.email": p.customerEmail,
+    "customer.phone": p.customerPhone,
+    // The editor labels the invoice number "Invoice Number" → {{invoice.number}};
+    // {{transaction.number}} is kept as an alias for backwards compatibility.
+    "invoice.number": p.invoiceNumber,
+    "transaction.number": p.invoiceNumber,
+    "transaction.total": p.totalStr,
+    "transaction.subtotal": p.subtotalStr,
+    "transaction.gst": p.gstStr,
+    "transaction.date": p.invoiceDateStr,
+    "date.today": now.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }),
+    "time.now": now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+/**
  * Build and send an invoice email, applying the merchant's invoice settings
  * (default subject/message templates, attach-PDF toggle, BCC the business). Shared
  * by the manual send route, auto-send-on-create, and the reminder/overdue scheduler.
@@ -1287,7 +1357,7 @@ function applyInvoicePlaceholders(s: string, vars: { number: string; business: s
 export async function sendInvoiceEmailInternal(
   merchantId: number,
   id: number,
-  opts: { to: string; template?: InvoiceEmailTemplate | null; baseUrl?: string | null; kind?: "invoice" | "reminder" | "overdue" },
+  opts: { to: string; template?: InvoiceEmailTemplate | null; baseUrl?: string | null; kind?: "invoice" | "reminder" | "overdue" | "debt_collection" },
 ): Promise<{ success: boolean; error?: string; notFound?: boolean }> {
   const { to: email, template, baseUrl = null, kind = "invoice" } = opts;
 
@@ -1327,14 +1397,30 @@ export async function sendInvoiceEmailInternal(
   const tplId            = tpl.templateId ?? "e-pro";
   const brandColor       = tpl.brandColor ?? "#4f46e5";
   const totalStr         = `$${parseFloat(inv.total).toFixed(2)}`;
-  const resolve = (s: string) => s
-    .replace(/{{business\.name}}/g, bizName)
-    .replace(/{{business\.email}}/g, tpl.contactEmail ?? "")
-    .replace(/{{business\.website}}/g, tpl.website ?? "")
-    .replace(/{{transaction\.total}}/g, totalStr)
-    .replace(/{{transaction\.number}}/g, inv.invoiceNumber)
-    .replace(/{{customer\.name}}/g, cName || "")
-    .replace(/{{[^}]+}}/g, "");
+  const invoiceDateStr = inv.createdAt
+    ? new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const quickCodeVars = buildInvoiceQuickCodeVars({
+    invoiceNumber:     inv.invoiceNumber,
+    totalStr,
+    subtotalStr:       `$${parseFloat(inv.subtotal).toFixed(2)}`,
+    gstStr:            `$${parseFloat(inv.taxTotal).toFixed(2)}`,
+    invoiceDateStr,
+    businessName:      bizName,
+    businessEmail:     tpl.contactEmail ?? bp?.contactEmail ?? merchant?.email ?? "",
+    businessWebsite:   tpl.website ?? bp?.website ?? "",
+    businessAbn:       bp?.abn ?? "",
+    businessPhone:     merchant?.phone ?? "",
+    businessTagline:   bp?.tagline ?? "",
+    businessAddress:   [merchant?.address, merchant?.city].filter(Boolean).join(", "),
+    customerName:      cName || "",
+    customerFirstName: row.customerFirstName ?? "",
+    customerEmail:     row.customerEmail ?? "",
+    customerPhone:     row.customerPhone ?? "",
+  });
+  const resolve = (s: string) => applyQuickCodes(s, quickCodeVars);
+  const resolveNullable = (s: string | null | undefined): string | null =>
+    typeof s === "string" ? resolve(s) : (s ?? null);
 
   const dueDateStr = inv.dueDate
     ? new Date(inv.dueDate).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
@@ -1350,6 +1436,7 @@ export async function sendInvoiceEmailInternal(
   const baseSubject = resolve(tpl.subjectLine || settingsSubject);
   const subject = kind === "reminder" ? `Reminder: ${baseSubject}`
     : kind === "overdue" ? `Overdue: ${baseSubject}`
+    : kind === "debt_collection" ? `Debt Collection Notice: ${baseSubject}`
     : baseSubject;
   const greeting = resolve(tpl.customGreeting || (cName ? `Hi ${cName.split(" ")[0]},` : "Hi,"));
   const signOff  = resolve(tpl.customSignOff  || `— The team at ${bizName}`);
@@ -1358,6 +1445,8 @@ export async function sendInvoiceEmailInternal(
       ? `This is a friendly reminder that invoice ${inv.invoiceNumber} for ${totalStr} is due${dueDateStr ? ` on ${dueDateStr}` : " soon"}.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
     : kind === "overdue"
       ? `Invoice ${inv.invoiceNumber} for ${totalStr} is now overdue${dueDateStr ? ` (was due ${dueDateStr})` : ""}. Please arrange payment at your earliest convenience.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+    : kind === "debt_collection"
+      ? `Our records show one or more of your invoices with ${bizName} remain unpaid and are now significantly overdue. This is a formal notice that your account is being escalated to debt collection. Please arrange payment immediately to avoid further action.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
     : settingsMessage;
   const thankYou = resolve(tpl.thankYouMsg || "Thank you for your business!");
   const footer   = tpl.footerText ? resolve(tpl.footerText) : "";
@@ -1464,13 +1553,13 @@ export async function sendInvoiceEmailInternal(
     showTagline:           Boolean(emailTplOpts.showTagline),
     businessTagline:       bp?.tagline || null,
     showGstBreakdown:      emailTplOpts.showGstBreakdown !== undefined ? Boolean(emailTplOpts.showGstBreakdown) : true,
-    headerText:            emailTplRow?.headerHtml || (emailTplOpts.headerText as string | undefined) || null,
-    thankYouMsg:           (emailTplOpts.thankYouMsg as string | undefined) || null,
-    footerText:            emailTplRow?.footerHtml || (emailTplOpts.footerText as string | undefined) || null,
-    paymentTerms:          (emailTplOpts.paymentTerms as string | undefined) || null,
-    invoiceNotes:          (emailTplOpts.invoiceNotes as string | undefined) || null,
-    bankDetails:           (emailTplOpts.bankDetails as string | undefined) || null,
-    paymentSectionHeading: (emailTplOpts.paymentSectionHeading as string | undefined) || null,
+    headerText:            resolveNullable(emailTplRow?.headerHtml || (emailTplOpts.headerText as string | undefined) || null),
+    thankYouMsg:           resolveNullable((emailTplOpts.thankYouMsg as string | undefined) || null),
+    footerText:            resolveNullable(emailTplRow?.footerHtml || (emailTplOpts.footerText as string | undefined) || null),
+    paymentTerms:          resolveNullable((emailTplOpts.paymentTerms as string | undefined) || null),
+    invoiceNotes:          resolveNullable((emailTplOpts.invoiceNotes as string | undefined) || null),
+    bankDetails:           resolveNullable((emailTplOpts.bankDetails as string | undefined) || null),
+    paymentSectionHeading: resolveNullable((emailTplOpts.paymentSectionHeading as string | undefined) || null),
     showAllCustomerDetails: Boolean(emailTplOpts.showAllCustomerDetails),
     showSocialLinks:        Boolean(emailTplOpts.showSocialLinks),
     socialIconBrandColors:  Boolean(emailTplOpts.socialIconBrandColors),
@@ -1509,7 +1598,10 @@ export async function sendInvoiceEmailInternal(
     await db.update(invoicesTable).set({ status: "sent" }).where(eq(invoicesTable.id, id));
   }
 
-  const eventType = kind === "reminder" ? "reminder" : kind === "overdue" ? "overdue" : "email";
+  const eventType = kind === "reminder" ? "reminder"
+    : kind === "overdue" ? "overdue"
+    : kind === "debt_collection" ? "debt_collection"
+    : "email";
   await appendInvoiceEvent(id, merchantId, { type: eventType, timestamp: new Date().toISOString(), detail: email });
 
   return { success: true };

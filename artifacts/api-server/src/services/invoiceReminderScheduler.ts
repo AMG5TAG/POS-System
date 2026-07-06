@@ -1,5 +1,5 @@
 import { db, invoicesTable, customersTable, invoiceSettingsTable } from "@workspace/db";
-import { eq, and, isNotNull, inArray } from "drizzle-orm";
+import { eq, and, isNotNull, isNull, inArray } from "drizzle-orm";
 import { trackedInterval } from "../lib/shutdown";
 import type { Logger } from "pino";
 import { getInvoiceSettings } from "../routes/invoice-settings";
@@ -98,6 +98,84 @@ async function applyLateFee(invoice: typeof invoicesTable.$inferSelect, percent:
   logger.info({ invoiceId: invoice.id, fee }, "Applied late fee to overdue invoice");
 }
 
+/** Apply a one-time percentage surcharge to an overdue invoice once it has had at
+ *  least `afterReminders` overdue notices sent. Distinct from (and stackable on
+ *  top of) the immediate late fee — guarded by a `surcharge` event so it is only
+ *  ever applied once. Re-reads the row so it never clobbers a late fee applied in
+ *  the same run. */
+async function applySurcharge(invoiceId: number, percent: number, afterReminders: number, logger: Logger): Promise<void> {
+  const [invoice] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, invoiceId));
+  if (!invoice) return;
+
+  const events = (invoice.events as InvoiceEvent[] | null) ?? [];
+  if (events.some((e) => e.type === "surcharge")) return;
+
+  // Only apply once enough overdue reminders have actually been sent.
+  const overdueNotices = events.filter((e) => e.type === "overdue").length;
+  if (overdueNotices < afterReminders) return;
+
+  const total = parseFloat(invoice.total);
+  const fee = Math.round(total * (percent / 100) * 100) / 100;
+  if (fee <= 0) return;
+
+  const items = ((invoice.items as LineItem[] | null) ?? []).slice();
+  items.push({ description: `Overdue surcharge (${percent}%)`, quantity: 1, unitPrice: fee, taxRate: 0 });
+
+  const newSubtotal = parseFloat(invoice.subtotal) + fee;
+  const newTotal = total + fee;
+
+  await db
+    .update(invoicesTable)
+    .set({
+      items,
+      subtotal: String(newSubtotal.toFixed(2)),
+      total: String(newTotal.toFixed(2)),
+      events: [...events, { type: "surcharge", timestamp: new Date().toISOString(), detail: `+$${fee.toFixed(2)} after ${overdueNotices} overdue notices` }],
+      updatedAt: new Date(),
+    })
+    .where(eq(invoicesTable.id, invoice.id));
+
+  logger.info({ invoiceId: invoice.id, fee, overdueNotices }, "Applied overdue surcharge to invoice");
+}
+
+type OverdueCustomer = { email: string | null; invoices: Array<{ id: number; events: InvoiceEvent[] }> };
+
+/** Escalate to debt collection: when a single customer has accumulated at least
+ *  `debtCollectionThreshold` overdue invoices, email them one escalation notice
+ *  covering their account. Deduped by the `overdueRepeatDays` cadence via
+ *  `debt_collection` marker events (0 = send once only). */
+async function processDebtCollection(
+  merchantId: number,
+  settings: Settings,
+  overdueByCustomer: Map<number, OverdueCustomer>,
+  logger: Logger,
+): Promise<void> {
+  const today = new Date();
+  for (const [customerId, entry] of overdueByCustomer) {
+    if (entry.invoices.length < settings.debtCollectionThreshold) continue;
+    if (!entry.email) continue; // no email on file — cannot escalate
+
+    // Cadence dedup: newest debt_collection marker across the customer's overdue invoices.
+    let lastDebtAt: Date | null = null;
+    for (const inv of entry.invoices) {
+      const t = lastEventAt(inv.events, "debt_collection");
+      if (t && (!lastDebtAt || t > lastDebtAt)) lastDebtAt = t;
+    }
+    const due = !lastDebtAt || (settings.overdueRepeatDays > 0 && dayDiff(lastDebtAt, today) >= settings.overdueRepeatDays);
+    if (!due) continue;
+
+    // Send against the customer's oldest overdue invoice; the notice frames the
+    // whole overdue account. sendInvoiceEmailInternal records the dedup marker on success.
+    const target = entry.invoices[0];
+    const r = await sendInvoiceEmailInternal(merchantId, target.id, { to: entry.email, kind: "debt_collection" });
+    if (r.success) {
+      logger.info({ merchantId, customerId, overdueCount: entry.invoices.length }, "Sent debt-collection escalation notice");
+    } else {
+      logger.warn({ merchantId, customerId, error: r.error }, "Debt-collection email failed");
+    }
+  }
+}
+
 async function processMerchant(merchantId: number, settings: Settings, logger: Logger): Promise<void> {
   const today = new Date();
 
@@ -114,9 +192,19 @@ async function processMerchant(merchantId: number, settings: Settings, logger: L
       and(
         eq(invoicesTable.merchantId, merchantId),
         isNotNull(invoicesTable.dueDate),
+        // Exclude recurring TEMPLATE rows. A template carries the series' original
+        // invoice number and original due date and only exists to spawn child
+        // instances — it must never be chased as an overdue invoice itself, or the
+        // reminder would show the original number instead of the child's. Its
+        // generated children (recurringFrequency IS NULL) and normal one-off
+        // invoices are still included.
+        isNull(invoicesTable.recurringFrequency),
         inArray(invoicesTable.status, ["sent", "partial", "overdue"]),
       ),
     );
+
+  // Overdue invoices grouped by customer, for debt-collection escalation below.
+  const overdueByCustomer = new Map<number, OverdueCustomer>();
 
   for (const row of rows) {
     const inv = row.invoice;
@@ -158,10 +246,28 @@ async function processMerchant(merchantId: number, settings: Settings, logger: L
             await dispatchNotice(merchantId, inv.id, "overdue", row.customerEmail ?? null, settings.defaultSendMethod, logger);
           }
         }
+
+        // Additional one-time surcharge once enough overdue reminders have been sent.
+        if (settings.surchargeEnabled && settings.surchargePercent > 0) {
+          await applySurcharge(inv.id, settings.surchargePercent, settings.surchargeAfterReminders, logger);
+        }
+
+        // Track this overdue invoice against its customer for debt-collection escalation.
+        if (inv.customerId != null) {
+          const entry = overdueByCustomer.get(inv.customerId) ?? { email: row.customerEmail ?? null, invoices: [] };
+          if (!entry.email && row.customerEmail) entry.email = row.customerEmail;
+          entry.invoices.push({ id: inv.id, events });
+          overdueByCustomer.set(inv.customerId, entry);
+        }
       }
     } catch (err) {
       logger.error({ invoiceId: inv.id, err }, "Error processing invoice notification");
     }
+  }
+
+  // ── Debt-collection escalation (per customer, once over the threshold) ──
+  if (settings.debtCollectionEnabled) {
+    await processDebtCollection(merchantId, settings, overdueByCustomer, logger);
   }
 }
 
@@ -170,7 +276,10 @@ export async function processInvoiceNotifications(logger: Logger): Promise<void>
   for (const { merchantId } of merchants) {
     try {
       const settings = await getInvoiceSettings(merchantId);
-      if (!settings.reminderEnabled && !settings.overdueEnabled && !settings.lateFeeEnabled) continue;
+      if (
+        !settings.reminderEnabled && !settings.overdueEnabled && !settings.lateFeeEnabled &&
+        !settings.surchargeEnabled && !settings.debtCollectionEnabled
+      ) continue;
       await processMerchant(merchantId, settings, logger);
     } catch (err) {
       logger.error({ merchantId, err }, "Error processing merchant invoice notifications");

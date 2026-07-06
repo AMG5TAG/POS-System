@@ -2693,13 +2693,32 @@ export interface InvoiceSettings {
      * @minimum 0
      */
   overdueRepeatDays: number;
-  /** Apply a late fee to overdue invoices. */
+  /** Apply a one-time late fee to an invoice as soon as it becomes overdue. */
   lateFeeEnabled: boolean;
   /**
      * Late fee as a percentage of the invoice total.
      * @minimum 0
      */
   lateFeePercent: number;
+  /** Apply an additional one-time surcharge once an invoice has had a set number of overdue reminders. */
+  surchargeEnabled: boolean;
+  /**
+     * Surcharge as a percentage of the invoice total, added after the overdue-reminder threshold is reached.
+     * @minimum 0
+     */
+  surchargePercent: number;
+  /**
+     * Number of overdue reminders that must be sent before the surcharge is applied. 0 = apply as soon as overdue.
+     * @minimum 0
+     */
+  surchargeAfterReminders: number;
+  /** Email a debt-collection escalation notice to a customer once they accumulate too many overdue invoices. */
+  debtCollectionEnabled: boolean;
+  /**
+     * Number of overdue invoices a single customer must reach before the debt-collection email is sent.
+     * @minimum 1
+     */
+  debtCollectionThreshold: number;
   /** Automatically send the invoice to the customer as soon as it is created. */
   autoSendOnCreate: boolean;
   /** Default delivery channel pre-selected when sending an invoice. */
@@ -2740,6 +2759,14 @@ export interface InvoiceSettingsInput {
   lateFeeEnabled?: boolean;
   /** @minimum 0 */
   lateFeePercent?: number;
+  surchargeEnabled?: boolean;
+  /** @minimum 0 */
+  surchargePercent?: number;
+  /** @minimum 0 */
+  surchargeAfterReminders?: number;
+  debtCollectionEnabled?: boolean;
+  /** @minimum 1 */
+  debtCollectionThreshold?: number;
   autoSendOnCreate?: boolean;
   defaultSendMethod?: InvoiceSettingsInputDefaultSendMethod;
   attachPdf?: boolean;

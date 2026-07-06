@@ -14,7 +14,7 @@ import {
   useGetInvoiceSettings, useUpdateInvoiceSettings, type InvoiceSettings,
 } from "@workspace/api-client-react";
 import {
-  FileText, CalendarClock, BellRing, AlertTriangle, Send, Loader2,
+  FileText, CalendarClock, BellRing, AlertTriangle, Send, Loader2, Gavel,
 } from "lucide-react";
 
 const INVOICE_SETTINGS_QUERY_KEY = ["/api/invoice-settings"] as const;
@@ -56,7 +56,7 @@ export default function ManagementInvoiceSettingsPage() {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <>
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             {/* ── Defaults ── */}
             <Card>
               <CardHeader>
@@ -177,6 +177,61 @@ export default function ManagementInvoiceSettingsPage() {
                     onSave={(n) => savePatch({ lateFeePercent: n })}
                   />
                 )}
+                <ToggleRow
+                  label="Add a surcharge after repeated reminders"
+                  hint="Apply an extra percentage surcharge once an invoice has had several overdue reminders — on top of any late fee above."
+                  checked={settings.surchargeEnabled}
+                  saving={saving}
+                  onChange={(v) => savePatch({ surchargeEnabled: v })}
+                />
+                {settings.surchargeEnabled && (
+                  <>
+                    <NumberRow
+                      label="Surcharge"
+                      hint="Percentage of the invoice total added as a surcharge."
+                      suffix="%"
+                      step="0.1"
+                      value={settings.surchargePercent}
+                      saving={saving}
+                      onSave={(n) => savePatch({ surchargePercent: n })}
+                    />
+                    <NumberRow
+                      label="Apply after"
+                      hint="Number of overdue reminders sent before the surcharge is added. 0 applies it as soon as the invoice is overdue."
+                      suffix="reminders"
+                      value={settings.surchargeAfterReminders}
+                      saving={saving}
+                      onSave={(n) => savePatch({ surchargeAfterReminders: n })}
+                    />
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* ── Debt collection ── */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2"><Gavel className="w-5 h-5 text-primary" /> Debt collection</CardTitle>
+                <CardDescription>Escalate customers whose overdue invoices pile up.</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-1">
+                <ToggleRow
+                  label="Send a debt-collection notice"
+                  hint="Email the customer a formal escalation notice once they build up too many overdue invoices."
+                  checked={settings.debtCollectionEnabled}
+                  saving={saving}
+                  onChange={(v) => savePatch({ debtCollectionEnabled: v })}
+                />
+                {settings.debtCollectionEnabled && (
+                  <NumberRow
+                    label="Overdue invoices before escalating"
+                    hint="Send the debt-collection email once a single customer reaches this many overdue invoices."
+                    suffix="invoices"
+                    value={settings.debtCollectionThreshold}
+                    saving={saving}
+                    onSave={(n) => savePatch({ debtCollectionThreshold: Math.max(1, n) })}
+                  />
+                )}
               </CardContent>
             </Card>
 
@@ -242,7 +297,7 @@ export default function ManagementInvoiceSettingsPage() {
                 />
               </CardContent>
             </Card>
-          </>
+          </div>
         )}
       </div>
     </AppLayout>

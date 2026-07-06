@@ -2696,6 +2696,11 @@ export const getInvoiceSettingsResponseOverdueRepeatDaysMin = 0;
 
 export const getInvoiceSettingsResponseLateFeePercentMin = 0;
 
+export const getInvoiceSettingsResponseSurchargePercentMin = 0;
+
+export const getInvoiceSettingsResponseSurchargeAfterRemindersMin = 0;
+
+
 
 
 export const GetInvoiceSettingsResponse = zod.object({
@@ -2708,8 +2713,13 @@ export const GetInvoiceSettingsResponse = zod.object({
   "overdueEnabled": zod.boolean().describe('Email the customer when an invoice becomes overdue.'),
   "overdueDaysAfter": zod.number().min(getInvoiceSettingsResponseOverdueDaysAfterMin).describe('Days after the due date before the first overdue notice is sent.'),
   "overdueRepeatDays": zod.number().min(getInvoiceSettingsResponseOverdueRepeatDaysMin).describe('Repeat the overdue notice every N days. 0 = send once only.'),
-  "lateFeeEnabled": zod.boolean().describe('Apply a late fee to overdue invoices.'),
+  "lateFeeEnabled": zod.boolean().describe('Apply a one-time late fee to an invoice as soon as it becomes overdue.'),
   "lateFeePercent": zod.number().min(getInvoiceSettingsResponseLateFeePercentMin).describe('Late fee as a percentage of the invoice total.'),
+  "surchargeEnabled": zod.boolean().describe('Apply an additional one-time surcharge once an invoice has had a set number of overdue reminders.'),
+  "surchargePercent": zod.number().min(getInvoiceSettingsResponseSurchargePercentMin).describe('Surcharge as a percentage of the invoice total, added after the overdue-reminder threshold is reached.'),
+  "surchargeAfterReminders": zod.number().min(getInvoiceSettingsResponseSurchargeAfterRemindersMin).describe('Number of overdue reminders that must be sent before the surcharge is applied. 0 = apply as soon as overdue.'),
+  "debtCollectionEnabled": zod.boolean().describe('Email a debt-collection escalation notice to a customer once they accumulate too many overdue invoices.'),
+  "debtCollectionThreshold": zod.number().min(1).describe('Number of overdue invoices a single customer must reach before the debt-collection email is sent.'),
   "autoSendOnCreate": zod.boolean().describe('Automatically send the invoice to the customer as soon as it is created.'),
   "defaultSendMethod": zod.enum(['email', 'sms', 'both']).describe('Default delivery channel pre-selected when sending an invoice.'),
   "attachPdf": zod.boolean().describe('Attach a PDF copy of the invoice to outgoing emails.'),
@@ -2732,6 +2742,11 @@ export const updateInvoiceSettingsBodyOverdueRepeatDaysMin = 0;
 
 export const updateInvoiceSettingsBodyLateFeePercentMin = 0;
 
+export const updateInvoiceSettingsBodySurchargePercentMin = 0;
+
+export const updateInvoiceSettingsBodySurchargeAfterRemindersMin = 0;
+
+
 
 
 export const UpdateInvoiceSettingsBody = zod.object({
@@ -2746,6 +2761,11 @@ export const UpdateInvoiceSettingsBody = zod.object({
   "overdueRepeatDays": zod.number().min(updateInvoiceSettingsBodyOverdueRepeatDaysMin).optional(),
   "lateFeeEnabled": zod.boolean().optional(),
   "lateFeePercent": zod.number().min(updateInvoiceSettingsBodyLateFeePercentMin).optional(),
+  "surchargeEnabled": zod.boolean().optional(),
+  "surchargePercent": zod.number().min(updateInvoiceSettingsBodySurchargePercentMin).optional(),
+  "surchargeAfterReminders": zod.number().min(updateInvoiceSettingsBodySurchargeAfterRemindersMin).optional(),
+  "debtCollectionEnabled": zod.boolean().optional(),
+  "debtCollectionThreshold": zod.number().min(1).optional(),
   "autoSendOnCreate": zod.boolean().optional(),
   "defaultSendMethod": zod.enum(['email', 'sms', 'both']).optional(),
   "attachPdf": zod.boolean().optional(),
@@ -2764,6 +2784,11 @@ export const updateInvoiceSettingsResponseOverdueRepeatDaysMin = 0;
 
 export const updateInvoiceSettingsResponseLateFeePercentMin = 0;
 
+export const updateInvoiceSettingsResponseSurchargePercentMin = 0;
+
+export const updateInvoiceSettingsResponseSurchargeAfterRemindersMin = 0;
+
+
 
 
 export const UpdateInvoiceSettingsResponse = zod.object({
@@ -2776,8 +2801,13 @@ export const UpdateInvoiceSettingsResponse = zod.object({
   "overdueEnabled": zod.boolean().describe('Email the customer when an invoice becomes overdue.'),
   "overdueDaysAfter": zod.number().min(updateInvoiceSettingsResponseOverdueDaysAfterMin).describe('Days after the due date before the first overdue notice is sent.'),
   "overdueRepeatDays": zod.number().min(updateInvoiceSettingsResponseOverdueRepeatDaysMin).describe('Repeat the overdue notice every N days. 0 = send once only.'),
-  "lateFeeEnabled": zod.boolean().describe('Apply a late fee to overdue invoices.'),
+  "lateFeeEnabled": zod.boolean().describe('Apply a one-time late fee to an invoice as soon as it becomes overdue.'),
   "lateFeePercent": zod.number().min(updateInvoiceSettingsResponseLateFeePercentMin).describe('Late fee as a percentage of the invoice total.'),
+  "surchargeEnabled": zod.boolean().describe('Apply an additional one-time surcharge once an invoice has had a set number of overdue reminders.'),
+  "surchargePercent": zod.number().min(updateInvoiceSettingsResponseSurchargePercentMin).describe('Surcharge as a percentage of the invoice total, added after the overdue-reminder threshold is reached.'),
+  "surchargeAfterReminders": zod.number().min(updateInvoiceSettingsResponseSurchargeAfterRemindersMin).describe('Number of overdue reminders that must be sent before the surcharge is applied. 0 = apply as soon as overdue.'),
+  "debtCollectionEnabled": zod.boolean().describe('Email a debt-collection escalation notice to a customer once they accumulate too many overdue invoices.'),
+  "debtCollectionThreshold": zod.number().min(1).describe('Number of overdue invoices a single customer must reach before the debt-collection email is sent.'),
   "autoSendOnCreate": zod.boolean().describe('Automatically send the invoice to the customer as soon as it is created.'),
   "defaultSendMethod": zod.enum(['email', 'sms', 'both']).describe('Default delivery channel pre-selected when sending an invoice.'),
   "attachPdf": zod.boolean().describe('Attach a PDF copy of the invoice to outgoing emails.'),

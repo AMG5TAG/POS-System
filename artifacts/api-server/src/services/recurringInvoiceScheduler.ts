@@ -3,6 +3,7 @@ import { eq, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
 import { trackedInterval } from "../lib/shutdown";
 import { jitteredStart } from "../lib/scheduler-jitter";
 import { sendEmail } from "./email";
+import { getInvoiceSettings } from "../routes/invoice-settings";
 import type { Logger } from "pino";
 
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
@@ -143,7 +144,17 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
     try {
       const total = parseFloat(String(inv.total));
       const items = (inv.items as LineItem[] | null) ?? [];
-      const dueDate = inv.dueDate?.toISOString() ?? null;
+
+      // ── Fresh due date per instance ──
+      // Each generated invoice gets its OWN due date, derived from the merchant's
+      // default invoice settings (Management → Invoices) relative to this
+      // instance's issue date (today) — never the template's original, now-stale
+      // due date. defaultDueDays = 0 means due on receipt.
+      const settings = await getInvoiceSettings(inv.merchantId);
+      const childDueDate = new Date();
+      childDueDate.setHours(0, 0, 0, 0);
+      childDueDate.setDate(childDueDate.getDate() + settings.defaultDueDays);
+      const dueDate = childDueDate.toISOString();
 
       // ── 1. Generate a unique sequential invoice number for this instance ──
       const childNumber = await getNextInvoiceNumber(inv.merchantId);
@@ -164,7 +175,7 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
           discountValue: inv.discountValue ?? null,
           discountTotal: inv.discountTotal ?? null,
           items: inv.items ?? null,
-          dueDate: inv.dueDate ?? null,
+          dueDate: childDueDate,
           notes: inv.notes ?? null,
           isRecurring: "false",
           parentInvoiceId: inv.id,
