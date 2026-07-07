@@ -2548,6 +2548,8 @@ export interface LoyaltySettings {
   cashbackRate?: number;
   pointsPerDollar?: number;
   dollarPerPoint?: number;
+  /** Loyalty points awarded from the dashboard birthday prompt. */
+  birthdayBonusPoints?: number;
   tiers?: LoyaltyTier[];
   stampsRequired?: number;
   stampRewardValue?: number;
@@ -2598,6 +2600,8 @@ export interface LoyaltySettingsInput {
   cashbackRate?: number;
   pointsPerDollar?: number;
   dollarPerPoint?: number;
+  /** Loyalty points awarded from the dashboard birthday prompt. */
+  birthdayBonusPoints?: number;
   tiers?: LoyaltyTier[];
   stampsRequired?: number;
   stampRewardValue?: number;

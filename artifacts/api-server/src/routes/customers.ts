@@ -6,7 +6,7 @@ import {
   laybysTable, invoicesTable, parkedSalesTable,
   formSubmissionsTable, marketingAutomationLogTable,
   emailCampaignsTable, productPreOrdersTable,
-  merchantsTable, staffTable,
+  merchantsTable, staffTable, loyaltySettingsTable,
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull, inArray } from "drizzle-orm";
 import crypto from "node:crypto";
@@ -1018,8 +1018,17 @@ router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Pro
   const merchantId = req.session.merchantId!;
   const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const points = parseInt(String(req.body?.points ?? 100), 10);
-  if (isNaN(points)) { res.status(400).json({ error: "Invalid points" }); return; }
+
+  // The birthday bonus is configured under Loyalty settings (config.birthdayBonusPoints,
+  // default 100). The server is the source of truth so the awarded amount can't drift
+  // from what the merchant configured; the client-sent points are ignored.
+  const [settingsRow] = await db
+    .select({ config: loyaltySettingsTable.config })
+    .from(loyaltySettingsTable)
+    .where(eq(loyaltySettingsTable.merchantId, merchantId));
+  const configured = Number((settingsRow?.config as Record<string, unknown> | undefined)?.birthdayBonusPoints);
+  const points = Number.isFinite(configured) ? Math.round(configured) : 100;
+  if (points < 0) { res.status(400).json({ error: "Invalid points" }); return; }
 
   const [customer] = await db
     .select({ id: customersTable.id, loyaltyPoints: customersTable.loyaltyPoints })

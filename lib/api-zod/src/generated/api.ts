@@ -2482,6 +2482,7 @@ export const GetLoyaltySettingsResponse = zod.object({
   "cashbackRate": zod.number().optional(),
   "pointsPerDollar": zod.number().optional(),
   "dollarPerPoint": zod.number().optional(),
+  "birthdayBonusPoints": zod.number().optional().describe('Loyalty points awarded from the dashboard birthday prompt.'),
   "tiers": zod.array(zod.object({
   "name": zod.string(),
   "minSpend": zod.number().optional().describe('Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.'),
@@ -2532,6 +2533,7 @@ export const UpdateLoyaltySettingsBody = zod.object({
   "cashbackRate": zod.number().optional(),
   "pointsPerDollar": zod.number().optional(),
   "dollarPerPoint": zod.number().optional(),
+  "birthdayBonusPoints": zod.number().optional().describe('Loyalty points awarded from the dashboard birthday prompt.'),
   "tiers": zod.array(zod.object({
   "name": zod.string(),
   "minSpend": zod.number().optional().describe('Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.'),
@@ -2578,6 +2580,7 @@ export const UpdateLoyaltySettingsResponse = zod.object({
   "cashbackRate": zod.number().optional(),
   "pointsPerDollar": zod.number().optional(),
   "dollarPerPoint": zod.number().optional(),
+  "birthdayBonusPoints": zod.number().optional().describe('Loyalty points awarded from the dashboard birthday prompt.'),
   "tiers": zod.array(zod.object({
   "name": zod.string(),
   "minSpend": zod.number().optional().describe('Minimum lifetime spend (dollars) to reach this tier. Either minSpend or pointsRequired should be set.'),

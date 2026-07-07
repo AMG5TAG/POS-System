@@ -12417,6 +12417,9 @@ components:
           type: number
         dollarPerPoint:
           type: number
+        birthdayBonusPoints:
+          type: integer
+          description: Loyalty points awarded from the dashboard birthday prompt.
         tiers:
           type: array
           items:
@@ -12474,6 +12477,9 @@ components:
           type: number
         dollarPerPoint:
           type: number
+        birthdayBonusPoints:
+          type: integer
+          description: Loyalty points awarded from the dashboard birthday prompt.
         tiers:
           type: array
           items:

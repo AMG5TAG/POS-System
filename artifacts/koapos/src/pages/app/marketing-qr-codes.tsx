@@ -119,6 +119,12 @@ const DEFAULT_SETTINGS: QRSettings = {
    only ones a "track scans" dynamic QR makes sense for. */
 const TRACKABLE_TYPES = new Set<QRCodeType>(["website", "landing", "shortlink", "dynamic", "document", "social"]);
 
+/* qrType values written by services/entityQr.ts for the auto-generated product,
+   customer and service QR codes. These share the qr_codes table with generator
+   codes but are managed on their own pages, so the generator's "Saved QR Codes"
+   list filters them out. */
+const ENTITY_QR_TYPES = new Set<string>(["product", "customer", "service"]);
+
 const DARK_SWATCHES  = ["#000000", "#166534", "#1d4ed8", "#4338ca", "#7e22ce", "#be185d", "#b91c1c", "#c2410c"];
 const LIGHT_SWATCHES = ["transparent", "#ffffff", "#e8e4f7", "#fde8e8", "#fef3c7", "#e9d5ff", "#dcfce7", "#bae6fd"];
 
@@ -368,53 +374,68 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
   };
 }
 
-/* Render the bare QR to an SVG string. getRawData() loads the embedded logo with
-   crossOrigin="anonymous" so the result is canvas-safe; if that load fails (most
-   commonly a CORS-blocked or unreachable remote logo) it rejects, taking down both
-   the PNG and SVG export. The live preview uses append() and never hits this path,
-   so a QR can look fine on screen yet fail to download. When a logo is set and the
-   render rejects, retry once without it so the QR itself still exports, reporting
-   whether the logo had to be dropped. */
-async function renderQrSvgText(settings: QRSettings, data: string, qrSize: number): Promise<{ qrSvg: string; droppedLogo: boolean }> {
+/* Resolution the bare QR is rasterised at before being embedded into the framed
+   export. Kept generous (and independent of the frame's on-screen size) so the
+   embedded QR stays crisp even when the exported file is scaled up for print. */
+const QR_EXPORT_PX = 1024;
+
+function blobToDataUri(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload  = () => resolve(reader.result as string);
+    reader.onerror = () => reject(reader.error ?? new Error("Failed to read QR blob"));
+    reader.readAsDataURL(blob);
+  });
+}
+
+/* Rasterise the bare QR to a PNG data URI.
+
+   The QR must be a *raster* image in the export, NOT qr-code-styling's own SVG
+   markup. qr-code-styling draws every dot by painting a solid rectangle through a
+   <clipPath>; when that markup is nested inside the frame SVG and the whole thing
+   is rasterised via <img> → <canvas> (the PNG path), the nested clip-paths do not
+   survive rasterisation — the dots collapse into solid stripes and any outer
+   circular clip is lost, so the downloaded QR is garbled and won't scan. The live
+   preview escapes this because it renders in the live DOM (append()), where nested
+   clip-paths work. Rasterising the QR on its own first (where its clip-path is the
+   top-level element and renders correctly) and embedding the result as a flat
+   <image> sidesteps the whole class of bug for every template.
+
+   getRawData("png") loads any embedded logo with crossOrigin="anonymous" so the
+   canvas stays untainted; if that load fails (CORS-blocked or unreachable remote
+   logo) it rejects. When a logo is set and the render rejects, retry once without
+   it so the QR itself still exports, reporting whether the logo had to be dropped. */
+async function renderQrPngDataUri(settings: QRSettings, data: string): Promise<{ qrHref: string; droppedLogo: boolean }> {
   const render = async (opts: QROptions) => {
-    const blob = await new QRCodeStyling(opts).getRawData("svg");
+    const blob = await new QRCodeStyling(opts).getRawData("png");
     if (!blob) throw new Error("QR render failed");
-    return (await (blob as Blob).text())
-      .replace(/<\?xml[^>]*\?>/i, "")
-      .replace(/<!DOCTYPE[^>]*>/i, "")
-      .trim();
+    return blobToDataUri(blob as Blob);
   };
   const safeData = data || "https://koapos.com";
   try {
-    return { qrSvg: await render(buildQROptions(settings, safeData, qrSize)), droppedLogo: false };
+    return { qrHref: await render(buildQROptions(settings, safeData, QR_EXPORT_PX)), droppedLogo: false };
   } catch (err) {
     if (!settings.logoUrl) throw err;
-    const qrSvg = await render(buildQROptions({ ...settings, logoUrl: "" }, safeData, qrSize));
-    return { qrSvg, droppedLogo: true };
+    const qrHref = await render(buildQROptions({ ...settings, logoUrl: "" }, safeData, QR_EXPORT_PX));
+    return { qrHref, droppedLogo: true };
   }
 }
 
 /* ── Framed SVG export ─────────────────────────────────────────────────────
-   Composes the QR together with its template frame into a single vector SVG so
-   downloads match the live preview (PNG export rasterises this same SVG). This
-   mirrors the visual logic of <TemplateWrapper> in vector primitives. */
+   Composes the QR together with its template frame into a single SVG so downloads
+   match the live preview (PNG export rasterises this same SVG). The frame itself is
+   vector; the QR is embedded as a pre-rasterised <image> (see renderQrPngDataUri
+   for why). This mirrors the visual logic of <TemplateWrapper> in SVG primitives. */
 async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: number): Promise<{ svg: string; width: number; height: number; droppedLogo: boolean }> {
-  const { qrSvg, droppedLogo } = await renderQrSvgText(settings, data, qrSize);
+  const { qrHref, droppedLogo } = await renderQrPngDataUri(settings, data);
 
-  // Embed the QR as a nested <svg> at (x, y); force width/height so it renders
-  // at qrSize regardless of how qr-code-styling emitted its root attributes.
-  // qr-code-styling already emits width/height (and sometimes x/y) on its root
-  // <svg>, so we must strip those before injecting ours — otherwise the tag ends
-  // up with duplicate attributes, which is invalid XML. The live preview tolerates
-  // it (lenient HTML parsing via append()), but the export is loaded as a strict
-  // image/svg+xml data URI, where duplicates make the image fail to load and the
-  // whole download silently aborts with "Download failed".
+  // Embed the QR as a flat raster <image> at (x, y), sized to qrSize. Clipping to
+  // a circle/rounded-rect is applied by the surrounding <g clip-path> and composes
+  // correctly against a raster image (unlike the QR's own nested clip-paths, which
+  // do not survive <img> → canvas rasterisation). xlink:href is used for the widest
+  // renderer compatibility (the root <svg> declares the xlink namespace).
   const place = (x: number, y: number) =>
-    qrSvg.replace(/^<svg\b[^>]*>/i, (tag) =>
-      tag
-        .replace(/\s(?:x|y|width|height)\s*=\s*("[^"]*"|'[^']*')/gi, "")
-        .replace(/^<svg\b/i, `<svg x="${x}" y="${y}" width="${qrSize}" height="${qrSize}"`),
-    );
+    `<image x="${x}" y="${y}" width="${qrSize}" height="${qrSize}" preserveAspectRatio="none" xlink:href="${qrHref}"/>`;
 
   const tpl     = settings.template;
   // Frame decorations (borders, rings, bars, ticks) use the dedicated border
@@ -435,7 +456,7 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
   const innerR = Math.round(8 * s);
 
   const wrap = (w: number, h: number, body: string) => ({
-    svg: `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`,
+    svg: `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">${body}</svg>`,
     width: w, height: h, droppedLogo,
   });
   const clip = (id: string, shape: string, inner: string, extra = "") =>
@@ -548,7 +569,7 @@ async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: numb
     const cx = margin, cy = margin;
     return {
       svg:
-        `<svg xmlns="http://www.w3.org/2000/svg" width="${total}" height="${total}" viewBox="0 0 ${total} ${total}">` +
+        `<svg xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink" width="${total}" height="${total}" viewBox="0 0 ${total} ${total}">` +
         `<defs><filter id="cardsh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="${Math.round(3 * s)}" stdDeviation="${Math.round(4 * s)}" flood-opacity="0.18"/></filter></defs>` +
         `<rect x="${cx}" y="${cy}" width="${box}" height="${box}" rx="${radius}" fill="${bg}" filter="url(#cardsh)"/>` +
         clip("fclip", `<rect x="${cx + cpad}" y="${cy + cpad}" width="${qrSize}" height="${qrSize}" rx="${innerR}"/>`, place(cx + cpad, cy + cpad)) +
@@ -1224,7 +1245,15 @@ export default function MarketingQRCodesPage() {
   const createTemplate = useCreateQrSavedTemplate();
   const deleteTemplate = useDeleteQrSavedTemplate();
 
-  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as unknown as Record<string, unknown>[]).map(apiToEntry);
+  // The /qr-codes endpoint is shared: it also returns the auto-generated QR codes
+  // for products, customers and services (tagged with those qrType values by
+  // services/entityQr.ts). Those belong to their own pages — the generator's
+  // "Saved QR Codes" list must show only codes created here, so exclude entity
+  // types. An exclusion list (rather than an allow-list) keeps new generator types
+  // working without changes here.
+  const history:        QREntry[]          = ((codesResponse?.items     ?? []) as unknown as Record<string, unknown>[])
+    .map(apiToEntry)
+    .filter((e) => !ENTITY_QR_TYPES.has(e.qrType ?? "website"));
   const savedTemplates: SavedQRTemplate[]  = ((templatesResponse?.items ?? []) as unknown as Record<string, unknown>[]).map(apiToTemplate);
 
   // Resolve the merchant's landing pages and shortlinks into selectable QR targets.

@@ -381,6 +381,7 @@ function toForm(s: LoyaltySettings) {
     cashbackRate:           ((s.cashbackRate ?? 0.01) * 100).toString(),
     pointsPerDollar:        (s.pointsPerDollar ?? 1).toString(),
     dollarPerPoint:         (s.dollarPerPoint ?? 0.01).toString(),
+    birthdayBonusPoints:    (s.birthdayBonusPoints ?? 100).toString(),
     tiers:                  (s.tiers ?? [{ name: "Bronze", minSpend: 0, rate: 1 }, { name: "Silver", minSpend: 500, rate: 2 }, { name: "Gold", minSpend: 1000, rate: 3 }]) as Tier[],
     stampsRequired:         (s.stampsRequired ?? 10).toString(),
     stampRewardValue:       (s.stampRewardValue ?? 10).toString(),
@@ -414,6 +415,7 @@ export default function ManagementLoyaltyPage() {
     cashbackRate:           "1",
     pointsPerDollar:        "1",
     dollarPerPoint:         "0.01",
+    birthdayBonusPoints:    "100",
     tiers:                  [
       { name: "Bronze", minSpend: 0,    rate: 1 },
       { name: "Silver", minSpend: 500,  rate: 2 },
@@ -468,6 +470,7 @@ export default function ManagementLoyaltyPage() {
         cashbackRate:           parseFloat(form.cashbackRate) / 100,
         pointsPerDollar:        parseFloat(form.pointsPerDollar),
         dollarPerPoint:         parseFloat(form.dollarPerPoint),
+        birthdayBonusPoints:    Math.max(0, Math.round(parseFloat(form.birthdayBonusPoints) || 0)),
         tiers:                  form.tiers.map(t => ({ ...t, rate: (t.rate ?? 0) / 100 })),
         stampsRequired:         parseInt(form.stampsRequired),
         stampRewardValue:       parseFloat(form.stampRewardValue),
@@ -800,6 +803,29 @@ export default function ManagementLoyaltyPage() {
                 </div>
               </div>
             )}
+          </CardContent>
+        </Card>
+
+        {/* Birthday Bonus — applies to every program type; the dashboard birthday
+            prompt awards this many loyalty points. */}
+        <Card id="birthday-bonus">
+          <CardHeader>
+            <div className="flex items-center gap-2">
+              <Gift className="w-4 h-4 text-primary" />
+              <CardTitle className="text-base">Birthday Bonus</CardTitle>
+            </div>
+            <CardDescription>Points awarded when you tap the birthday reward on a customer from the Dashboard birthday prompt.</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="max-w-[220px]">
+              <Label>Birthday Reward Points</Label>
+              <p className="text-xs text-muted-foreground mb-2">Set to 0 to disable the reward.</p>
+              <Input
+                type="number" step="1" min="0"
+                value={form.birthdayBonusPoints}
+                onChange={(e) => set("birthdayBonusPoints", e.target.value)}
+              />
+            </div>
           </CardContent>
         </Card>
 

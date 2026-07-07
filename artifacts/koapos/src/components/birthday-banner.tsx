@@ -73,6 +73,19 @@ export function BirthdayBanner() {
     },
   });
 
+  // The birthday bonus amount is configured under Management → Loyalty
+  // (birthdayBonusPoints). The server is the source of truth on award; this is
+  // only to show the correct amount on the button. Falls back to 100.
+  const { data: loyaltySettings } = useQuery<{ birthdayBonusPoints?: number }>({
+    queryKey: ["loyalty-settings"],
+    queryFn: async () => {
+      const r = await fetch("/api/loyalty/settings", { credentials: "include" });
+      if (!r.ok) return {};
+      return r.json();
+    },
+  });
+  const bonusPoints = loyaltySettings?.birthdayBonusPoints ?? 100;
+
   const awardMutation = useMutation({
     mutationFn: async ({ id, points }: { id: number; points: number }) => {
       const r = await fetch(`/api/customers/${id}/birthday-reward`, {
@@ -112,10 +125,10 @@ export function BirthdayBanner() {
                 ) : (
                   <Button size="sm" variant="ghost"
                     className="h-5 text-[11px] text-pink-700 dark:text-pink-300 hover:text-pink-800 px-1.5 font-medium"
-                    onClick={() => awardMutation.mutate({ id: c.id, points: 100 })}
+                    onClick={() => awardMutation.mutate({ id: c.id, points: bonusPoints })}
                     disabled={awardMutation.isPending}>
                     <Gift className="w-2.5 h-2.5 mr-1" />
-                    +100 pts
+                    +{bonusPoints} pts
                   </Button>
                 )}
               </div>
