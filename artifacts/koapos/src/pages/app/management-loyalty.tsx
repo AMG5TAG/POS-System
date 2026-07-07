@@ -803,27 +803,22 @@ export default function ManagementLoyaltyPage() {
                 </div>
               </div>
             )}
-          </CardContent>
-        </Card>
 
-        {/* Birthday Bonus — applies to every program type; the dashboard birthday
-            prompt awards this many loyalty points. */}
-        <Card id="birthday-bonus">
-          <CardHeader>
-            <div className="flex items-center gap-2">
-              <Gift className="w-4 h-4 text-primary" />
-              <CardTitle className="text-base">Birthday Bonus</CardTitle>
-            </div>
-            <CardDescription>Points awarded when you tap the birthday reward on a customer from the Dashboard birthday prompt.</CardDescription>
-          </CardHeader>
-          <CardContent>
-            <div className="max-w-[220px]">
-              <Label>Birthday Reward Points</Label>
-              <p className="text-xs text-muted-foreground mb-2">Set to 0 to disable the reward.</p>
+            {/* Birthday Bonus — applies to every program type; the dashboard
+                birthday prompt awards this many loyalty points. */}
+            <div id="birthday-bonus" className="border-t pt-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <Gift className="w-4 h-4 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <Label className="text-sm">Birthday Bonus</Label>
+                  <p className="text-xs text-muted-foreground">Points from the Dashboard birthday prompt. 0 disables.</p>
+                </div>
+              </div>
               <Input
                 type="number" step="1" min="0"
                 value={form.birthdayBonusPoints}
                 onChange={(e) => set("birthdayBonusPoints", e.target.value)}
+                className="w-24 shrink-0"
               />
             </div>
           </CardContent>
