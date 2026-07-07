@@ -433,6 +433,16 @@ export default function ManagementLoyaltyPage() {
   });
 
   const naming = form.naming;
+  // Reward unit label for the active program type (e.g. cashback → "Credits",
+  // not "Points"). Falls back to the default if the merchant cleared the name.
+  const UNIT_KEY: Record<ProgramType, keyof LoyaltyNaming> = {
+    cashback: "cashbackUnit",
+    points:   "pointsUnit",
+    tiered:   "tieredUnit",
+    stamp:    "stampUnit",
+    custom:   "customUnit",
+  };
+  const unitName = naming[UNIT_KEY[form.programType]]?.trim() || NAMING_DEFAULTS[UNIT_KEY[form.programType]];
   const setNamingField = <K extends keyof LoyaltyNaming>(key: K, value: string) =>
     setForm((prev) => ({ ...prev, naming: { ...prev.naming, [key]: value } }));
 
@@ -811,7 +821,7 @@ export default function ManagementLoyaltyPage() {
                 <Gift className="w-4 h-4 text-primary shrink-0" />
                 <div className="min-w-0">
                   <Label className="text-sm">Birthday Bonus</Label>
-                  <p className="text-xs text-muted-foreground">Points from the Dashboard birthday prompt. 0 disables.</p>
+                  <p className="text-xs text-muted-foreground">{unitName} from the Dashboard birthday prompt. 0 disables.</p>
                 </div>
               </div>
               <Input
