@@ -1947,14 +1947,18 @@ export default function MarketingQRCodesPage() {
                           </p>
                         </div>
                         <div className="space-y-1.5 pt-1">
-                          <div className="flex items-center justify-between">
-                            <Label className="text-xs">Logo size</Label>
-                            <span className="text-[10px] text-muted-foreground font-mono">{Math.round(settings.logoSize * 100)}%</span>
+                          <Label className="text-xs">Logo size</Label>
+                          <div className="relative w-28">
+                            <input type="number" min={15} max={50} step={1}
+                              value={Math.round(settings.logoSize * 100)}
+                              onChange={(e) => {
+                                const pct = Math.min(50, Math.max(15, Math.round(Number(e.target.value) || 0)));
+                                set("logoSize", pct / 100);
+                              }}
+                              className="w-full rounded-md border bg-background px-2 py-1 pr-6 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring" />
+                            <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
                           </div>
-                          <input type="range" min={0.15} max={0.5} step={0.01} value={settings.logoSize}
-                            onChange={(e) => set("logoSize", parseFloat(e.target.value))}
-                            className="w-full accent-primary cursor-pointer" />
-                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code — keep ECC at Q or H so it still scans.</p>
+                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code — keep ECC at Q or H so it still scans. Range 15–50%.</p>
                         </div>
                       </>
                     )}
