@@ -67,6 +67,7 @@ import {
   Loader2,
   FileText,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -451,6 +452,7 @@ export function BackupSettingsPanel() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [drafts, setDrafts] = useState<DestDraft[]>([]);
   const [passwordIsSet, setPasswordIsSet] = useState(false);
+  const [showAllBackups, setShowAllBackups] = useState(false);
 
   const [restoreTarget, setRestoreTarget] = useState<Backup | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
@@ -466,6 +468,7 @@ export function BackupSettingsPanel() {
   }, [config]);
 
   const backups = (backupsQuery.data?.items ?? []) as Backup[];
+  const visibleBackups = showAllBackups ? backups : backups.slice(0, 5);
   const hasPendingBackup = backups.some((b) => b.status === "pending");
 
   const canSave = useMemo(() => {
@@ -593,6 +596,8 @@ export function BackupSettingsPanel() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+          {/* Left column: Encryption + scheduled backups stacked in a half box */}
+          <div className="space-y-6">
           {/* Encryption + schedule */}
           <Card>
             <CardHeader>
@@ -661,6 +666,10 @@ export function BackupSettingsPanel() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Scheduled backups sit directly under Encryption in the left half */}
+          <BackupSchedulesCard destinations={config?.destinations ?? []} passwordIsSet={passwordIsSet} />
+          </div>
 
           {/* Destinations */}
           <Card>
@@ -942,9 +951,6 @@ export function BackupSettingsPanel() {
           </Button>
         </div>
 
-        {/* Scheduled backups (multiple) */}
-        <BackupSchedulesCard destinations={config?.destinations ?? []} passwordIsSet={passwordIsSet} />
-
         {/* History */}
         <Card>
           <CardHeader>
@@ -974,7 +980,7 @@ export function BackupSettingsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {backups.map((b) => (
+                  {visibleBackups.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell className="whitespace-nowrap">
                         {formatDate(b.startedAt)}
@@ -1018,6 +1024,24 @@ export function BackupSettingsPanel() {
                             )}
                           </Button>
                           <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={b.status !== "completed"}
+                            title="Download backup to this computer"
+                            aria-label="Download backup"
+                            onClick={() => {
+                              const a = document.createElement("a");
+                              a.href = `/api/backups/${b.id}/download`;
+                              a.rel = "noopener";
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
                             variant="outline"
                             size="sm"
                             disabled={b.status !== "completed"}
@@ -1034,6 +1058,13 @@ export function BackupSettingsPanel() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+            {backups.length > 5 && (
+              <div className="mt-3 flex justify-center">
+                <Button variant="ghost" size="sm" onClick={() => setShowAllBackups((v) => !v)}>
+                  {showAllBackups ? "Show less" : `Show more (${backups.length - 5})`}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

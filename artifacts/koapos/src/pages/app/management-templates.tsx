@@ -362,15 +362,16 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer", key: "footerText",          label: "Footer Text",            type: "text",   placeholder: "e.g. Confidential — internal use only", quickCodes: true },
     ];
     case "Email": return [
-      { section: "Header",  key: "showLogo",       label: "Show Business Logo",   type: "toggle", hint: "Displays your logo in the email header" },
-      { section: "Header",  key: "showAbn",        label: "Show ABN",             type: "toggle" },
-      { section: "Content", key: "subjectLine",    label: "Default Subject Line", type: "text",     placeholder: "A message from {{business.name}}", quickCodes: true },
-      { section: "Content", key: "customGreeting", label: "Greeting",             type: "text",     placeholder: "Hi {{customer.first_name}},", quickCodes: true },
-      { section: "Content", key: "customMessage",  label: "Body Message",         type: "textarea", placeholder: "Thank you for choosing {{business.name}}…", quickCodes: true, rows: 4 },
-      { section: "Content", key: "customSignOff",  label: "Sign-off",             type: "text",     placeholder: "— The team at {{business.name}}", quickCodes: true },
-      { section: "Body",    key: "showGstBreakdown", label: "Show GST Breakdown", type: "toggle" },
-      { section: "Footer",  key: "footerText",     label: "Footer Text",          type: "textarea", placeholder: "e.g. contact details, opening hours, unsubscribe note", quickCodes: true },
-      { section: "Footer",  key: "showWebsite",    label: "Show Website",         type: "toggle" },
+      { section: "Branding", key: "showLogo",              label: "Show Business Logo",   type: "toggle", hint: "Displays your logo in the email header" },
+      { section: "Branding", key: "headerText",            label: "Header Text",          type: "text",     placeholder: "e.g. {{business.name}} — Order Update", quickCodes: true },
+      { section: "Content",  key: "subjectLine",           label: "Subject Line",         type: "text",     placeholder: "A message from {{business.name}}", quickCodes: true },
+      { section: "Content",  key: "customGreeting",        label: "Greeting",             type: "text",     placeholder: "Hi {{customer.first_name}},", quickCodes: true },
+      { section: "Content",  key: "customMessage",         label: "Body Message",         type: "textarea", placeholder: "Write the main body of your email…", quickCodes: true, rows: 5 },
+      { section: "Content",  key: "customSignOff",         label: "Sign-off",             type: "textarea", placeholder: "Warm regards,\n{{business.name}}", quickCodes: true, rows: 2 },
+      { section: "Footer",   key: "footerText",            label: "Footer Text",          type: "textarea", placeholder: "e.g. contact details, opening hours, unsubscribe note", quickCodes: true },
+      { section: "Footer",   key: "showWebsite",           label: "Show Website",         type: "toggle" },
+      { section: "Footer",   key: "showSocialLinks",       label: "Show Business Socials", type: "toggle", hint: "Pulls social links from Business Info" },
+      { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle" },
     ];
     default: return [];
   }
@@ -1450,75 +1451,75 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
   );
 }
 
-function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, brandColor, tagline, logo, opts }: PreviewProps) {
-  const greeting = opts.customGreeting;
-  const signOff  = opts.customSignOff;
-  const footer   = opts.footerText;
-  const customMsg= opts.customMessage;
-  const total    = "$19.50";
+function EmailPreview({ templateId, businessName, abn, website, email: contactEmail, address, brandColor, tagline, logo, socialLinks, referralCode, referralUrl, opts }: PreviewProps) {
+  const rc = (t: string) => resolveCode(t, businessName, abn, website, contactEmail, referralCode, referralUrl);
+  const accent   = brandColor || "#4f46e5";
+  const subject  = rc(opts.subjectLine   || "A message from {{business.name}}");
+  const greeting = rc(opts.customGreeting || "Hi {{customer.first_name}},");
+  const bodyText = rc(opts.customMessage  || "Thanks so much for choosing {{business.name}} — we really appreciate your business. If there's anything we can help you with, just reply to this email.");
+  const signOff  = rc(opts.customSignOff  || "Warm regards,\nThe {{business.name}} team");
+  const header   = opts.headerText ? rc(opts.headerText) : "";
+  const footer   = opts.footerText ? rc(opts.footerText) : "";
+  const socials  = Object.entries(socialLinks ?? {}).filter(([, v]) => v);
+  const minimal  = templateId === "e-minimal";
+  const casual   = templateId === "e-casual";
 
-  if (templateId === "e-minimal") {
-    return (
-      <div className="text-[10px] font-mono text-gray-800 space-y-1">
-        {opts.subjectLine && <p className="font-medium">{resolveCode(opts.subjectLine, businessName, abn, website, contactEmail)}</p>}
-        <Separator />
-        {greeting && <p>{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>}
-        {customMsg && <p className="text-gray-600">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
-        <p>Thanks for your purchase on 18/05/2026. Total: {total}</p>
-        {opts.showAbn && abn && <p className="text-gray-400">ABN: {abn}</p>}
-        {signOff && <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>}
-        {footer && <p className="text-gray-400">{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
-      </div>
-    );
-  }
-  if (templateId === "e-casual") {
-    return (
-      <div className="text-[10px] text-gray-800">
-        <div className="p-2 rounded-t text-center mb-2" style={{ background: `${brandColor}22` }}>
-          {opts.showLogo && (logo
-            ? <img src={logo} alt="Logo" className="w-9 h-9 rounded-full object-contain mx-auto mb-1" />
-            : <div className="w-7 h-7 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: brandColor }}>{businessName[0]}</div>
-          )}
-          <p className="font-bold">{businessName}</p>
-          {tagline && <p className="text-gray-500 text-[9px] italic">{tagline}</p>}
-        </div>
-        {greeting && <p className="text-[10px] mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>}
-        {customMsg && <p className="text-[10px] text-gray-600 mb-1">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
-        <div className="bg-gray-50 rounded p-1.5 text-[10px] space-y-0.5 mb-2">
-          <div className="flex justify-between"><span>Flat White ×2</span><span>$8.00</span></div>
-          <div className="flex justify-between"><span>Banana Bread ×1</span><span>$6.50</span></div>
-          <div className="flex justify-between font-bold border-t pt-1" style={{ color: brandColor }}><span>Total</span><span>{total}</span></div>
-        </div>
-        {signOff && <p className="text-[10px] text-gray-500">{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>}
-        {footer && <p className="text-[10px] text-gray-400 mt-1">{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
-        {opts.showWebsite && website && <p className="text-[10px] text-blue-500 mt-1">{website}</p>}
-      </div>
-    );
-  }
   return (
-    <div className="text-[10px] text-gray-800">
-      <div className="p-2 text-white mb-2 flex items-center gap-2 rounded-t" style={{ background: brandColor }}>
-        {opts.showLogo && (logo
-          ? <img src={logo} alt="Logo" className="w-7 h-7 object-contain rounded" />
-          : <div className="w-5 h-5 bg-white/20 rounded flex items-center justify-center font-bold text-xs">{businessName[0]}</div>
+    <div className="w-80 bg-white">
+      {/* Email client meta strip — makes clear this is an email, not a receipt */}
+      <div className="px-4 py-2 border-b bg-gray-100/70 space-y-0.5">
+        <p className="text-[9px] text-gray-500 truncate"><span className="font-semibold text-gray-700">From:</span> {businessName} &lt;{contactEmail || "noreply@yourbusiness.com"}&gt;</p>
+        <p className="text-[10px] text-gray-800 truncate"><span className="font-semibold">Subject:</span> {subject}</p>
+      </div>
+
+      {/* Header */}
+      {!minimal && !casual && (
+        <div className="px-4 py-3 text-white flex items-center gap-2" style={{ background: accent }}>
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="" className="w-7 h-7 object-contain rounded bg-white/90 p-0.5" />
+            : <div className="w-6 h-6 bg-white/20 rounded flex items-center justify-center font-bold text-xs">{businessName[0]}</div>)}
+          <div className="min-w-0">
+            <p className="font-bold text-sm truncate">{businessName}</p>
+            {header && <p className="opacity-90 text-[10px] truncate">{header}</p>}
+          </div>
+        </div>
+      )}
+      {casual && (
+        <div className="px-4 py-4 text-center" style={{ background: `${accent}14` }}>
+          {opts.showLogo && (logo
+            ? <img src={logo} alt="" className="w-10 h-10 rounded-full object-contain mx-auto mb-1" />
+            : <div className="w-9 h-9 rounded-full mx-auto mb-1 flex items-center justify-center text-white font-bold" style={{ background: accent }}>{businessName[0]}</div>)}
+          <p className="font-bold text-sm text-gray-800">{businessName}</p>
+          {tagline && <p className="text-gray-500 text-[10px] italic">{tagline}</p>}
+          {header && <p className="text-gray-600 text-[10px] mt-1 whitespace-pre-wrap">{header}</p>}
+        </div>
+      )}
+      {minimal && (
+        <div className="px-4 pt-3">
+          <p className="font-bold text-sm text-gray-800">{businessName}</p>
+          {header && <p className="text-gray-500 text-[10px] whitespace-pre-wrap">{header}</p>}
+        </div>
+      )}
+
+      {/* Body */}
+      <div className="px-4 py-3 space-y-2 text-[11px] text-gray-700 leading-relaxed">
+        <p className="font-medium text-gray-800">{greeting}</p>
+        <p className="whitespace-pre-wrap">{bodyText}</p>
+        <p className="whitespace-pre-wrap pt-1 text-gray-600">{signOff}</p>
+      </div>
+
+      {/* Footer */}
+      <div className="px-4 py-3 border-t bg-gray-50 space-y-1.5 text-[9px] text-gray-500">
+        {footer && <p className="whitespace-pre-wrap">{footer}</p>}
+        <p>{[businessName, opts.showWebsite ? website : "", address].filter(Boolean).join("  ·  ")}</p>
+        {opts.showSocialLinks && socials.length > 0 && (
+          <div className="flex gap-1.5 pt-0.5">
+            {socials.map(([k]) => (
+              <span key={k} className="inline-flex h-4 w-4 items-center justify-center rounded-full text-white text-[8px] font-bold"
+                style={{ backgroundColor: opts.socialIconBrandColors ? accent : "#9ca3af" }}>{k.charAt(0).toUpperCase()}</span>
+            ))}
+          </div>
         )}
-        <div><p className="font-bold text-xs">{businessName}</p>{opts.showAbn && abn && <p className="opacity-70 text-[9px]">ABN {abn}</p>}</div>
-        <span className="ml-auto opacity-70">Receipt</span>
-      </div>
-      {greeting && <p className="text-[10px] px-1 mb-1">{resolveCode(greeting, businessName, abn, website, contactEmail)}</p>}
-      {customMsg && <p className="text-[10px] text-gray-500 px-1 mb-1">{resolveCode(customMsg, businessName, abn, website, contactEmail)}</p>}
-      <table className="w-full text-[10px] px-1">
-        <thead><tr className="border-b"><th className="text-left">Item</th><th className="text-right">Qty</th><th className="text-right">Amt</th></tr></thead>
-        <tbody><tr><td className="py-0.5">Flat White</td><td className="text-right">2</td><td className="text-right">$8.00</td></tr><tr><td className="py-0.5">Banana Bread</td><td className="text-right">1</td><td className="text-right">$6.50</td></tr></tbody>
-      </table>
-      <div className="border-t mt-1 pt-1 px-1 space-y-0.5">
-        <div className="flex justify-between font-bold"><span>Total Paid</span><span>{total}</span></div>
-        {opts.showGstBreakdown && <div className="flex justify-between text-gray-400"><span>GST Included</span><span>$1.77</span></div>}
-      </div>
-      <div className="border-t mt-2 pt-1 px-1 space-y-0.5 text-[9px] text-gray-400">
-        {signOff && <p>{resolveCode(signOff, businessName, abn, website, contactEmail)}</p>}
-        {footer && <p>{resolveCode(footer, businessName, abn, website, contactEmail)}</p>}
-        {opts.showWebsite && website && <p>{website}</p>}
       </div>
     </div>
   );
@@ -2184,7 +2185,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
                     onClick={() => {
                       update("showLogo", true);
                       update("showWebsite", true);
-                      update("showAbn", true);
+                      update("showSocialLinks", true);
                       update("footerText", [businessName, previewProps.address, previewProps.email, previewProps.website].filter(Boolean).join(" · "));
                       toast.success("Imported details from Business Info");
                     }}>

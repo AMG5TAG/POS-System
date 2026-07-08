@@ -263,6 +263,49 @@ router.post(
   },
 );
 
+// GET /backups/:id/download — stream the encrypted backup archive to the browser
+// so the merchant can keep an offline copy (still restorable with their password).
+router.get("/backups/:id/download", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { id } = RestoreBackupParams.parse(req.params);
+
+  const [backup] = await db
+    .select()
+    .from(merchantBackupsTable)
+    .where(and(eq(merchantBackupsTable.id, id), eq(merchantBackupsTable.merchantId, merchantId)));
+
+  if (!backup) { res.status(404).json({ error: "Backup not found" }); return; }
+  if (backup.status !== "completed" || !backup.filePath) {
+    res.status(400).json({ error: "Backup is not downloadable" });
+    return;
+  }
+
+  // Prefer the local canonical copy; fall back to the durable server copy.
+  let archivePath = backup.filePath;
+  let cleanup: (() => Promise<void>) | null = null;
+  if (!existsSync(archivePath)) {
+    const serverLoc = ((backup.locations ?? []) as BackupLocation[]).find((l) => l.type === "server");
+    if (!serverLoc) { res.status(410).json({ error: "Backup file is no longer available on this server" }); return; }
+    try {
+      const dl = await downloadServerCopy(serverLoc.ref);
+      archivePath = dl.path;
+      cleanup = dl.cleanup;
+    } catch (err) {
+      req.log.error({ merchantId, backupId: id, err }, "Server backup fetch failed");
+      res.status(500).json({ error: "Could not retrieve the backup from the server" });
+      return;
+    }
+  }
+
+  const startedAt = backup.startedAt ? new Date(backup.startedAt).toISOString().slice(0, 10) : "backup";
+  const fileName = `koapos-backup-${merchantId}-${startedAt}-${id}.koapos.enc`;
+  res.download(archivePath, fileName, async (err) => {
+    if (cleanup) await cleanup().catch(() => { /* best-effort */ });
+    if (err && !res.headersSent) res.status(500).end();
+    else if (err) req.log.warn({ merchantId, backupId: id, err }, "Backup download stream error");
+  });
+});
+
 /* ── Named backup schedules (multiple per merchant) ──────────────────────────── */
 
 const SCHEDULE_FREQUENCIES = new Set(["daily", "weekly", "monthly"]);

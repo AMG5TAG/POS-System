@@ -1914,7 +1914,7 @@ function CustomerDetailInner({
               type="file"
               className="hidden"
               onChange={handleFileChange}
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,application/zip,application/x-zip-compressed"
             />
           </div>
 

@@ -854,6 +854,12 @@ export default function ServiceJobNewPage() {
         body * { visibility: hidden !important; }
         body[data-print="sheet"] #svc-job-sheet-print-area,
         body[data-print="sheet"] #svc-job-sheet-print-area * { visibility: visible !important; }
+        /* Collapse the (hidden) app content to zero height so it can't paginate
+           into a second sheet. The print area is position:fixed (viewport-
+           relative), so #root's overflow does NOT clip it — but with #root
+           collapsed only one page is generated, so the fixed sheet, which Chrome
+           would otherwise repeat on every page, now prints exactly once. */
+        body[data-print="sheet"] #root { height: 0 !important; overflow: hidden !important; }
         body[data-print="sheet"] #svc-job-sheet-print-area {
           display: block !important;
           position: fixed !important; left: 0 !important; top: 0 !important;
