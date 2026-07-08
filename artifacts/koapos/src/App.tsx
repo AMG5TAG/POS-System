@@ -112,6 +112,8 @@ const ManagementServicePlansPage = lazyWithRetry(() => import("@/pages/app/manag
 const ManagementLocationsPage = lazyWithRetry(() => import("@/pages/app/management-locations"));
 /** Misc templates = the same editor scoped to the "misc" section (Customer PDF, …). */
 const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
+/** Email templates = the same editor scoped to the "email" section (outgoing emails). */
+const ManagementEmailTemplatesPage = () => <ManagementTemplatesPage section="email" />;
 const ManagementFormsPage = lazyWithRetry(() => import("@/pages/app/management-forms"));
 const ManagementStickersPage = lazyWithRetry(() => import("@/pages/app/management-stickers"));
 const InventoryWastagePage = lazyWithRetry(() => import("@/pages/app/inventory-wastage"));
@@ -559,6 +561,9 @@ function Router() {
       </Route>
       <Route path="/management/templates/misc">
         <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
+      </Route>
+      <Route path="/management/templates/email">
+        <ManagementProtectedRoute component={ManagementEmailTemplatesPage} />
       </Route>
       <Route path="/management/products-inventory/labels">
         <ManagementProtectedRoute component={ManagementStickersPage} />

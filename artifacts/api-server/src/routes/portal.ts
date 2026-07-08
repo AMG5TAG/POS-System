@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, customersTable, merchantsTable, loyaltySettingsTable, appointmentsTable, serviceJobsTable, quotesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { formatAddressParts } from "../lib/address";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { deflateSync } from "node:zlib";
@@ -280,6 +281,10 @@ router.get("/portal/:token", async (req, res): Promise<void> => {
     email: customer.email,
     phone: customer.phone,
     address: customer.address,
+    billingStreet: customer.billingStreet,
+    billingCity: customer.billingCity,
+    billingState: customer.billingState,
+    billingPostcode: customer.billingPostcode,
     dateOfBirth: customer.dateOfBirth,
     loyaltyPoints: customer.loyaltyPoints,
     totalSpent: parseFloat(customer.totalSpent),
@@ -299,7 +304,10 @@ const UpdateProfileBody = z.object({
   lastName:  z.string().optional(),
   email:     z.string().email().optional(),
   phone:     z.string().optional(),
-  address:   z.string().optional(),
+  billingStreet:   z.string().optional(),
+  billingCity:     z.string().optional(),
+  billingState:    z.string().optional(),
+  billingPostcode: z.string().optional(),
   dateOfBirth: z.string().optional(),
 });
 
@@ -310,9 +318,20 @@ router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
   const parsed = UpdateProfileBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const data = parsed.data;
+  // Keep the legacy free-text `address` in sync with the structured billing fields.
+  // Merge the submitted fields over the EXISTING row so a partial update (or a
+  // submission with empty structured fields) can't clobber the stored address.
+  const structuredKeys = ["billingStreet", "billingCity", "billingState", "billingPostcode"] as const;
+  const hasStructured = structuredKeys.some((k) => data[k] !== undefined);
+  const merged = formatAddressParts(...structuredKeys.map((k) => data[k] ?? customer[k]));
+  // Only rewrite `address` when the merge yields real content, so an all-empty
+  // submission leaves any existing free-text address untouched.
+  const derivedAddress = hasStructured && merged ? merged : undefined;
+
   const [updated] = await db
     .update(customersTable)
-    .set(parsed.data)
+    .set({ ...data, ...(derivedAddress !== undefined ? { address: derivedAddress } : {}) })
     .where(eq(customersTable.id, customer.id))
     .returning();
 
@@ -322,6 +341,10 @@ router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
     email:     updated.email,
     phone:     updated.phone,
     address:   updated.address,
+    billingStreet: updated.billingStreet,
+    billingCity: updated.billingCity,
+    billingState: updated.billingState,
+    billingPostcode: updated.billingPostcode,
     dateOfBirth: updated.dateOfBirth,
   });
 });

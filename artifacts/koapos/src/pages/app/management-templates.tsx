@@ -54,13 +54,14 @@ import { FontPicker } from "@/components/ui/font-picker";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
-type Category = "Thermal_Receipt" | "Invoice" | "A4_Receipt" | "Quote" | "Service_Ticket" | "Customer_PDF";
+type Category = "Thermal_Receipt" | "Invoice" | "A4_Receipt" | "Quote" | "Service_Ticket" | "Customer_PDF" | "Email";
 
 /** Which template categories belong to each Management → Templates sub-section. */
-type TemplateSection = "sales" | "misc";
+type TemplateSection = "sales" | "misc" | "email";
 const SECTION_CATEGORIES: Record<TemplateSection, Category[]> = {
   sales: ["Thermal_Receipt", "Invoice", "A4_Receipt", "Quote", "Service_Ticket"],
   misc:  ["Customer_PDF"],
+  email: ["Email"],
 };
 
 interface TemplateOption {
@@ -201,7 +202,7 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
       const { headerText, footerText, showLogo, fontFamily, ...rest } = opts;
       upsert.mutate(
         {
-          templateType: category as "Invoice" | "Thermal_Receipt" | "A4_Receipt" | "Quote" | "Service_Ticket",
+          templateType: category as "Invoice" | "Thermal_Receipt" | "A4_Receipt" | "Quote" | "Service_Ticket" | "Customer_PDF" | "Email",
           data: {
             headerHtml: headerText,
             footerHtml: footerText,
@@ -359,6 +360,17 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",   key: "showWarningNote",     label: "Customer Warning Note",  type: "toggle", hint: "The red alert note shown on the customer profile" },
       { section: "Body",   key: "showInternalNotes",   label: "Internal Notes",         type: "toggle", hint: "Staff-only notes field on the customer record" },
       { section: "Footer", key: "footerText",          label: "Footer Text",            type: "text",   placeholder: "e.g. Confidential — internal use only", quickCodes: true },
+    ];
+    case "Email": return [
+      { section: "Header",  key: "showLogo",       label: "Show Business Logo",   type: "toggle", hint: "Displays your logo in the email header" },
+      { section: "Header",  key: "showAbn",        label: "Show ABN",             type: "toggle" },
+      { section: "Content", key: "subjectLine",    label: "Default Subject Line", type: "text",     placeholder: "A message from {{business.name}}", quickCodes: true },
+      { section: "Content", key: "customGreeting", label: "Greeting",             type: "text",     placeholder: "Hi {{customer.first_name}},", quickCodes: true },
+      { section: "Content", key: "customMessage",  label: "Body Message",         type: "textarea", placeholder: "Thank you for choosing {{business.name}}…", quickCodes: true, rows: 4 },
+      { section: "Content", key: "customSignOff",  label: "Sign-off",             type: "text",     placeholder: "— The team at {{business.name}}", quickCodes: true },
+      { section: "Body",    key: "showGstBreakdown", label: "Show GST Breakdown", type: "toggle" },
+      { section: "Footer",  key: "footerText",     label: "Footer Text",          type: "textarea", placeholder: "e.g. contact details, opening hours, unsubscribe note", quickCodes: true },
+      { section: "Footer",  key: "showWebsite",    label: "Show Website",         type: "toggle" },
     ];
     default: return [];
   }
@@ -890,10 +902,12 @@ function OptionsPanel({
           <Save className="w-3.5 h-3.5" />
           {saving ? "Saving…" : "Save Template"}
         </Button>
-        <Button size="sm" variant="outline" className="w-full gap-2" onClick={onPreview}>
-          <Printer className="w-3.5 h-3.5" />
-          Print Preview
-        </Button>
+        {category !== "Email" && (
+          <Button size="sm" variant="outline" className="w-full gap-2" onClick={onPreview}>
+            <Printer className="w-3.5 h-3.5" />
+            Print Preview
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -929,6 +943,11 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
   Customer_PDF: [
     { id: "cp-standard", name: "Standard", style: "professional", description: "Branded header, full customer history export" },
   ],
+  Email: [
+    { id: "e-pro",     name: "Professional", style: "professional", description: "Branded header with logo, itemised summary" },
+    { id: "e-casual",  name: "Casual",       style: "casual",       description: "Friendly rounded header, warm tone" },
+    { id: "e-minimal", name: "Minimal",      style: "minimal",      description: "Plain text-style, no header graphics" },
+  ],
 };
 
 const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; color: string }> = {
@@ -938,6 +957,7 @@ const CATEGORY_META: Record<Category, { label: string; icon: React.ElementType; 
   Quote:           { label: "Quote",            icon: FileSearch,    color: "text-amber-500"   },
   Service_Ticket:  { label: "Service Ticket",   icon: ClipboardList, color: "text-cyan-500"    },
   Customer_PDF:    { label: "Customer PDF",     icon: FileDown,      color: "text-fuchsia-500" },
+  Email:           { label: "Emails",            icon: Mail,          color: "text-rose-500"    },
 };
 
 const STYLE_ICONS: Record<string, React.ElementType> = {
@@ -1854,6 +1874,7 @@ const DEFAULT_STYLE: Record<Category, string> = {
   Quote:           "q-pro",
   Service_Ticket:  "ss-standard",
   Customer_PDF:    "cp-standard",
+  Email:           "e-pro",
 };
 
 export default function ManagementTemplatesPage({ section = "sales" }: { section?: TemplateSection } = {}) {
@@ -2058,6 +2079,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       case "Quote":            return <InvoicePreview      {...previewProps} />;
       case "Service_Ticket":   return <ServiceSheetPreview {...previewProps} />;
       case "Customer_PDF":     return <CustomerPdfPreview  {...previewProps} />;
+      case "Email":            return <EmailPreview        {...previewProps} />;
     }
   };
 
@@ -2069,10 +2091,12 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
           <div className="flex items-center gap-3">
             <Tag className="w-6 h-6 text-primary" />
             <div>
-              <h1 className="text-2xl font-bold">{section === "misc" ? "Misc Templates" : "Sales Templates"}</h1>
+              <h1 className="text-2xl font-bold">{section === "misc" ? "Misc Templates" : section === "email" ? "Email Templates" : "Sales Templates"}</h1>
               <p className="text-sm text-muted-foreground">
                 {section === "misc"
                   ? "Configure templates for other customer documents. Changes are saved to the database and used across the related export actions."
+                  : section === "email"
+                  ? "Customise the look and content of your outgoing emails. Changes are saved to the database and applied across your transactional emails."
                   : "Configure print templates for receipts, invoices, quotes and service tickets. Changes are saved to the database and used across all print and export actions."}
               </p>
             </div>
@@ -2154,21 +2178,35 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
             {/* Options + Preview side by side — 40/60 split */}
             <div className="grid grid-cols-1 lg:grid-cols-[2fr_3fr] gap-6 items-start">
               {/* Left: Options */}
-              <OptionsPanel
-                key={`${activeCategory}-${previewId}`}
-                category={activeCategory}
-                templateId={previewId}
-                opts={opts}
-                update={update}
-                reset={reset}
-                isDefault={isDefault}
-                setIsDefault={setIsDefault}
-                onSave={() => save(previewId)}
-                saving={saving}
-                onPreview={handlePreview}
-                onFieldFocus={(label) => setFocusedFieldLabel(label)}
-                onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
-              />
+              <div className="space-y-2">
+                {activeCategory === "Email" && (
+                  <Button variant="outline" size="sm" className="w-full gap-2"
+                    onClick={() => {
+                      update("showLogo", true);
+                      update("showWebsite", true);
+                      update("showAbn", true);
+                      update("footerText", [businessName, previewProps.address, previewProps.email, previewProps.website].filter(Boolean).join(" · "));
+                      toast.success("Imported details from Business Info");
+                    }}>
+                    <Building2 className="w-3.5 h-3.5" /> Import from Business Info
+                  </Button>
+                )}
+                <OptionsPanel
+                  key={`${activeCategory}-${previewId}`}
+                  category={activeCategory}
+                  templateId={previewId}
+                  opts={opts}
+                  update={update}
+                  reset={reset}
+                  isDefault={isDefault}
+                  setIsDefault={setIsDefault}
+                  onSave={() => save(previewId)}
+                  saving={saving}
+                  onPreview={handlePreview}
+                  onFieldFocus={(label) => setFocusedFieldLabel(label)}
+                  onFieldInsert={(_key, fn) => { insertFnRef.current = fn; }}
+                />
+              </div>
 
               {/* Right: Preview */}
               <div className="space-y-3">
@@ -2218,6 +2256,9 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
                   )}
                   {activeCategory === "Customer_PDF" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-full max-w-md">{renderPreview()}</div>
+                  )}
+                  {activeCategory === "Email" && (
+                    <div className="bg-white shadow-lg rounded-lg border border-gray-200 overflow-hidden">{renderPreview()}</div>
                   )}
                   </div>
                 </div>

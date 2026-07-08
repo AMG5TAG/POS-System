@@ -11,6 +11,7 @@ import {
 } from "@workspace/db";
 import { eq, and, gte, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { publicOrigin } from "../lib/publicUrl";
 
 /* Platform-registered Xero OAuth app credentials. Xero connects in one click
    against this single app — there is no per-merchant developer app. */
@@ -83,8 +84,12 @@ type XeroCredentials = {
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
-function buildCallbackUrl(proto: string, host: string): string {
-  return `${proto}://${host}/api/xero/auth/callback`;
+// Build the OAuth callback from the app's canonical public origin (koapos.com.au
+// in production) — NOT from raw request headers, which in the Replit deployment
+// resolve to the internal *.replit.dev host and make Xero reject the redirect_uri.
+// This URL must exactly match a Redirect URI registered in the Xero app config.
+function buildCallbackUrl(req: { hostname?: string }): string {
+  return `${publicOrigin(req)}/api/xero/auth/callback`;
 }
 
 async function getRow(merchantId: number) {
@@ -222,12 +227,10 @@ router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
   }
   const clientId = cc.clientId;
 
-  const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const host  = req.headers.host ?? "";
   const params = new URLSearchParams({
     response_type: "code",
     client_id:     clientId,
-    redirect_uri:  buildCallbackUrl(proto, host),
+    redirect_uri:  buildCallbackUrl(req),
     scope:         XERO_SCOPES,
     state:         String(req.session.merchantId!),
   });
@@ -258,9 +261,7 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
   }
   const { clientId, clientSecret } = cc;
 
-  const cbProto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const cbHost  = req.headers.host ?? "";
-  const cb = buildCallbackUrl(cbProto, cbHost);
+  const cb = buildCallbackUrl(req);
 
   let tokens: { access_token: string; refresh_token: string; expires_in: number };
   try {

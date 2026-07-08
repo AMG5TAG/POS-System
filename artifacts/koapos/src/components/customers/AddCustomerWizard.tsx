@@ -32,6 +32,7 @@ import { cn } from "@/lib/utils";
 import { COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
 import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
+import { AddressAutocomplete } from "@/components/customers/AddressAutocomplete";
 import { ImageUploader } from "@/components/ui/image-uploader";
 
 type Step = "personal" | "address" | "account";
@@ -455,7 +456,19 @@ export function AddCustomerWizard({
             <>
               <p className="text-xs font-bold tracking-widest text-foreground uppercase">Billing Address</p>
               <Field label="Street Address" full>
-                <Input value={form.billingStreet} onChange={(e) => setField("billingStreet", e.target.value)} onBlur={(e) => setField("billingStreet", expandStreetType(e.target.value))} placeholder="123 Main St" />
+                <AddressAutocomplete
+                  value={form.billingStreet}
+                  onChange={(v) => setField("billingStreet", v)}
+                  onBlur={(v) => setField("billingStreet", expandStreetType(v))}
+                  onPick={(a) => setForm((prev) => ({
+                    ...prev,
+                    billingStreet:   a.street   || prev.billingStreet,
+                    billingCity:     a.city     || prev.billingCity,
+                    billingState:    a.state    || prev.billingState,
+                    billingPostcode: a.postcode || prev.billingPostcode,
+                  }))}
+                  placeholder="123 Main St"
+                />
               </Field>
               <FieldRow>
                 <Field label="City">

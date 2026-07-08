@@ -10,6 +10,7 @@
 import type { Logger } from "pino";
 import { db, customersTable, customerNotesTable, appointmentsTable, contactSyncLinksTable } from "@workspace/db";
 import { eq, and, desc, gte } from "drizzle-orm";
+import { formatAddressParts } from "../lib/address";
 import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "./microsoftToken";
 import { getValidGoogleToken, GoogleNotConnectedError } from "./googleToken";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -263,7 +264,7 @@ export async function syncContacts(
       const body: Record<string, unknown> = {
         names:          [{ givenName: c.firstName ?? "", familyName: c.lastName ?? "" }],
         emailAddresses: c.email ? [{ value: c.email }] : [],
-        phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
+        phoneNumbers:   c.phone ? [{ value: c.phone, type: "mobile" }] : [],
       };
       if (includeNotes && notesText) body.biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }];
       const r = await fetch("https://people.googleapis.com/v1/people:createContact", {
@@ -278,7 +279,8 @@ export async function syncContacts(
       givenName:      c.firstName ?? "",
       surname:        c.lastName  ?? "",
       emailAddresses: c.email ? [{ address: c.email, name: fullName || c.email }] : [],
-      businessPhones: c.phone ? [c.phone] : [],
+      mobilePhone:    c.phone || null,
+      businessPhones: [],
     };
     if (includeNotes && notesText) body.personalNotes = notesText;
     const r = await fetch("https://graph.microsoft.com/v1.0/me/contacts", {
@@ -296,7 +298,7 @@ export async function syncContacts(
         etag:           ref.etag,
         names:          [{ givenName: c.firstName ?? "", familyName: c.lastName ?? "" }],
         emailAddresses: c.email ? [{ value: c.email }] : [],
-        phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
+        phoneNumbers:   c.phone ? [{ value: c.phone, type: "mobile" }] : [],
       };
       if (includeNotes && notesText) { body.biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }]; fields.push("biographies"); }
       const r = await fetch(`https://people.googleapis.com/v1/${ref.resourceName}:updateContact?updatePersonFields=${fields.join(",")}`, {
@@ -311,7 +313,8 @@ export async function syncContacts(
       givenName:      c.firstName ?? "",
       surname:        c.lastName  ?? "",
       emailAddresses: c.email ? [{ address: c.email, name: fullName || c.email }] : [],
-      businessPhones: c.phone ? [c.phone] : [],
+      mobilePhone:    c.phone || null,
+      businessPhones: [],
     };
     if (includeNotes && notesText) body.personalNotes = notesText;
     const r = await fetch(`https://graph.microsoft.com/v1.0/me/contacts/${ref.id}`, {
@@ -426,7 +429,9 @@ export async function syncCalendar(
   // Join the customer so each event can carry the customer's address (as the
   // event location) and mobile (appended to the notes).
   const appointments = (await db
-    .select({ appt: appointmentsTable, custAddress: customersTable.address, custPhone: customersTable.phone })
+    .select({ appt: appointmentsTable, custAddress: customersTable.address, custPhone: customersTable.phone,
+              custBillingStreet: customersTable.billingStreet, custBillingCity: customersTable.billingCity,
+              custBillingState: customersTable.billingState, custBillingPostcode: customersTable.billingPostcode })
     .from(appointmentsTable)
     .leftJoin(customersTable, eq(appointmentsTable.customerId, customersTable.id))
     .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now)))
@@ -446,7 +451,9 @@ export async function syncCalendar(
     const start = new Date(a.scheduledAt);
     const end   = new Date(start.getTime() + (a.durationMinutes ?? 30) * 60_000);
     // Customer address → event location; customer mobile → appended to notes.
-    const location  = (row.custAddress ?? "").trim();
+    // Fall back to the structured billing address when the free-text address is blank.
+    const location  = (row.custAddress ?? "").trim()
+      || formatAddressParts(row.custBillingStreet, row.custBillingCity, row.custBillingState, row.custBillingPostcode);
     const baseNotes = a.description ?? a.notes ?? "";
     const mobile    = (row.custPhone ?? "").trim();
     const notes     = mobile ? `${baseNotes ? `${baseNotes}\n\n` : ""}Mobile: ${mobile}` : baseNotes;

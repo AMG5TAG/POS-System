@@ -256,6 +256,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
           { name: "Labels",            href: "/management/products-inventory/labels",           icon: Printer,
             matchPaths: ["/management/products-inventory/stickers", "/management/sticker-templates"] }, // legacy paths → redirect to Labels
           { name: "Misc",              href: "/management/templates/misc",   icon: FileText },
+          { name: "Emails",            href: "/management/templates/email",  icon: Mail },
         ],
       },
       { name: "SMS",               href: "/management/settings-integrations/sms",           icon: MessageSquare  },

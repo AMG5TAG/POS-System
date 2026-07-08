@@ -11,6 +11,7 @@ import {
   productReviewsTable,
 } from "@workspace/db";
 import { eq, and, inArray, sql, desc } from "drizzle-orm";
+import { formatAddressParts } from "../lib/address";
 import { z } from "zod/v4";
 import { sendEmail } from "../services/email";
 
@@ -312,8 +313,7 @@ router.post("/online-store/public/b/:username/o/:slug/checkout", async (req, res
   const nameParts = body.customer.name.trim().split(/\s+/);
   const firstName = nameParts[0] ?? body.customer.name;
   const lastName = nameParts.slice(1).join(" ");
-  const addressStr = [body.address.line, body.address.city, body.address.state, body.address.postcode]
-    .map((s) => s.trim()).filter(Boolean).join(", ");
+  const addressStr = formatAddressParts(body.address.line, body.address.city, body.address.state, body.address.postcode);
 
   // ── Persist atomically: decrement stock, bump discount usage, write order ──
   try {
@@ -340,7 +340,13 @@ router.post("/online-store/public/b/:username/o/:slug/checkout", async (req, res
           totalSpent: sql`${customersTable.totalSpent} + ${total}`,
           visitCount: sql`${customersTable.visitCount} + 1`,
           ...(body.customer.phone ? { phone: body.customer.phone } : {}),
-          ...(addressStr ? { address: addressStr } : {}),
+          ...(addressStr ? {
+            address: addressStr,                       // denormalised free-text kept for backward-compatible reads
+            billingStreet:   body.address.line || null,
+            billingCity:     body.address.city || null,
+            billingState:    body.address.state || null,
+            billingPostcode: body.address.postcode || null,
+          } : {}),
         }).where(eq(customersTable.id, existingCustomer.id));
       } else {
         await tx.insert(customersTable).values({
@@ -348,7 +354,11 @@ router.post("/online-store/public/b/:username/o/:slug/checkout", async (req, res
           firstName, lastName: lastName || null,
           email: body.customer.email,
           phone: body.customer.phone || null,
-          address: addressStr || null,
+          address: addressStr || null,               // denormalised free-text kept for backward-compatible reads
+          billingStreet:   body.address.line || null,
+          billingCity:     body.address.city || null,
+          billingState:    body.address.state || null,
+          billingPostcode: body.address.postcode || null,
           totalSpent: String(total),
           visitCount: 1,
         });

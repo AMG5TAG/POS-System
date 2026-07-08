@@ -1586,9 +1586,20 @@ export async function sendInvoiceEmailInternal(
     socialLinks:            tpl.socialLinks ?? (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
     fontFamily:             emailTplRow?.fontFamily || null,
     styleVariant:           emailTplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(emailTplOpts.showCustomerQr),
     showCustomQr:           Boolean(emailTplOpts.showCustomQr),
     customQrImage:          (emailTplOpts.customQrImage as string | undefined) || null,
     customQrCaption:        (emailTplOpts.customQrCaption as string | undefined) || null,
+    showLoyaltyEarned:      Boolean(emailTplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(emailTplOpts.showPaymentMethods),
+    showBarcode:            Boolean(emailTplOpts.showBarcode),
+    showReferralLink:       Boolean(emailTplOpts.showReferralLink),
+    customMessage:          resolveNullable((emailTplOpts.customMessage as string | undefined) || null),
+    referralLinkText:       (emailTplOpts.referralLinkText as string | undefined) || null,
+    // Customer-profile QR encodes the stable scan-to-lookup customer code, mirroring
+    // the download path so the emailed PDF matches the merchant's saved template.
+    customerCode:           inv.customerId ? `CUS-${inv.customerId}` : null,
+    customerQrValue:        inv.customerId ? `CUS-${inv.customerId}` : null,
   }) : null;
 
   // Embed a 1×1 open-tracking pixel when sending in a request context (manual

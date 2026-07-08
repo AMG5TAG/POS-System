@@ -7139,7 +7139,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket, A4_Receipt, Customer_PDF]
+            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket, A4_Receipt, Customer_PDF, Email]
       requestBody:
         required: true
         content:

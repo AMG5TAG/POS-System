@@ -23,6 +23,10 @@ interface PortalData {
   email: string | null;
   phone: string | null;
   address: string | null;
+  billingStreet: string | null;
+  billingCity: string | null;
+  billingState: string | null;
+  billingPostcode: string | null;
   dateOfBirth: string | null;
   loyaltyPoints: number;
   totalSpent: number;
@@ -303,7 +307,10 @@ function ProfileTab({ data, token }: { data: PortalData; token: string }) {
     lastName:    data.lastName   ?? "",
     email:       data.email      ?? "",
     phone:       data.phone      ?? "",
-    address:     data.address    ?? "",
+    billingStreet:   data.billingStreet   ?? "",
+    billingCity:     data.billingCity     ?? "",
+    billingState:    data.billingState    ?? "",
+    billingPostcode: data.billingPostcode ?? "",
     dateOfBirth: data.dateOfBirth ?? "",
   });
   const [saving, setSaving] = useState(false);
@@ -347,7 +354,12 @@ function ProfileTab({ data, token }: { data: PortalData; token: string }) {
         {field("Last Name",     "lastName")}
         {field("Email",         "email",       "email")}
         {field("Phone",         "phone",       "tel")}
-        {field("Address",       "address")}
+        {field("Street Address", "billingStreet")}
+        {field("Suburb / City", "billingCity")}
+        <div className="grid grid-cols-2 gap-3">
+          {field("State",    "billingState")}
+          {field("Postcode", "billingPostcode")}
+        </div>
         {field("Date of Birth", "dateOfBirth", "date")}
       </div>
       <Button className="w-full" onClick={handleSave} disabled={saving}>
