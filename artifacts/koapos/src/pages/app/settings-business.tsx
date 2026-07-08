@@ -832,6 +832,7 @@ export default function SettingsBusinessPage() {
                     value={stripSocialHandle(ext.socialLinks[key])}
                     onChange={(e) => setSocial(key, stripSocialHandle(e.target.value))}
                     placeholder={placeholder}
+                    noAutoCapitalize
                     autoCapitalize="none"
                     autoCorrect="off"
                     spellCheck={false}
