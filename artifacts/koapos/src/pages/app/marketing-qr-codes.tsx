@@ -355,19 +355,14 @@ function buildQRDataString(type: QRCodeType, content: QRTypeContent): string {
 
 /* ── QR options builder ────────────────────────────────────────────────── */
 
-/* qr-code-styling's error-correction "cover levels": it sizes the centre image by
-   AREA scaled by this factor, so the rendered logo width ends up ≈
-   sqrt(imageSize × ECC_COVER[level]) of the QR — i.e. a raw imageSize of 0.5 only
-   spans ~0.35 of the code. We invert that below so settings.logoSize can mean the
-   actual logo width fraction the user picked. */
-const ECC_COVER: Record<QRSettings["level"], number> = { L: 0.07, M: 0.15, Q: 0.25, H: 0.3 };
-
 function buildQROptions(settings: QRSettings, data: string, size: number): QROptions {
   const isCircleTemplate = TEMPLATES.find((t) => t.id === settings.template)?.circle ?? false;
-  // settings.logoSize is the desired logo WIDTH as a fraction of the QR; invert the
-  // library's area/cover-level scaling so the logo actually spans that width.
-  const targetWidth = settings.logoSize;
-  const imageSize = Math.min(1, (targetWidth * targetWidth) / (ECC_COVER[settings.level] ?? 0.3));
+  // NOTE: pass settings.logoSize straight through as qr-code-styling's imageSize.
+  // The library deliberately scales the drawn logo down by the ECC "cover level"
+  // (rendered width ≈ sqrt(imageSize × cover)) to keep the code SCANNABLE — do not
+  // try to invert that to force a literal width, it over-covers the code and breaks
+  // scanning. Recognisability instead comes from the tight logo plate (below) + ECC H.
+  const imageSize = Math.min(0.5, settings.logoSize);
   return {
     type: "svg",
     data: data || "https://koapos.com",
@@ -2042,7 +2037,7 @@ export default function MarketingQRCodesPage() {
                           </p>
                         </div>
                         <div className="space-y-1.5 pt-1">
-                          <Label className="text-xs">Logo width</Label>
+                          <Label className="text-xs">Logo size</Label>
                           <div className="relative w-28">
                             <input type="number" min={15} max={50} step={1}
                               value={Math.round(settings.logoSize * 100)}
@@ -2053,7 +2048,7 @@ export default function MarketingQRCodesPage() {
                               className="w-full rounded-md border bg-background px-2 py-1 pr-6 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring" />
                             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">How much of the code's width the logo spans. Keep ECC at H so it still scans. Range 15–50%.</p>
+                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code. Kept within a scannable limit with ECC H. Range 15–50%.</p>
                         </div>
                       </>
                     )}
