@@ -993,12 +993,14 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
     return () => { if (containerRef.current) containerRef.current.innerHTML = ""; };
   }, []);
 
-  return (
-    <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
-      <div ref={containerRef} style={{ lineHeight: 0, display: "inline-block" }} />
-      <LogoOverlay settings={settings} size={size} />
-    </div>
-  );
+  // Returns ONLY the imperatively-managed container — no React-managed siblings. The
+  // container's children are owned by qr-code-styling (via innerHTML/append) and torn
+  // down by the cleanup above; mixing a React sibling (e.g. a logo overlay) alongside
+  // it here makes React's unmount-time removeChild collide with that imperative DOM
+  // ("node to be removed is not a child") when a saved-code thumbnail is deleted. The
+  // centre logo is shown in the live preview and exports instead — it isn't legible at
+  // these 52–72px thumbnail sizes anyway.
+  return <div ref={containerRef} style={{ lineHeight: 0, display: "inline-block" }} />;
 }
 
 /* ── Template mini preview ─────────────────────────────────────────────── */
