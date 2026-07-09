@@ -111,7 +111,7 @@ const DEFAULT_SETTINGS: QRSettings = {
   size: 256,
   level: "M",
   logoUrl: "",
-  logoSize: 0.35,
+  logoSize: 0.3,
   customCode: "",
   trackScans: false,
 };
@@ -355,14 +355,36 @@ function buildQRDataString(type: QRCodeType, content: QRTypeContent): string {
 
 /* ── QR options builder ────────────────────────────────────────────────── */
 
+/* Largest fraction of the QR's width a centred logo may span. Grounded in a decode
+   experiment (qrcode → rasterise → cover a centred square → decode with jsqr): at
+   ECC H the worst-case short/medium payload still decoded up to ~0.42 width in a
+   clean synthetic test. We cap at 0.33 (~11% area) to keep an ~80% real-world margin
+   for phone-camera blur/angle/glare, styled dots and print artefacts. A centred
+   square this size also never reaches the three finder patterns. ALWAYS paired with
+   ECC H (forced when a logo is added). Do not raise without re-running the decode
+   test — over-covering the code is what made earlier versions unscannable. */
+const LOGO_MAX_COVER = 0.33;
+const LOGO_MIN_COVER = 0.15;
+
+/** The clamped fraction of the QR width the logo overlay actually spans. */
+function logoCoverFraction(settings: QRSettings): number {
+  return Math.min(LOGO_MAX_COVER, Math.max(LOGO_MIN_COVER, settings.logoSize));
+}
+
+/** Whether this logo value can be composited (only same-origin data: URIs; a remote
+ *  URL would taint the export canvas, so it's dropped from the render). */
+function isCompositableLogo(logoUrl: string): boolean {
+  return logoUrl.startsWith("data:");
+}
+
 function buildQROptions(settings: QRSettings, data: string, size: number): QROptions {
   const isCircleTemplate = TEMPLATES.find((t) => t.id === settings.template)?.circle ?? false;
-  // NOTE: pass settings.logoSize straight through as qr-code-styling's imageSize.
-  // The library deliberately scales the drawn logo down by the ECC "cover level"
-  // (rendered width ≈ sqrt(imageSize × cover)) to keep the code SCANNABLE — do not
-  // try to invert that to force a literal width, it over-covers the code and breaks
-  // scanning. Recognisability instead comes from the tight logo plate (below) + ECC H.
-  const imageSize = Math.min(0.5, settings.logoSize);
+  // The logo is deliberately NOT passed to qr-code-styling. The library sizes/positions
+  // and rasterises the logo itself (area-scaled by ECC cover level, quantised to whole
+  // modules, and it stretches non-square images) — which is exactly what kept breaking
+  // scannability and distorting logos. We render only the bare code here and composite
+  // the logo ourselves as a centred, aspect-preserved overlay (see LogoOverlay and
+  // buildFramedQrSvg), so preview and export are pixel-identical and always scannable.
   return {
     type: "svg",
     data: data || "https://koapos.com",
@@ -373,10 +395,6 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
     cornersSquareOptions: { type: settings.cornerSquareStyle, color: settings.eyeColor },
     cornersDotOptions: { type: settings.cornerDotStyle, color: settings.eyeDotColor },
     backgroundOptions: { color: settings.bgColor === "transparent" ? "rgba(0,0,0,0)" : settings.bgColor },
-    ...(settings.logoUrl ? {
-      image: settings.logoUrl,
-      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize, margin: 2 },
-    } : {}),
     qrOptions: { errorCorrectionLevel: settings.level },
   };
 }
@@ -477,24 +495,13 @@ function blobToDataUri(blob: Blob): Promise<string> {
    top-level element and renders correctly) and embedding the result as a flat
    <image> sidesteps the whole class of bug for every template.
 
-   getRawData("png") loads any embedded logo with crossOrigin="anonymous" so the
-   canvas stays untainted; if that load fails (CORS-blocked or unreachable remote
-   logo) it rejects. When a logo is set and the render rejects, retry once without
-   it so the QR itself still exports, reporting whether the logo had to be dropped. */
-async function renderQrPngDataUri(settings: QRSettings, data: string): Promise<{ qrHref: string; droppedLogo: boolean }> {
-  const render = async (opts: QROptions) => {
-    const blob = await new QRCodeStyling(opts).getRawData("png");
-    if (!blob) throw new Error("QR render failed");
-    return blobToDataUri(blob as Blob);
-  };
-  const safeData = data || "https://koapos.com";
-  try {
-    return { qrHref: await render(buildQROptions(settings, safeData, QR_EXPORT_PX)), droppedLogo: false };
-  } catch (err) {
-    if (!settings.logoUrl) throw err;
-    const qrHref = await render(buildQROptions({ ...settings, logoUrl: "" }, safeData, QR_EXPORT_PX));
-    return { qrHref, droppedLogo: true };
-  }
+   The QR here is bare — the logo is composited separately as a centred <image>
+   overlay (see buildFramedQrSvg), so there is no embedded image to load and no CORS
+   taint to guard against. */
+async function renderQrPngDataUri(settings: QRSettings, data: string): Promise<string> {
+  const blob = await new QRCodeStyling(buildQROptions(settings, data || "https://koapos.com", QR_EXPORT_PX)).getRawData("png");
+  if (!blob) throw new Error("QR render failed");
+  return blobToDataUri(blob as Blob);
 }
 
 /* ── Framed SVG export ─────────────────────────────────────────────────────
@@ -503,15 +510,29 @@ async function renderQrPngDataUri(settings: QRSettings, data: string): Promise<{
    vector; the QR is embedded as a pre-rasterised <image> (see renderQrPngDataUri
    for why). This mirrors the visual logic of <TemplateWrapper> in SVG primitives. */
 async function buildFramedQrSvg(settings: QRSettings, data: string, qrSize: number): Promise<{ svg: string; width: number; height: number; droppedLogo: boolean }> {
-  const { qrHref, droppedLogo } = await renderQrPngDataUri(settings, data);
+  const qrHref = await renderQrPngDataUri(settings, data);
+
+  // Only a data: logo can be composited into the raster export (a remote URL would
+  // taint the export canvas); a set-but-remote logo is reported as dropped.
+  const hasLogo = isCompositableLogo(settings.logoUrl);
+  const droppedLogo = !!settings.logoUrl && !hasLogo;
+  const logoBox = hasLogo ? logoCoverFraction(settings) * qrSize : 0;
 
   // Embed the QR as a flat raster <image> at (x, y), sized to qrSize. Clipping to
   // a circle/rounded-rect is applied by the surrounding <g clip-path> and composes
   // correctly against a raster image (unlike the QR's own nested clip-paths, which
   // do not survive <img> → canvas rasterisation). xlink:href is used for the widest
-  // renderer compatibility (the root <svg> declares the xlink namespace).
-  const place = (x: number, y: number) =>
-    `<image x="${x}" y="${y}" width="${qrSize}" height="${qrSize}" preserveAspectRatio="none" xlink:href="${qrHref}"/>`;
+  // renderer compatibility (the root <svg> declares the xlink namespace). When a logo
+  // is set, a second centred <image> is overlaid in a square box using
+  // preserveAspectRatio="xMidYMid meet" — aspect ratio preserved, never stretched,
+  // its opaque white plate hiding the modules underneath (ECC H recovers them).
+  const place = (x: number, y: number) => {
+    const qr = `<image x="${x}" y="${y}" width="${qrSize}" height="${qrSize}" preserveAspectRatio="none" xlink:href="${qrHref}"/>`;
+    if (!hasLogo) return qr;
+    const lx = x + (qrSize - logoBox) / 2;
+    const ly = y + (qrSize - logoBox) / 2;
+    return qr + `<image x="${lx}" y="${ly}" width="${logoBox}" height="${logoBox}" preserveAspectRatio="xMidYMid meet" xlink:href="${settings.logoUrl}"/>`;
+  };
 
   const tpl     = settings.template;
   // Frame decorations (borders, rings, bars, ticks) use the dedicated border
@@ -915,6 +936,29 @@ function EyeIcon({ csStyle, cdStyle }: { csStyle: CornerSquareType; cdStyle: Cor
 const qrSvgCache = new Map<string, string>();
 const QR_CACHE_LIMIT = 300;
 
+/* Centred logo overlay shared by the live preview and every <StyledQR> thumbnail.
+   Matches the SVG export (buildFramedQrSvg) exactly: a square box of (cover × size)
+   centred on the code, with the logo plate fitted inside via object-fit: contain so
+   its aspect ratio is preserved (never stretched). The plate's opaque white rounded
+   background hides the code modules beneath it — recoverable because a logo forces
+   ECC H. Rendered as a sibling positioned over the QR container (which must be
+   position: relative). Only data: URIs are shown, to stay in lockstep with export. */
+function LogoOverlay({ settings, size }: { settings: QRSettings; size: number }) {
+  if (!isCompositableLogo(settings.logoUrl)) return null;
+  const box = logoCoverFraction(settings) * size;
+  return (
+    <img
+      src={settings.logoUrl}
+      alt=""
+      aria-hidden
+      style={{
+        position: "absolute", left: "50%", top: "50%", transform: "translate(-50%, -50%)",
+        width: box, height: box, objectFit: "contain", pointerEvents: "none",
+      }}
+    />
+  );
+}
+
 function StyledQR({ settings, data, size }: { settings: QRSettings; data: string; size: number }) {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -932,17 +976,15 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
       return;
     }
 
-    // Miss — render once with qr-code-styling, then memoise the markup. Only
-    // logo-free codes are cached: append() builds their SVG synchronously, so the
-    // innerHTML read below captures the complete, final markup.
+    // Miss — render once with qr-code-styling, then memoise the markup. The QR is now
+    // logo-free (the logo is a separate overlay), so append() builds the complete SVG
+    // synchronously and the innerHTML read below always captures the final markup.
     container.innerHTML = "";
     new QRCodeStyling(opts).append(container);
-    if (!settings.logoUrl) {
-      const markup = container.innerHTML;
-      if (markup) {
-        if (qrSvgCache.size >= QR_CACHE_LIMIT) qrSvgCache.clear();
-        qrSvgCache.set(cacheKey, markup);
-      }
+    const markup = container.innerHTML;
+    if (markup) {
+      if (qrSvgCache.size >= QR_CACHE_LIMIT) qrSvgCache.clear();
+      qrSvgCache.set(cacheKey, markup);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [cacheKey]);
@@ -951,7 +993,12 @@ function StyledQR({ settings, data, size }: { settings: QRSettings; data: string
     return () => { if (containerRef.current) containerRef.current.innerHTML = ""; };
   }, []);
 
-  return <div ref={containerRef} style={{ lineHeight: 0, display: "inline-block" }} />;
+  return (
+    <div style={{ position: "relative", display: "inline-block", lineHeight: 0 }}>
+      <div ref={containerRef} style={{ lineHeight: 0, display: "inline-block" }} />
+      <LogoOverlay settings={settings} size={size} />
+    </div>
+  );
 }
 
 /* ── Template mini preview ─────────────────────────────────────────────── */
@@ -1725,7 +1772,10 @@ export default function MarketingQRCodesPage() {
               <CardContent className="space-y-4">
                 <div className="flex flex-col items-center gap-4 py-2">
                   <TemplateWrapper template={settings.template} bgColor={settings.bgColor} patternColor={settings.patternColor} borderColor={settings.borderColor} fontFamily={brandFontFamily} code={settings.customCode}>
-                    <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
+                    <div style={{ position: "relative", width: previewSize, height: previewSize, lineHeight: 0 }}>
+                      <div ref={liveContainerRef} style={{ lineHeight: 0, display: "inline-block", width: previewSize, height: previewSize }} />
+                      <LogoOverlay settings={settings} size={previewSize} />
+                    </div>
                   </TemplateWrapper>
                   <div className="text-center space-y-1">
                     <p className="text-xs font-medium">{label || <span className="text-muted-foreground italic">No label</span>}</p>
@@ -2037,18 +2087,18 @@ export default function MarketingQRCodesPage() {
                           </p>
                         </div>
                         <div className="space-y-1.5 pt-1">
-                          <Label className="text-xs">Logo size</Label>
+                          <Label className="text-xs">Logo width</Label>
                           <div className="relative w-28">
-                            <input type="number" min={15} max={50} step={1}
-                              value={Math.round(settings.logoSize * 100)}
+                            <input type="number" min={15} max={33} step={1}
+                              value={Math.round(Math.min(0.33, Math.max(0.15, settings.logoSize)) * 100)}
                               onChange={(e) => {
-                                const pct = Math.min(50, Math.max(15, Math.round(Number(e.target.value) || 0)));
+                                const pct = Math.min(33, Math.max(15, Math.round(Number(e.target.value) || 0)));
                                 set("logoSize", pct / 100);
                               }}
                               className="w-full rounded-md border bg-background px-2 py-1 pr-6 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring" />
                             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code. Kept within a scannable limit with ECC H. Range 15–50%.</p>
+                          <p className="text-[10px] text-muted-foreground">The logo spans this share of the code's width. Capped at 33% and paired with ECC H so it stays scannable. Range 15–33%.</p>
                         </div>
                       </>
                     )}
