@@ -374,6 +374,71 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
   };
 }
 
+/* ── Logo normalisation ────────────────────────────────────────────────────
+   The centre logo used to be handed to qr-code-styling raw, which baked it into
+   the low-res QR raster: small/odd-ratio uploads came out blurry, edge-quantised
+   to whole QR modules, and transparent PNGs sat messily on the dots. Instead we
+   pre-render every logo (upload / business-logo / pasted URL) ONCE into a crisp,
+   fixed high-resolution square PNG — the source contain-fitted (aspect ratio
+   always preserved, never stretched) with padding, centred on a rounded white
+   plate. qr-code-styling then only has to scale a clean square image, so the logo
+   stays sharp and undistorted at any preview or export size, and the white plate
+   keeps it legible (and scannable) on top of the code regardless of the source's
+   own background/transparency. */
+const LOGO_PLATE_PX = 640; // high enough that downscaling stays crisp; upscaling never happens
+
+function roundRectPath(ctx: CanvasRenderingContext2D, x: number, y: number, w: number, h: number, r: number) {
+  if (typeof ctx.roundRect === "function") { ctx.beginPath(); ctx.roundRect(x, y, w, h, r); return; }
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+
+/* Load `src` (data: URI or remote URL) and return a normalised square PNG data URI
+   (see block comment above), or null if it can't be decoded — e.g. a CORS-blocked
+   remote URL taints the canvas so toDataURL throws; the caller then falls back to
+   the raw src, which the export path already handles (dropping the logo if needed). */
+function normalizeLogoImage(src: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!src) { resolve(null); return; }
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      try {
+        if (!img.width || !img.height) { resolve(null); return; }
+        const S = LOGO_PLATE_PX;
+        const canvas = document.createElement("canvas");
+        canvas.width = S;
+        canvas.height = S;
+        const ctx = canvas.getContext("2d");
+        if (!ctx) { resolve(null); return; }
+        ctx.imageSmoothingEnabled = true;
+        ctx.imageSmoothingQuality = "high";
+        // Rounded white plate behind the logo.
+        ctx.fillStyle = "#ffffff";
+        roundRectPath(ctx, 0, 0, S, S, S * 0.18);
+        ctx.fill();
+        // Contain-fit the source inside the plate with padding, aspect preserved.
+        const pad = S * 0.14;
+        const box = S - pad * 2;
+        const scale = Math.min(box / img.width, box / img.height);
+        const w = img.width * scale;
+        const h = img.height * scale;
+        ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+        resolve(canvas.toDataURL("image/png"));
+      } catch {
+        resolve(null); // tainted canvas (CORS) or draw failure
+      }
+    };
+    img.onerror = () => resolve(null);
+    img.src = src;
+  });
+}
+
 /* Resolution the bare QR is rasterised at before being embedded into the framed
    export. Kept generous (and independent of the frame's on-screen size) so the
    embedded QR stays crisp even when the exported file is scaled up for print. */
@@ -1404,9 +1469,10 @@ export default function MarketingQRCodesPage() {
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     const reader = new FileReader();
-    reader.onload = (ev) => {
+    reader.onload = async (ev) => {
       const dataUrl = ev.target?.result as string;
-      set("logoUrl", dataUrl);
+      const normalized = await normalizeLogoImage(dataUrl);
+      set("logoUrl", normalized ?? dataUrl);
       if (settings.level === "L" || settings.level === "M") set("level", "Q");
       toast.success("Logo uploaded");
     };
@@ -1416,12 +1482,13 @@ export default function MarketingQRCodesPage() {
   }, [settings.level]);
 
   /* Import the logo from Management > Business Details */
-  const importBusinessLogo = useCallback(() => {
+  const importBusinessLogo = useCallback(async () => {
     if (!profile.logo) {
       toast.error("No business logo found. Add one in Business Details first.");
       return;
     }
-    set("logoUrl", profile.logo);
+    const normalized = await normalizeLogoImage(profile.logo);
+    set("logoUrl", normalized ?? profile.logo);
     if (settings.level === "L" || settings.level === "M") set("level", "Q");
     toast.success("Business logo imported");
   }, [profile.logo, settings.level]);
@@ -1927,6 +1994,17 @@ export default function MarketingQRCodesPage() {
                     <div className="flex gap-2">
                       <Input placeholder="…or paste image URL" value={settings.logoUrl.startsWith("data:") ? "" : settings.logoUrl}
                         onChange={(e) => set("logoUrl", e.target.value)}
+                        onBlur={async (e) => {
+                          const url = e.target.value.trim();
+                          if (!url || url.startsWith("data:")) return;
+                          // Normalise the pasted logo to a crisp plated square; keep the
+                          // raw URL if it can't be loaded (CORS) so export can still try it.
+                          const normalized = await normalizeLogoImage(url);
+                          if (normalized) {
+                            set("logoUrl", normalized);
+                            if (settings.level === "L" || settings.level === "M") set("level", "Q");
+                          }
+                        }}
                         className="font-mono text-xs flex-1 min-w-0" />
                       {settings.logoUrl && (
                         <Button type="button" variant="ghost" size="sm" className="shrink-0 px-2 text-muted-foreground"
