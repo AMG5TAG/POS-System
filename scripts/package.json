@@ -37,12 +37,14 @@
     "add-dashboard-public-token": "tsx ./src/add-dashboard-public-token.ts",
     "hash-staff-pins": "tsx ./src/hash-staff-pins.ts",
     "patch-koastal-recurring-invoices": "tsx ./src/patch-koastal-recurring-invoices.ts",
+    "backfill-resize-logos": "tsx ./src/backfill-resize-logos.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",
     "bcryptjs": "^3.0.3",
-    "drizzle-orm": "catalog:"
+    "drizzle-orm": "catalog:",
+    "sharp": "^0.34.4"
   },
   "devDependencies": {
     "@types/node": "catalog:",

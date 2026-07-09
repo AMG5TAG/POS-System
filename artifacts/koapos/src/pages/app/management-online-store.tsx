@@ -33,6 +33,7 @@ import {
 } from "@workspace/api-client-react";
 import { isProductBlock } from "@/pages/marketing/storefront-commerce";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { resizeImageFile } from "@/lib/image-resize";
 import { useStoreSlug, slugifyStorePath } from "@/lib/online-store-slug";
 import DOMPurify from "dompurify";
 import { useQueryClient } from "@tanstack/react-query";
@@ -1165,13 +1166,17 @@ export default function ManagementOnlineStorePage() {
     toast.success("Imported branding from Business Details");
   };
 
-  /* Read an uploaded image file into a data URL and store it on the site. */
-  const handleImageFile = (file: File | undefined, field: "logoUrl" | "faviconUrl") => {
+  /* Read an uploaded image file, downscale large uploads, and store it on the site. */
+  const handleImageFile = async (file: File | undefined, field: "logoUrl" | "faviconUrl") => {
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
-    const reader = new FileReader();
-    reader.onload = () => updateSite({ [field]: reader.result as string });
-    reader.readAsDataURL(file);
+    try {
+      const { dataUrl, resized, width, height } = await resizeImageFile(file, { maxDim: field === "faviconUrl" ? 128 : 512 });
+      updateSite({ [field]: dataUrl });
+      if (resized) toast.success(`Image resized to ${width}×${height}`);
+    } catch {
+      toast.error("Failed to read image file");
+    }
   };
 
   /* Reuse the store logo as the favicon. */

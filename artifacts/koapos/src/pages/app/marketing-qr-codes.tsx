@@ -18,6 +18,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { resizeImageFile } from "@/lib/image-resize";
 import { publicOrigin } from "@/lib/public-url";
 import { useLandingPageNames } from "@/lib/landing-page-names";
 import {
@@ -1464,21 +1465,22 @@ export default function MarketingQRCodesPage() {
   const activeEntry = preview ?? (history[0] ?? null);
 
   /* Logo upload */
-  const handleLogoUpload = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
     if (!file) return;
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
-    const reader = new FileReader();
-    reader.onload = async (ev) => {
-      const dataUrl = ev.target?.result as string;
+    try {
+      // Downscale large uploads first so a huge source doesn't get stored if the
+      // plate normalisation falls back, then render it onto the crisp centre plate.
+      const { dataUrl } = await resizeImageFile(file, { maxDim: LOGO_PLATE_PX });
       const normalized = await normalizeLogoImage(dataUrl);
       set("logoUrl", normalized ?? dataUrl);
       if (settings.level === "L" || settings.level === "M") set("level", "Q");
       toast.success("Logo uploaded");
-    };
-    reader.onerror = () => toast.error("Failed to read image file");
-    reader.readAsDataURL(file);
-    e.target.value = "";
+    } catch {
+      toast.error("Failed to read image file");
+    }
   }, [settings.level]);
 
   /* Import the logo from Management > Business Details */

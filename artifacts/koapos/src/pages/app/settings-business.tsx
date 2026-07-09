@@ -8,6 +8,7 @@ import {
 import { useAuth } from "@/lib/use-auth";
 import { useBusinessProfile, DAYS, type BusinessProfile, type CustomLink } from "@/lib/business-profile";
 import { validateABN } from "@/lib/abn";
+import { resizeImageFile } from "@/lib/image-resize";
 import { expandStreetType, expandState } from "@/lib/address-format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -375,13 +376,18 @@ export default function SettingsBusinessPage() {
     setDirtyBusiness(true);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setExtField("logo", reader.result as string);
-    reader.onerror = () => toast.error("Failed to read image file");
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    try {
+      const { dataUrl, resized, width, height } = await resizeImageFile(file, { maxDim: 512 });
+      setExtField("logo", dataUrl);
+      toast.success(resized ? `Logo uploaded and resized to ${width}×${height}` : "Logo uploaded");
+    } catch {
+      toast.error("Failed to read image file");
+    }
   };
 
   const addCategory = () => {
@@ -952,7 +958,7 @@ function LogoSection({
               <Globe className="w-3 h-3" /> Use URL instead
             </button>
           )}
-          <p className="text-xs text-muted-foreground">PNG or SVG recommended. Max 2 MB.</p>
+          <p className="text-xs text-muted-foreground">PNG or SVG recommended. Large images are resized automatically.</p>
         </div>
       </div>
       {urlMode && (
