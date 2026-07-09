@@ -355,8 +355,19 @@ function buildQRDataString(type: QRCodeType, content: QRTypeContent): string {
 
 /* ── QR options builder ────────────────────────────────────────────────── */
 
+/* qr-code-styling's error-correction "cover levels": it sizes the centre image by
+   AREA scaled by this factor, so the rendered logo width ends up ≈
+   sqrt(imageSize × ECC_COVER[level]) of the QR — i.e. a raw imageSize of 0.5 only
+   spans ~0.35 of the code. We invert that below so settings.logoSize can mean the
+   actual logo width fraction the user picked. */
+const ECC_COVER: Record<QRSettings["level"], number> = { L: 0.07, M: 0.15, Q: 0.25, H: 0.3 };
+
 function buildQROptions(settings: QRSettings, data: string, size: number): QROptions {
   const isCircleTemplate = TEMPLATES.find((t) => t.id === settings.template)?.circle ?? false;
+  // settings.logoSize is the desired logo WIDTH as a fraction of the QR; invert the
+  // library's area/cover-level scaling so the logo actually spans that width.
+  const targetWidth = settings.logoSize;
+  const imageSize = Math.min(1, (targetWidth * targetWidth) / (ECC_COVER[settings.level] ?? 0.3));
   return {
     type: "svg",
     data: data || "https://koapos.com",
@@ -369,7 +380,7 @@ function buildQROptions(settings: QRSettings, data: string, size: number): QROpt
     backgroundOptions: { color: settings.bgColor === "transparent" ? "rgba(0,0,0,0)" : settings.bgColor },
     ...(settings.logoUrl ? {
       image: settings.logoUrl,
-      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize: settings.logoSize, margin: 4 },
+      imageOptions: { crossOrigin: "anonymous", hideBackgroundDots: true, imageSize, margin: 2 },
     } : {}),
     qrOptions: { errorCorrectionLevel: settings.level },
   };
@@ -410,26 +421,30 @@ function normalizeLogoImage(src: string): Promise<string | null> {
     img.crossOrigin = "anonymous";
     img.onload = () => {
       try {
-        if (!img.width || !img.height) { resolve(null); return; }
-        const S = LOGO_PLATE_PX;
+        const iw = img.width;
+        const ih = img.height;
+        if (!iw || !ih) { resolve(null); return; }
+        // Wrap the logo in a rounded white plate that HUGS it — the plate matches the
+        // logo's aspect ratio with only a small uniform padding, so almost the entire
+        // cleared centre area of the QR is the logo itself (not whitespace). This keeps
+        // the logo recognisable even at large logo sizes. Aspect ratio is preserved.
+        const pad = Math.round(LOGO_PLATE_PX * 0.06);
+        const scale = (LOGO_PLATE_PX - pad * 2) / Math.max(iw, ih);
+        const lw = Math.max(1, Math.round(iw * scale));
+        const lh = Math.max(1, Math.round(ih * scale));
+        const cw = lw + pad * 2;
+        const ch = lh + pad * 2;
         const canvas = document.createElement("canvas");
-        canvas.width = S;
-        canvas.height = S;
+        canvas.width = cw;
+        canvas.height = ch;
         const ctx = canvas.getContext("2d");
         if (!ctx) { resolve(null); return; }
         ctx.imageSmoothingEnabled = true;
         ctx.imageSmoothingQuality = "high";
-        // Rounded white plate behind the logo.
         ctx.fillStyle = "#ffffff";
-        roundRectPath(ctx, 0, 0, S, S, S * 0.18);
+        roundRectPath(ctx, 0, 0, cw, ch, Math.min(cw, ch) * 0.16);
         ctx.fill();
-        // Contain-fit the source inside the plate with padding, aspect preserved.
-        const pad = S * 0.14;
-        const box = S - pad * 2;
-        const scale = Math.min(box / img.width, box / img.height);
-        const w = img.width * scale;
-        const h = img.height * scale;
-        ctx.drawImage(img, (S - w) / 2, (S - h) / 2, w, h);
+        ctx.drawImage(img, pad, pad, lw, lh);
         resolve(canvas.toDataURL("image/png"));
       } catch {
         resolve(null); // tainted canvas (CORS) or draw failure
@@ -1476,7 +1491,7 @@ export default function MarketingQRCodesPage() {
       const { dataUrl } = await resizeImageFile(file, { maxDim: LOGO_PLATE_PX });
       const normalized = await normalizeLogoImage(dataUrl);
       set("logoUrl", normalized ?? dataUrl);
-      if (settings.level === "L" || settings.level === "M") set("level", "Q");
+      if (settings.level !== "H") set("level", "H"); // H gives the most damage tolerance for a large centre logo
       toast.success("Logo uploaded");
     } catch {
       toast.error("Failed to read image file");
@@ -1491,7 +1506,7 @@ export default function MarketingQRCodesPage() {
     }
     const normalized = await normalizeLogoImage(profile.logo);
     set("logoUrl", normalized ?? profile.logo);
-    if (settings.level === "L" || settings.level === "M") set("level", "Q");
+    if (settings.level !== "H") set("level", "H"); // H gives the most damage tolerance for a large centre logo
     toast.success("Business logo imported");
   }, [profile.logo, settings.level]);
 
@@ -2004,7 +2019,7 @@ export default function MarketingQRCodesPage() {
                           const normalized = await normalizeLogoImage(url);
                           if (normalized) {
                             set("logoUrl", normalized);
-                            if (settings.level === "L" || settings.level === "M") set("level", "Q");
+                            if (settings.level !== "H") set("level", "H"); // H gives the most damage tolerance for a large centre logo
                           }
                         }}
                         className="font-mono text-xs flex-1 min-w-0" />
@@ -2021,13 +2036,13 @@ export default function MarketingQRCodesPage() {
                         <div className="flex items-center gap-2.5 mt-1 p-2 rounded-lg bg-muted/40 border">
                           <img src={settings.logoUrl} alt="Logo" className="w-10 h-10 object-contain rounded border bg-white" />
                           <p className="text-[10px] text-muted-foreground">
-                            Logo active · {settings.level === "L" || settings.level === "M"
-                              ? <span className="text-amber-600">Switch to ECC Q or H for best results</span>
+                            Logo active · {settings.level !== "H"
+                              ? <span className="text-amber-600">Switch to ECC H for best results</span>
                               : "ECC level is good"}
                           </p>
                         </div>
                         <div className="space-y-1.5 pt-1">
-                          <Label className="text-xs">Logo size</Label>
+                          <Label className="text-xs">Logo width</Label>
                           <div className="relative w-28">
                             <input type="number" min={15} max={50} step={1}
                               value={Math.round(settings.logoSize * 100)}
@@ -2038,11 +2053,11 @@ export default function MarketingQRCodesPage() {
                               className="w-full rounded-md border bg-background px-2 py-1 pr-6 text-sm tabular-nums focus:outline-none focus:ring-2 focus:ring-ring" />
                             <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground">%</span>
                           </div>
-                          <p className="text-[10px] text-muted-foreground">Larger logos cover more of the code — keep ECC at Q or H so it still scans. Range 15–50%.</p>
+                          <p className="text-[10px] text-muted-foreground">How much of the code's width the logo spans. Keep ECC at H so it still scans. Range 15–50%.</p>
                         </div>
                       </>
                     )}
-                    <p className="text-[10px] text-muted-foreground">Use Error Correction Q or H when adding a logo.</p>
+                    <p className="text-[10px] text-muted-foreground">Error Correction H is recommended when adding a logo.</p>
                   </div>
                 </CardContent>
               )}
