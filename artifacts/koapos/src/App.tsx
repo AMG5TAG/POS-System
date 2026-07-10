@@ -140,6 +140,7 @@ const MarketingPage = lazyWithRetry(() => import("@/pages/app/marketing"));
 const MarketingQRCodesPage = lazyWithRetry(() => import("@/pages/app/marketing-qr-codes"));
 const MarketingStickersPage = lazyWithRetry(() => import("@/pages/app/marketing-stickers"));
 const MarketingShortlinksPage = lazyWithRetry(() => import("@/pages/app/marketing-shortlinks"));
+const MarketingEmailSignaturesPage = lazyWithRetry(() => import("@/pages/app/marketing-email-signatures"));
 const MarketingLandingPagesPage = lazyWithRetry(() => import("@/pages/app/marketing-landing-pages"));
 const MarketingEmailCampaignsPage = lazyWithRetry(() => import("@/pages/app/marketing-email-campaigns"));
 const MarketingEmailTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-email-templates"));
@@ -803,6 +804,9 @@ function Router() {
       </Route>
       <Route path="/management/marketing-reports/generators/shortlinks">
         <ManagementProtectedRoute component={MarketingShortlinksPage} />
+      </Route>
+      <Route path="/management/marketing-reports/generators/email-signatures">
+        <ManagementProtectedRoute component={MarketingEmailSignaturesPage} />
       </Route>
       {/* Legacy redirects from the old /marketing/* locations */}
       <Route path="/marketing/landing-pages">        <Redirect to="/management/marketing-reports/landing-pages/pages" />        </Route>

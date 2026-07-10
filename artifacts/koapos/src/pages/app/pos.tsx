@@ -1677,6 +1677,12 @@ export default function POSPage() {
      Auto-fill exact amount for EFTPOS, card, and direct deposit
      then focus the Complete Sale button so the cashier can just press Enter. */
   useEffect(() => {
+    // This only manages the payment modal's numpad, so it must not run while the
+    // modal is closed. Otherwise, after a card/eftpos sale, clearCart() empties
+    // the cart (effectiveTotal → 0) and this effect would re-fill numpadInput
+    // with "0.00", leaving isPaymentDirty true and the nav guard wrongly warning
+    // "Payment in progress" on a completed sale.
+    if (!paymentModalOpen) return;
     const autoExactMethods: PaymentMethodId[] = ["eftpos", "card", "direct_deposit"];
     if (payMethod !== "cash" && payMethod !== "loyalty" && !autoExactMethods.includes(payMethod)) {
       setNumpadInput("");
@@ -1694,7 +1700,7 @@ export default function POSPage() {
         completeSaleRef.current?.focus();
       }, 0);
     }
-  }, [payMethod, effectiveTotal]);
+  }, [payMethod, effectiveTotal, paymentModalOpen]);
 
   const handleNumpad = (key: string) => {
     setNumpadInput(prev => {
@@ -2853,7 +2859,14 @@ export default function POSPage() {
           setReceiptPhone(inv.customerPhone ?? "");
           setReceiptMode("idle");
           setInvoicePay(null);
+          /* Clear all payment-entry state so the navigation guard doesn't keep
+             reporting "Payment in progress" after a settled invoice payment
+             (this path has no cart, so clearCart() isn't called). */
           setNumpadInput("");
+          setGcPayCardNumber("");
+          setDepositDesc("");
+          setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
+          paymentModalInitialMethodRef.current = null;
           setPaymentModalOpen(false);
           setSaleStaff(null); /* payment done — revert any one-sale staff switch */
           /* A paid invoice counts toward revenue KPIs — refresh every KPI /
