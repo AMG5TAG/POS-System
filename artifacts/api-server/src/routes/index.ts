@@ -192,6 +192,15 @@ router.use(invoicesRouter);
 router.use(quotesRouter);
 router.use(salesSettingsRouter);
 router.use(integrationsRouter);
+// xeroRouter and payrollRouter must be mounted BEFORE the blanket-requireAuth
+// routers below (e.g. customerFilesCloudRouter). Their OAuth callbacks
+// (/xero/auth/callback, /payroll/auth/callback) have no per-route requireAuth by
+// design — they authenticate via the `state` param, because the browser's return
+// from Xero cannot be relied on to carry the app session cookie. Every other
+// route in both routers carries its own requireAuth, so this placement is safe.
+// Mounting them after the blanket guard 401s the callbacks.
+router.use(xeroRouter);
+router.use(payrollRouter);
 router.use(customerFilesCloudRouter);
 router.use(autoSyncSettingsRouter);
 router.use(storageRouter);
@@ -213,8 +222,6 @@ router.use(emailSettingsRouter);
 router.use(formsRouter);
 router.use(formSubmissionsRouter);
 router.use(laybysRouter);
-router.use(xeroRouter);
-router.use(payrollRouter);
 router.use(marketingAutomationRouter);
 router.use(feedbackRouter);
 router.use(camerasRouter);

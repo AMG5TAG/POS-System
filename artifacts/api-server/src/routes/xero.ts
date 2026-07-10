@@ -30,8 +30,15 @@ const XERO_AUTH_URL    = "https://login.xero.com/identity/connect/authorize";
 const XERO_TOKEN_URL   = "https://identity.xero.com/connect/token";
 const XERO_CONNECTIONS = "https://api.xero.com/connections";
 const XERO_API         = "https://api.xero.com/api.xro/2.0";
+// Xero deprecated the broad `accounting.transactions` scope and split it into
+// granular scopes. Apps created on/after 2 March 2026 cannot use the broad scope
+// at all (Xero returns invalid_scope), so we request the granular replacement.
+// The sync only writes to /Invoices (accounting.invoices), /Contacts
+// (accounting.contacts) and reads /Accounts (accounting.settings). Add
+// `accounting.payments` here if we ever record payments via the /Payments API.
+// See https://developer.xero.com/documentation/guides/oauth2/scopes/
 const XERO_SCOPES      =
-  "openid profile email accounting.transactions accounting.contacts accounting.settings offline_access";
+  "openid profile email accounting.invoices accounting.contacts accounting.settings offline_access";
 
 /* Canonical Xero setup-wizard route. Every OAuth redirect MUST target this exact
    path — never the legacy /management/xero or /management/integrations aliases.
