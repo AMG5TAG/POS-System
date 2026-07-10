@@ -248,12 +248,18 @@ export default function ManagementXeroPage() {
   const initializedRef = useRef(false);
   useEffect(() => {
     if (initializedRef.current || !status) return;
-    initializedRef.current = true;
     if (status.mappings)     setMappings(status.mappings);
     if (status.syncSettings) setSyncSettings(prev => ({ ...prev, ...status.syncSettings }));
-    if (status.connected && status.tenantId && status.mappings?.revenueAccount) setStep(6);
-    else if (status.connected && status.tenantId) setStep(4);
-    else if (status.connected) setStep(3);
+    // Only consume the one-shot (and jump forward) once we actually see a
+    // CONNECTED status. If the first status load arrives before the connection
+    // registers (e.g. a slow/stale fetch), we must not lock initialisation on a
+    // disconnected snapshot — otherwise a genuinely-connected merchant gets
+    // stranded on the Connect step and the wizard never advances.
+    if (!status.connected) return;
+    initializedRef.current = true;
+    if (status.tenantId && status.mappings?.revenueAccount) setStep(6);
+    else if (status.tenantId) setStep(4);
+    else setStep(3);
   }, [status]);
 
   /* Handle URL params after OAuth redirect */

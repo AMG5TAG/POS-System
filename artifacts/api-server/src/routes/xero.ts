@@ -384,6 +384,9 @@ router.get("/xero/accounts", requireAuth, async (req, res): Promise<void> => {
       Authorization:    `Bearer ${auth.accessToken}`,
       "xero-tenant-id": auth.tenantId,
       "Content-Type":   "application/json",
+      // Xero's Accounting API returns XML unless JSON is explicitly requested;
+      // without this, `await r.json()` throws and the handler 500s.
+      Accept:           "application/json",
     },
   });
 
@@ -482,6 +485,9 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
       Authorization:    `Bearer ${auth.accessToken}`,
       "xero-tenant-id": auth.tenantId,
       "Content-Type":   "application/json",
+      // Xero's Accounting API returns XML unless JSON is explicitly requested;
+      // without this, `await r.json()` throws and the handler 500s.
+      Accept:           "application/json",
     },
     body: JSON.stringify({ Contacts: xeroContacts }),
   });
@@ -559,6 +565,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
             Authorization:    `Bearer ${auth.accessToken}`,
             "xero-tenant-id": auth.tenantId,
             "Content-Type":   "application/json",
+            Accept:           "application/json",
           },
           body: JSON.stringify({ HistoryRecords: [{ Details: noteText }] }),
         });
@@ -666,6 +673,9 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
       Authorization:    `Bearer ${auth.accessToken}`,
       "xero-tenant-id": auth.tenantId,
       "Content-Type":   "application/json",
+      // Xero's Accounting API returns XML unless JSON is explicitly requested;
+      // without this, `await r.json()` throws and the handler 500s.
+      Accept:           "application/json",
     },
     body: JSON.stringify({ Invoices: invoices }),
   });
@@ -721,6 +731,9 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
       Authorization:    `Bearer ${auth.accessToken}`,
       "xero-tenant-id": auth.tenantId,
       "Content-Type":   "application/json",
+      // Xero's Accounting API returns XML unless JSON is explicitly requested;
+      // without this, `await r.json()` throws and the handler 500s.
+      Accept:           "application/json",
     },
     body: JSON.stringify({ Invoices: xeroPos }),
   });
@@ -808,6 +821,9 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
       Authorization:    `Bearer ${auth.accessToken}`,
       "xero-tenant-id": auth.tenantId,
       "Content-Type":   "application/json",
+      // Xero's Accounting API returns XML unless JSON is explicitly requested;
+      // without this, `await r.json()` throws and the handler 500s.
+      Accept:           "application/json",
     },
     body: JSON.stringify({ Invoices: [invoice] }),
   });

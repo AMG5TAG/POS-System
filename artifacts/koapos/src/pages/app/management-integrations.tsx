@@ -252,6 +252,15 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
 
 /* ─── Integration card ───────────────────────────────────────────────────── */
 
+/* Integrations that have a dedicated setup/config wizard reachable *after*
+   connecting. The connected card shows a "Configure" button linking here so
+   merchants can re-enter the wizard (org selection, account mapping, sync
+   settings) instead of only being able to disconnect. */
+const CONFIG_ROUTES: Record<string, string> = {
+  xero:        "/management/settings-integrations/integrations/xero",
+  tyro_eftpos: "/management/settings-integrations/integrations/tyro-eftpos",
+};
+
 function IntegrationCard({
   intg, busy, onConnect, onDisconnect, onOAuth, onNavigate, onSyncContacts,
 }: {
@@ -348,15 +357,15 @@ function IntegrationCard({
                     <Users className="w-3 h-3" /> Sync Contacts
                   </Button>
                 )}
-                {onNavigate && (
+                {onNavigate && CONFIG_ROUTES[intg.key] && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="gap-1.5 text-xs h-7 px-2"
-                    onClick={() => onNavigate("/management/settings-integrations/integrations/tyro-eftpos")}
-                    title="Terminal settings"
+                    onClick={() => onNavigate(CONFIG_ROUTES[intg.key])}
+                    title="Open setup & settings"
                   >
-                    <Settings className="w-3 h-3" /> Settings
+                    <Settings className="w-3 h-3" /> Configure
                   </Button>
                 )}
                 <Button
@@ -473,7 +482,7 @@ function Section({
               onConnect={() => onConnect(intg)}
               onDisconnect={() => onDisconnect(intg)}
               onOAuth={() => onOAuth(intg)}
-              onNavigate={intg.key === "tyro_eftpos" ? onNavigate : undefined}
+              onNavigate={CONFIG_ROUTES[intg.key] ? onNavigate : undefined}
               onSyncContacts={
                 (intg.key === "google_contacts" || intg.key === "microsoft_contacts") && onSyncContacts
                   ? () => onSyncContacts(intg)
@@ -731,7 +740,7 @@ export default function ManagementIntegrationsPage() {
                   onConnect={setModalTarget}
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
-                  onNavigate={sec.id === "payments" ? (href) => setLocation(href) : undefined}
+                  onNavigate={(href) => setLocation(href)}
                   onSyncContacts={sec.id === "cloud" ? (intg) => { setSyncTarget(intg); setSyncIncludeNotes(false); setSyncNotesConflict("append"); } : undefined}
                   defaultOpen={sectionsWithReconnect.has(sec.id)}
                 />
