@@ -162,13 +162,21 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
     // concat_ws skips null name parts; a single token also covers first/last
     // name on its own. Falls back to the raw term for email/phone lookups.
     const fullName = sql`concat_ws(' ', ${customersTable.firstName}, ${customersTable.lastName})`;
+    // Full address spanning legacy free-text + billing + shipping parts, so a
+    // search can span columns ("smith sydney 2000" matches street + city +
+    // postcode). Token-matched like the name so word order doesn't matter.
+    const fullAddress = sql`concat_ws(' ', ${customersTable.address}, ${customersTable.billingStreet}, ${customersTable.billingCity}, ${customersTable.billingState}, ${customersTable.billingPostcode}, ${customersTable.billingCountry}, ${customersTable.shippingStreet}, ${customersTable.shippingCity}, ${customersTable.shippingState}, ${customersTable.shippingPostcode}, ${customersTable.shippingCountry})`;
     const tokens = search.split(/\s+/).filter(Boolean);
     const nameMatch = tokens.length
       ? and(...tokens.map((t) => sql`${fullName} ILIKE ${`%${t}%`}`))
       : undefined;
+    const addressMatch = tokens.length
+      ? and(...tokens.map((t) => sql`${fullAddress} ILIKE ${`%${t}%`}`))
+      : undefined;
     conditions.push(
       or(
         nameMatch,
+        addressMatch,
         ilike(customersTable.email, `%${search}%`),
         ilike(customersTable.phone, `%${search}%`)
       )!
