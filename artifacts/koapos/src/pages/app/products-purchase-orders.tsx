@@ -359,9 +359,23 @@ export default function ProductsPurchaseOrdersPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    deletePO.mutate({ id }, {
-      onSuccess: () => { invalidateList(); toast.success("Purchase order deleted"); },
+  const handleDelete = (po: (typeof orders)[0]) => {
+    const totalReceived = (po.items ?? []).reduce((s, i) => s + (i.received ?? 0), 0);
+    const lines = [
+      `Delete purchase order ${po.poNumber}?`,
+      "",
+      "This permanently deletes the order AND reverses every change it made:",
+      totalReceived > 0
+        ? `• Removes ${totalReceived} received unit${totalReceived === 1 ? "" : "s"} from product stock`
+        : "• No stock to reverse (nothing was received)",
+      "• Removes any unsold serial numbers this order added",
+      "• Removes this order's cost-price history and restores prior cost prices",
+      "",
+      "This cannot be undone.",
+    ];
+    if (!window.confirm(lines.join("\n"))) return;
+    deletePO.mutate({ id: po.id }, {
+      onSuccess: () => { invalidateList(); toast.success("Purchase order deleted and its changes reversed"); },
       onError: () => toast.error("Failed to delete"),
     });
   };
@@ -477,7 +491,7 @@ export default function ProductsPurchaseOrdersPage() {
                         <Pencil className="w-3.5 h-3.5" />
                       </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                        title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po.id); }}>
+                        title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po); }}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </td>

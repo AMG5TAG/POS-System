@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { withUniqueRetry, nextSequential, isUniqueViolation } from "../lib/document-numbers";
 import {
@@ -354,6 +354,11 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
 });
 
 // DELETE /purchase-orders/:id
+// Deletes the PO *and reverses every change it made*: stock added at receipt is
+// backed out, unsold serial numbers it created are removed, and the cost-price
+// history it wrote is dropped (with each affected product's cost restored to its
+// prior history entry). All of it runs in one transaction so a partial reversal
+// can never be left behind.
 router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeletePurchaseOrderParams.parse({ id: Number(req.params.id) });
@@ -361,9 +366,71 @@ router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!owned) { res.status(404).json({ error: "Not found" }); return; }
-  await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
-  await db.delete(purchaseOrdersTable)
-    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+
+  await db.transaction(async (tx) => {
+    const items = await tx.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+
+    // 1) Reverse stock — back out the units this PO added to on-hand (the
+    //    received quantity, tracked products only). Aggregate per product so
+    //    repeated lines for the same product net correctly.
+    const receivedByProduct = new Map<number, number>();
+    for (const it of items) {
+      if (it.productId && it.received > 0) {
+        receivedByProduct.set(it.productId, (receivedByProduct.get(it.productId) ?? 0) + it.received);
+      }
+    }
+    for (const [productId, qty] of receivedByProduct) {
+      const [product] = await tx.select({ trackInventory: productsTable.trackInventory })
+        .from(productsTable)
+        .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+      if (product?.trackInventory === "true") {
+        await tx.update(productsTable)
+          .set({ stockQuantity: sql`${productsTable.stockQuantity} - ${qty}` })
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+      }
+    }
+
+    // 2) Remove serial numbers this PO received that are still on hand. Serials
+    //    already sold belong to completed sales and are left untouched.
+    const itemIds = items.map((i) => i.id);
+    if (itemIds.length) {
+      await tx.delete(productSerialsTable).where(and(
+        eq(productSerialsTable.merchantId, merchantId),
+        eq(productSerialsTable.status, "available"),
+        inArray(productSerialsTable.poItemId, itemIds),
+      ));
+    }
+
+    // 3) Reverse cost-price changes — drop the price-history rows this PO wrote,
+    //    then restore each affected product's cost price to its most recent
+    //    remaining history entry (left unchanged if no prior history remains).
+    const affectedProducts = [...new Set((await tx
+      .select({ productId: productPriceHistoryTable.productId })
+      .from(productPriceHistoryTable)
+      .where(and(eq(productPriceHistoryTable.merchantId, merchantId), eq(productPriceHistoryTable.poId, id))))
+      .map((r) => r.productId))];
+    await tx.delete(productPriceHistoryTable)
+      .where(and(eq(productPriceHistoryTable.merchantId, merchantId), eq(productPriceHistoryTable.poId, id)));
+    for (const productId of affectedProducts) {
+      const [prior] = await tx.select({ costPrice: productPriceHistoryTable.costPrice })
+        .from(productPriceHistoryTable)
+        .where(and(eq(productPriceHistoryTable.merchantId, merchantId), eq(productPriceHistoryTable.productId, productId)))
+        .orderBy(desc(productPriceHistoryTable.changedAt))
+        .limit(1);
+      if (prior) {
+        await tx.update(productsTable)
+          .set({ costPrice: prior.costPrice })
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+      }
+    }
+
+    // 4) Delete the PO's receipts, items, then the PO itself (FK order).
+    await tx.delete(purchaseOrderReceiptsTable).where(eq(purchaseOrderReceiptsTable.poId, id));
+    await tx.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+    await tx.delete(purchaseOrdersTable)
+      .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  });
+
   res.json({ success: true });
 });
 
