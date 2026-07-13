@@ -249,11 +249,6 @@ export default function ProductsPurchaseOrdersPage() {
   };
 
   const openEdit = (po: (typeof orders)[0]) => {
-    // Fully received POs are locked — editing is not permitted.
-    if (isFullyReceived(po)) {
-      toast.error("Fully received purchase orders can't be edited.");
-      return;
-    }
     setEditingId(po.id);
     setForm({
       supplierId:         po.supplierId ?? null,
@@ -318,6 +313,13 @@ export default function ProductsPurchaseOrdersPage() {
   const handleSave = () => {
     const validItems = items.filter((i) => i.productName);
     if (!validItems.length) { toast.error("Add at least one item"); return; }
+    // A PO can only be marked complete once goods have actually been received.
+    // Receiving happens via the Receive Goods worksheet (which sets received > 0);
+    // this blocks manually flipping the status to complete with nothing received.
+    if (isFullyReceived({ status: form.status }) && !validItems.some((i) => (i.received ?? 0) > 0)) {
+      toast.error("Can't mark this order as fully received — no items have been received yet. Use \"Receive Inventory\" to receive at least one item first.");
+      return;
+    }
     const payload = {
       supplierId:      form.supplierId ?? undefined,
       orderNumber:     form.orderNumber || undefined,
@@ -471,11 +473,9 @@ export default function ProductsPurchaseOrdersPage() {
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="View details" onClick={() => setViewingPO(po)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
-                      {!isFullyReceived(po) && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
                         title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po.id); }}>
                         <Trash2 className="w-3.5 h-3.5" />
@@ -676,11 +676,9 @@ export default function ProductsPurchaseOrdersPage() {
 
               <DialogFooter className="flex gap-2 pt-2 sm:justify-between">
                 <div className="flex gap-2">
-                  {!isFullyReceived(po) && (
-                    <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
-                      <Pencil className="w-4 h-4 mr-1.5" /> Edit
-                    </Button>
-                  )}
+                  <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
+                    <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                  </Button>
                   {(po.status === "Ordered" || po.status === "Partially Received" || po.status === "Sent" || po.status === "Partial") && (
                     <Button onClick={() => setReceiveDialogOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
                       <PackageCheck className="w-4 h-4" /> Receive Inventory
@@ -923,24 +921,29 @@ export default function ProductsPurchaseOrdersPage() {
                 </Button>
               </div>
               <div className="grid grid-cols-12 gap-2 px-1 mb-1">
-                <p className="col-span-5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product Name</p>
+                <p className="col-span-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product Name</p>
                 <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center">Qty</p>
+                <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center">Received</p>
                 <p className="col-span-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit Cost</p>
               </div>
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <Input className="col-span-5" placeholder="Item name" value={item.productName}
+                  <Input className="col-span-4" placeholder="Item name" value={item.productName}
                     onChange={(e) => updateItem(i, "productName", e.target.value)} />
                   <Input className="col-span-2 text-center" type="number" min={1} placeholder="Qty"
                     value={item.quantity}
                     onChange={(e) => updateItem(i, "quantity", parseInt(e.target.value) || 1)} />
+                  <Input className="col-span-2 text-center" type="number" min={0} max={item.quantity}
+                    title="Units received — editing this adjusts product stock"
+                    value={item.received}
+                    onChange={(e) => updateItem(i, "received", Math.max(0, Math.min(item.quantity, parseInt(e.target.value) || 0)))} />
                   <div className="col-span-3 relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                     <Input className="pl-6" type="number" step="0.01" placeholder="0.00"
                       value={item.unitCost || ""}
                       onChange={(e) => updateItem(i, "unitCost", parseFloat(e.target.value) || 0)} />
                   </div>
-                  <Button variant="ghost" size="icon" className="col-span-2 h-8 text-destructive hover:text-destructive"
+                  <Button variant="ghost" size="icon" className="col-span-1 h-8 text-destructive hover:text-destructive"
                     onClick={() => removeItem(i)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>

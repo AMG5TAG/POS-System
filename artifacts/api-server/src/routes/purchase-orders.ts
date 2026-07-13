@@ -253,6 +253,20 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!owned) { res.status(404).json({ error: "Not found" }); return; }
+  // A PO can only be marked complete once goods have actually been received.
+  // Receiving flows through POST /:id/receive (which raises `received`); guard the
+  // generic status edit so a PO can't be flipped to received with nothing received.
+  const completeStatuses = ["Fully Received", "Received"];
+  if (body.status && completeStatuses.includes(body.status)) {
+    const itemsToCheck = body.items !== undefined
+      ? body.items
+      : await db.select({ received: purchaseOrderItemsTable.received })
+          .from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+    if (!itemsToCheck.some((i) => (i.received ?? 0) > 0)) {
+      res.status(400).json({ error: "Cannot mark a purchase order as received before at least one item has been received." });
+      return;
+    }
+  }
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
@@ -277,20 +291,51 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     distributeDelivery: distributeDelivery ? "true" : "false",
   }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (body.items !== undefined) {
-    await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
-    if (body.items.length) {
-      await db.insert(purchaseOrderItemsTable).values(
-        body.items.map((i) => ({
-          poId: id,
-          productId: i.productId ?? null,
-          productName: i.productName ?? "",
-          quantity: i.quantity ?? 1,
-          received: i.received ?? 0,
-          unitCost: String(i.unitCost ?? 0),
-          notes: i.notes ?? null,
-        }))
-      );
-    }
+    // Editing a PO's received quantities must move inventory the same way the
+    // Receive worksheet does. Aggregate received-per-product before and after the
+    // edit, then shift each tracked product's stock by the delta — all inside one
+    // transaction so the item rewrite and the stock adjustments can't split apart.
+    await db.transaction(async (tx) => {
+      const oldItems = await tx.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+      const receivedByProduct = (rows: Array<{ productId?: number | null; received?: number | null }>) => {
+        const m = new Map<number, number>();
+        for (const r of rows) {
+          if (r.productId) m.set(r.productId, (m.get(r.productId) ?? 0) + (r.received ?? 0));
+        }
+        return m;
+      };
+      const oldReceived = receivedByProduct(oldItems);
+      const newReceived = receivedByProduct(body.items ?? []);
+
+      await tx.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+      if (body.items!.length) {
+        await tx.insert(purchaseOrderItemsTable).values(
+          body.items!.map((i) => ({
+            poId: id,
+            productId: i.productId ?? null,
+            productName: i.productName ?? "",
+            quantity: i.quantity ?? 1,
+            received: i.received ?? 0,
+            unitCost: String(i.unitCost ?? 0),
+            notes: i.notes ?? null,
+          }))
+        );
+      }
+
+      const affected = new Set<number>([...oldReceived.keys(), ...newReceived.keys()]);
+      for (const productId of affected) {
+        const delta = (newReceived.get(productId) ?? 0) - (oldReceived.get(productId) ?? 0);
+        if (delta === 0) continue;
+        const [product] = await tx.select({ trackInventory: productsTable.trackInventory })
+          .from(productsTable)
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+        if (product?.trackInventory === "true") {
+          await tx.update(productsTable)
+            .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${delta}` })
+            .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+        }
+      }
+    });
     // Sync product cost prices and log pricing history
     const [updatedPO] = await db.select().from(purchaseOrdersTable)
       .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
