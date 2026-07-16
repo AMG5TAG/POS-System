@@ -861,6 +861,28 @@ export const GetProductPricingHistoryResponse = zod.array(GetProductPricingHisto
 
 
 /**
+ * @summary Get every sale and invoice that includes this product
+ */
+export const GetProductSalesHistoryParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetProductSalesHistoryResponseItem = zod.object({
+  "type": zod.enum(['sale', 'invoice']),
+  "id": zod.number(),
+  "reference": zod.string(),
+  "date": zod.string(),
+  "status": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number(),
+  "lineTotal": zod.number(),
+  "documentTotal": zod.number()
+})
+export const GetProductSalesHistoryResponse = zod.array(GetProductSalesHistoryResponseItem)
+
+
+/**
  * @summary List digital codes for a product
  */
 export const ListDigitalCodesParams = zod.object({

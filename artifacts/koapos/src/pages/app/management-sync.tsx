@@ -600,8 +600,15 @@ export default function ManagementSyncPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Users className="w-4 h-4" /> Sync Contacts to {syncTarget?.label}</DialogTitle>
             <DialogDescription>
-              Push your KoaPOS customers to {syncTarget?.key === "google_contacts" ? "Google Contacts" : "Microsoft Contacts"}.
-              Contacts that already exist (matched by email) are detected — you'll be warned before any are overwritten.
+              {(() => {
+                const dest = syncTarget?.key === "google_contacts" ? "Google Contacts"
+                  : syncTarget?.key === "apple_icloud" ? "iCloud Contacts"
+                  : "Microsoft Contacts";
+                const isApple = syncTarget?.key === "apple_icloud";
+                return `Push your KoaPOS customers to ${dest}. ${isApple
+                  ? "Re-syncing updates the same contacts instead of creating duplicates."
+                  : "Contacts that already exist (matched by email) are detected — you'll be warned before any are overwritten."}`;
+              })()}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1">
@@ -609,7 +616,9 @@ export default function ManagementSyncPage() {
               <div>
                 <p className="text-sm font-medium">Include customer notes</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {syncTarget?.key === "google_contacts" ? "Maps to Google Contacts → About" : "Maps to Outlook Contact → Notes"}
+                  {syncTarget?.key === "google_contacts" ? "Maps to Google Contacts → About"
+                    : syncTarget?.key === "apple_icloud" ? "Maps to the contact’s Notes field in iCloud"
+                    : "Maps to Outlook Contact → Notes"}
                 </p>
               </div>
               <Switch checked={includeNotes} onCheckedChange={setIncludeNotes} />

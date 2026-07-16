@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable, transactionsTable, invoicesTable, customersTable } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import multer from "multer";
@@ -31,6 +31,7 @@ import {
   UpdateProductVariantParams,
   DeleteProductVariantParams,
   GetProductPricingHistoryParams,
+  GetProductSalesHistoryParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -942,6 +943,81 @@ router.get("/products/:id/pricing-history", requireAuth, async (req, res): Promi
     poId: r.poId ?? null,
     changedAt: r.changedAt.toISOString(),
   })));
+});
+
+// GET /products/:id/sales-history — every sale (transaction) and invoice whose
+// line items include this product. Line items are JSON blobs on the parent row
+// (no join table), so we push the "contains this productId" filter into the DB
+// via jsonb containment, then extract the matching line(s) from each document.
+router.get("/products/:id/sales-history", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = GetProductSalesHistoryParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+
+  // jsonb array containment: rows whose `items` array has an element {productId: id}.
+  const contains = JSON.stringify([{ productId: id }]);
+  const customerName = (first: string | null, last: string | null, company: string | null): string | null =>
+    ([first, last].filter(Boolean).join(" ").trim() || company || "") || null;
+
+  type Line = { productId?: number | null; quantity?: number | null; unitPrice?: number | null; totalPrice?: number | null };
+  /** Sum this product's units and line value across a document's line items. */
+  const aggregate = (items: unknown): { quantity: number; lineTotal: number; unitPrice: number } => {
+    const lines = (Array.isArray(items) ? items : []) as Line[];
+    let quantity = 0, lineTotal = 0;
+    for (const l of lines) {
+      if (Number(l.productId) !== id) continue;
+      const qty = Number(l.quantity) || 0;
+      const price = Number(l.unitPrice) || 0;
+      quantity += qty;
+      lineTotal += l.totalPrice != null ? Number(l.totalPrice) || 0 : qty * price;
+    }
+    return { quantity, lineTotal, unitPrice: quantity > 0 ? lineTotal / quantity : 0 };
+  };
+
+  const [txns, invs] = await Promise.all([
+    db.select({
+      id: transactionsTable.id, reference: transactionsTable.receiptNumber, status: transactionsTable.status,
+      total: transactionsTable.total, createdAt: transactionsTable.createdAt, items: transactionsTable.items,
+      first: customersTable.firstName, last: customersTable.lastName, company: customersTable.company,
+    })
+      .from(transactionsTable)
+      .leftJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+      .where(and(eq(transactionsTable.merchantId, merchantId), sql`${transactionsTable.items} @> ${contains}::jsonb`)),
+    db.select({
+      id: invoicesTable.id, reference: invoicesTable.invoiceNumber, status: invoicesTable.status,
+      total: invoicesTable.total, createdAt: invoicesTable.createdAt, items: invoicesTable.items,
+      first: customersTable.firstName, last: customersTable.lastName, company: customersTable.company,
+    })
+      .from(invoicesTable)
+      .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .where(and(eq(invoicesTable.merchantId, merchantId), sql`${invoicesTable.items}::jsonb @> ${contains}::jsonb`)),
+  ]);
+
+  const entries = [
+    ...txns.map((t) => {
+      const agg = aggregate(t.items);
+      return {
+        type: "sale" as const, id: t.id, reference: t.reference ?? String(t.id),
+        date: t.createdAt.toISOString(), status: t.status ?? null,
+        customerName: customerName(t.first, t.last, t.company),
+        quantity: agg.quantity, unitPrice: agg.unitPrice, lineTotal: agg.lineTotal,
+        documentTotal: t.total != null ? parseFloat(t.total) : 0,
+      };
+    }),
+    ...invs.map((v) => {
+      const agg = aggregate(v.items);
+      return {
+        type: "invoice" as const, id: v.id, reference: v.reference ?? String(v.id),
+        date: v.createdAt.toISOString(), status: v.status ?? null,
+        customerName: customerName(v.first, v.last, v.company),
+        quantity: agg.quantity, unitPrice: agg.unitPrice, lineTotal: agg.lineTotal,
+        documentTotal: v.total != null ? parseFloat(v.total) : 0,
+      };
+    }),
+  ].sort((a, b) => b.date.localeCompare(a.date)); // newest first
+
+  res.json(entries);
 });
 
 export default router;

@@ -12,6 +12,7 @@ import {
   useCreateCategory,
   useGetMerchant,
   useGetProductPricingHistory,
+  useGetProductSalesHistory,
   useListFloorPlanZones,
   useGetFloorPlan,
   useGetPosSettings,
@@ -85,7 +86,7 @@ import {
 
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
-type DetailTab = "details" | "price" | "media" | "inventory" | "serials" | "settings";
+type DetailTab = "details" | "price" | "media" | "inventory" | "serials" | "sales" | "settings";
 type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
 
 type BulkActionPending =
@@ -785,6 +786,7 @@ function ProductDetailDialog({
     { key: "media",     label: "Media"     },
     { key: "inventory", label: "Inventory" },
     ...(serials.length > 0 ? [{ key: "serials" as DetailTab, label: "Serial Numbers" }] : []),
+    { key: "sales",     label: "Sales History" },
     { key: "settings",  label: "Settings"  },
   ];
   const tabIndex = TABS.findIndex((t) => t.key === tab);
@@ -987,6 +989,12 @@ function ProductDetailDialog({
           </div>
         )}
 
+        {tab === "sales" && (
+          <div className="py-4">
+            <SalesHistoryTable productId={product.id} />
+          </div>
+        )}
+
         {tab === "settings" && (
           <div className="space-y-3 py-4">
             <div className="rounded-xl border bg-muted/20 divide-y">
@@ -1109,6 +1117,77 @@ function PricingHistoryTable({ productId }: { productId: number }) {
           ))}
         </tbody>
       </table>
+    </div>
+  );
+}
+
+/* Every sale (transaction) and invoice whose line items include this product. */
+function SalesHistoryTable({ productId }: { productId: number }) {
+  const { data, isLoading } = useGetProductSalesHistory(productId);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => <div key={i} className="h-9 rounded-lg bg-muted/40 animate-pulse" />)}
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No sales yet. Completed sales and invoices that include this product will appear here.
+      </p>
+    );
+  }
+
+  const soldUnits = data.reduce((s, e) => s + (e.quantity ?? 0), 0);
+  const soldValue = data.reduce((s, e) => s + (e.lineTotal ?? 0), 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{data.length} document{data.length === 1 ? "" : "s"}</span>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{soldUnits} unit{soldUnits === 1 ? "" : "s"} sold</span>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{formatCurrency(soldValue)} total</span>
+      </div>
+      <div className="rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left p-2.5 font-medium text-muted-foreground">Reference</th>
+              <th className="text-left p-2.5 font-medium text-muted-foreground">Date</th>
+              <th className="text-left p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Customer</th>
+              <th className="text-right p-2.5 font-medium text-muted-foreground">Qty</th>
+              <th className="text-right p-2.5 font-medium text-muted-foreground">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {data.map((entry) => (
+              <tr key={`${entry.type}-${entry.id}`} className="hover:bg-muted/20">
+                <td className="p-2.5">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={cn(
+                      "text-[10px] shrink-0 capitalize",
+                      entry.type === "invoice" ? "border-blue-400 text-blue-600 dark:text-blue-400" : "border-emerald-400 text-emerald-600 dark:text-emerald-400",
+                    )}>
+                      {entry.type}
+                    </Badge>
+                    <span className="font-mono text-xs truncate">{entry.reference}</span>
+                  </div>
+                  {entry.status && <span className="text-[10px] text-muted-foreground capitalize">{entry.status.replace(/-/g, " ")}</span>}
+                </td>
+                <td className="p-2.5 text-muted-foreground whitespace-nowrap">
+                  {new Date(entry.date).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
+                </td>
+                <td className="p-2.5 text-muted-foreground hidden sm:table-cell truncate">{entry.customerName ?? "—"}</td>
+                <td className="p-2.5 text-right tabular-nums">{entry.quantity}</td>
+                <td className="p-2.5 text-right font-medium tabular-nums">{formatCurrency(entry.lineTotal)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

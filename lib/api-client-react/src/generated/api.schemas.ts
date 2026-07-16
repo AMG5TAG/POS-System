@@ -481,6 +481,27 @@ export interface ProductPriceHistoryEntry {
   changedAt: string;
 }
 
+export type ProductSalesHistoryEntryType = typeof ProductSalesHistoryEntryType[keyof typeof ProductSalesHistoryEntryType];
+
+
+export const ProductSalesHistoryEntryType = {
+  sale: 'sale',
+  invoice: 'invoice',
+} as const;
+
+export interface ProductSalesHistoryEntry {
+  type: ProductSalesHistoryEntryType;
+  id: number;
+  reference: string;
+  date: string;
+  status?: string | null;
+  customerName?: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  documentTotal: number;
+}
+
 export interface ProductType {
   id: number;
   merchantId: number;

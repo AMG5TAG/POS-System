@@ -763,6 +763,27 @@ paths:
                 items:
                   $ref: "#/components/schemas/ProductPriceHistoryEntry"
 
+  /products/{id}/sales-history:
+    get:
+      operationId: getProductSalesHistory
+      summary: Get every sale and invoice that includes this product
+      tags: [products]
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sales and invoices containing the product, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductSalesHistoryEntry"
+
   # ── Digital Codes ─────────────────────────────────────────────────────────
   /products/{productId}/digital-codes:
     get:
@@ -9904,6 +9925,20 @@ components:
         poNumber: { type: string, nullable: true }
         poId: { type: integer, nullable: true }
         changedAt: { type: string }
+    ProductSalesHistoryEntry:
+      type: object
+      required: [type, id, reference, date, quantity, unitPrice, lineTotal, documentTotal]
+      properties:
+        type: { type: string, enum: [sale, invoice] }
+        id: { type: integer }                                   # transaction or invoice id
+        reference: { type: string }                             # receipt number or invoice number
+        date: { type: string }                                  # createdAt (ISO)
+        status: { type: string, nullable: true }
+        customerName: { type: string, nullable: true }
+        quantity: { type: number }                              # units of this product on the document
+        unitPrice: { type: number }
+        lineTotal: { type: number }                             # quantity × unitPrice for this product
+        documentTotal: { type: number }                         # total of the whole sale/invoice
     # ── Product Types ─────────────────────────────────────────────────────────
     ProductType:
       type: object

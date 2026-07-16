@@ -312,6 +312,7 @@ import type {
   ProductReturnAuth,
   ProductReturnAuthInput,
   ProductReturnAuthListResponse,
+  ProductSalesHistoryEntry,
   ProductTagActionResult,
   ProductTagDeleteInput,
   ProductTagList,
@@ -3153,6 +3154,83 @@ export function useGetProductPricingHistory<TData = Awaited<ReturnType<typeof ge
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getGetProductPricingHistoryQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetProductSalesHistoryUrl = (id: number,) => {
+
+
+
+
+  return `/api/products/${id}/sales-history`
+}
+
+/**
+ * @summary Get every sale and invoice that includes this product
+ */
+export const getProductSalesHistory = async (id: number, options?: RequestInit): Promise<ProductSalesHistoryEntry[]> => {
+
+  return customFetch<ProductSalesHistoryEntry[]>(getGetProductSalesHistoryUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductSalesHistoryQueryKey = (id: number,) => {
+    return [
+    `/api/products/${id}/sales-history`
+    ] as const;
+    }
+
+
+export const getGetProductSalesHistoryQueryOptions = <TData = Awaited<ReturnType<typeof getProductSalesHistory>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductSalesHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductSalesHistoryQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductSalesHistory>>> = ({ signal }) => getProductSalesHistory(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductSalesHistory>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductSalesHistoryQueryResult = NonNullable<Awaited<ReturnType<typeof getProductSalesHistory>>>
+export type GetProductSalesHistoryQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Get every sale and invoice that includes this product
+ */
+
+export function useGetProductSalesHistory<TData = Awaited<ReturnType<typeof getProductSalesHistory>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductSalesHistory>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductSalesHistoryQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
