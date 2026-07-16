@@ -164,7 +164,7 @@ type CartItem = {
   pricingRuleDiscount?: number;
   pricingRuleLabel?: string;
   modifiers?: Modifier[];
-  /** Serial numbers for warranty products — one per unit sold. */
+  /** Serial numbers for serial-tracked products — one per unit sold. */
   serials?: string[];
 };
 
@@ -436,7 +436,7 @@ export default function POSPage() {
   const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
   const [zeroPriceDiscardConfirmOpen, setZeroPriceDiscardConfirmOpen] = useState(false);
 
-  /* warranty serial-number collection at checkout */
+  /* serial-number collection at checkout (serial-tracked products) */
   const [serialPrompt, setSerialPrompt] = useState<null | {
     method: TransactionInputPaymentMethod; amountTendered: number;
     extraNote?: string; giftCardPayment?: { cardId: number; amount: number };
@@ -2884,12 +2884,12 @@ export default function POSPage() {
       return;
     }
 
-    // Warranty products require a serial number per unit. If any warranty line is
-    // missing serials, open the serial-collection prompt and abort this attempt;
+    // Serial-tracked products require a serial number per unit. If any such line
+    // is missing serials, open the serial-collection prompt and abort this attempt;
     // the modal re-runs handleCheckout once serials are entered.
     const needSerials = cart.filter((i) => {
-      const wd = (i.product as { warrantyDuration?: number }).warrantyDuration ?? 0;
-      return wd > 0 && (i.serials?.filter(Boolean).length ?? 0) < i.quantity;
+      const tracks = (i.product as { tracksSerial?: boolean }).tracksSerial ?? false;
+      return tracks && (i.serials?.filter(Boolean).length ?? 0) < i.quantity;
     });
     if (needSerials.length > 0) {
       const init: Record<number, string[]> = {};
@@ -3083,7 +3083,7 @@ export default function POSPage() {
 
   const confirmSerials = () => {
     for (const arr of Object.values(serialInputs)) {
-      if (arr.some((s) => !s.trim())) { toast.error("Enter a serial number for every warranty unit"); return; }
+      if (arr.some((s) => !s.trim())) { toast.error("Enter a serial number for every serial-tracked unit"); return; }
     }
     const all = Object.values(serialInputs).flat().map((s) => s.trim());
     if (new Set(all).size !== all.length) { toast.error("Serial numbers must be unique"); return; }
@@ -5116,13 +5116,13 @@ export default function POSPage() {
         prefillName={customerSearch}
       />
 
-      {/* ─── Warranty serial-number collection ─── */}
+      {/* ─── Serial-number collection (serial-tracked products) ─── */}
       <Dialog open={!!serialPrompt} onOpenChange={(o) => { if (!o) setSerialPrompt(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial / IMEI Required</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">These warranty items need a serial number or IMEI per unit. Select one from stock below, or type one in.</p>
+          <p className="text-sm text-muted-foreground">These items need a serial number or IMEI per unit. Select one from stock below, or type one in.</p>
           <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
             {Object.entries(serialInputs).map(([pidStr, arr]) => {
               const pid = Number(pidStr);

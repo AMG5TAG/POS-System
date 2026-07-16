@@ -39,9 +39,9 @@ import { loadCodePrefixes } from "@/pages/app/management-misc";
 type POStatus = "Draft" | "Ordered" | "Partially Received" | "Fully Received" | "Cancelled"
               | "Sent" | "Partial" | "Received"; // legacy values
 type TaxMode  = "exclusive" | "inclusive";
-type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number };
+type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number; tracksSerial?: boolean };
 /* Minimal product shape needed to render a sale-ticket (price label). */
-type ProductRecord = { id: number; name: string; sku?: string | null; price?: number | null; barcode?: string | null; category?: { name?: string } | null };
+type ProductRecord = { id: number; name: string; sku?: string | null; price?: number | null; barcode?: string | null; category?: { name?: string } | null; tracksSerial?: boolean };
 
 interface SupplierOption { id: number; name: string }
 
@@ -152,7 +152,7 @@ export default function ProductsPurchaseOrdersPage() {
 
   /* Full product catalogue + sticker printer, used to print "sale tickets"
      (price labels) for the products brought in when a PO is completed. */
-  const { data: allProductsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
+  const { data: allProductsData } = useListProducts({ limit: 100000 }, { query: { queryKey: ["products", "po-full"] } });
   const productsById = useMemo(() => {
     const m = new Map<number, ProductRecord>();
     for (const p of (allProductsData?.items ?? []) as ProductRecord[]) m.set(p.id, p);
@@ -226,14 +226,14 @@ export default function ProductsPurchaseOrdersPage() {
     .filter((o) => (tab === "history" ? isFullyReceived(o) : !isFullyReceived(o)));
 
   const addItem = () => setItems((p) => [...p, { ...EMPTY_ITEM }]);
-  const updateItem = (i: number, field: keyof POItem, value: string | number) =>
+  const updateItem = (i: number, field: keyof POItem, value: string | number | boolean) =>
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
 
-  const addProductFromSearch = (product: { id: number; name: string; price: number; costPrice?: number | null }) => {
+  const addProductFromSearch = (product: { id: number; name: string; price: number; costPrice?: number | null; tracksSerial?: boolean }) => {
     setItems((prev) => [
       ...prev.filter((it) => it.productName),
-      { productName: product.name, quantity: 1, unitCost: product.costPrice ?? 0, received: 0, productId: product.id },
+      { productName: product.name, quantity: 1, unitCost: product.costPrice ?? 0, received: 0, productId: product.id, tracksSerial: product.tracksSerial ?? false },
     ]);
     setProductSearchQuery("");
     setShowProductResults(false);
@@ -268,6 +268,7 @@ export default function ProductsPurchaseOrdersPage() {
       unitCost:    i.unitCost ?? 0,
       received:    i.received ?? 0,
       productId:   i.productId ?? undefined,
+      tracksSerial: i.productId != null ? (productsById.get(i.productId)?.tracksSerial ?? false) : false,
     })));
     setProductSearchQuery("");
     setSupplierSearchQuery(po.supplierName ?? "");
@@ -339,6 +340,7 @@ export default function ProductsPurchaseOrdersPage() {
         {
           onSuccess: () => {
             invalidateList();
+            queryClient.invalidateQueries({ queryKey: ["products"] });
             toast.success("Purchase order updated");
             setDialogOpen(false);
           },
@@ -350,6 +352,7 @@ export default function ProductsPurchaseOrdersPage() {
       createPO.mutate({ data: { ...payload, poNumberPrefix: prefixes.poPrefix, poNumberDigits: prefixes.poDigits } }, {
         onSuccess: (data) => {
           invalidateList();
+          queryClient.invalidateQueries({ queryKey: ["products"] });
           toast.success(`${data.poNumber} created`);
           setDialogOpen(false);
           setTimeout(() => setPrintPO(data), 100);
@@ -382,7 +385,7 @@ export default function ProductsPurchaseOrdersPage() {
 
   const productList = Array.isArray(productResults)
     ? productResults
-    : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null }[] } | undefined)?.items ?? [];
+    : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null; tracksSerial?: boolean }[] } | undefined)?.items ?? [];
 
   /* ── Totals ─────────────────────────────────────────────────────────── */
   const itemsSubtotal    = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
@@ -938,7 +941,8 @@ export default function ProductsPurchaseOrdersPage() {
                 <p className="col-span-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product Name</p>
                 <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center">Qty</p>
                 <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center">Received</p>
-                <p className="col-span-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit Cost</p>
+                <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit Cost</p>
+                <p className="col-span-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center" title="Tick if this product carries a Serial Number / IMEI to capture on receiving">Serial #</p>
               </div>
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
@@ -951,11 +955,18 @@ export default function ProductsPurchaseOrdersPage() {
                     title="Units received — editing this adjusts product stock"
                     value={item.received}
                     onChange={(e) => updateItem(i, "received", Math.max(0, Math.min(item.quantity, parseInt(e.target.value) || 0)))} />
-                  <div className="col-span-3 relative">
+                  <div className="col-span-2 relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                     <Input className="pl-6" type="number" step="0.01" placeholder="0.00"
                       value={item.unitCost || ""}
                       onChange={(e) => updateItem(i, "unitCost", parseFloat(e.target.value) || 0)} />
+                  </div>
+                  <div className="col-span-1 flex justify-center">
+                    <input type="checkbox" className="rounded border-muted-foreground/40 accent-primary h-4 w-4"
+                      checked={item.tracksSerial ?? false}
+                      title={item.productId ? "This product carries a Serial Number / IMEI — prompt for it when receiving and selling" : "Add a catalogued product to this line to track serial numbers"}
+                      disabled={!item.productId}
+                      onChange={(e) => updateItem(i, "tracksSerial", e.target.checked)} />
                   </div>
                   <Button variant="ghost" size="icon" className="col-span-1 h-8 text-destructive hover:text-destructive"
                     onClick={() => removeItem(i)}>
@@ -1209,16 +1220,16 @@ function ReceiveGoodsDialog({
 }) {
   const items = po.items ?? [];
 
-  // Warranty products require a serial number per received unit.
-  const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
-  const warrantyByProductId = useMemo(() => {
+  // Serial-tracked products require a serial number / IMEI per received unit.
+  const { data: productsData } = useListProducts({ limit: 100000 }, { query: { queryKey: ["products", "po-full"] } });
+  const serialByProductId = useMemo(() => {
     const m = new Map<number, boolean>();
-    for (const p of (productsData?.items ?? []) as Array<{ id: number; warrantyDuration?: number | null }>) {
-      if ((p.warrantyDuration ?? 0) > 0) m.set(p.id, true);
+    for (const p of (productsData?.items ?? []) as Array<{ id: number; tracksSerial?: boolean | null }>) {
+      if (p.tracksSerial) m.set(p.id, true);
     }
     return m;
   }, [productsData]);
-  const isWarrantyItem = (item: { productId?: number | null }) => item.productId != null && warrantyByProductId.has(item.productId);
+  const isSerialItem = (item: { productId?: number | null }) => item.productId != null && serialByProductId.has(item.productId);
 
   // Default each field to the remaining unreceived balance
   const [qtys, setQtys] = useState<Record<number, number>>(() => {
@@ -1248,9 +1259,9 @@ function ReceiveGoodsDialog({
     setSubmitError(null);
     const receiving = items.filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0);
 
-    // Every warranty unit being received needs a serial number.
+    // Every serial-tracked unit being received needs a serial number / IMEI.
     for (const i of receiving) {
-      if (!isWarrantyItem(i)) continue;
+      if (!isSerialItem(i)) continue;
       const qty = qtys[i.id!];
       const entered = (serials[i.id!] ?? []).slice(0, qty).map((s) => (s ?? "").trim());
       if (entered.length < qty || entered.some((s) => !s)) {
@@ -1266,7 +1277,7 @@ function ReceiveGoodsDialog({
     const receiveItems: ReceiptItem[] = receiving.map((i) => ({
       poItemId: i.id!,
       quantityReceiving: qtys[i.id!],
-      ...(isWarrantyItem(i) ? { serialNumbers: (serials[i.id!] ?? []).slice(0, qtys[i.id!]).map((s) => s.trim()) } : {}),
+      ...(isSerialItem(i) ? { serialNumbers: (serials[i.id!] ?? []).slice(0, qtys[i.id!]).map((s) => s.trim()) } : {}),
     }));
 
     if (!receiveItems.length) {
@@ -1320,7 +1331,7 @@ function ReceiveGoodsDialog({
                 const remaining = Math.max(0, (item.quantity ?? 0) - (item.received ?? 0));
                 const isFullyReceived = remaining === 0;
                 const qtyNow = item.id != null ? (qtys[item.id] ?? 0) : 0;
-                const showSerials = isWarrantyItem(item) && qtyNow > 0;
+                const showSerials = isSerialItem(item) && qtyNow > 0;
                 return (
                   <Fragment key={item.id}>
                   <tr className={cn(isFullyReceived && "opacity-50 bg-muted/20")}>
@@ -1364,7 +1375,7 @@ function ReceiveGoodsDialog({
                     <tr className="bg-muted/20">
                       <td colSpan={4} className="p-3">
                         <p className="text-xs font-medium flex items-center gap-1.5 mb-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Serial numbers ({qtyNow} required — warranty item)
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Serial numbers / IMEI ({qtyNow} required — serial-tracked item)
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {Array.from({ length: qtyNow }, (_, k) => (

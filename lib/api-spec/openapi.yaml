@@ -10051,6 +10051,8 @@ components:
           type: boolean
         isRefurbished:
           type: boolean
+        tracksSerial:
+          type: boolean
         tags:
           type: array
           items:
@@ -10153,6 +10155,8 @@ components:
           type: string
         isEpay:
           type: boolean
+        tracksSerial:
+          type: boolean
         tags:
           type: array
           items:
@@ -10207,6 +10211,8 @@ components:
         supplierCode:
           type: ["string", "null"]
         isEpay:
+          type: boolean
+        tracksSerial:
           type: boolean
         tags:
           type: array
@@ -12700,6 +12706,7 @@ components:
         received: { type: integer }
         unitCost: { type: number }
         notes: { type: string, nullable: true }
+        tracksSerial: { type: boolean }
     PurchaseOrder:
       type: object
       required: [id, poNumber, status, orderDate, totalCost, createdAt]

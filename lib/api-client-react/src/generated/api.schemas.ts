@@ -582,6 +582,7 @@ export interface Product {
   supplierCode?: string | null;
   isEpay?: boolean;
   isRefurbished?: boolean;
+  tracksSerial?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   /** @nullable */
@@ -653,6 +654,7 @@ export interface ProductInput {
   supplier?: string;
   supplierCode?: string;
   isEpay?: boolean;
+  tracksSerial?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   notification?: string;
@@ -687,6 +689,7 @@ export interface ProductUpdate {
   /** @nullable */
   supplierCode?: string | null;
   isEpay?: boolean;
+  tracksSerial?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   stockLocation?: string;
@@ -2849,6 +2852,7 @@ export interface PurchaseOrderItem {
   received?: number;
   unitCost?: number;
   notes?: string | null;
+  tracksSerial?: boolean;
 }
 
 export interface PurchaseOrder {

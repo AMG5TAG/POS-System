@@ -324,9 +324,9 @@ export async function finalizeSale(
     // have no cost to snapshot.
     const parsedCost = product?.costPrice != null ? parseFloat(product.costPrice) : NaN;
     const costPrice = product && Number.isFinite(parsedCost) ? parsedCost : undefined;
-    // Serials only apply to warranty products.
+    // Serials only apply to serial-tracked products.
     const rawSerials = rawItems[idx]?.serials;
-    const serials = (product && product.warrantyDuration > 0 && Array.isArray(rawSerials))
+    const serials = (product && product.tracksSerial === "true" && Array.isArray(rawSerials))
       ? [...new Set((rawSerials as unknown[]).map((s) => String(s).trim()).filter(Boolean))]
       : [];
     computedItems.push({
@@ -786,7 +786,7 @@ export async function finalizeSale(
     for (const item of computedItems) {
       if (!item.serials || item.serials.length === 0) continue;
       const product = productMap.get(item.productId);
-      if (!product || !(product.warrantyDuration > 0)) continue;
+      if (!product || product.tracksSerial !== "true") continue;
       for (const serial of item.serials) {
         const updated = await tx
           .update(productSerialsTable)

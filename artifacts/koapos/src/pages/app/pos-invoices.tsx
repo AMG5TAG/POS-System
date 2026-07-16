@@ -354,6 +354,7 @@ export default function POSInvoicesPage() {
 
   /* ── Link service/appointment ── */
   const [linkDialogFor, setLinkDialogFor] = useState<"create" | "edit" | null>(null);
+  const [linkSearch, setLinkSearch] = useState("");
   const [createLinkedServiceJob, setCreateLinkedServiceJob] = useState<{ id: number; jobNumber: string; label: string } | null>(null);
   const [createLinkedAppointment, setCreateLinkedAppointment] = useState<{ id: number; title: string; label: string } | null>(null);
   const [editLinkedServiceJob, setEditLinkedServiceJob] = useState<{ id: number; jobNumber: string; label: string } | null>(null);
@@ -373,10 +374,18 @@ export default function POSInvoicesPage() {
   const isServiceJobDone = (s?: string | null) => ["completed", "cancelled"].includes((s ?? "").toLowerCase());
   const isAppointmentDone = (s?: string | null) => ["completed", "cancelled", "no-show"].includes((s ?? "").toLowerCase());
   const byIdDesc = <T extends { id: number }>(a: T, b: T) => b.id - a.id;
-  const sjUnfinished = linkServiceJobs.filter((j) => !isServiceJobDone(j.status)).sort(byIdDesc);
-  const sjDone       = linkServiceJobs.filter((j) =>  isServiceJobDone(j.status)).sort(byIdDesc);
-  const aptUnfinished = linkAppointments.filter((a) => !isAppointmentDone(a.status)).sort(byIdDesc);
-  const aptDone       = linkAppointments.filter((a) =>  isAppointmentDone(a.status)).sort(byIdDesc);
+  // Free-text filter across both open and closed jobs/appointments.
+  const linkQ = linkSearch.trim().toLowerCase();
+  const matchSj = (j: LinkServiceJob) =>
+    !linkQ || [`#${j.jobNumber}`, j.jobNumber, j.deviceType, j.deviceDescription, j.customerName, j.status]
+      .some((v) => (v ?? "").toString().toLowerCase().includes(linkQ));
+  const matchApt = (a: LinkAppointment) =>
+    !linkQ || [`#${a.id}`, a.title, a.customerName, a.status]
+      .some((v) => (v ?? "").toString().toLowerCase().includes(linkQ));
+  const sjUnfinished = linkServiceJobs.filter((j) => !isServiceJobDone(j.status) && matchSj(j)).sort(byIdDesc);
+  const sjDone       = linkServiceJobs.filter((j) =>  isServiceJobDone(j.status) && matchSj(j)).sort(byIdDesc);
+  const aptUnfinished = linkAppointments.filter((a) => !isAppointmentDone(a.status) && matchApt(a)).sort(byIdDesc);
+  const aptDone       = linkAppointments.filter((a) =>  isAppointmentDone(a.status) && matchApt(a)).sort(byIdDesc);
 
   const renderLinkServiceJobRow = (sj: LinkServiceJob) => {
     const isSelected = linkDialogFor === "create" ? createLinkedServiceJob?.id === sj.id : editLinkedServiceJob?.id === sj.id;
@@ -588,8 +597,18 @@ export default function POSInvoicesPage() {
     setLineSearch((p) => [...p, ""]);
     setLineDropOpen((p) => [...p, false]);
   };
-  const updateLine = (i: number, field: keyof LineItem, val: string | number) =>
+  const updateLine = (i: number, field: keyof LineItem, val: string | number | null) =>
     setLines((p) => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  // Turn a line into a custom one-off item: keep the typed text as the description,
+  // clear any product link, and reveal the cost-price input (backend keeps a
+  // client-supplied cost for lines with no productId).
+  const addCustomLine = (i: number, text: string) => {
+    const name = text.trim();
+    if (!name) return;
+    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: name, productId: null } : l));
+    setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
+    setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+  };
   const removeLine = (i: number) => {
     setLines((p) => p.filter((_, idx) => idx !== i));
     setLineSearch((p) => p.filter((_, idx) => idx !== i));
@@ -657,8 +676,15 @@ export default function POSInvoicesPage() {
     setEditLineSearch((p) => [...p, ""]);
     setEditLineDropOpen((p) => [...p, false]);
   };
-  const updateEditLine = (i: number, field: keyof LineItem, val: string | number) =>
+  const updateEditLine = (i: number, field: keyof LineItem, val: string | number | null) =>
     setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const addCustomEditLine = (i: number, text: string) => {
+    const name = text.trim();
+    if (!name) return;
+    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: name, productId: null } : l));
+    setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
+    setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+  };
   const removeEditLine = (i: number) => {
     setEditLines((p) => p.filter((_, idx) => idx !== i));
     setEditLineSearch((p) => p.filter((_, idx) => idx !== i));
@@ -2176,8 +2202,8 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
+                  <div key={i} className="space-y-1">
                   <div
-                    key={i}
                     className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${createDragFrom === i ? "opacity-40" : ""} ${createDragFrom !== null && createDragOver === i && createDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); setCreateDragOver(i); }}
                     onDrop={(e) => { e.preventDefault(); if (createDragFrom !== null) reorderLines(createDragFrom, i); setCreateDragFrom(null); setCreateDragOver(null); }}
@@ -2208,9 +2234,7 @@ export default function POSInvoicesPage() {
                       </div>
                       {lineDropOpen[i] && (
                         <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
-                          {filteredProducts(lineSearch[i] ?? "").length === 0 ? (
-                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
-                          ) : filteredProducts(lineSearch[i] ?? "").map((p) => (
+                          {filteredProducts(lineSearch[i] ?? "").map((p) => (
                             <button
                               key={p.id}
                               type="button"
@@ -2221,6 +2245,17 @@ export default function POSInvoicesPage() {
                               <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
                             </button>
                           ))}
+                          {(lineSearch[i] ?? "").trim() ? (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); addCustomLine(i, lineSearch[i] ?? ""); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 border-t flex items-center gap-2 text-primary"
+                            >
+                              <Plus className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Add “{lineSearch[i]}” as custom item</span>
+                            </button>
+                          ) : filteredProducts(lineSearch[i] ?? "").length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
+                          )}
                         </div>
                       )}
                       {lineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].description}</p>}
@@ -2254,6 +2289,23 @@ export default function POSInvoicesPage() {
                       onClick={() => removeLine(i)} disabled={lines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
+                  </div>
+                  {line.description.trim() !== "" && line.productId == null && (
+                    <div className="flex items-center gap-2 pl-[26px]">
+                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1"><Package className="w-2.5 h-2.5" /> Custom item</Badge>
+                      <span className="text-[11px] text-muted-foreground shrink-0">Cost price (ex GST)</span>
+                      <div className="relative w-28">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">$</span>
+                        <Input
+                          type="number" step="0.01" min={0}
+                          value={line.costPrice ?? ""}
+                          placeholder="0.00"
+                          onChange={(e) => updateLine(i, "costPrice", e.target.value === "" ? null : (parseFloat(e.target.value) || 0))}
+                          className="h-7 text-xs pl-5"
+                        />
+                      </div>
+                    </div>
+                  )}
                   </div>
                 ))}
               </div>
@@ -2326,17 +2378,17 @@ export default function POSInvoicesPage() {
             </div>
 
             {/* Link to service / appointment */}
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <Label>Linked To</Label>
               {(createLinkedServiceJob || createLinkedAppointment) ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm">
+                <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30 text-sm min-w-0">
                   {createLinkedServiceJob && <><Wrench className="w-3.5 h-3.5 text-cyan-600 shrink-0" /><span className="flex-1 truncate text-cyan-700 font-medium">Service Job #{createLinkedServiceJob.jobNumber || createLinkedServiceJob.id}</span></>}
                   {createLinkedAppointment && <><CalendarDays className="w-3.5 h-3.5 text-violet-600 shrink-0" /><span className="flex-1 truncate text-violet-700 font-medium">{createLinkedAppointment.title || `Appointment #${createLinkedAppointment.id}`}</span></>}
-                  <button onClick={() => { setCreateLinkedServiceJob(null); setCreateLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => { setCreateLinkedServiceJob(null); setCreateLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkDialogFor("create")}>
-                  <Link2 className="w-3.5 h-3.5" /> Link to Service or Appointment
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 px-2.5 text-xs w-fit max-w-full" onClick={() => setLinkDialogFor("create")}>
+                  <Link2 className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Link to Service or Appointment</span>
                 </Button>
               )}
             </div>
@@ -2449,8 +2501,8 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
+                  <div key={i} className="space-y-1">
                   <div
-                    key={i}
                     className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${editDragFrom === i ? "opacity-40" : ""} ${editDragFrom !== null && editDragOver === i && editDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); setEditDragOver(i); }}
                     onDrop={(e) => { e.preventDefault(); if (editDragFrom !== null) reorderEditLines(editDragFrom, i); setEditDragFrom(null); setEditDragOver(null); }}
@@ -2485,9 +2537,7 @@ export default function POSInvoicesPage() {
                       </div>
                       {editLineDropOpen[i] && (
                         <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
-                          {filteredProducts(editLineSearch[i] ?? "").length === 0 ? (
-                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
-                          ) : filteredProducts(editLineSearch[i] ?? "").map((p) => (
+                          {filteredProducts(editLineSearch[i] ?? "").map((p) => (
                             <button
                               key={p.id}
                               type="button"
@@ -2498,6 +2548,17 @@ export default function POSInvoicesPage() {
                               <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
                             </button>
                           ))}
+                          {(editLineSearch[i] ?? "").trim() ? (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); addCustomEditLine(i, editLineSearch[i] ?? ""); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 border-t flex items-center gap-2 text-primary"
+                            >
+                              <Plus className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Add “{editLineSearch[i]}” as custom item</span>
+                            </button>
+                          ) : filteredProducts(editLineSearch[i] ?? "").length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
+                          )}
                         </div>
                       )}
                       {editLineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].description}</p>}
@@ -2531,6 +2592,23 @@ export default function POSInvoicesPage() {
                       onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
                       <Trash2 className="w-3.5 h-3.5" />
                     </Button>
+                  </div>
+                  {line.description.trim() !== "" && line.productId == null && (
+                    <div className="flex items-center gap-2 pl-[26px]">
+                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1"><Package className="w-2.5 h-2.5" /> Custom item</Badge>
+                      <span className="text-[11px] text-muted-foreground shrink-0">Cost price (ex GST)</span>
+                      <div className="relative w-28">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">$</span>
+                        <Input
+                          type="number" step="0.01" min={0}
+                          value={line.costPrice ?? ""}
+                          placeholder="0.00"
+                          onChange={(e) => updateEditLine(i, "costPrice", e.target.value === "" ? null : (parseFloat(e.target.value) || 0))}
+                          className="h-7 text-xs pl-5"
+                        />
+                      </div>
+                    </div>
+                  )}
                   </div>
                 ))}
               </div>
@@ -2603,17 +2681,17 @@ export default function POSInvoicesPage() {
             </div>
 
             {/* Link to service / appointment */}
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <Label>Linked To</Label>
               {(editLinkedServiceJob || editLinkedAppointment) ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm">
+                <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30 text-sm min-w-0">
                   {editLinkedServiceJob && <><Wrench className="w-3.5 h-3.5 text-cyan-600 shrink-0" /><span className="flex-1 truncate text-cyan-700 font-medium">Service Job #{editLinkedServiceJob.jobNumber || editLinkedServiceJob.id}</span></>}
                   {editLinkedAppointment && <><CalendarDays className="w-3.5 h-3.5 text-violet-600 shrink-0" /><span className="flex-1 truncate text-violet-700 font-medium">{editLinkedAppointment.title || `Appointment #${editLinkedAppointment.id}`}</span></>}
-                  <button onClick={() => { setEditLinkedServiceJob(null); setEditLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => { setEditLinkedServiceJob(null); setEditLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkDialogFor("edit")}>
-                  <Link2 className="w-3.5 h-3.5" /> Link to Service or Appointment
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 px-2.5 text-xs w-fit max-w-full" onClick={() => setLinkDialogFor("edit")}>
+                  <Link2 className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Link to Service or Appointment</span>
                 </Button>
               )}
             </div>
@@ -2704,7 +2782,7 @@ export default function POSInvoicesPage() {
       </AlertDialog>
 
       {/* ─── Link to Service / Appointment ─── */}
-      <Dialog open={!!linkDialogFor} onOpenChange={(o) => { if (!o) setLinkDialogFor(null); }}>
+      <Dialog open={!!linkDialogFor} onOpenChange={(o) => { if (!o) { setLinkDialogFor(null); setLinkSearch(""); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2712,12 +2790,22 @@ export default function POSInvoicesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="relative">
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Input
+                autoFocus
+                value={linkSearch}
+                onChange={(e) => setLinkSearch(e.target.value)}
+                placeholder="Search all jobs & appointments (open or closed)…"
+                className="pl-9"
+              />
+            </div>
             <p className="text-xs text-muted-foreground -mb-1">Unfinished jobs and appointments are listed first; completed ones appear below.</p>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
               <ScrollArea className="max-h-56 border rounded-lg">
-                {linkServiceJobs.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
+                {sjUnfinished.length + sjDone.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">{linkQ ? "No matching service jobs." : "No service jobs found."}</div>
                 ) : (
                   <div>
                     {sjUnfinished.length > 0 && (
@@ -2739,8 +2827,8 @@ export default function POSInvoicesPage() {
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
               <ScrollArea className="max-h-56 border rounded-lg">
-                {linkAppointments.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
+                {aptUnfinished.length + aptDone.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">{linkQ ? "No matching appointments." : "No appointments found."}</div>
                 ) : (
                   <div>
                     {aptUnfinished.length > 0 && (

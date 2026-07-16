@@ -422,6 +422,7 @@ export const ListProductsResponse = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "isRefurbished": zod.boolean().optional(),
+  "tracksSerial": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(listProductsResponseItemsItemTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
@@ -465,6 +466,7 @@ export const CreateProductBody = zod.object({
   "supplier": zod.string().optional(),
   "supplierCode": zod.string().optional(),
   "isEpay": zod.boolean().optional(),
+  "tracksSerial": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(createProductBodyTagsMax).optional(),
   "notification": zod.string().optional(),
   "timeCardMinutes": zod.number().optional()
@@ -556,6 +558,7 @@ export const GetProductResponse = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "isRefurbished": zod.boolean().optional(),
+  "tracksSerial": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(getProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
@@ -598,6 +601,7 @@ export const UpdateProductBody = zod.object({
   "supplier": zod.string().nullish(),
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
+  "tracksSerial": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductBodyTagsMax).optional(),
   "stockLocation": zod.string().optional(),
   "overflowLocation": zod.string().optional(),
@@ -645,6 +649,7 @@ export const UpdateProductResponse = zod.object({
   "supplierCode": zod.string().nullish(),
   "isEpay": zod.boolean().optional(),
   "isRefurbished": zod.boolean().optional(),
+  "tracksSerial": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(updateProductResponseTagsMax).optional(),
   "stockLocation": zod.string().nullish(),
   "overflowLocation": zod.string().nullish(),
@@ -5006,7 +5011,8 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "quantity": zod.number().optional(),
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional()
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),
@@ -5044,7 +5050,8 @@ export const CreatePurchaseOrderBody = zod.object({
   "quantity": zod.number().optional(),
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional()
 })).optional()
 })
 
@@ -5078,7 +5085,8 @@ export const GetPurchaseOrderResponse = zod.object({
   "quantity": zod.number().optional(),
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional()
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),
@@ -5119,7 +5127,8 @@ export const UpdatePurchaseOrderBody = zod.object({
   "quantity": zod.number().optional(),
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional()
 })).optional()
 })
 
@@ -5145,7 +5154,8 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "quantity": zod.number().optional(),
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional()
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),
@@ -5206,7 +5216,8 @@ export const ReceivePurchaseOrderItemsResponse = zod.object({
   "quantity": zod.number().optional(),
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
-  "notes": zod.string().nullish()
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional()
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),

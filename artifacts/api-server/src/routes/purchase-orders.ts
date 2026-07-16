@@ -33,6 +33,24 @@ function fmtItem(i: POItemRow) {
   };
 }
 
+// Propagate each PO line's "has serial number" checkbox onto its product, so
+// receiving (and later selling) knows whether to capture/consume serials. Only
+// catalogued lines (with a productId) that explicitly set the flag are touched.
+async function applyTracksSerialFromItems(
+  merchantId: number,
+  items: Array<{ productId?: number | null; tracksSerial?: boolean }>,
+) {
+  const byProduct = new Map<number, boolean>();
+  for (const i of items) {
+    if (i.productId != null && i.tracksSerial !== undefined) byProduct.set(i.productId, i.tracksSerial);
+  }
+  for (const [productId, flag] of byProduct) {
+    await db.update(productsTable)
+      .set({ tracksSerial: flag ? "true" : "false" })
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+  }
+}
+
 function fmtReceipt(r: ReceiptRow) {
   return {
     id: r.id,
@@ -219,6 +237,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
         notes: i.notes ?? null,
       }))
     );
+    await applyTracksSerialFromItems(merchantId, body.items);
   }
   // Sync product cost prices and log pricing history
   if (body.items?.length) {
@@ -348,6 +367,7 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     if (body.items.length) {
       await syncCostPricesFromPO(merchantId, id, updatedPO?.poNumber ?? "", body.items, supplierName, distributeDelivery ? deliveryCharge : 0);
     }
+    await applyTracksSerialFromItems(merchantId, body.items);
   }
   const result = await getPOWithItems(id, merchantId);
   res.json(result);
@@ -485,12 +505,12 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
           .where(eq(purchaseOrderItemsTable.id, poItemId));
 
         if (poItem.productId) {
-          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, warrantyDuration: productsTable.warrantyDuration, costPrice: productsTable.costPrice, stockQuantity: productsTable.stockQuantity })
+          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, tracksSerial: productsTable.tracksSerial, costPrice: productsTable.costPrice, stockQuantity: productsTable.stockQuantity })
             .from(productsTable)
             .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
 
-          // Warranty products: record any serial numbers captured at receiving.
-          if (product && product.warrantyDuration > 0 && serialNumbers && serialNumbers.length) {
+          // Serial-tracked products: record any serial numbers captured at receiving.
+          if (product && product.tracksSerial === "true" && serialNumbers && serialNumbers.length) {
             const cleaned = [...new Set(serialNumbers.map((s) => s.trim()).filter(Boolean))];
             if (cleaned.length) {
               await tx.insert(productSerialsTable)

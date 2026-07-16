@@ -112,6 +112,8 @@ type ProductForm = {
   productTypeId: string;
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
+  /* when true, each unit carries a serial number / IMEI captured at PO receiving and at sale */
+  tracksSerial: boolean;
   tags: string[];
   /* notes */
   internalNotes: string;
@@ -142,6 +144,7 @@ const defaultForm: ProductForm = {
   productTypeId: "",
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
+  tracksSerial: false,
   tags: [],
   internalNotes: "",
   notification: "",
@@ -1480,6 +1483,7 @@ export default function ProductsPage() {
       trackInventory: p.trackInventory ?? true,
       isActive: p.isActive ?? true,
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
+      tracksSerial: (ep as Product & { tracksSerial?: boolean }).tracksSerial ?? false,
       tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
       notification: (ep as Product & { notification?: string | null }).notification ?? "",
@@ -1532,6 +1536,7 @@ export default function ProductsPage() {
       taxRate: parseFloat(form.taxRate) || 10,
       trackInventory: form.trackInventory, isActive: form.isActive,
       excludeFromLoyalty: form.excludeFromLoyalty,
+      tracksSerial: form.tracksSerial,
       supplier: form.supplier || undefined,
       supplierCode: form.supplierCode || undefined,
       isEpay: form.isEpay,
@@ -2082,9 +2087,9 @@ export default function ProductsPage() {
                                 </div>;
                           })()}
                         </td>
-                        <td className="p-3 min-w-[160px]">
-                          <p className="font-medium leading-tight">{product.name}</p>
-                          {product.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>}
+                        <td className="p-3 min-w-[160px] max-w-[240px]">
+                          <p className="font-medium leading-tight truncate" title={product.name}>{product.name}</p>
+                          {product.sku && <p className="text-xs text-muted-foreground mt-0.5 truncate" title={product.sku}>SKU: {product.sku}</p>}
                         </td>
                         <td className="p-3 text-muted-foreground text-sm">
                           {(product as Product & { productTypeName?: string | null }).productTypeName
@@ -2608,6 +2613,24 @@ export default function ProductsPage() {
                         <SelectItem value="years">Years</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                </div>
+                )}
+
+                {/* Serial number / IMEI tracking */}
+                {form.productType !== "time_card" && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <SectionHeader label="Serial Number / IMEI" />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        When on, each unit carries a unique Serial Number / IMEI. You'll be prompted to enter one per unit when receiving stock on a purchase order, and to pick one when selling.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={form.tracksSerial}
+                      onCheckedChange={(v) => setField("tracksSerial", v)}
+                    />
                   </div>
                 </div>
                 )}

@@ -638,6 +638,10 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       // Any explicit non-paid status (sent/draft/overdue/cancelled) clears recorded payments.
       if (status !== "partial") updates.amountPaid = "0";
     }
+    // Cancelling a recurring template must stop it from generating further
+    // invoices. The scheduler already skips cancelled rows, but clear the
+    // recurrence flag here too so the record's state is unambiguous.
+    if (status === "cancelled") updates.isRecurring = "false";
   }
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;

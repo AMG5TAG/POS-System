@@ -1,5 +1,5 @@
 import { db, invoicesTable, customersTable, merchantsTable, posCodePrefixesTable } from "@workspace/db";
-import { eq, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
+import { eq, ne, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
 import { trackedInterval } from "../lib/shutdown";
 import { jitteredStart } from "../lib/scheduler-jitter";
 import { sendEmail } from "./email";
@@ -125,6 +125,9 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
     .where(
       and(
         eq(invoicesTable.isRecurring, "true"),
+        // A cancelled template must never send again, even though isRecurring
+        // may still be "true" (cancelling only sets status = "cancelled").
+        ne(invoicesTable.status, "cancelled"),
         isNull(invoicesTable.parentInvoiceId),
         isNotNull(invoicesTable.recurringStartDate),
         lte(invoicesTable.recurringStartDate, endOfDay),

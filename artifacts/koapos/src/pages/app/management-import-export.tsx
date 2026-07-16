@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, DragEvent } from "react";
+import { useState, useCallback, useRef, useEffect, DragEvent } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -644,8 +644,47 @@ function downloadCSV(filename: string, content: string) {
 
 /* ─── Export card ────────────────────────────────────────────────────────── */
 
+const ALL = "__all__";
+
 function ExportCard({ entity }: { entity: EntityConfig }) {
   const [exporting, setExporting] = useState(false);
+
+  // Products can be exported filtered by Category / Product Type / Supplier.
+  const isProducts = entity.key === "products";
+  const [catFilter, setCatFilter] = useState(ALL);
+  const [typeFilter, setTypeFilter] = useState(ALL);
+  const [supplierFilter, setSupplierFilter] = useState(ALL);
+  const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
+  const [ptypes, setPtypes] = useState<{ id: number; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const anyFilter = catFilter !== ALL || typeFilter !== ALL || supplierFilter !== ALL;
+
+  useEffect(() => {
+    if (!isProducts) return;
+    let cancelled = false;
+    const load = async (url: string): Promise<Record<string, unknown>[]> => {
+      try {
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) return [];
+        const d = await r.json();
+        return Array.isArray(d) ? d : (Array.isArray(d.items) ? d.items : []);
+      } catch { return []; }
+    };
+    (async () => {
+      const [c, t, s] = await Promise.all([
+        load("/api/categories"),
+        load("/api/product-types"),
+        load("/api/suppliers?limit=10000"),
+      ]);
+      if (cancelled) return;
+      const named = (rows: Record<string, unknown>[]) =>
+        rows.map((x) => ({ id: Number(x.id), name: String(x.name ?? "").trim() })).filter((x) => x.name);
+      setCats(named(c));
+      setPtypes(named(t));
+      setSuppliers([...new Set(s.map((x) => String(x.name ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
+    })();
+    return () => { cancelled = true; };
+  }, [isProducts]);
 
   const handleExportSample = () => {
     const headers = entity.fields.map((f) => f.key);
@@ -660,9 +699,21 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
       const res  = await fetch(entity.exportUrl, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      const list: Record<string, unknown>[] = Array.isArray(data)
+      let list: Record<string, unknown>[] = Array.isArray(data)
         ? data
         : (Array.isArray(data.items) ? data.items : []);
+      if (isProducts && anyFilter) {
+        list = list.filter((p) => {
+          if (catFilter !== ALL && String(p.categoryId ?? "") !== catFilter) return false;
+          if (typeFilter !== ALL && String(p.productTypeId ?? "") !== typeFilter) return false;
+          if (supplierFilter !== ALL && String(p.supplier ?? "").trim().toLowerCase() !== supplierFilter.toLowerCase()) return false;
+          return true;
+        });
+      }
+      if (list.length === 0) {
+        toast.info(anyFilter ? "No products match the selected filters." : `No ${entity.pluralLabel.toLowerCase()} to export.`);
+        return;
+      }
       const rows    = list.map((item) => entity.toExportRow(item, list));
       const headers = entity.fields.map((f) => f.key);
       const csv     = toCSV(headers, rows);
@@ -703,12 +754,61 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
         <p className="text-[11px] text-muted-foreground pt-1.5">* Required when importing</p>
       </div>
 
+      {isProducts && (
+        <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-foreground/70 uppercase tracking-wide">Filter export</p>
+            {anyFilter && (
+              <button
+                className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                onClick={() => { setCatFilter(ALL); setTypeFilter(ALL); setSupplierFilter(ALL); }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Category</p>
+              <Select value={catFilter} onValueChange={setCatFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All categories</SelectItem>
+                  {cats.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Product Type</p>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All product types</SelectItem>
+                  {ptypes.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Supplier</p>
+              <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All suppliers</SelectItem>
+                  {suppliers.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Leave as “All” to export everything. Filters combine (Category AND Type AND Supplier).</p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 mt-auto">
         <Button variant="outline" size="sm" className="gap-1.5 justify-center" onClick={handleExportSample}>
           <FileText className="w-3.5 h-3.5" /> Download Sample CSV
         </Button>
         <Button size="sm" className="gap-1.5 justify-center" onClick={handleExportAll} disabled={exporting}>
-          {exporting ? "Exporting…" : <><Download className="w-3.5 h-3.5" /> Export All {entity.pluralLabel}</>}
+          {exporting ? "Exporting…" : <><Download className="w-3.5 h-3.5" /> Export {isProducts && anyFilter ? "Filtered" : "All"} {entity.pluralLabel}</>}
         </Button>
       </div>
     </div>

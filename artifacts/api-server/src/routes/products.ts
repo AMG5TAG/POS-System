@@ -107,6 +107,7 @@ function formatProduct(
     supplierCode: p.supplierCode ?? null,
     isEpay: p.isEpay === "true",
     isRefurbished: p.isRefurbished === "true",
+    tracksSerial: p.tracksSerial === "true",
     tags: p.tags ?? [],
     stockLocation: p.stockLocation ?? null,
     overflowLocation: p.overflowLocation ?? null,
@@ -275,7 +276,7 @@ async function logCostHistory(
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, productTypeId, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
 
   let ptRecord: typeof productTypesTable.$inferSelect | null = null;
 
@@ -322,6 +323,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       isActive: isActive === false ? "false" : "true",
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
       isEpay: isEpayRaw === true ? "true" : "false",
+      ...(tracksSerial !== undefined ? { tracksSerial: tracksSerial === true ? "true" : "false" } : {}),
       groupPrices: groupPrices ?? null,
       tags: tags ?? null,
     })
@@ -724,7 +726,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, productTypeId, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
@@ -733,6 +735,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
+  if (tracksSerial !== undefined) updates.tracksSerial = tracksSerial ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;
   if (tags !== undefined) updates.tags = tags;
   const warranty = readWarranty(req.body);
