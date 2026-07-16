@@ -19,6 +19,8 @@ import {
   ReverseInvoicePaymentResponse,
   AddInvoiceEventBody,
   SendInvoiceEmailBody,
+  SendInvoiceSmsBody,
+  SendInvoiceSmsParams,
   ListInvoicesQueryParams,
   CreateInvoiceBody,
   UpdateInvoiceBody,
@@ -1307,6 +1309,29 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     return;
   }
   req.log.info({ invoiceId: id, email }, "Invoice emailed");
+  res.json({ success: true });
+});
+
+// POST /invoices/:id/send-sms — manual SMS send (defaults to the customer's
+// phone on file; an entered number overrides it). Reuses the shared invoice-SMS
+// service so wording matches auto-send and reminders.
+router.post("/invoices/:id/send-sms", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = SendInvoiceSmsParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+  const bodyParsed = SendInvoiceSmsBody.safeParse(req.body ?? {});
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const phone = bodyParsed.data.phone?.trim() || undefined;
+
+  const result = await sendInvoiceSms(merchantId, id, "invoice", phone);
+  if (result.error === "Invoice not found") { res.status(404).json({ error: result.error }); return; }
+  if (!result.success) {
+    req.log.warn({ invoiceId: id, error: result.error }, "Invoice SMS failed");
+    res.status(400).json({ error: result.error ?? "Failed to send invoice SMS" });
+    return;
+  }
+  req.log.info({ invoiceId: id }, "Invoice SMS sent");
   res.json({ success: true });
 });
 

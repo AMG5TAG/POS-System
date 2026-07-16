@@ -3101,7 +3101,8 @@ export const UpdateInventoryResponse = zod.object({
 export const GetDashboardSummaryQueryParams = zod.object({
   "period": zod.enum(['today', 'yesterday', 'week', 'month', 'year']).optional(),
   "monthMode": zod.enum(['rolling30', 'calendar_mtd']).optional().describe('How the \"month\" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.'),
-  "yearMode": zod.enum(['financial', 'rolling365']).optional().describe('How the \"year\" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.')
+  "yearMode": zod.enum(['financial', 'rolling365']).optional().describe('How the \"year\" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.'),
+  "compare": zod.coerce.boolean().optional().describe('When true, also return the previous equivalent period\'s headline totals under `previous`.')
 })
 
 export const GetDashboardSummaryResponse = zod.object({
@@ -3121,7 +3122,16 @@ export const GetDashboardSummaryResponse = zod.object({
   "itemsSold": zod.number().optional(),
   "costTotal": zod.number().optional(),
   "surchargeCost": zod.number().optional().describe('Absorbed payment surcharges (pass-on disabled) for the period — a cost of business.'),
-  "topPaymentMethod": zod.string().nullish()
+  "topPaymentMethod": zod.string().nullish(),
+  "previous": zod.object({
+  "totalSales": zod.number().optional(),
+  "transactionCount": zod.number().optional(),
+  "posSales": zod.number().optional(),
+  "posCount": zod.number().optional(),
+  "invoiceSales": zod.number().optional(),
+  "invoiceCount": zod.number().optional(),
+  "averageOrderValue": zod.number().optional()
+}).nullish().describe('Previous equivalent period\'s headline totals (present only when compare=true).')
 })
 
 
@@ -3243,7 +3253,8 @@ export const GetRecentTransactionsResponse = zod.array(GetRecentTransactionsResp
  * @summary Get sales chart data
  */
 export const GetSalesChartQueryParams = zod.object({
-  "period": zod.enum(['week', 'month', 'year']).optional()
+  "period": zod.enum(['week', 'month', 'year']).optional(),
+  "monthMode": zod.enum(['rolling30', 'calendar_mtd']).optional().describe('How the \"month\" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.')
 })
 
 export const GetSalesChartResponseItem = zod.object({
@@ -11292,6 +11303,22 @@ export const SendInvoiceEmailBody = zod.object({
 })
 
 export const SendInvoiceEmailResponse = zod.object({
+  "ok": zod.boolean()
+})
+
+
+/**
+ * @summary Send the invoice by SMS to the customer
+ */
+export const SendInvoiceSmsParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SendInvoiceSmsBody = zod.object({
+  "phone": zod.string().optional().describe('Optional override number; defaults to the customer\'s phone on file.')
+})
+
+export const SendInvoiceSmsResponse = zod.object({
   "ok": zod.boolean()
 })
 

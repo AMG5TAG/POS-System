@@ -44,6 +44,7 @@ import {
   useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { InvoiceSendDialog } from "@/components/invoices/InvoiceSendDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -70,7 +71,7 @@ import {
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
-  Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink, Truck,
+  Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink, Truck, Send,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { publicProductUrl } from "@/lib/public-url";
@@ -1121,9 +1122,11 @@ function PricingHistoryTable({ productId }: { productId: number }) {
   );
 }
 
-/* Every sale (transaction) and invoice whose line items include this product. */
+/* Every sale (transaction) and invoice whose line items include this product.
+   Invoice rows are clickable and open the Send window (email / SMS / print). */
 function SalesHistoryTable({ productId }: { productId: number }) {
   const { data, isLoading } = useGetProductSalesHistory(productId);
+  const [sendInvoiceId, setSendInvoiceId] = useState<number | null>(null);
 
   if (isLoading) {
     return (
@@ -1163,17 +1166,25 @@ function SalesHistoryTable({ productId }: { productId: number }) {
             </tr>
           </thead>
           <tbody className="divide-y">
-            {data.map((entry) => (
-              <tr key={`${entry.type}-${entry.id}`} className="hover:bg-muted/20">
+            {data.map((entry) => {
+              const isInvoice = entry.type === "invoice";
+              return (
+              <tr
+                key={`${entry.type}-${entry.id}`}
+                className={cn("hover:bg-muted/20", isInvoice && "cursor-pointer")}
+                onClick={isInvoice ? () => setSendInvoiceId(entry.id) : undefined}
+                title={isInvoice ? "Send this invoice (email / SMS / print)" : undefined}
+              >
                 <td className="p-2.5">
                   <div className="flex items-center gap-2">
                     <Badge variant="outline" className={cn(
                       "text-[10px] shrink-0 capitalize",
-                      entry.type === "invoice" ? "border-blue-400 text-blue-600 dark:text-blue-400" : "border-emerald-400 text-emerald-600 dark:text-emerald-400",
+                      isInvoice ? "border-blue-400 text-blue-600 dark:text-blue-400" : "border-emerald-400 text-emerald-600 dark:text-emerald-400",
                     )}>
                       {entry.type}
                     </Badge>
                     <span className="font-mono text-xs truncate">{entry.reference}</span>
+                    {isInvoice && <Send className="w-3 h-3 text-muted-foreground shrink-0" />}
                   </div>
                   {entry.status && <span className="text-[10px] text-muted-foreground capitalize">{entry.status.replace(/-/g, " ")}</span>}
                 </td>
@@ -1184,10 +1195,16 @@ function SalesHistoryTable({ productId }: { productId: number }) {
                 <td className="p-2.5 text-right tabular-nums">{entry.quantity}</td>
                 <td className="p-2.5 text-right font-medium tabular-nums">{formatCurrency(entry.lineTotal)}</td>
               </tr>
-            ))}
+              );
+            })}
           </tbody>
         </table>
       </div>
+      <InvoiceSendDialog
+        invoiceId={sendInvoiceId}
+        open={sendInvoiceId != null}
+        onOpenChange={(o) => { if (!o) setSendInvoiceId(null); }}
+      />
     </div>
   );
 }

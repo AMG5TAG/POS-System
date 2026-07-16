@@ -2026,6 +2026,11 @@ paths:
           schema:
             type: string
             enum: [financial, rolling365]
+        - name: compare
+          in: query
+          description: When true, also return the previous equivalent period's headline totals under `previous`.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Dashboard summary
@@ -2090,6 +2095,12 @@ paths:
           schema:
             type: string
             enum: [week, month, year]
+        - name: monthMode
+          in: query
+          description: How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+          schema:
+            type: string
+            enum: [rolling30, calendar_mtd]
       responses:
         "200":
           description: Sales chart data
@@ -8271,6 +8282,33 @@ paths:
         "404":
           description: Invoice not found
 
+  /invoices/{id}/send-sms:
+    post:
+      operationId: sendInvoiceSms
+      tags: [invoices]
+      summary: Send the invoice by SMS to the customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendInvoiceSmsInput"
+      responses:
+        "200":
+          description: SMS sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "404":
+          description: Invoice not found
+
   /invoices/{id}/event:
     post:
       operationId: addInvoiceEvent
@@ -12169,6 +12207,17 @@ components:
           description: Absorbed payment surcharges (pass-on disabled) for the period — a cost of business.
         topPaymentMethod:
           type: ["string", "null"]
+        previous:
+          type: ["object", "null"]
+          description: Previous equivalent period's headline totals (present only when compare=true).
+          properties:
+            totalSales:       { type: number }
+            transactionCount: { type: integer }
+            posSales:         { type: number }
+            posCount:         { type: integer }
+            invoiceSales:     { type: number }
+            invoiceCount:     { type: integer }
+            averageOrderValue: { type: number }
 
     DashboardActivity:
       type: object
@@ -16093,6 +16142,12 @@ components:
         eventId: { type: string }
         reason:  { type: string }
 
+    SendInvoiceSmsInput:
+      type: object
+      properties:
+        phone:
+          type: string
+          description: Optional override number; defaults to the customer's phone on file.
     SendInvoiceEmailInput:
       type: object
       required: [email]

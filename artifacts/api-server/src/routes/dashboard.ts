@@ -185,6 +185,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const period = queryParams.data.period ?? "today";
   const monthMode: MonthMode = queryParams.data.monthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
   const yearMode: YearMode = queryParams.data.yearMode === "rolling365" ? "rolling365" : "financial";
+  const compare = queryParams.data.compare === true;
   // The Sales Overview always treats "week" as the current Mon–Sun calendar week.
   const periodStart = getPeriodStart(period, monthMode, yearMode, "calendar_week");
   const periodEnd = getPeriodEnd(period);
@@ -362,6 +363,54 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   `);
   const surchargeCost = Number(surchargeRows.rows[0]?.surcharge_cost ?? 0);
 
+  // Compare-to-previous: re-run just the headline revenue/count aggregations over
+  // the previous equivalent window (previous month-to-date, prior 7 days, etc.),
+  // so the Sales Overview can show a delta against the same metrics as the tiles.
+  let previous: {
+    totalSales: number; transactionCount: number;
+    posSales: number; posCount: number; invoiceSales: number; invoiceCount: number;
+    averageOrderValue: number;
+  } | null = null;
+  if (compare) {
+    const activityPeriod = period === "today" || period === "yesterday" ? "day" : period;
+    const [, , prevStart, prevEnd] = getActivityWindows(activityPeriod, monthMode);
+    const [pTxn, pInv, pLay] = await Promise.all([
+      db.select({
+        posSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
+        posCount: sql<string>`COUNT(CASE WHEN ${transactionsTable.status} = 'completed' THEN 1 END)`,
+      }).from(transactionsTable).where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, prevStart), lt(transactionsTable.createdAt, prevEnd))),
+      db.select({
+        invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+        invoiceCount: sql<string>`COUNT(*)`,
+      }).from(invoicesTable).where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, prevStart), lt(invoicesTable.paidAt, prevEnd))),
+      db.execute<{ sales: number; cnt: number }>(sql`
+        SELECT COALESCE(SUM(total_amount::numeric), 0)::float AS sales, COUNT(*)::int AS cnt
+        FROM laybys l
+        WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+          AND COALESCE(l.completed_at, l.updated_at) >= ${prevStart}
+          AND COALESCE(l.completed_at, l.updated_at) < ${prevEnd}
+      `),
+    ]);
+    const pPosSales = parseFloat(pTxn[0]?.posSales ?? "0");
+    const pPosCount = Number(pTxn[0]?.posCount ?? 0);
+    const pInvoiceSales = parseFloat(pInv[0]?.invoiceSales ?? "0");
+    const pInvoiceCount = Number(pInv[0]?.invoiceCount ?? 0);
+    const pLayRow = pLay.rows[0];
+    const pLaybySales = Number(pLayRow?.sales ?? 0);
+    const pLaybyCount = Number(pLayRow?.cnt ?? 0);
+    const pTotalSales = pPosSales + pInvoiceSales + pLaybySales;
+    const pTxCount = pPosCount + pInvoiceCount + pLaybyCount;
+    previous = {
+      totalSales:        Math.round(pTotalSales * 100) / 100,
+      transactionCount:  pTxCount,
+      posSales:          Math.round(pPosSales * 100) / 100,
+      posCount:          pPosCount,
+      invoiceSales:      Math.round(pInvoiceSales * 100) / 100,
+      invoiceCount:      pInvoiceCount,
+      averageOrderValue: pTxCount > 0 ? Math.round((pTotalSales / pTxCount) * 100) / 100 : 0,
+    };
+  }
+
   res.json({
     totalSales:         Math.round(totalSales * 100) / 100,
     posSales:           Math.round(posSales * 100) / 100,
@@ -383,6 +432,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     costTotal:          Math.round(costTotal * 100) / 100,
     surchargeCost:      Math.round(surchargeCost * 100) / 100,
     topPaymentMethod,
+    previous,
   });
 });
 
@@ -479,7 +529,8 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
   }
 
   const period = queryParams.data.period ?? "week";
-  const periodStart = getPeriodStart(period);
+  const monthMode: MonthMode = queryParams.data.monthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
+  const periodStart = getPeriodStart(period, monthMode);
   const merchantId = req.session.merchantId!;
 
   type AggRow = { bucket: string; sales: string; transactions: string };
@@ -557,9 +608,12 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
     groups[r.bucket].transactions += Number(r.transactions);
   }
 
-  // Fill in all periods and apply labels
+  // Fill in all periods and apply labels. For calendar month-to-date, only show
+  // days elapsed this month (1st → today) instead of a fixed 30-day window.
   const result = [];
-  const slots = period === "week" ? 7 : period === "month" ? 30 : 12;
+  const slots = period === "week" ? 7
+    : period === "month" ? (monthMode === "calendar_mtd" ? new Date().getDate() : 30)
+    : 12;
   for (let i = slots - 1; i >= 0; i--) {
     const d = new Date();
     if (period === "year") {

@@ -48,6 +48,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn, formatCurrency, exportToCsv } from "@/lib/utils";
+import { Delta } from "@/components/reports/Delta";
 import { useAllCustomers } from "@/hooks/use-all-customers";
 import {
   TrendingUp, CreditCard, Package2, Monitor, DollarSign, Users,
@@ -96,12 +97,10 @@ function presetDates(p: Preset): { from: string; to: string } {
   const now = new Date();
   const to  = toISO(now);
   if (p === "today") return { from: to, to };
-  // "Month" is the calendar month-to-date: 1st → last day of the current month
-  // (not a rolling 30-day window).
+  // "Month" is month-to-date: 1st of the current month → today.
   if (p === "month") {
     const first = new Date(now.getFullYear(), now.getMonth(), 1);
-    const last  = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-    return { from: toISO(first), to: toISO(last) };
+    return { from: toISO(first), to };
   }
   const d = new Date(now);
   if (p === "year") d.setFullYear(d.getFullYear() - 1);
@@ -141,12 +140,13 @@ type ReportTabId = (typeof REPORT_TABS)[number]["id"];
 
 /* ─── Shared UI helpers ──────────────────────────────────────────────────── */
 
-function KpiTile({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function KpiTile({ label, value, sub, accent = false, delta }: { label: string; value: string; sub?: string; accent?: boolean; delta?: React.ReactNode }) {
   return (
     <div className={cn("rounded-xl border p-5", accent ? "bg-primary/5" : "bg-card")}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className={cn("text-3xl font-bold mt-2", accent ? "text-primary" : "")}>{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+      {delta && <div className="text-xs mt-1.5">{delta} <span className="text-muted-foreground ml-0.5">vs prev</span></div>}
     </div>
   );
 }
@@ -186,10 +186,11 @@ const PAYMENT_COLORS: Record<string, string> = {
 
 /* ─── Tab: Sales ─────────────────────────────────────────────────────────── */
 
-function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales, txCount, avgSaleValue }: {
+function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales, txCount, avgSaleValue, prev }: {
   summary: { totalSales: number; transactionCount: number; averageOrderValue: number; posSales?: number; invoiceSales?: number; posCount?: number; invoiceCount?: number } | undefined;
   summaryLoading: boolean; chartData: { label: string; sales: number; transactions: number }[] | undefined;
   chartLoading: boolean; totalSales: number; txCount: number; avgSaleValue: number;
+  prev?: { totalSales?: number; posSales?: number; posCount?: number; invoiceSales?: number; averageOrderValue?: number } | null;
 }) {
   const posSales     = summary?.posSales     ?? totalSales;
   const invoiceSales = summary?.invoiceSales ?? 0;
@@ -198,10 +199,14 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiTile label="Total Revenue" value={summaryLoading ? "—" : formatCurrency(totalSales)} sub="POS + Invoices" accent />
-        <KpiTile label="POS Transactions" value={summaryLoading ? "—" : posCount.toLocaleString()} sub={formatCurrency(posSales)} />
-        <KpiTile label="Invoice Revenue" value={summaryLoading ? "—" : formatCurrency(invoiceSales)} sub={`${invoiceCount} paid invoice${invoiceCount !== 1 ? "s" : ""}`} />
-        <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction" />
+        <KpiTile label="Total Revenue" value={summaryLoading ? "—" : formatCurrency(totalSales)} sub="POS + Invoices" accent
+          delta={prev ? <Delta current={totalSales} previous={prev.totalSales ?? 0} prefix="$" /> : undefined} />
+        <KpiTile label="POS Transactions" value={summaryLoading ? "—" : posCount.toLocaleString()} sub={formatCurrency(posSales)}
+          delta={prev ? <Delta current={posCount} previous={prev.posCount ?? 0} /> : undefined} />
+        <KpiTile label="Invoice Revenue" value={summaryLoading ? "—" : formatCurrency(invoiceSales)} sub={`${invoiceCount} paid invoice${invoiceCount !== 1 ? "s" : ""}`}
+          delta={prev ? <Delta current={invoiceSales} previous={prev.invoiceSales ?? 0} prefix="$" /> : undefined} />
+        <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction"
+          delta={prev ? <Delta current={avgSaleValue} previous={prev.averageOrderValue ?? 0} prefix="$" /> : undefined} />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
         <SectionHeader title="Daily Sales" action={<ExportBtn filename="daily-sales" rows={(chartData ?? []) as unknown as Record<string, unknown>[]} columns={[{ key: "label", label: "Date" }, { key: "sales", label: "Revenue" }, { key: "transactions", label: "Transactions" }]} />} />
@@ -2556,6 +2561,8 @@ export default function ReportsPage() {
   const [toDate,   setToDate]     = useState(init.to);
   const [apiPeriod, setApiPeriod] = useState<GetDashboardSummaryPeriod>(presetToApiPeriod("month"));
   const [refreshKey, setRefresh]  = useState(0);
+  // Compare the current period's KPIs against the previous equivalent period.
+  const [compare, setCompare]     = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as ReportTabId;
@@ -2574,20 +2581,23 @@ export default function ReportsPage() {
     setRefresh((k) => k + 1);
   };
 
+  // Month is treated as calendar month-to-date (1st → today) for both KPIs & chart.
+  const monthMode = apiPeriod === "month" ? "calendar_mtd" as const : undefined;
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary(
-    { period: apiPeriod },
-    { query: { queryKey: ["reports-summary", apiPeriod, refreshKey] } },
+    { period: apiPeriod, ...(monthMode ? { monthMode } : {}), ...(compare ? { compare: true } : {}) },
+    { query: { queryKey: ["reports-summary", apiPeriod, refreshKey, compare] } },
   );
   const safeChartPeriod = (apiPeriod === "today" || apiPeriod === "yesterday") ? "week" : apiPeriod;
   const { data: chartData, isLoading: chartLoading } = useGetSalesChart(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    { period: safeChartPeriod as any },
+    { period: safeChartPeriod as any, ...(monthMode ? { monthMode } : {}) },
     { query: { queryKey: ["reports-chart", apiPeriod, refreshKey] } },
   );
 
   const totalSales   = summary?.totalSales       ?? 0;
   const txCount      = summary?.transactionCount ?? 0;
   const avgSaleValue = txCount > 0 ? totalSales / txCount : 0;
+  const prev         = (compare ? summary?.previous : null) ?? null;
 
   return (
     <AppLayout>
@@ -2629,6 +2639,12 @@ export default function ReportsPage() {
             <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={handleRefresh}>
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </Button>
+            {activeTab === "sales" && (
+              <label className="flex items-center gap-2 rounded-lg border px-3 h-8 text-sm cursor-pointer select-none">
+                <Switch checked={compare} onCheckedChange={setCompare} className="scale-90" />
+                Compare
+              </label>
+            )}
           </div>
         </div>
 
@@ -2652,7 +2668,7 @@ export default function ReportsPage() {
         </div>
 
         {/* ── Tab content ──────────────────────────────────────────────────── */}
-        {activeTab === "sales"             && <SalesTab summary={summary} summaryLoading={summaryLoading} chartData={chartData} chartLoading={chartLoading} totalSales={totalSales} txCount={txCount} avgSaleValue={avgSaleValue} />}
+        {activeTab === "sales"             && <SalesTab summary={summary} summaryLoading={summaryLoading} chartData={chartData} chartLoading={chartLoading} totalSales={totalSales} txCount={txCount} avgSaleValue={avgSaleValue} prev={prev} />}
         {activeTab === "payments"          && <PaymentsTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "inventory"         && <InventoryTab />}
         {activeTab === "register-closures" && <RegisterClosuresTab />}

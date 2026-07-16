@@ -14,6 +14,7 @@ export async function sendInvoiceSms(
   merchantId: number,
   invoiceId: number,
   kind: "invoice" | "reminder" | "overdue" = "invoice",
+  overridePhone?: string,
 ): Promise<{ success: boolean; error?: string; skipped?: boolean }> {
   const [row] = await db
     .select({
@@ -27,7 +28,8 @@ export async function sendInvoiceSms(
     .where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) return { success: false, error: "Invoice not found" };
-  const phone = row.customerPhone?.trim();
+  // A manually-entered number (from the Send dialog) wins over the phone on file.
+  const phone = (overridePhone?.trim() || row.customerPhone?.trim()) ?? "";
   if (!phone) return { success: false, skipped: true, error: "No customer phone on file" };
 
   const inv = row.invoice;

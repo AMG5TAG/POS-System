@@ -2266,6 +2266,20 @@ export interface CreateDailyCloseInput {
   breakdown?: CreateDailyCloseInputBreakdown;
 }
 
+/**
+ * Previous equivalent period's headline totals (present only when compare=true).
+ * @nullable
+ */
+export type DashboardSummaryPrevious = {
+  totalSales?: number;
+  transactionCount?: number;
+  posSales?: number;
+  posCount?: number;
+  invoiceSales?: number;
+  invoiceCount?: number;
+  averageOrderValue?: number;
+} | null;
+
 export interface DashboardSummary {
   totalSales: number;
   posSales?: number;
@@ -2286,6 +2300,11 @@ export interface DashboardSummary {
   surchargeCost?: number;
   /** @nullable */
   topPaymentMethod?: string | null;
+  /**
+     * Previous equivalent period's headline totals (present only when compare=true).
+     * @nullable
+     */
+  previous?: DashboardSummaryPrevious;
 }
 
 export type DashboardActivityDeviceTypesItem = {
@@ -5714,6 +5733,11 @@ export interface InvoicePaymentReverseInput {
   reason?: string;
 }
 
+export interface SendInvoiceSmsInput {
+  /** Optional override number; defaults to the customer's phone on file. */
+  phone?: string;
+}
+
 export type SendInvoiceEmailInputTemplateSocialLinks = {[key: string]: string};
 
 /**
@@ -6290,6 +6314,10 @@ monthMode?: GetDashboardSummaryMonthMode;
  * How the "year" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.
  */
 yearMode?: GetDashboardSummaryYearMode;
+/**
+ * When true, also return the previous equivalent period's headline totals under `previous`.
+ */
+compare?: boolean;
 };
 
 export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof typeof GetDashboardSummaryPeriod];
@@ -6351,6 +6379,10 @@ limit?: number;
 
 export type GetSalesChartParams = {
 period?: GetSalesChartPeriod;
+/**
+ * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+ */
+monthMode?: GetSalesChartMonthMode;
 };
 
 export type GetSalesChartPeriod = typeof GetSalesChartPeriod[keyof typeof GetSalesChartPeriod];
@@ -6360,6 +6392,14 @@ export const GetSalesChartPeriod = {
   week: 'week',
   month: 'month',
   year: 'year',
+} as const;
+
+export type GetSalesChartMonthMode = typeof GetSalesChartMonthMode[keyof typeof GetSalesChartMonthMode];
+
+
+export const GetSalesChartMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
 } as const;
 
 export type GetTopProductsParams = {

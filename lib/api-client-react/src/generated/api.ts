@@ -370,6 +370,7 @@ import type {
   SecuritySettings,
   SecuritySettingsUpdate,
   SendInvoiceEmailInput,
+  SendInvoiceSmsInput,
   SendPurchaseOrderEmail200,
   SendPurchaseOrderEmailBody,
   SendQuoteEmailInput,
@@ -33301,6 +33302,78 @@ export const useSendInvoiceEmail = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getSendInvoiceEmailMutationOptions(options));
+    }
+
+export const getSendInvoiceSmsUrl = (id: number,) => {
+
+
+
+
+  return `/api/invoices/${id}/send-sms`
+}
+
+/**
+ * @summary Send the invoice by SMS to the customer
+ */
+export const sendInvoiceSms = async (id: number,
+    sendInvoiceSmsInput?: SendInvoiceSmsInput, options?: RequestInit): Promise<OkResult> => {
+
+  return customFetch<OkResult>(getSendInvoiceSmsUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      sendInvoiceSmsInput,)
+  }
+);}
+
+
+
+
+export const getSendInvoiceSmsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceSms>>, TError,{id: number;data?: BodyType<SendInvoiceSmsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceSms>>, TError,{id: number;data?: BodyType<SendInvoiceSmsInput>}, TContext> => {
+
+const mutationKey = ['sendInvoiceSms'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendInvoiceSms>>, {id: number;data?: BodyType<SendInvoiceSmsInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  sendInvoiceSms(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendInvoiceSmsMutationResult = NonNullable<Awaited<ReturnType<typeof sendInvoiceSms>>>
+    export type SendInvoiceSmsMutationBody = BodyType<SendInvoiceSmsInput> | undefined
+    export type SendInvoiceSmsMutationError = ErrorType<void>
+
+    /**
+ * @summary Send the invoice by SMS to the customer
+ */
+export const useSendInvoiceSms = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendInvoiceSms>>, TError,{id: number;data?: BodyType<SendInvoiceSmsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendInvoiceSms>>,
+        TError,
+        {id: number;data?: BodyType<SendInvoiceSmsInput>},
+        TContext
+      > => {
+      return useMutation(getSendInvoiceSmsMutationOptions(options));
     }
 
 export const getAddInvoiceEventUrl = (id: number,) => {
