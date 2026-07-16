@@ -25,6 +25,7 @@ export function generateIcs({
   location,
   startAt,
   endAt,
+  method = "REQUEST",
 }: {
   uid: string;
   summary: string;
@@ -32,13 +33,16 @@ export function generateIcs({
   location?: string | null;
   startAt: Date;
   endAt: Date;
+  /** iTIP method for email invites ("REQUEST"). Pass null for CalDAV objects,
+   *  which must be stored without a METHOD (a METHOD marks an iTIP message). */
+  method?: string | null;
 }): Buffer {
   const now = new Date();
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
     "PRODID:-//KoaPOS//Appointments//EN",
-    "METHOD:REQUEST",
+    ...(method ? [`METHOD:${method}`] : []),
     "BEGIN:VEVENT",
     `UID:${uid}`,
     `DTSTAMP:${fmtDt(now)}`,

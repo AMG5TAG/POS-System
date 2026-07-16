@@ -46,13 +46,15 @@ const LOGOS: Record<string, { bg: string; src?: string; node?: React.ReactNode }
   dropbox:            { bg: "bg-[#0061FF]",     src: SI("dropbox",     "ffffff") },
   google_contacts:    { bg: "bg-white border", src: SI("google",      "4285F4") },
   microsoft_contacts: { bg: "bg-white border", node: <MicrosoftIcon className="w-5 h-5" /> },
-  apple_account:      { bg: "bg-black",         src: SI("apple",       "ffffff") },
+  apple_icloud:       { bg: "bg-black",         src: SI("apple",       "ffffff") },
 };
 
-const ACCOUNT_KEYS = ["google_contacts", "microsoft_contacts", "apple_account"];
+const ACCOUNT_KEYS = ["google_contacts", "microsoft_contacts", "apple_icloud"];
 const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox"];
-// Customer (contacts) sync is supported for Google & Microsoft accounts.
-const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts"]);
+// Customer (contacts) + calendar sync — Google & Microsoft (OAuth) and Apple iCloud (CalDAV/CardDAV).
+const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts", "apple_icloud"]);
+// Apple connects via an Apple ID + app-specific password form, not an OAuth redirect.
+const CREDENTIALS_KEYS = new Set(["apple_icloud"]);
 
 function SyncCard({ intg, onConnect, onDisconnect, onSync, onSyncCalendar, calendarBusy, busy }: {
   intg: SyncIntegration;
@@ -377,7 +379,7 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
       </div>
 
       {!hasAccounts && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">Connect a Google or Microsoft account above to enable automatic sync.</p>
+        <p className="text-xs text-amber-600 dark:text-amber-400">Connect a Google, Microsoft, or Apple account above to enable automatic sync.</p>
       )}
 
       {/* Contacts row */}
@@ -438,6 +440,9 @@ export default function ManagementSyncPage() {
   /* Calendar push (appointments → connected account's calendar) */
   const [calendarBusyKey, setCalendarBusyKey] = useState<string | null>(null);
 
+  /* Apple iCloud connect form (Apple ID + app-specific password) */
+  const [appleConnectOpen, setAppleConnectOpen] = useState(false);
+
   /* OAuth callback lands back here (?success=/?error=) for sync integrations. */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -462,10 +467,9 @@ export default function ManagementSyncPage() {
   const storage = STORAGE_KEYS.map(byKey).filter(Boolean) as SyncIntegration[];
 
   const connect = (intg: SyncIntegration) => {
-    // apple_account uses the named /apple/start route (form_post callback).
-    window.location.href = intg.key === "apple_account"
-      ? "/api/integrations/oauth/apple/start"
-      : `/api/integrations/oauth/${intg.key}/start`;
+    // Apple iCloud connects via a credentials form (Apple ID + app-specific password).
+    if (CREDENTIALS_KEYS.has(intg.key)) { setAppleConnectOpen(true); return; }
+    window.location.href = `/api/integrations/oauth/${intg.key}/start`;
   };
 
   const disconnect = (intg: SyncIntegration) => {
@@ -657,6 +661,89 @@ export default function ManagementSyncPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── Apple iCloud connect (Apple ID + app-specific password) ── */}
+      <AppleConnectModal
+        open={appleConnectOpen}
+        onClose={() => setAppleConnectOpen(false)}
+        onConnected={() => { setAppleConnectOpen(false); refetch(); toast.success("Apple iCloud connected"); }}
+      />
     </AppLayout>
+  );
+}
+
+/* Connect an Apple/iCloud account for Contacts + Calendar sync. Apple has no
+   OAuth sync API, so the merchant supplies their Apple ID and an app-specific
+   password; the server verifies it against iCloud CalDAV/CardDAV before storing. */
+function AppleConnectModal({ open, onClose, onConnected }: { open: boolean; onClose: () => void; onConnected: () => void }) {
+  const [appleId, setAppleId] = useState("");
+  const [appPassword, setAppPassword] = useState("");
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => { if (open) { setAppleId(""); setAppPassword(""); setSaving(false); } }, [open]);
+
+  const save = async () => {
+    if (!appleId.trim() || !appPassword.trim()) { toast.error("Enter your Apple ID and app-specific password"); return; }
+    setSaving(true);
+    try {
+      const r = await fetch("/api/integrations/apple_icloud/connect", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ appleId: appleId.trim(), appPassword: appPassword.trim() }),
+      });
+      const data = await r.json().catch(() => ({})) as { error?: string };
+      if (r.ok) { onConnected(); }
+      else { toast.error(data.error ?? "Couldn't connect this Apple account."); }
+    } catch {
+      toast.error("Connection request failed — please try again.");
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-3">
+            <span className="w-8 h-8 rounded-lg bg-black flex items-center justify-center">
+              <img src={SI("apple", "ffffff")} alt="" className="w-4 h-4" />
+            </span>
+            Connect Apple iCloud
+          </DialogTitle>
+          <DialogDescription>
+            Syncs customers to iCloud Contacts and pushes appointments to Apple Calendar. Apple requires an
+            {" "}<span className="font-medium text-foreground">app-specific password</span> (not your normal password).
+          </DialogDescription>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="space-y-1.5">
+            <Label htmlFor="appleId">Apple ID (email)</Label>
+            <Input id="appleId" type="text" autoComplete="off" placeholder="you@icloud.com"
+              value={appleId} onChange={(e) => setAppleId(e.target.value)} />
+          </div>
+          <div className="space-y-1.5">
+            <Label htmlFor="appPassword">App-specific password</Label>
+            <Input id="appPassword" type="password" autoComplete="off" placeholder="xxxx-xxxx-xxxx-xxxx"
+              value={appPassword} onChange={(e) => setAppPassword(e.target.value)} />
+          </div>
+          <div className="rounded-lg border bg-muted/30 px-3 py-2 text-xs text-muted-foreground space-y-1">
+            <p className="flex items-center gap-1.5 font-medium text-foreground"><ShieldCheck className="w-3.5 h-3.5" /> How to create one</p>
+            <p>
+              Sign in at{" "}
+              <a href="https://appleid.apple.com" target="_blank" rel="noreferrer" className="text-primary hover:underline">appleid.apple.com</a>{" "}
+              → Sign-In &amp; Security → App-Specific Passwords → generate one for “KoaPOS”, then paste it above. Requires two-factor authentication.
+            </p>
+          </div>
+        </div>
+        <DialogFooter>
+          <Button variant="ghost" onClick={onClose} disabled={saving}>Cancel</Button>
+          <Button onClick={save} disabled={saving} className="gap-1.5">
+            {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plug className="w-3.5 h-3.5" />} Connect
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }

@@ -14,6 +14,10 @@ import { formatAddressParts } from "../lib/address";
 import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "./microsoftToken";
 import { getValidGoogleToken, GoogleNotConnectedError } from "./googleToken";
 import { ObjectStorageService } from "../lib/objectStorage";
+import { readCredentialVault } from "./tokenVault";
+import { customerToVCard, appleContactUid } from "./vcardGenerator";
+import { generateIcs } from "./icsGenerator";
+import { openAppleCalendar, openAppleContacts, type AppleCreds } from "./appleDav";
 
 const MS_CONTACTS_SCOPE = "Contacts.ReadWrite Calendars.ReadWrite offline_access";
 
@@ -40,8 +44,11 @@ async function readPhotoBytes(photoUrl: string): Promise<{ buf: Buffer; contentT
   }
 }
 
-export type SyncProvider = "google_contacts" | "microsoft_contacts";
+export type SyncProvider = "google_contacts" | "microsoft_contacts" | "apple_icloud";
 export type DuplicateStrategy = "overwrite" | "skip";
+
+/** iCloud is reached via CalDAV/CardDAV with an app-specific password, not OAuth. */
+export const APPLE_PROVIDER = "apple_icloud" as const;
 
 /** Raised when the target account isn't connected / can't be refreshed (→ 401). */
 export class AccountNotConnectedError extends Error {
@@ -52,7 +59,7 @@ export class AccountNotConnectedError extends Error {
 }
 
 export function isSyncProvider(v: unknown): v is SyncProvider {
-  return v === "google_contacts" || v === "microsoft_contacts";
+  return v === "google_contacts" || v === "microsoft_contacts" || v === "apple_icloud";
 }
 
 /** Resolve a valid (refreshed) access token, normalising "not connected" errors. */
@@ -161,6 +168,35 @@ const EMPTY_CONTACT_RESULT: ContactSyncResult = {
   needsConfirmation: false, duplicates: 0, total: 0, created: 0, updated: 0, skipped: 0, failed: 0, notesSynced: 0,
 };
 
+/** Build the per-customer CRM-notes text pushed to a contact's notes field.
+ *  Shared by every provider so notes read identically across Google/MS/Apple. */
+async function buildCustomerNotes(
+  merchantId: number,
+  includeNotes: boolean,
+  notesConflict: "append" | "overwrite",
+): Promise<Map<number, string>> {
+  const notesByCustomer = new Map<number, string>();
+  if (!includeNotes) return notesByCustomer;
+  const MAX_NOTE_CHARS = 2000;
+  const allNotes = await db
+    .select()
+    .from(customerNotesTable)
+    .where(eq(customerNotesTable.merchantId, merchantId))
+    .orderBy(desc(customerNotesTable.createdAt)); // newest first
+  for (const note of allNotes) {
+    const existing = notesByCustomer.get(note.customerId) ?? "";
+    const date = new Date(note.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+    if (notesConflict === "overwrite") {
+      if (existing === "") notesByCustomer.set(note.customerId, `[KoaPOS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS));
+    } else {
+      const line = `• ${date}: ${note.note}`;
+      const next = existing === "" ? `[KoaPOS Notes]\n${line}` : `${existing}\n${line}`;
+      notesByCustomer.set(note.customerId, next.slice(0, MAX_NOTE_CHARS));
+    }
+  }
+  return notesByCustomer;
+}
+
 /** Push the merchant's customers to the provider's contacts. Resolves its own token. */
 export async function syncContacts(
   merchantId: number,
@@ -172,32 +208,16 @@ export async function syncContacts(
   const notesConflict = opts.notesConflict ?? "append";
   const duplicateStrategy = opts.duplicateStrategy;
 
+  // iCloud uses a different transport (CardDAV) — handle it separately.
+  if (provider === "apple_icloud") return syncAppleContacts(merchantId, opts, logger);
+
   const accessToken = await resolveAccountToken(merchantId, provider);
 
   const customers = await db.select().from(customersTable).where(eq(customersTable.merchantId, merchantId));
   if (customers.length === 0) return { ...EMPTY_CONTACT_RESULT };
 
   // Build per-customer notes text when requested.
-  const notesByCustomer = new Map<number, string>();
-  if (includeNotes) {
-    const MAX_NOTE_CHARS = 2000;
-    const allNotes = await db
-      .select()
-      .from(customerNotesTable)
-      .where(eq(customerNotesTable.merchantId, merchantId))
-      .orderBy(desc(customerNotesTable.createdAt)); // newest first
-    for (const note of allNotes) {
-      const existing = notesByCustomer.get(note.customerId) ?? "";
-      const date = new Date(note.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
-      if (notesConflict === "overwrite") {
-        if (existing === "") notesByCustomer.set(note.customerId, `[KoaPOS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS));
-      } else {
-        const line = `• ${date}: ${note.note}`;
-        const next = existing === "" ? `[KoaPOS Notes]\n${line}` : `${existing}\n${line}`;
-        notesByCustomer.set(note.customerId, next.slice(0, MAX_NOTE_CHARS));
-      }
-    }
-  }
+  const notesByCustomer = await buildCustomerNotes(merchantId, includeNotes, notesConflict);
 
   // Snapshot the remote address book (indexed by email and by remote id).
   const existingIndex = provider === "microsoft_contacts"
@@ -423,6 +443,9 @@ export async function syncCalendar(
   provider: SyncProvider,
   logger: Logger,
 ): Promise<CalendarSyncResult> {
+  // iCloud uses a different transport (CalDAV) — handle it separately.
+  if (provider === "apple_icloud") return syncAppleCalendar(merchantId, logger);
+
   const accessToken = await resolveAccountToken(merchantId, provider);
 
   const now = new Date();
@@ -489,6 +512,107 @@ export async function syncCalendar(
       }
     } catch (err) {
       logger.warn({ merchantId, err, appointmentId: a.id }, "Calendar event create threw");
+      failed++;
+    }
+  }
+
+  return { synced, failed, total: appointments.length };
+}
+
+/* ── Apple / iCloud (CalDAV + CardDAV) ───────────────────────────────────────
+   Apple has no OAuth REST API for iCloud data, so contacts/calendar are pushed
+   over CardDAV/CalDAV using the merchant's Apple ID + app-specific password
+   (stored via upsertCredentialVault under provider "apple_icloud"). Objects are
+   PUT at a deterministic URL so re-syncing overwrites rather than duplicates. */
+
+/** Read and validate the stored Apple credentials, or raise not-connected. */
+async function requireAppleCreds(merchantId: number): Promise<AppleCreds> {
+  const creds = await readCredentialVault<AppleCreds>(merchantId, APPLE_PROVIDER);
+  if (!creds?.appleId || !creds?.appPassword) {
+    throw new AccountNotConnectedError("Apple iCloud account isn't connected. Reconnect it on the Sync page and try again.");
+  }
+  return creds;
+}
+
+async function syncAppleContacts(merchantId: number, opts: ContactSyncOptions, logger: Logger): Promise<ContactSyncResult> {
+  const includeNotes  = opts.includeNotes ?? false;
+  const notesConflict = opts.notesConflict ?? "append";
+  const creds = await requireAppleCreds(merchantId);
+
+  const customers = await db.select().from(customersTable).where(eq(customersTable.merchantId, merchantId));
+  if (customers.length === 0) return { ...EMPTY_CONTACT_RESULT };
+
+  const notesByCustomer = await buildCustomerNotes(merchantId, includeNotes, notesConflict);
+
+  // Prior links tell us whether a customer's card already exists (→ "updated").
+  const links = await db
+    .select()
+    .from(contactSyncLinksTable)
+    .where(and(eq(contactSyncLinksTable.merchantId, merchantId), eq(contactSyncLinksTable.provider, APPLE_PROVIDER)));
+  const linkedCustomerIds = new Set(links.map((l) => l.customerId));
+
+  const book = await openAppleContacts(creds);
+
+  let created = 0, updated = 0, failed = 0, notesSynced = 0;
+  for (const c of customers) {
+    const noteText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
+    const vcard = customerToVCard(c, noteText);
+    try {
+      const { href } = await book.putContact(`${appleContactUid(c.id)}.vcf`, vcard);
+      if (linkedCustomerIds.has(c.id)) updated++; else created++;
+      if (includeNotes && noteText) notesSynced++;
+      await db
+        .insert(contactSyncLinksTable)
+        .values({ merchantId, customerId: c.id, provider: APPLE_PROVIDER, remoteContactId: href, remoteEtag: null, lastSyncedAt: new Date() })
+        .onConflictDoUpdate({
+          target: [contactSyncLinksTable.merchantId, contactSyncLinksTable.customerId, contactSyncLinksTable.provider],
+          set: { remoteContactId: href, lastSyncedAt: new Date() },
+        });
+    } catch (err) {
+      logger.warn({ merchantId, provider: APPLE_PROVIDER, err, customerId: c.id }, "Apple contact push failed");
+      failed++;
+    }
+  }
+
+  return { needsConfirmation: false, duplicates: 0, total: customers.length, created, updated, skipped: 0, failed, notesSynced };
+}
+
+async function syncAppleCalendar(merchantId: number, logger: Logger): Promise<CalendarSyncResult> {
+  const creds = await requireAppleCreds(merchantId);
+
+  const now = new Date();
+  const appointments = (await db
+    .select({ appt: appointmentsTable, custAddress: customersTable.address, custPhone: customersTable.phone,
+              custBillingStreet: customersTable.billingStreet, custBillingCity: customersTable.billingCity,
+              custBillingState: customersTable.billingState, custBillingPostcode: customersTable.billingPostcode })
+    .from(appointmentsTable)
+    .leftJoin(customersTable, eq(appointmentsTable.customerId, customersTable.id))
+    .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now)))
+    .orderBy(appointmentsTable.scheduledAt))
+    .filter((r) => r.appt.status !== "cancelled");
+
+  if (appointments.length === 0) return { synced: 0, failed: 0, total: 0 };
+
+  const cal = await openAppleCalendar(creds);
+
+  let synced = 0, failed = 0;
+  for (const row of appointments) {
+    const a = row.appt;
+    const start = new Date(a.scheduledAt);
+    const end   = new Date(start.getTime() + (a.durationMinutes ?? 30) * 60_000);
+    const location = (row.custAddress ?? "").trim()
+      || formatAddressParts(row.custBillingStreet, row.custBillingCity, row.custBillingState, row.custBillingPostcode);
+    const baseNotes = a.description ?? a.notes ?? "";
+    const mobile    = (row.custPhone ?? "").trim();
+    const notes     = mobile ? `${baseNotes ? `${baseNotes}\n\n` : ""}Mobile: ${mobile}` : baseNotes;
+    const uid = `koapos-appt-${a.id}`;
+    // CalDAV objects must not carry a METHOD (that marks an iTIP message).
+    const ics = generateIcs({ uid, summary: a.title, description: notes, location, startAt: start, endAt: end, method: null }).toString("utf-8");
+    try {
+      await cal.putEvent(`${uid}.ics`, ics);
+      synced++;
+    } catch (err) {
+      logger.warn({ merchantId, provider: APPLE_PROVIDER, err, appointmentId: a.id }, "Apple calendar push failed");
       failed++;
     }
   }

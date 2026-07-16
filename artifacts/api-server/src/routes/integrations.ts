@@ -5,6 +5,7 @@ import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
 import { upsertVault, deleteVault, upsertCredentialVault } from "../services/tokenVault";
 import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError } from "../services/accountSync";
+import { verifyAppleCredentials } from "../services/appleDav";
 
 const router: IRouter = Router();
 
@@ -46,7 +47,8 @@ export const INTEGRATIONS = [
   { key: "dropbox",             label: "Dropbox",             section: "cloud", category: "Cloud Storage & Productivity", description: "Send automated backups of reports and exports directly to your Dropbox.",                    authType: "oauth" as const, oauthProvider: "dropbox"   as const, useVault: true  },
   { key: "google_contacts",     label: "Google Account",      section: "cloud", category: "Cloud Storage & Productivity", description: "Sync your customer list with Google Contacts and push appointments to Google Calendar.",    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "microsoft_contacts",  label: "Microsoft Account",   section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar.",          authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
-  { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple to sync customers to iCloud Contacts and push appointments to Apple Calendar.", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
+  { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple — lets staff/customers authenticate with their Apple ID. (Contacts & Calendar sync is the separate Apple iCloud connection.)", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
+  { key: "apple_icloud",        label: "Apple iCloud",        section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to iCloud Contacts and push appointments to Apple Calendar. Connect with your Apple ID and an app-specific password.", authType: "credentials" as const, fields: [{ name: "appleId", label: "Apple ID (email)", type: "text" }, { name: "appPassword", label: "App-specific password", type: "password" }] as F[], useVault: true  },
   { key: "openai",              label: "OpenAI (Your Key)",   section: "cloud", category: "Cloud Storage & Productivity", description: "Use your own OpenAI API key for AI Insights, demand forecasting, and product descriptions.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
 ] as const;
 
@@ -346,6 +348,18 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
   if (intg.authType !== "credentials") { res.status(400).json({ error: "Use OAuth flow" }); return; }
   const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // iCloud: verify the Apple ID + app-specific password against CalDAV/CardDAV
+  // before storing them, so a wrong or expired password fails loudly here.
+  if (key === "apple_icloud") {
+    const appleId = String(body.appleId ?? "").trim();
+    const appPassword = String(body.appPassword ?? "").trim();
+    if (!appleId || !appPassword) { res.status(400).json({ error: "Enter your Apple ID and an app-specific password." }); return; }
+    const check = await verifyAppleCredentials(appleId, appPassword);
+    if (!check.ok) { res.status(400).json({ error: check.error ?? "Apple credentials could not be verified." }); return; }
+    body.appleId = appleId;
+    body.appPassword = appPassword;
+  }
 
   if (intg.useVault) {
     // Credential secrets (e.g. Zip's apiKey) are encrypted at rest in the vault.
