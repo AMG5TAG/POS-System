@@ -320,6 +320,16 @@ export default function POSInvoicesPage() {
   const [editDragFrom, setEditDragFrom] = useState<number | null>(null);
   const [editDragOver, setEditDragOver] = useState<number | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  /* Sell-price prompt — opened when a selected product has a $0 sell price so the
+     user can set a one-off sell price (required) and optional cost price for that
+     line without leaving the invoice. `flow` picks which line list to write back to. */
+  const [pricePrompt, setPricePrompt] = useState<{
+    flow: "create" | "edit";
+    index: number;
+    name: string;
+    sellPrice: string;
+    costPrice: string;
+  } | null>(null);
   const [editRecurring, setEditRecurring] = useState({
     enabled: false,
     frequency: "monthly" as "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually",
@@ -623,6 +633,10 @@ export default function POSInvoicesPage() {
     setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate, productId: product.id ?? null, costPrice: product.costPrice ?? null } : l));
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+    // Product has no sell price on file — prompt for a one-off sell price (and
+    // optional cost price) for this line rather than silently invoicing $0.
+    if ((product.price ?? 0) <= 0)
+      setPricePrompt({ flow: "create", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice != null ? String(product.costPrice) : "" });
   };
   const moveLineUp = (i: number) => {
     if (i === 0) return;
@@ -699,6 +713,21 @@ export default function POSInvoicesPage() {
     setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate, productId: product.id ?? null, costPrice: product.costPrice ?? null } : l));
     setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+    // See selectProduct — same $0 sell-price prompt for the edit-invoice flow.
+    if ((product.price ?? 0) <= 0)
+      setPricePrompt({ flow: "edit", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice != null ? String(product.costPrice) : "" });
+  };
+  /* Apply the sell-price prompt back to the originating line. Sell price is
+     required (> 0); cost price is optional and left untouched when blank. */
+  const pricePromptSell = pricePrompt ? parseFloat(pricePrompt.sellPrice) : NaN;
+  const pricePromptValid = !isNaN(pricePromptSell) && pricePromptSell > 0;
+  const confirmPricePrompt = () => {
+    if (!pricePrompt || !pricePromptValid) return;
+    const cost = pricePrompt.costPrice.trim() === "" ? null : (parseFloat(pricePrompt.costPrice) || 0);
+    const apply = pricePrompt.flow === "create" ? updateLine : updateEditLine;
+    apply(pricePrompt.index, "unitPrice", pricePromptSell);
+    apply(pricePrompt.index, "costPrice", cost);
+    setPricePrompt(null);
   };
   const moveEditLineUp = (i: number) => {
     if (i === 0) return;
@@ -2870,6 +2899,55 @@ export default function POSInvoicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sell-price prompt for products with no ($0) sell price on file */}
+      <Dialog open={!!pricePrompt} onOpenChange={(o) => { if (!o) setPricePrompt(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set sell price</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{pricePrompt?.name}</span> has no sell price set.
+              Enter a price for this invoice line.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="prompt-sell-price">Sell price (inc GST)</Label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                <Input
+                  id="prompt-sell-price"
+                  type="number" step="0.01" min={0} autoFocus
+                  value={pricePrompt?.sellPrice ?? ""}
+                  placeholder="0.00"
+                  onChange={(e) => setPricePrompt((p) => p ? { ...p, sellPrice: e.target.value } : p)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && pricePromptValid) confirmPricePrompt(); }}
+                  className="pl-6"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="prompt-cost-price">Cost price (ex GST) <span className="text-muted-foreground font-normal">— optional</span></Label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                <Input
+                  id="prompt-cost-price"
+                  type="number" step="0.01" min={0}
+                  value={pricePrompt?.costPrice ?? ""}
+                  placeholder="0.00"
+                  onChange={(e) => setPricePrompt((p) => p ? { ...p, costPrice: e.target.value } : p)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && pricePromptValid) confirmPricePrompt(); }}
+                  className="pl-6"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setPricePrompt(null)}>Cancel</Button>
+              <Button onClick={confirmPricePrompt} disabled={!pricePromptValid}>Apply price</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </AppLayout>
   );
