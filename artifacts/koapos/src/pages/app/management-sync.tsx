@@ -295,9 +295,10 @@ const AUTO_FREQUENCIES: { value: string; label: string }[] = [
   { value: "monthly", label: "Monthly" },
 ];
 
+interface SyncTypeState { provider: string; frequency: string; lastSyncAt: string | null; lastError?: string | null; lastErrorAt?: string | null }
 interface AutoSyncState {
-  contacts: { provider: string; frequency: string; includeNotes: boolean; lastSyncAt: string | null };
-  calendar: { provider: string; frequency: string; lastSyncAt: string | null };
+  contacts: SyncTypeState & { includeNotes: boolean };
+  calendar: SyncTypeState;
 }
 
 function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
@@ -308,7 +309,14 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
   useEffect(() => {
     fetch("/api/integrations/auto-sync", { credentials: "include" })
       .then((r) => r.json())
-      .then((d: AutoSyncState) => setState({ contacts: d.contacts, calendar: d.calendar }))
+      .then((d: AutoSyncState) => {
+        setState({ contacts: d.contacts, calendar: d.calendar });
+        // Notify the merchant if the most recent automatic sync failed and hasn't
+        // yet recovered — the run happens in the background, so this screen is the
+        // only place the failure surfaces.
+        if (d.contacts?.lastError) toast.error(`Automatic contacts sync failed: ${d.contacts.lastError}`);
+        if (d.calendar?.lastError) toast.error(`Automatic calendar sync failed: ${d.calendar.lastError}`);
+      })
       .catch(() => { /* leave hidden */ });
   }, []);
 
@@ -361,6 +369,17 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
     </Select>
   );
 
+  /* Persistent failure notice for a sync kind whose last automatic run errored. */
+  const failureBanner = (s: SyncTypeState) => s.lastError ? (
+    <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+      <div>
+        <p className="font-medium">Last automatic sync failed{s.lastErrorAt ? ` · ${formatRelativeTime(s.lastErrorAt)}` : ""}</p>
+        <p className="text-destructive/90">{s.lastError}</p>
+      </div>
+    </div>
+  ) : null;
+
   const freqSelect = (value: string, onChange: (v: string) => void) => (
     <Select value={value} onValueChange={onChange} disabled={!hasAccounts}>
       <SelectTrigger className="h-8 text-xs w-[170px]"><SelectValue /></SelectTrigger>
@@ -394,6 +413,7 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
           <Switch checked={state.contacts.includeNotes} onCheckedChange={(c) => update({ contacts: { ...state.contacts, includeNotes: c } })} disabled={!hasAccounts || state.contacts.frequency === "disabled"} />
           Include notes
         </label>
+        <div className="basis-full">{failureBanner(state.contacts)}</div>
       </div>
 
       {/* Calendar row */}
@@ -404,6 +424,7 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
         </div>
         {providerSelect(state.calendar.provider, (v) => update({ calendar: { ...state.calendar, provider: v } }), state.calendar.frequency === "disabled")}
         {freqSelect(state.calendar.frequency, (v) => update({ calendar: { ...state.calendar, frequency: v } }))}
+        <div className="basis-full">{failureBanner(state.calendar)}</div>
       </div>
 
       <div className="flex items-center justify-between border-t pt-3">

@@ -36,24 +36,37 @@ function isPollDue(frequency: string, lastSyncAt: Date | null): boolean {
   return Date.now() - lastSyncAt.getTime() >= interval;
 }
 
-/** Run one sync for a merchant + kind, then stamp the last-sync timestamp. */
+/** Persist a failure for the merchant's automatic sync so the Sync screen can
+ *  surface it. A subsequent success clears it (see runSync). */
+async function recordSyncFailure(merchantId: number, kind: SyncKind, message: string): Promise<void> {
+  const patch = kind === "contacts"
+    ? { contactsLastError: message, contactsLastErrorAt: new Date() }
+    : { calendarLastError: message, calendarLastErrorAt: new Date() };
+  await db.update(merchantAutoSyncSettingsTable).set(patch).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+}
+
+/** Run one sync for a merchant + kind, then stamp the last-sync timestamp and
+ *  clear any prior failure. On error, record the failure for the Sync screen. */
 async function runSync(merchantId: number, kind: SyncKind, provider: SyncProvider, includeNotes: boolean, logger: Logger): Promise<void> {
   try {
     if (kind === "contacts") {
       const r = await syncContacts(merchantId, provider, { includeNotes, duplicateStrategy: "overwrite" }, logger);
       logger.info({ merchantId, provider, created: r.created, updated: r.updated, failed: r.failed }, "Auto contacts sync complete");
-      await db.update(merchantAutoSyncSettingsTable).set({ contactsLastSyncAt: new Date() }).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+      await db.update(merchantAutoSyncSettingsTable).set({ contactsLastSyncAt: new Date(), contactsLastError: null, contactsLastErrorAt: null }).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
     } else {
       const r = await syncCalendar(merchantId, provider, logger);
       logger.info({ merchantId, provider, synced: r.synced, failed: r.failed }, "Auto calendar sync complete");
-      await db.update(merchantAutoSyncSettingsTable).set({ calendarLastSyncAt: new Date() }).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+      await db.update(merchantAutoSyncSettingsTable).set({ calendarLastSyncAt: new Date(), calendarLastError: null, calendarLastErrorAt: null }).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
     }
   } catch (err) {
     if (err instanceof AccountNotConnectedError) {
       logger.warn({ merchantId, kind, provider }, "Auto sync skipped — account not connected");
+      await recordSyncFailure(merchantId, kind, "Account disconnected — reconnect the account to resume automatic sync.");
       return;
     }
     logger.error({ merchantId, kind, provider, err }, "Auto sync failed");
+    const message = err instanceof Error && err.message ? err.message : "The automatic sync failed. It will retry on the next run.";
+    await recordSyncFailure(merchantId, kind, message).catch((e) => logger.error({ merchantId, kind, e }, "Failed to record auto sync failure"));
   }
 }
 

@@ -10,9 +10,10 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { formatLoyaltyAmount } from "@/lib/loyalty-naming";
+import { customerDisplayName } from "@/lib/customer-name";
 import {
   Receipt, RotateCcw, CreditCard, Banknote,
-  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle, PencilLine,
+  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle, PencilLine, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -173,6 +174,7 @@ function ReceiptDialog({
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter]   = useState<string>("");
+  const [search, setSearch]               = useState("");
   const [selectedTx, setSelectedTx]       = useState<Transaction | null>(null);
   const [modifyTx, setModifyTx]           = useState<Transaction | null>(null);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
@@ -189,7 +191,18 @@ export default function TransactionsPage() {
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff-tx"] } });
   const refundMutation = useRefundTransaction();
-  const transactions = txData?.items || [];
+  const allTransactions = txData?.items || [];
+
+  /* Free-text search across receipt number, customer, payment method and status.
+     Filtering is client-side — the list endpoint has no text-search param. */
+  const q = search.trim().toLowerCase();
+  const transactions = !q ? allTransactions : allTransactions.filter((tx) => [
+    tx.receiptNumber,
+    tx.customer ? customerDisplayName(tx.customer, "") : "",
+    tx.paymentMethod,
+    tx.status,
+    String(tx.total),
+  ].some((v) => (v ?? "").toString().toLowerCase().includes(q)));
 
   /* Sort */
   const sorted = [...transactions].sort((a, b) => {
@@ -250,16 +263,29 @@ export default function TransactionsPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold">Transactions</h1>
-          <p className="text-sm text-muted-foreground">View and manage all completed and refunded sales transactions.</p>
-          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All transactions" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Transactions</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-            </SelectContent>
-          </Select>
+          <div>
+            <h1 className="text-2xl font-bold">Transactions</h1>
+            <p className="text-sm text-muted-foreground">View and manage all completed and refunded sales transactions.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search receipt, customer, payment…"
+                className="w-[260px] pl-9"
+              />
+            </div>
+            <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="All transactions" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Transactions</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {isLoading ? (
@@ -269,8 +295,17 @@ export default function TransactionsPage() {
             <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
               <Receipt className="w-16 h-16 text-muted-foreground/30" />
               <div>
-                <p className="font-medium text-lg">No transactions yet</p>
-                <p className="text-muted-foreground text-sm">Transactions will appear here after your first sale.</p>
+                {q || statusFilter ? (
+                  <>
+                    <p className="font-medium text-lg">No matching transactions</p>
+                    <p className="text-muted-foreground text-sm">Try a different search or filter.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-lg">No transactions yet</p>
+                    <p className="text-muted-foreground text-sm">Transactions will appear here after your first sale.</p>
+                  </>
+                )}
               </div>
             </div>
           </div>

@@ -22,10 +22,17 @@ export const merchantAutoSyncSettingsTable = pgTable("merchant_auto_sync_setting
   contactsFrequency: text("contacts_frequency").notNull().default("disabled"),
   contactsIncludeNotes: boolean("contacts_include_notes").notNull().default(false),
   contactsLastSyncAt: timestamp("contacts_last_sync_at", { withTimezone: true }),
+  // Last automatic-sync failure for contacts. Set when a scheduled/instant run
+  // errors; cleared (back to null) on the next successful run. A non-null
+  // `*LastError` means the most recent automatic sync did not succeed.
+  contactsLastError: text("contacts_last_error"),
+  contactsLastErrorAt: timestamp("contacts_last_error_at", { withTimezone: true }),
 
   calendarProvider: text("calendar_provider").notNull().default(""),
   calendarFrequency: text("calendar_frequency").notNull().default("disabled"),
   calendarLastSyncAt: timestamp("calendar_last_sync_at", { withTimezone: true }),
+  calendarLastError: text("calendar_last_error"),
+  calendarLastErrorAt: timestamp("calendar_last_error_at", { withTimezone: true }),
 
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

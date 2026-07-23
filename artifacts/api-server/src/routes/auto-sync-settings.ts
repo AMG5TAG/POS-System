@@ -10,7 +10,7 @@ router.use(requireAuth);
 /** Allowed automatic-sync frequencies. "instant" is event-driven; the rest poll. */
 const FREQUENCIES = new Set(["disabled", "instant", "8h", "24h", "monthly"]);
 
-type SyncTypeSettings = { provider: string; frequency: string; lastSyncAt: string | null };
+type SyncTypeSettings = { provider: string; frequency: string; lastSyncAt: string | null; lastError: string | null; lastErrorAt: string | null };
 
 function toResponse(row: typeof merchantAutoSyncSettingsTable.$inferSelect | undefined) {
   return {
@@ -19,11 +19,15 @@ function toResponse(row: typeof merchantAutoSyncSettingsTable.$inferSelect | und
       frequency: row?.contactsFrequency ?? "disabled",
       includeNotes: row?.contactsIncludeNotes ?? false,
       lastSyncAt: row?.contactsLastSyncAt?.toISOString() ?? null,
+      lastError: row?.contactsLastError ?? null,
+      lastErrorAt: row?.contactsLastErrorAt?.toISOString() ?? null,
     },
     calendar: {
       provider: row?.calendarProvider ?? "",
       frequency: row?.calendarFrequency ?? "disabled",
       lastSyncAt: row?.calendarLastSyncAt?.toISOString() ?? null,
+      lastError: row?.calendarLastError ?? null,
+      lastErrorAt: row?.calendarLastErrorAt?.toISOString() ?? null,
     },
   };
 }

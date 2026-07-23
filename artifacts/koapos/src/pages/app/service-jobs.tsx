@@ -31,6 +31,7 @@ import {
   Package,
   Wrench,
   History,
+  Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -277,6 +278,7 @@ export default function ServiceJobsPage() {
   const [collapsed, setCollapsed]           = useState(false);
   const [priority, setPriority]             = useState("all");
   const [statusFilter, setStatus]           = useState("all");
+  const [search, setSearch]                 = useState("");
   const [selected, setSelected]             = useState<Set<number>>(new Set());
   const [viewing, setViewing]               = useState<ServiceJob | null>(null);
   const [printChoiceJob, setPrintChoiceJob] = useState<ServiceJob | null>(null);
@@ -363,6 +365,7 @@ export default function ServiceJobsPage() {
     setTab(t);
     setPriority("all");
     setStatus("all");
+    setSearch("");
     setSelected(new Set());
     setSortKey("bookInDate");
     setSortDir("desc");
@@ -379,11 +382,17 @@ export default function ServiceJobsPage() {
     }
   }, [routeParams?.id, jobs]);
 
-  /* Filter */
+  /* Filter — priority + status dropdowns plus a free-text search across the
+     job number, customer, device and fault fields. */
+  const q = search.trim().toLowerCase();
   const filtered = tabJobs.filter((j) => {
     if (priority === "critical" && !j.isCritical) return false;
     if (priority === "normal"   &&  j.isCritical) return false;
     if (statusFilter !== "all"  && j.status !== statusFilter) return false;
+    if (q && ![
+      j.jobNumber, j.customerName, j.customerPhone, j.customerEmail,
+      j.deviceType, j.deviceDescription, j.workDescription, j.serialNumber,
+    ].some((v) => (v ?? "").toString().toLowerCase().includes(q))) return false;
     return true;
   });
 
@@ -512,8 +521,17 @@ export default function ServiceJobsPage() {
         {!collapsed && (
           <>
             {/* Filter bar */}
-            <div className="flex items-center justify-between border-x border-b border-border bg-muted/20 px-5 py-2.5 gap-3">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between border-x border-b border-border bg-muted/20 px-5 py-2.5 gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search job #, customer, device…"
+                    className="h-8 text-xs w-64 pl-8 bg-background"
+                  />
+                </div>
                 <SlidersHorizontal className="w-4 h-4 text-muted-foreground shrink-0" />
                 <Select value={priority} onValueChange={setPriority}>
                   <SelectTrigger className="h-8 text-xs w-36 bg-background">

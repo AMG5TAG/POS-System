@@ -68,7 +68,7 @@ function isOAuthConfigured(provider: string): boolean {
     case "microsoft":  return !!process.env.MICROSOFT_CLIENT_ID;
     case "dropbox":    return !!process.env.DROPBOX_APP_KEY;
     case "xero":       return !!process.env.XERO_CLIENT_ID;
-    case "meta":       return !!process.env.META_APP_ID;
+    case "meta":       return !!(process.env.META_APP_ID && process.env.META_APP_SECRET);
     case "twitter":    return !!process.env.TWITTER_CLIENT_ID;
     case "linkedin":   return !!process.env.LINKEDIN_CLIENT_ID;
     case "tiktok":     return !!process.env.TIKTOK_CLIENT_KEY;
