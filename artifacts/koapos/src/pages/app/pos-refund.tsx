@@ -1,6 +1,8 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListTransactions, useRefundTransaction, useVoidTransaction, Transaction } from "@workspace/api-client-react";
+import { useListTransactions, useRefundTransaction, useVoidTransaction, useGetPosSettings, Transaction } from "@workspace/api-client-react";
+import { useDocumentTemplate } from "@/lib/use-document-template";
+import { parseHardwareConfig } from "@/lib/hardware-config";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -14,6 +16,9 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function POSRefundPage() {
   const queryClient = useQueryClient();
+  const { printReceipt } = useDocumentTemplate();
+  const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = useMemo(() => parseHardwareConfig(posSettingsData?.hardwareConfig), [posSettingsData]);
   const [search, setSearch] = useState("");
   const [refundingTx, setRefundingTx] = useState<Transaction | null>(null);
   const [refundReason, setRefundReason] = useState("");
@@ -39,11 +44,16 @@ export default function POSRefundPage() {
     refundMutation.mutate(
       { id: txToRefund.id, data: { reason: refundReason || "Customer requested refund" } },
       {
-        onSuccess: () => {
+        onSuccess: (refunded) => {
           toast.success("Refund processed successfully");
           setRefundingTx(null);
           setRefundReason("");
           queryClient.invalidateQueries({ queryKey: ["transactions"] });
+          // Auto-print a refund receipt when the register is configured to.
+          // Non-fatal — the refund is already recorded.
+          if (hardware.printer.enabled && hardware.printer.autoPrintOnRefund) {
+            void printReceipt(refunded).catch(() => { /* non-fatal */ });
+          }
         },
         onError: () => toast.error("Failed to process refund"),
       }

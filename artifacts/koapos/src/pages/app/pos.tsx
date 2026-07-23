@@ -10,6 +10,7 @@ import { useOfflineQueue } from "@/hooks/use-offline-queue";
 import { useDebounce } from "@/hooks/use-debounce";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
+import { parseHardwareConfig } from "@/lib/hardware-config";
 import { warrantyLabel } from "@/lib/warranty";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
@@ -392,7 +393,10 @@ export default function POSPage() {
 
   /* active print template */
   const { opts: thermalOpts, fontCss: thermalFontCss } = useSalesTemplate("Thermal_Receipt");
-  const { printA4Receipt } = useDocumentTemplate();
+  const { printA4Receipt, printReceipt } = useDocumentTemplate();
+
+  /* Register hardware config — drives auto-print on sale/refund. */
+  const hardware = useMemo(() => parseHardwareConfig(posSettingsData?.hardwareConfig), [posSettingsData]);
 
   /* parked sales — API-backed */
   const queryClient = useQueryClient();
@@ -2622,6 +2626,12 @@ export default function POSPage() {
     setWalkIn(null);
     setPaymentModalOpen(false);
     setTimeout(() => setReceiptOpen(true), 250);
+    // Auto-print the receipt when the register is configured to (native ESC/POS
+    // over USB/serial, or the HTML print path as a fallback). Non-fatal: the sale
+    // is already recorded and the receipt dialog is open for a manual reprint.
+    if (hardware.printer.enabled && hardware.printer.autoPrintOnSale) {
+      void printReceipt(data).catch(() => { /* manual reprint still available */ });
+    }
   };
 
   /* Park a sale as an async (BNPL) charge and open the pending dialog. The server

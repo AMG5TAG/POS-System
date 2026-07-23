@@ -33,6 +33,11 @@ import {
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS } from "@/lib/keyboard-shortcuts";
 import {
+  parseHardwareConfig, resolvePrinterConnection, findPrinterModel, PRINTER_MODELS,
+  type HardwareCfg, type CashDrawerCfg, type PrinterCfg, type ScannerCfg,
+} from "@/lib/hardware-config";
+import { connectUsbPrinter, connectSerialPrinter, printTestReceipt, openCashDrawer } from "@/lib/thermal-printer";
+import {
   getEnabledPaymentMethods, getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
   parseCustomPaymentMethods, type CustomPaymentMethod,
 } from "@/lib/pos-local-settings";
@@ -837,26 +842,10 @@ function RoleDiscountLimitsSection() {
 
 /* ─── Hardware section ───────────────────────────────────────────────────── */
 
-interface CashDrawerCfg  { enabled: boolean; interface: "usb"|"serial"|"network"; openOnCashSale: boolean; pulseMs: number; }
-interface PrinterCfg     { enabled: boolean; type: "thermal"|"network"|"pdf"; paperWidth: "80mm"|"58mm"; autoPrintOnSale: boolean; autoPrintOnRefund: boolean; ipAddress: string; port: string; }
-interface ScannerCfg     { enabled: boolean; interface: "usb-hid"|"serial"|"bluetooth"; beepOnScan: boolean; prefix: string; suffix: string; }
-interface HardwareCfg    { cashDrawer: CashDrawerCfg; printer: PrinterCfg; scanner: ScannerCfg; }
-
-const DEFAULT_HW: HardwareCfg = {
-  cashDrawer: { enabled: false, interface: "usb",     openOnCashSale: true,  pulseMs: 200 },
-  printer:    { enabled: false, type: "thermal",      paperWidth: "80mm",    autoPrintOnSale: false, autoPrintOnRefund: false, ipAddress: "", port: "9100" },
-  scanner:    { enabled: false, interface: "usb-hid", beepOnScan: true,      prefix: "", suffix: "" },
-};
-
 function HardwareSection() {
   const { settings, upsert } = usePosSettings();
 
-  const hw = useMemo((): HardwareCfg => {
-    try {
-      if (settings?.hardwareConfig) return { ...DEFAULT_HW, ...JSON.parse(settings.hardwareConfig) } as HardwareCfg;
-    } catch { /* ignore */ }
-    return DEFAULT_HW;
-  }, [settings]);
+  const hw = useMemo((): HardwareCfg => parseHardwareConfig(settings?.hardwareConfig), [settings]);
 
   const save = (next: HardwareCfg) => {
     upsert.mutate({ data: { hardwareConfig: JSON.stringify(next) } });
@@ -864,6 +853,44 @@ function HardwareSection() {
   const patchCD = (p: Partial<CashDrawerCfg>)  => save({ ...hw, cashDrawer: { ...hw.cashDrawer, ...p } });
   const patchPR = (p: Partial<PrinterCfg>)      => save({ ...hw, printer:    { ...hw.printer,    ...p } });
   const patchSC = (p: Partial<ScannerCfg>)      => save({ ...hw, scanner:    { ...hw.scanner,    ...p } });
+
+  /* Pick a printer model preset — seeds paper width + connection defaults. */
+  const applyModel = (id: string) => {
+    const m = findPrinterModel(id);
+    if (!m) { patchPR({ model: id }); return; }
+    patchPR({ model: id, paperWidth: m.paperWidth, connection: m.defaultConnection });
+  };
+
+  const connectPrinter = async () => {
+    try {
+      const conn = resolvePrinterConnection(hw.printer);
+      if (conn === "serial") { await connectSerialPrinter(); toast.success("Serial printer connected"); }
+      else { await connectUsbPrinter(); toast.success("USB printer connected"); }
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not connect printer");
+    }
+  };
+
+  const runTestPrint = async () => {
+    try {
+      const method = await printTestReceipt(hw);
+      toast.success(`Test ticket sent (${method.toUpperCase()})`);
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Test print failed");
+    }
+  };
+
+  const testDrawer = async () => {
+    try {
+      await openCashDrawer(hw);
+      toast.success("Cash drawer kick sent");
+    } catch (e) {
+      toast.error(e instanceof Error ? e.message : "Could not open drawer");
+    }
+  };
+
+  const printerConn = resolvePrinterConnection(hw.printer);
+  const nativeConn = printerConn === "usb" || printerConn === "serial";
 
   return (
     <div className="space-y-4">
@@ -896,7 +923,8 @@ function HardwareSection() {
               <div><p className="text-sm font-medium">Open on cash sale</p><p className="text-xs text-muted-foreground">Automatically open drawer when a cash payment is processed</p></div>
               <Switch checked={hw.cashDrawer.openOnCashSale} onCheckedChange={(v) => patchCD({ openOnCashSale: v })} />
             </div>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Test signal sent to cash drawer")}><Zap className="w-3.5 h-3.5" /> Test Open</Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={testDrawer}><Zap className="w-3.5 h-3.5" /> Test Open</Button>
+            <p className="text-xs text-muted-foreground">The drawer kick is sent through the receipt printer, so connect the printer over USB or serial above.</p>
           </div>
         )}
       </div>
@@ -909,16 +937,34 @@ function HardwareSection() {
         {hw.printer.enabled && (
           <div className="px-5 py-4 space-y-4">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-              <div><Label className="text-xs">Printer Type</Label>
-                <Select value={hw.printer.type} onValueChange={(v) => patchPR({ type: v as PrinterCfg["type"] })}>
+              <div><Label className="text-xs">Printer Model</Label>
+                <Select value={hw.printer.model ?? "partner-rp700"} onValueChange={applyModel}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="thermal">USB Thermal (ESC/POS)</SelectItem>
-                    <SelectItem value="network">Network (ESC/POS)</SelectItem>
-                    <SelectItem value="pdf">PDF / Virtual</SelectItem>
+                    {PRINTER_MODELS.map((m) => <SelectItem key={m.id} value={m.id}>{m.label}</SelectItem>)}
                   </SelectContent>
                 </Select>
               </div>
+              <div><Label className="text-xs">Connection</Label>
+                <Select
+                  value={printerConn}
+                  onValueChange={(v) => patchPR({
+                    connection: v as NonNullable<PrinterCfg["connection"]>,
+                    // Keep the legacy `type` roughly in step for older readers.
+                    type: v === "network" ? "network" : v === "system" ? "pdf" : "thermal",
+                  })}
+                >
+                  <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="usb"><span className="flex items-center gap-2"><Usb className="w-3.5 h-3.5 shrink-0" />USB (ESC/POS, WebUSB)</span></SelectItem>
+                    <SelectItem value="serial"><span className="flex items-center gap-2"><Settings2 className="w-3.5 h-3.5 shrink-0" />Serial / RS-232 (Web Serial)</span></SelectItem>
+                    <SelectItem value="network"><span className="flex items-center gap-2"><Wifi className="w-3.5 h-3.5 shrink-0" />Network / LAN</span></SelectItem>
+                    <SelectItem value="system"><span className="flex items-center gap-2"><Printer className="w-3.5 h-3.5 shrink-0" />System print dialog</span></SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div><Label className="text-xs">Paper Width</Label>
                 <Select value={hw.printer.paperWidth} onValueChange={(v) => patchPR({ paperWidth: v as PrinterCfg["paperWidth"] })}>
                   <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
@@ -929,11 +975,19 @@ function HardwareSection() {
                 </Select>
               </div>
             </div>
-            {hw.printer.type === "network" && (
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div><Label className="text-xs">IP Address</Label><Input placeholder="192.168.1.100" value={hw.printer.ipAddress} onChange={(e) => patchPR({ ipAddress: e.target.value })} className="mt-1" /></div>
-                <div><Label className="text-xs">Port</Label><Input placeholder="9100" value={hw.printer.port} onChange={(e) => patchPR({ port: e.target.value })} className="mt-1" /></div>
+            {printerConn === "network" && (
+              <div className="space-y-2">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div><Label className="text-xs">IP Address</Label><Input placeholder="192.168.1.100" value={hw.printer.ipAddress} onChange={(e) => patchPR({ ipAddress: e.target.value })} className="mt-1" /></div>
+                  <div><Label className="text-xs">Port</Label><Input placeholder="9100" value={hw.printer.port} onChange={(e) => patchPR({ port: e.target.value })} className="mt-1" /></div>
+                </div>
+                <p className="text-xs text-amber-600 dark:text-amber-400">A browser can't reach a LAN printer directly, so network printers print via the system dialog. For native ESC/POS (auto-cut + drawer kick), connect the RP-700 by USB or serial.</p>
               </div>
+            )}
+            {nativeConn && (
+              <p className="text-xs text-muted-foreground">
+                Connect the printer once per terminal — the browser remembers it. Native ESC/POS needs Chrome or Edge.
+              </p>
             )}
             <div className="divide-y border rounded-lg">
               <div className="flex items-center justify-between px-4 py-3">
@@ -945,7 +999,14 @@ function HardwareSection() {
                 <Switch checked={hw.printer.autoPrintOnRefund} onCheckedChange={(v) => patchPR({ autoPrintOnRefund: v })} />
               </div>
             </div>
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => toast.success("Test page sent to printer")}><Zap className="w-3.5 h-3.5" /> Print Test Page</Button>
+            <div className="flex flex-wrap gap-2">
+              {nativeConn && (
+                <Button variant="outline" size="sm" className="gap-1.5" onClick={connectPrinter}>
+                  {printerConn === "serial" ? <Settings2 className="w-3.5 h-3.5" /> : <Usb className="w-3.5 h-3.5" />} Connect printer
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={runTestPrint} disabled={!nativeConn}><Zap className="w-3.5 h-3.5" /> Print test ticket</Button>
+            </div>
           </div>
         )}
       </div>

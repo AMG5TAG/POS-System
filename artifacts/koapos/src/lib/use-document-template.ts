@@ -1,10 +1,11 @@
-import { useGetMerchant, useListProducts } from "@workspace/api-client-react";
+import { useGetMerchant, useListProducts, useGetPosSettings } from "@workspace/api-client-react";
 import type { Transaction } from "@workspace/api-client-react";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { warrantyLabel } from "@/lib/warranty";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import { printThermalReceipt } from "@/lib/thermal-printer";
 import {
-  printReceipt as rawPrintReceipt,
   printA4Invoice as rawPrintA4Invoice,
   printA4Quote as rawPrintA4Quote,
   printA4Receipt as rawPrintA4Receipt,
@@ -113,6 +114,11 @@ export function useDocumentTemplate(): DocumentTemplateController {
   const { profile, isLoading: profileLoading } = useBusinessProfile();
   const { data: merchant, isLoading: merchantLoading } = useGetMerchant();
   const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
+  // Register hardware config drives native ESC/POS printing (Partner Tech RP-700
+  // etc.) when a printer is connected over USB/serial; otherwise printReceipt
+  // falls back to the HTML print path.
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
 
   // Warranty is computed at print time from each product's current setting.
   // Sold line items carry productId, so we attach a warranty label per item
@@ -159,9 +165,9 @@ export function useDocumentTemplate(): DocumentTemplateController {
     isLoading,
     businessInfo,
     printReceipt: (tx) =>
-      rawPrintReceipt(withWarranty(tx), businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
+      printThermalReceipt(withWarranty(tx), businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
-      })),
+      }), hardware).then(() => { /* method (usb/serial/html) is internal */ }),
     printInvoice: (tx) =>
       rawPrintA4Invoice(withWarranty(tx), businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
