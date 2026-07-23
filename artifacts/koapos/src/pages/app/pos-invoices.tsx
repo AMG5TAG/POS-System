@@ -636,7 +636,7 @@ export default function POSInvoicesPage() {
     // Product has no sell price on file — prompt for a one-off sell price (and
     // optional cost price) for this line rather than silently invoicing $0.
     if ((product.price ?? 0) <= 0)
-      setPricePrompt({ flow: "create", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice != null ? String(product.costPrice) : "" });
+      setPricePrompt({ flow: "create", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice ? String(product.costPrice) : "" });
   };
   const moveLineUp = (i: number) => {
     if (i === 0) return;
@@ -715,7 +715,7 @@ export default function POSInvoicesPage() {
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
     // See selectProduct — same $0 sell-price prompt for the edit-invoice flow.
     if ((product.price ?? 0) <= 0)
-      setPricePrompt({ flow: "edit", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice != null ? String(product.costPrice) : "" });
+      setPricePrompt({ flow: "edit", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice ? String(product.costPrice) : "" });
   };
   /* Apply the sell-price prompt back to the originating line. Sell price is
      required (> 0); cost price is optional and left untouched when blank. */
@@ -1232,6 +1232,10 @@ export default function POSInvoicesPage() {
   const kpiOutstanding = useMemo(() => invoices.filter((i) => !i.isRecurring && (i.status === "sent" || i.status === "overdue" || i.status === "partial")).reduce((s, i) => s + (i.total - (i.amountPaid ?? 0)), 0), [invoices]);
   const kpiOverdue     = useMemo(() => invoices.filter((i) => i.status === "overdue"),                                                         [invoices]);
 
+  /* Total balance still owing across the standard invoices currently listed —
+     shown as a footer totals row under the Total column. */
+  const standardOutstanding = useMemo(() => standardFiltered.reduce((s, inv) => s + balanceDue(inv), 0), [standardFiltered]); // eslint-disable-line react-hooks/exhaustive-deps
+
   /* ── Shared row actions ── */
   const InvoiceRowActions = ({ inv }: { inv: Invoice }) => (
     <div className="flex items-center justify-end gap-1">
@@ -1444,6 +1448,17 @@ export default function POSInvoicesPage() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot className="border-t bg-muted/50 font-medium">
+                    <tr>
+                      <td className="p-3 text-muted-foreground">Outstanding owing</td>
+                      <td className="p-3 hidden sm:table-cell" />
+                      <td className="p-3 hidden md:table-cell" />
+                      <td className="p-3" />
+                      <td className="p-3 hidden lg:table-cell" />
+                      <td className="p-3 text-right font-bold text-amber-600">{formatCurrency(standardOutstanding)}</td>
+                      <td className="p-3" />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}

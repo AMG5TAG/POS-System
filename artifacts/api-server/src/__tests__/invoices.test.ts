@@ -218,4 +218,54 @@ describe.skipIf(!hasDb)("invoices — partial payments & reversal (real DB)", ()
       expect(leg!.timestamp.slice(0, 10)).toBe("2026-06-15");
     });
   });
+
+  // Cost-price snapshot on create. Products whose catalog cost is 0/unset (e.g. an
+  // item that also had no sell price, so the POS prompts the cashier to price it at
+  // invoicing time) must keep the cost the cashier entered — otherwise COGS/margin
+  // reports, which read the stored line costPrice, would show $0 cost / 100% margin.
+  // A product WITH a real catalog cost stays server-authoritative.
+  describe("line cost snapshot honours entered cost when catalog cost is 0", () => {
+    let zeroCostProductId = 0;
+    let realCostProductId = 0;
+    let createdInvoiceId = 0;
+
+    beforeAll(async () => {
+      const [zeroCost] = await db.insert(productsTable).values({
+        merchantId: h.merchantId, name: "No-price item", price: "0", costPrice: "0",
+      }).returning();
+      zeroCostProductId = zeroCost.id;
+      const [realCost] = await db.insert(productsTable).values({
+        merchantId: h.merchantId, name: "Costed item", price: "0", costPrice: "8",
+      }).returning();
+      realCostProductId = realCost.id;
+    });
+
+    afterAll(async () => {
+      if (createdInvoiceId) await db.delete(invoicesTable).where(eq(invoicesTable.id, createdInvoiceId));
+      if (zeroCostProductId) await db.delete(productsTable).where(eq(productsTable.id, zeroCostProductId));
+      if (realCostProductId) await db.delete(productsTable).where(eq(productsTable.id, realCostProductId));
+    });
+
+    it("keeps entered cost for a 0-catalog-cost product, but catalog cost wins when set", async () => {
+      const res = await request(app).post("/api/invoices").send({
+        customerId,
+        items: [
+          // Zero catalog cost + cashier-entered cost 5 → keep 5.
+          { description: "No-price item", quantity: 2, unitPrice: 20, taxRate: 0, productId: zeroCostProductId, costPrice: 5 },
+          // Real catalog cost 8 overrides the client-sent 5 → 8.
+          { description: "Costed item", quantity: 1, unitPrice: 30, taxRate: 0, productId: realCostProductId, costPrice: 5 },
+          // Free-text line (no productId) keeps its client cost.
+          { description: "Labour", quantity: 1, unitPrice: 40, taxRate: 0, costPrice: 3 },
+        ],
+      });
+      expect(res.status).toBe(201);
+      createdInvoiceId = res.body.id;
+
+      const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, createdInvoiceId));
+      const items = inv.items as { productId?: number; costPrice?: number }[];
+      expect(items.find((l) => l.productId === zeroCostProductId)!.costPrice).toBe(5);
+      expect(items.find((l) => l.productId === realCostProductId)!.costPrice).toBe(8);
+      expect(items.find((l) => l.description === "Labour")!.costPrice).toBe(3);
+    });
+  });
 });

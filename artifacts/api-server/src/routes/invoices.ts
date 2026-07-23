@@ -341,7 +341,12 @@ async function resolveMerchantFk(
 
 /** Snapshot each product-linked line item's cost price (server-authoritative),
  *  so invoice COGS in reports reflects the cost at invoicing rather than trusting
- *  whatever the client sent. Free-text lines (no productId) are left untouched. */
+ *  whatever the client sent. Free-text lines (no productId) are left untouched.
+ *
+ *  Exception: when a product carries no meaningful cost on file (catalog cost is
+ *  null/0 — e.g. an item that also had no sell price, which the POS prompts the
+ *  cashier to price at invoicing time), we DON'T clobber a positive client-supplied
+ *  cost with 0. The catalog only wins when it actually has a cost to assert. */
 async function snapshotInvoiceLineCosts(merchantId: number, lines: LineItem[]): Promise<LineItem[]> {
   const arr = (Array.isArray(lines) ? lines : []) as Array<LineItem & { productId?: number; costPrice?: number }>;
   const ids = [...new Set(arr.map((l) => l.productId).filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
@@ -353,8 +358,12 @@ async function snapshotInvoiceLineCosts(merchantId: number, lines: LineItem[]): 
   const costById = new Map(rows.map((r) => [r.id, r.costPrice != null ? parseFloat(r.costPrice) : NaN]));
   return arr.map((l) => {
     if (typeof l.productId === "number" && costById.has(l.productId)) {
-      const c = costById.get(l.productId)!;
-      if (Number.isFinite(c)) return { ...l, costPrice: c };
+      const catalogCost = costById.get(l.productId)!;
+      // Catalog cost wins only when it's a real, positive cost. When it's 0/unset,
+      // keep the cost the cashier entered for this line (falling back to 0).
+      if (Number.isFinite(catalogCost) && catalogCost > 0) return { ...l, costPrice: catalogCost };
+      const clientCost = typeof l.costPrice === "number" && Number.isFinite(l.costPrice) ? l.costPrice : 0;
+      return { ...l, costPrice: clientCost };
     }
     return l;
   });
