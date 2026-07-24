@@ -199,6 +199,24 @@ function marginColorClass(pct: number): string {
   return "text-green-600";
 }
 
+// Tax-aware profit/margin. Sell prices are entered GST-INCLUSIVE while cost
+// prices are GST-EXCLUSIVE, so the GST collected on a sale — which is remitted
+// to the ATO, not kept — must be stripped from the sell price before comparing
+// to cost. A raw (sell − cost) overstates profit by the GST component.
+// `taxRatePct` is a percentage (e.g. 10 = 10% GST; 0 = GST-free). Returns null
+// when there's no cost to compare against or no positive sell price.
+function computeMargin(
+  sellIncGst: number,
+  cost: number | null,
+  taxRatePct: number,
+): { profit: number; marginPct: number } | null {
+  if (cost == null || !(sellIncGst > 0)) return null;
+  const sellExGst = sellIncGst / (1 + (taxRatePct || 0) / 100);
+  const profit = sellExGst - cost;
+  const marginPct = Math.round((profit / sellExGst) * 100);
+  return { profit, marginPct };
+}
+
 /* Colour a stock quantity by level: 0 → red, 1–5 → yellow, 5+ → green. */
 function stockColorClass(qty: number): string {
   if (qty <= 0) return "text-red-500";
@@ -798,9 +816,8 @@ function ProductDetailDialog({
   if (!product) return null;
   const productStockLocation = (product as Product & { stockLocation?: string | null }).stockLocation ?? null;
 
-  const margin = product.costPrice && product.price > 0
-    ? Math.round(((product.price - product.costPrice) / product.price) * 100)
-    : null;
+  // GST-aware margin: sell inc-GST vs cost ex-GST (see computeMargin).
+  const margin = computeMargin(product.price, product.costPrice || null, product.taxRate ?? 10)?.marginPct ?? null;
 
   // Non-stocked product types (services, downloads, digital codes) never carry
   // inventory, so the low-stock warning must never apply to them.
@@ -1887,9 +1904,12 @@ export default function ProductsPage() {
     });
   };
 
-  const marginPct = form.costPrice && form.price && parseFloat(form.price) > 0
-    ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
+  // GST-aware: sell price is inc-GST, cost is ex-GST — strip the remitted GST
+  // before working out real profit/margin. See computeMargin above.
+  const marginInfo = form.costPrice && form.price && parseFloat(form.price) > 0
+    ? computeMargin(parseFloat(form.price), parseFloat(form.costPrice) || 0, parseFloat(form.taxRate) || 0)
     : null;
+  const marginPct = marginInfo?.marginPct ?? null;
 
   return (
     <AppLayout>
@@ -2171,7 +2191,8 @@ export default function ProductsPage() {
                     const isLowStock  = !NO_STOCK_TYPES.has(productType) && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
-                    const marginPct = cost !== null && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
+                    // GST-aware margin: sell inc-GST vs cost ex-GST (see computeMargin).
+                    const marginPct = computeMargin(sell, cost, product.taxRate ?? 10)?.marginPct ?? null;
                     // Effective group prices for the margin columns: a value stored
                     // on the product wins, otherwise the price its group rule would
                     // produce, otherwise the standard sell price — so the columns
@@ -2232,9 +2253,8 @@ export default function ProductsPage() {
                             {customerGroups.map((group) => {
                               const stored = (product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[group.id];
                               const groupPrice = stored ?? ruleGroupPrices[group.id] ?? sell;
-                              const groupMarginPct = cost !== null && groupPrice > 0
-                                ? Math.round(((groupPrice - cost) / groupPrice) * 100)
-                                : null;
+                              // Group prices are inc-GST too, so strip GST the same way.
+                              const groupMarginPct = computeMargin(groupPrice, cost, product.taxRate ?? 10)?.marginPct ?? null;
                               return (
                                 <td key={group.id} className="p-3 text-right">
                                   {groupMarginPct != null
@@ -2866,7 +2886,8 @@ export default function ProductsPage() {
                       <DollarSign className="w-3.5 h-3.5 shrink-0" />
                       <span>
                         Margin: <span className={cn("font-semibold", marginPct < 20 ? "text-destructive" : "text-emerald-600")}>{marginPct}%</span>
-                        {" · "}Profit: <span className="font-semibold text-foreground">${(parseFloat(form.price) - parseFloat(form.costPrice)).toFixed(2)}</span>
+                        {" · "}Profit: <span className="font-semibold text-foreground">${(marginInfo?.profit ?? 0).toFixed(2)}</span>
+                        {" · "}<span className="text-xs">ex-GST</span>
                       </span>
                     </div>
                   )}

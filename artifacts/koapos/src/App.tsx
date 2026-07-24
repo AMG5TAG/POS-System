@@ -387,9 +387,10 @@ function Router() {
       <Route path="/inventory/purchase-orders">
         <ProtectedRoute component={ProductsPurchaseOrdersPage} />
       </Route>
-      <Route path="/inventory/pre-orders">
+      <Route path="/pos/pre-orders">
         <ProtectedRoute component={ProductsPreOrdersPage} />
       </Route>
+      <Route path="/inventory/pre-orders"><Redirect to="/pos/pre-orders" /></Route>
       <Route path="/inventory/return-auth">
         <ProtectedRoute component={ProductsReturnAuthPage} />
       </Route>
@@ -845,7 +846,7 @@ function Router() {
       <Route path="/products/bundles"><Redirect to="/inventory/bundles" /></Route>
       <Route path="/products/stocktake"><Redirect to="/inventory/stocktake" /></Route>
       <Route path="/products/purchase-orders"><Redirect to="/inventory/purchase-orders" /></Route>
-      <Route path="/products/pre-orders"><Redirect to="/inventory/pre-orders" /></Route>
+      <Route path="/products/pre-orders"><Redirect to="/pos/pre-orders" /></Route>
       <Route path="/products/return-auth"><Redirect to="/inventory/return-auth" /></Route>
       <Route path="/products/suppliers"><Redirect to="/inventory/suppliers" /></Route>
       <Route path="/products/brands"><Redirect to="/inventory/brands" /></Route>

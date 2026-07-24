@@ -3536,6 +3536,14 @@ export interface ProductRecallListResponse {
   total: number;
 }
 
+export interface ProductPreOrderItem {
+  id?: number | null;
+  productId?: number | null;
+  productName: string;
+  quantity: number;
+  unitPrice?: number;
+}
+
 export interface ProductPreOrder {
   id: number;
   merchantId: number;
@@ -3545,6 +3553,7 @@ export interface ProductPreOrder {
   productId?: number | null;
   productName: string;
   quantity: number;
+  items: ProductPreOrderItem[];
   depositAmount: number;
   status: string;
   expectedDate?: string | null;
@@ -3555,9 +3564,7 @@ export interface ProductPreOrder {
 export interface ProductPreOrderInput {
   customerId?: number;
   customerName: string;
-  productId?: number;
-  productName: string;
-  quantity: number;
+  items: ProductPreOrderItem[];
   depositAmount?: number;
   status?: string;
   expectedDate?: string;

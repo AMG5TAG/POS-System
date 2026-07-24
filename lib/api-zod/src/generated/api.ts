@@ -6804,6 +6804,13 @@ export const ListProductPreOrdersResponse = zod.object({
   "productId": zod.number().nullish(),
   "productName": zod.string(),
   "quantity": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number().optional()
+})),
   "depositAmount": zod.number(),
   "status": zod.string(),
   "expectedDate": zod.string().nullish(),
@@ -6820,9 +6827,13 @@ export const ListProductPreOrdersResponse = zod.object({
 export const CreateProductPreOrderBody = zod.object({
   "customerId": zod.number().optional(),
   "customerName": zod.string(),
-  "productId": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().nullish(),
+  "productId": zod.number().nullish(),
   "productName": zod.string(),
   "quantity": zod.number(),
+  "unitPrice": zod.number().optional()
+})),
   "depositAmount": zod.number().optional(),
   "status": zod.string().optional(),
   "expectedDate": zod.string().optional(),
@@ -6840,9 +6851,13 @@ export const UpdateProductPreOrderParams = zod.object({
 export const UpdateProductPreOrderBody = zod.object({
   "customerId": zod.number().optional(),
   "customerName": zod.string(),
-  "productId": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().nullish(),
+  "productId": zod.number().nullish(),
   "productName": zod.string(),
   "quantity": zod.number(),
+  "unitPrice": zod.number().optional()
+})),
   "depositAmount": zod.number().optional(),
   "status": zod.string().optional(),
   "expectedDate": zod.string().optional(),
@@ -6858,6 +6873,13 @@ export const UpdateProductPreOrderResponse = zod.object({
   "productId": zod.number().nullish(),
   "productName": zod.string(),
   "quantity": zod.number(),
+  "items": zod.array(zod.object({
+  "id": zod.number().nullish(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "unitPrice": zod.number().optional()
+})),
   "depositAmount": zod.number(),
   "status": zod.string(),
   "expectedDate": zod.string().nullish(),

@@ -13614,18 +13614,33 @@ components:
             $ref: "#/components/schemas/ProductRecall"
         total: { type: integer }
 
+    ProductPreOrderItem:
+      type: object
+      required: [productName, quantity]
+      properties:
+        id:          { type: integer, nullable: true }
+        productId:   { type: integer, nullable: true }
+        productName: { type: string }
+        quantity:    { type: integer }
+        unitPrice:   { type: number }
+
     ProductPreOrder:
       type: object
-      required: [id, merchantId, poNumber, customerName, productName, quantity, depositAmount, status, createdAt]
+      required: [id, merchantId, poNumber, customerName, productName, quantity, depositAmount, status, items, createdAt]
       properties:
         id:            { type: integer }
         merchantId:    { type: integer }
         poNumber:      { type: string }
         customerId:    { type: integer, nullable: true }
         customerName:  { type: string }
+        # Legacy single-product fields, mirrored from the first line item.
         productId:     { type: integer, nullable: true }
         productName:   { type: string }
         quantity:      { type: integer }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPreOrderItem"
         depositAmount: { type: number }
         status:        { type: string }
         expectedDate:  { type: string, nullable: true }
@@ -13634,13 +13649,14 @@ components:
 
     ProductPreOrderInput:
       type: object
-      required: [customerName, productName, quantity]
+      required: [customerName, items]
       properties:
         customerId:    { type: integer }
         customerName:  { type: string }
-        productId:     { type: integer }
-        productName:   { type: string }
-        quantity:      { type: integer }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPreOrderItem"
         depositAmount: { type: number }
         status:        { type: string }
         expectedDate:  { type: string }
