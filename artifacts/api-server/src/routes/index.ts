@@ -201,6 +201,14 @@ router.use(integrationsRouter);
 // Mounting them after the blanket guard 401s the callbacks.
 router.use(xeroRouter);
 router.use(payrollRouter);
+// qrRouter and shortlinksRouter expose PUBLIC unauthenticated resolvers
+// (`/qr/r/:id` redirect for scanned/downloaded tracked QR codes, and
+// `/shortlinks/r/:slug`). Every other route in both routers carries its own
+// per-route requireAuth, so mounting them here — before the blanket-guard
+// routers below — is safe and keeps those public scan endpoints reachable.
+// Mounting them after the blanket guard 401s scans with {"error":"Unauthorized"}.
+router.use(qrRouter);
+router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(autoSyncSettingsRouter);
 router.use(storageRouter);
@@ -239,12 +247,10 @@ router.use(posSettingsRouter);
 router.use(paymentMethodSurchargesRouter);
 router.use(laybySettingsRouter);
 router.use(kpiRouter);
-router.use(qrRouter);
 router.use(emailTemplatesRouter);
 router.use(emailCampaignsRouter);
 router.use(smsTemplatesRouter);
 router.use(smsCampaignsRouter);
-router.use(shortlinksRouter);
 router.use(marketingAnalyticsRouter);
 router.use(onlineStoreRouter);
 router.use(onlineStoreCheckoutRouter);
