@@ -279,6 +279,22 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
 
+  // Reject a SKU that already exists for this merchant (case-insensitive, like
+  // the CSV import path). SKU has no DB unique constraint, so this is enforced
+  // in application code.
+  const skuValue = typeof rest.sku === "string" ? rest.sku.trim() : "";
+  if (skuValue) {
+    const [dupe] = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(and(
+        eq(productsTable.merchantId, req.session.merchantId!),
+        sql`lower(${productsTable.sku}) = ${skuValue.toLowerCase()}`,
+      ))
+      .limit(1);
+    if (dupe) { res.status(409).json({ error: `SKU already exists: ${skuValue}` }); return; }
+  }
+
   let ptRecord: typeof productTypesTable.$inferSelect | null = null;
 
   if (productTypeId != null) {
@@ -728,6 +744,25 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
+
+  // Reject a SKU that already exists on a DIFFERENT product for this merchant
+  // (case-insensitive), matching the create path. Only runs when the SKU is
+  // being set to a non-empty value; re-saving a product with its own unchanged
+  // SKU is fine because the current product id is excluded.
+  const skuValue = typeof rest.sku === "string" ? rest.sku.trim() : "";
+  if (skuValue) {
+    const [dupe] = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(and(
+        eq(productsTable.merchantId, req.session.merchantId!),
+        sql`lower(${productsTable.sku}) = ${skuValue.toLowerCase()}`,
+        sql`${productsTable.id} <> ${params.data.id}`,
+      ))
+      .limit(1);
+    if (dupe) { res.status(409).json({ error: `SKU already exists: ${skuValue}` }); return; }
+  }
+
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();

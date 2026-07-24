@@ -1677,7 +1677,15 @@ export default function ProductsPage() {
           }
           toast.success("Product updated"); setDialogOpen(false); setFormTouched(false); inv();
         },
-        onError: () => toast.error("Failed to update product"),
+        onError: (err) => {
+          const status = (err as { status?: number })?.status;
+          const serverMsg = (err as { data?: { error?: string } })?.data?.error;
+          if (status === 409) {
+            toast.error(serverMsg || `SKU already exists${form.sku ? `: ${form.sku}` : ""}`);
+          } else {
+            toast.error("Failed to update product");
+          }
+        },
       });
     } else {
       createMutation.mutate({ data: payload }, {
@@ -1691,7 +1699,15 @@ export default function ProductsPage() {
           }
           toast.success("Product created"); setDialogOpen(false); setFormTouched(false); inv();
         },
-        onError: () => toast.error("Failed to create product"),
+        onError: (err) => {
+          const status = (err as { status?: number })?.status;
+          const serverMsg = (err as { data?: { error?: string } })?.data?.error;
+          if (status === 409) {
+            toast.error(serverMsg || `SKU already exists${form.sku ? `: ${form.sku}` : ""}`);
+          } else {
+            toast.error("Failed to create product");
+          }
+        },
       });
     }
   };
