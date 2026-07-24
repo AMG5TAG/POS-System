@@ -246,6 +246,83 @@ async function xeroErrorMessage(r: Response): Promise<string> {
   return reason ? `${prefix} — ${reason}` : `${prefix} — ${raw.slice(0, 300)}`;
 }
 
+type XeroAuth = { accessToken: string; tenantId: string };
+
+// Standard headers for every Xero Accounting API call. `Accept: application/json`
+// is REQUIRED — without it Xero returns XML and `r.json()` throws.
+function xeroHeaders(auth: XeroAuth): Record<string, string> {
+  return {
+    Authorization:    `Bearer ${auth.accessToken}`,
+    "xero-tenant-id": auth.tenantId,
+    "Content-Type":   "application/json",
+    Accept:           "application/json",
+  };
+}
+
+/* Build name/email → ContactID maps for the org's ACTIVE contacts, so a contact
+   sync can attach the ContactID and UPDATE the existing record rather than relying
+   on Xero's name-matching (which misses on any whitespace/spelling drift and 400s
+   on the unique-name rule). Best-effort: on any read failure we return whatever we
+   have so far and let the sync fall back to create-or-update by name. Paginated at
+   Xero's 100-per-page cap; bounded so a huge book can't spin forever. */
+async function fetchXeroContactIndex(
+  auth: XeroAuth,
+): Promise<{ byName: Map<string, string>; byEmail: Map<string, string> }> {
+  const byName  = new Map<string, string>();
+  const byEmail = new Map<string, string>();
+  const MAX_PAGES = 50; // 50 × 100 = 5000 contacts
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = `${XERO_API}/Contacts?where=${encodeURIComponent('ContactStatus=="ACTIVE"')}&page=${page}`;
+    let r: Response;
+    try { r = await fetch(url, { headers: xeroHeaders(auth) }); } catch { break; }
+    if (!r.ok) break;
+
+    let body: { Contacts?: Array<{ ContactID?: string; Name?: string; EmailAddress?: string }> };
+    try { body = await r.json() as typeof body; } catch { break; }
+
+    const contacts = body.Contacts ?? [];
+    for (const c of contacts) {
+      if (!c.ContactID) continue;
+      if (c.Name)         byName.set(c.Name.trim().toLowerCase(), c.ContactID);
+      if (c.EmailAddress) byEmail.set(c.EmailAddress.trim().toLowerCase(), c.ContactID);
+    }
+    if (contacts.length < 100) break; // last page
+  }
+  return { byName, byEmail };
+}
+
+/* Return the subset of the given InvoiceNumbers that ALREADY exist in Xero (any
+   status), so an invoice/bill sync can skip re-creating them — making re-syncs
+   idempotent. Uses Xero's `InvoiceNumbers` filter, chunked to keep the URL bounded.
+   Best-effort: a failed read for a chunk just means those numbers aren't treated as
+   existing (worst case a duplicate, same as before this guard). */
+async function fetchExistingInvoiceNumbers(
+  auth: XeroAuth,
+  numbers: string[],
+): Promise<Set<string>> {
+  const existing = new Set<string>();
+  const unique = Array.from(new Set(numbers.filter(Boolean)));
+  if (unique.length === 0) return existing;
+
+  const CHUNK = 50;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const qs = new URLSearchParams({ InvoiceNumbers: chunk.join(",") });
+    let r: Response;
+    try { r = await fetch(`${XERO_API}/Invoices?${qs.toString()}`, { headers: xeroHeaders(auth) }); }
+    catch { continue; }
+    if (!r.ok) continue;
+
+    let body: { Invoices?: Array<{ InvoiceNumber?: string }> };
+    try { body = await r.json() as typeof body; } catch { continue; }
+    for (const inv of body.Invoices ?? []) {
+      if (inv.InvoiceNumber) existing.add(inv.InvoiceNumber);
+    }
+  }
+  return existing;
+}
+
 /* ── GET /api/xero/status ────────────────────────────────────────────────── */
 
 router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
@@ -432,14 +509,7 @@ router.get("/xero/accounts", requireAuth, async (req, res): Promise<void> => {
   if (!auth) { res.status(401).json({ error: "Not connected or no tenant selected" }); return; }
 
   const r = await fetch(`${XERO_API}/Accounts?where=Status%3D%3D%22ACTIVE%22`, {
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-      // Xero's Accounting API returns XML unless JSON is explicitly requested;
-      // without this, `await r.json()` throws and the handler 500s.
-      Accept:           "application/json",
-    },
+    headers: xeroHeaders(auth),
   });
 
   if (!r.ok) { res.status(r.status).json({ error: "Failed to fetch accounts" }); return; }
@@ -506,8 +576,20 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     .from(suppliersTable)
     .where(eq(suppliersTable.merchantId, merchantId));
 
-  const xeroContacts = [
-    ...customers.map((c) => ({
+  type XeroContactPayload = {
+    ContactID?:    string;
+    Name:          string;
+    FirstName?:    string;
+    LastName?:     string;
+    EmailAddress?: string;
+    Phones:        Array<{ PhoneType: string; PhoneNumber: string }>;
+    IsCustomer:    boolean;
+    IsSupplier:    boolean;
+    AccountNumber?: string;
+  };
+
+  const xeroContacts: XeroContactPayload[] = [
+    ...customers.map((c): XeroContactPayload => ({
       Name:         `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || `Customer ${c.id}`,
       FirstName:    c.firstName  ?? undefined,
       LastName:     c.lastName   ?? undefined,
@@ -516,7 +598,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
       IsCustomer:   true,
       IsSupplier:   false,
     })),
-    ...suppliers.map((s) => ({
+    ...suppliers.map((s): XeroContactPayload => ({
       Name:          s.name,
       EmailAddress:  s.email         ?? undefined,
       Phones:        s.phone ? [{ PhoneType: "DEFAULT", PhoneNumber: s.phone }] : [],
@@ -531,16 +613,26 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
+  // Bulletproof upsert: look up each contact's existing Xero ContactID (by email
+  // first, then name) and attach it, so Xero UPDATES the record by ID instead of
+  // trying to create a duplicate and 400ing on the unique-name rule. Contacts with
+  // no match get created fresh (no ContactID).
+  const { byName, byEmail } = await fetchXeroContactIndex(auth);
+  for (const c of xeroContacts) {
+    const email = c.EmailAddress?.trim().toLowerCase();
+    const name  = c.Name.trim().toLowerCase();
+    const id    = (email ? byEmail.get(email) : undefined) ?? byName.get(name);
+    if (id) c.ContactID = id;
+  }
+
+  // POST (create-or-update), NOT PUT (create-only). Contact Name must be unique
+  // across active contacts in Xero, so PUT 400s the moment a name already exists
+  // there ("...already assigned to another contact"). POST matches an existing
+  // contact by Name and updates it instead of colliding, which is what a
+  // re-runnable sync needs.
   const r = await fetch(`${XERO_API}/Contacts`, {
-    method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-      // Xero's Accounting API returns XML unless JSON is explicitly requested;
-      // without this, `await r.json()` throws and the handler 500s.
-      Accept:           "application/json",
-    },
+    method:  "POST",
+    headers: xeroHeaders(auth),
     body: JSON.stringify({ Contacts: xeroContacts }),
   });
 
@@ -617,12 +709,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
       try {
         const hr = await fetch(`${XERO_API}/Contacts/${contactId}/History`, {
           method:  "POST",
-          headers: {
-            Authorization:    `Bearer ${auth.accessToken}`,
-            "xero-tenant-id": auth.tenantId,
-            "Content-Type":   "application/json",
-            Accept:           "application/json",
-          },
+          headers: xeroHeaders(auth),
           body: JSON.stringify({ HistoryRecords: [{ Details: noteText }] }),
         });
         if (hr.ok) {
@@ -719,33 +806,43 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
       DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
       Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
       LineItems: lineItems,
-      LineAmountTypes: "INCLUSIVE",
+      LineAmountTypes: "Inclusive",
     };
   });
 
+  // Idempotent re-sync: skip any invoice whose InvoiceNumber already exists in
+  // Xero, so re-running never creates duplicates (or 400s under the org's "unique
+  // invoice numbers" setting). Only brand-new invoices are pushed.
+  const existingNumbers = await fetchExistingInvoiceNumbers(
+    auth,
+    invoices.map((inv) => String(inv.InvoiceNumber)),
+  );
+  const toCreate = invoices.filter((inv) => !existingNumbers.has(String(inv.InvoiceNumber)));
+  const skipped  = invoices.length - toCreate.length;
+
+  if (toCreate.length === 0) {
+    const msg = `All ${invoices.length} transactions already in Xero — nothing to sync`;
+    await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: 0, message: msg });
+    res.json({ ok: true, synced: 0, skipped, message: msg });
+    return;
+  }
+
   const r = await fetch(`${XERO_API}/Invoices`, {
     method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-      // Xero's Accounting API returns XML unless JSON is explicitly requested;
-      // without this, `await r.json()` throws and the handler 500s.
-      Accept:           "application/json",
-    },
-    body: JSON.stringify({ Invoices: invoices }),
+    headers: xeroHeaders(auth),
+    body: JSON.stringify({ Invoices: toCreate }),
   });
 
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
-    ? `Synced ${invoices.length} transactions`
+    ? `Synced ${toCreate.length} transactions${skipped ? ` (${skipped} already in Xero)` : ""}`
     : await xeroErrorMessage(r);
-  if (!r.ok) req.log.warn({ merchantId, count: invoices.length, status: r.status, msg }, "Xero sync/transactions failed");
+  if (!r.ok) req.log.warn({ merchantId, count: toCreate.length, status: r.status, msg }, "Xero sync/transactions failed");
 
-  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: invoices.length, ...(status === "error" ? { error: msg } : { message: msg }) });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: toCreate.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
-  res.json({ ok: true, synced: invoices.length, message: msg });
+  res.json({ ok: true, synced: toCreate.length, skipped, message: msg });
 });
 
 /* ── POST /api/xero/sync/purchase-orders ─────────────────────────────────── */
@@ -778,33 +875,41 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
         : new Date(po.createdAt).toISOString().split("T")[0],
       Reference:       `KoaPOS PO ${po.poNumber ?? po.id}`,
       LineItems:       [{ Description: "Purchase Order", Quantity: 1, UnitAmount: parseFloat(String(po.totalCost ?? 0)) }],
-      LineAmountTypes: "EXCLUSIVE",
+      LineAmountTypes: "Exclusive",
     };
   });
 
+  // Idempotent re-sync: skip bills whose InvoiceNumber already exists in Xero.
+  const existingNumbers = await fetchExistingInvoiceNumbers(
+    auth,
+    xeroPos.map((po) => String(po.InvoiceNumber)),
+  );
+  const toCreate = xeroPos.filter((po) => !existingNumbers.has(String(po.InvoiceNumber)));
+  const skipped  = xeroPos.length - toCreate.length;
+
+  if (toCreate.length === 0) {
+    const msg = `All ${xeroPos.length} purchase orders already in Xero — nothing to sync`;
+    await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: 0, message: msg });
+    res.json({ ok: true, synced: 0, skipped, message: msg });
+    return;
+  }
+
   const r = await fetch(`${XERO_API}/Invoices`, {
     method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-      // Xero's Accounting API returns XML unless JSON is explicitly requested;
-      // without this, `await r.json()` throws and the handler 500s.
-      Accept:           "application/json",
-    },
-    body: JSON.stringify({ Invoices: xeroPos }),
+    headers: xeroHeaders(auth),
+    body: JSON.stringify({ Invoices: toCreate }),
   });
 
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
-    ? `Synced ${xeroPos.length} purchase orders as bills`
+    ? `Synced ${toCreate.length} purchase orders as bills${skipped ? ` (${skipped} already in Xero)` : ""}`
     : await xeroErrorMessage(r);
-  if (!r.ok) req.log.warn({ merchantId, count: xeroPos.length, status: r.status, msg }, "Xero sync/purchase-orders failed");
+  if (!r.ok) req.log.warn({ merchantId, count: toCreate.length, status: r.status, msg }, "Xero sync/purchase-orders failed");
 
-  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: xeroPos.length, ...(status === "error" ? { error: msg } : { message: msg }) });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: toCreate.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
-  res.json({ ok: true, synced: xeroPos.length, message: msg });
+  res.json({ ok: true, synced: toCreate.length, skipped, message: msg });
 });
 
 /* ── GET /api/xero/sync/log ──────────────────────────────────────────────── */
@@ -862,27 +967,31 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
         TaxType:     gstType,
       }];
 
+  const invoiceNumber = tx.receiptNumber ?? `KP-${tx.id}`;
   const invoice = {
     Type:      "ACCREC",
     Status:    "AUTHORISED",
-    InvoiceNumber: tx.receiptNumber ?? `KP-${tx.id}`,
+    InvoiceNumber: invoiceNumber,
     Date:      new Date(tx.createdAt).toISOString().split("T")[0],
     DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
     Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
     LineItems: lineItems,
-    LineAmountTypes: "INCLUSIVE",
+    LineAmountTypes: "Inclusive",
   };
+
+  // Idempotent: if this sale's invoice is already in Xero (e.g. a manual retry
+  // after the auto sync-on-sale already landed it), don't create a duplicate.
+  const existingNumbers = await fetchExistingInvoiceNumbers(auth, [invoiceNumber]);
+  if (existingNumbers.has(invoiceNumber)) {
+    const msg = `Sale ${invoiceNumber} already in Xero`;
+    await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "sale", synced: 0, message: msg });
+    res.json({ ok: true, synced: 0, skipped: 1, message: msg });
+    return;
+  }
 
   const r = await fetch(`${XERO_API}/Invoices`, {
     method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-      // Xero's Accounting API returns XML unless JSON is explicitly requested;
-      // without this, `await r.json()` throws and the handler 500s.
-      Accept:           "application/json",
-    },
+    headers: xeroHeaders(auth),
     body: JSON.stringify({ Invoices: [invoice] }),
   });
 
