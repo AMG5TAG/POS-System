@@ -9,7 +9,7 @@ import {
   purchaseOrdersTable,
   customerNotesTable,
 } from "@workspace/db";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { eq, and, gte, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { publicOrigin } from "../lib/publicUrl";
 
@@ -67,6 +67,8 @@ type XeroCredentials = {
     refundAccountName?: string;
     roundingAccount?: string;
     roundingAccountName?: string;
+    purchasesAccount?: string;
+    purchasesAccountName?: string;
     gstTaxType?: string;
   };
   syncSettings?: {
@@ -613,42 +615,75 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
+  // Xero rejects a whole batch that contains two contacts with the same Name — and
+  // a customer and a supplier can legitimately share one ("Ross Gregory" as both).
+  // Dedupe by name so the batch can't self-collide; the first row for a name wins.
+  const seenNames = new Set<string>();
+  const contactsToSync = xeroContacts.filter((c) => {
+    const key = c.Name.trim().toLowerCase();
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
+  });
+
   // Bulletproof upsert: look up each contact's existing Xero ContactID (by email
   // first, then name) and attach it, so Xero UPDATES the record by ID instead of
   // trying to create a duplicate and 400ing on the unique-name rule. Contacts with
   // no match get created fresh (no ContactID).
   const { byName, byEmail } = await fetchXeroContactIndex(auth);
-  for (const c of xeroContacts) {
+  for (const c of contactsToSync) {
     const email = c.EmailAddress?.trim().toLowerCase();
     const name  = c.Name.trim().toLowerCase();
     const id    = (email ? byEmail.get(email) : undefined) ?? byName.get(name);
     if (id) c.ContactID = id;
   }
 
-  // POST (create-or-update), NOT PUT (create-only). Contact Name must be unique
-  // across active contacts in Xero, so PUT 400s the moment a name already exists
-  // there ("...already assigned to another contact"). POST matches an existing
-  // contact by Name and updates it instead of colliding, which is what a
-  // re-runnable sync needs.
-  const r = await fetch(`${XERO_API}/Contacts`, {
+  // POST (create-or-update), NOT PUT (create-only): Contact Name must be unique
+  // across active contacts, so PUT 400s the moment a name already exists in Xero.
+  // `summarizeErrors=false` makes Xero return HTTP 200 and validate each contact
+  // INDEPENDENTLY — so one still-colliding row can't fail the whole batch; we read
+  // the per-contact ValidationErrors below and report them instead of losing every
+  // good contact to one bad one.
+  const r = await fetch(`${XERO_API}/Contacts?summarizeErrors=false`, {
     method:  "POST",
     headers: xeroHeaders(auth),
-    body: JSON.stringify({ Contacts: xeroContacts }),
+    body: JSON.stringify({ Contacts: contactsToSync }),
   });
 
-  // Parse the full response body so we can extract Xero ContactIDs for notes sync
-  // (on success) or the validation reason (on failure). The body can only be read
-  // once, so this single parse serves both purposes.
-  type XeroContactRecord = { ContactID?: string; EmailAddress?: string };
+  // Parse the body once: it feeds ContactIDs to the notes sync AND carries per-row
+  // ValidationErrors (present because of summarizeErrors=false).
+  type XeroContactRecord = {
+    ContactID?:        string;
+    EmailAddress?:     string;
+    ValidationErrors?: Array<{ Message?: string }>;
+  };
   let responseBody: { Contacts?: XeroContactRecord[] } = {};
   try { responseBody = await r.json() as { Contacts?: XeroContactRecord[] }; } catch { /* ignore */ }
 
-  const syncStatus = r.ok ? "success" : "error";
-  const errReason  = r.ok ? null : xeroReasonFromBody(responseBody);
-  let msg = r.ok
-    ? `Synced ${xeroContacts.length} contacts`
-    : `Xero API error: ${r.status}${errReason ? ` — ${errReason}` : ""}`;
-  if (!r.ok) req.log.warn({ merchantId, count: xeroContacts.length, status: r.status, msg }, "Xero sync/contacts failed");
+  const returned    = responseBody.Contacts ?? [];
+  const rowErrors   = Array.from(new Set(
+    returned.flatMap((c) => c.ValidationErrors ?? [])
+            .map((v) => v.Message)
+            .filter((m): m is string => !!m),
+  ));
+  const failedCount = returned.filter((c) => (c.ValidationErrors?.length ?? 0) > 0).length;
+  const syncedCount = Math.max(0, contactsToSync.length - failedCount);
+
+  // `!r.ok` = whole-request failure (auth/structural). A 200 with some failed rows
+  // is a partial success — sync what we can and surface the rest.
+  const syncStatus = (!r.ok || syncedCount === 0) ? "error" : "success";
+  let msg: string;
+  if (!r.ok) {
+    const errReason = xeroReasonFromBody(responseBody);
+    msg = `Xero API error: ${r.status}${errReason ? ` — ${errReason}` : ""}`;
+    req.log.warn({ merchantId, count: contactsToSync.length, status: r.status, msg }, "Xero sync/contacts failed");
+  } else {
+    msg = `Synced ${syncedCount} contact${syncedCount !== 1 ? "s" : ""}`;
+    if (failedCount > 0) {
+      msg += `, ${failedCount} failed${rowErrors.length ? `: ${rowErrors.slice(0, 3).join("; ").slice(0, 300)}` : ""}`;
+      req.log.warn({ merchantId, failedCount, rowErrors: rowErrors.slice(0, 5) }, "Xero sync/contacts partial failure");
+    }
+  }
 
   // ── Notes sync (best-effort, only when the main contact sync succeeded) ──
   let notesSynced = 0;
@@ -733,12 +768,12 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
   await appendSyncLog(merchantId, {
     timestamp: new Date().toISOString(),
     type:      "contacts",
-    synced:    xeroContacts.length,
+    synced:    syncedCount,
     ...(syncStatus === "error" ? { error: msg } : { message: msg }),
   });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
-  res.json({ ok: true, synced: xeroContacts.length, notesSynced, notesFailed, message: msg });
+  res.json({ ok: true, synced: syncedCount, failed: failedCount, notesSynced, notesFailed, message: msg });
 });
 
 /* ── POST /api/xero/sync/transactions ───────────────────────────────────────
@@ -776,6 +811,23 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
     return;
   }
 
+  // Xero requires a Contact on every ACCREC invoice. Resolve the customer name for
+  // linked sales; walk-in sales (no customerId) fall back to a shared contact.
+  const custIds = Array.from(new Set(
+    txs.map((t) => t.customerId).filter((id): id is number => id != null),
+  ));
+  const custRows = custIds.length
+    ? await db.select().from(customersTable).where(and(
+        eq(customersTable.merchantId, merchantId),
+        inArray(customersTable.id, custIds),
+      ))
+    : [];
+  const custName = new Map<number, string>();
+  for (const c of custRows) {
+    custName.set(c.id, `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || `Customer ${c.id}`);
+  }
+  const WALK_IN_CONTACT = "Walk-in Customer";
+
   type XeroInvoice = Record<string, unknown>;
   const invoices: XeroInvoice[] = txs.map((tx) => {
     const items = Array.isArray(tx.items) ? (tx.items as Array<{
@@ -801,6 +853,7 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
     return {
       Type:      "ACCREC",
       Status:    "AUTHORISED",
+      Contact:   { Name: (tx.customerId != null ? custName.get(tx.customerId) : undefined) ?? WALK_IN_CONTACT },
       InvoiceNumber: tx.receiptNumber ?? `KP-${tx.id}`,
       Date:      new Date(tx.createdAt).toISOString().split("T")[0],
       DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
@@ -863,18 +916,40 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
     return;
   }
 
+  // Xero requires a Contact (the supplier) on every ACCPAY bill, and an AccountCode
+  // on each bill line. Resolve supplier names; bills with no linked supplier fall
+  // back to a shared contact. The expense account uses the mapped purchases account
+  // if set, else Xero's conventional "300" (Purchases) — a wrong/absent code will
+  // now surface a clear 400 reason to map.
+  const creds = (await getCreds(merchantId)) ?? {};
+  const purchasesCode = creds.mappings?.purchasesAccount ?? "300";
+
+  const supIds = Array.from(new Set(
+    pos.map((p) => p.supplierId).filter((id): id is number => id != null),
+  ));
+  const supRows = supIds.length
+    ? await db.select().from(suppliersTable).where(and(
+        eq(suppliersTable.merchantId, merchantId),
+        inArray(suppliersTable.id, supIds),
+      ))
+    : [];
+  const supName = new Map<number, string>();
+  for (const s of supRows) supName.set(s.id, s.name);
+  const UNKNOWN_SUPPLIER = "Unknown Supplier";
+
   type XeroPO = Record<string, unknown>;
   const xeroPos: XeroPO[] = pos.map((po) => {
     return {
       Type:            "ACCPAY",
       Status:          po.status === "received" ? "AUTHORISED" : "DRAFT",
+      Contact:         { Name: (po.supplierId != null ? supName.get(po.supplierId) : undefined) ?? UNKNOWN_SUPPLIER },
       InvoiceNumber:   po.poNumber ?? `PO-${po.id}`,
       Date:            new Date(po.createdAt).toISOString().split("T")[0],
       DueDate:         po.expectedDate
         ? new Date(po.expectedDate).toISOString().split("T")[0]
         : new Date(po.createdAt).toISOString().split("T")[0],
       Reference:       `KoaPOS PO ${po.poNumber ?? po.id}`,
-      LineItems:       [{ Description: "Purchase Order", Quantity: 1, UnitAmount: parseFloat(String(po.totalCost ?? 0)) }],
+      LineItems:       [{ Description: "Purchase Order", Quantity: 1, UnitAmount: parseFloat(String(po.totalCost ?? 0)), AccountCode: purchasesCode }],
       LineAmountTypes: "Exclusive",
     };
   });
@@ -967,10 +1042,22 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
         TaxType:     gstType,
       }];
 
+  // Xero requires a Contact on every ACCREC invoice — resolve the linked customer,
+  // else fall back to the shared walk-in contact.
+  let contactName = "Walk-in Customer";
+  if (tx.customerId != null) {
+    const [cust] = await db.select().from(customersTable).where(and(
+      eq(customersTable.id, tx.customerId),
+      eq(customersTable.merchantId, merchantId),
+    ));
+    if (cust) contactName = `${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim() || cust.email || `Customer ${cust.id}`;
+  }
+
   const invoiceNumber = tx.receiptNumber ?? `KP-${tx.id}`;
   const invoice = {
     Type:      "ACCREC",
     Status:    "AUTHORISED",
+    Contact:   { Name: contactName },
     InvoiceNumber: invoiceNumber,
     Date:      new Date(tx.createdAt).toISOString().split("T")[0],
     DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
