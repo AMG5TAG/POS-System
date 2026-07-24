@@ -6,6 +6,11 @@
  *    the interval has elapsed since the last run (mirrors backupScheduler).
  *  - "instant" is event-driven: callers invoke triggerInstantSync() after a
  *    customer/appointment write; runs are debounced to coalesce bursts.
+ *  - "instant" also has a poller safety net: the event trigger is an in-memory,
+ *    debounced timer with no persistence, so a restart mid-debounce, a transient
+ *    failure, or a write that never fired a trigger would otherwise freeze the
+ *    merchant's "Last sync" indefinitely (the event path never retries). The
+ *    hourly tick re-fires any instant merchant whose last sync has gone stale.
  *
  * Automatic contact syncs always overwrite existing contacts (no interactive
  * duplicate prompt is possible in the background).
@@ -24,6 +29,11 @@ const POLL_INTERVAL_MS: Record<string, number> = {
   monthly: 30 * DAY,
 };
 const INSTANT_DEBOUNCE_MS = 30 * 1000;
+/** Safety-net staleness bound for event-driven "instant" merchants. If an instant
+ *  sync hasn't landed in this long, the hourly poller assumes its trigger was
+ *  missed (restart, transient failure, or a write that never fired one) and
+ *  re-fires it. Kept coarse so idle merchants aren't re-pushed needlessly. */
+const INSTANT_SAFETY_NET_MS = 6 * HOUR;
 
 export type SyncKind = "contacts" | "calendar";
 
@@ -31,9 +41,16 @@ let schedulerLogger: Logger | null = null;
 
 function isPollDue(frequency: string, lastSyncAt: Date | null): boolean {
   const interval = POLL_INTERVAL_MS[frequency];
-  if (!interval) return false; // "disabled" / "instant" are not polled
+  if (!interval) return false; // "disabled" / "instant" handled separately
   if (!lastSyncAt) return true;
   return Date.now() - lastSyncAt.getTime() >= interval;
+}
+
+/** True when an "instant" merchant's last sync is stale enough that its event
+ *  trigger must have been missed — the poller then re-fires it as a safety net. */
+function isInstantStale(lastSyncAt: Date | null): boolean {
+  if (!lastSyncAt) return true;
+  return Date.now() - lastSyncAt.getTime() >= INSTANT_SAFETY_NET_MS;
 }
 
 /** Persist a failure for the merchant's automatic sync so the Sync screen can
@@ -75,11 +92,25 @@ async function runSync(merchantId: number, kind: SyncKind, provider: SyncProvide
 async function runDuePolls(logger: Logger): Promise<void> {
   const rows = await db.select().from(merchantAutoSyncSettingsTable);
   for (const row of rows) {
-    if (POLL_INTERVAL_MS[row.contactsFrequency] && isSyncProvider(row.contactsProvider) && isPollDue(row.contactsFrequency, row.contactsLastSyncAt)) {
-      await runSync(row.merchantId, "contacts", row.contactsProvider, row.contactsIncludeNotes, logger);
+    // Contacts: polled frequencies run directly; a stale "instant" merchant is
+    // re-fired through triggerInstantSync so the safety-net run shares the same
+    // debounce + per-merchant serialisation and can't race a live event trigger.
+    if (isSyncProvider(row.contactsProvider)) {
+      if (POLL_INTERVAL_MS[row.contactsFrequency] && isPollDue(row.contactsFrequency, row.contactsLastSyncAt)) {
+        await runSync(row.merchantId, "contacts", row.contactsProvider, row.contactsIncludeNotes, logger);
+      } else if (row.contactsFrequency === "instant" && isInstantStale(row.contactsLastSyncAt)) {
+        logger.info({ merchantId: row.merchantId, kind: "contacts", lastSyncAt: row.contactsLastSyncAt }, "Instant sync stale — re-firing via safety net");
+        triggerInstantSync(row.merchantId, "contacts");
+      }
     }
-    if (POLL_INTERVAL_MS[row.calendarFrequency] && isSyncProvider(row.calendarProvider) && isPollDue(row.calendarFrequency, row.calendarLastSyncAt)) {
-      await runSync(row.merchantId, "calendar", row.calendarProvider, false, logger);
+    // Calendar: same shape.
+    if (isSyncProvider(row.calendarProvider)) {
+      if (POLL_INTERVAL_MS[row.calendarFrequency] && isPollDue(row.calendarFrequency, row.calendarLastSyncAt)) {
+        await runSync(row.merchantId, "calendar", row.calendarProvider, false, logger);
+      } else if (row.calendarFrequency === "instant" && isInstantStale(row.calendarLastSyncAt)) {
+        logger.info({ merchantId: row.merchantId, kind: "calendar", lastSyncAt: row.calendarLastSyncAt }, "Instant sync stale — re-firing via safety net");
+        triggerInstantSync(row.merchantId, "calendar");
+      }
     }
   }
 }
