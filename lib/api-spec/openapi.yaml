@@ -12820,6 +12820,10 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        amountPaid: { type: number }
+        paymentStatus: { type: string }
+        paymentMethod: { type: string, nullable: true }
+        paidAt: { type: string, nullable: true }
         invoiceUrls:
           type: array
           items: { type: string }
@@ -12849,6 +12853,13 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        # Optional supplier payment recorded at creation. Set payFull to settle
+        # the order at the server-computed total (avoids client/server GST rounding
+        # drift); otherwise paymentAmount records a partial payment. paymentMethod
+        # labels how the supplier was paid (bank_transfer, card, cash, …).
+        payFull: { type: boolean }
+        paymentAmount: { type: number }
+        paymentMethod: { type: string }
         invoiceUrls:
           type: array
           items: { type: string }

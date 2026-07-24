@@ -5036,6 +5036,10 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "amountPaid": zod.number().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentMethod": zod.string().nullish(),
+  "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
@@ -5075,6 +5079,9 @@ export const CreatePurchaseOrderBody = zod.object({
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "payFull": zod.boolean().optional(),
+  "paymentAmount": zod.number().optional(),
+  "paymentMethod": zod.string().optional(),
   "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
@@ -5110,6 +5117,10 @@ export const GetPurchaseOrderResponse = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "amountPaid": zod.number().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentMethod": zod.string().nullish(),
+  "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
@@ -5152,6 +5163,9 @@ export const UpdatePurchaseOrderBody = zod.object({
   "totalCost": zod.number().optional(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "payFull": zod.boolean().optional(),
+  "paymentAmount": zod.number().optional(),
+  "paymentMethod": zod.string().optional(),
   "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
@@ -5179,6 +5193,10 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "amountPaid": zod.number().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentMethod": zod.string().nullish(),
+  "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
@@ -5241,6 +5259,10 @@ export const ReceivePurchaseOrderItemsResponse = zod.object({
   "totalCost": zod.number(),
   "deliveryCharge": zod.number().optional(),
   "deliveryTaxMode": zod.string().optional(),
+  "amountPaid": zod.number().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentMethod": zod.string().nullish(),
+  "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),

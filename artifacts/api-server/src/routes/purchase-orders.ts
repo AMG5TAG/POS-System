@@ -21,6 +21,8 @@ type PORow = typeof purchaseOrdersTable.$inferSelect;
 type POItemRow = typeof purchaseOrderItemsTable.$inferSelect;
 type ReceiptRow = typeof purchaseOrderReceiptsTable.$inferSelect;
 
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
 function fmtItem(i: POItemRow) {
   return {
     id: i.id,
@@ -79,6 +81,10 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null,
     deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
     deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
     distributeDelivery: (po as { distributeDelivery?: string }).distributeDelivery === "true",
+    amountPaid: parseFloat(po.amountPaid ?? "0"),
+    paymentStatus: po.paymentStatus ?? "unpaid",
+    paymentMethod: po.paymentMethod ?? null,
+    paidAt: po.paidAt ? po.paidAt.toISOString() : null,
     items: items.map(fmtItem),
     receipts: receipts.map(fmtReceipt),
     createdAt: po.createdAt.toISOString(),
@@ -188,7 +194,23 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
   const distributeDelivery = req.body?.distributeDelivery === true;
   const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
-  const totalCost = itemsSubtotal + deliveryGross;
+  const totalCost = round2(itemsSubtotal + deliveryGross);
+
+  // Optional supplier payment recorded at creation. `payFull` settles the order
+  // at the exact server-computed total (so client/server GST rounding can't leave
+  // a stray cent unpaid); otherwise `paymentAmount` records a partial payment,
+  // clamped to the total. paidAt is stamped only once the order is settled in full.
+  const payFull = (body as { payFull?: boolean }).payFull === true;
+  const requestedPay = payFull
+    ? totalCost
+    : round2(Math.max(0, Number((body as { paymentAmount?: number }).paymentAmount ?? 0)));
+  const amountPaid = round2(Math.min(requestedPay, totalCost));
+  const fullyPaid = totalCost > 0 && amountPaid >= totalCost - 0.005;
+  const paymentStatus = fullyPaid ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
+  const paymentMethod = amountPaid > 0
+    ? ((body as { paymentMethod?: string }).paymentMethod?.trim() || null)
+    : null;
+  const paidAt = fullyPaid ? new Date() : null;
 
   let po: typeof purchaseOrdersTable.$inferSelect;
   try {
@@ -215,6 +237,10 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
         deliveryCharge: String(deliveryCharge),
         deliveryTaxMode,
         distributeDelivery: distributeDelivery ? "true" : "false",
+        amountPaid: String(amountPaid),
+        paymentStatus,
+        paymentMethod,
+        paidAt,
       }).returning();
       return row;
     }, autoNumber ? 6 : 1);

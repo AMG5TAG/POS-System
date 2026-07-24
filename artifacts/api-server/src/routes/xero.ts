@@ -194,6 +194,58 @@ async function appendSyncLog(
   await saveCreds(merchantId, creds);
 }
 
+/* Turn a failed Xero API Response into a human-readable reason.
+
+   Xero's Accounting API returns a rich body on 400 that pinpoints WHY the payload
+   was rejected — for a rejected /Invoices or /Contacts PUT it looks like:
+     { Type:"ValidationException", Message:"A validation exception occurred",
+       Elements:[{ ValidationErrors:[{ Message:"Account code '200' ..." }] }] }
+   Older/other errors use a flat { Message } or { detail }. We surface the most
+   specific message(s) available so the merchant's sync log and the API response
+   say e.g. "Xero API error: 400 — Account code '200' is not a valid code" instead
+   of a bare status. The body can only be consumed once, so call this exactly once
+   on the `!r.ok` branch. */
+type XeroErrorBody = {
+  Message?: string;
+  detail?: string;
+  Detail?: string;
+  Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }>;
+};
+
+// Extract the most specific reason from an already-parsed Xero error body.
+// Returns null when the body carries nothing more useful than the status.
+function xeroReasonFromBody(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as XeroErrorBody;
+
+  // Most specific first: per-element validation errors (deduped).
+  const validationMsgs = Array.from(new Set(
+    (b.Elements ?? [])
+      .flatMap((el) => el.ValidationErrors ?? [])
+      .map((ve) => ve.Message)
+      .filter((m): m is string => !!m),
+  ));
+  if (validationMsgs.length > 0) return validationMsgs.join("; ").slice(0, 500);
+
+  const flat = b.Message ?? b.detail ?? b.Detail;
+  if (flat) return String(flat).slice(0, 300);
+
+  return null;
+}
+
+async function xeroErrorMessage(r: Response): Promise<string> {
+  const prefix = `Xero API error: ${r.status}`;
+  let raw = "";
+  try { raw = await r.text(); } catch { return prefix; }
+  if (!raw) return prefix;
+
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { return `${prefix} — ${raw.slice(0, 300)}`; }
+
+  const reason = xeroReasonFromBody(body);
+  return reason ? `${prefix} — ${reason}` : `${prefix} — ${raw.slice(0, 300)}`;
+}
+
 /* ── GET /api/xero/status ────────────────────────────────────────────────── */
 
 router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
@@ -493,14 +545,18 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
   });
 
   // Parse the full response body so we can extract Xero ContactIDs for notes sync
+  // (on success) or the validation reason (on failure). The body can only be read
+  // once, so this single parse serves both purposes.
   type XeroContactRecord = { ContactID?: string; EmailAddress?: string };
   let responseBody: { Contacts?: XeroContactRecord[] } = {};
   try { responseBody = await r.json() as { Contacts?: XeroContactRecord[] }; } catch { /* ignore */ }
 
   const syncStatus = r.ok ? "success" : "error";
+  const errReason  = r.ok ? null : xeroReasonFromBody(responseBody);
   let msg = r.ok
     ? `Synced ${xeroContacts.length} contacts`
-    : `Xero API error: ${r.status}`;
+    : `Xero API error: ${r.status}${errReason ? ` — ${errReason}` : ""}`;
+  if (!r.ok) req.log.warn({ merchantId, count: xeroContacts.length, status: r.status, msg }, "Xero sync/contacts failed");
 
   // ── Notes sync (best-effort, only when the main contact sync succeeded) ──
   let notesSynced = 0;
@@ -594,7 +650,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     ...(syncStatus === "error" ? { error: msg } : { message: msg }),
   });
 
-  if (!r.ok) { res.status(r.status).json({ error: `Xero API error: ${r.status}` }); return; }
+  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
   res.json({ ok: true, synced: xeroContacts.length, notesSynced, notesFailed, message: msg });
 });
 
@@ -683,7 +739,8 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
     ? `Synced ${invoices.length} transactions`
-    : `Xero API error: ${r.status}`;
+    : await xeroErrorMessage(r);
+  if (!r.ok) req.log.warn({ merchantId, count: invoices.length, status: r.status, msg }, "Xero sync/transactions failed");
 
   await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: invoices.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
@@ -741,7 +798,8 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
     ? `Synced ${xeroPos.length} purchase orders as bills`
-    : `Xero API error: ${r.status}`;
+    : await xeroErrorMessage(r);
+  if (!r.ok) req.log.warn({ merchantId, count: xeroPos.length, status: r.status, msg }, "Xero sync/purchase-orders failed");
 
   await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: xeroPos.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
@@ -831,7 +889,8 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
     ? `Synced sale ${tx.receiptNumber ?? tx.id} to Xero`
-    : `Xero API error: ${r.status}`;
+    : await xeroErrorMessage(r);
+  if (!r.ok) req.log.warn({ merchantId, transactionId, status: r.status, msg }, "Xero sync-sale failed");
 
   await appendSyncLog(merchantId, {
     timestamp: new Date().toISOString(),

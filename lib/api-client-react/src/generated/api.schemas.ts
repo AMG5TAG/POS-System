@@ -2909,6 +2909,10 @@ export interface PurchaseOrder {
   totalCost: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  amountPaid?: number;
+  paymentStatus?: string;
+  paymentMethod?: string | null;
+  paidAt?: string | null;
   invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
   receipts?: POReceiptLog[];
@@ -2929,6 +2933,9 @@ export interface PurchaseOrderInput {
   totalCost?: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  payFull?: boolean;
+  paymentAmount?: number;
+  paymentMethod?: string;
   invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
 }

@@ -63,6 +63,16 @@ function getStatusBadge(status: string): { variant: "default" | "secondary" | "o
 
 const PO_STATUSES: POStatus[] = ["Draft", "Ordered", "Partially Received", "Fully Received", "Cancelled"];
 
+// Supplier payment tenders offered when recording a payment on a PO.
+const PO_PAYMENT_METHODS: { value: string; label: string }[] = [
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "card",          label: "Credit / Debit Card" },
+  { value: "eftpos",        label: "EFTPOS" },
+  { value: "cash",          label: "Cash" },
+  { value: "cheque",        label: "Cheque" },
+  { value: "other",         label: "Other" },
+];
+
 const EMPTY_FORM = {
   supplierId:      null as number | null,
   supplierName:    "",
@@ -74,6 +84,10 @@ const EMPTY_FORM = {
   deliveryTaxMode: "exclusive" as TaxMode,
   distributeDelivery: false,
   invoiceAttachments: [] as string[],
+  // Supplier payment recorded at creation.
+  payNow:          false,
+  paymentMethod:   "bank_transfer",
+  paymentAmount:   "" as string, // blank = full amount
 };
 const EMPTY_ITEM: POItem = { productName: "", quantity: 1, unitCost: 0, received: 0 };
 
@@ -261,6 +275,10 @@ export default function ProductsPurchaseOrdersPage() {
       deliveryTaxMode:    ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode,
       distributeDelivery: (po as { distributeDelivery?: boolean }).distributeDelivery ?? false,
       invoiceAttachments: (po as { invoiceUrls?: string[] }).invoiceUrls ?? [],
+      // Payment is recorded at creation only; not editable here.
+      payNow:          false,
+      paymentMethod:   "bank_transfer",
+      paymentAmount:   "",
     });
     setItems((po.items ?? []).map((i) => ({
       productName: i.productName ?? "",
@@ -334,6 +352,20 @@ export default function ProductsPurchaseOrdersPage() {
       invoiceUrls:     form.invoiceAttachments,
       items:           validItems,
     };
+
+    // Optional supplier payment recorded at creation. A blank amount means "pay in
+    // full"; we flag payFull so the server settles at its own computed total (no
+    // client/server GST rounding drift). A part amount is sent as paymentAmount.
+    let paymentFields: { payFull?: boolean; paymentAmount?: number; paymentMethod?: string } = {};
+    if (form.payNow) {
+      const enteredRaw = form.paymentAmount.trim();
+      const entered = enteredRaw === "" ? grandTotal : (parseFloat(enteredRaw) || 0);
+      if (!(entered > 0)) { toast.error("Enter a payment amount greater than zero"); return; }
+      const isFull = entered >= grandTotal - 0.005;
+      paymentFields = isFull
+        ? { payFull: true, paymentMethod: form.paymentMethod }
+        : { paymentAmount: Math.round(entered * 100) / 100, paymentMethod: form.paymentMethod };
+    }
     if (editingId !== null) {
       updatePO.mutate(
         { id: editingId, data: payload },
@@ -349,7 +381,7 @@ export default function ProductsPurchaseOrdersPage() {
       );
     } else {
       const prefixes = loadCodePrefixes();
-      createPO.mutate({ data: { ...payload, poNumberPrefix: prefixes.poPrefix, poNumberDigits: prefixes.poDigits } }, {
+      createPO.mutate({ data: { ...payload, ...paymentFields, poNumberPrefix: prefixes.poPrefix, poNumberDigits: prefixes.poDigits } }, {
         onSuccess: (data) => {
           invalidateList();
           queryClient.invalidateQueries({ queryKey: ["products"] });
@@ -485,7 +517,17 @@ export default function ProductsPurchaseOrdersPage() {
                     <td className="p-3" onClick={() => setViewingPO(po)}>
                       {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
                     </td>
-                    <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>{formatCurrency(po.totalCost ?? 0)}</td>
+                    <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>
+                      <div>{formatCurrency(po.totalCost ?? 0)}</div>
+                      {po.paymentStatus === "paid" && (
+                        <Badge variant="outline" className="mt-1 border-green-500 text-green-700 dark:text-green-400 text-[10px] font-normal">Paid</Badge>
+                      )}
+                      {po.paymentStatus === "partial" && (
+                        <Badge variant="outline" className="mt-1 border-amber-400 text-amber-700 dark:text-amber-400 text-[10px] font-normal">
+                          {formatCurrency(po.amountPaid ?? 0)} paid
+                        </Badge>
+                      )}
+                    </td>
                     <td className="p-3 flex gap-1 justify-end">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="View details" onClick={() => setViewingPO(po)}>
                         <Eye className="w-3.5 h-3.5" />
@@ -1160,6 +1202,66 @@ export default function ProductsPurchaseOrdersPage() {
                 <span>{formatCurrency(grandTotal)}</span>
               </div>
             </div>
+
+            {/* ── Supplier payment (new POs only) ──────────────────────── */}
+            {editingId === null && (
+              <div className="rounded-lg border px-4 py-3 space-y-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input accent-primary"
+                    checked={form.payNow}
+                    onChange={(e) => setForm({ ...form, payNow: e.target.checked })}
+                  />
+                  <span className="text-sm font-medium">Record a payment to the supplier</span>
+                </label>
+
+                {form.payNow && (() => {
+                  const enteredRaw = form.paymentAmount.trim();
+                  const entered = enteredRaw === "" ? grandTotal : (parseFloat(enteredRaw) || 0);
+                  const overpay = entered > grandTotal + 0.005;
+                  const isFull = entered > 0 && !overpay && entered >= grandTotal - 0.005;
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Amount</Label>
+                        <Input
+                          type="number" inputMode="decimal" min="0" step="0.01"
+                          placeholder={grandTotal.toFixed(2)}
+                          value={form.paymentAmount}
+                          onChange={(e) => setForm({ ...form, paymentAmount: e.target.value })}
+                          className={overpay ? "border-destructive" : ""}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                            onClick={() => setForm({ ...form, paymentAmount: "" })}>
+                            Full amount
+                          </Button>
+                          <p className="text-[11px] text-muted-foreground">
+                            {overpay
+                              ? "Exceeds total — will be capped."
+                              : isFull
+                                ? "Pays this order in full."
+                                : entered > 0
+                                  ? `Leaves ${formatCurrency(Math.max(0, grandTotal - entered))} owing.`
+                                  : "Blank = full amount."}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Method</Label>
+                        <Select value={form.paymentMethod} onValueChange={(v) => setForm({ ...form, paymentMethod: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {PO_PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
