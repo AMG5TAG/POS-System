@@ -72,6 +72,7 @@ import {
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
   Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink, Truck, Send,
+  AlertTriangle, LayoutGrid, List,
 } from "lucide-react";
 import { QRCodeSVG } from "qrcode.react";
 import { publicProductUrl } from "@/lib/public-url";
@@ -1299,6 +1300,10 @@ export default function ProductsPage() {
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter]       = useState("");
   const [inStockOnly, setInStockOnly]   = useState(false);
+  // Surfaces oversold products — tracked stock that has dropped below zero.
+  const [negativeStockOnly, setNegativeStockOnly] = useState(false);
+  // "list" = the detail table, "photo" = responsive image tiles.
+  const [viewMode, setViewMode] = useState<"list" | "photo">("list");
   const [hideCosts, setHideCosts]       = useState(true);
   const { data: inventorySettings } = useGetInventorySettings();
   const { data: lowStockSettings } = useGetLowStockAlertSettings({ query: { queryKey: ["low-stock-alert-settings"] } });
@@ -1560,7 +1565,13 @@ export default function ProductsPage() {
     if (!inStockOnly) return true;
     // Untracked items (services/digital) have unlimited stock, so they always count as in stock.
     return !p.trackInventory || (p.stockQuantity ?? 0) > 0;
+  }).filter((p) => {
+    if (!negativeStockOnly) return true;
+    // Only tracked items can go negative; untracked stock is unlimited.
+    return p.trackInventory && (p.stockQuantity ?? 0) < 0;
   });
+
+  const negativeStockCount = products.filter((p) => p.trackInventory && (p.stockQuantity ?? 0) < 0).length;
 
   const allChecked = filtered.length > 0 && filtered.every((p) => checked.has(p.id));
   const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(filtered.map((p) => p.id)));
@@ -1985,12 +1996,55 @@ export default function ProductsPage() {
           <Button
             variant={inStockOnly ? "default" : "outline"}
             size="sm"
-            onClick={() => setInStockOnly((v) => !v)}
+            onClick={() => { setInStockOnly((v) => !v); setNegativeStockOnly(false); }}
             className="gap-1.5"
             aria-pressed={inStockOnly}
           >
             <Boxes className="w-4 h-4" /> In Stock
           </Button>
+
+          {/* Negative stock — oversold items whose tracked quantity is below zero */}
+          <Button
+            variant={negativeStockOnly ? "destructive" : "outline"}
+            size="sm"
+            onClick={() => { setNegativeStockOnly((v) => !v); setInStockOnly(false); }}
+            className="gap-1.5"
+            aria-pressed={negativeStockOnly}
+            title="Show only products with negative stock"
+          >
+            <AlertTriangle className="w-4 h-4" /> Negative Stock
+            {negativeStockCount > 0 && (
+              <span className={`ml-0.5 rounded-full px-1.5 text-[11px] font-semibold leading-4 ${
+                negativeStockOnly ? "bg-white/25" : "bg-destructive/10 text-destructive"
+              }`}>
+                {negativeStockCount}
+              </span>
+            )}
+          </Button>
+
+          {/* List / Photo view switch */}
+          <div className="inline-flex rounded-md border p-0.5">
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 px-2"
+              onClick={() => setViewMode("list")}
+              aria-pressed={viewMode === "list"}
+              title="List view"
+            >
+              <List className="w-4 h-4" /> List
+            </Button>
+            <Button
+              variant={viewMode === "photo" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 px-2"
+              onClick={() => setViewMode("photo")}
+              aria-pressed={viewMode === "photo"}
+              title="Photo view"
+            >
+              <LayoutGrid className="w-4 h-4" /> Photo
+            </Button>
+          </div>
 
           {/* Hide / Show Costs — only visible when enabled in Management > Inventory */}
           {showHideCostsBtn && (
@@ -2154,6 +2208,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <>
+            {viewMode === "list" ? (
             <div className="rounded-lg border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-background border-b">
@@ -2283,6 +2338,68 @@ export default function ProductsPage() {
                 </tbody>
               </table>
             </div>
+            ) : (
+              /* Photo view — tiles reflow to fit the window, so the number per
+                 row grows with the available width rather than being fixed. */
+              <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
+                {filtered.map((product) => {
+                  const isChecked   = checked.has(product.id);
+                  const productType = (product as Product & { productType?: string }).productType ?? "standard";
+                  const isService   = productType === "service";
+                  const isLowStock  = !NO_STOCK_TYPES.has(productType) && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+                  const img  = (product as Product & { imageUrl?: string | null }).imageUrl;
+                  const cost = product.costPrice ?? null;
+                  return (
+                    <div
+                      key={product.id}
+                      className={cn(
+                        "group relative rounded-lg border bg-background overflow-hidden cursor-pointer transition-colors hover:bg-muted/30",
+                        isChecked && "border-primary bg-primary/5",
+                      )}
+                      onClick={() => setSelectedProduct(product)}
+                    >
+                      {/* Select checkbox overlays the image so bulk actions work here too */}
+                      <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(product.id)}
+                          className="rounded border-muted-foreground/40 accent-primary bg-background/90" />
+                      </div>
+                      {product.isActive === false && (
+                        <Badge variant="secondary" className="absolute top-2 right-2 z-10 text-[10px]">Inactive</Badge>
+                      )}
+
+                      <div className="aspect-square bg-muted/30 flex items-center justify-center overflow-hidden">
+                        {img
+                          ? <img src={img} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+                          : <Package className="w-10 h-10 text-muted-foreground/30" />}
+                      </div>
+
+                      {/* Description and cost sit below the image */}
+                      <div className="p-3 space-y-1">
+                        <p className="font-medium text-sm leading-tight line-clamp-2" title={product.name}>{product.name}</p>
+                        {product.description
+                          ? <p className="text-xs text-muted-foreground line-clamp-2" title={product.description}>{product.description}</p>
+                          : product.sku && <p className="text-xs text-muted-foreground truncate">SKU: {product.sku}</p>}
+                        <div className="flex items-baseline justify-between gap-2 pt-1">
+                          <span className="font-semibold text-sm">{formatCurrency(product.price)}</span>
+                          {!isService && product.trackInventory
+                            ? <span className={cn("text-xs font-medium", stockColorsEnabled
+                                ? stockColorClass(product.stockQuantity ?? 0)
+                                : (isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]"))}>
+                                {product.stockQuantity} in stock
+                              </span>
+                            : <span className="text-xs text-[#16a34a] font-medium">∞</span>}
+                        </div>
+                        {!hideCosts && (
+                          <p className="text-xs text-muted-foreground">
+                            Cost: {cost != null ? formatCurrency(cost) : "—"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground text-right">
               {filtered.length} product{filtered.length !== 1 ? "s" : ""}
