@@ -17,6 +17,7 @@ export * from "./locations";
 export * from "./product-stock";
 export * from "./loaner-devices";
 export * from "./store-credit-ledger";
+export * from "./product-oversell-ledger";
 export * from "./invoices";
 export * from "./quotes";
 export * from "./sales-settings";

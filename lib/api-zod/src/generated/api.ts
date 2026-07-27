@@ -5049,7 +5049,14 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish(),
-  "tracksSerial": zod.boolean().optional()
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),
@@ -5091,7 +5098,14 @@ export const CreatePurchaseOrderBody = zod.object({
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish(),
-  "tracksSerial": zod.boolean().optional()
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
 })).optional()
 })
 
@@ -5130,7 +5144,14 @@ export const GetPurchaseOrderResponse = zod.object({
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish(),
-  "tracksSerial": zod.boolean().optional()
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),
@@ -5175,7 +5196,14 @@ export const UpdatePurchaseOrderBody = zod.object({
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish(),
-  "tracksSerial": zod.boolean().optional()
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
 })).optional()
 })
 
@@ -5206,7 +5234,14 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish(),
-  "tracksSerial": zod.boolean().optional()
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),
@@ -5272,7 +5307,14 @@ export const ReceivePurchaseOrderItemsResponse = zod.object({
   "received": zod.number().optional(),
   "unitCost": zod.number().optional(),
   "notes": zod.string().nullish(),
-  "tracksSerial": zod.boolean().optional()
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
 })).optional(),
   "receipts": zod.array(zod.object({
   "id": zod.number(),

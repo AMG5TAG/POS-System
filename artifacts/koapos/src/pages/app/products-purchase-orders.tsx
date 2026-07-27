@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags } from "lucide-react";
 import { toast } from "sonner";
 import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
@@ -1357,6 +1357,21 @@ function ReceiveGoodsDialog({
 
   const totalReceiving = Object.values(qtys).reduce((s, v) => s + (v || 0), 0);
 
+  // Lines whose product is currently oversold (sold below zero). The units being
+  // received first cover those backordered sales, so the merchant ends up "short"
+  // versus what they'd expect on the shelf. We surface this and gate the confirm.
+  const oversoldLines = useMemo(
+    () => items.filter((i) => (i.oversoldUnits ?? 0) > 0),
+    [items],
+  );
+  const describeOversell = (i: (typeof items)[number]) => {
+    const sales = (i.oversellSales ?? [])
+      .map((s) => `${s.receiptNumber ?? "unknown sale"} (${s.quantity})`)
+      .join(", ");
+    const plural = (i.oversellSales?.length ?? 0) === 1 ? "" : "s";
+    return `${i.productName} is oversold by ${i.oversoldUnits} unit(s) — receiving now first covers sale${plural}: ${sales}`;
+  };
+
   const handleConfirm = () => {
     setSubmitError(null);
     const receiving = items.filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0);
@@ -1385,6 +1400,19 @@ function ReceiveGoodsDialog({
     if (!receiveItems.length) {
       setSubmitError("Enter at least one quantity to receive.");
       return;
+    }
+
+    // Gate the receipt when an item being received is already oversold: the new
+    // units immediately cover the backordered sale(s), so warn (with receipt
+    // numbers) and require confirmation before committing.
+    const oversoldReceiving = receiving.filter((i) => (i.oversoldUnits ?? 0) > 0);
+    if (oversoldReceiving.length) {
+      const lines = oversoldReceiving.map((i) => `• ${describeOversell(i)}`).join("\n");
+      const ok = window.confirm(
+        `Heads up — some items are already oversold:\n\n${lines}\n\n` +
+        `The units you receive will immediately cover these sales, so your on-hand count stays short by those amounts. Continue receiving?`
+      );
+      if (!ok) return;
     }
 
     receivePO.mutate(
@@ -1505,6 +1533,23 @@ function ReceiveGoodsDialog({
           <span className="text-muted-foreground">Total units receiving now</span>
           <span className="font-bold text-lg">{totalReceiving}</span>
         </div>
+
+        {oversoldLines.length > 0 && (
+          <div className="text-xs flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-3 py-2.5 text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+            <div className="space-y-1">
+              <p className="font-medium">Some items are oversold — incoming stock covers backordered sales first.</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {oversoldLines.map((i) => (
+                  <li key={i.id}>
+                    <strong>{i.productName}</strong> is short {i.oversoldUnits} — covers{" "}
+                    {(i.oversellSales ?? []).map((s) => `${s.receiptNumber ?? "unknown sale"} (${s.quantity})`).join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         <div className="text-xs text-muted-foreground flex items-start gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 px-3 py-2.5">
           <PackageCheck className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-500" />

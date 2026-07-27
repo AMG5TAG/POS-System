@@ -1,7 +1,8 @@
 import { Router, type IRouter } from "express";
-import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable } from "@workspace/db";
-import { eq, and, desc, sql, inArray } from "drizzle-orm";
+import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable, productOversellLedgerTable } from "@workspace/db";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { reconcileOversellLedger } from "../lib/oversellLedger";
 import { withUniqueRetry, nextSequential, isUniqueViolation } from "../lib/document-numbers";
 import {
   ListPurchaseOrdersQueryParams,
@@ -23,7 +24,13 @@ type ReceiptRow = typeof purchaseOrderReceiptsTable.$inferSelect;
 
 const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
 
-function fmtItem(i: POItemRow) {
+// Per-product backorder context, joined onto a PO line for the receive warning.
+type OversellSale = { receiptNumber: string | null; quantity: number; saleAt: string };
+type OversellInfo = { currentStock: number | null; oversellSales: OversellSale[] };
+
+function fmtItem(i: POItemRow, oversell?: OversellInfo) {
+  const oversellSales = oversell?.oversellSales ?? [];
+  const oversoldUnits = oversellSales.reduce((s, o) => s + o.quantity, 0);
   return {
     id: i.id,
     productId: i.productId ?? null,
@@ -32,6 +39,11 @@ function fmtItem(i: POItemRow) {
     received: i.received,
     unitCost: parseFloat(i.unitCost),
     notes: i.notes ?? null,
+    // Current on-hand for this line's product (negative = oversold). Null for
+    // non-catalogued lines. `oversellSales` names the sales that oversold it.
+    currentStock: oversell?.currentStock ?? null,
+    oversoldUnits,
+    oversellSales,
   };
 }
 
@@ -62,7 +74,7 @@ function fmtReceipt(r: ReceiptRow) {
   };
 }
 
-function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = []) {
+function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = [], oversellByProduct?: Map<number, OversellInfo>) {
   let invoiceUrls: string[] = [];
   try { if (po.invoiceUrls) invoiceUrls = JSON.parse(po.invoiceUrls); } catch {}
   return {
@@ -85,7 +97,7 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null,
     paymentStatus: po.paymentStatus ?? "unpaid",
     paymentMethod: po.paymentMethod ?? null,
     paidAt: po.paidAt ? po.paidAt.toISOString() : null,
-    items: items.map(fmtItem),
+    items: items.map((i) => fmtItem(i, i.productId ? oversellByProduct?.get(i.productId) : undefined)),
     receipts: receipts.map(fmtReceipt),
     createdAt: po.createdAt.toISOString(),
   };
@@ -137,6 +149,42 @@ function nextPoNumber(existing: Array<{ poNumber: string }>, prefix = "KP", digi
   return `${prefix}${String(nextSequential(existing.map((p) => p.poNumber), tryIndex)).padStart(digits, "0")}`;
 }
 
+// For each catalogued product on a PO, gather its current on-hand stock and any
+// still-outstanding backorders (oldest sale first) so the receive worksheet can
+// warn that incoming units are already spoken for.
+async function getOversellByProduct(merchantId: number, productIds: number[]): Promise<Map<number, OversellInfo>> {
+  const map = new Map<number, OversellInfo>();
+  const unique = [...new Set(productIds)];
+  if (!unique.length) return map;
+
+  const products = await db
+    .select({ id: productsTable.id, stockQuantity: productsTable.stockQuantity })
+    .from(productsTable)
+    .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, unique)));
+  for (const p of products) map.set(p.id, { currentStock: p.stockQuantity, oversellSales: [] });
+
+  const openRows = await db
+    .select({
+      productId: productOversellLedgerTable.productId,
+      receiptNumber: productOversellLedgerTable.receiptNumber,
+      remaining: productOversellLedgerTable.remaining,
+      saleAt: productOversellLedgerTable.saleAt,
+    })
+    .from(productOversellLedgerTable)
+    .where(and(
+      eq(productOversellLedgerTable.merchantId, merchantId),
+      inArray(productOversellLedgerTable.productId, unique),
+      sql`${productOversellLedgerTable.remaining} > 0`,
+    ))
+    .orderBy(asc(productOversellLedgerTable.createdAt), asc(productOversellLedgerTable.id));
+  for (const r of openRows) {
+    const info = map.get(r.productId) ?? { currentStock: null, oversellSales: [] };
+    info.oversellSales.push({ receiptNumber: r.receiptNumber, quantity: r.remaining, saleAt: r.saleAt.toISOString() });
+    map.set(r.productId, info);
+  }
+  return map;
+}
+
 async function getPOWithItems(id: number, merchantId: number) {
   const [po] = await db.select().from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
@@ -152,7 +200,11 @@ async function getPOWithItems(id: number, merchantId: number) {
     const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, po.supplierId));
     supplierName = s?.name ?? null;
   }
-  return fmtPO(po, items, supplierName, receipts);
+  const oversellByProduct = await getOversellByProduct(
+    merchantId,
+    items.map((i) => i.productId).filter((p): p is number => p != null),
+  );
+  return fmtPO(po, items, supplierName, receipts, oversellByProduct);
 }
 
 // GET /purchase-orders
@@ -371,13 +423,19 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
       for (const productId of affected) {
         const delta = (newReceived.get(productId) ?? 0) - (oldReceived.get(productId) ?? 0);
         if (delta === 0) continue;
-        const [product] = await tx.select({ trackInventory: productsTable.trackInventory })
+        const [product] = await tx.select({ trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity })
           .from(productsTable)
           .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
         if (product?.trackInventory === "true") {
+          const newStock = product.stockQuantity + delta;
           await tx.update(productsTable)
-            .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${delta}` })
+            .set({ stockQuantity: newStock })
             .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+          // Keep the backorder ledger in step whichever way the edit moves stock.
+          await reconcileOversellLedger(tx, {
+            merchantId, productId,
+            prevStock: product.stockQuantity, newStock,
+          });
         }
       }
     });
@@ -426,13 +484,19 @@ router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
       }
     }
     for (const [productId, qty] of receivedByProduct) {
-      const [product] = await tx.select({ trackInventory: productsTable.trackInventory })
+      const [product] = await tx.select({ trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity })
         .from(productsTable)
         .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
       if (product?.trackInventory === "true") {
+        const newStock = product.stockQuantity - qty;
         await tx.update(productsTable)
-          .set({ stockQuantity: sql`${productsTable.stockQuantity} - ${qty}` })
+          .set({ stockQuantity: newStock })
           .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+        // Backing out received units can re-open backorders these units had covered.
+        await reconcileOversellLedger(tx, {
+          merchantId, productId,
+          prevStock: product.stockQuantity, newStock,
+        });
       }
     }
 
@@ -548,9 +612,16 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
           }
 
           if (product?.trackInventory === "true") {
+            const prevStock = product.stockQuantity ?? 0;
+            const newStock = prevStock + qty;
             await tx.update(productsTable)
-              .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })
+              .set({ stockQuantity: newStock })
               .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+            // Received units cover any outstanding backorders first (FIFO).
+            await reconcileOversellLedger(tx, {
+              merchantId, productId: poItem.productId,
+              prevStock, newStock,
+            });
           }
 
           // Update cost via a moving (weighted) average: blend the existing

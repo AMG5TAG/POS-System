@@ -12803,6 +12803,17 @@ components:
         unitCost: { type: number }
         notes: { type: string, nullable: true }
         tracksSerial: { type: boolean }
+        currentStock: { type: integer, nullable: true, description: "Current on-hand stock for this line's product (negative = oversold). Null for non-catalogued lines." }
+        oversoldUnits: { type: integer, description: "Total units this product is currently oversold by (0 if none)." }
+        oversellSales:
+          type: array
+          description: "Sales that oversold this product and remain uncovered, oldest first."
+          items:
+            type: object
+            properties:
+              receiptNumber: { type: string, nullable: true }
+              quantity: { type: integer }
+              saleAt: { type: string }
     PurchaseOrder:
       type: object
       required: [id, poNumber, status, orderDate, totalCost, createdAt]

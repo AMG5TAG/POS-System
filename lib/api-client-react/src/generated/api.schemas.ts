@@ -2884,6 +2884,12 @@ export interface ReceiveItemsInput {
   items: ReceiveItemsInputItemsItem[];
 }
 
+export type PurchaseOrderItemOversellSalesItem = {
+  receiptNumber?: string | null;
+  quantity?: number;
+  saleAt?: string;
+};
+
 export interface PurchaseOrderItem {
   id?: number;
   productId?: number | null;
@@ -2893,6 +2899,12 @@ export interface PurchaseOrderItem {
   unitCost?: number;
   notes?: string | null;
   tracksSerial?: boolean;
+  /** Current on-hand stock for this line's product (negative = oversold). Null for non-catalogued lines. */
+  currentStock?: number | null;
+  /** Total units this product is currently oversold by (0 if none). */
+  oversoldUnits?: number;
+  /** Sales that oversold this product and remain uncovered, oldest first. */
+  oversellSales?: PurchaseOrderItemOversellSalesItem[];
 }
 
 export interface PurchaseOrder {

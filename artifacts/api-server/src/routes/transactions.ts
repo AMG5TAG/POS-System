@@ -16,6 +16,7 @@ import {
 import { sendEmail } from "../services/email";
 import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
 import { isUniqueViolation } from "../lib/document-numbers";
+import { reconcileOversellLedger } from "../lib/oversellLedger";
 
 const router: IRouter = Router();
 
@@ -817,11 +818,22 @@ export async function finalizeSale(
     for (const [productId, qty] of qtyByProduct) {
       const product = productMap.get(productId);
       if (product?.trackInventory === "true") {
-        const newQty = Math.max(0, product.stockQuantity - qty);
+        // Allow stock to go negative: selling more than on-hand records a true
+        // backorder rather than silently flooring at zero, so the shortfall stays
+        // visible (and drives the "short" warning when a PO is later received).
+        const newQty = product.stockQuantity - qty;
         await tx
           .update(productsTable)
           .set({ stockQuantity: newQty })
           .where(eq(productsTable.id, productId));
+        // If this sale pushed stock further below zero, record the oversold units
+        // against this sale's receipt so the backorder is traceable.
+        await reconcileOversellLedger(tx, {
+          merchantId, productId,
+          prevStock: product.stockQuantity, newStock: newQty,
+          receiptNumber, transactionId: row.id,
+          saleAt: row.createdAt,
+        });
         // product.stockQuantity is the pre-sale value; newQty is post-sale.
         updatedStockItems.push({ id: product.id, name: product.name, sku: product.sku ?? null, stockQuantity: newQty, previousStockQuantity: product.stockQuantity, lowStockThreshold: product.lowStockThreshold ?? null, trackInventory: product.trackInventory });
       }
@@ -1043,10 +1055,16 @@ async function reverseSaleEffects(
       .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)))
       .for("update");
     if (product?.trackInventory !== "true") continue;
+    const newQty = product.stockQuantity + qty;
     await tx
       .update(productsTable)
-      .set({ stockQuantity: product.stockQuantity + qty })
+      .set({ stockQuantity: newQty })
       .where(eq(productsTable.id, productId));
+    // Restocking may cover outstanding backorders — resolve them FIFO.
+    await reconcileOversellLedger(tx, {
+      merchantId, productId,
+      prevStock: product.stockQuantity, newStock: newQty,
+    });
   }
 
   if (!transaction.customerId) return;
@@ -1237,8 +1255,14 @@ router.post("/transactions/:id/modify", requireAuth, async (req, res): Promise<v
         for (const [pid, qty] of qtyByProduct) {
           const product = productMap.get(pid)!;
           if (product.trackInventory === "true") {
-            const newQty = Math.max(0, product.stockQuantity - qty);
+            // Complimentary items still draw down stock, and may push it negative.
+            const newQty = product.stockQuantity - qty;
             await tx.update(productsTable).set({ stockQuantity: newQty }).where(eq(productsTable.id, pid));
+            await reconcileOversellLedger(tx, {
+              merchantId, productId: pid,
+              prevStock: product.stockQuantity, newStock: newQty,
+              receiptNumber: transaction.receiptNumber, transactionId: transaction.id,
+            });
           }
         }
         updates.items = existingItems;

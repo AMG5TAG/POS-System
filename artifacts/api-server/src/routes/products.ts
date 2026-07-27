@@ -6,6 +6,7 @@ import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
 import { registerProductQr, registerProductQrsBatch, registerQrBestEffort } from "../services/entityQr";
+import { reconcileOversellLedger } from "../lib/oversellLedger";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -787,6 +788,16 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
     previousCost = existing?.costPrice ?? null;
   }
 
+  // Capture prior stock when it's being set manually, so a correction that lifts
+  // a product out of (or into) the negative reconciles the backorder ledger.
+  const stockBeingSet = typeof (rest as { stockQuantity?: unknown }).stockQuantity === "number";
+  let previousStock: number | null = null;
+  if (stockBeingSet) {
+    const [existing] = await db.select({ stockQuantity: productsTable.stockQuantity }).from(productsTable)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+    previousStock = existing?.stockQuantity ?? null;
+  }
+
   let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
   if (productTypeId != null) {
     const [pt] = await db.select().from(productTypesTable)
@@ -810,6 +821,17 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
       .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
   }
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
+
+  // Reconcile the backorder ledger when stock was manually adjusted and the
+  // product tracks inventory (a manual set can cover or re-open oversold units).
+  if (stockBeingSet && previousStock !== null && product.trackInventory === "true") {
+    await reconcileOversellLedger(db, {
+      merchantId: req.session.merchantId!,
+      productId: product.id,
+      prevStock: previousStock,
+      newStock: product.stockQuantity,
+    });
+  }
 
   // Audit a manual cost change (only when the value actually changed).
   if (costPrice !== undefined) {
