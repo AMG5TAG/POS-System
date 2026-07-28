@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, merchantAutoSyncSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { isSyncProvider } from "../services/accountSync";
+import { isSyncProvider, isAccountConnected, syncProviderLabel } from "../services/accountSync";
 
 const router: IRouter = Router();
 router.use(requireAuth);
@@ -67,14 +67,27 @@ router.put("/integrations/auto-sync", async (req, res): Promise<void> => {
       return;
     }
     if (freq !== "disabled" && !isSyncProvider(provider)) {
-      res.status(400).json({ error: `${label} sync requires a connected account (google_contacts or microsoft_contacts)` });
+      res.status(400).json({ error: `${label} sync requires a connected account (Google, Microsoft or Apple iCloud)` });
+      return;
+    }
+    // The target account must still be connected. Without this a merchant who
+    // switched providers could keep a stale target saved, and every automatic
+    // run would fail against an account that no longer exists.
+    if (freq !== "disabled" && isSyncProvider(provider) && !(await isAccountConnected(merchantId, provider))) {
+      res.status(400).json({ error: `${syncProviderLabel(provider)} isn't connected. Connect it above, or choose a connected account for ${label} sync.` });
       return;
     }
   }
 
+  // Saving a schedule clears the previous failure for that kind: the failure
+  // described the *old* target, so leaving it would keep alarming the merchant
+  // about a setting they just changed. The next run records a fresh one if it
+  // still fails.
   const values = {
     contactsProvider, contactsFrequency, contactsIncludeNotes,
+    contactsLastError: null, contactsLastErrorAt: null,
     calendarProvider, calendarFrequency,
+    calendarLastError: null, calendarLastErrorAt: null,
     updatedAt: new Date(),
   };
 

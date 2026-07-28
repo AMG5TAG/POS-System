@@ -19,7 +19,7 @@ import type { Logger } from "pino";
 import { trackedInterval } from "../lib/shutdown";
 import { db, merchantAutoSyncSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
-import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError, type SyncProvider } from "./accountSync";
+import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError, syncProviderLabel, type SyncProvider } from "./accountSync";
 
 const HOUR = 60 * 60 * 1000;
 const DAY = 24 * HOUR;
@@ -78,7 +78,14 @@ async function runSync(merchantId: number, kind: SyncKind, provider: SyncProvide
   } catch (err) {
     if (err instanceof AccountNotConnectedError) {
       logger.warn({ merchantId, kind, provider }, "Auto sync skipped — account not connected");
-      await recordSyncFailure(merchantId, kind, "Account disconnected — reconnect the account to resume automatic sync.");
+      // Name the account: automatic sync keeps targeting whichever account was
+      // picked, so a merchant who has since moved to a different provider needs
+      // to be told *which* one is stale, not just that "an account" failed.
+      await recordSyncFailure(
+        merchantId,
+        kind,
+        `${syncProviderLabel(provider)} is no longer connected. Reconnect it, or pick a connected account for automatic ${kind} sync on this page.`,
+      );
       return;
     }
     logger.error({ merchantId, kind, provider, err }, "Auto sync failed");

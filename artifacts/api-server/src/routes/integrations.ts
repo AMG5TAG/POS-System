@@ -1,10 +1,10 @@
 import { Router, type IRouter } from "express";
-import { db, merchantIntegrationsTable, oauthTokenVaultTable } from "@workspace/db";
+import { db, merchantIntegrationsTable, oauthTokenVaultTable, merchantAutoSyncSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
 import { upsertVault, deleteVault, upsertCredentialVault } from "../services/tokenVault";
-import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError } from "../services/accountSync";
+import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError, syncProviderLabel } from "../services/accountSync";
 import { verifyAppleCredentials } from "../services/appleDav";
 
 const router: IRouter = Router();
@@ -302,8 +302,33 @@ router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void>
   if (intg?.useVault) await deleteVault(merchantId, key);
   const existing = await getRow(merchantId, key);
   if (existing) { await db.update(merchantIntegrationsTable).set({ status: "disconnected", credentials: null, accessToken: null, refreshToken: null, connectedAt: null }).where(eq(merchantIntegrationsTable.id, existing.id)); }
+  await standDownAutoSync(merchantId, key, req.log);
   res.json({ status: "disconnected" });
 });
+
+/* Disconnecting an account must also stand down any automatic sync aimed at it.
+   Otherwise the schedule keeps pointing at the old provider and every run fails
+   with "not connected" — which is what a merchant who switched providers sees.
+   We turn the schedule off rather than silently repointing it: pushing the whole
+   customer list into a different account is the merchant's call, not ours. */
+async function standDownAutoSync(merchantId: number, key: string, log: { info: (o: object, m: string) => void }): Promise<void> {
+  if (!isSyncProvider(key)) return;
+  const [row] = await db.select().from(merchantAutoSyncSettingsTable).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+  if (!row) return;
+
+  const notice = `Automatic sync was turned off because ${syncProviderLabel(key)} was disconnected. Choose a connected account to resume.`;
+  const patch: Partial<typeof merchantAutoSyncSettingsTable.$inferInsert> = {};
+  if (row.contactsProvider === key && row.contactsFrequency !== "disabled") {
+    Object.assign(patch, { contactsProvider: "", contactsFrequency: "disabled", contactsLastError: notice, contactsLastErrorAt: new Date() });
+  }
+  if (row.calendarProvider === key && row.calendarFrequency !== "disabled") {
+    Object.assign(patch, { calendarProvider: "", calendarFrequency: "disabled", calendarLastError: notice, calendarLastErrorAt: new Date() });
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  await db.update(merchantAutoSyncSettingsTable).set(patch).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+  log.info({ merchantId, provider: key }, "Automatic sync disabled — target account disconnected");
+}
 
 /* ── GET /integrations/oauth/apple/start ───────────────────────────────────── */
 
@@ -487,7 +512,7 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
   };
 
   if (!isSyncProvider(provider)) {
-    res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
+    res.status(400).json({ error: "provider must be 'google_contacts', 'microsoft_contacts' or 'apple_icloud'" });
     return;
   }
 
@@ -538,7 +563,7 @@ router.post("/integrations/calendar/sync", requireAuth, async (req, res): Promis
   const merchantId = req.session.merchantId!;
   const { provider } = req.body as { provider?: string };
   if (!isSyncProvider(provider)) {
-    res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
+    res.status(400).json({ error: "provider must be 'google_contacts', 'microsoft_contacts' or 'apple_icloud'" });
     return;
   }
   try {

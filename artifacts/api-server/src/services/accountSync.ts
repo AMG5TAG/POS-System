@@ -8,7 +8,7 @@
  * always resolve a freshly-refreshed token via the per-provider helpers.
  */
 import type { Logger } from "pino";
-import { db, customersTable, customerNotesTable, appointmentsTable, contactSyncLinksTable } from "@workspace/db";
+import { db, customersTable, customerNotesTable, appointmentsTable, contactSyncLinksTable, oauthTokenVaultTable } from "@workspace/db";
 import { eq, and, desc, gte } from "drizzle-orm";
 import { formatAddressParts } from "../lib/address";
 import { getValidMicrosoftToken, MicrosoftNotConnectedError } from "./microsoftToken";
@@ -60,6 +60,32 @@ export class AccountNotConnectedError extends Error {
 
 export function isSyncProvider(v: unknown): v is SyncProvider {
   return v === "google_contacts" || v === "microsoft_contacts" || v === "apple_icloud";
+}
+
+/** Human-readable account names — used wherever a provider key would otherwise
+ *  leak into user-facing copy (auto-sync failures, the Sync screen's hints). */
+export const SYNC_PROVIDER_LABELS: Record<SyncProvider, string> = {
+  google_contacts:    "Google Account",
+  microsoft_contacts: "Microsoft Account",
+  apple_icloud:       "Apple iCloud",
+};
+
+export const syncProviderLabel = (provider: string): string =>
+  isSyncProvider(provider) ? SYNC_PROVIDER_LABELS[provider] : provider;
+
+/**
+ * True when the merchant currently has this sync account connected. All three
+ * providers keep their credentials in the OAuth vault (Google/Microsoft tokens,
+ * Apple's app-specific password), so a live connection is a vault row that has
+ * been connected and not since invalidated — the same test GET /integrations
+ * uses to render the account as "connected".
+ */
+export async function isAccountConnected(merchantId: number, provider: SyncProvider): Promise<boolean> {
+  const [row] = await db
+    .select({ connectedAt: oauthTokenVaultTable.connectedAt, disconnectedReason: oauthTokenVaultTable.disconnectedReason })
+    .from(oauthTokenVaultTable)
+    .where(and(eq(oauthTokenVaultTable.merchantId, merchantId), eq(oauthTokenVaultTable.provider, provider)));
+  return Boolean(row?.connectedAt && !row.disconnectedReason);
 }
 
 /** Resolve a valid (refreshed) access token, normalising "not connected" errors. */

@@ -55,6 +55,13 @@ const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox"];
 const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts", "apple_icloud"]);
 // Apple connects via an Apple ID + app-specific password form, not an OAuth redirect.
 const CREDENTIALS_KEYS = new Set(["apple_icloud"]);
+/* Fallback names for sync accounts, so a saved-but-now-disconnected provider is
+   still described in words rather than as a raw key like "microsoft_contacts". */
+const ACCOUNT_LABELS: Record<string, string> = {
+  google_contacts:    "Google Account",
+  microsoft_contacts: "Microsoft Account",
+  apple_icloud:       "Apple iCloud",
+};
 
 function SyncCard({ intg, onConnect, onDisconnect, onSync, onSyncCalendar, calendarBusy, busy }: {
   intg: SyncIntegration;
@@ -324,7 +331,20 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
 
   const hasAccounts = accounts.length > 0;
   const defaultProvider = accounts[0]?.key ?? "";
-  const accountLabel = (key: string) => accounts.find((a) => a.key === key)?.label ?? key;
+  const accountLabel = (key: string) => accounts.find((a) => a.key === key)?.label ?? ACCOUNT_LABELS[key] ?? key;
+  const isConnected = (key: string) => accounts.some((a) => a.key === key);
+  /* The account a schedule will actually target. A saved provider that is no
+     longer connected (the merchant switched accounts) can't be honoured, so the
+     UI shows — and saves — the first connected account instead of silently
+     keeping a dead target that fails on every run. */
+  const effectiveProvider = (key: string) => (isConnected(key) ? key : defaultProvider);
+  /* A saved target that's no longer connected: name it so the merchant knows
+     why automatic sync is failing and what to change. */
+  const staleProvider = (s: SyncTypeState) =>
+    s.frequency !== "disabled" && s.provider && !isConnected(s.provider) ? s.provider : null;
+  /* True when a schedule points at a disconnected account and there is a
+     connected one to move it to — Save alone is enough to repair it. */
+  const needsRepoint = hasAccounts && Boolean(staleProvider(state.contacts) || staleProvider(state.calendar));
 
   const update = (patch: Partial<AutoSyncState>) => { setState((s) => ({ ...s!, ...patch })); setDirty(true); };
 
@@ -335,12 +355,12 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
         method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           contacts: {
-            provider: state.contacts.frequency === "disabled" ? state.contacts.provider : (state.contacts.provider || defaultProvider),
+            provider: state.contacts.frequency === "disabled" ? state.contacts.provider : effectiveProvider(state.contacts.provider),
             frequency: state.contacts.frequency,
             includeNotes: state.contacts.includeNotes,
           },
           calendar: {
-            provider: state.calendar.frequency === "disabled" ? state.calendar.provider : (state.calendar.provider || defaultProvider),
+            provider: state.calendar.frequency === "disabled" ? state.calendar.provider : effectiveProvider(state.calendar.provider),
             frequency: state.calendar.frequency,
           },
         }),
@@ -360,8 +380,10 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
     }
   };
 
+  /* Never freeze the picker while accounts exist: with a single connected
+     account it still has to be usable to move a schedule off a stale target. */
   const providerSelect = (value: string, onChange: (v: string) => void, disabled: boolean) => (
-    <Select value={value || defaultProvider} onValueChange={onChange} disabled={disabled || accounts.length <= 1}>
+    <Select value={effectiveProvider(value)} onValueChange={onChange} disabled={disabled || !hasAccounts}>
       <SelectTrigger className="h-8 text-xs w-[160px]"><SelectValue placeholder="Account" /></SelectTrigger>
       <SelectContent>
         {accounts.map((a) => <SelectItem key={a.key} value={a.key}>{a.label}</SelectItem>)}
@@ -369,16 +391,32 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
     </Select>
   );
 
-  /* Persistent failure notice for a sync kind whose last automatic run errored. */
-  const failureBanner = (s: SyncTypeState) => s.lastError ? (
-    <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
-      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
-      <div>
-        <p className="font-medium">Last automatic sync failed{s.lastErrorAt ? ` · ${formatRelativeTime(s.lastErrorAt)}` : ""}</p>
-        <p className="text-destructive/90">{s.lastError}</p>
+  /* Persistent failure notice for a sync kind whose last automatic run errored,
+     plus a pointer when the saved target account is no longer connected — the
+     usual cause of a run that fails over and over. */
+  const failureBanner = (s: SyncTypeState) => {
+    const stale = staleProvider(s);
+    if (!s.lastError && !stale) return null;
+    return (
+      <div className="flex items-start gap-2 rounded-lg border border-destructive/30 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+        <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+        <div>
+          {s.lastError && (
+            <>
+              <p className="font-medium">Last automatic sync failed{s.lastErrorAt ? ` · ${formatRelativeTime(s.lastErrorAt)}` : ""}</p>
+              <p className="text-destructive/90">{s.lastError}</p>
+            </>
+          )}
+          {stale && (
+            <p className="text-destructive/90">
+              This schedule is still set to <span className="font-medium">{accountLabel(stale)}</span>, which isn&apos;t connected
+              {hasAccounts ? <> — it will sync to <span className="font-medium">{accountLabel(defaultProvider)}</span> once you save.</> : <>. Connect an account above to resume.</>}
+            </p>
+          )}
+        </div>
       </div>
-    </div>
-  ) : null;
+    );
+  };
 
   const freqSelect = (value: string, onChange: (v: string) => void) => (
     <Select value={value} onValueChange={onChange} disabled={!hasAccounts}>
@@ -430,10 +468,12 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
       <div className="flex items-center justify-between border-t pt-3">
         <p className="text-[11px] text-muted-foreground">
           {(state.contacts.frequency === "instant" || state.calendar.frequency === "instant")
-            ? `Instant syncs run shortly after a change to ${accountLabel(state.contacts.provider || defaultProvider)}.`
+            ? `Instant syncs run shortly after a customer or appointment changes, pushing to ${accountLabel(effectiveProvider(state.contacts.provider))}.`
             : "Automatic contact syncs overwrite existing matches to stay current."}
         </p>
-        <Button size="sm" onClick={save} disabled={saving || !dirty}>
+        {/* A stale target is fixable with a plain Save (it repoints to a connected
+            account), so allow saving even when the merchant hasn't edited anything. */}
+        <Button size="sm" onClick={save} disabled={saving || (!dirty && !needsRepoint)}>
           {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
           Save
         </Button>
