@@ -3289,59 +3289,6 @@ export interface PosSecurityCaptureInput {
   storedLocally?: boolean;
 }
 
-export interface SocialFeedSettings {
-  id?: number | null;
-  showFacebook: boolean;
-  showInstagram: boolean;
-  showTwitter: boolean;
-  showLinkedin: boolean;
-  facebookEnabled: boolean;
-  instagramEnabled: boolean;
-  twitterEnabled: boolean;
-  tiktokEnabled: boolean;
-  linkedinEnabled: boolean;
-  refreshIntervalMinutes: number;
-}
-
-export interface SocialFeedSettingsInput {
-  showFacebook?: boolean;
-  showInstagram?: boolean;
-  showTwitter?: boolean;
-  showLinkedin?: boolean;
-  facebookEnabled?: boolean;
-  instagramEnabled?: boolean;
-  twitterEnabled?: boolean;
-  tiktokEnabled?: boolean;
-  linkedinEnabled?: boolean;
-  refreshIntervalMinutes?: number;
-}
-
-export interface SocialPost {
-  id: string;
-  platform: string;
-  accountName: string;
-  accountHandle: string;
-  text: string;
-  imageUrl?: string | null;
-  videoUrl?: string | null;
-  permalink?: string | null;
-  likes: number;
-  comments: number;
-  shares: number;
-  postedAt: string;
-}
-
-export interface SocialPlatformResult {
-  platform: string;
-  status: string;
-  posts: SocialPost[];
-  error?: string | null;
-}
-
-export interface SocialFeedResponse {
-  results: SocialPlatformResult[];
-}
-
 export interface CameraSnapshot {
   id: number;
   cameraId: number;
@@ -6611,10 +6558,6 @@ export type SaveAiSettings200 = {
 
 export type SaveFloorPlan200 = {
   ok?: boolean;
-};
-
-export type ListSocialFeedPostsParams = {
-platform?: string;
 };
 
 export type ListBrandsParams = {

@@ -130,8 +130,6 @@ const ManagementKpisPage = lazyWithRetry(() => import("@/pages/app/management-kp
 const StaffNotesPage = lazyWithRetry(() => import("@/pages/app/staff-notes"));
 const StaffKpisPage = lazyWithRetry(() => import("@/pages/app/staff-kpis"));
 const StaffLinksPage = lazyWithRetry(() => import("@/pages/app/staff-links"));
-const StaffSocialFeedPage = lazyWithRetry(() => import("@/pages/app/staff-social-feed"));
-const ManagementMarketingSocialFeedPage = lazyWithRetry(() => import("@/pages/app/management-marketing-social-feed"));
 const ManagementMarketingAnalyticsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-analytics"));
 const ManagementFloorPlanPage = lazyWithRetry(() => import("@/pages/app/management-floor-plan"));
 const ManagementAIPage = lazyWithRetry(() => import("@/pages/app/management-ai"));
@@ -146,7 +144,6 @@ const MarketingEmailCampaignsPage = lazyWithRetry(() => import("@/pages/app/mark
 const MarketingEmailTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-email-templates"));
 const MarketingSmsCampaignsPage = lazyWithRetry(() => import("@/pages/app/marketing-sms-campaigns"));
 const MarketingSmsTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-sms-templates"));
-const MarketingSocialMediaPage = lazyWithRetry(() => import("@/pages/app/marketing-social-media"));
 const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
@@ -476,9 +473,6 @@ function Router() {
       <Route path="/staff/links">
         <ProtectedRoute component={StaffLinksPage} />
       </Route>
-      <Route path="/staff/social-feed">
-        <ProtectedRoute component={StaffSocialFeedPage} />
-      </Route>
       <Route path="/staff/employees">
         <ProtectedRoute component={StaffPage} />
       </Route>
@@ -659,9 +653,6 @@ function Router() {
       <Route path="/management/marketing-reports/referrals">
         <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
-      <Route path="/management/marketing-reports/social-feed">
-        <ManagementProtectedRoute component={ManagementMarketingSocialFeedPage} />
-      </Route>
       <Route path="/management/marketing-reports/online-store">
         <ManagementProtectedRoute component={ManagementOnlineStorePage} />
       </Route>
@@ -790,9 +781,6 @@ function Router() {
       <Route path="/marketing/sms/templates">
         <ProtectedRoute component={MarketingSmsTemplatesPage} />
       </Route>
-      <Route path="/marketing/social">
-        <ProtectedRoute component={MarketingSocialMediaPage} />
-      </Route>
       {/* Moved under Management → Marketing & Reports (owner/manager only) */}
       <Route path="/management/marketing-reports/landing-pages/pages">
         <ManagementProtectedRoute component={MarketingLandingPagesPage} />
@@ -894,7 +882,6 @@ function Router() {
       <Route path="/management/kpis"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing-reports/kpis-targets"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing/referrals"><Redirect to="/management/marketing-reports/referrals" /></Route>
-      <Route path="/management/marketing/social-feed"><Redirect to="/management/marketing-reports/social-feed" /></Route>
       <Route path="/management/online-store"><Redirect to="/management/marketing-reports/online-store" /></Route>
       <Route path="/management/email"><Redirect to="/management/marketing-reports/email" /></Route>
       <Route path="/management/sms"><Redirect to="/management/settings-integrations/sms" /></Route>

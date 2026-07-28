@@ -50,8 +50,6 @@ export * from "./marketing-automation";
 export * from "./oauth-token-vault";
 export * from "./cameras";
 export * from "./payment-attempts";
-export * from "./social-feed";
-export * from "./social-media";
 export * from "./floor-plan";
 export * from "./conversations";
 export * from "./messages";

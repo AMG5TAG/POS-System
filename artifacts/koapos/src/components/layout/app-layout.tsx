@@ -18,7 +18,7 @@ import {
   ChevronRight, Building2, Globe, UserCircle, Monitor, Gift, Trophy,
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
-  Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles, Sticker,
+  Megaphone, QrCode, BarChart2, Send, Zap, UserPlus, Sparkles, Sticker,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
   CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
 } from "lucide-react";
@@ -89,7 +89,6 @@ const STAFF_SUBNAV: NavItem[] = [
   { name: "Notes",       href: "/staff/notes",        icon: StickyNote    },
   { name: "KPIs",        href: "/staff/kpis",         icon: Target        },
   { name: "Links",       href: "/staff/links",        icon: Link2         },
-  { name: "Social Feed", href: "/staff/social-feed",  icon: Share2        },
 ];
 
 const ONLINE_SUBNAV: NavItem[] = [
@@ -118,7 +117,6 @@ const MARKETING_SUBNAV: NavItem[] = [
       { name: "Templates", href: "/marketing/sms/templates",  icon: FileText },
     ],
   },
-  { name: "Social Media",  href: "/marketing/social",               icon: Share2 },
   {
     name: "Loyalty",
     icon: Gift,
@@ -220,7 +218,6 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
         matchPaths: ["/management/marketing-reports/reports/daily"] },
       { name: "Analytics",      href: "/management/marketing-reports/analytics",   icon: Activity   },
       { name: "Referrals",      href: "/management/marketing-reports/referrals",  icon: UserPlus   },
-      { name: "Social Feed",    href: "/management/marketing-reports/social-feed",icon: Share2     },
       {
         name: "Landing Pages", icon: LayoutTemplate,
         children: [
@@ -299,7 +296,6 @@ const SEARCH_INDEX = [
   { label: "Staff · Notes",      href: "/staff/notes",                 icon: StickyNote,      group: "Staff" },
   { label: "Staff · KPIs",       href: "/staff/kpis",                  icon: Target,          group: "Staff" },
   { label: "Staff · Links",        href: "/staff/links",                        icon: Link2,    group: "Staff" },
-  { label: "Staff · Social Feed", href: "/staff/social-feed",                  icon: Share2,   group: "Staff" },
   { label: "3D Prints",          href: "/pos/3d-prints",                          icon: Cpu,          group: "POS" },
   { label: "PC Builder",             href: "/pos/pc-builder",                      icon: HardDrive,   group: "POS" },
   { label: "POS · End of Day",            href: "/pos/eod",                                       icon: Moon,          group: "POS"        },
@@ -336,7 +332,6 @@ const SEARCH_INDEX = [
   { label: "Label Templates",    href: "/management/products-inventory/labels",           icon: LayoutTemplate,  group: "Management" },
   { label: "Loyalty",            href: "/management/customers/loyalty",          icon: Gift,            group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing-reports/referrals",       icon: UserPlus, group: "Management" },
-  { label: "Marketing · Social Feed Settings", href: "/management/marketing-reports/social-feed", icon: Share2, group: "Management" },
   { label: "Misc",                          href: "/management/settings-integrations/system/misc",                       icon: MoreHorizontal, group: "Management" },
   { label: "Online Store",              href: "/management/marketing-reports/online-store",  icon: Globe,        group: "Management" },
   { label: "POS Registers",      href: "/management/staff-operations/pos-registers",        icon: Monitor,         group: "Management" },
@@ -352,7 +347,6 @@ const SEARCH_INDEX = [
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
   { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },
   { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
-  { label: "Marketing · Social Media",         href: "/marketing/social",                   icon: Share2,     group: "Marketing" },
   { label: "Marketing · QR Codes",             href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode,     group: "Management" },
   { label: "Marketing · Shortlinks",           href: "/management/marketing-reports/generators/shortlinks", icon: Link2,      group: "Management" },
   { label: "Marketing · Landing Pages",        href: "/management/marketing-reports/landing-pages/pages",         icon: LayoutTemplate, group: "Management" },

@@ -9,8 +9,6 @@ import {
   businessProfileTable,
   marketingAutomationRulesTable,
   marketingAutomationLogTable,
-  socialPostsTable,
-  socialAccountsTable,
 } from "@workspace/db";
 import { trackedInterval } from "../lib/shutdown";
 import { jitteredStart } from "../lib/scheduler-jitter";
@@ -18,7 +16,6 @@ import { eq, and, gt, gte, lt, lte, isNotNull, desc, sql } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
-import { runPublish } from "../routes/social-media";
 import type { Logger } from "pino";
 
 type Rule = typeof marketingAutomationRulesTable.$inferSelect;
@@ -697,39 +694,6 @@ async function runScheduledTime(
   return sent;
 }
 
-/* ── Social broadcast automation ─────────────────────────────────────────────
- * Social rules don't message individual customers — they publish a single post
- * to every active connected account. `scheduled_time` rules fire once at their
- * configured moment; other triggers fire at most once per day. The post body is
- * the rule's templateBody (rendered to plain text). */
-async function runSocialAutomation(merchantId: number, rule: Rule, logger: Logger): Promise<number> {
-  if (rule.triggerEvent === "scheduled_time") {
-    if (!rule.scheduledAt) return 0;
-    if (Date.now() < new Date(rule.scheduledAt).getTime()) return 0;
-  }
-  const dedupeKey = `social-${rule.id}-${rule.triggerEvent}`;
-  const windowMs = rule.triggerEvent === "scheduled_time" ? 3650 * 24 * 3600 * 1000 : 24 * 3600 * 1000;
-  if (await alreadySent(rule.id, dedupeKey, windowMs)) return 0;
-
-  const accounts = await db.select().from(socialAccountsTable)
-    .where(and(eq(socialAccountsTable.merchantId, merchantId), eq(socialAccountsTable.status, "active")));
-  if (accounts.length === 0) {
-    await logDispatch({ merchantId, ruleId: rule.id, customerId: null, recordType: "social", recordId: dedupeKey, channel: "social", status: "failed", error: "No connected social accounts" });
-    return 0;
-  }
-
-  const content = bodyToText(rule.templateBody, "");
-  const targets = accounts.map((a) => ({ platform: a.platform, accountId: a.externalId }));
-  const [post] = await db.insert(socialPostsTable).values({
-    merchantId, content, media: [], targets, status: "publishing", automationRuleId: rule.id,
-  }).returning();
-  const published = await runPublish(merchantId, post!.id);
-  const ok = published?.status === "published" || published?.status === "partial";
-  await logDispatch({ merchantId, ruleId: rule.id, customerId: null, recordType: "social", recordId: dedupeKey, channel: "social", status: ok ? "sent" : "failed", error: ok ? undefined : "Publish failed — check connected accounts" });
-  logger.info({ ruleId: rule.id, postId: post!.id }, "Automation: social post published");
-  return ok ? 1 : 0;
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function runAutomationRule(
@@ -741,18 +705,6 @@ export async function runAutomationRule(
     return { dispatched: 0, trigger: rule.triggerEvent, error: "No template body configured" };
   }
   const biz = await getBizInfo(merchantId);
-
-  // Social rules broadcast a post rather than messaging each customer.
-  if (rule.channel === "social") {
-    try {
-      const dispatched = await runSocialAutomation(merchantId, rule, logger);
-      await db.update(marketingAutomationRulesTable).set({ lastRunAt: new Date() }).where(eq(marketingAutomationRulesTable.id, rule.id));
-      return { dispatched, trigger: rule.triggerEvent };
-    } catch (err) {
-      logger.error({ ruleId: rule.id, err }, "Social automation error");
-      return { dispatched: 0, trigger: rule.triggerEvent, error: String(err) };
-    }
-  }
 
   try {
     let dispatched = 0;

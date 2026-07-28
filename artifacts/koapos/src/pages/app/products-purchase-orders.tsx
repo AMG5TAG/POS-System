@@ -31,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
@@ -102,6 +102,102 @@ function calcDelivery(charge: number, mode: TaxMode) {
     const gst   = charge - charge / (1 + GST_RATE);
     return { exGst: charge - gst, gst, incGst: charge };
   }
+}
+
+/* ── GST calculator ────────────────────────────────────────────────────────
+   Standalone helper for merchants working from a supplier quote: enter an
+   amount that either excludes or includes GST and see the full breakdown.
+   Mirrors the ATO/Moneysmart GST calculator. Purely informational — it does
+   not feed into the PO totals. */
+
+function GstCalculator() {
+  const [open, setOpen]     = useState(false);
+  const [amount, setAmount] = useState("");
+  const [mode, setMode]     = useState<TaxMode>("exclusive");
+
+  const parsed = parseFloat(amount);
+  const value  = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  const result = calcDelivery(value, mode);
+
+  return (
+    <div className="rounded-lg border bg-muted/20">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <Calculator className="w-4 h-4 text-muted-foreground" />
+        <span className="text-sm font-medium flex-1">Tax Calculator</span>
+        <span className="text-xs text-muted-foreground">{open ? "Hide" : "Show"}</span>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Amount</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  className="pl-6"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">This amount</Label>
+              <div className="flex rounded-md border overflow-hidden h-9">
+                {(["exclusive", "inclusive"] as TaxMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={cn(
+                      "flex-1 text-xs font-medium transition-colors",
+                      mode === m
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background hover:bg-muted/60 text-muted-foreground"
+                    )}
+                  >
+                    {m === "exclusive" ? "Excludes GST" : "Includes GST"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-md bg-background border px-3 py-2 space-y-1 text-xs">
+            <div className={cn("flex justify-between", mode === "exclusive" ? "text-muted-foreground" : "font-medium")}>
+              <span>Price excluding GST</span>
+              <span>{formatCurrency(result.exGst)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>GST (10%)</span>
+              <span>{formatCurrency(result.gst)}</span>
+            </div>
+            <div className={cn("flex justify-between border-t pt-1 mt-1", mode === "inclusive" ? "text-muted-foreground" : "font-medium")}>
+              <span>Price including GST</span>
+              <span>{formatCurrency(result.incGst)}</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            {mode === "exclusive"
+              ? "Adds 10% GST to the amount entered."
+              : "Splits out the GST already contained in the amount entered (÷ 11)."}
+            {" "}Reference only — this does not change the order totals.
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 type PrintPO = Awaited<ReturnType<typeof import("@workspace/api-client-react").createPurchaseOrder>>;
@@ -1115,6 +1211,9 @@ export default function ProductsPurchaseOrdersPage() {
                 </label>
               )}
             </div>
+
+            {/* ── Tax Calculator ──────────────────────────────────────────── */}
+            <GstCalculator />
 
             <div className="space-y-1.5">
               <Label>Notes</Label>

@@ -31,15 +31,9 @@ export const INTEGRATIONS = [
   { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "apple_wallet",    label: "Apple Wallet",          section: "payments",   category: "Payments & Terminals", description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",                  authType: "credentials" as const, fields: [{ name: "passTypeId", label: "Pass Type ID", type: "text" }, { name: "teamId", label: "Apple Team ID", type: "text" }, { name: "certificateBase64", label: "Certificate (Base64)", type: "password" }] as F[], useVault: false },
 
-  /* ── MARKETING & SOCIALS ───────────────────────────────────────────────── */
-  { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing & Socials", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "meta_business",       label: "Meta Business",           section: "marketing", category: "Marketing & Socials", description: "Sync your product catalogue and customer audiences to Facebook & Instagram for targeted ads.",    authType: "oauth" as const, oauthProvider: "meta"      as const, useVault: true  },
-  { key: "twitter_x",           label: "Twitter / X",             section: "marketing", category: "Marketing & Socials", description: "Post promotions, reply to mentions, and track brand sentiment on Twitter / X.",                authType: "oauth" as const, oauthProvider: "twitter"   as const, useVault: true  },
-  { key: "tiktok_business",     label: "TikTok for Business",     section: "marketing", category: "Marketing & Socials", description: "Run ads, track performance, and grow your audience on TikTok Business.",                       authType: "oauth" as const, oauthProvider: "tiktok"    as const, useVault: true  },
-  { key: "linkedin_business",   label: "LinkedIn",                section: "marketing", category: "Marketing & Socials", description: "Share business updates and promotions to your LinkedIn company page.",                         authType: "oauth" as const, oauthProvider: "linkedin"  as const, useVault: true  },
-  { key: "instagram_business",  label: "Instagram Business",      section: "marketing", category: "Marketing & Socials", description: "Schedule posts, manage DMs, and track insights on Instagram Business.",                       authType: "oauth" as const, oauthProvider: "meta"      as const, useVault: true  },
-  { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing & Socials", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "youtube_channel",     label: "YouTube Channel",         section: "marketing", category: "Marketing & Socials", description: "Publish video content, manage community posts, and pull channel analytics.",                  authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
+  /* ── MARKETING ─────────────────────────────────────────────────────────── */
+  { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
+  { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
 
   /* ── CLOUD STORAGE & PRODUCTIVITY ─────────────────────────────────────── */
   { key: "google_drive",        label: "Google Workspace",    section: "cloud", category: "Cloud Storage & Productivity", description: "Back up reports to Google Drive and sync contacts and appointments with Google Workspace.",   authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
@@ -68,10 +62,6 @@ function isOAuthConfigured(provider: string): boolean {
     case "microsoft":  return !!process.env.MICROSOFT_CLIENT_ID;
     case "dropbox":    return !!process.env.DROPBOX_APP_KEY;
     case "xero":       return !!process.env.XERO_CLIENT_ID;
-    case "meta":       return !!(process.env.META_APP_ID && process.env.META_APP_SECRET);
-    case "twitter":    return !!process.env.TWITTER_CLIENT_ID;
-    case "linkedin":   return !!process.env.LINKEDIN_CLIENT_ID;
-    case "tiktok":     return !!process.env.TIKTOK_CLIENT_KEY;
     case "apple":      return !!(process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY);
     default:           return false;
   }
@@ -112,7 +102,6 @@ const GOOGLE_SCOPES: Record<string, string> = {
   google_business:  "https://www.googleapis.com/auth/business.manage",
   google_drive:     "https://www.googleapis.com/auth/drive.file",
   google_contacts:  "https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/calendar",
-  youtube_channel:  "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/yt-analytics.readonly",
   google_ads:       "https://www.googleapis.com/auth/adwords",
 };
 
@@ -154,25 +143,6 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
     const k = process.env.DROPBOX_APP_KEY; if (!k) return null;
     return `https://www.dropbox.com/oauth2/authorize?${new URLSearchParams({ client_id: k, redirect_uri: cb, response_type: "code", token_access_type: "offline", state })}`;
   }
-  if (key === "meta_business" || key === "instagram_business") {
-    const appId = process.env.META_APP_ID; if (!appId) return null;
-    const scope = key === "instagram_business"
-      ? "instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_comments,pages_show_list,pages_read_engagement"
-      : "pages_manage_ads,pages_manage_posts,pages_read_engagement,pages_show_list,business_management,ads_management,ads_read,read_insights";
-    return `https://www.facebook.com/v19.0/dialog/oauth?${new URLSearchParams({ client_id: appId, redirect_uri: cb, response_type: "code", scope, state })}`;
-  }
-  if (key === "twitter_x") {
-    const cid = process.env.TWITTER_CLIENT_ID; if (!cid) return null;
-    return `https://twitter.com/i/oauth2/authorize?${new URLSearchParams({ response_type: "code", client_id: cid, redirect_uri: cb, scope: "tweet.read tweet.write users.read offline.access media.write list.read", state, code_challenge: "challenge", code_challenge_method: "plain" })}`;
-  }
-  if (key === "linkedin_business") {
-    const cid = process.env.LINKEDIN_CLIENT_ID; if (!cid) return null;
-    return `https://www.linkedin.com/oauth/v2/authorization?${new URLSearchParams({ response_type: "code", client_id: cid, redirect_uri: cb, scope: "r_organization_social w_organization_social r_basicprofile r_ads rw_ads r_organization_admin", state })}`;
-  }
-  if (key === "tiktok_business") {
-    const k = process.env.TIKTOK_CLIENT_KEY; if (!k) return null;
-    return `https://business-api.tiktok.com/portal/auth?${new URLSearchParams({ app_id: k, redirect_uri: cb, state })}`;
-  }
   if (key === "apple_account") {
     const cid = process.env.APPLE_CLIENT_ID;
     if (!cid || !process.env.APPLE_TEAM_ID || !process.env.APPLE_KEY_ID || !process.env.APPLE_PRIVATE_KEY) return null;
@@ -184,19 +154,12 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
 /* ── Token exchange ──────────────────────────────────────────────────────────── */
 
 async function exchangeToken(key: string, code: string, cb: string, merchantId: number, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
-  if (key === "google_drive" || key === "google_business" || key === "google_contacts" || key === "youtube_channel" || key === "google_ads") {
+  if (key === "google_drive" || key === "google_business" || key === "google_contacts" || key === "google_ads") {
     const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     const accessToken = d.access_token ?? "";
     let accountId: string | undefined, accountHandle: string | undefined;
     if (accessToken) {
-      if (key === "youtube_channel") {
-        const ch = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { items?: Array<{ id?: string; snippet?: { title?: string } }> };
-        accountId = ch.items?.[0]?.id; accountHandle = ch.items?.[0]?.snippet?.title;
-        if (!accountHandle) {
-          const ui = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { sub?: string; email?: string };
-          accountId = accountId ?? ui.sub; accountHandle = ui.email;
-        }
-      } else if (key === "google_ads") {
+      if (key === "google_ads") {
         const customers = await fetch("https://googleads.googleapis.com/v16/customers:listAccessibleCustomers", { headers: { Authorization: `Bearer ${accessToken}`, "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "" } }).then((r) => r.json()).catch(() => ({})) as { resourceNames?: string[] };
         const firstId = customers.resourceNames?.[0]?.split("/")?.[1];
         if (firstId) { accountId = firstId; accountHandle = `Account #${firstId}`; }
@@ -230,59 +193,6 @@ async function exchangeToken(key: string, code: string, cb: string, merchantId: 
       accountHandle = profile.email;
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id, accountHandle };
-  }
-  if (key === "meta_business" || key === "instagram_business") {
-    const d = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${new URLSearchParams({ client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "", redirect_uri: cb, code })}`).then((r) => r.json()) as { access_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const me = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token=${accessToken}`).then((r) => r.json()).catch(() => ({})) as { id?: string; name?: string; email?: string };
-      if (key === "instagram_business") {
-        // Resolve the connected IG Business account via linked pages
-        const igAccounts = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=name,id,instagram_business_account{id,username}&access_token=${accessToken}&limit=1`).then((r) => r.json()).catch(() => ({ data: [] })) as { data?: Array<{ name?: string; instagram_business_account?: { id?: string; username?: string } }> };
-        const igBiz = igAccounts.data?.[0]?.instagram_business_account;
-        accountId = igBiz?.id ?? me.id;
-        accountHandle = igBiz?.username ? `@${igBiz.username}` : (igAccounts.data?.[0]?.name ?? me.name ?? me.email);
-      } else {
-        // Return the first managed Facebook Page as the primary account
-        const pages = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=name,id&limit=1&access_token=${accessToken}`).then((r) => r.json()).catch(() => ({ data: [] })) as { data?: Array<{ id?: string; name?: string }> };
-        accountId = pages.data?.[0]?.id ?? me.id;
-        accountHandle = pages.data?.[0]?.name ?? me.name ?? me.email;
-      }
-    }
-    return { accessToken, refreshToken: "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "twitter_x") {
-    const creds = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString("base64");
-    const d = await fetch("https://api.twitter.com/2/oauth2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${creds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb, code_verifier: "challenge" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const me = await fetch("https://api.twitter.com/2/users/me?user.fields=id,name,username,public_metrics", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { data?: { id?: string; name?: string; username?: string } };
-      accountId = me.data?.id; accountHandle = me.data?.username ? `@${me.data.username}` : me.data?.name;
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "linkedin_business") {
-    const d = await fetch("https://www.linkedin.com/oauth/v2/accessToken", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, client_id: process.env.LINKEDIN_CLIENT_ID ?? "", client_secret: process.env.LINKEDIN_CLIENT_SECRET ?? "", redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const me = await fetch("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { sub?: string; email?: string; name?: string };
-      // Resolve the first administered LinkedIn Organization (Company Page)
-      const orgs = await fetch("https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organization~(id,localizedName)))", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({ elements: [] })) as { elements?: Array<{ "organization~"?: { id?: number; localizedName?: string } }> };
-      const org = orgs.elements?.[0]?.["organization~"];
-      accountId = org?.id ? String(org.id) : me.sub;
-      accountHandle = org?.localizedName ?? me.name ?? me.email;
-    }
-    return { accessToken, refreshToken: "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "tiktok_business") {
-    const d = await fetch("https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: process.env.TIKTOK_CLIENT_KEY, secret: process.env.TIKTOK_CLIENT_SECRET, auth_code: code }) }).then((r) => r.json()) as { data?: { access_token?: string; advertiser_id?: string; advertiser_name?: string; display_name?: string } };
-    const accessToken = d.data?.access_token ?? "";
-    const accountId = d.data?.advertiser_id;
-    const accountHandle = d.data?.advertiser_name ?? d.data?.display_name;
-    return { accessToken, refreshToken: "", expiresAt: null, accountId, accountHandle };
   }
   throw new Error(`No token exchange handler for: ${key}`);
 }

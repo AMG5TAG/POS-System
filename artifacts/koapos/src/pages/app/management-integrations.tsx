@@ -18,11 +18,10 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  useGetSocialFeedSettings, useUpdateSocialFeedSettings,
   useListIntegrations, useGetVaultStatus, useDisconnectIntegration, useConnectIntegration,
 } from "@workspace/api-client-react";
-import type { SocialFeedSettingsInput } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { OneDriveIcon, MicrosoftIcon } from "@/components/provider-icons";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, ChevronDown, ChevronRight, Zap,
@@ -103,11 +102,14 @@ type LogoCfg =
 const LOGO_MAP: Record<string, LogoCfg> = {
   /* Cloud Storage & Productivity */
   google_drive:         { type: "img",  bg: "bg-white border",  src: SI("googledrive",   "4285F4") },
-  onedrive:             { type: "img",  bg: "bg-[#0078D4]",     src: SI("onedrive",      "ffffff") },
+  // Microsoft brand marks were pulled from simple-icons (those slugs 404), so
+  // OneDrive/Microsoft use the inline SVGs shared with the Sync page.
+  onedrive:             { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: OneDriveIcon },
   dropbox:              { type: "img",  bg: "bg-[#0061FF]",     src: SI("dropbox",       "ffffff") },
   google_contacts:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  microsoft_contacts:   { type: "img",  bg: "bg-[#0078D4]",     src: SI("microsoft",     "ffffff") },
+  microsoft_contacts:   { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: MicrosoftIcon },
   apple_account:        { type: "svg",  bg: "bg-black",          color: "text-white",    component: AppleSvg },
+  apple_icloud:         { type: "img",  bg: "bg-[#3693F3]",     src: SI("icloud",        "ffffff") },
   openai:               { type: "img",  bg: "bg-black",          src: SI("openai",        "ffffff") },
   zapier:               { type: "img",  bg: "bg-[#FF4A00]",     src: SI("zapier",        "ffffff") },
   deputy:               { type: "img",  bg: "bg-[#FF8C00]",     src: SI("deputy",        "ffffff") },
@@ -132,15 +134,9 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   klarna:               { type: "img",  bg: "bg-[#FFB3C7]",     src: SI("klarna",        "000000") },
   apple_wallet:         { type: "img",  bg: "bg-black",          src: SI("apple",         "ffffff") },
   google_pay:           { type: "img",  bg: "bg-white border",  src: SI("googlepay",     "000000") },
-  /* Marketing & Socials */
+  /* Marketing */
   google_ads:           { type: "img",  bg: "bg-white border",  src: SI("googleads",     "4285F4") },
-  meta_business:        { type: "img",  bg: "bg-[#0082FB]",     src: SI("meta",          "ffffff") },
-  twitter_x:            { type: "img",  bg: "bg-black",          src: SI("x",             "ffffff") },
-  tiktok_business:      { type: "img",  bg: "bg-black",          src: SI("tiktok",        "ffffff") },
-  linkedin_business:    { type: "img",  bg: "bg-[#0A66C2]",     src: SI("linkedin",      "ffffff") },
-  instagram_business:   { type: "img",  bg: "bg-[#E4405F]",     src: SI("instagram",     "ffffff") },
   google_business:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  youtube_channel:      { type: "img",  bg: "bg-[#FF0000]",     src: SI("youtube",       "ffffff") },
   mailchimp:            { type: "img",  bg: "bg-[#FFE01B]",     src: SI("mailchimp",     "000000") },
 };
 
@@ -529,9 +525,9 @@ const ALL_SECTIONS = [
   },
   {
     id: "marketing",
-    title: "Marketing & Socials",
+    title: "Marketing",
     icon: Megaphone,
-    description: "Ad campaigns, social posts, email flows, and customer audience targeting",
+    description: "Ad campaigns, email flows, and customer audience targeting",
     accent: "bg-pink-50/60 border-pink-200 dark:bg-pink-950/20 dark:border-pink-900",
     iconBg: "bg-pink-100 dark:bg-pink-900/40",
     iconColor: "text-pink-600 dark:text-pink-400",
@@ -549,10 +545,13 @@ const ALL_SECTIONS = [
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
-// Cloud-storage and account/contacts integrations now live on the consolidated
-// Sync page (Management → Settings & Integrations → Sync), so they are hidden here.
+// Account/contacts integrations are configured on the consolidated Sync page
+// (Management → Settings & Integrations → Sync), so they are hidden here.
+// The cloud-storage destinations (Google Drive, OneDrive, Dropbox) stay
+// visible: the Cloud Storage section is where merchants expect to connect a
+// backup destination, and the Sync page still owns what actually gets synced
+// once connected.
 export const SYNC_INTEGRATION_KEYS = new Set([
-  "google_drive", "onedrive", "dropbox",
   "google_contacts", "microsoft_contacts", "apple_account",
 ]);
 

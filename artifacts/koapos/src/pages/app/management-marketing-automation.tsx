@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Zap, Plus, Trash2, Pencil, Play, RefreshCw, Mail, MessageSquare,
   Clock, CheckCircle2, XCircle, AlertTriangle, Info, Cake, Calendar,
-  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Share2, Gift, ShieldCheck,
+  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Gift, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -105,7 +105,6 @@ const CHANNELS = [
   { value: "email",  label: "Email",       icon: Mail },
   { value: "sms",    label: "SMS",         icon: MessageSquare },
   { value: "both",   label: "Email & SMS", icon: Send },
-  { value: "social", label: "Social Media", icon: Share2 },
 ];
 
 const EMPTY_FORM = {
@@ -152,9 +151,6 @@ function ChannelBadge({ value }: { value: string }) {
         <Mail className="w-3 h-3" /><MessageSquare className="w-3 h-3" /> Email &amp; SMS
       </Badge>
     );
-  }
-  if (value === "social") {
-    return <Badge variant="outline" className="gap-1"><Share2 className="w-3 h-3" /> Social Media</Badge>;
   }
   return (
     <Badge variant="outline" className="gap-1">

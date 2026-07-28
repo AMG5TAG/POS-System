@@ -11,7 +11,6 @@ import { ensureLoginCleanupFunction } from "./services/loginCleanupSetup";
 import { ensureReportViews } from "./services/reportViewsSetup";
 import { schedulePasswordResetTokensCleanup } from "./services/passwordResetTokensCleanupScheduler";
 import { scheduleBackups } from "./services/backupScheduler";
-import { scheduleSocialPosts } from "./services/socialPostScheduler";
 import { scheduleAutoSync } from "./services/autoSyncScheduler";
 import { scheduleKpiResets } from "./services/kpiResetScheduler";
 import { scheduleScheduledReports } from "./services/scheduledReportsScheduler";
@@ -63,7 +62,6 @@ async function bootstrap() {
   schedulePaymentAttemptsExpiry(logger);
   schedulePasswordResetTokensCleanup(logger);
   scheduleBackups(logger);
-  scheduleSocialPosts(logger);
   scheduleAutoSync(logger);
   scheduleKpiResets(logger);
   scheduleScheduledReports(logger);

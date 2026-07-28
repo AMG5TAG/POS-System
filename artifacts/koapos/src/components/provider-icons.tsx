@@ -1,9 +1,10 @@
 /**
- * Microsoft brand icons (Microsoft logo + OneDrive).
+ * Inline provider brand marks.
  *
  * Microsoft had its brand marks removed from the simple-icons CDN, so the
  * `microsoft`/`onedrive` slugs 404 there. These inline SVGs are used instead so
- * the Sync menu and Backup destinations render reliably without a network call.
+ * the Sync menu, Integrations cards and Backup destinations render reliably
+ * without a network call.
  */
 
 interface IconProps {

@@ -3,7 +3,7 @@
  *
  * Single-path marks that use `fill="currentColor"`, so they render in whatever
  * text colour the parent sets — typically white on the platform's brand colour.
- * Inlined (not from a CDN) so the Social Feed renders reliably with no network call.
+ * Inlined (not from a CDN) so they render reliably with no network call.
  */
 
 interface IconProps {

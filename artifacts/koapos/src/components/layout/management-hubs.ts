@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import {
   Users, Radio, Link2, Gift, Percent,
-  BarChart2, TrendingUp, Target, UserPlus, Share2, Globe, Mail, FileText, Brain, Activity,
+  BarChart2, TrendingUp, Target, UserPlus, Globe, Mail, FileText, Brain, Activity,
   UserSquare2, Clock, Coins, Monitor, Map, MapPin, Camera, Scale, TabletSmartphone, LayoutDashboard,
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Repeat,
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, Sparkles, FolderSync, MessageSquare, Palette,
@@ -62,7 +62,6 @@ export const MARKETING_HUB_TABS: HubTab[] = [
   },
   { label: "Analytics",       href: "/management/marketing-reports/analytics",     icon: Activity   },
   { label: "Referrals",       href: "/management/marketing-reports/referrals",     icon: UserPlus   },
-  { label: "Social Feed",     href: "/management/marketing-reports/social-feed",   icon: Share2     },
   { label: "Online Store",    href: "/management/marketing-reports/online-store",            icon: Globe      },
   { label: "Email",           href: "/management/marketing-reports/email",                   icon: Mail       },
   { label: "Forms & Files",   href: "/management/marketing-reports/forms-files",                   icon: FileText   },

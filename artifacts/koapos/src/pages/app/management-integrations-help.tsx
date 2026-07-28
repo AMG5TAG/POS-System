@@ -122,12 +122,12 @@ const SECTIONS: HelpSection[] = [
   },
   {
     id: "marketing",
-    title: "Marketing & Socials",
+    title: "Marketing",
     icon: Megaphone,
-    intro: "Connect ad, social and email platforms to publish posts, run campaigns and sync audiences.",
+    intro: "Connect ad and email platforms to run campaigns and sync audiences.",
     faqs: [
       {
-        q: "How do I connect Google, Meta (Facebook/Instagram), TikTok, LinkedIn or YouTube?",
+        q: "How do I connect Google Ads or Google Business Profile?",
         steps: [
           "Click Connect Account on the integration.",
           "You'll be redirected to the provider to sign in and approve the requested permissions.",
