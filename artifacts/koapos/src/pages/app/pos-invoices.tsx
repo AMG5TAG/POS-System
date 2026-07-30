@@ -851,8 +851,11 @@ export default function POSInvoicesPage() {
       toast.success("Invoice updated");
       setEditOpen(false);
       invalidateInvoices();
-    } catch {
-      toast.error("Failed to update invoice");
+    } catch (err) {
+      // Surface the server's reason — a bare "Failed to update" hides contract
+      // validation errors (400s) that the user has no way to diagnose.
+      const detail = err instanceof Error ? err.message : "";
+      toast.error(detail ? `Failed to update invoice: ${detail}` : "Failed to update invoice");
     } finally {
       setEditSaving(false);
     }

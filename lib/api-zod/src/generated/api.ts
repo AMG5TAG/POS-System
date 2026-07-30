@@ -10918,7 +10918,7 @@ export const updateInvoiceBodyPaymentScheduleItemAmountMin = 0;
 
 export const UpdateInvoiceBody = zod.object({
   "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']).optional(),
-  "notes": zod.string().optional(),
+  "notes": zod.string().nullish(),
   "dueDate": zod.coerce.date().nullish(),
   "customerId": zod.number().nullish(),
   "items": zod.array(zod.object({

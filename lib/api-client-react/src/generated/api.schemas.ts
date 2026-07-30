@@ -5671,7 +5671,7 @@ export const InvoiceUpdateStatus = {
 
 export interface InvoiceUpdate {
   status?: InvoiceUpdateStatus;
-  notes?: string;
+  notes?: string | null;
   dueDate?: string | null;
   customerId?: number | null;
   items?: InvoiceLineItem[];

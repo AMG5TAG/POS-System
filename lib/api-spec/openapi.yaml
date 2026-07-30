@@ -16007,7 +16007,11 @@ components:
       type: object
       properties:
         status:    { type: string, enum: [draft, sent, partial, paid, overdue, cancelled] }
-        notes:     { type: string }
+        # Nullable: the edit form sends null to clear the notes field. A
+        # non-nullable string here 400s every edit of an invoice with no notes.
+        notes:
+          type: string
+          nullable: true
         dueDate:
           type: string
           format: date-time

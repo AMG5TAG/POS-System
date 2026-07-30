@@ -163,6 +163,25 @@ describe.skipIf(!hasDb)("invoices — partial payments & reversal (real DB)", ()
     expect(res.status).toBe(404);
   });
 
+  // The edit form clears optional text fields by sending null. `notes` used to be
+  // a non-nullable string in the contract, so saving an edit with an empty notes
+  // box was rejected at validation — i.e. every edit of a notes-less invoice.
+  it("accepts an edit that clears notes with null", async () => {
+    const res = await request(app).patch(`/api/invoices/${invoiceId}`).send({
+      customerId,
+      dueDate: null,
+      notes: null,
+      items: [{ description: "Edited line", quantity: 1, unitPrice: 10, taxRate: 0, productId: null, costPrice: null }],
+      serviceJobId: null,
+      appointmentId: null,
+      recurring: { enabled: false, frequency: "monthly", startDate: null, occurrences: 1 },
+      paymentSchedule: [],
+    });
+    expect(res.status).toBe(200);
+    expect(res.body.notes).toBeNull();
+    expect(res.body.total).toBe(10);
+  });
+
   // Backdated settlement — the direct-deposit "date paid" flow. Uses its own
   // invoice so it doesn't disturb the partial/reversal fixture above, and cleans
   // it up here (the outer afterAll owns the shared pool).
@@ -262,7 +281,7 @@ describe.skipIf(!hasDb)("invoices — partial payments & reversal (real DB)", ()
       createdInvoiceId = res.body.id;
 
       const [inv] = await db.select().from(invoicesTable).where(eq(invoicesTable.id, createdInvoiceId));
-      const items = inv.items as { productId?: number; costPrice?: number }[];
+      const items = inv.items as { description?: string; productId?: number; costPrice?: number }[];
       expect(items.find((l) => l.productId === zeroCostProductId)!.costPrice).toBe(5);
       expect(items.find((l) => l.productId === realCostProductId)!.costPrice).toBe(8);
       expect(items.find((l) => l.description === "Labour")!.costPrice).toBe(3);
