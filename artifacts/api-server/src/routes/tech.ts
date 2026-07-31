@@ -432,7 +432,7 @@ router.post("/tech/service-jobs/:id/photos", async (req, res): Promise<void> => 
 const SERVICE_STATUSES = [
   "pending", "in-progress", "awaiting-parts", "awaiting-stock", "at-repairer",
   "awaiting-partner-approval", "partner-replacement", "awaiting-customer",
-  "completed", "cancelled",
+  "awaiting-pickup", "completed", "cancelled",
 ] as const;
 
 const STATUS_LABELS: Record<string, string> = {
@@ -444,6 +444,7 @@ const STATUS_LABELS: Record<string, string> = {
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement":       "Partner Replacement",
   "awaiting-customer":         "Awaiting Customer",
+  "awaiting-pickup":       "Completed - Awaiting Pickup",
   "completed":                 "Completed",
   "cancelled":                 "Cancelled",
 };
@@ -482,7 +483,7 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
   logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "status_changed", `Changed service job ${job.jobNumber} status to ${toLabel}`);
 
   /* Auto-send SMS on key status transitions — mirrors the admin endpoint */
-  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "completed"]);
+  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "awaiting-pickup", "completed"]);
   if (SMS_NOTIFY_STATUSES.has(status) && job.customerId) {
     const [customer] = await db
       .select({ phone: customersTable.phone, portalToken: customersTable.portalToken })
@@ -503,7 +504,8 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
       const smsLabel: Record<string, string> = {
         "in-progress":       "In Progress",
         "awaiting-customer": "Ready — awaiting your decision",
-        "completed":         "Completed & ready for pickup",
+        "awaiting-pickup":   "Completed & ready for pickup",
+        "completed":         "Completed",
       };
       const label = smsLabel[status] ?? status;
       const smsBody = portalUrl

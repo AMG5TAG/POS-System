@@ -1408,6 +1408,7 @@ export const ServiceJobStatus = {
   'awaiting-partner-approval': 'awaiting-partner-approval',
   'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
+  'awaiting-pickup': 'awaiting-pickup',
   completed: 'completed',
   cancelled: 'cancelled',
 } as const;
@@ -1517,6 +1518,7 @@ export const ServiceJobInputStatus = {
   'awaiting-partner-approval': 'awaiting-partner-approval',
   'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
+  'awaiting-pickup': 'awaiting-pickup',
   completed: 'completed',
   cancelled: 'cancelled',
 } as const;

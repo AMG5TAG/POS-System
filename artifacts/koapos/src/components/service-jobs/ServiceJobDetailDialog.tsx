@@ -46,6 +46,7 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   "awaiting-partner-approval": { label: "Awaiting Partner Approval",   className: "bg-indigo-50 text-indigo-700 border-indigo-300" },
   "partner-replacement":       { label: "Partner Replacement",         className: "bg-teal-50 text-teal-700 border-teal-300" },
   "awaiting-customer":         { label: "Awaiting Customer",           className: "bg-orange-50 text-orange-600 border-orange-300" },
+  "awaiting-pickup":           { label: "Completed - Awaiting Pickup", className: "bg-lime-50 text-lime-700 border-lime-300" },
   completed:                   { label: "Completed",                   className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
   cancelled:                   { label: "Cancelled",                   className: "bg-red-50 text-red-700 border-red-300" },
 };

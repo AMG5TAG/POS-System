@@ -49,6 +49,7 @@ const STATUS_LABELS: Record<string, string> = {
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement": "Partner Replacement",
   "awaiting-customer": "Awaiting Customer",
+  "awaiting-pickup": "Completed - Awaiting Pickup",
   completed: "Completed",
   cancelled: "Cancelled",
 };

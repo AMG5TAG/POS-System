@@ -84,6 +84,7 @@ const STATUS_LABELS: Record<string, string> = {
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement": "Partner Replacement",
   "awaiting-customer": "Awaiting Customer",
+  "awaiting-pickup": "Completed - Awaiting Pickup",
   completed: "Completed",
   cancelled: "Cancelled",
 };
@@ -97,6 +98,7 @@ const STATUS_COLORS: Record<string, string> = {
   "awaiting-partner-approval": "bg-cyan-100 text-cyan-700",
   "partner-replacement": "bg-cyan-100 text-cyan-700",
   "awaiting-customer": "bg-pink-100 text-pink-700",
+  "awaiting-pickup": "bg-lime-100 text-lime-700",
   completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-red-100 text-red-700",
 };

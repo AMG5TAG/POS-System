@@ -234,6 +234,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         "awaiting-partner-approval":   "Awaiting Partner Approval",
         "partner-replacement":         "Partner Replacement",
         "awaiting-customer":           "Awaiting Customer",
+        "awaiting-pickup":             "Completed - Awaiting Pickup",
         "completed":                   "Completed",
         "cancelled":                   "Cancelled",
       };
@@ -268,7 +269,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     : null;
 
   // Auto-send SMS on key status transitions
-  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "completed"]);
+  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "awaiting-pickup", "completed"]);
   if (typeof body.status === "string" && SMS_NOTIFY_STATUSES.has(body.status) && customer?.phone && customer.portalToken) {
     const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
       .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
@@ -281,10 +282,11 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         : null;
 
     const statusLabel: Record<string, string> = {
-      "in-progress":      "In Progress",
-      "at-repairer":       "At Repairer",
-      "awaiting-customer": "Ready — awaiting your decision",
-      "completed":         "Completed & ready for pickup",
+      "in-progress":         "In Progress",
+      "at-repairer":         "At Repairer",
+      "awaiting-customer":   "Ready — awaiting your decision",
+      "awaiting-pickup":     "Completed & ready for pickup",
+      "completed":           "Completed",
     };
     const label = statusLabel[body.status] ?? body.status;
     const smsBody = portalUrl
@@ -350,7 +352,8 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
     "awaiting-partner-approval":   "Awaiting Partner Approval",
     "partner-replacement":         "Partner Replacement",
     "awaiting-customer":           "Awaiting Your Decision",
-    "completed":                   "Completed & ready for pickup",
+    "awaiting-pickup":             "Completed & ready for pickup",
+    "completed":                   "Completed",
     "cancelled":                   "Cancelled",
   };
   const label = statusLabel[job.status] ?? job.status;

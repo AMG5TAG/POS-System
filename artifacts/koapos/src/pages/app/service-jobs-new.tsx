@@ -335,7 +335,7 @@ export default function ServiceJobNewPage() {
       {
         data: {
           customerId: customerId ? Number(customerId) : null,
-          status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "completed" | "cancelled",
+          status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "awaiting-pickup" | "completed" | "cancelled",
           bookInDate,
           isPartnerRepair,
           isCritical,

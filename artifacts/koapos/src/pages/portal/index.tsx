@@ -120,6 +120,7 @@ const JOB_COLORS: Record<string, string> = {
   "awaiting-partner-approval": "bg-indigo-100 text-indigo-800 border-indigo-200",
   "partner-replacement":       "bg-teal-100   text-teal-800   border-teal-200",
   "awaiting-customer":         "bg-orange-100 text-orange-800 border-orange-200",
+  "awaiting-pickup":           "bg-lime-100   text-lime-800   border-lime-200",
   completed:                   "bg-emerald-100 text-emerald-800 border-emerald-200",
   cancelled:                   "bg-red-100    text-red-700    border-red-200",
 };
@@ -132,7 +133,8 @@ const JOB_LABEL: Record<string, string> = {
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement":       "Partner Replacement",
   "awaiting-customer":         "Awaiting Your Decision",
-  completed:                   "Completed — Ready for Pickup",
+  "awaiting-pickup":           "Completed — Ready for Pickup",
+  completed:                   "Completed",
   cancelled:                   "Cancelled",
 };
 const APPT_COLORS: Record<string, string> = {

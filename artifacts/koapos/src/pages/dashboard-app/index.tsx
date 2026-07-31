@@ -35,6 +35,7 @@ const STATUS_LABEL: Record<string, string> = {
   "pending": "Pending",
   "in-progress": "In Progress",
   "awaiting-customer": "Awaiting Customer",
+  "awaiting-pickup": "Completed - Awaiting Pickup",
   "ready": "Ready",
   "completed": "Completed",
 };
