@@ -128,6 +128,8 @@ export interface KpiTarget {
   notes: string;
   startDate?: string | null;
   endDate?: string | null;
+  /** "true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over. */
+  repeats?: string;
   isActive: string;
   showOnDashboard?: string;
   createdAt: string;
@@ -3937,6 +3939,8 @@ export interface KpiTargetInput {
   notes?: string;
   startDate?: string | null;
   endDate?: string | null;
+  /** "true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over. */
+  repeats?: string;
   isActive?: string;
   showOnDashboard?: string;
 }

@@ -198,7 +198,9 @@
       "WebSearch",
       "Bash(env -u PORT -u BASE_PATH pnpm run build)",
       "Bash(echo \"=== EXIT api-server: $? ===\")",
-      "Bash(ps -eo pid,ppid,etime,cmd)"
+      "Bash(ps -eo pid,ppid,etime,cmd)",
+      "Bash(curl -s https://api.resend.com/*)",
+      "Bash(curl -sS https://api.resend.com/*)"
     ]
   }
 }

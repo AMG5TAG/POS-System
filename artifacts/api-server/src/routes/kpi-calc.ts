@@ -160,6 +160,158 @@ export function getPreviousPeriodWindow(
   return { start, end, label };
 }
 
+/* ── Fixed budget windows (startDate/endDate) ────────────────────────────────
+   A KPI can pin its tracking window to explicit dates instead of the rolling
+   calendar period. When such a target is marked `repeats`, the window has to
+   advance to the next period once it finishes — otherwise the KPI stays stuck
+   on a window that has already ended. These helpers do the calendar arithmetic
+   for that roll-forward, and describe a KPI's own window for archiving. */
+
+interface Ymd { y: number; mo: number; d: number }
+
+function parseYmd(s?: string | null): Ymd | null {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec((s ?? "").slice(0, 10));
+  if (!m) return null;
+  const v = { y: +m[1], mo: +m[2], d: +m[3] };
+  if (v.mo < 1 || v.mo > 12 || v.d < 1 || v.d > daysInMonth(v.y, v.mo)) return null;
+  return v;
+}
+
+const formatYmd = (v: Ymd) =>
+  `${String(v.y).padStart(4, "0")}-${String(v.mo).padStart(2, "0")}-${String(v.d).padStart(2, "0")}`;
+
+/** Days in a calendar month (day 0 of the next month is the last of this one). */
+function daysInMonth(y: number, mo: number): number {
+  return new Date(Date.UTC(y, mo, 0)).getUTCDate();
+}
+
+/** Shift a calendar date by whole days. Uses a UTC proxy purely as calendar
+ *  arithmetic — no timezone is involved until the date is anchored to midnight. */
+function shiftYmd(v: Ymd, days: number): Ymd {
+  const p = new Date(Date.UTC(v.y, v.mo - 1, v.d) + days * 86_400_000);
+  return { y: p.getUTCFullYear(), mo: p.getUTCMonth() + 1, d: p.getUTCDate() };
+}
+
+/** Add whole months, clamping the day to the target month's length so
+ *  31 Jan + 1 month is 28/29 Feb rather than spilling into March. */
+function addMonths(v: Ymd, n: number): Ymd {
+  const total = v.y * 12 + (v.mo - 1) + n;
+  const y = Math.floor(total / 12);
+  const mo = (total % 12 + 12) % 12 + 1;
+  return { y, mo, d: Math.min(v.d, daysInMonth(y, mo)) };
+}
+
+/** Advance a calendar date by exactly one KPI period. */
+function addPeriod(v: Ymd, period: string): Ymd {
+  switch (period) {
+    case "daily":     return shiftYmd(v, 1);
+    case "weekly":    return shiftYmd(v, 7);
+    case "quarterly": return addMonths(v, 3);
+    case "annual":    return addMonths(v, 12);
+    case "monthly":
+    default:          return addMonths(v, 1);
+  }
+}
+
+const daysBetween = (a: Ymd, b: Ymd) =>
+  Math.round((Date.UTC(b.y, b.mo - 1, b.d) - Date.UTC(a.y, a.mo - 1, a.d)) / 86_400_000);
+
+/** Human label for a dated window. Windows that line up exactly with a calendar
+ *  period get the same label the rolling path produces ("August 2026", "Q3 2026")
+ *  so KPI History groups them together; anything offset gets a date range. */
+function labelForDatedWindow(period: string, s: Ymd, e: Ymd): string {
+  const sameYear = s.y === e.y;
+  const spanDays = daysBetween(s, e) + 1;
+
+  if (spanDays === 1) return `${s.d} ${MONTH_SHORT[s.mo - 1]} ${s.y}`;
+  if (period === "weekly" && spanDays === 7) return `Week of ${s.d} ${MONTH_SHORT[s.mo - 1]} ${s.y}`;
+  if (s.d === 1 && e.d === daysInMonth(e.y, e.mo)) {
+    const months = (e.y - s.y) * 12 + (e.mo - s.mo) + 1;
+    if (period === "monthly" && months === 1) return `${MONTH_LONG[s.mo - 1]} ${s.y}`;
+    if (period === "quarterly" && months === 3 && (s.mo - 1) % 3 === 0) {
+      return `Q${Math.floor((s.mo - 1) / 3) + 1} ${s.y}`;
+    }
+    if (period === "annual" && months === 12 && s.mo === 1) return `${s.y}`;
+  }
+
+  const startPart = sameYear
+    ? `${s.d} ${MONTH_SHORT[s.mo - 1]}`
+    : `${s.d} ${MONTH_SHORT[s.mo - 1]} ${s.y}`;
+  return `${startPart} – ${e.d} ${MONTH_SHORT[e.mo - 1]} ${e.y}`;
+}
+
+export interface DatedWindow {
+  /** UTC instant of local midnight on the window's first day. */
+  start: Date;
+  /** UTC instant of the last millisecond of the window's final local day. */
+  end: Date;
+  label: string;
+  /** The window's local calendar bounds, as stored on the KPI row. */
+  startDate: string;
+  endDate: string;
+}
+
+/**
+ * The budget window a dated KPI is currently tracking, resolved against the
+ * merchant's timezone. When `endDate` is absent (or nonsensical — on or before
+ * the start) the window is taken to be exactly one `period` long, so a target
+ * pinned to "the 15th" tracks the 15th-to-14th month without the merchant
+ * having to spell out an end date.
+ *
+ * Returns null when `startDate` is missing or unparseable — such a KPI has no
+ * fixed window and follows the rolling calendar period instead.
+ */
+export function getDatedWindow(
+  period: string,
+  startDate?: string | null,
+  endDate?: string | null,
+  timeZone?: string | null,
+): DatedWindow | null {
+  const s = parseYmd(startDate);
+  if (!s) return null;
+
+  const explicitEnd = parseYmd(endDate);
+  const e = explicitEnd && daysBetween(s, explicitEnd) >= 0
+    ? explicitEnd
+    : shiftYmd(addPeriod(s, period), -1);
+
+  const tz = safeZone(timeZone);
+  return {
+    start: zonedWallClockToUtc(s.y, s.mo, s.d, 0, 0, 0, tz),
+    end: new Date(zonedWallClockToUtc(e.y, e.mo, e.d, 23, 59, 59, tz).getTime() + 999),
+    label: labelForDatedWindow(period, s, e),
+    startDate: formatYmd(s),
+    endDate: formatYmd(e),
+  };
+}
+
+/**
+ * The window immediately following a completed dated window. The next window
+ * starts the day after this one ends and runs one full `period`, so successive
+ * windows are contiguous with no gap or overlap: 1–31 Jul rolls to 1–31 Aug,
+ * and 1–28 Feb rolls to 1–31 Mar (not 1–28 Mar).
+ *
+ * `endDate` comes back null when the KPI had none, preserving the merchant's
+ * "start date only" setup rather than inventing an end date for them.
+ */
+export function advanceDatedWindow(
+  period: string,
+  startDate: string,
+  endDate: string | null | undefined,
+  timeZone?: string | null,
+): { startDate: string; endDate: string | null } | null {
+  const current = getDatedWindow(period, startDate, endDate, timeZone);
+  if (!current) return null;
+
+  const nextStart = shiftYmd(parseYmd(current.endDate)!, 1);
+  const nextEnd = shiftYmd(addPeriod(nextStart, period), -1);
+  return {
+    startDate: formatYmd(nextStart),
+    // Only carry an end date forward if the merchant set one.
+    endDate: parseYmd(endDate) ? formatYmd(nextEnd) : null,
+  };
+}
+
 /** Inclusive upper bound of a fixed-budget window (end of the given local day),
  *  or null for a rolling period that runs up to "now". */
 export function getPeriodEndForKpi(endDate?: string | null, timeZone?: string | null): Date | null {

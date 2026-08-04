@@ -657,6 +657,15 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
         href: "/inventory/products",
         icon: Package,
         group: "Product",
+        // Open the product's own detail view rather than dropping the user on
+        // the full product list to find it again. Mirrors the customer handoff.
+        action: () => {
+          sessionStorage.setItem("koapos_open_product", String(p.id));
+          navigate("/inventory/products");
+          // Covers the case where the products page is already mounted, so the
+          // navigate() above is a no-op and no effect would re-fire.
+          window.dispatchEvent(new CustomEvent("koapos:open-product", { detail: p.id }));
+        },
       }));
     if (products.length) sections.push({ title: "Products", items: products });
 

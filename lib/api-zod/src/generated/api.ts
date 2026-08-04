@@ -7501,6 +7501,7 @@ export const ListKpiTargetsResponse = zod.object({
   "notes": zod.string(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
+  "repeats": zod.string().optional().describe('\"true\" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.'),
   "isActive": zod.string(),
   "showOnDashboard": zod.string().optional(),
   "createdAt": zod.coerce.date(),
@@ -7525,6 +7526,7 @@ export const CreateKpiTargetBody = zod.object({
   "notes": zod.string().optional(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
+  "repeats": zod.string().optional().describe('\"true\" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.'),
   "isActive": zod.string().optional(),
   "showOnDashboard": zod.string().optional()
 })
@@ -7549,6 +7551,7 @@ export const UpdateKpiTargetBody = zod.object({
   "notes": zod.string().optional(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
+  "repeats": zod.string().optional().describe('\"true\" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.'),
   "isActive": zod.string().optional(),
   "showOnDashboard": zod.string().optional()
 })
@@ -7567,6 +7570,7 @@ export const UpdateKpiTargetResponse = zod.object({
   "notes": zod.string(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
+  "repeats": zod.string().optional().describe('\"true\" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.'),
   "isActive": zod.string(),
   "showOnDashboard": zod.string().optional(),
   "createdAt": zod.coerce.date(),
@@ -12654,6 +12658,7 @@ export const GetDashboardKpiResponse = zod.union([zod.object({
   "notes": zod.string(),
   "startDate": zod.string().nullish(),
   "endDate": zod.string().nullish(),
+  "repeats": zod.string().optional().describe('\"true\" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.'),
   "isActive": zod.string(),
   "showOnDashboard": zod.string().optional(),
   "createdAt": zod.coerce.date(),

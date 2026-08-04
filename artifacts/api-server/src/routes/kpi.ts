@@ -51,9 +51,9 @@ router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true", startDate = null, endDate = null } = req.body;
+  const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true", startDate = null, endDate = null, repeats = "false" } = req.body;
   if (!targetId || !name || !metric) { res.status(400).json({ error: "targetId, name, and metric are required" }); return; }
-  const [row] = await db.insert(kpiTargetsTable).values({ merchantId, targetId, name, metric, categoryId, period, target, staffIds, reward, notes, isActive, startDate, endDate }).returning();
+  const [row] = await db.insert(kpiTargetsTable).values({ merchantId, targetId, name, metric, categoryId, period, target, staffIds, reward, notes, isActive, startDate, endDate, repeats }).returning();
   res.status(201).json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
@@ -61,7 +61,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive, showOnDashboard, startDate, endDate } = req.body;
+  const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive, showOnDashboard, startDate, endDate, repeats } = req.body;
 
   // When marking this KPI for dashboard display, unset all others first
   if (showOnDashboard === "true") {
@@ -83,6 +83,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   if (showOnDashboard  !== undefined) updates.showOnDashboard = showOnDashboard;
   if (startDate        !== undefined) updates.startDate       = startDate;
   if (endDate          !== undefined) updates.endDate         = endDate;
+  if (repeats          !== undefined) updates.repeats         = repeats;
 
   const [row] = await db.update(kpiTargetsTable)
     .set(updates)

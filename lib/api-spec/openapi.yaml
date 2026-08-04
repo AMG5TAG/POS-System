@@ -13943,6 +13943,7 @@ components:
         notes:       { type: string }
         startDate:   { type: string, nullable: true }
         endDate:     { type: string, nullable: true }
+        repeats:     { type: string, description: '"true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.' }
         isActive:    { type: string }
         showOnDashboard: { type: string }
         createdAt:   { type: string, format: date-time }
@@ -13963,6 +13964,7 @@ components:
         notes:       { type: string }
         startDate:   { type: string, nullable: true }
         endDate:     { type: string, nullable: true }
+        repeats:     { type: string, description: '"true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.' }
         isActive:    { type: string }
         showOnDashboard: { type: string }
 

@@ -31,7 +31,7 @@ import {
   Wrench, BarChart3, AlertCircle, CheckCircle2, Clock,
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
   SplitSquareHorizontal, Flame, Store, Banknote, CalendarDays, Calendar,
-  FileSpreadsheet,
+  FileSpreadsheet, RefreshCw,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -50,7 +50,7 @@ interface KpiTarget {
   id: string; name: string; metric: KpiMetric; categoryId: string;
   period: KpiPeriod; target: number; staffIds: string[];
   reward: KpiReward | null; notes: string; isActive: boolean;
-  startDate: string; endDate: string;
+  startDate: string; endDate: string; repeats: boolean;
   showOnDashboard?: string;
 }
 
@@ -73,6 +73,7 @@ function apiToTarget(r: Record<string, unknown>): KpiTarget {
     notes: String(r.notes ?? ""),
     startDate: String(r.startDate ?? ""),
     endDate: String(r.endDate ?? ""),
+    repeats: String(r.repeats) === "true",
     isActive: String(r.isActive) !== "false",
     showOnDashboard: String(r.showOnDashboard ?? "false"),
   };
@@ -98,6 +99,11 @@ const METRIC_META: Record<KpiMetric, { label: string; icon: React.ElementType; u
 
 const PERIOD_LABELS: Record<KpiPeriod, string> = {
   daily: "Daily", weekly: "Weekly", monthly: "Monthly", quarterly: "Quarterly", annual: "Annual",
+};
+
+/** Period as a noun, for sentences like "Repeat each month". */
+const PERIOD_NOUNS: Record<KpiPeriod, string> = {
+  daily: "day", weekly: "week", monthly: "month", quarterly: "quarter", annual: "year",
 };
 
 const REWARD_META: Record<RewardType, { label: string; icon: React.ElementType; hasValue: boolean; valueSuffix: string }> = {
@@ -130,7 +136,7 @@ function progressColor(pct: number, isInverse?: boolean) {
 const BLANK: Omit<KpiTarget, "id"> = {
   name: "", metric: "revenue", categoryId: "", period: "monthly",
   target: 0, staffIds: [], reward: null, notes: "", isActive: true,
-  startDate: "", endDate: "",
+  startDate: "", endDate: "", repeats: false,
 };
 const BLANK_REWARD: KpiReward = { type: "cash", value: 0, label: "", note: "" };
 
@@ -177,6 +183,11 @@ function KpiCard({ kpi, onEdit, onDelete, onToggleDashboard, staffList }: {
               <p className="text-xs text-muted-foreground">
                 {kpi.startDate || "—"}{kpi.endDate ? ` → ${kpi.endDate}` : " onwards"}
               </p>
+              {kpi.repeats && (
+                <Badge variant="secondary" className="text-[10px] gap-0.5 px-1.5 py-0">
+                  <RefreshCw className="w-2.5 h-2.5" /> Repeats
+                </Badge>
+              )}
             </div>
           )}
           {kpi.reward && (
@@ -303,6 +314,24 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
             <p className="text-xs text-muted-foreground">
               When set, progress tracks from the start date instead of the current {form.period === "weekly" ? "week" : form.period === "monthly" ? "month" : form.period === "daily" ? "day" : form.period === "quarterly" ? "quarter" : "year"}.
             </p>
+            {form.startDate && (
+              <label className="flex items-start gap-2 cursor-pointer pt-1 border-t border-border/60">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary shrink-0"
+                  checked={form.repeats}
+                  onChange={(e) => setField("repeats", e.target.checked)}
+                />
+                <span className="text-xs">
+                  <span className="font-medium">Repeat each {PERIOD_NOUNS[form.period]}</span>
+                  <span className="block text-muted-foreground mt-0.5">
+                    When this {PERIOD_NOUNS[form.period]} ends its result is saved to KPI History and a new
+                    one starts automatically, keeping the same target. Leave off for a one-off campaign
+                    window that simply finishes.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
           {!staffOnly && (
             <div className="space-y-1.5">
@@ -394,6 +423,7 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
       target: perStaffTarget, staffIds: [staffId], reward: selectedKpi.reward,
       notes: `Spread from store target: ${selectedKpi.name}`, isActive: true,
       startDate: selectedKpi.startDate ?? "", endDate: selectedKpi.endDate ?? "",
+      repeats: selectedKpi.repeats,
     }));
     onSpread(newTargets);
     onOpenChange(false);
@@ -611,6 +641,9 @@ export default function ManagementKpisPage() {
       isActive: t.isActive ? "true" : "false",
       startDate: t.startDate || null,
       endDate: t.endDate || null,
+      // Only meaningful alongside a start date — a rolling period already resets
+      // on its own, so never persist a stray repeat flag without a window.
+      repeats: t.startDate && t.repeats ? "true" : "false",
     };
     const invalidateTargets = () => {
       queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
@@ -686,6 +719,10 @@ export default function ManagementKpisPage() {
         name: t.name, metric: t.metric, categoryId: t.categoryId, period: t.period,
         target: t.target, staffIds: JSON.stringify(t.staffIds),
         reward: t.reward ? JSON.stringify(t.reward) : undefined, notes: t.notes, isActive: "true",
+        // Carry the store target's budget window across, so a spread staff
+        // target tracks (and rolls over) on the same schedule as its parent.
+        startDate: t.startDate || null, endDate: t.endDate || null,
+        repeats: t.startDate && t.repeats ? "true" : "false",
       }})
     )).then(() => {
       refetchTargets();

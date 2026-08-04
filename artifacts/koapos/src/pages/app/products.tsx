@@ -1,10 +1,11 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListProducts,
+  useGetProduct,
   useListCategories,
   useCreateProduct,
   useUpdateProduct,
@@ -1527,6 +1528,34 @@ export default function ProductsPage() {
   const products   = productsData?.items || [];
   const allTags    = [...new Set(products.flatMap((p) => (p as typeof p & { tags?: string[] }).tags ?? []))].sort();
   const categories = (categoriesData as unknown as { id: number; name: string; parentId?: number | null }[]) || [];
+
+  /* ── Open a product straight from the universal search bar ──
+     The search hands the product id over and navigates here; we open that
+     product's detail view instead of leaving the user on the list. Fetched by
+     id rather than looked up in `products`, so it still opens when the row sits
+     behind an active search/category filter or past the list's fetch limit. */
+  const [openFromSearchId, setOpenFromSearchId] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const take = () => {
+      const raw = sessionStorage.getItem("koapos_open_product");
+      if (!raw) return;
+      sessionStorage.removeItem("koapos_open_product");
+      const id = parseInt(raw, 10);
+      if (!isNaN(id)) setOpenFromSearchId(id);
+    };
+    take(); // navigated in from another page
+    window.addEventListener("koapos:open-product", take); // already on this page
+    return () => window.removeEventListener("koapos:open-product", take);
+  }, []);
+
+  const { data: productFromSearch } = useGetProduct(openFromSearchId as number, {
+    query: { enabled: openFromSearchId != null, queryKey: ["product", openFromSearchId] },
+  });
+  useEffect(() => {
+    if (!productFromSearch) return;
+    setSelectedProduct(productFromSearch as Product);
+    setOpenFromSearchId(null);
+  }, [productFromSearch]);
 
   /* Sort */
   const sorted = [...products].sort((a, b) => {
