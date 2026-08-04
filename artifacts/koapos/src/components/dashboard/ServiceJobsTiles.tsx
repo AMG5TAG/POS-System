@@ -253,7 +253,12 @@ export function ServiceJobsTiles({
   const inProgress = jobs.filter((j) => !["completed", "partner-replacement", "cancelled"].includes(j.status as string)).length;
   const awaitingCustomer = jobs.filter((j) => (j.status as string) === "awaiting-customer").length;
   const pending = jobs.filter((j) => (j.status as string) === "pending").length;
-  const critical = jobs.filter((j) => j.isCritical).length;
+  // Only count critical jobs that are still open — a flagged job that has been
+  // completed or cancelled is no longer actionable. Matches the wall-display
+  // endpoint (dashboard-app-public.ts), which counts critical among active jobs.
+  const critical = jobs.filter(
+    (j) => j.isCritical && !["completed", "cancelled"].includes(j.status as string)
+  ).length;
 
   const now = new Date();
   const upcomingAppts = (appointmentsData ?? []).filter(
