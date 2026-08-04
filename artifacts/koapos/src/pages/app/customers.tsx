@@ -47,7 +47,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
 import { useDocumentTemplate } from "@/lib/use-document-template";
@@ -766,7 +766,7 @@ function ManualMergePickerDialog({
             autoFocus
           />
         </div>
-        <ScrollArea className="flex-1 min-h-0 mt-1">
+        <ScrollArea className={cn("flex-1 min-h-0 mt-1", SCROLL_AREA_TRUNCATE_FIX)}>
           <div className="divide-y">
             {results.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">

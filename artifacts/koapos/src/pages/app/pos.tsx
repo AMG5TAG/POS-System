@@ -60,7 +60,7 @@ import { useStaffSession } from "@/lib/staff-day-session";
 import { loyaltyUnitName, loyaltyProgramName } from "@/lib/loyalty-naming";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -3649,7 +3649,7 @@ export default function POSPage() {
               <p className="text-xs mt-1">Tap products to add them to the sale.</p>
             </div>
           ) : (
-          <ScrollArea className="flex-1 w-full">
+          <ScrollArea className={cn("flex-1 w-full", SCROLL_AREA_TRUNCATE_FIX)}>
               <div className="p-2.5 space-y-1.5 w-full overflow-x-hidden">
                 {cart.map((item) => {
                   const modAdj = (item.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
@@ -5027,7 +5027,7 @@ export default function POSPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
-              <ScrollArea className="max-h-44 border rounded-lg">
+              <ScrollArea className={cn("max-h-44 border rounded-lg", SCROLL_AREA_TRUNCATE_FIX)}>
                 {filteredServiceJobs.length === 0
                   ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No service jobs match your search." : "No service jobs found."}</div>
                   : <div className="divide-y">{filteredServiceJobs.map(sj => (
@@ -5045,7 +5045,7 @@ export default function POSPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
-              <ScrollArea className="max-h-44 border rounded-lg">
+              <ScrollArea className={cn("max-h-44 border rounded-lg", SCROLL_AREA_TRUNCATE_FIX)}>
                 {filteredAppointments.length === 0
                   ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No appointments match your search." : "No appointments found."}</div>
                   : <div className="divide-y">{filteredAppointments.map(apt => (

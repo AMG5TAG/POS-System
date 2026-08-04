@@ -42,7 +42,7 @@ import {
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList,
   Copy, GripVertical, Loader2, Link2, CalendarDays, Wrench,
 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { SendDialog, type SendMethodKey } from "@/components/send/send-dialog";
 import {
@@ -2850,7 +2850,7 @@ export default function POSInvoicesPage() {
             <p className="text-xs text-muted-foreground -mb-1">Unfinished jobs and appointments are listed first; completed ones appear below.</p>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
-              <ScrollArea className="max-h-56 border rounded-lg">
+              <ScrollArea className={`max-h-56 border rounded-lg ${SCROLL_AREA_TRUNCATE_FIX}`}>
                 {sjUnfinished.length + sjDone.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">{linkQ ? "No matching service jobs." : "No service jobs found."}</div>
                 ) : (
@@ -2873,7 +2873,7 @@ export default function POSInvoicesPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
-              <ScrollArea className="max-h-56 border rounded-lg">
+              <ScrollArea className={`max-h-56 border rounded-lg ${SCROLL_AREA_TRUNCATE_FIX}`}>
                 {aptUnfinished.length + aptDone.length === 0 ? (
                   <div className="text-center py-6 text-muted-foreground text-sm">{linkQ ? "No matching appointments." : "No appointments found."}</div>
                 ) : (
