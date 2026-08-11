@@ -136,3 +136,4 @@ export * from "./payroll-payslips";
 export * from "./payroll-leave-balances";
 export * from "./product-reviews";
 export * from "./report-views";
+export * from "./merchant-assets";

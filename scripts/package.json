@@ -37,6 +37,7 @@
     "add-dashboard-section-order": "tsx ./src/add-dashboard-section-order.ts",
     "add-service-job-reopen-link": "tsx ./src/add-service-job-reopen-link.ts",
     "add-dashboard-public-token": "tsx ./src/add-dashboard-public-token.ts",
+    "add-merchant-assets-table": "tsx ./src/add-merchant-assets-table.ts",
     "hash-staff-pins": "tsx ./src/hash-staff-pins.ts",
     "patch-koastal-recurring-invoices": "tsx ./src/patch-koastal-recurring-invoices.ts",
     "backfill-resize-logos": "tsx ./src/backfill-resize-logos.ts",

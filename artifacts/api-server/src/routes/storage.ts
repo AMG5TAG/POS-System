@@ -1,13 +1,22 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
+import { createHash } from "crypto";
+import { db, merchantAssetsTable } from "@workspace/db";
+import { and, eq, desc, ilike, like, sql } from "drizzle-orm";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
   ConfirmUploadBody,
   ConfirmUploadResponse,
+  ListMerchantAssetsResponse,
+  GetMerchantAssetUsageResponse,
+  DeleteMerchantAssetResponse,
+  ImportMerchantAssetsResponse,
+  SweepMerchantAssetOrphansResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
+import { findAssetUsage, findUsageCounts } from "../lib/assetUsage";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireActiveAuth } from "../middlewares/requireActiveAuth";
 
@@ -22,12 +31,38 @@ const ALLOWED_UPLOAD_MIME_TYPES = new Set([
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
 
+/** Content-addressed objects live under assets/; legacy random-UUID ones under uploads/. */
+const ASSET_PATH_MARKER = "%/assets/%";
+
+/** Public URL the frontend uses as an <img src> for a stored object. */
+function assetUrl(objectPath: string): string {
+  return `/api/storage${objectPath}`;
+}
+
+/**
+ * Express query params arrive as strings, and the generated schemas use
+ * zod.coerce.boolean() — which treats the string "false" as true. Parse
+ * booleans from the raw query instead.
+ */
+function queryFlag(value: unknown): boolean {
+  return value === true || value === "true" || value === "1";
+}
+
 /**
  * POST /storage/uploads/request-url
  *
  * Request a presigned URL for file upload.
  * The client sends JSON metadata (name, size, contentType) — NOT the file.
  * Then uploads the file directly to the returned presigned URL.
+ *
+ * When the client supplies `sha256`, uploads are de-duplicated: if this
+ * merchant already has an asset with that hash the response carries no
+ * uploadURL and the client skips straight to using the existing objectPath.
+ * That is what lets a few hundred products share one stored image.
+ *
+ * The hash is client-supplied and not re-verified server-side. A client that
+ * lies about it can only confuse its own library — keys are merchant-scoped,
+ * so a bad hash can never surface or overwrite another merchant's file.
  */
 router.post("/storage/uploads/request-url", requireActiveAuth, async (req: Request, res: Response) => {
   const parsed = RequestUploadUrlBody.safeParse(req.body);
@@ -42,18 +77,47 @@ router.post("/storage/uploads/request-url", requireActiveAuth, async (req: Reque
   }
 
   try {
-    const { name, size, contentType } = parsed.data;
+    const { name, size, contentType, sha256 } = parsed.data;
+    const merchantId = String(req.session.merchantId);
+    const metadata = { name, size, contentType, sha256 };
 
-    const uploadURL = await objectStorageService.getObjectEntityUploadURL(String(req.session.merchantId));
-    const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+    if (!sha256) {
+      // Legacy path — no hash supplied, so no dedup is possible.
+      const uploadURL = await objectStorageService.getObjectEntityUploadURL(merchantId);
+      const objectPath = objectStorageService.normalizeObjectEntityPath(uploadURL);
+      res.json(RequestUploadUrlResponse.parse({ uploadURL, objectPath, deduped: false, metadata }));
+      return;
+    }
 
-    res.json(
-      RequestUploadUrlResponse.parse({
-        uploadURL,
-        objectPath,
-        metadata: { name, size, contentType },
-      }),
-    );
+    const [existing] = await db
+      .select()
+      .from(merchantAssetsTable)
+      .where(and(
+        eq(merchantAssetsTable.merchantId, req.session.merchantId!),
+        eq(merchantAssetsTable.sha256, sha256),
+        like(merchantAssetsTable.objectPath, ASSET_PATH_MARKER),
+      ))
+      .limit(1);
+
+    if (existing) {
+      // Guard against a library row whose object was removed out of band —
+      // better to re-upload than to hand back a path that 404s.
+      if (await objectStorageService.objectExists(existing.objectPath)) {
+        res.json(RequestUploadUrlResponse.parse({
+          objectPath: existing.objectPath,
+          deduped: true,
+          assetId: existing.id,
+          metadata,
+        }));
+        return;
+      }
+      await db.delete(merchantAssetsTable).where(eq(merchantAssetsTable.id, existing.id));
+    }
+
+    const uploadURL = await objectStorageService.getAssetUploadURL(merchantId, sha256);
+    const objectPath = objectStorageService.assetObjectPath(merchantId, sha256);
+
+    res.json(RequestUploadUrlResponse.parse({ uploadURL, objectPath, deduped: false, metadata }));
   } catch (error) {
     req.log.error({ err: error }, "Error generating upload URL");
     res.status(500).json({ error: "Failed to generate upload URL" });
@@ -75,7 +139,7 @@ router.post("/storage/uploads/confirm", requireActiveAuth, async (req: Request, 
     return;
   }
 
-  const { objectPath } = parsed.data;
+  const { objectPath, sha256, name, size, contentType, width, height } = parsed.data;
   const merchantId = String(req.session.merchantId);
 
   const expectedPrefix = `/objects/merchants/${merchantId}/`;
@@ -90,7 +154,35 @@ router.post("/storage/uploads/confirm", requireActiveAuth, async (req: Request, 
       visibility: "private",
     });
 
-    res.json(ConfirmUploadResponse.parse({ objectPath: normalizedPath }));
+    // Register the upload in the merchant's media library so it can be picked
+    // again instead of re-uploaded. Concurrent confirms of the same file race
+    // on the unique indexes; onConflictDoNothing plus a read-back makes either
+    // order converge on the one row.
+    let assetId: number | undefined;
+    if (sha256) {
+      await db.insert(merchantAssetsTable).values({
+        merchantId: req.session.merchantId!,
+        sha256,
+        objectPath: normalizedPath,
+        contentType: contentType ?? "application/octet-stream",
+        sizeBytes: size ?? 0,
+        filename: name ?? null,
+        width: width ?? null,
+        height: height ?? null,
+      }).onConflictDoNothing();
+
+      const [asset] = await db
+        .select({ id: merchantAssetsTable.id })
+        .from(merchantAssetsTable)
+        .where(and(
+          eq(merchantAssetsTable.merchantId, req.session.merchantId!),
+          eq(merchantAssetsTable.objectPath, normalizedPath),
+        ))
+        .limit(1);
+      assetId = asset?.id;
+    }
+
+    res.json(ConfirmUploadResponse.parse({ objectPath: normalizedPath, assetId }));
   } catch (error) {
     if (error instanceof ObjectNotFoundError) {
       res.status(404).json({ error: "Object not found" });
@@ -171,10 +263,24 @@ router.get("/storage/objects/*path", requireActiveAuth, async (req: Request, res
       return;
     }
 
-    const response = await objectStorageService.downloadObject(objectFile);
+    // Content-addressed objects can never change under a given key, so they
+    // are safe to cache hard. This matters now that one image is shared by
+    // many products: the browser fetches it once per session, not per tile.
+    const isContentAddressed = wildcardPath.includes("/assets/");
+    const response = await objectStorageService.downloadObject(
+      objectFile,
+      isContentAddressed ? 31_536_000 : 3600,
+      isContentAddressed,
+    );
 
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
+
+    const etag = response.headers.get("etag");
+    if (etag && req.headers["if-none-match"] === etag) {
+      res.status(304).end();
+      return;
+    }
 
     if (response.body) {
       const nodeStream = Readable.fromWeb(response.body as ReadableStream<Uint8Array>);
@@ -190,6 +296,276 @@ router.get("/storage/objects/*path", requireActiveAuth, async (req: Request, res
     }
     req.log.error({ err: error }, "Error serving object");
     res.status(500).json({ error: "Failed to serve object" });
+  }
+});
+
+// ── Media library ───────────────────────────────────────────────────────────
+
+/**
+ * GET /storage/assets
+ *
+ * The merchant's reusable media. Every row is filtered by the session's
+ * merchantId, and each objectPath is itself merchant-prefixed, so a merchant
+ * can only ever list and serve its own uploads.
+ */
+router.get("/storage/assets", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
+    const limit = Math.min(Math.max(Number(req.query.limit) || 60, 1), 200);
+    const offset = Math.max(Number(req.query.offset) || 0, 0);
+    const withUsage = queryFlag(req.query.withUsage);
+
+    const conditions = [eq(merchantAssetsTable.merchantId, merchantId)];
+    if (search) conditions.push(ilike(merchantAssetsTable.filename, `%${search}%`));
+    const where = and(...conditions);
+
+    const rows = await db
+      .select()
+      .from(merchantAssetsTable)
+      .where(where)
+      .orderBy(desc(merchantAssetsTable.createdAt))
+      .limit(limit)
+      .offset(offset);
+
+    const [totals] = await db
+      .select({
+        total: sql<number>`count(*)::int`,
+        totalBytes: sql<number>`coalesce(sum(${merchantAssetsTable.sizeBytes}), 0)::int`,
+      })
+      .from(merchantAssetsTable)
+      .where(where);
+
+    const usageCounts = withUsage
+      ? await findUsageCounts(merchantId, rows.map((r) => r.objectPath))
+      : null;
+
+    res.json(ListMerchantAssetsResponse.parse({
+      assets: rows.map((r) => ({
+        id: r.id,
+        objectPath: r.objectPath,
+        url: assetUrl(r.objectPath),
+        sha256: r.sha256,
+        contentType: r.contentType,
+        sizeBytes: r.sizeBytes,
+        filename: r.filename,
+        width: r.width,
+        height: r.height,
+        ...(usageCounts ? { usageCount: usageCounts.get(r.objectPath) ?? 0 } : {}),
+        createdAt: r.createdAt,
+      })),
+      total: totals?.total ?? 0,
+      totalBytes: totals?.totalBytes ?? 0,
+    }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error listing merchant assets");
+    res.status(500).json({ error: "Failed to list assets" });
+  }
+});
+
+/**
+ * GET /storage/assets/:id/usage
+ *
+ * Where an asset is still referenced. Backs the "used by 12 products" hint and
+ * the delete confirmation.
+ */
+router.get("/storage/assets/:id/usage", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      res.status(404).json({ error: "Asset not found" });
+      return;
+    }
+
+    const [asset] = await db
+      .select()
+      .from(merchantAssetsTable)
+      .where(and(eq(merchantAssetsTable.id, id), eq(merchantAssetsTable.merchantId, merchantId)))
+      .limit(1);
+
+    if (!asset) {
+      res.status(404).json({ error: "Asset not found" });
+      return;
+    }
+
+    const usage = await findAssetUsage(asset.objectPath);
+    res.json(GetMerchantAssetUsageResponse.parse({
+      total: usage.reduce((sum, u) => sum + u.count, 0),
+      usage,
+    }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error computing asset usage");
+    res.status(500).json({ error: "Failed to compute asset usage" });
+  }
+});
+
+/**
+ * DELETE /storage/assets/:id
+ *
+ * Reclaims storage. Refuses with 409 while anything still points at the
+ * object, so removing a library entry can never blank out a product image —
+ * the caller gets the reference report back and can go clear those first.
+ */
+router.delete("/storage/assets/:id", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const id = Number(req.params.id);
+    if (!Number.isInteger(id)) {
+      res.status(404).json({ error: "Asset not found" });
+      return;
+    }
+
+    const [asset] = await db
+      .select()
+      .from(merchantAssetsTable)
+      .where(and(eq(merchantAssetsTable.id, id), eq(merchantAssetsTable.merchantId, merchantId)))
+      .limit(1);
+
+    if (!asset) {
+      res.status(404).json({ error: "Asset not found" });
+      return;
+    }
+
+    const usage = await findAssetUsage(asset.objectPath);
+    const total = usage.reduce((sum, u) => sum + u.count, 0);
+    if (total > 0) {
+      res.status(409).json(GetMerchantAssetUsageResponse.parse({
+        total,
+        usage,
+        error: `Still used in ${total} place${total === 1 ? "" : "s"}. Remove those references first.`,
+      }));
+      return;
+    }
+
+    try {
+      await objectStorageService.deleteObjectEntity(asset.objectPath);
+    } catch (error) {
+      // An object that has already vanished should not block cleaning up the
+      // row that points at it.
+      if (!(error instanceof ObjectNotFoundError)) throw error;
+    }
+    await db.delete(merchantAssetsTable).where(eq(merchantAssetsTable.id, asset.id));
+
+    res.json(DeleteMerchantAssetResponse.parse({ deleted: true, reclaimedBytes: asset.sizeBytes }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error deleting merchant asset");
+    res.status(500).json({ error: "Failed to delete asset" });
+  }
+});
+
+/** Objects large enough that hashing them during the backfill is not worth it. */
+const IMPORT_HASH_SIZE_LIMIT = 32 * 1024 * 1024;
+
+/**
+ * POST /storage/assets/import
+ *
+ * Backfills the library from what is already in storage, so merchants who
+ * uploaded before this feature existed can reuse those files. Purely additive:
+ * it reads objects and inserts rows, and never moves or deletes anything.
+ */
+router.post("/storage/assets/import", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const objects = await objectStorageService.listMerchantObjects(String(merchantId));
+
+    const known = new Set(
+      (await db
+        .select({ objectPath: merchantAssetsTable.objectPath })
+        .from(merchantAssetsTable)
+        .where(eq(merchantAssetsTable.merchantId, merchantId))
+      ).map((r) => r.objectPath),
+    );
+
+    let imported = 0;
+    let skipped = 0;
+
+    for (const obj of objects) {
+      if (known.has(obj.objectPath)) {
+        skipped++;
+        continue;
+      }
+
+      let sha256: string | null = null;
+      if (obj.size > 0 && obj.size <= IMPORT_HASH_SIZE_LIMIT) {
+        try {
+          const file = await objectStorageService.getObjectEntityFile(obj.objectPath);
+          const bytes = await objectStorageService.readObjectBytes(file);
+          sha256 = createHash("sha256").update(bytes).digest("hex");
+        } catch (error) {
+          req.log.warn({ err: error, objectPath: obj.objectPath }, "Could not hash object during import");
+        }
+      }
+
+      await db.insert(merchantAssetsTable).values({
+        merchantId,
+        sha256,
+        objectPath: obj.objectPath,
+        contentType: obj.contentType,
+        sizeBytes: obj.size,
+        filename: obj.objectPath.split("/").pop() ?? null,
+      }).onConflictDoNothing();
+
+      imported++;
+    }
+
+    res.json(ImportMerchantAssetsResponse.parse({ imported, skipped, scanned: objects.length }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error importing merchant assets");
+    res.status(500).json({ error: "Failed to import assets" });
+  }
+});
+
+/**
+ * POST /storage/assets/orphans
+ *
+ * Finds stored objects that are neither in the library nor referenced by any
+ * row — the residue of the old "remove image" behaviour, which cleared the
+ * form field and left the object behind forever.
+ *
+ * Dry run unless apply=true. Registered library assets are never swept, even
+ * when unused: keeping an unused image around for reuse is the whole point of
+ * the library, so those are only removed through an explicit DELETE.
+ */
+router.post("/storage/assets/orphans", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const apply = queryFlag(req.query.apply);
+
+    const objects = await objectStorageService.listMerchantObjects(String(merchantId));
+    const known = new Set(
+      (await db
+        .select({ objectPath: merchantAssetsTable.objectPath })
+        .from(merchantAssetsTable)
+        .where(eq(merchantAssetsTable.merchantId, merchantId))
+      ).map((r) => r.objectPath),
+    );
+
+    const unregistered = objects.filter((o) => !known.has(o.objectPath));
+    const usage = await findUsageCounts(merchantId, unregistered.map((o) => o.objectPath));
+    const orphans = unregistered.filter((o) => (usage.get(o.objectPath) ?? 0) === 0);
+
+    let deletedCount = 0;
+    if (apply) {
+      for (const orphan of orphans) {
+        try {
+          await objectStorageService.deleteObjectEntity(orphan.objectPath);
+          deletedCount++;
+        } catch (error) {
+          req.log.warn({ err: error, objectPath: orphan.objectPath }, "Could not delete orphan object");
+        }
+      }
+    }
+
+    res.json(SweepMerchantAssetOrphansResponse.parse({
+      dryRun: !apply,
+      orphans: orphans.map((o) => ({ objectPath: o.objectPath, sizeBytes: o.size })),
+      reclaimableBytes: orphans.reduce((sum, o) => sum + o.size, 0),
+      deletedCount,
+    }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error sweeping orphan objects");
+    res.status(500).json({ error: "Failed to sweep orphan objects" });
   }
 });
 

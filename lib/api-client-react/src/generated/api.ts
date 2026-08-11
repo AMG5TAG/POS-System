@@ -96,6 +96,7 @@ import type {
   DashboardSummary,
   DeleteCashDrawerEntry200,
   DeleteDiscount200,
+  DeleteMerchantAssetResponse,
   DeleteParkedSale200,
   DeletePriceTier200,
   DeleteProductBundle200,
@@ -152,6 +153,7 @@ import type {
   GiftCardValidateResponse,
   HealthStatus,
   ImportCustomersBody,
+  ImportMerchantAssetsResponse,
   ImportProductsBody,
   IntegrationActionResult,
   IntegrationConnectInput,
@@ -204,6 +206,7 @@ import type {
   ListLaybysParams,
   ListLowStockAlertLog200,
   ListLowStockAlertLogParams,
+  ListMerchantAssetsParams,
   ListPcSavedBuilds200,
   ListPosRegisterSessionsParams,
   ListPosStaffSessionsParams,
@@ -237,6 +240,8 @@ import type {
   MarketplaceConnectionInput,
   MarketplaceConnectionListResponse,
   Merchant,
+  MerchantAssetListResponse,
+  MerchantAssetUsageResponse,
   MerchantUpdate,
   MergeCustomerProfilesBody,
   ModifyCompletedSaleInput,
@@ -446,6 +451,8 @@ import type {
   Supplier,
   SupplierInput,
   SupplierListResponse,
+  SweepMerchantAssetOrphansParams,
+  SweepOrphansResponse,
   SyncContactsInput,
   SyncContactsResult,
   Tag,
@@ -5083,6 +5090,394 @@ export function useGetStorageObject<TData = Awaited<ReturnType<typeof getStorage
 
 
 
+
+export const getListMerchantAssetsUrl = (params?: ListMerchantAssetsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/storage/assets?${stringifiedParams}` : `/api/storage/assets`
+}
+
+/**
+ * Returns the merchant's media library — one entry per distinct uploaded file. Assets are scoped to the merchant by both the asset row and the merchant-prefixed storage path, so a merchant only ever sees its own uploads.
+
+ * @summary List the authenticated merchant's uploaded media
+ */
+export const listMerchantAssets = async (params?: ListMerchantAssetsParams, options?: RequestInit): Promise<MerchantAssetListResponse> => {
+
+  return customFetch<MerchantAssetListResponse>(getListMerchantAssetsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListMerchantAssetsQueryKey = (params?: ListMerchantAssetsParams,) => {
+    return [
+    `/api/storage/assets`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListMerchantAssetsQueryOptions = <TData = Awaited<ReturnType<typeof listMerchantAssets>>, TError = ErrorType<unknown>>(params?: ListMerchantAssetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMerchantAssets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListMerchantAssetsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listMerchantAssets>>> = ({ signal }) => listMerchantAssets(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listMerchantAssets>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListMerchantAssetsQueryResult = NonNullable<Awaited<ReturnType<typeof listMerchantAssets>>>
+export type ListMerchantAssetsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List the authenticated merchant's uploaded media
+ */
+
+export function useListMerchantAssets<TData = Awaited<ReturnType<typeof listMerchantAssets>>, TError = ErrorType<unknown>>(
+ params?: ListMerchantAssetsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listMerchantAssets>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListMerchantAssetsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetMerchantAssetUsageUrl = (id: number,) => {
+
+
+
+
+  return `/api/storage/assets/${id}/usage`
+}
+
+/**
+ * Scans every column that can hold a media reference and reports where this asset is still in use. A total of 0 means the asset can be deleted.
+
+ * @summary List what still references an asset
+ */
+export const getMerchantAssetUsage = async (id: number, options?: RequestInit): Promise<MerchantAssetUsageResponse> => {
+
+  return customFetch<MerchantAssetUsageResponse>(getGetMerchantAssetUsageUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetMerchantAssetUsageQueryKey = (id: number,) => {
+    return [
+    `/api/storage/assets/${id}/usage`
+    ] as const;
+    }
+
+
+export const getGetMerchantAssetUsageQueryOptions = <TData = Awaited<ReturnType<typeof getMerchantAssetUsage>>, TError = ErrorType<ErrorEnvelope>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMerchantAssetUsage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetMerchantAssetUsageQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getMerchantAssetUsage>>> = ({ signal }) => getMerchantAssetUsage(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getMerchantAssetUsage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetMerchantAssetUsageQueryResult = NonNullable<Awaited<ReturnType<typeof getMerchantAssetUsage>>>
+export type GetMerchantAssetUsageQueryError = ErrorType<ErrorEnvelope>
+
+
+/**
+ * @summary List what still references an asset
+ */
+
+export function useGetMerchantAssetUsage<TData = Awaited<ReturnType<typeof getMerchantAssetUsage>>, TError = ErrorType<ErrorEnvelope>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getMerchantAssetUsage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetMerchantAssetUsageQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getDeleteMerchantAssetUrl = (id: number,) => {
+
+
+
+
+  return `/api/storage/assets/${id}`
+}
+
+/**
+ * Permanently removes the stored object and its library entry. Refuses with 409 when anything still references the asset, so deleting can never break a product image.
+
+ * @summary Delete an unreferenced asset and reclaim its storage
+ */
+export const deleteMerchantAsset = async (id: number, options?: RequestInit): Promise<DeleteMerchantAssetResponse> => {
+
+  return customFetch<DeleteMerchantAssetResponse>(getDeleteMerchantAssetUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteMerchantAssetMutationOptions = <TError = ErrorType<ErrorEnvelope | MerchantAssetUsageResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMerchantAsset>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteMerchantAsset>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteMerchantAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteMerchantAsset>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteMerchantAsset(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteMerchantAssetMutationResult = NonNullable<Awaited<ReturnType<typeof deleteMerchantAsset>>>
+
+    export type DeleteMerchantAssetMutationError = ErrorType<ErrorEnvelope | MerchantAssetUsageResponse>
+
+    /**
+ * @summary Delete an unreferenced asset and reclaim its storage
+ */
+export const useDeleteMerchantAsset = <TError = ErrorType<ErrorEnvelope | MerchantAssetUsageResponse>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteMerchantAsset>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteMerchantAsset>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteMerchantAssetMutationOptions(options));
+    }
+
+export const getImportMerchantAssetsUrl = () => {
+
+
+
+
+  return `/api/storage/assets/import`
+}
+
+/**
+ * One-shot backfill. Lists the merchant's stored objects, hashes any that are not yet in the library, and registers them so historical uploads are pickable. Read-only with respect to stored objects — nothing is moved or deleted. Idempotent.
+
+ * @summary Register pre-existing uploads into the media library
+ */
+export const importMerchantAssets = async ( options?: RequestInit): Promise<ImportMerchantAssetsResponse> => {
+
+  return customFetch<ImportMerchantAssetsResponse>(getImportMerchantAssetsUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getImportMerchantAssetsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMerchantAssets>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importMerchantAssets>>, TError,void, TContext> => {
+
+const mutationKey = ['importMerchantAssets'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importMerchantAssets>>, void> = () => {
+
+
+          return  importMerchantAssets(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportMerchantAssetsMutationResult = NonNullable<Awaited<ReturnType<typeof importMerchantAssets>>>
+
+    export type ImportMerchantAssetsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Register pre-existing uploads into the media library
+ */
+export const useImportMerchantAssets = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importMerchantAssets>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importMerchantAssets>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getImportMerchantAssetsMutationOptions(options));
+    }
+
+export const getSweepMerchantAssetOrphansUrl = (params?: SweepMerchantAssetOrphansParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/storage/assets/orphans?${stringifiedParams}` : `/api/storage/assets/orphans`
+}
+
+/**
+ * Reports stored objects that nothing references — typically images left behind by a "remove image" click, which previously orphaned the object forever. Defaults to a dry run; pass apply=true to actually delete.
+
+ * @summary Find (and optionally delete) unreferenced stored objects
+ */
+export const sweepMerchantAssetOrphans = async (params?: SweepMerchantAssetOrphansParams, options?: RequestInit): Promise<SweepOrphansResponse> => {
+
+  return customFetch<SweepOrphansResponse>(getSweepMerchantAssetOrphansUrl(params),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getSweepMerchantAssetOrphansMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sweepMerchantAssetOrphans>>, TError,{params?: SweepMerchantAssetOrphansParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sweepMerchantAssetOrphans>>, TError,{params?: SweepMerchantAssetOrphansParams}, TContext> => {
+
+const mutationKey = ['sweepMerchantAssetOrphans'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sweepMerchantAssetOrphans>>, {params?: SweepMerchantAssetOrphansParams}> = (props) => {
+          const {params} = props ?? {};
+
+          return  sweepMerchantAssetOrphans(params,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SweepMerchantAssetOrphansMutationResult = NonNullable<Awaited<ReturnType<typeof sweepMerchantAssetOrphans>>>
+
+    export type SweepMerchantAssetOrphansMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Find (and optionally delete) unreferenced stored objects
+ */
+export const useSweepMerchantAssetOrphans = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sweepMerchantAssetOrphans>>, TError,{params?: SweepMerchantAssetOrphansParams}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sweepMerchantAssetOrphans>>,
+        TError,
+        {params?: SweepMerchantAssetOrphansParams},
+        TContext
+      > => {
+      return useMutation(getSweepMerchantAssetOrphansMutationOptions(options));
+    }
 
 export const getGetInvoicePdfUrl = (id: number,) => {
 

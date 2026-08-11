@@ -2468,11 +2468,23 @@ export interface UploadUrlRequest {
   size: number;
   /** @minLength 1 */
   contentType: string;
+  /**
+     * Lowercase hex SHA-256 of the file contents, computed by the client before uploading. When supplied, the server de-duplicates: if this merchant has already stored a file with this hash, the response omits uploadURL and returns the existing objectPath, and the client skips the upload entirely.
+
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256?: string;
 }
 
 export interface UploadUrlResponse {
-  uploadURL: string;
+  /** Presigned PUT URL. Absent when deduped is true — the bytes are already stored and must not be re-uploaded.
+   */
+  uploadURL?: string;
   objectPath: string;
+  /** True when an existing asset with the same hash was reused. */
+  deduped: boolean;
+  /** Media library id, present when deduped is true. */
+  assetId?: number;
   metadata?: UploadUrlRequest;
 }
 
@@ -2482,11 +2494,88 @@ export interface ConfirmUploadBody {
      * @minLength 1
      */
   objectPath: string;
+  /**
+     * The same hash sent to request-url. When supplied, the upload is registered in the merchant's media library so it can be reused.
+
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256?: string;
+  name?: string;
+  /** @minimum 0 */
+  size?: number;
+  contentType?: string;
+  /** @minimum 0 */
+  width?: number;
+  /** @minimum 0 */
+  height?: number;
 }
 
 export interface ConfirmUploadResponse {
   /** The confirmed, normalized object path with ACL policy applied. */
   objectPath: string;
+  /** Media library id, present when the upload was registered as an asset. */
+  assetId?: number;
+}
+
+export interface MerchantAsset {
+  id: number;
+  /** Normalized storage path, e.g. /objects/merchants/4/assets/<sha256>. */
+  objectPath: string;
+  /** Ready-to-use src for an img tag, i.e. /api/storage + objectPath. */
+  url: string;
+  sha256?: string | null;
+  contentType: string;
+  sizeBytes: number;
+  filename?: string | null;
+  width?: number | null;
+  height?: number | null;
+  /** Present only when the listing was requested withUsage=true. */
+  usageCount?: number;
+  createdAt: string;
+}
+
+export interface MerchantAssetListResponse {
+  assets: MerchantAsset[];
+  total: number;
+  totalBytes?: number;
+}
+
+export interface MerchantAssetUsageEntry {
+  /** Table holding the reference, e.g. "products". */
+  entity: string;
+  column: string;
+  count: number;
+}
+
+export interface MerchantAssetUsageResponse {
+  /** Total references. 0 means the asset is safe to delete. */
+  total: number;
+  usage: MerchantAssetUsageEntry[];
+  error?: string;
+}
+
+export interface DeleteMerchantAssetResponse {
+  deleted: boolean;
+  reclaimedBytes?: number;
+}
+
+export interface ImportMerchantAssetsResponse {
+  imported: number;
+  /** Objects already present in the library. */
+  skipped: number;
+  scanned: number;
+}
+
+export interface OrphanObject {
+  objectPath: string;
+  sizeBytes: number;
+}
+
+export interface SweepOrphansResponse {
+  dryRun: boolean;
+  orphans: OrphanObject[];
+  reclaimableBytes: number;
+  deletedCount?: number;
 }
 
 export interface LoyaltyLeaderboardEntry {
@@ -6243,6 +6332,30 @@ export type GenerateMissingReferralCodes200 = {
 export type MergeCustomerProfilesBody = {
   /** Optional reason or note for the merge, recorded in the audit trail */
   reason?: string;
+};
+
+export type ListMerchantAssetsParams = {
+search?: string;
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+/**
+ * Include a reference count per asset. Costs a scan; off by default.
+ */
+withUsage?: boolean;
+};
+
+export type SweepMerchantAssetOrphansParams = {
+/**
+ * When true, delete the listed orphans. Destructive.
+ */
+apply?: boolean;
 };
 
 export type ListTransactionsParams = {

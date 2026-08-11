@@ -1,6 +1,6 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, useRequestUploadUrl, useConfirmUpload,
+  useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
   customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -20,6 +20,7 @@ import {
   ChevronUp, ChevronDown, ChevronsUpDown, Upload, Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
@@ -154,25 +155,19 @@ function LogoUploaderInline({ value, onChange }: { value: string; onChange: (url
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
 
-  const requestUploadUrlMutation = useRequestUploadUrl();
-  const confirmUploadMutation = useConfirmUpload();
-
   const upload = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
-      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUploadMutation.mutateAsync({ data: { objectPath: result.objectPath } });
-      onChange(`/api/storage${result.objectPath}`);
-      toast.success("Logo uploaded");
+      const { url, deduped } = await uploadFile(file);
+      onChange(url);
+      toast.success(deduped ? "Reused an image already in your library" : "Logo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
-  }, [onChange, requestUploadUrlMutation, confirmUploadMutation]);
+  }, [onChange]);
 
   return (
     <div className="space-y-1.5">

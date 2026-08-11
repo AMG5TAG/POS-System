@@ -1679,26 +1679,32 @@ export const BulkExecuteMergeResponse = zod.object({
 
 
 
+export const requestUploadUrlBodySha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const RequestUploadUrlBody = zod.object({
   "name": zod.string().min(1),
   "size": zod.number().min(1),
-  "contentType": zod.string().min(1)
+  "contentType": zod.string().min(1),
+  "sha256": zod.string().regex(requestUploadUrlBodySha256RegExp).optional().describe('Lowercase hex SHA-256 of the file contents, computed by the client before uploading. When supplied, the server de-duplicates: if this merchant has already stored a file with this hash, the response omits uploadURL and returns the existing objectPath, and the client skips the upload entirely.\n')
 })
 
 
 
 
+export const requestUploadUrlResponseMetadataSha256RegExp = new RegExp('^[a-f0-9]{64}$');
 
 
 export const RequestUploadUrlResponse = zod.object({
-  "uploadURL": zod.string().url(),
+  "uploadURL": zod.string().url().optional().describe('Presigned PUT URL. Absent when deduped is true — the bytes are already stored and must not be re-uploaded.\n'),
   "objectPath": zod.string(),
+  "deduped": zod.boolean().describe('True when an existing asset with the same hash was reused.'),
+  "assetId": zod.number().optional().describe('Media library id, present when deduped is true.'),
   "metadata": zod.object({
   "name": zod.string().min(1),
   "size": zod.number().min(1),
-  "contentType": zod.string().min(1)
+  "contentType": zod.string().min(1),
+  "sha256": zod.string().regex(requestUploadUrlResponseMetadataSha256RegExp).optional().describe('Lowercase hex SHA-256 of the file contents, computed by the client before uploading. When supplied, the server de-duplicates: if this merchant has already stored a file with this hash, the response omits uploadURL and returns the existing objectPath, and the client skips the upload entirely.\n')
 }).optional()
 })
 
@@ -1709,14 +1715,28 @@ export const RequestUploadUrlResponse = zod.object({
  * @summary Confirm a completed upload and tag the file with an ACL policy
  */
 
+export const confirmUploadBodySha256RegExp = new RegExp('^[a-f0-9]{64}$');
+export const confirmUploadBodySizeMin = 0;
+
+export const confirmUploadBodyWidthMin = 0;
+
+export const confirmUploadBodyHeightMin = 0;
+
 
 
 export const ConfirmUploadBody = zod.object({
-  "objectPath": zod.string().min(1).describe('The normalized objectPath returned by POST \/storage\/uploads\/request-url.')
+  "objectPath": zod.string().min(1).describe('The normalized objectPath returned by POST \/storage\/uploads\/request-url.'),
+  "sha256": zod.string().regex(confirmUploadBodySha256RegExp).optional().describe('The same hash sent to request-url. When supplied, the upload is registered in the merchant\'s media library so it can be reused.\n'),
+  "name": zod.string().optional(),
+  "size": zod.number().min(confirmUploadBodySizeMin).optional(),
+  "contentType": zod.string().optional(),
+  "width": zod.number().min(confirmUploadBodyWidthMin).optional(),
+  "height": zod.number().min(confirmUploadBodyHeightMin).optional()
 })
 
 export const ConfirmUploadResponse = zod.object({
-  "objectPath": zod.string().describe('The confirmed, normalized object path with ACL policy applied.')
+  "objectPath": zod.string().describe('The confirmed, normalized object path with ACL policy applied.'),
+  "assetId": zod.number().optional().describe('Media library id, present when the upload was registered as an asset.')
 })
 
 
@@ -1733,6 +1753,114 @@ export const GetPublicObjectParams = zod.object({
  */
 export const GetStorageObjectParams = zod.object({
   "objectPath": zod.coerce.string()
+})
+
+
+/**
+ * Returns the merchant's media library — one entry per distinct uploaded file. Assets are scoped to the merchant by both the asset row and the merchant-prefixed storage path, so a merchant only ever sees its own uploads.
+
+ * @summary List the authenticated merchant's uploaded media
+ */
+export const listMerchantAssetsQueryLimitDefault = 60;
+export const listMerchantAssetsQueryLimitMax = 200;
+
+export const listMerchantAssetsQueryOffsetDefault = 0;
+export const listMerchantAssetsQueryOffsetMin = 0;
+
+export const listMerchantAssetsQueryWithUsageDefault = false;
+
+export const ListMerchantAssetsQueryParams = zod.object({
+  "search": zod.coerce.string().optional(),
+  "limit": zod.coerce.number().min(1).max(listMerchantAssetsQueryLimitMax).default(listMerchantAssetsQueryLimitDefault),
+  "offset": zod.coerce.number().min(listMerchantAssetsQueryOffsetMin).default(listMerchantAssetsQueryOffsetDefault),
+  "withUsage": zod.coerce.boolean().default(listMerchantAssetsQueryWithUsageDefault).describe('Include a reference count per asset. Costs a scan; off by default.')
+})
+
+export const ListMerchantAssetsResponse = zod.object({
+  "assets": zod.array(zod.object({
+  "id": zod.number(),
+  "objectPath": zod.string().describe('Normalized storage path, e.g. \/objects\/merchants\/4\/assets\/<sha256>.'),
+  "url": zod.string().describe('Ready-to-use src for an img tag, i.e. \/api\/storage + objectPath.'),
+  "sha256": zod.string().nullish(),
+  "contentType": zod.string(),
+  "sizeBytes": zod.number(),
+  "filename": zod.string().nullish(),
+  "width": zod.number().nullish(),
+  "height": zod.number().nullish(),
+  "usageCount": zod.number().optional().describe('Present only when the listing was requested withUsage=true.'),
+  "createdAt": zod.coerce.date()
+})),
+  "total": zod.number(),
+  "totalBytes": zod.number().optional()
+})
+
+
+/**
+ * Scans every column that can hold a media reference and reports where this asset is still in use. A total of 0 means the asset can be deleted.
+
+ * @summary List what still references an asset
+ */
+export const GetMerchantAssetUsageParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetMerchantAssetUsageResponse = zod.object({
+  "total": zod.number().describe('Total references. 0 means the asset is safe to delete.'),
+  "usage": zod.array(zod.object({
+  "entity": zod.string().describe('Table holding the reference, e.g. \"products\".'),
+  "column": zod.string(),
+  "count": zod.number()
+})),
+  "error": zod.string().optional()
+})
+
+
+/**
+ * Permanently removes the stored object and its library entry. Refuses with 409 when anything still references the asset, so deleting can never break a product image.
+
+ * @summary Delete an unreferenced asset and reclaim its storage
+ */
+export const DeleteMerchantAssetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const DeleteMerchantAssetResponse = zod.object({
+  "deleted": zod.boolean(),
+  "reclaimedBytes": zod.number().optional()
+})
+
+
+/**
+ * One-shot backfill. Lists the merchant's stored objects, hashes any that are not yet in the library, and registers them so historical uploads are pickable. Read-only with respect to stored objects — nothing is moved or deleted. Idempotent.
+
+ * @summary Register pre-existing uploads into the media library
+ */
+export const ImportMerchantAssetsResponse = zod.object({
+  "imported": zod.number(),
+  "skipped": zod.number().describe('Objects already present in the library.'),
+  "scanned": zod.number()
+})
+
+
+/**
+ * Reports stored objects that nothing references — typically images left behind by a "remove image" click, which previously orphaned the object forever. Defaults to a dry run; pass apply=true to actually delete.
+
+ * @summary Find (and optionally delete) unreferenced stored objects
+ */
+export const sweepMerchantAssetOrphansQueryApplyDefault = false;
+
+export const SweepMerchantAssetOrphansQueryParams = zod.object({
+  "apply": zod.coerce.boolean().default(sweepMerchantAssetOrphansQueryApplyDefault).describe('When true, delete the listed orphans. Destructive.')
+})
+
+export const SweepMerchantAssetOrphansResponse = zod.object({
+  "dryRun": zod.boolean(),
+  "orphans": zod.array(zod.object({
+  "objectPath": zod.string(),
+  "sizeBytes": zod.number()
+})),
+  "reclaimableBytes": zod.number(),
+  "deletedCount": zod.number().optional()
 })
 
 

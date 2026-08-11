@@ -1,6 +1,6 @@
 import { useState, useRef, useCallback, useMemo } from "react";
 import {
-  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useRequestUploadUrl, useConfirmUpload,
+  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand,
   useListProducts, getListProductsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,6 +17,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
 import { useShowBrandCostValue } from "@/lib/brand-view-settings";
@@ -58,19 +59,13 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
 
-  const requestUploadUrlMutation = useRequestUploadUrl();
-  const confirmUploadMutation = useConfirmUpload();
-
   const upload = async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
-      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUploadMutation.mutateAsync({ data: { objectPath: result.objectPath } });
-      onChange(`/api/storage${result.objectPath}`);
-      toast.success("Logo uploaded");
+      const { url, deduped } = await uploadFile(file);
+      onChange(url);
+      toast.success(deduped ? "Reused an image already in your library" : "Logo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {

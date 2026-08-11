@@ -26,6 +26,7 @@ import { formatDate } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
 import { Plus, RotateCcw, Search, Pencil, Trash2, Printer, Paperclip, Upload, X, FileText, Loader2 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 
 /* Build the legacy `items` text summary + total quantity from the structured list. */
 function summariseItems(list: ReturnAuthItem[]): { items: string; quantity: number } {
@@ -203,22 +204,7 @@ export default function ProductsReturnAuthPage() {
     setUploading(true);
     try {
       for (const file of Array.from(files)) {
-        const urlRes = await fetch("/api/storage/uploads/request-url", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type || "application/octet-stream" }),
-        });
-        if (!urlRes.ok) throw new Error("request-url failed");
-        const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-        const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type || "application/octet-stream" } });
-        if (!putRes.ok) throw new Error("upload failed");
-        await fetch("/api/storage/uploads/confirm", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          credentials: "include",
-          body: JSON.stringify({ objectPath }),
-        });
+        const { objectPath } = await uploadFile(file);
         setForm((f) => ({
           ...f,
           attachments: [...f.attachments, { fileKey: objectPath, filename: file.name, contentType: file.type || "application/octet-stream", sizeBytes: file.size }],

@@ -1389,6 +1389,146 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  # ── Media library ─────────────────────────────────────────────────────────
+
+  /storage/assets:
+    get:
+      tags: [Storage]
+      operationId: listMerchantAssets
+      summary: List the authenticated merchant's uploaded media
+      description: >
+        Returns the merchant's media library — one entry per distinct uploaded
+        file. Assets are scoped to the merchant by both the asset row and the
+        merchant-prefixed storage path, so a merchant only ever sees its own
+        uploads.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 60 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: withUsage
+          in: query
+          required: false
+          description: Include a reference count per asset. Costs a scan; off by default.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: The merchant's media library.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantAssetListResponse'
+
+  /storage/assets/{id}/usage:
+    get:
+      tags: [Storage]
+      operationId: getMerchantAssetUsage
+      summary: List what still references an asset
+      description: >
+        Scans every column that can hold a media reference and reports where
+        this asset is still in use. A total of 0 means the asset can be deleted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Reference report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantAssetUsageResponse'
+        '404':
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/assets/{id}:
+    delete:
+      tags: [Storage]
+      operationId: deleteMerchantAsset
+      summary: Delete an unreferenced asset and reclaim its storage
+      description: >
+        Permanently removes the stored object and its library entry. Refuses
+        with 409 when anything still references the asset, so deleting can
+        never break a product image.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Asset deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMerchantAssetResponse'
+        '404':
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Asset is still referenced and was not deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantAssetUsageResponse'
+
+  /storage/assets/import:
+    post:
+      tags: [Storage]
+      operationId: importMerchantAssets
+      summary: Register pre-existing uploads into the media library
+      description: >
+        One-shot backfill. Lists the merchant's stored objects, hashes any that
+        are not yet in the library, and registers them so historical uploads
+        are pickable. Read-only with respect to stored objects — nothing is
+        moved or deleted. Idempotent.
+      responses:
+        '200':
+          description: Import summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportMerchantAssetsResponse'
+
+  /storage/assets/orphans:
+    post:
+      tags: [Storage]
+      operationId: sweepMerchantAssetOrphans
+      summary: Find (and optionally delete) unreferenced stored objects
+      description: >
+        Reports stored objects that nothing references — typically images left
+        behind by a "remove image" click, which previously orphaned the object
+        forever. Defaults to a dry run; pass apply=true to actually delete.
+      parameters:
+        - name: apply
+          in: query
+          required: false
+          description: When true, delete the listed orphans. Destructive.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Orphan report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SweepOrphansResponse'
+
   # ── Invoices (PDF) ────────────────────────────────────────────────────────
   /invoices/{id}/pdf:
     get:
@@ -12341,16 +12481,34 @@ components:
         contentType:
           type: string
           minLength: 1
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: >
+            Lowercase hex SHA-256 of the file contents, computed by the client
+            before uploading. When supplied, the server de-duplicates: if this
+            merchant has already stored a file with this hash, the response
+            omits uploadURL and returns the existing objectPath, and the client
+            skips the upload entirely.
 
     UploadUrlResponse:
       type: object
-      required: [uploadURL, objectPath]
+      required: [objectPath, deduped]
       properties:
         uploadURL:
           type: string
           format: uri
+          description: >
+            Presigned PUT URL. Absent when deduped is true — the bytes are
+            already stored and must not be re-uploaded.
         objectPath:
           type: string
+        deduped:
+          type: boolean
+          description: True when an existing asset with the same hash was reused.
+        assetId:
+          type: integer
+          description: Media library id, present when deduped is true.
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
 
@@ -12362,6 +12520,25 @@ components:
           type: string
           minLength: 1
           description: The normalized objectPath returned by POST /storage/uploads/request-url.
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: >
+            The same hash sent to request-url. When supplied, the upload is
+            registered in the merchant's media library so it can be reused.
+        name:
+          type: string
+        size:
+          type: integer
+          minimum: 0
+        contentType:
+          type: string
+        width:
+          type: integer
+          minimum: 0
+        height:
+          type: integer
+          minimum: 0
 
     ConfirmUploadResponse:
       type: object
@@ -12370,6 +12547,128 @@ components:
         objectPath:
           type: string
           description: The confirmed, normalized object path with ACL policy applied.
+        assetId:
+          type: integer
+          description: Media library id, present when the upload was registered as an asset.
+
+    MerchantAsset:
+      type: object
+      required: [id, objectPath, url, contentType, sizeBytes, createdAt]
+      properties:
+        id:
+          type: integer
+        objectPath:
+          type: string
+          description: Normalized storage path, e.g. /objects/merchants/4/assets/<sha256>.
+        url:
+          type: string
+          description: Ready-to-use src for an img tag, i.e. /api/storage + objectPath.
+        sha256:
+          type: string
+          nullable: true
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+        filename:
+          type: string
+          nullable: true
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        usageCount:
+          type: integer
+          description: Present only when the listing was requested withUsage=true.
+        createdAt:
+          type: string
+          format: date-time
+
+    MerchantAssetListResponse:
+      type: object
+      required: [assets, total]
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantAsset'
+        total:
+          type: integer
+        totalBytes:
+          type: integer
+
+    MerchantAssetUsageEntry:
+      type: object
+      required: [entity, column, count]
+      properties:
+        entity:
+          type: string
+          description: Table holding the reference, e.g. "products".
+        column:
+          type: string
+        count:
+          type: integer
+
+    MerchantAssetUsageResponse:
+      type: object
+      required: [total, usage]
+      properties:
+        total:
+          type: integer
+          description: Total references. 0 means the asset is safe to delete.
+        usage:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantAssetUsageEntry'
+        error:
+          type: string
+
+    DeleteMerchantAssetResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: boolean
+        reclaimedBytes:
+          type: integer
+
+    ImportMerchantAssetsResponse:
+      type: object
+      required: [imported, skipped, scanned]
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+          description: Objects already present in the library.
+        scanned:
+          type: integer
+
+    OrphanObject:
+      type: object
+      required: [objectPath, sizeBytes]
+      properties:
+        objectPath:
+          type: string
+        sizeBytes:
+          type: integer
+
+    SweepOrphansResponse:
+      type: object
+      required: [dryRun, orphans, reclaimableBytes]
+      properties:
+        dryRun:
+          type: boolean
+        orphans:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrphanObject'
+        reclaimableBytes:
+          type: integer
+        deletedCount:
+          type: integer
 
     LoyaltyLeaderboardEntry:
       type: object

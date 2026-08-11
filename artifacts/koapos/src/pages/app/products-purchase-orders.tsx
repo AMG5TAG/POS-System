@@ -10,8 +10,6 @@ import {
   useSendPurchaseOrderEmail,
   useListProducts,
   useListSuppliers,
-  useRequestUploadUrl,
-  useConfirmUpload,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
   useGetMerchant,
@@ -33,6 +31,7 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
 import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 
@@ -220,8 +219,6 @@ export default function ProductsPurchaseOrdersPage() {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
   /* Supplier dropdown */
-  const requestUploadUrl = useRequestUploadUrl();
-  const confirmUpload    = useConfirmUpload();
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const invoiceFileRef = useRef<HTMLInputElement>(null);
 
@@ -396,11 +393,7 @@ export default function ProductsPurchaseOrdersPage() {
     }
     setUploadingInvoice(true);
     try {
-      const result = await requestUploadUrl.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
-      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUpload.mutateAsync({ data: { objectPath: result.objectPath } });
-      const url = `/api/storage${result.objectPath}`;
+      const { url } = await uploadFile(file);
       setForm((prev) => ({ ...prev, invoiceAttachments: [...prev.invoiceAttachments, url] }));
       toast.success("Invoice attached");
     } catch (e) {

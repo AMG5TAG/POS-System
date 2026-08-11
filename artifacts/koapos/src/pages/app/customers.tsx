@@ -19,8 +19,6 @@ import {
   useListCustomerFiles,
   useCreateCustomerFile,
   useDeleteCustomerFile,
-  useRequestUploadUrl,
-  useConfirmUpload,
   useGetLoyaltySettings,
   useSendTransactionReceipt,
   useSendServiceJobEmail,
@@ -66,6 +64,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
@@ -1205,8 +1204,6 @@ function CustomerDetailInner({
   const deleteNoteMutation = useDeleteCustomerNote();
   const createFileMutation = useCreateCustomerFile();
   const deleteFileMutation = useDeleteCustomerFile();
-  const requestUploadMutation = useRequestUploadUrl();
-  const confirmUploadMutation = useConfirmUpload();
   const loyaltyUpdateMutation = useUpdateCustomer();
 
   const programType     = loyaltySettings?.programType ?? "cashback";
@@ -1303,22 +1300,10 @@ function CustomerDetailInner({
     if (!file) return;
     setUploadingFile(true);
     try {
-      const urlResp = await new Promise<{ uploadURL: string; objectPath: string }>((resolve, reject) => {
-        requestUploadMutation.mutate(
-          { data: { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" } },
-          { onSuccess: (d) => resolve(d as { uploadURL: string; objectPath: string }), onError: reject }
-        );
-      });
-      const putRes = await fetch(urlResp.uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-      });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUploadMutation.mutateAsync({ data: { objectPath: urlResp.objectPath } });
+      const { objectPath } = await uploadFile(file);
       await new Promise<void>((resolve, reject) => {
         createFileMutation.mutate(
-          { id: customer.id, data: { filename: file.name, fileKey: urlResp.objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },
+          { id: customer.id, data: { filename: file.name, fileKey: objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },
           { onSuccess: () => resolve(), onError: reject }
         );
       });
