@@ -32,6 +32,8 @@ vi.mock("@workspace/db", () => {
     db: new Proxy({} as any, { get: () => () => chain }),
     pool: { query: vi.fn().mockResolvedValue({ rows: [] }) },
     merchantAssetsTable: tableProxy,
+    customerFilesTable: tableProxy,
+    productReturnAuthsTable: tableProxy,
   };
 });
 
@@ -70,6 +72,15 @@ vi.mock("../lib/objectStorage", () => ({
     }
     async trySetObjectEntityAclPolicy(path: string) {
       return path;
+    }
+    async getObjectEntityFile() {
+      return {} as any;
+    }
+    async canAccessObjectEntity() {
+      return true;
+    }
+    async downloadObject() {
+      return new Response("bytes", { headers: { "Content-Type": "image/png" } });
     }
   },
 }));
@@ -193,6 +204,43 @@ describe("POST /api/storage/uploads/confirm", () => {
 
     expect(res.status).toBe(200);
     expect(res.body.assetId).toBe(42);
+  });
+});
+
+describe("GET /api/storage/objects/* — original filename", () => {
+  it("serves the file under the name it was uploaded with", async () => {
+    dbResults = [[{ filename: "blue widget.png" }]];
+
+    const res = await request(app).get(`/api/storage/objects/merchants/1/assets/${SHA}`);
+
+    expect(res.status).toBe(200);
+    // Without this the browser saves the file as a bare hex string.
+    expect(res.headers["content-disposition"]).toContain('filename="blue widget.png"');
+  });
+
+  it("encodes a non-ASCII filename rather than mangling it", async () => {
+    dbResults = [[{ filename: "café-menü.pdf" }]];
+
+    const res = await request(app).get(`/api/storage/objects/merchants/1/assets/${SHA}`);
+
+    expect(res.status).toBe(200);
+    const disposition = res.headers["content-disposition"];
+    expect(disposition).toContain("filename*=UTF-8''");
+    expect(disposition).toContain(encodeURIComponent("café-menü.pdf"));
+  });
+
+  it("omits the header when no filename is on record", async () => {
+    dbResults = [[]];
+
+    const res = await request(app).get(`/api/storage/objects/merchants/1/assets/${SHA}`);
+
+    expect(res.status).toBe(200);
+    expect(res.headers["content-disposition"]).toBeUndefined();
+  });
+
+  it("still refuses another merchant's path", async () => {
+    const res = await request(app).get(`/api/storage/objects/merchants/2/assets/${SHA}`);
+    expect(res.status).toBe(403);
   });
 });
 

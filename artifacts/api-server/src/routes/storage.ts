@@ -17,6 +17,7 @@ import {
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
 import { findAssetUsage, findUsageCounts } from "../lib/assetUsage";
+import { contentDispositionFor, recoverKnownFilenames } from "../lib/assetFilenames";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireActiveAuth } from "../middlewares/requireActiveAuth";
 
@@ -103,6 +104,14 @@ router.post("/storage/uploads/request-url", requireActiveAuth, async (req: Reque
       // Guard against a library row whose object was removed out of band —
       // better to re-upload than to hand back a path that 404s.
       if (await objectStorageService.objectExists(existing.objectPath)) {
+        // A dedup hit skips confirm, so this is the only chance to record a
+        // name for a row that has none — e.g. one created by the backfill.
+        // An existing name is kept: one stored object, one canonical filename.
+        if (!existing.filename && name) {
+          await db.update(merchantAssetsTable)
+            .set({ filename: name })
+            .where(eq(merchantAssetsTable.id, existing.id));
+        }
         res.json(RequestUploadUrlResponse.parse({
           objectPath: existing.objectPath,
           deduped: true,
@@ -172,7 +181,7 @@ router.post("/storage/uploads/confirm", requireActiveAuth, async (req: Request, 
       }).onConflictDoNothing();
 
       const [asset] = await db
-        .select({ id: merchantAssetsTable.id })
+        .select({ id: merchantAssetsTable.id, filename: merchantAssetsTable.filename })
         .from(merchantAssetsTable)
         .where(and(
           eq(merchantAssetsTable.merchantId, req.session.merchantId!),
@@ -180,6 +189,14 @@ router.post("/storage/uploads/confirm", requireActiveAuth, async (req: Request, 
         ))
         .limit(1);
       assetId = asset?.id;
+
+      // The insert above no-ops when the row already exists, so fill in a name
+      // it is missing (a row the backfill created without one).
+      if (asset && !asset.filename && name) {
+        await db.update(merchantAssetsTable)
+          .set({ filename: name })
+          .where(eq(merchantAssetsTable.id, asset.id));
+      }
     }
 
     res.json(ConfirmUploadResponse.parse({ objectPath: normalizedPath, assetId }));
@@ -275,6 +292,21 @@ router.get("/storage/objects/*path", requireActiveAuth, async (req: Request, res
 
     res.status(response.status);
     response.headers.forEach((value, key) => res.setHeader(key, value));
+
+    // The storage key is a content hash with no name or extension, so re-attach
+    // the name the file was uploaded under — otherwise saving it yields a bare
+    // hex string. Indexed single-row lookup on an already multi-round-trip path.
+    const [named] = await db
+      .select({ filename: merchantAssetsTable.filename })
+      .from(merchantAssetsTable)
+      .where(and(
+        eq(merchantAssetsTable.merchantId, req.session.merchantId!),
+        eq(merchantAssetsTable.objectPath, objectPath),
+      ))
+      .limit(1);
+    if (named?.filename) {
+      res.setHeader("Content-Disposition", contentDispositionFor(named.filename));
+    }
 
     const etag = response.headers.get("etag");
     if (etag && req.headers["if-none-match"] === etag) {
@@ -477,6 +509,10 @@ router.post("/storage/assets/import", requireActiveAuth, async (req: Request, re
       ).map((r) => r.objectPath),
     );
 
+    // Pre-library uploads recorded no filename centrally, but customer files
+    // and return-auth attachments kept one next to the object key.
+    const knownNames = await recoverKnownFilenames(merchantId);
+
     let imported = 0;
     let skipped = 0;
 
@@ -503,7 +539,9 @@ router.post("/storage/assets/import", requireActiveAuth, async (req: Request, re
         objectPath: obj.objectPath,
         contentType: obj.contentType,
         sizeBytes: obj.size,
-        filename: obj.objectPath.split("/").pop() ?? null,
+        // Null rather than the object key's trailing UUID — an unrecoverable
+        // name should read as "unknown", not as a meaningless filename.
+        filename: knownNames.get(obj.objectPath) ?? null,
       }).onConflictDoNothing();
 
       imported++;
