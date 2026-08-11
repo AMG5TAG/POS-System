@@ -2517,6 +2517,28 @@ export interface ConfirmUploadResponse {
   assetId?: number;
 }
 
+/**
+ * Media kind derived from contentType.
+ */
+export type MerchantAssetKind = typeof MerchantAssetKind[keyof typeof MerchantAssetKind];
+
+
+export const MerchantAssetKind = {
+  image: 'image',
+  video: 'video',
+  document: 'document',
+} as const;
+
+export interface MerchantAssetReference {
+  /** Table holding the reference, e.g. "products". */
+  entity: string;
+  column: string;
+  /** Row id, when the table has one. */
+  id?: string | null;
+  /** Human-readable row label, e.g. the product name. */
+  label?: string | null;
+}
+
 export interface MerchantAsset {
   id: number;
   /** Normalized storage path, e.g. /objects/merchants/4/assets/<sha256>. */
@@ -2529,8 +2551,12 @@ export interface MerchantAsset {
   filename?: string | null;
   width?: number | null;
   height?: number | null;
+  /** Media kind derived from contentType. */
+  kind?: MerchantAssetKind;
   /** Present only when the listing was requested withUsage=true. */
   usageCount?: number;
+  /** What the asset is attached to. Present only with withReferences=true. */
+  references?: MerchantAssetReference[];
   createdAt: string;
 }
 
@@ -2557,6 +2583,17 @@ export interface MerchantAssetUsageResponse {
 export interface DeleteMerchantAssetResponse {
   deleted: boolean;
   reclaimedBytes?: number;
+}
+
+export interface ReplaceMerchantAssetBody {
+  /** Id of the asset to point everything at. Upload the new file through the normal flow first; that registers it and returns its id.
+   */
+  replacementAssetId: number;
+}
+
+export interface ReplaceMerchantAssetResponse {
+  /** Number of rows repointed at the replacement. */
+  replaced: number;
 }
 
 export interface ImportMerchantAssetsResponse {
@@ -6349,7 +6386,26 @@ offset?: number;
  * Include a reference count per asset. Costs a scan; off by default.
  */
 withUsage?: boolean;
+/**
+ * Include what each asset is attached to (entity, row id and label). Implies withUsage. Used by the Uploads management page.
+
+ */
+withReferences?: boolean;
+/**
+ * Filter by media kind, derived from the stored content type.
+ */
+kind?: ListMerchantAssetsKind;
 };
+
+export type ListMerchantAssetsKind = typeof ListMerchantAssetsKind[keyof typeof ListMerchantAssetsKind];
+
+
+export const ListMerchantAssetsKind = {
+  all: 'all',
+  image: 'image',
+  video: 'video',
+  document: 'document',
+} as const;
 
 export type SweepMerchantAssetOrphansParams = {
 /**

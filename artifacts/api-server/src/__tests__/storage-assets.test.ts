@@ -86,10 +86,14 @@ vi.mock("../lib/objectStorage", () => ({
 }));
 
 const findAssetUsage = vi.fn();
+const findReferencesByPath = vi.fn();
+const rewriteAssetReferences = vi.fn();
 
 vi.mock("../lib/assetUsage", () => ({
   findAssetUsage: (...args: unknown[]) => findAssetUsage(...args),
   findUsageCounts: async () => new Map(),
+  findReferencesByPath: (...args: unknown[]) => findReferencesByPath(...args),
+  rewriteAssetReferences: (...args: unknown[]) => rewriteAssetReferences(...args),
 }));
 
 const SHA = "a".repeat(64);
@@ -111,7 +115,25 @@ beforeEach(() => {
   objectExists.mockResolvedValue(true);
   deleteObjectEntity.mockClear();
   findAssetUsage.mockReset();
+  findReferencesByPath.mockReset();
+  rewriteAssetReferences.mockReset();
 });
+
+/** A library row as the listing route reads it out of the db. */
+function assetRow(over: Record<string, unknown> = {}) {
+  return {
+    id: 5,
+    objectPath: `/objects/merchants/1/assets/${SHA}`,
+    sha256: SHA,
+    contentType: "image/png",
+    sizeBytes: 2048,
+    filename: "logo.png",
+    width: 64,
+    height: 64,
+    createdAt: new Date("2026-01-01T00:00:00.000Z"),
+    ...over,
+  };
+}
 
 describe("POST /api/storage/uploads/request-url — de-duplication", () => {
   it("reuses the stored object when the merchant already has that hash", async () => {
@@ -279,5 +301,141 @@ describe("DELETE /api/storage/assets/:id", () => {
 
     expect(res.status).toBe(404);
     expect(deleteObjectEntity).not.toHaveBeenCalled();
+  });
+});
+
+describe("GET /api/storage/assets", () => {
+  it("labels each asset with its media kind", async () => {
+    dbResults = [
+      [
+        assetRow({ id: 1, contentType: "image/png" }),
+        assetRow({ id: 2, contentType: "video/mp4" }),
+        assetRow({ id: 3, contentType: "application/pdf" }),
+      ],
+      [{ total: 3, totalBytes: 6144 }],
+    ];
+
+    const res = await request(app).get("/api/storage/assets");
+
+    expect(res.status).toBe(200);
+    expect(res.body.assets.map((a: any) => a.kind)).toEqual(["image", "video", "document"]);
+  });
+
+  it("omits usage detail unless it is asked for", async () => {
+    dbResults = [[assetRow()], [{ total: 1, totalBytes: 2048 }]];
+
+    const res = await request(app).get("/api/storage/assets");
+
+    expect(res.status).toBe(200);
+    // The scan is the expensive part; the default listing must not pay for it.
+    expect(findReferencesByPath).not.toHaveBeenCalled();
+    expect(res.body.assets[0].usageCount).toBeUndefined();
+    expect(res.body.assets[0].references).toBeUndefined();
+  });
+
+  it("reports what each asset is attached to when withReferences is set", async () => {
+    const path = `/objects/merchants/1/assets/${SHA}`;
+    dbResults = [[assetRow({ objectPath: path })], [{ total: 1, totalBytes: 2048 }]];
+    findReferencesByPath.mockResolvedValue(
+      new Map([[path, [
+        { entity: "products", column: "image_url", id: "412", label: "Coca-Cola 600ml" },
+        { entity: "brands", column: "logo_url", id: "7", label: "Coca-Cola" },
+      ]]]),
+    );
+
+    const res = await request(app).get("/api/storage/assets?withReferences=true");
+
+    expect(res.status).toBe(200);
+    const [asset] = res.body.assets;
+    expect(asset.usageCount).toBe(2);
+    expect(asset.references).toHaveLength(2);
+    expect(asset.references[0].label).toBe("Coca-Cola 600ml");
+  });
+
+  it("returns an empty reference list for an asset nothing points at", async () => {
+    dbResults = [[assetRow()], [{ total: 1, totalBytes: 2048 }]];
+    findReferencesByPath.mockResolvedValue(new Map());
+
+    const res = await request(app).get("/api/storage/assets?withReferences=true");
+
+    expect(res.status).toBe(200);
+    expect(res.body.assets[0].usageCount).toBe(0);
+    expect(res.body.assets[0].references).toEqual([]);
+  });
+});
+
+describe("POST /api/storage/assets/:id/replace", () => {
+  const OTHER_SHA = "b".repeat(64);
+  const originalPath = `/objects/merchants/1/assets/${SHA}`;
+  const replacementPath = `/objects/merchants/1/assets/${OTHER_SHA}`;
+
+  it("repoints every reference at the replacement", async () => {
+    dbResults = [[
+      { id: 5, objectPath: originalPath },
+      { id: 6, objectPath: replacementPath },
+    ]];
+    rewriteAssetReferences.mockResolvedValue(4);
+
+    const res = await request(app)
+      .post("/api/storage/assets/5/replace")
+      .send({ replacementAssetId: 6 });
+
+    expect(res.status).toBe(200);
+    expect(res.body.replaced).toBe(4);
+    expect(rewriteAssetReferences).toHaveBeenCalledWith(originalPath, replacementPath);
+  });
+
+  it("leaves the old asset in place — replacing never deletes", async () => {
+    dbResults = [[
+      { id: 5, objectPath: originalPath },
+      { id: 6, objectPath: replacementPath },
+    ]];
+    rewriteAssetReferences.mockResolvedValue(1);
+
+    await request(app).post("/api/storage/assets/5/replace").send({ replacementAssetId: 6 });
+
+    expect(deleteObjectEntity).not.toHaveBeenCalled();
+  });
+
+  it("rejects an asset replacing itself", async () => {
+    const res = await request(app)
+      .post("/api/storage/assets/5/replace")
+      .send({ replacementAssetId: 5 });
+
+    expect(res.status).toBe(400);
+    expect(rewriteAssetReferences).not.toHaveBeenCalled();
+  });
+
+  it("rejects a body with no replacement", async () => {
+    const res = await request(app).post("/api/storage/assets/5/replace").send({});
+
+    expect(res.status).toBe(400);
+    expect(rewriteAssetReferences).not.toHaveBeenCalled();
+  });
+
+  it("404s when the asset is not the merchant's", async () => {
+    // Neither row comes back, because the lookup is merchant-scoped.
+    dbResults = [[]];
+
+    const res = await request(app)
+      .post("/api/storage/assets/999/replace")
+      .send({ replacementAssetId: 6 });
+
+    expect(res.status).toBe(404);
+    expect(rewriteAssetReferences).not.toHaveBeenCalled();
+  });
+
+  it("refuses to point references at another merchant's file", async () => {
+    // The original is ours; the replacement id belongs to someone else, so the
+    // merchant-scoped lookup returns only the original.
+    dbResults = [[{ id: 5, objectPath: originalPath }]];
+
+    const res = await request(app)
+      .post("/api/storage/assets/5/replace")
+      .send({ replacementAssetId: 6 });
+
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Replacement asset not found");
+    expect(rewriteAssetReferences).not.toHaveBeenCalled();
   });
 });

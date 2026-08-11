@@ -1419,6 +1419,21 @@ paths:
           required: false
           description: Include a reference count per asset. Costs a scan; off by default.
           schema: { type: boolean, default: false }
+        - name: withReferences
+          in: query
+          required: false
+          description: >
+            Include what each asset is attached to (entity, row id and label).
+            Implies withUsage. Used by the Uploads management page.
+          schema: { type: boolean, default: false }
+        - name: kind
+          in: query
+          required: false
+          description: Filter by media kind, derived from the stored content type.
+          schema:
+            type: string
+            enum: [all, image, video, document]
+            default: all
       responses:
         '200':
           description: The merchant's media library.
@@ -1487,6 +1502,48 @@ paths:
             application/json:
               schema:
                 $ref: '#/components/schemas/MerchantAssetUsageResponse'
+
+  /storage/assets/{id}/replace:
+    post:
+      tags: [Storage]
+      operationId: replaceMerchantAsset
+      summary: Point everything using one asset at another
+      description: >
+        Repoints every reference to this asset at the replacement asset, in a
+        single transaction. Storage is content-addressed, so a file cannot be
+        overwritten in place — replacing means rewriting the references. The
+        old asset stays in the library, now unused, and can be deleted
+        separately.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceMerchantAssetBody'
+      responses:
+        '200':
+          description: References rewritten.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplaceMerchantAssetResponse'
+        '400':
+          description: Invalid replacement asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
 
   /storage/assets/import:
     post:
@@ -12579,12 +12636,39 @@ components:
         height:
           type: integer
           nullable: true
+        kind:
+          type: string
+          enum: [image, video, document]
+          description: Media kind derived from contentType.
         usageCount:
           type: integer
           description: Present only when the listing was requested withUsage=true.
+        references:
+          type: array
+          description: What the asset is attached to. Present only with withReferences=true.
+          items:
+            $ref: '#/components/schemas/MerchantAssetReference'
         createdAt:
           type: string
           format: date-time
+
+    MerchantAssetReference:
+      type: object
+      required: [entity, column]
+      properties:
+        entity:
+          type: string
+          description: Table holding the reference, e.g. "products".
+        column:
+          type: string
+        id:
+          type: string
+          nullable: true
+          description: Row id, when the table has one.
+        label:
+          type: string
+          nullable: true
+          description: Human-readable row label, e.g. the product name.
 
     MerchantAssetListResponse:
       type: object
@@ -12633,6 +12717,24 @@ components:
           type: boolean
         reclaimedBytes:
           type: integer
+
+    ReplaceMerchantAssetBody:
+      type: object
+      required: [replacementAssetId]
+      properties:
+        replacementAssetId:
+          type: integer
+          description: >
+            Id of the asset to point everything at. Upload the new file through
+            the normal flow first; that registers it and returns its id.
+
+    ReplaceMerchantAssetResponse:
+      type: object
+      required: [replaced]
+      properties:
+        replaced:
+          type: integer
+          description: Number of rows repointed at the replacement.
 
     ImportMerchantAssetsResponse:
       type: object

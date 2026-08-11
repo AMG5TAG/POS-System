@@ -1768,12 +1768,16 @@ export const listMerchantAssetsQueryOffsetDefault = 0;
 export const listMerchantAssetsQueryOffsetMin = 0;
 
 export const listMerchantAssetsQueryWithUsageDefault = false;
+export const listMerchantAssetsQueryWithReferencesDefault = false;
+export const listMerchantAssetsQueryKindDefault = `all`;
 
 export const ListMerchantAssetsQueryParams = zod.object({
   "search": zod.coerce.string().optional(),
   "limit": zod.coerce.number().min(1).max(listMerchantAssetsQueryLimitMax).default(listMerchantAssetsQueryLimitDefault),
   "offset": zod.coerce.number().min(listMerchantAssetsQueryOffsetMin).default(listMerchantAssetsQueryOffsetDefault),
-  "withUsage": zod.coerce.boolean().default(listMerchantAssetsQueryWithUsageDefault).describe('Include a reference count per asset. Costs a scan; off by default.')
+  "withUsage": zod.coerce.boolean().default(listMerchantAssetsQueryWithUsageDefault).describe('Include a reference count per asset. Costs a scan; off by default.'),
+  "withReferences": zod.coerce.boolean().default(listMerchantAssetsQueryWithReferencesDefault).describe('Include what each asset is attached to (entity, row id and label). Implies withUsage. Used by the Uploads management page.\n'),
+  "kind": zod.enum(['all', 'image', 'video', 'document']).default(listMerchantAssetsQueryKindDefault).describe('Filter by media kind, derived from the stored content type.')
 })
 
 export const ListMerchantAssetsResponse = zod.object({
@@ -1787,7 +1791,14 @@ export const ListMerchantAssetsResponse = zod.object({
   "filename": zod.string().nullish(),
   "width": zod.number().nullish(),
   "height": zod.number().nullish(),
+  "kind": zod.enum(['image', 'video', 'document']).optional().describe('Media kind derived from contentType.'),
   "usageCount": zod.number().optional().describe('Present only when the listing was requested withUsage=true.'),
+  "references": zod.array(zod.object({
+  "entity": zod.string().describe('Table holding the reference, e.g. \"products\".'),
+  "column": zod.string(),
+  "id": zod.string().nullish().describe('Row id, when the table has one.'),
+  "label": zod.string().nullish().describe('Human-readable row label, e.g. the product name.')
+})).optional().describe('What the asset is attached to. Present only with withReferences=true.'),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number(),
@@ -1827,6 +1838,24 @@ export const DeleteMerchantAssetParams = zod.object({
 export const DeleteMerchantAssetResponse = zod.object({
   "deleted": zod.boolean(),
   "reclaimedBytes": zod.number().optional()
+})
+
+
+/**
+ * Repoints every reference to this asset at the replacement asset, in a single transaction. Storage is content-addressed, so a file cannot be overwritten in place — replacing means rewriting the references. The old asset stays in the library, now unused, and can be deleted separately.
+
+ * @summary Point everything using one asset at another
+ */
+export const ReplaceMerchantAssetParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const ReplaceMerchantAssetBody = zod.object({
+  "replacementAssetId": zod.number().describe('Id of the asset to point everything at. Upload the new file through the normal flow first; that registers it and returns its id.\n')
+})
+
+export const ReplaceMerchantAssetResponse = zod.object({
+  "replaced": zod.number().describe('Number of rows repointed at the replacement.')
 })
 
 

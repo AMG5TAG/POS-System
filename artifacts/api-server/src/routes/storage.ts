@@ -2,7 +2,7 @@ import { Router, type IRouter, type Request, type Response } from "express";
 import { Readable } from "stream";
 import { createHash } from "crypto";
 import { db, merchantAssetsTable } from "@workspace/db";
-import { and, eq, desc, ilike, like, sql } from "drizzle-orm";
+import { and, eq, desc, ilike, like, inArray, sql } from "drizzle-orm";
 import {
   RequestUploadUrlBody,
   RequestUploadUrlResponse,
@@ -11,23 +11,40 @@ import {
   ListMerchantAssetsResponse,
   GetMerchantAssetUsageResponse,
   DeleteMerchantAssetResponse,
+  ReplaceMerchantAssetBody,
+  ReplaceMerchantAssetResponse,
   ImportMerchantAssetsResponse,
   SweepMerchantAssetOrphansResponse,
 } from "@workspace/api-zod";
 import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { ObjectPermission } from "../lib/objectAcl";
-import { findAssetUsage, findUsageCounts } from "../lib/assetUsage";
+import {
+  findAssetUsage,
+  findUsageCounts,
+  findReferencesByPath,
+  rewriteAssetReferences,
+} from "../lib/assetUsage";
 import { contentDispositionFor, recoverKnownFilenames } from "../lib/assetFilenames";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireActiveAuth } from "../middlewares/requireActiveAuth";
 
 const ALLOWED_UPLOAD_MIME_TYPES = new Set([
   "image/jpeg", "image/png", "image/gif", "image/webp",
+  // Video, for social posts and product media. SVG stays out on purpose — it
+  // can carry script and is served from our own origin.
+  "video/mp4", "video/webm", "video/quicktime",
   "application/pdf",
   "text/csv",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.ms-excel",
 ]);
+
+/** How the Uploads page groups a file, derived from its stored content type. */
+function mediaKind(contentType: string): "image" | "video" | "document" {
+  if (contentType.startsWith("image/")) return "image";
+  if (contentType.startsWith("video/")) return "video";
+  return "document";
+}
 
 const router: IRouter = Router();
 const objectStorageService = new ObjectStorageService();
@@ -346,10 +363,18 @@ router.get("/storage/assets", requireActiveAuth, async (req: Request, res: Respo
     const search = typeof req.query.search === "string" ? req.query.search.trim() : "";
     const limit = Math.min(Math.max(Number(req.query.limit) || 60, 1), 200);
     const offset = Math.max(Number(req.query.offset) || 0, 0);
-    const withUsage = queryFlag(req.query.withUsage);
+    const withReferences = queryFlag(req.query.withReferences);
+    const withUsage = withReferences || queryFlag(req.query.withUsage);
+    const kind = typeof req.query.kind === "string" ? req.query.kind : "all";
 
     const conditions = [eq(merchantAssetsTable.merchantId, merchantId)];
     if (search) conditions.push(ilike(merchantAssetsTable.filename, `%${search}%`));
+    if (kind === "image" || kind === "video") {
+      conditions.push(like(merchantAssetsTable.contentType, `${kind}/%`));
+    } else if (kind === "document") {
+      conditions.push(sql`${merchantAssetsTable.contentType} NOT LIKE 'image/%'
+        AND ${merchantAssetsTable.contentType} NOT LIKE 'video/%'`);
+    }
     const where = and(...conditions);
 
     const rows = await db
@@ -368,24 +393,35 @@ router.get("/storage/assets", requireActiveAuth, async (req: Request, res: Respo
       .from(merchantAssetsTable)
       .where(where);
 
-    const usageCounts = withUsage
+    // References give both the "attached to" detail and the counts, so when
+    // they are requested the cheaper count-only scan is skipped.
+    const referencesByPath = withReferences ? await findReferencesByPath(merchantId) : null;
+    const usageCounts = withUsage && !referencesByPath
       ? await findUsageCounts(merchantId, rows.map((r) => r.objectPath))
       : null;
 
     res.json(ListMerchantAssetsResponse.parse({
-      assets: rows.map((r) => ({
-        id: r.id,
-        objectPath: r.objectPath,
-        url: assetUrl(r.objectPath),
-        sha256: r.sha256,
-        contentType: r.contentType,
-        sizeBytes: r.sizeBytes,
-        filename: r.filename,
-        width: r.width,
-        height: r.height,
-        ...(usageCounts ? { usageCount: usageCounts.get(r.objectPath) ?? 0 } : {}),
-        createdAt: r.createdAt,
-      })),
+      assets: rows.map((r) => {
+        const refs = referencesByPath?.get(r.objectPath) ?? [];
+        return {
+          id: r.id,
+          objectPath: r.objectPath,
+          url: assetUrl(r.objectPath),
+          sha256: r.sha256,
+          contentType: r.contentType,
+          sizeBytes: r.sizeBytes,
+          filename: r.filename,
+          width: r.width,
+          height: r.height,
+          kind: mediaKind(r.contentType),
+          ...(referencesByPath
+            ? { usageCount: refs.length, references: refs }
+            : usageCounts
+              ? { usageCount: usageCounts.get(r.objectPath) ?? 0 }
+              : {}),
+          createdAt: r.createdAt,
+        };
+      }),
       total: totals?.total ?? 0,
       totalBytes: totals?.totalBytes ?? 0,
     }));
@@ -483,6 +519,66 @@ router.delete("/storage/assets/:id", requireActiveAuth, async (req: Request, res
   } catch (error) {
     req.log.error({ err: error }, "Error deleting merchant asset");
     res.status(500).json({ error: "Failed to delete asset" });
+  }
+});
+
+/**
+ * POST /storage/assets/:id/replace
+ *
+ * Swaps one file for another everywhere it is used.
+ *
+ * Storage is content-addressed, so a file cannot be overwritten in place — the
+ * replacement is a separate object and "replacing" means repointing every
+ * reference at it. That happens in one transaction, so a product grid can
+ * never end up half-swapped.
+ *
+ * The old asset is left in the library with nothing attached, which is exactly
+ * the state DELETE is for. Keeping the two operations separate means replacing
+ * never destroys anything on its own.
+ */
+router.post("/storage/assets/:id/replace", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const id = Number(req.params.id);
+    const parsed = ReplaceMerchantAssetBody.safeParse(req.body);
+    if (!Number.isInteger(id) || !parsed.success) {
+      res.status(400).json({ error: "Invalid asset or replacement" });
+      return;
+    }
+
+    const { replacementAssetId } = parsed.data;
+    if (replacementAssetId === id) {
+      res.status(400).json({ error: "An asset cannot replace itself" });
+      return;
+    }
+
+    // Both must belong to the caller — this is what stops one merchant
+    // repointing their references at another merchant's file.
+    const found = await db
+      .select()
+      .from(merchantAssetsTable)
+      .where(and(
+        eq(merchantAssetsTable.merchantId, merchantId),
+        inArray(merchantAssetsTable.id, [id, replacementAssetId]),
+      ));
+
+    const original = found.find((a) => a.id === id);
+    const replacement = found.find((a) => a.id === replacementAssetId);
+    if (!original) {
+      res.status(404).json({ error: "Asset not found" });
+      return;
+    }
+    if (!replacement) {
+      res.status(400).json({ error: "Replacement asset not found" });
+      return;
+    }
+
+    const replaced = await rewriteAssetReferences(original.objectPath, replacement.objectPath);
+
+    res.json(ReplaceMerchantAssetResponse.parse({ replaced }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error replacing merchant asset");
+    res.status(500).json({ error: "Failed to replace asset" });
   }
 });
 

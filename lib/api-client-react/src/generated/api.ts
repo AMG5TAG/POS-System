@@ -352,6 +352,8 @@ import type {
   RegionalExtSettings,
   RegionalExtSettingsInput,
   RegisterInput,
+  ReplaceMerchantAssetBody,
+  ReplaceMerchantAssetResponse,
   ReportRunResult,
   ResetPasswordInput,
   RestoreBackup200,
@@ -5326,6 +5328,80 @@ export const useDeleteMerchantAsset = <TError = ErrorType<ErrorEnvelope | Mercha
         TContext
       > => {
       return useMutation(getDeleteMerchantAssetMutationOptions(options));
+    }
+
+export const getReplaceMerchantAssetUrl = (id: number,) => {
+
+
+
+
+  return `/api/storage/assets/${id}/replace`
+}
+
+/**
+ * Repoints every reference to this asset at the replacement asset, in a single transaction. Storage is content-addressed, so a file cannot be overwritten in place — replacing means rewriting the references. The old asset stays in the library, now unused, and can be deleted separately.
+
+ * @summary Point everything using one asset at another
+ */
+export const replaceMerchantAsset = async (id: number,
+    replaceMerchantAssetBody: ReplaceMerchantAssetBody, options?: RequestInit): Promise<ReplaceMerchantAssetResponse> => {
+
+  return customFetch<ReplaceMerchantAssetResponse>(getReplaceMerchantAssetUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      replaceMerchantAssetBody,)
+  }
+);}
+
+
+
+
+export const getReplaceMerchantAssetMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMerchantAsset>>, TError,{id: number;data: BodyType<ReplaceMerchantAssetBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof replaceMerchantAsset>>, TError,{id: number;data: BodyType<ReplaceMerchantAssetBody>}, TContext> => {
+
+const mutationKey = ['replaceMerchantAsset'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof replaceMerchantAsset>>, {id: number;data: BodyType<ReplaceMerchantAssetBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  replaceMerchantAsset(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReplaceMerchantAssetMutationResult = NonNullable<Awaited<ReturnType<typeof replaceMerchantAsset>>>
+    export type ReplaceMerchantAssetMutationBody = BodyType<ReplaceMerchantAssetBody>
+    export type ReplaceMerchantAssetMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Point everything using one asset at another
+ */
+export const useReplaceMerchantAsset = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof replaceMerchantAsset>>, TError,{id: number;data: BodyType<ReplaceMerchantAssetBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof replaceMerchantAsset>>,
+        TError,
+        {id: number;data: BodyType<ReplaceMerchantAssetBody>},
+        TContext
+      > => {
+      return useMutation(getReplaceMerchantAssetMutationOptions(options));
     }
 
 export const getImportMerchantAssetsUrl = () => {
