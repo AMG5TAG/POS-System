@@ -21,7 +21,12 @@ import {
   Megaphone, QrCode, BarChart2, Send, Zap, UserPlus, Sparkles, Sticker,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
   CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
+  MapPin, Repeat, Puzzle, Recycle, Image as ImageIcon,
 } from "lucide-react";
+import {
+  MANAGEMENT_SUBNAV, HUB_ROUTE_LABELS,
+  type NavLeaf, type NavSubGroup, type NavItem,
+} from "./management-hubs";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
 import {
@@ -146,128 +151,8 @@ const INVENTORY_SUBNAV = [
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
 ];
 
-type NavLeaf     = { name: string; href: string; icon: React.ComponentType<{ className?: string }>; matchPaths?: string[] };
-type NavSubGroup = { name: string; children: NavLeaf[]; icon: React.ComponentType<{ className?: string }> };
-type NavGroup    = { name: string; children: (NavLeaf | NavSubGroup)[]; icon: React.ComponentType<{ className?: string }>; defaultHref?: string };
-type NavItem     = NavLeaf | NavGroup;
-
-const MANAGEMENT_SUBNAV: NavItem[] = [
-  { name: "Overview", href: "/management/overview", icon: LayoutDashboard },
-  {
-    name: "Customers", icon: Users, defaultHref: "/management/customers/settings",
-    children: [
-      { name: "Settings",            href: "/management/customers/settings",            icon: Users         },
-      { name: "Heard From",          href: "/management/customers/heard-from", icon: Radio         },
-      { name: "Portal",              href: "/management/customers/portal",     icon: Link2         },
-      { name: "Loyalty",             href: "/management/customers/loyalty",              icon: Gift,
-        matchPaths: ["/management/customers/loyalty/leaderboard"] },
-      { name: "Gift Cards",          href: "/management/customers/gift-cards",           icon: Gift          },
-      { name: "Discounts & Pricing", href: "/management/customers/discounts-pricing",            icon: Percent,
-        matchPaths: ["/management/customers/discounts-pricing/pricing-rules", "/management/customers/discounts-pricing/layby"] },
-    ],
-  },
-  {
-    name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/invoices",
-    children: [
-      { name: "Invoices", href: "/management/invoices-services/invoices", icon: FileText },
-      { name: "Service Options", href: "/management/invoices-services/service-options", icon: Wrench },
-    ],
-  },
-  {
-    name: "Products & Inventory", icon: Boxes, defaultHref: "/management/products-inventory/inventory",
-    children: [
-      { name: "Inventory",       href: "/management/products-inventory/inventory",       icon: Boxes    },
-      { name: "Product Types",   href: "/management/products-inventory/product-types",   icon: Tag      },
-      { name: "Modifier Groups", href: "/management/products-inventory/modifier-groups", icon: Layers   },
-      {
-        name: "Calculators", icon: Calculator,
-        children: [
-          { name: "3D Prints",  href: "/management/products-inventory/3d-prints", icon: Cpu       },
-          { name: "PC Builder", href: "/management/products-inventory/pc-builder",  icon: HardDrive },
-        ],
-      },
-    ],
-  },
-  {
-    name: "Staff & Operations", icon: UserSquare2, defaultHref: "/management/staff-operations/employees",
-    children: [
-      { name: "Employees",     href: "/management/staff-operations/employees",              icon: UserSquare2 },
-      { name: "Timesheets",    href: "/management/staff-operations/timesheets",    icon: Clock       },
-      { name: "Cost Summary",  href: "/management/staff-operations/cost-summary", icon: Coins       },
-      { name: "POS Registers", href: "/management/staff-operations/pos-registers",          icon: Monitor     },
-      { name: "KPIs & Targets", href: "/management/staff-operations/kpis-targets",         icon: Target      },
-      { name: "Sales Settings", href: "/management/sales-settings",    icon: Receipt     },
-      { name: "Floor Plan",    href: "/management/staff-operations/floor-plan",         icon: Map         },
-      { name: "Cameras",       href: "/management/staff-operations/cameras",            icon: Camera      },
-      {
-        name: "Apps", icon: LayoutGrid,
-        children: [
-          { name: "Dashboard",  href: "/management/staff-operations/dashboard", icon: LayoutDashboard  },
-          { name: "Mobile POS", href: "/management/staff-operations/mobile-pos",     icon: Smartphone },
-          { name: "Tech App",   href: "/management/staff-operations/tech-app",      icon: TabletSmartphone },
-        ],
-      },
-      { name: "Legal",         href: "/management/staff-operations/legal",              icon: Scale       },
-    ],
-  },
-  {
-    name: "Marketing & Reports", icon: TrendingUp, defaultHref: "/management/marketing-reports/sales-overview",
-    children: [
-      { name: "Sales Overview", href: "/management/marketing-reports/sales-overview",       icon: BarChart2  },
-      { name: "Reports",        href: "/management/marketing-reports/reports", icon: TrendingUp,
-        matchPaths: ["/management/marketing-reports/reports/daily"] },
-      { name: "Analytics",      href: "/management/marketing-reports/analytics",   icon: Activity   },
-      { name: "Referrals",      href: "/management/marketing-reports/referrals",  icon: UserPlus   },
-      {
-        name: "Landing Pages", icon: LayoutTemplate,
-        children: [
-          { name: "Pages",         href: "/management/marketing-reports/landing-pages/pages",          icon: Globe },
-          { name: "Templates",     href: "/management/marketing-reports/landing-pages/templates", icon: LayoutTemplate },
-        ],
-      },
-      {
-        name: "Generators", icon: QrCode,
-        children: [
-          { name: "QR Codes",   href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode },
-          { name: "Shortlinks", href: "/management/marketing-reports/generators/shortlinks", icon: Link2  },
-        ],
-      },
-      { name: "Online Store",   href: "/management/marketing-reports/online-store",         icon: Globe      },
-      { name: "Forms & Files",  href: "/management/marketing-reports/forms-files",                icon: FileText   },
-      { name: "AI Assistant",   href: "/management/marketing-reports/ai-assistant",                   icon: Brain      },
-    ],
-  },
-  {
-    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/settings-integrations/account",
-    children: [
-      { name: "Account",           href: "/management/settings-integrations/account",       icon: UserCircle     },
-      { name: "Business Details",  href: "/management/settings-integrations/business-details",      icon: Building2,
-        matchPaths: ["/management/settings-integrations/business-details/regional"] },
-      { name: "Tax",               href: "/management/settings-integrations/tax",           icon: Receipt        },
-      { name: "Surcharges",        href: "/management/settings-integrations/surcharges",    icon: Percent        },
-      { name: "Themes",            href: "/management/settings-integrations/themes",        icon: Palette        },
-      {
-        name: "Templates", icon: LayoutTemplate,
-        children: [
-          { name: "Sales",             href: "/management/products-inventory/sales",        icon: LayoutTemplate },
-          { name: "Labels",            href: "/management/products-inventory/labels",           icon: Printer,
-            matchPaths: ["/management/products-inventory/stickers", "/management/sticker-templates"] }, // legacy paths → redirect to Labels
-          { name: "Misc",              href: "/management/templates/misc",   icon: FileText },
-          { name: "Emails",            href: "/management/templates/email",  icon: Mail },
-        ],
-      },
-      { name: "SMS",               href: "/management/settings-integrations/sms",           icon: MessageSquare  },
-      { name: "Emails",            href: "/management/marketing-reports/email",         icon: Mail           },
-      { name: "Integrations",      href: "/management/settings-integrations/integrations",  icon: Plug,
-        matchPaths: ["/management/settings-integrations/integrations/tyro-eftpos", "/management/settings-integrations/integrations/xero"] },
-      { name: "Sync",              href: "/management/settings-integrations/sync",          icon: FolderSync,
-        matchPaths: ["/management/settings-integrations/sync/backup"] },
-      { name: "Import / Export",   href: "/management/settings-integrations/import-export", icon: ArrowLeftRight },
-      { name: "Misc",              href: "/management/settings-integrations/system/misc",          icon: MoreHorizontal },
-      { name: "Feedback",          href: "/management/settings-integrations/feedback",      icon: MessageSquare  },
-    ],
-  },
-];
+// Nav types and the Management tree itself live in ./management-hubs, which
+// also derives the hub tab lists and breadcrumb trails from that same tree.
 
 /* ─── Search index ───────────────────────────────────────────────────────── */
 
@@ -320,6 +205,14 @@ const SEARCH_INDEX = [
   { label: "Forms & Files",     href: "/management/marketing-reports/forms-files",            icon: FileText,        group: "Management" },
   { label: "Gift Cards",        href: "/management/customers/gift-cards",       icon: Gift,            group: "Management" },
   { label: "Import / Export",   href: "/management/settings-integrations/import-export",    icon: ArrowLeftRight,  group: "Management" },
+  { label: "Uploads",           href: "/management/settings-integrations/uploads",          icon: ImageIcon,       group: "Management" },
+  { label: "Media Library",     href: "/management/settings-integrations/uploads",          icon: ImageIcon,       group: "Management" },
+  { label: "Locations",         href: "/management/settings-integrations/locations",        icon: MapPin,          group: "Management" },
+  { label: "Service Plans",     href: "/management/customers/service-plans",                icon: Repeat,          group: "Management" },
+  { label: "Loaners",           href: "/management/products-inventory/loaners",             icon: Smartphone,      group: "Management" },
+  { label: "Parts Compatibility", href: "/management/products-inventory/parts-compatibility", icon: Puzzle,        group: "Management" },
+  { label: "Trade-Ins",         href: "/management/products-inventory/trade-ins",           icon: Recycle,         group: "Management" },
+  { label: "Time Cards",        href: "/management/products-inventory/time-cards",          icon: Clock,           group: "Management" },
   { label: "Integrations",       href: "/management/settings-integrations/integrations",     icon: Receipt,         group: "Management" },
   { label: "Integrations · Tyro EFTPOS", href: "/management/settings-integrations/integrations/tyro-eftpos", icon: CreditCard,   group: "Management" },
   { label: "Inventory Settings",       href: "/management/products-inventory/inventory",         icon: Boxes,           group: "Management" },
@@ -349,6 +242,7 @@ const SEARCH_INDEX = [
   { label: "Marketing · SMS Templates",        href: "/marketing/sms/templates",            icon: FileText,   group: "Marketing" },
   { label: "Marketing · QR Codes",             href: "/management/marketing-reports/generators/qr-codes",   icon: QrCode,     group: "Management" },
   { label: "Marketing · Shortlinks",           href: "/management/marketing-reports/generators/shortlinks", icon: Link2,      group: "Management" },
+  { label: "Marketing · Email Signatures",     href: "/management/marketing-reports/generators/email-signatures", icon: Mail, group: "Management" },
   { label: "Marketing · Landing Pages",        href: "/management/marketing-reports/landing-pages/pages",         icon: LayoutTemplate, group: "Management" },
   { label: "Marketing · Landing Page Templates", href: "/management/marketing-reports/landing-pages/templates", icon: LayoutTemplate, group: "Management" },
   { label: "Marketing · Loyalty Promos",    href: "/marketing/loyalty/promos",  icon: Zap,    group: "Marketing" },
@@ -421,9 +315,14 @@ function titleCaseSegment(seg: string): string {
     .replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
-/** Breadcrumb labels for a route, falling back to a title-cased path trail. */
-/** Breadcrumb labels for a route, derived from its URL segments. */
+/**
+ * Breadcrumb labels for a route. Management routes use the trail derived from
+ * the nav tree, so a page's crumbs always match where it sits in the sidebar;
+ * everything else falls back to a title-cased path trail.
+ */
 function routeLabels(location: string): string[] {
+  const hubTrail = HUB_ROUTE_LABELS[location];
+  if (hubTrail) return hubTrail;
   const segments = location.split("/").filter(Boolean);
   if (!segments.length) return ["Home"];
   return segments.map((seg) => SEGMENT_LABEL[seg] ?? titleCaseSegment(seg));
