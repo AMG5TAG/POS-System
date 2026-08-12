@@ -4,6 +4,7 @@ import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Tru
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { FollowUpBanner } from "./FollowUpBanner";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -239,10 +240,12 @@ export function ServiceJobsTiles({
   showStatusTiles = true,
   showMetricTiles = true,
   showOverdueBanner = true,
+  showFollowUpBanner = true,
 }: {
   showStatusTiles?: boolean;
   showMetricTiles?: boolean;
   showOverdueBanner?: boolean;
+  showFollowUpBanner?: boolean;
 }) {
   const { data: jobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-dash"] } });
   const { data: appointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appts-dash"] } });
@@ -353,8 +356,9 @@ export function ServiceJobsTiles({
         </div>
       )}
 
-      {/* Overdue banner */}
+      {/* Overdue banner, then the follow-up nudge directly beneath it */}
       {showOverdueBanner && <OverdueBanner jobs={jobs} />}
+      {showFollowUpBanner && <FollowUpBanner />}
     </div>
   );
 }

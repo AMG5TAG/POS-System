@@ -24,7 +24,6 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ReferralRevenueWidget } from "@/components/dashboard/ReferralRevenueWidget";
-import { FollowUpBanner } from "@/components/dashboard/FollowUpBanner";
 import {
   Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw, Radio, Cake, Clock, GripVertical,
 } from "lucide-react";
@@ -131,7 +130,9 @@ export default function DashboardPage() {
 
   const sectionVisible = (id: DashboardSectionId): boolean => {
     switch (id) {
-      case "serviceJobs":     return config.showStatusTiles || config.showMetricTiles || config.showOverdueBanner;
+      // The follow-up banner lives at the foot of this section, so the section
+      // must still render when it is the only thing switched on.
+      case "serviceJobs":     return config.showStatusTiles || config.showMetricTiles || config.showOverdueBanner || config.showFollowUpNotifications;
       case "panels":          return showPanels;
       case "calendar":        return config.showCalendar;
       case "referralRevenue": return config.showReferralRevenue;
@@ -146,6 +147,7 @@ export default function DashboardPage() {
             showStatusTiles={config.showStatusTiles}
             showMetricTiles={config.showMetricTiles}
             showOverdueBanner={config.showOverdueBanner}
+            showFollowUpBanner={config.showFollowUpNotifications}
           />
         );
       case "panels":
@@ -164,7 +166,6 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         {config.showBirthdayNotifications && <BirthdayBanner />}
-        {config.showFollowUpNotifications && <FollowUpBanner />}
         <SecurityAlertBanner />
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}
