@@ -9610,8 +9610,383 @@ paths:
                   - $ref: "#/components/schemas/DashboardKpiResult"
                   - type: "null"
 
+  # ── Marketing · Follow Up ───────────────────────────────────────────────────
+  /follow-ups:
+    get:
+      operationId: listFollowUps
+      tags: [follow-ups]
+      summary: Completed service jobs and appointments due for a follow-up
+      parameters:
+        - { name: windowValue, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 3650 } }
+        - { name: windowUnit, in: query, required: false, schema: { type: string, enum: [days, weeks, months] } }
+        - { name: includeServices, in: query, required: false, schema: { type: string, enum: ["true", "false"] } }
+        - { name: includeAppointments, in: query, required: false, schema: { type: string, enum: ["true", "false"] } }
+        - { name: hideAlreadySent, in: query, required: false, schema: { type: string, enum: ["true", "false"] } }
+      responses:
+        "200":
+          description: Follow-ups due
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpListResponse" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /follow-ups/shortcodes:
+    get:
+      operationId: listFollowUpShortcodes
+      tags: [follow-ups]
+      summary: Shortcodes available to follow-up templates
+      responses:
+        "200":
+          description: Shortcodes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpShortcodeListResponse" }
+
+  /follow-ups/log:
+    get:
+      operationId: listFollowUpLog
+      tags: [follow-ups]
+      summary: Follow-up messages already dispatched
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500 } }
+      responses:
+        "200":
+          description: Send history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpLogListResponse" }
+
+  /follow-ups/preview:
+    post:
+      operationId: previewFollowUp
+      tags: [follow-ups]
+      summary: Render a follow-up message against one record without sending it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpSendInput" }
+      responses:
+        "200":
+          description: Rendered message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpPreviewResponse" }
+        "400":
+          description: Validation error
+        "404":
+          description: Record not found
+
+  /follow-ups/send:
+    post:
+      operationId: sendFollowUps
+      tags: [follow-ups]
+      summary: Send follow-up emails and/or SMS for the selected records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpSendInput" }
+      responses:
+        "200":
+          description: Dispatch outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSendResponse" }
+        "400":
+          description: Validation error
+
+  /follow-up-settings:
+    get:
+      operationId: getFollowUpSettings
+      tags: [follow-ups]
+      summary: Follow Up defaults for the current merchant
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSettings" }
+    put:
+      operationId: updateFollowUpSettings
+      tags: [follow-ups]
+      summary: Update Follow Up defaults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpSettingsInput" }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSettings" }
+        "400":
+          description: Validation error
+
+  /follow-up-templates:
+    get:
+      operationId: listFollowUpTemplates
+      tags: [follow-ups]
+      summary: List follow-up message templates
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpTemplateListResponse" }
+    post:
+      operationId: createFollowUpTemplate
+      tags: [follow-ups]
+      summary: Create a follow-up message template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpTemplate" }
+        "400":
+          description: Validation error
+
+  /follow-up-templates/{id}:
+    put:
+      operationId: updateFollowUpTemplate
+      tags: [follow-ups]
+      summary: Update a follow-up message template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpTemplateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpTemplate" }
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteFollowUpTemplate
+      tags: [follow-ups]
+      summary: Delete a follow-up message template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
 components:
   schemas:
+    # ── Marketing · Follow Up ─────────────────────────────────────────────────
+    FollowUpItem:
+      type: object
+      required: [id, sourceType, sourceId, reference, title, device, staffName, completedAt, daysSince, customerId, customerName, email, phone, agreedToMarketing, lastFollowUpAt, followUpCount]
+      properties:
+        id: { type: string, description: "Composite key, e.g. service_job-42" }
+        sourceType: { type: string, enum: [service_job, appointment] }
+        sourceId: { type: integer }
+        reference: { type: string, description: "Job number, or APT-<id> for an appointment" }
+        title: { type: string }
+        device: { type: string }
+        staffName: { type: string }
+        completedAt: { type: string, format: date-time }
+        daysSince: { type: integer }
+        customerId: { type: integer, nullable: true }
+        customerName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        agreedToMarketing: { type: boolean }
+        lastFollowUpAt: { type: string, nullable: true }
+        followUpCount: { type: integer }
+
+    FollowUpListResponse:
+      type: object
+      required: [items, total, windowValue, windowUnit, cutoff]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpItem" }
+        total: { type: integer }
+        windowValue: { type: integer }
+        windowUnit: { type: string }
+        cutoff: { type: string, format: date-time }
+
+    FollowUpShortcode:
+      type: object
+      required: [code, label, example]
+      properties:
+        code: { type: string }
+        label: { type: string }
+        example: { type: string }
+
+    FollowUpShortcodeListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpShortcode" }
+        total: { type: integer }
+
+    FollowUpLogEntry:
+      type: object
+      required: [id, sourceType, sourceId, customerId, templateId, channel, status, recipient, subject, body, error, sentAt]
+      properties:
+        id: { type: integer }
+        sourceType: { type: string }
+        sourceId: { type: integer }
+        customerId: { type: integer, nullable: true }
+        templateId: { type: integer, nullable: true }
+        channel: { type: string }
+        status: { type: string }
+        recipient: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        error: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time }
+
+    FollowUpLogListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpLogEntry" }
+        total: { type: integer }
+
+    FollowUpTarget:
+      type: object
+      required: [sourceType, sourceId]
+      properties:
+        sourceType: { type: string, enum: [service_job, appointment] }
+        sourceId: { type: integer }
+
+    FollowUpSendInput:
+      type: object
+      required: [targets, channel]
+      properties:
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/FollowUpTarget" }
+        channel: { type: string, enum: [email, sms, both] }
+        templateId: { type: integer, nullable: true }
+        subject: { type: string }
+        body: { type: string }
+        smsBody: { type: string }
+
+    FollowUpSendResult:
+      type: object
+      required: [sourceType, sourceId, channel, status]
+      properties:
+        sourceType: { type: string }
+        sourceId: { type: integer }
+        channel: { type: string }
+        status: { type: string, enum: [sent, failed, skipped] }
+        error: { type: string }
+
+    FollowUpSendResponse:
+      type: object
+      required: [success, sent, failed, skipped, results]
+      properties:
+        success: { type: boolean }
+        sent: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpSendResult" }
+
+    FollowUpPreviewResponse:
+      type: object
+      required: [subject, html, text, sms, recipientEmail, recipientPhone]
+      properties:
+        subject: { type: string }
+        html: { type: string }
+        text: { type: string }
+        sms: { type: string }
+        recipientEmail: { type: string }
+        recipientPhone: { type: string }
+
+    FollowUpSettings:
+      type: object
+      required: [id, merchantId, windowValue, windowUnit, includeServices, includeAppointments, hideAlreadySent, requireOptIn, defaultChannel, defaultTemplateId, reviewUrl, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        windowValue: { type: integer }
+        windowUnit: { type: string, enum: [days, weeks, months] }
+        includeServices: { type: boolean }
+        includeAppointments: { type: boolean }
+        hideAlreadySent: { type: boolean }
+        requireOptIn: { type: boolean }
+        defaultChannel: { type: string, enum: [email, sms, both] }
+        defaultTemplateId: { type: integer, nullable: true }
+        reviewUrl: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FollowUpSettingsInput:
+      type: object
+      properties:
+        windowValue: { type: integer, minimum: 0, maximum: 3650 }
+        windowUnit: { type: string, enum: [days, weeks, months] }
+        includeServices: { type: boolean }
+        includeAppointments: { type: boolean }
+        hideAlreadySent: { type: boolean }
+        requireOptIn: { type: boolean }
+        defaultChannel: { type: string, enum: [email, sms, both] }
+        defaultTemplateId: { type: integer, nullable: true }
+        reviewUrl: { type: string }
+
+    FollowUpTemplate:
+      type: object
+      required: [id, merchantId, name, channel, subject, body, smsBody, isDefault, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        name: { type: string }
+        channel: { type: string, enum: [email, sms, both] }
+        subject: { type: string }
+        body: { type: string }
+        smsBody: { type: string }
+        isDefault: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FollowUpTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpTemplate" }
+        total: { type: integer }
+
+    FollowUpTemplateInput:
+      type: object
+      properties:
+        name: { type: string }
+        channel: { type: string, enum: [email, sms, both] }
+        subject: { type: string }
+        body: { type: string }
+        smsBody: { type: string }
+        isDefault: { type: boolean }
+
     # ── SMS templates & campaigns ─────────────────────────────────────────────
     SmsTemplate:
       type: object

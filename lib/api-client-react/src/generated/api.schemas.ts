@@ -5,6 +5,253 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+export type FollowUpItemSourceType = typeof FollowUpItemSourceType[keyof typeof FollowUpItemSourceType];
+
+
+export const FollowUpItemSourceType = {
+  service_job: 'service_job',
+  appointment: 'appointment',
+} as const;
+
+export interface FollowUpItem {
+  /** Composite key, e.g. service_job-42 */
+  id: string;
+  sourceType: FollowUpItemSourceType;
+  sourceId: number;
+  /** Job number, or APT-<id> for an appointment */
+  reference: string;
+  title: string;
+  device: string;
+  staffName: string;
+  completedAt: string;
+  daysSince: number;
+  customerId: number | null;
+  customerName: string;
+  email: string;
+  phone: string;
+  agreedToMarketing: boolean;
+  lastFollowUpAt: string | null;
+  followUpCount: number;
+}
+
+export interface FollowUpListResponse {
+  items: FollowUpItem[];
+  total: number;
+  windowValue: number;
+  windowUnit: string;
+  cutoff: string;
+}
+
+export interface FollowUpShortcode {
+  code: string;
+  label: string;
+  example: string;
+}
+
+export interface FollowUpShortcodeListResponse {
+  items: FollowUpShortcode[];
+  total: number;
+}
+
+export interface FollowUpLogEntry {
+  id: number;
+  sourceType: string;
+  sourceId: number;
+  customerId: number | null;
+  templateId: number | null;
+  channel: string;
+  status: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  error: string | null;
+  sentAt: string;
+}
+
+export interface FollowUpLogListResponse {
+  items: FollowUpLogEntry[];
+  total: number;
+}
+
+export type FollowUpTargetSourceType = typeof FollowUpTargetSourceType[keyof typeof FollowUpTargetSourceType];
+
+
+export const FollowUpTargetSourceType = {
+  service_job: 'service_job',
+  appointment: 'appointment',
+} as const;
+
+export interface FollowUpTarget {
+  sourceType: FollowUpTargetSourceType;
+  sourceId: number;
+}
+
+export type FollowUpSendInputChannel = typeof FollowUpSendInputChannel[keyof typeof FollowUpSendInputChannel];
+
+
+export const FollowUpSendInputChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpSendInput {
+  /** @minItems 1 */
+  targets: FollowUpTarget[];
+  channel: FollowUpSendInputChannel;
+  templateId?: number | null;
+  subject?: string;
+  body?: string;
+  smsBody?: string;
+}
+
+export type FollowUpSendResultStatus = typeof FollowUpSendResultStatus[keyof typeof FollowUpSendResultStatus];
+
+
+export const FollowUpSendResultStatus = {
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+
+export interface FollowUpSendResult {
+  sourceType: string;
+  sourceId: number;
+  channel: string;
+  status: FollowUpSendResultStatus;
+  error?: string;
+}
+
+export interface FollowUpSendResponse {
+  success: boolean;
+  sent: number;
+  failed: number;
+  skipped: number;
+  results: FollowUpSendResult[];
+}
+
+export interface FollowUpPreviewResponse {
+  subject: string;
+  html: string;
+  text: string;
+  sms: string;
+  recipientEmail: string;
+  recipientPhone: string;
+}
+
+export type FollowUpSettingsWindowUnit = typeof FollowUpSettingsWindowUnit[keyof typeof FollowUpSettingsWindowUnit];
+
+
+export const FollowUpSettingsWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export type FollowUpSettingsDefaultChannel = typeof FollowUpSettingsDefaultChannel[keyof typeof FollowUpSettingsDefaultChannel];
+
+
+export const FollowUpSettingsDefaultChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpSettings {
+  id: number;
+  merchantId: number;
+  windowValue: number;
+  windowUnit: FollowUpSettingsWindowUnit;
+  includeServices: boolean;
+  includeAppointments: boolean;
+  hideAlreadySent: boolean;
+  requireOptIn: boolean;
+  defaultChannel: FollowUpSettingsDefaultChannel;
+  defaultTemplateId: number | null;
+  reviewUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FollowUpSettingsInputWindowUnit = typeof FollowUpSettingsInputWindowUnit[keyof typeof FollowUpSettingsInputWindowUnit];
+
+
+export const FollowUpSettingsInputWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export type FollowUpSettingsInputDefaultChannel = typeof FollowUpSettingsInputDefaultChannel[keyof typeof FollowUpSettingsInputDefaultChannel];
+
+
+export const FollowUpSettingsInputDefaultChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpSettingsInput {
+  /**
+     * @minimum 0
+     * @maximum 3650
+     */
+  windowValue?: number;
+  windowUnit?: FollowUpSettingsInputWindowUnit;
+  includeServices?: boolean;
+  includeAppointments?: boolean;
+  hideAlreadySent?: boolean;
+  requireOptIn?: boolean;
+  defaultChannel?: FollowUpSettingsInputDefaultChannel;
+  defaultTemplateId?: number | null;
+  reviewUrl?: string;
+}
+
+export type FollowUpTemplateChannel = typeof FollowUpTemplateChannel[keyof typeof FollowUpTemplateChannel];
+
+
+export const FollowUpTemplateChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpTemplate {
+  id: number;
+  merchantId: number;
+  name: string;
+  channel: FollowUpTemplateChannel;
+  subject: string;
+  body: string;
+  smsBody: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FollowUpTemplateListResponse {
+  items: FollowUpTemplate[];
+  total: number;
+}
+
+export type FollowUpTemplateInputChannel = typeof FollowUpTemplateInputChannel[keyof typeof FollowUpTemplateInputChannel];
+
+
+export const FollowUpTemplateInputChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpTemplateInput {
+  name?: string;
+  channel?: FollowUpTemplateInputChannel;
+  subject?: string;
+  body?: string;
+  smsBody?: string;
+  isDefault?: boolean;
+}
+
 export interface SmsTemplate {
   id: number;
   merchantId: number;
@@ -6939,5 +7186,58 @@ pin: string;
 
 export type GetPaymentTotalsParams = {
 date?: string;
+};
+
+export type ListFollowUpsParams = {
+/**
+ * @minimum 0
+ * @maximum 3650
+ */
+windowValue?: number;
+windowUnit?: ListFollowUpsWindowUnit;
+includeServices?: ListFollowUpsIncludeServices;
+includeAppointments?: ListFollowUpsIncludeAppointments;
+hideAlreadySent?: ListFollowUpsHideAlreadySent;
+};
+
+export type ListFollowUpsWindowUnit = typeof ListFollowUpsWindowUnit[keyof typeof ListFollowUpsWindowUnit];
+
+
+export const ListFollowUpsWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export type ListFollowUpsIncludeServices = typeof ListFollowUpsIncludeServices[keyof typeof ListFollowUpsIncludeServices];
+
+
+export const ListFollowUpsIncludeServices = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListFollowUpsIncludeAppointments = typeof ListFollowUpsIncludeAppointments[keyof typeof ListFollowUpsIncludeAppointments];
+
+
+export const ListFollowUpsIncludeAppointments = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListFollowUpsHideAlreadySent = typeof ListFollowUpsHideAlreadySent[keyof typeof ListFollowUpsHideAlreadySent];
+
+
+export const ListFollowUpsHideAlreadySent = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListFollowUpLogParams = {
+/**
+ * @minimum 1
+ * @maximum 500
+ */
+limit?: number;
 };
 

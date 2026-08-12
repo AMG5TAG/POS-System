@@ -145,6 +145,8 @@ const MarketingEmailCampaignsPage = lazyWithRetry(() => import("@/pages/app/mark
 const MarketingEmailTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-email-templates"));
 const MarketingSmsCampaignsPage = lazyWithRetry(() => import("@/pages/app/marketing-sms-campaigns"));
 const MarketingSmsTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-sms-templates"));
+const MarketingFollowUpPage = lazyWithRetry(() => import("@/pages/app/marketing-follow-up"));
+const MarketingFollowUpTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-follow-up-templates"));
 const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
@@ -784,6 +786,12 @@ function Router() {
       </Route>
       <Route path="/marketing/sms/templates">
         <ProtectedRoute component={MarketingSmsTemplatesPage} />
+      </Route>
+      <Route path="/marketing/follow-up">
+        <ProtectedRoute component={MarketingFollowUpPage} />
+      </Route>
+      <Route path="/marketing/follow-up/templates">
+        <ProtectedRoute component={MarketingFollowUpTemplatesPage} />
       </Route>
       {/* Moved under Management → Marketing & Reports (owner/manager only) */}
       <Route path="/management/marketing-reports/landing-pages/pages">

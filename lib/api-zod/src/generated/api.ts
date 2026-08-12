@@ -12858,3 +12858,277 @@ export const GetDashboardKpiResponse = zod.union([zod.object({
 }),zod.null()])
 
 
+/**
+ * @summary Completed service jobs and appointments due for a follow-up
+ */
+export const listFollowUpsQueryWindowValueMin = 0;
+export const listFollowUpsQueryWindowValueMax = 3650;
+
+
+
+export const ListFollowUpsQueryParams = zod.object({
+  "windowValue": zod.coerce.number().min(listFollowUpsQueryWindowValueMin).max(listFollowUpsQueryWindowValueMax).optional(),
+  "windowUnit": zod.enum(['days', 'weeks', 'months']).optional(),
+  "includeServices": zod.enum(['true', 'false']).optional(),
+  "includeAppointments": zod.enum(['true', 'false']).optional(),
+  "hideAlreadySent": zod.enum(['true', 'false']).optional()
+})
+
+export const ListFollowUpsResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.string().describe('Composite key, e.g. service_job-42'),
+  "sourceType": zod.enum(['service_job', 'appointment']),
+  "sourceId": zod.number(),
+  "reference": zod.string().describe('Job number, or APT-<id> for an appointment'),
+  "title": zod.string(),
+  "device": zod.string(),
+  "staffName": zod.string(),
+  "completedAt": zod.coerce.date(),
+  "daysSince": zod.number(),
+  "customerId": zod.number().nullable(),
+  "customerName": zod.string(),
+  "email": zod.string(),
+  "phone": zod.string(),
+  "agreedToMarketing": zod.boolean(),
+  "lastFollowUpAt": zod.string().nullable(),
+  "followUpCount": zod.number()
+})),
+  "total": zod.number(),
+  "windowValue": zod.number(),
+  "windowUnit": zod.string(),
+  "cutoff": zod.coerce.date()
+})
+
+
+/**
+ * @summary Shortcodes available to follow-up templates
+ */
+export const ListFollowUpShortcodesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "code": zod.string(),
+  "label": zod.string(),
+  "example": zod.string()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Follow-up messages already dispatched
+ */
+export const listFollowUpLogQueryLimitMax = 500;
+
+
+
+export const ListFollowUpLogQueryParams = zod.object({
+  "limit": zod.coerce.number().min(1).max(listFollowUpLogQueryLimitMax).optional()
+})
+
+export const ListFollowUpLogResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "sourceType": zod.string(),
+  "sourceId": zod.number(),
+  "customerId": zod.number().nullable(),
+  "templateId": zod.number().nullable(),
+  "channel": zod.string(),
+  "status": zod.string(),
+  "recipient": zod.string(),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "error": zod.string().nullable(),
+  "sentAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Render a follow-up message against one record without sending it
+ */
+
+
+
+export const PreviewFollowUpBody = zod.object({
+  "targets": zod.array(zod.object({
+  "sourceType": zod.enum(['service_job', 'appointment']),
+  "sourceId": zod.number()
+})).min(1),
+  "channel": zod.enum(['email', 'sms', 'both']),
+  "templateId": zod.number().nullish(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional(),
+  "smsBody": zod.string().optional()
+})
+
+export const PreviewFollowUpResponse = zod.object({
+  "subject": zod.string(),
+  "html": zod.string(),
+  "text": zod.string(),
+  "sms": zod.string(),
+  "recipientEmail": zod.string(),
+  "recipientPhone": zod.string()
+})
+
+
+/**
+ * @summary Send follow-up emails and/or SMS for the selected records
+ */
+
+
+
+export const SendFollowUpsBody = zod.object({
+  "targets": zod.array(zod.object({
+  "sourceType": zod.enum(['service_job', 'appointment']),
+  "sourceId": zod.number()
+})).min(1),
+  "channel": zod.enum(['email', 'sms', 'both']),
+  "templateId": zod.number().nullish(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional(),
+  "smsBody": zod.string().optional()
+})
+
+export const SendFollowUpsResponse = zod.object({
+  "success": zod.boolean(),
+  "sent": zod.number(),
+  "failed": zod.number(),
+  "skipped": zod.number(),
+  "results": zod.array(zod.object({
+  "sourceType": zod.string(),
+  "sourceId": zod.number(),
+  "channel": zod.string(),
+  "status": zod.enum(['sent', 'failed', 'skipped']),
+  "error": zod.string().optional()
+}))
+})
+
+
+/**
+ * @summary Follow Up defaults for the current merchant
+ */
+export const GetFollowUpSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "windowValue": zod.number(),
+  "windowUnit": zod.enum(['days', 'weeks', 'months']),
+  "includeServices": zod.boolean(),
+  "includeAppointments": zod.boolean(),
+  "hideAlreadySent": zod.boolean(),
+  "requireOptIn": zod.boolean(),
+  "defaultChannel": zod.enum(['email', 'sms', 'both']),
+  "defaultTemplateId": zod.number().nullable(),
+  "reviewUrl": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Update Follow Up defaults
+ */
+export const updateFollowUpSettingsBodyWindowValueMin = 0;
+export const updateFollowUpSettingsBodyWindowValueMax = 3650;
+
+
+
+export const UpdateFollowUpSettingsBody = zod.object({
+  "windowValue": zod.number().min(updateFollowUpSettingsBodyWindowValueMin).max(updateFollowUpSettingsBodyWindowValueMax).optional(),
+  "windowUnit": zod.enum(['days', 'weeks', 'months']).optional(),
+  "includeServices": zod.boolean().optional(),
+  "includeAppointments": zod.boolean().optional(),
+  "hideAlreadySent": zod.boolean().optional(),
+  "requireOptIn": zod.boolean().optional(),
+  "defaultChannel": zod.enum(['email', 'sms', 'both']).optional(),
+  "defaultTemplateId": zod.number().nullish(),
+  "reviewUrl": zod.string().optional()
+})
+
+export const UpdateFollowUpSettingsResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "windowValue": zod.number(),
+  "windowUnit": zod.enum(['days', 'weeks', 'months']),
+  "includeServices": zod.boolean(),
+  "includeAppointments": zod.boolean(),
+  "hideAlreadySent": zod.boolean(),
+  "requireOptIn": zod.boolean(),
+  "defaultChannel": zod.enum(['email', 'sms', 'both']),
+  "defaultTemplateId": zod.number().nullable(),
+  "reviewUrl": zod.string(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary List follow-up message templates
+ */
+export const ListFollowUpTemplatesResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'both']),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "smsBody": zod.string(),
+  "isDefault": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "total": zod.number()
+})
+
+
+/**
+ * @summary Create a follow-up message template
+ */
+export const CreateFollowUpTemplateBody = zod.object({
+  "name": zod.string().optional(),
+  "channel": zod.enum(['email', 'sms', 'both']).optional(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional(),
+  "smsBody": zod.string().optional(),
+  "isDefault": zod.boolean().optional()
+})
+
+
+/**
+ * @summary Update a follow-up message template
+ */
+export const UpdateFollowUpTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const UpdateFollowUpTemplateBody = zod.object({
+  "name": zod.string().optional(),
+  "channel": zod.enum(['email', 'sms', 'both']).optional(),
+  "subject": zod.string().optional(),
+  "body": zod.string().optional(),
+  "smsBody": zod.string().optional(),
+  "isDefault": zod.boolean().optional()
+})
+
+export const UpdateFollowUpTemplateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "name": zod.string(),
+  "channel": zod.enum(['email', 'sms', 'both']),
+  "subject": zod.string(),
+  "body": zod.string(),
+  "smsBody": zod.string(),
+  "isDefault": zod.boolean(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Delete a follow-up message template
+ */
+export const DeleteFollowUpTemplateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+

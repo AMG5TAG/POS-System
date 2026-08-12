@@ -125,6 +125,17 @@ import type {
   FeedbackInput,
   FloorPlan,
   FloorZone,
+  FollowUpListResponse,
+  FollowUpLogListResponse,
+  FollowUpPreviewResponse,
+  FollowUpSendInput,
+  FollowUpSendResponse,
+  FollowUpSettings,
+  FollowUpSettingsInput,
+  FollowUpShortcodeListResponse,
+  FollowUpTemplate,
+  FollowUpTemplateInput,
+  FollowUpTemplateListResponse,
   ForgotPasswordInput,
   GenerateMissingReferralCodes200,
   GetAuthEventsFlaggedCount200,
@@ -200,6 +211,8 @@ import type {
   ListCashDrawerEntriesParams,
   ListCustomersParams,
   ListDailyClosesParams,
+  ListFollowUpLogParams,
+  ListFollowUpsParams,
   ListGiftCardsParams,
   ListInventoryParams,
   ListInvoicesParams,
@@ -37910,4 +37923,829 @@ export function useGetDashboardKpi<TData = Awaited<ReturnType<typeof getDashboar
 
 
 
+
+export const getListFollowUpsUrl = (params?: ListFollowUpsParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/follow-ups?${stringifiedParams}` : `/api/follow-ups`
+}
+
+/**
+ * @summary Completed service jobs and appointments due for a follow-up
+ */
+export const listFollowUps = async (params?: ListFollowUpsParams, options?: RequestInit): Promise<FollowUpListResponse> => {
+
+  return customFetch<FollowUpListResponse>(getListFollowUpsUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFollowUpsQueryKey = (params?: ListFollowUpsParams,) => {
+    return [
+    `/api/follow-ups`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListFollowUpsQueryOptions = <TData = Awaited<ReturnType<typeof listFollowUps>>, TError = ErrorType<void>>(params?: ListFollowUpsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFollowUpsQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFollowUps>>> = ({ signal }) => listFollowUps(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFollowUps>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFollowUpsQueryResult = NonNullable<Awaited<ReturnType<typeof listFollowUps>>>
+export type ListFollowUpsQueryError = ErrorType<void>
+
+
+/**
+ * @summary Completed service jobs and appointments due for a follow-up
+ */
+
+export function useListFollowUps<TData = Awaited<ReturnType<typeof listFollowUps>>, TError = ErrorType<void>>(
+ params?: ListFollowUpsParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUps>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFollowUpsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListFollowUpShortcodesUrl = () => {
+
+
+
+
+  return `/api/follow-ups/shortcodes`
+}
+
+/**
+ * @summary Shortcodes available to follow-up templates
+ */
+export const listFollowUpShortcodes = async ( options?: RequestInit): Promise<FollowUpShortcodeListResponse> => {
+
+  return customFetch<FollowUpShortcodeListResponse>(getListFollowUpShortcodesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFollowUpShortcodesQueryKey = () => {
+    return [
+    `/api/follow-ups/shortcodes`
+    ] as const;
+    }
+
+
+export const getListFollowUpShortcodesQueryOptions = <TData = Awaited<ReturnType<typeof listFollowUpShortcodes>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUpShortcodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFollowUpShortcodesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFollowUpShortcodes>>> = ({ signal }) => listFollowUpShortcodes({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFollowUpShortcodes>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFollowUpShortcodesQueryResult = NonNullable<Awaited<ReturnType<typeof listFollowUpShortcodes>>>
+export type ListFollowUpShortcodesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Shortcodes available to follow-up templates
+ */
+
+export function useListFollowUpShortcodes<TData = Awaited<ReturnType<typeof listFollowUpShortcodes>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUpShortcodes>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFollowUpShortcodesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getListFollowUpLogUrl = (params?: ListFollowUpLogParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/follow-ups/log?${stringifiedParams}` : `/api/follow-ups/log`
+}
+
+/**
+ * @summary Follow-up messages already dispatched
+ */
+export const listFollowUpLog = async (params?: ListFollowUpLogParams, options?: RequestInit): Promise<FollowUpLogListResponse> => {
+
+  return customFetch<FollowUpLogListResponse>(getListFollowUpLogUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFollowUpLogQueryKey = (params?: ListFollowUpLogParams,) => {
+    return [
+    `/api/follow-ups/log`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getListFollowUpLogQueryOptions = <TData = Awaited<ReturnType<typeof listFollowUpLog>>, TError = ErrorType<unknown>>(params?: ListFollowUpLogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUpLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFollowUpLogQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFollowUpLog>>> = ({ signal }) => listFollowUpLog(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFollowUpLog>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFollowUpLogQueryResult = NonNullable<Awaited<ReturnType<typeof listFollowUpLog>>>
+export type ListFollowUpLogQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Follow-up messages already dispatched
+ */
+
+export function useListFollowUpLog<TData = Awaited<ReturnType<typeof listFollowUpLog>>, TError = ErrorType<unknown>>(
+ params?: ListFollowUpLogParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUpLog>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFollowUpLogQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getPreviewFollowUpUrl = () => {
+
+
+
+
+  return `/api/follow-ups/preview`
+}
+
+/**
+ * @summary Render a follow-up message against one record without sending it
+ */
+export const previewFollowUp = async (followUpSendInput: FollowUpSendInput, options?: RequestInit): Promise<FollowUpPreviewResponse> => {
+
+  return customFetch<FollowUpPreviewResponse>(getPreviewFollowUpUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpSendInput,)
+  }
+);}
+
+
+
+
+export const getPreviewFollowUpMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewFollowUp>>, TError,{data: BodyType<FollowUpSendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof previewFollowUp>>, TError,{data: BodyType<FollowUpSendInput>}, TContext> => {
+
+const mutationKey = ['previewFollowUp'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof previewFollowUp>>, {data: BodyType<FollowUpSendInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  previewFollowUp(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PreviewFollowUpMutationResult = NonNullable<Awaited<ReturnType<typeof previewFollowUp>>>
+    export type PreviewFollowUpMutationBody = BodyType<FollowUpSendInput>
+    export type PreviewFollowUpMutationError = ErrorType<void>
+
+    /**
+ * @summary Render a follow-up message against one record without sending it
+ */
+export const usePreviewFollowUp = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof previewFollowUp>>, TError,{data: BodyType<FollowUpSendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof previewFollowUp>>,
+        TError,
+        {data: BodyType<FollowUpSendInput>},
+        TContext
+      > => {
+      return useMutation(getPreviewFollowUpMutationOptions(options));
+    }
+
+export const getSendFollowUpsUrl = () => {
+
+
+
+
+  return `/api/follow-ups/send`
+}
+
+/**
+ * @summary Send follow-up emails and/or SMS for the selected records
+ */
+export const sendFollowUps = async (followUpSendInput: FollowUpSendInput, options?: RequestInit): Promise<FollowUpSendResponse> => {
+
+  return customFetch<FollowUpSendResponse>(getSendFollowUpsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpSendInput,)
+  }
+);}
+
+
+
+
+export const getSendFollowUpsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFollowUps>>, TError,{data: BodyType<FollowUpSendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendFollowUps>>, TError,{data: BodyType<FollowUpSendInput>}, TContext> => {
+
+const mutationKey = ['sendFollowUps'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendFollowUps>>, {data: BodyType<FollowUpSendInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  sendFollowUps(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SendFollowUpsMutationResult = NonNullable<Awaited<ReturnType<typeof sendFollowUps>>>
+    export type SendFollowUpsMutationBody = BodyType<FollowUpSendInput>
+    export type SendFollowUpsMutationError = ErrorType<void>
+
+    /**
+ * @summary Send follow-up emails and/or SMS for the selected records
+ */
+export const useSendFollowUps = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendFollowUps>>, TError,{data: BodyType<FollowUpSendInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof sendFollowUps>>,
+        TError,
+        {data: BodyType<FollowUpSendInput>},
+        TContext
+      > => {
+      return useMutation(getSendFollowUpsMutationOptions(options));
+    }
+
+export const getGetFollowUpSettingsUrl = () => {
+
+
+
+
+  return `/api/follow-up-settings`
+}
+
+/**
+ * @summary Follow Up defaults for the current merchant
+ */
+export const getFollowUpSettings = async ( options?: RequestInit): Promise<FollowUpSettings> => {
+
+  return customFetch<FollowUpSettings>(getGetFollowUpSettingsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFollowUpSettingsQueryKey = () => {
+    return [
+    `/api/follow-up-settings`
+    ] as const;
+    }
+
+
+export const getGetFollowUpSettingsQueryOptions = <TData = Awaited<ReturnType<typeof getFollowUpSettings>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFollowUpSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFollowUpSettingsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFollowUpSettings>>> = ({ signal }) => getFollowUpSettings({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFollowUpSettings>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFollowUpSettingsQueryResult = NonNullable<Awaited<ReturnType<typeof getFollowUpSettings>>>
+export type GetFollowUpSettingsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Follow Up defaults for the current merchant
+ */
+
+export function useGetFollowUpSettings<TData = Awaited<ReturnType<typeof getFollowUpSettings>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFollowUpSettings>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFollowUpSettingsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getUpdateFollowUpSettingsUrl = () => {
+
+
+
+
+  return `/api/follow-up-settings`
+}
+
+/**
+ * @summary Update Follow Up defaults
+ */
+export const updateFollowUpSettings = async (followUpSettingsInput: FollowUpSettingsInput, options?: RequestInit): Promise<FollowUpSettings> => {
+
+  return customFetch<FollowUpSettings>(getUpdateFollowUpSettingsUrl(),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpSettingsInput,)
+  }
+);}
+
+
+
+
+export const getUpdateFollowUpSettingsMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFollowUpSettings>>, TError,{data: BodyType<FollowUpSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFollowUpSettings>>, TError,{data: BodyType<FollowUpSettingsInput>}, TContext> => {
+
+const mutationKey = ['updateFollowUpSettings'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFollowUpSettings>>, {data: BodyType<FollowUpSettingsInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  updateFollowUpSettings(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFollowUpSettingsMutationResult = NonNullable<Awaited<ReturnType<typeof updateFollowUpSettings>>>
+    export type UpdateFollowUpSettingsMutationBody = BodyType<FollowUpSettingsInput>
+    export type UpdateFollowUpSettingsMutationError = ErrorType<void>
+
+    /**
+ * @summary Update Follow Up defaults
+ */
+export const useUpdateFollowUpSettings = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFollowUpSettings>>, TError,{data: BodyType<FollowUpSettingsInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFollowUpSettings>>,
+        TError,
+        {data: BodyType<FollowUpSettingsInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateFollowUpSettingsMutationOptions(options));
+    }
+
+export const getListFollowUpTemplatesUrl = () => {
+
+
+
+
+  return `/api/follow-up-templates`
+}
+
+/**
+ * @summary List follow-up message templates
+ */
+export const listFollowUpTemplates = async ( options?: RequestInit): Promise<FollowUpTemplateListResponse> => {
+
+  return customFetch<FollowUpTemplateListResponse>(getListFollowUpTemplatesUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListFollowUpTemplatesQueryKey = () => {
+    return [
+    `/api/follow-up-templates`
+    ] as const;
+    }
+
+
+export const getListFollowUpTemplatesQueryOptions = <TData = Awaited<ReturnType<typeof listFollowUpTemplates>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUpTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListFollowUpTemplatesQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listFollowUpTemplates>>> = ({ signal }) => listFollowUpTemplates({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listFollowUpTemplates>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListFollowUpTemplatesQueryResult = NonNullable<Awaited<ReturnType<typeof listFollowUpTemplates>>>
+export type ListFollowUpTemplatesQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List follow-up message templates
+ */
+
+export function useListFollowUpTemplates<TData = Awaited<ReturnType<typeof listFollowUpTemplates>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listFollowUpTemplates>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListFollowUpTemplatesQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateFollowUpTemplateUrl = () => {
+
+
+
+
+  return `/api/follow-up-templates`
+}
+
+/**
+ * @summary Create a follow-up message template
+ */
+export const createFollowUpTemplate = async (followUpTemplateInput: FollowUpTemplateInput, options?: RequestInit): Promise<FollowUpTemplate> => {
+
+  return customFetch<FollowUpTemplate>(getCreateFollowUpTemplateUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpTemplateInput,)
+  }
+);}
+
+
+
+
+export const getCreateFollowUpTemplateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFollowUpTemplate>>, TError,{data: BodyType<FollowUpTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createFollowUpTemplate>>, TError,{data: BodyType<FollowUpTemplateInput>}, TContext> => {
+
+const mutationKey = ['createFollowUpTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createFollowUpTemplate>>, {data: BodyType<FollowUpTemplateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createFollowUpTemplate(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateFollowUpTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof createFollowUpTemplate>>>
+    export type CreateFollowUpTemplateMutationBody = BodyType<FollowUpTemplateInput>
+    export type CreateFollowUpTemplateMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a follow-up message template
+ */
+export const useCreateFollowUpTemplate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createFollowUpTemplate>>, TError,{data: BodyType<FollowUpTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createFollowUpTemplate>>,
+        TError,
+        {data: BodyType<FollowUpTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getCreateFollowUpTemplateMutationOptions(options));
+    }
+
+export const getUpdateFollowUpTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/follow-up-templates/${id}`
+}
+
+/**
+ * @summary Update a follow-up message template
+ */
+export const updateFollowUpTemplate = async (id: number,
+    followUpTemplateInput: FollowUpTemplateInput, options?: RequestInit): Promise<FollowUpTemplate> => {
+
+  return customFetch<FollowUpTemplate>(getUpdateFollowUpTemplateUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpTemplateInput,)
+  }
+);}
+
+
+
+
+export const getUpdateFollowUpTemplateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFollowUpTemplate>>, TError,{id: number;data: BodyType<FollowUpTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateFollowUpTemplate>>, TError,{id: number;data: BodyType<FollowUpTemplateInput>}, TContext> => {
+
+const mutationKey = ['updateFollowUpTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateFollowUpTemplate>>, {id: number;data: BodyType<FollowUpTemplateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  updateFollowUpTemplate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateFollowUpTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof updateFollowUpTemplate>>>
+    export type UpdateFollowUpTemplateMutationBody = BodyType<FollowUpTemplateInput>
+    export type UpdateFollowUpTemplateMutationError = ErrorType<void>
+
+    /**
+ * @summary Update a follow-up message template
+ */
+export const useUpdateFollowUpTemplate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateFollowUpTemplate>>, TError,{id: number;data: BodyType<FollowUpTemplateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateFollowUpTemplate>>,
+        TError,
+        {id: number;data: BodyType<FollowUpTemplateInput>},
+        TContext
+      > => {
+      return useMutation(getUpdateFollowUpTemplateMutationOptions(options));
+    }
+
+export const getDeleteFollowUpTemplateUrl = (id: number,) => {
+
+
+
+
+  return `/api/follow-up-templates/${id}`
+}
+
+/**
+ * @summary Delete a follow-up message template
+ */
+export const deleteFollowUpTemplate = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteFollowUpTemplateUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteFollowUpTemplateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFollowUpTemplate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteFollowUpTemplate>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['deleteFollowUpTemplate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteFollowUpTemplate>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  deleteFollowUpTemplate(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteFollowUpTemplateMutationResult = NonNullable<Awaited<ReturnType<typeof deleteFollowUpTemplate>>>
+
+    export type DeleteFollowUpTemplateMutationError = ErrorType<void>
+
+    /**
+ * @summary Delete a follow-up message template
+ */
+export const useDeleteFollowUpTemplate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteFollowUpTemplate>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteFollowUpTemplate>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getDeleteFollowUpTemplateMutationOptions(options));
+    }
 

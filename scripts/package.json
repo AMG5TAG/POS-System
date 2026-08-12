@@ -28,6 +28,7 @@
     "add-overview-year-mode": "tsx ./src/add-overview-year-mode.ts",
     "add-payment-surcharges": "tsx ./src/add-payment-surcharges.ts",
     "add-marketing-events-table": "tsx ./src/add-marketing-events-table.ts",
+    "add-follow-up-tables": "tsx ./src/add-follow-up-tables.ts",
     "repurpose-return-auths-supplier-rma": "tsx ./src/repurpose-return-auths-supplier-rma.ts",
     "add-time-cards": "tsx ./src/add-time-cards.ts",
     "add-return-auth-po-files": "tsx ./src/add-return-auth-po-files.ts",
