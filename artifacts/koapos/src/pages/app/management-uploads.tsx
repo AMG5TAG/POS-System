@@ -3,6 +3,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import {
   Search, Loader2, ImageIcon, Video, FileText, Trash2, Repeat, HardDrive,
   Upload, ExternalLink, AlertTriangle, Recycle, ArrowRight, Link2Off,
+  CheckSquare, X, Check,
 } from "lucide-react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -20,6 +21,7 @@ import { uploadFile } from "@/lib/upload";
 import {
   useListMerchantAssets,
   useDeleteMerchantAsset,
+  useBulkDeleteMerchantAssets,
   useReplaceMerchantAsset,
   useImportMerchantAssets,
   useSweepMerchantAssetOrphans,
@@ -118,6 +120,9 @@ export default function ManagementUploadsPage() {
   const [kind, setKind] = useState<ListMerchantAssetsKind>("all");
   const [selectedId, setSelectedId] = useState<number | null>(null);
   const [replaceOpen, setReplaceOpen] = useState(false);
+  const [selectMode, setSelectMode] = useState(false);
+  const [checkedIds, setCheckedIds] = useState<Set<number>>(new Set());
+  const [bulkOpen, setBulkOpen] = useState(false);
 
   // Debounced so typing does not fire a reference scan per keystroke — the
   // scan is the expensive half of this request.
@@ -147,7 +152,36 @@ export default function ManagementUploadsPage() {
     if (selectedId !== null && !assets.some((a) => a.id === selectedId)) setSelectedId(null);
   }, [assets, selectedId]);
 
+  // Anything that leaves the grid must leave the selection too, or the
+  // confirmation would count files the merchant can no longer see.
+  useEffect(() => {
+    setCheckedIds((prev) => {
+      const live = new Set(assets.map((a) => a.id));
+      const next = new Set([...prev].filter((id) => live.has(id)));
+      return next.size === prev.size ? prev : next;
+    });
+  }, [assets]);
+
+  const checkedAssets = useMemo(
+    () => assets.filter((a) => checkedIds.has(a.id)),
+    [assets, checkedIds],
+  );
+
+  const toggleChecked = useCallback((id: number) => {
+    setCheckedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const leaveSelectMode = useCallback(() => {
+    setSelectMode(false);
+    setCheckedIds(new Set());
+  }, []);
+
   const deleteAsset = useDeleteMerchantAsset();
+  const bulkDelete = useBulkDeleteMerchantAssets();
   const importAssets = useImportMerchantAssets();
   const sweepOrphans = useSweepMerchantAssetOrphans();
 
@@ -167,6 +201,37 @@ export default function ManagementUploadsPage() {
       toast.success(`Deleted — ${formatBytes(body.reclaimedBytes ?? 0)} reclaimed`);
     } catch {
       toast.error("Could not delete this file");
+    }
+  };
+
+  const handleBulkDelete = async () => {
+    const ids = checkedAssets.map((a) => a.id);
+    if (ids.length === 0) return;
+
+    try {
+      const body = await bulkDelete.mutateAsync({ data: { assetIds: ids } });
+      setBulkOpen(false);
+      setSelectedId(null);
+      leaveSelectMode();
+      await invalidate();
+
+      // The server decides what was actually removable, so report its answer
+      // rather than what was selected.
+      const parts: string[] = [];
+      if (body.skipped.length) parts.push(`${body.skipped.length} still in use`);
+      if (body.failed.length) parts.push(`${body.failed.length} could not be removed`);
+      if (body.notFound.length) parts.push(`${body.notFound.length} no longer exist`);
+
+      if (body.deleted === 0) {
+        toast.error("Nothing was deleted", { description: parts.join(" · ") || undefined });
+        return;
+      }
+      toast.success(
+        `Deleted ${body.deleted} file${body.deleted === 1 ? "" : "s"} — ${formatBytes(body.reclaimedBytes)} reclaimed`,
+        { description: parts.length ? `Left alone: ${parts.join(" · ")}` : undefined },
+      );
+    } catch {
+      toast.error("Could not delete these files");
     }
   };
 
@@ -217,6 +282,14 @@ export default function ManagementUploadsPage() {
             </p>
           </div>
           <div className="flex items-center gap-2">
+            <Button
+              type="button"
+              variant={selectMode ? "secondary" : "outline"}
+              onClick={() => (selectMode ? leaveSelectMode() : setSelectMode(true))}
+            >
+              {selectMode ? <X className="w-4 h-4" /> : <CheckSquare className="w-4 h-4" />}
+              <span className="ml-1.5">{selectMode ? "Cancel selection" : "Select"}</span>
+            </Button>
             <Button type="button" variant="outline" onClick={handleFindOrphans} disabled={sweepOrphans.isPending}>
               {sweepOrphans.isPending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Recycle className="w-4 h-4" />}
               <span className="ml-1.5">Find leftovers</span>
@@ -260,6 +333,39 @@ export default function ManagementUploadsPage() {
                 </span>
                 <span>{formatBytes(totalBytes)} stored</span>
               </div>
+
+              {selectMode && (
+                <div className="flex flex-wrap items-center gap-2 pt-1 border-t">
+                  <span className="text-xs text-muted-foreground pt-2">
+                    {checkedIds.size} selected
+                  </span>
+                  <div className="flex flex-wrap gap-1.5 pt-2 ml-auto">
+                    {/* Unused files are the ones a bulk delete can actually
+                        remove, so make that the one-click case. */}
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      onClick={() => setCheckedIds(new Set(
+                        assets.filter((a) => (a.usageCount ?? 0) === 0).map((a) => a.id),
+                      ))}
+                    >
+                      Select unused
+                    </Button>
+                    <Button
+                      type="button" size="sm" variant="outline"
+                      onClick={() => setCheckedIds(new Set(assets.map((a) => a.id)))}
+                    >
+                      Select all
+                    </Button>
+                    <Button
+                      type="button" size="sm" variant="ghost"
+                      onClick={() => setCheckedIds(new Set())}
+                      disabled={checkedIds.size === 0}
+                    >
+                      Clear
+                    </Button>
+                  </div>
+                </div>
+              )}
             </div>
 
             <div className="p-4 max-h-[calc(100vh-20rem)] overflow-y-auto">
@@ -286,20 +392,34 @@ export default function ManagementUploadsPage() {
               <div className="grid grid-cols-3 sm:grid-cols-4 xl:grid-cols-5 gap-3">
                 {assets.map((asset) => {
                   const used = asset.usageCount ?? 0;
+                  const checked = checkedIds.has(asset.id);
                   return (
                     <button
                       key={asset.id}
                       type="button"
-                      onClick={() => setSelectedId(asset.id)}
+                      onClick={() => (selectMode ? toggleChecked(asset.id) : setSelectedId(asset.id))}
+                      aria-pressed={selectMode ? checked : undefined}
                       className={cn(
                         "text-left rounded-lg border overflow-hidden transition-all",
-                        asset.id === selectedId
-                          ? "border-primary ring-2 ring-primary/30"
-                          : "hover:border-primary/50",
+                        selectMode && checked
+                          ? "border-primary ring-2 ring-primary/40"
+                          : !selectMode && asset.id === selectedId
+                            ? "border-primary ring-2 ring-primary/30"
+                            : "hover:border-primary/50",
                       )}
                     >
                       <div className="aspect-square bg-muted/20 relative">
                         <AssetPreview asset={asset} />
+                        {selectMode && (
+                          <span
+                            className={cn(
+                              "absolute top-1 left-1 w-5 h-5 rounded border flex items-center justify-center shadow-sm",
+                              checked ? "bg-primary border-primary text-primary-foreground" : "bg-background/85",
+                            )}
+                          >
+                            {checked && <Check className="w-3.5 h-3.5" />}
+                          </span>
+                        )}
                         {used === 0 && (
                           <span
                             title="Nothing points at this file"
@@ -343,6 +463,24 @@ export default function ManagementUploadsPage() {
         </div>
       </div>
 
+      {selectMode && checkedIds.size > 0 && (
+        <div className="sticky bottom-0 z-10 border-t bg-background/95 backdrop-blur px-6 py-3 flex flex-wrap items-center gap-3">
+          <span className="text-sm">
+            <span className="font-semibold">{checkedIds.size}</span> selected
+            <span className="text-muted-foreground">
+              {" · "}{formatBytes(checkedAssets.reduce((sum, a) => sum + a.sizeBytes, 0))}
+            </span>
+          </span>
+          <div className="ml-auto flex items-center gap-2">
+            <Button type="button" variant="ghost" onClick={leaveSelectMode}>Cancel</Button>
+            <Button type="button" variant="destructive" onClick={() => setBulkOpen(true)}>
+              <Trash2 className="w-4 h-4" />
+              <span className="ml-1.5">Delete selected…</span>
+            </Button>
+          </div>
+        </div>
+      )}
+
       {selected && (
         <ReplaceAssetDialog
           open={replaceOpen}
@@ -352,7 +490,116 @@ export default function ManagementUploadsPage() {
           onReplaced={async () => { setReplaceOpen(false); await invalidate(); }}
         />
       )}
+
+      <BulkDeleteDialog
+        open={bulkOpen}
+        onOpenChange={setBulkOpen}
+        assets={checkedAssets}
+        onConfirm={handleBulkDelete}
+        deleting={bulkDelete.isPending}
+      />
     </AppLayout>
+  );
+}
+
+/* ── Bulk delete ──────────────────────────────────────────────────────────── */
+
+/**
+ * The confirmation for the one irreversible action on this page that can hit
+ * many files at once.
+ *
+ * Deleting removes the stored file itself, so the dialog names every file
+ * rather than showing a count: "delete 34 files" gives the merchant nothing to
+ * check against. In-use files are split out first, because the server will
+ * refuse those and the merchant should know that before confirming, not from
+ * the toast afterwards.
+ */
+function BulkDeleteDialog({
+  open, onOpenChange, assets, onConfirm, deleting,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  assets: MerchantAsset[];
+  onConfirm: () => void | Promise<void>;
+  deleting: boolean;
+}) {
+  const [deletable, inUse] = useMemo(() => [
+    assets.filter((a) => (a.usageCount ?? 0) === 0),
+    assets.filter((a) => (a.usageCount ?? 0) > 0),
+  ], [assets]);
+
+  const freedBytes = deletable.reduce((sum, a) => sum + a.sizeBytes, 0);
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Delete {deletable.length} file{deletable.length === 1 ? "" : "s"}?</DialogTitle>
+          <DialogDescription>
+            This permanently removes the stored files and frees {formatBytes(freedBytes)}.
+            They cannot be recovered — you would have to upload them again.
+          </DialogDescription>
+        </DialogHeader>
+
+        {inUse.length > 0 && (
+          <div className="rounded-lg border border-amber-500/40 bg-amber-500/5 p-3 space-y-2">
+            <p className="text-sm font-medium flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4 text-amber-600" />
+              {inUse.length} of your selection {inUse.length === 1 ? "is" : "are"} still in use and will be kept
+            </p>
+            <ul className="text-xs text-muted-foreground space-y-0.5 max-h-32 overflow-y-auto">
+              {inUse.map((a) => (
+                <li key={a.id} className="truncate">
+                  {a.filename ?? "Untitled"} — used {a.usageCount}×
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-muted-foreground">
+              Replace or detach them first if you need them gone.
+            </p>
+          </div>
+        )}
+
+        {deletable.length === 0 ? (
+          <p className="text-sm text-muted-foreground">
+            Nothing in this selection can be deleted yet.
+          </p>
+        ) : (
+          <div className="rounded-lg border divide-y max-h-64 overflow-y-auto">
+            {deletable.map((asset) => (
+              <div key={asset.id} className="flex items-center gap-3 p-2">
+                <div className="w-10 h-10 shrink-0 rounded border overflow-hidden bg-muted/20">
+                  <AssetPreview asset={asset} />
+                </div>
+                <span className="text-sm truncate flex-1" title={asset.filename ?? ""}>
+                  {asset.filename ?? "Untitled"}
+                </span>
+                <span className="text-xs text-muted-foreground shrink-0">
+                  {formatBytes(asset.sizeBytes)}
+                </span>
+              </div>
+            ))}
+          </div>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={() => onOpenChange(false)} disabled={deleting}>
+            Cancel
+          </Button>
+          <Button
+            type="button"
+            variant="destructive"
+            onClick={() => void onConfirm()}
+            disabled={deleting || deletable.length === 0}
+          >
+            {deleting ? <Loader2 className="w-4 h-4 animate-spin" /> : <Trash2 className="w-4 h-4" />}
+            <span className="ml-1.5">
+              Delete {deletable.length} file{deletable.length === 1 ? "" : "s"} permanently
+            </span>
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
 

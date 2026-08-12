@@ -1503,6 +1503,42 @@ paths:
               schema:
                 $ref: '#/components/schemas/MerchantAssetUsageResponse'
 
+  /storage/assets/bulk-delete:
+    post:
+      tags: [Storage]
+      operationId: bulkDeleteMerchantAssets
+      summary: Delete many unreferenced assets in one pass
+      description: >
+        Permanently removes the stored objects and library entries for every
+        listed asset that nothing references. Assets still in use are skipped,
+        never deleted, and come back in `skipped` with their reference count —
+        one in-use file does not block the rest of the batch.
+
+
+        The usage check is a single scan for the whole batch rather than one per
+        asset, but uses the same substring matching as the per-asset delete, so
+        the "never delete something still referenced" guarantee is unchanged.
+        Ids the caller does not own are reported in `notFound`, not deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteMerchantAssetsBody'
+      responses:
+        '200':
+          description: Per-asset outcome for the batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteMerchantAssetsResponse'
+        '400':
+          description: Invalid or empty asset id list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
   /storage/assets/{id}/replace:
     post:
       tags: [Storage]
@@ -12715,6 +12751,74 @@ components:
       properties:
         deleted:
           type: boolean
+        reclaimedBytes:
+          type: integer
+
+    BulkDeleteMerchantAssetsBody:
+      type: object
+      required: [assetIds]
+      properties:
+        assetIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: integer
+          description: >
+            Ids of the assets to delete. Capped so one request cannot hold a
+            storage-delete loop open indefinitely.
+
+    BulkDeleteSkippedAsset:
+      type: object
+      required: [id, usageCount]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+          nullable: true
+        usageCount:
+          type: integer
+          description: Why it was skipped — how many rows still point at it.
+
+    BulkDeleteFailedAsset:
+      type: object
+      required: [id, error]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+          nullable: true
+        error:
+          type: string
+
+    BulkDeleteMerchantAssetsResponse:
+      type: object
+      required: [deleted, deletedIds, skipped, failed, notFound, reclaimedBytes]
+      properties:
+        deleted:
+          type: integer
+          description: How many assets were actually removed.
+        deletedIds:
+          type: array
+          items:
+            type: integer
+        skipped:
+          type: array
+          description: Still referenced, so deliberately left alone.
+          items:
+            $ref: '#/components/schemas/BulkDeleteSkippedAsset'
+        failed:
+          type: array
+          description: Storage delete errored; the library row was kept.
+          items:
+            $ref: '#/components/schemas/BulkDeleteFailedAsset'
+        notFound:
+          type: array
+          description: Ids that do not belong to this merchant, or no longer exist.
+          items:
+            type: integer
         reclaimedBytes:
           type: integer
 

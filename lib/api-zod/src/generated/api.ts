@@ -1842,6 +1842,39 @@ export const DeleteMerchantAssetResponse = zod.object({
 
 
 /**
+ * Permanently removes the stored objects and library entries for every listed asset that nothing references. Assets still in use are skipped, never deleted, and come back in `skipped` with their reference count — one in-use file does not block the rest of the batch.
+
+The usage check is a single scan for the whole batch rather than one per asset, but uses the same substring matching as the per-asset delete, so the "never delete something still referenced" guarantee is unchanged. Ids the caller does not own are reported in `notFound`, not deleted.
+
+ * @summary Delete many unreferenced assets in one pass
+ */
+export const bulkDeleteMerchantAssetsBodyAssetIdsMax = 200;
+
+
+
+export const BulkDeleteMerchantAssetsBody = zod.object({
+  "assetIds": zod.array(zod.number()).min(1).max(bulkDeleteMerchantAssetsBodyAssetIdsMax).describe('Ids of the assets to delete. Capped so one request cannot hold a storage-delete loop open indefinitely.\n')
+})
+
+export const BulkDeleteMerchantAssetsResponse = zod.object({
+  "deleted": zod.number().describe('How many assets were actually removed.'),
+  "deletedIds": zod.array(zod.number()),
+  "skipped": zod.array(zod.object({
+  "id": zod.number(),
+  "filename": zod.string().nullish(),
+  "usageCount": zod.number().describe('Why it was skipped — how many rows still point at it.')
+})).describe('Still referenced, so deliberately left alone.'),
+  "failed": zod.array(zod.object({
+  "id": zod.number(),
+  "filename": zod.string().nullish(),
+  "error": zod.string()
+})).describe('Storage delete errored; the library row was kept.'),
+  "notFound": zod.array(zod.number()).describe('Ids that do not belong to this merchant, or no longer exist.'),
+  "reclaimedBytes": zod.number()
+})
+
+
+/**
  * Repoints every reference to this asset at the replacement asset, in a single transaction. Storage is content-addressed, so a file cannot be overwritten in place — replacing means rewriting the references. The old asset stays in the library, now unused, and can be deleted separately.
 
  * @summary Point everything using one asset at another

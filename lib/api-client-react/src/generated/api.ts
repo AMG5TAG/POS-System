@@ -36,6 +36,8 @@ import type {
   Brand,
   BrandInput,
   BrandListResponse,
+  BulkDeleteMerchantAssetsBody,
+  BulkDeleteMerchantAssetsResponse,
   BulkExecuteMergeBody,
   BulkMergePreviewResponse,
   BulkMergeResult,
@@ -5328,6 +5330,81 @@ export const useDeleteMerchantAsset = <TError = ErrorType<ErrorEnvelope | Mercha
         TContext
       > => {
       return useMutation(getDeleteMerchantAssetMutationOptions(options));
+    }
+
+export const getBulkDeleteMerchantAssetsUrl = () => {
+
+
+
+
+  return `/api/storage/assets/bulk-delete`
+}
+
+/**
+ * Permanently removes the stored objects and library entries for every listed asset that nothing references. Assets still in use are skipped, never deleted, and come back in `skipped` with their reference count — one in-use file does not block the rest of the batch.
+
+The usage check is a single scan for the whole batch rather than one per asset, but uses the same substring matching as the per-asset delete, so the "never delete something still referenced" guarantee is unchanged. Ids the caller does not own are reported in `notFound`, not deleted.
+
+ * @summary Delete many unreferenced assets in one pass
+ */
+export const bulkDeleteMerchantAssets = async (bulkDeleteMerchantAssetsBody: BulkDeleteMerchantAssetsBody, options?: RequestInit): Promise<BulkDeleteMerchantAssetsResponse> => {
+
+  return customFetch<BulkDeleteMerchantAssetsResponse>(getBulkDeleteMerchantAssetsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      bulkDeleteMerchantAssetsBody,)
+  }
+);}
+
+
+
+
+export const getBulkDeleteMerchantAssetsMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteMerchantAssets>>, TError,{data: BodyType<BulkDeleteMerchantAssetsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteMerchantAssets>>, TError,{data: BodyType<BulkDeleteMerchantAssetsBody>}, TContext> => {
+
+const mutationKey = ['bulkDeleteMerchantAssets'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof bulkDeleteMerchantAssets>>, {data: BodyType<BulkDeleteMerchantAssetsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  bulkDeleteMerchantAssets(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type BulkDeleteMerchantAssetsMutationResult = NonNullable<Awaited<ReturnType<typeof bulkDeleteMerchantAssets>>>
+    export type BulkDeleteMerchantAssetsMutationBody = BodyType<BulkDeleteMerchantAssetsBody>
+    export type BulkDeleteMerchantAssetsMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Delete many unreferenced assets in one pass
+ */
+export const useBulkDeleteMerchantAssets = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof bulkDeleteMerchantAssets>>, TError,{data: BodyType<BulkDeleteMerchantAssetsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof bulkDeleteMerchantAssets>>,
+        TError,
+        {data: BodyType<BulkDeleteMerchantAssetsBody>},
+        TContext
+      > => {
+      return useMutation(getBulkDeleteMerchantAssetsMutationOptions(options));
     }
 
 export const getReplaceMerchantAssetUrl = (id: number,) => {

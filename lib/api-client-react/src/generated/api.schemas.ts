@@ -2585,6 +2585,42 @@ export interface DeleteMerchantAssetResponse {
   reclaimedBytes?: number;
 }
 
+export interface BulkDeleteMerchantAssetsBody {
+  /**
+     * Ids of the assets to delete. Capped so one request cannot hold a storage-delete loop open indefinitely.
+
+     * @minItems 1
+     * @maxItems 200
+     */
+  assetIds: number[];
+}
+
+export interface BulkDeleteSkippedAsset {
+  id: number;
+  filename?: string | null;
+  /** Why it was skipped — how many rows still point at it. */
+  usageCount: number;
+}
+
+export interface BulkDeleteFailedAsset {
+  id: number;
+  filename?: string | null;
+  error: string;
+}
+
+export interface BulkDeleteMerchantAssetsResponse {
+  /** How many assets were actually removed. */
+  deleted: number;
+  deletedIds: number[];
+  /** Still referenced, so deliberately left alone. */
+  skipped: BulkDeleteSkippedAsset[];
+  /** Storage delete errored; the library row was kept. */
+  failed: BulkDeleteFailedAsset[];
+  /** Ids that do not belong to this merchant, or no longer exist. */
+  notFound: number[];
+  reclaimedBytes: number;
+}
+
 export interface ReplaceMerchantAssetBody {
   /** Id of the asset to point everything at. Upload the new file through the normal flow first; that registers it and returns its id.
    */

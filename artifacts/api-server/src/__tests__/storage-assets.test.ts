@@ -86,12 +86,15 @@ vi.mock("../lib/objectStorage", () => ({
 }));
 
 const findAssetUsage = vi.fn();
+const findUsageCounts = vi.fn();
+const countAssetUsage = vi.fn();
 const findReferencesByPath = vi.fn();
 const rewriteAssetReferences = vi.fn();
 
 vi.mock("../lib/assetUsage", () => ({
   findAssetUsage: (...args: unknown[]) => findAssetUsage(...args),
-  findUsageCounts: async () => new Map(),
+  findUsageCounts: (...args: unknown[]) => findUsageCounts(...args),
+  countAssetUsage: (...args: unknown[]) => countAssetUsage(...args),
   findReferencesByPath: (...args: unknown[]) => findReferencesByPath(...args),
   rewriteAssetReferences: (...args: unknown[]) => rewriteAssetReferences(...args),
 }));
@@ -106,7 +109,13 @@ beforeAll(async () => {
   app = express();
   app.use(express.json());
   app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-  app.use((req, _res, next) => { (req as any).session.merchantId = 1; next(); });
+  app.use((req, _res, next) => {
+    (req as any).session.merchantId = 1;
+    // pino-http supplies req.log in the real app; without it any handler that
+    // logs on an error path throws instead of returning its own response.
+    (req as any).log = { error: vi.fn(), warn: vi.fn(), info: vi.fn(), debug: vi.fn() };
+    next();
+  });
   app.use("/api", storageRouter);
 });
 
@@ -117,6 +126,12 @@ beforeEach(() => {
   findAssetUsage.mockReset();
   findReferencesByPath.mockReset();
   rewriteAssetReferences.mockReset();
+  // Default: nothing references anything. Tests that care set their own counts.
+  findUsageCounts.mockReset();
+  findUsageCounts.mockImplementation(async (_merchantId: unknown, paths: string[]) =>
+    new Map(paths.map((p) => [p, 0])));
+  countAssetUsage.mockReset();
+  countAssetUsage.mockResolvedValue(0);
 });
 
 /** A library row as the listing route reads it out of the db. */
@@ -301,6 +316,147 @@ describe("DELETE /api/storage/assets/:id", () => {
 
     expect(res.status).toBe(404);
     expect(deleteObjectEntity).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/storage/assets/bulk-delete", () => {
+  const pathFor = (n: number) => `/objects/merchants/1/assets/${String(n).repeat(64)}`;
+  const row = (id: number, over: Record<string, unknown> = {}) => ({
+    id,
+    objectPath: pathFor(id),
+    sizeBytes: 1000 * id,
+    filename: `file-${id}.png`,
+    ...over,
+  });
+
+  it("deletes every unreferenced asset and totals the bytes reclaimed", async () => {
+    dbResults = [[row(1), row(2)], []];
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1, 2] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(2);
+    expect(res.body.deletedIds).toEqual([1, 2]);
+    expect(res.body.reclaimedBytes).toBe(3000);
+    expect(res.body.skipped).toEqual([]);
+    expect(deleteObjectEntity).toHaveBeenCalledTimes(2);
+  });
+
+  // The whole point of the chosen semantics: one in-use file must not cost the
+  // merchant the rest of the batch, and must not itself be touched.
+  it("skips in-use assets and still deletes the rest", async () => {
+    dbResults = [[row(1), row(2), row(3)], []];
+    findUsageCounts.mockImplementation(async (_m: unknown, paths: string[]) =>
+      new Map(paths.map((p) => [p, p === pathFor(2) ? 4 : 0])));
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1, 2, 3] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(2);
+    expect(res.body.deletedIds).toEqual([1, 3]);
+    expect(res.body.skipped).toEqual([{ id: 2, filename: "file-2.png", usageCount: 4 }]);
+    // Reclaimed bytes must exclude the file that was kept.
+    expect(res.body.reclaimedBytes).toBe(4000);
+    expect(deleteObjectEntity).not.toHaveBeenCalledWith(pathFor(2));
+  });
+
+  it("never deletes an id the merchant does not own", async () => {
+    // The scoped select simply does not return the foreign row.
+    dbResults = [[row(1)], []];
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1, 999] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(1);
+    expect(res.body.notFound).toEqual([999]);
+    expect(deleteObjectEntity).toHaveBeenCalledTimes(1);
+    expect(deleteObjectEntity).toHaveBeenCalledWith(pathFor(1));
+  });
+
+  it("cleans up the library row when the stored object is already gone", async () => {
+    dbResults = [[row(1)], []];
+    const { ObjectNotFoundError } = await import("../lib/objectStorage");
+    deleteObjectEntity.mockRejectedValueOnce(new ObjectNotFoundError());
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(1);
+    expect(res.body.failed).toEqual([]);
+  });
+
+  it("keeps the row when the storage delete genuinely fails", async () => {
+    dbResults = [[row(1), row(2)], []];
+    deleteObjectEntity.mockRejectedValueOnce(new Error("bucket unreachable"));
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1, 2] });
+
+    expect(res.status).toBe(200);
+    // A row whose object is still in the bucket must not be dropped, or the
+    // object becomes an orphan nothing can find.
+    expect(res.body.deletedIds).toEqual([2]);
+    expect(res.body.failed).toEqual([
+      { id: 1, filename: "file-1.png", error: "Could not remove the stored file" },
+    ]);
+    expect(res.body.reclaimedBytes).toBe(2000);
+  });
+
+  it("falls back to a per-asset scan for a path outside the merchant prefix", async () => {
+    // A legacy import could carry a path the batch scan does not cover; it must
+    // read as in-use rather than as unreferenced.
+    dbResults = [[row(1, { objectPath: "/objects/legacy/odd-path" })], []];
+    countAssetUsage.mockResolvedValue(2);
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1] });
+
+    expect(res.status).toBe(200);
+    expect(countAssetUsage).toHaveBeenCalledWith("/objects/legacy/odd-path");
+    expect(res.body.deleted).toBe(0);
+    expect(res.body.skipped[0].usageCount).toBe(2);
+    expect(deleteObjectEntity).not.toHaveBeenCalled();
+  });
+
+  it("rejects an empty list", async () => {
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [] });
+
+    expect(res.status).toBe(400);
+    expect(deleteObjectEntity).not.toHaveBeenCalled();
+  });
+
+  it("rejects a batch over the cap", async () => {
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: Array.from({ length: 201 }, (_, i) => i + 1) });
+
+    expect(res.status).toBe(400);
+    expect(deleteObjectEntity).not.toHaveBeenCalled();
+  });
+
+  it("counts a repeated id once", async () => {
+    dbResults = [[row(1)], []];
+
+    const res = await request(app)
+      .post("/api/storage/assets/bulk-delete")
+      .send({ assetIds: [1, 1, 1] });
+
+    expect(res.status).toBe(200);
+    expect(res.body.deleted).toBe(1);
+    expect(res.body.notFound).toEqual([]);
+    expect(deleteObjectEntity).toHaveBeenCalledTimes(1);
   });
 });
 

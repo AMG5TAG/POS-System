@@ -11,6 +11,8 @@ import {
   ListMerchantAssetsResponse,
   GetMerchantAssetUsageResponse,
   DeleteMerchantAssetResponse,
+  BulkDeleteMerchantAssetsBody,
+  BulkDeleteMerchantAssetsResponse,
   ReplaceMerchantAssetBody,
   ReplaceMerchantAssetResponse,
   ImportMerchantAssetsResponse,
@@ -20,6 +22,7 @@ import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage"
 import { ObjectPermission } from "../lib/objectAcl";
 import {
   findAssetUsage,
+  countAssetUsage,
   findUsageCounts,
   findReferencesByPath,
   rewriteAssetReferences,
@@ -519,6 +522,130 @@ router.delete("/storage/assets/:id", requireActiveAuth, async (req: Request, res
   } catch (error) {
     req.log.error({ err: error }, "Error deleting merchant asset");
     res.status(500).json({ error: "Failed to delete asset" });
+  }
+});
+
+/**
+ * Reference counts for a whole batch, using the same matching as the
+ * single-asset delete guard.
+ *
+ * `findUsageCounts` answers the whole batch in one scan by pulling back only
+ * the values that mention this merchant's storage prefix, then testing each
+ * candidate path against them with a substring check — identical semantics to
+ * the `LIKE '%path%'` in `findAssetUsage`. Any value containing a
+ * merchant-prefixed path necessarily contains the prefix, so the filter cannot
+ * hide a real reference.
+ *
+ * A path without that prefix would fall outside the scan, so rather than let it
+ * read as unused it falls back to its own per-asset scan. Content-addressed
+ * paths always carry the prefix; this only guards oddly-shaped legacy imports.
+ */
+async function usageCountsForDeletion(
+  merchantId: number,
+  objectPaths: string[],
+): Promise<Map<string, number>> {
+  const prefix = `/objects/merchants/${merchantId}/`;
+  const scannable = objectPaths.filter((p) => p.includes(prefix));
+
+  const counts = scannable.length > 0
+    ? await findUsageCounts(merchantId, scannable)
+    : new Map<string, number>();
+
+  for (const path of objectPaths) {
+    if (!counts.has(path)) counts.set(path, await countAssetUsage(path));
+  }
+  return counts;
+}
+
+/**
+ * POST /storage/assets/bulk-delete
+ *
+ * The same delete as above, N at a time, for clearing out a library.
+ *
+ * In-use assets are skipped rather than failing the batch: one product image
+ * among fifty leftovers should not force the merchant to hunt for it and
+ * retry. Nothing referenced is ever removed, so the invariant that a delete
+ * cannot blank out a product image still holds for every asset individually.
+ *
+ * Storage deletes run one at a time and each is independent — a bucket error on
+ * one object leaves its library row in place (reported in `failed`) instead of
+ * stranding the row behind a deleted object.
+ */
+router.post("/storage/assets/bulk-delete", requireActiveAuth, async (req: Request, res: Response) => {
+  try {
+    const merchantId = req.session.merchantId!;
+    const parsed = BulkDeleteMerchantAssetsBody.safeParse(req.body);
+    if (!parsed.success) {
+      res.status(400).json({ error: "Provide between 1 and 200 asset ids" });
+      return;
+    }
+
+    const requestedIds = Array.from(new Set(parsed.data.assetIds));
+
+    // Scoped to the session's merchant, so ids belonging to someone else are
+    // simply absent here and get reported as not found rather than deleted.
+    const rows = await db
+      .select()
+      .from(merchantAssetsTable)
+      .where(and(
+        eq(merchantAssetsTable.merchantId, merchantId),
+        inArray(merchantAssetsTable.id, requestedIds),
+      ));
+
+    const foundIds = new Set(rows.map((r) => r.id));
+    const notFound = requestedIds.filter((id) => !foundIds.has(id));
+
+    const counts = await usageCountsForDeletion(merchantId, rows.map((r) => r.objectPath));
+
+    const skipped: { id: number; filename: string | null; usageCount: number }[] = [];
+    const deletable: typeof rows = [];
+    for (const asset of rows) {
+      const usageCount = counts.get(asset.objectPath) ?? 0;
+      if (usageCount > 0) {
+        skipped.push({ id: asset.id, filename: asset.filename, usageCount });
+      } else {
+        deletable.push(asset);
+      }
+    }
+
+    const failed: { id: number; filename: string | null; error: string }[] = [];
+    const deletedIds: number[] = [];
+    let reclaimedBytes = 0;
+
+    for (const asset of deletable) {
+      try {
+        await objectStorageService.deleteObjectEntity(asset.objectPath);
+      } catch (error) {
+        // An object that has already vanished should not block cleaning up the
+        // row that points at it; anything else keeps the row.
+        if (!(error instanceof ObjectNotFoundError)) {
+          req.log.error({ err: error, assetId: asset.id }, "Error deleting stored object in bulk delete");
+          failed.push({ id: asset.id, filename: asset.filename, error: "Could not remove the stored file" });
+          continue;
+        }
+      }
+      deletedIds.push(asset.id);
+      reclaimedBytes += asset.sizeBytes;
+    }
+
+    if (deletedIds.length > 0) {
+      await db.delete(merchantAssetsTable).where(and(
+        eq(merchantAssetsTable.merchantId, merchantId),
+        inArray(merchantAssetsTable.id, deletedIds),
+      ));
+    }
+
+    res.json(BulkDeleteMerchantAssetsResponse.parse({
+      deleted: deletedIds.length,
+      deletedIds,
+      skipped,
+      failed,
+      notFound,
+      reclaimedBytes,
+    }));
+  } catch (error) {
+    req.log.error({ err: error }, "Error bulk deleting merchant assets");
+    res.status(500).json({ error: "Failed to delete assets" });
   }
 });
 
