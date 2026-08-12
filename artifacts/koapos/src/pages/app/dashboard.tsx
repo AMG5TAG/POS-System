@@ -24,8 +24,9 @@ import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { ReferralRevenueWidget } from "@/components/dashboard/ReferralRevenueWidget";
+import { FollowUpBanner } from "@/components/dashboard/FollowUpBanner";
 import {
-  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw, Radio, Cake, GripVertical,
+  Timer, BarChart2, AlertTriangle, Bell, Wrench, CalendarDays, RotateCcw, Radio, Cake, Clock, GripVertical,
 } from "lucide-react";
 
 const WIDGETS: {
@@ -81,6 +82,12 @@ const WIDGETS: {
     label: "Birthday Notifications",
     description: "Banner highlighting customers with a birthday today",
     icon: Cake,
+  },
+  {
+    key: "showFollowUpNotifications",
+    label: "Follow Up Notifications",
+    description: "Banner counting completed jobs and appointments overdue a follow-up",
+    icon: Clock,
   },
 ];
 
@@ -157,6 +164,7 @@ export default function DashboardPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         {config.showBirthdayNotifications && <BirthdayBanner />}
+        {config.showFollowUpNotifications && <FollowUpBanner />}
         <SecurityAlertBanner />
         <DashboardClockBar
           onCustomize={() => setCustomiseOpen(true)}

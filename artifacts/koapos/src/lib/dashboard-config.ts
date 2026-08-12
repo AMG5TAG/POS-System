@@ -21,6 +21,7 @@ export type DashboardConfig = {
   showCalendar: boolean;
   showReferralRevenue: boolean;
   showBirthdayNotifications: boolean;
+  showFollowUpNotifications: boolean;
   sectionOrder: DashboardSectionId[];
 };
 
@@ -33,6 +34,7 @@ const DEFAULTS: DashboardConfig = {
   showCalendar: true,
   showReferralRevenue: true,
   showBirthdayNotifications: true,
+  showFollowUpNotifications: true,
   sectionOrder: DEFAULT_SECTION_ORDER,
 };
 
@@ -47,6 +49,7 @@ function toConfig(data: DashboardConfigResponse | undefined): DashboardConfig {
     showCalendar: data.showCalendar,
     showReferralRevenue: data.showReferralRevenue,
     showBirthdayNotifications: data.showBirthdayNotifications,
+    showFollowUpNotifications: data.showFollowUpNotifications,
     sectionOrder: sanitizeSectionOrder(data.sectionOrder),
   };
 }

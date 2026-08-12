@@ -133,6 +133,7 @@ import type {
   FollowUpSettings,
   FollowUpSettingsInput,
   FollowUpShortcodeListResponse,
+  FollowUpSummary,
   FollowUpTemplate,
   FollowUpTemplateInput,
   FollowUpTemplateListResponse,
@@ -37996,6 +37997,83 @@ export function useListFollowUps<TData = Awaited<ReturnType<typeof listFollowUps
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
   const queryOptions = getListFollowUpsQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGetFollowUpSummaryUrl = () => {
+
+
+
+
+  return `/api/follow-ups/summary`
+}
+
+/**
+ * @summary Headline counts of overdue follow-ups, for the dashboard banner
+ */
+export const getFollowUpSummary = async ( options?: RequestInit): Promise<FollowUpSummary> => {
+
+  return customFetch<FollowUpSummary>(getGetFollowUpSummaryUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetFollowUpSummaryQueryKey = () => {
+    return [
+    `/api/follow-ups/summary`
+    ] as const;
+    }
+
+
+export const getGetFollowUpSummaryQueryOptions = <TData = Awaited<ReturnType<typeof getFollowUpSummary>>, TError = ErrorType<void>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFollowUpSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetFollowUpSummaryQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getFollowUpSummary>>> = ({ signal }) => getFollowUpSummary({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getFollowUpSummary>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetFollowUpSummaryQueryResult = NonNullable<Awaited<ReturnType<typeof getFollowUpSummary>>>
+export type GetFollowUpSummaryQueryError = ErrorType<void>
+
+
+/**
+ * @summary Headline counts of overdue follow-ups, for the dashboard banner
+ */
+
+export function useGetFollowUpSummary<TData = Awaited<ReturnType<typeof getFollowUpSummary>>, TError = ErrorType<void>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getFollowUpSummary>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetFollowUpSummaryQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 

@@ -4998,6 +4998,7 @@ export const GetDashboardConfigResponse = zod.object({
   "showCalendar": zod.boolean(),
   "showReferralRevenue": zod.boolean(),
   "showBirthdayNotifications": zod.boolean(),
+  "showFollowUpNotifications": zod.boolean(),
   "sectionOrder": zod.array(zod.string()).nullish().describe('Custom vertical order of dashboard content sections; null = default order'),
   "updatedAt": zod.string()
 })
@@ -5015,6 +5016,7 @@ export const UpsertDashboardConfigBody = zod.object({
   "showCalendar": zod.boolean().optional(),
   "showReferralRevenue": zod.boolean().optional(),
   "showBirthdayNotifications": zod.boolean().optional(),
+  "showFollowUpNotifications": zod.boolean().optional(),
   "sectionOrder": zod.array(zod.string()).optional().describe('Custom vertical order of dashboard content sections')
 })
 
@@ -5029,6 +5031,7 @@ export const UpsertDashboardConfigResponse = zod.object({
   "showCalendar": zod.boolean(),
   "showReferralRevenue": zod.boolean(),
   "showBirthdayNotifications": zod.boolean(),
+  "showFollowUpNotifications": zod.boolean(),
   "sectionOrder": zod.array(zod.string()).nullish().describe('Custom vertical order of dashboard content sections; null = default order'),
   "updatedAt": zod.string()
 })
@@ -12897,6 +12900,20 @@ export const ListFollowUpsResponse = zod.object({
   "windowValue": zod.number(),
   "windowUnit": zod.string(),
   "cutoff": zod.coerce.date()
+})
+
+
+/**
+ * @summary Headline counts of overdue follow-ups, for the dashboard banner
+ */
+export const GetFollowUpSummaryResponse = zod.object({
+  "dueCount": zod.number(),
+  "contactableCount": zod.number().describe('Due records reachable on the merchant\'s default channel'),
+  "servicesDue": zod.number(),
+  "appointmentsDue": zod.number(),
+  "oldestDaysSince": zod.number(),
+  "windowValue": zod.number(),
+  "windowUnit": zod.enum(['days', 'weeks', 'months'])
 })
 
 

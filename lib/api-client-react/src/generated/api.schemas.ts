@@ -42,6 +42,26 @@ export interface FollowUpListResponse {
   cutoff: string;
 }
 
+export type FollowUpSummaryWindowUnit = typeof FollowUpSummaryWindowUnit[keyof typeof FollowUpSummaryWindowUnit];
+
+
+export const FollowUpSummaryWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export interface FollowUpSummary {
+  dueCount: number;
+  /** Due records reachable on the merchant's default channel */
+  contactableCount: number;
+  servicesDue: number;
+  appointmentsDue: number;
+  oldestDaysSince: number;
+  windowValue: number;
+  windowUnit: FollowUpSummaryWindowUnit;
+}
+
 export interface FollowUpShortcode {
   code: string;
   label: string;
@@ -2454,6 +2474,7 @@ export interface DashboardConfigResponse {
   showCalendar: boolean;
   showReferralRevenue: boolean;
   showBirthdayNotifications: boolean;
+  showFollowUpNotifications: boolean;
   /** Custom vertical order of dashboard content sections; null = default order */
   sectionOrder?: string[] | null;
   updatedAt: string;
@@ -2468,6 +2489,7 @@ export interface UpsertDashboardConfigBody {
   showCalendar?: boolean;
   showReferralRevenue?: boolean;
   showBirthdayNotifications?: boolean;
+  showFollowUpNotifications?: boolean;
   /** Custom vertical order of dashboard content sections */
   sectionOrder?: string[];
 }

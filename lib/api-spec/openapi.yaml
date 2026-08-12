@@ -9633,6 +9633,20 @@ paths:
         "401":
           description: Unauthorized
 
+  /follow-ups/summary:
+    get:
+      operationId: getFollowUpSummary
+      tags: [follow-ups]
+      summary: Headline counts of overdue follow-ups, for the dashboard banner
+      responses:
+        "200":
+          description: Follow-up summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSummary" }
+        "401":
+          description: Unauthorized
+
   /follow-ups/shortcodes:
     get:
       operationId: listFollowUpShortcodes
@@ -9824,6 +9838,18 @@ components:
         windowValue: { type: integer }
         windowUnit: { type: string }
         cutoff: { type: string, format: date-time }
+
+    FollowUpSummary:
+      type: object
+      required: [dueCount, contactableCount, servicesDue, appointmentsDue, oldestDaysSince, windowValue, windowUnit]
+      properties:
+        dueCount: { type: integer }
+        contactableCount: { type: integer, description: "Due records reachable on the merchant's default channel" }
+        servicesDue: { type: integer }
+        appointmentsDue: { type: integer }
+        oldestDaysSince: { type: integer }
+        windowValue: { type: integer }
+        windowUnit: { type: string, enum: [days, weeks, months] }
 
     FollowUpShortcode:
       type: object
@@ -12611,7 +12637,7 @@ components:
 
     DashboardConfigResponse:
       type: object
-      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, showBirthdayNotifications, updatedAt]
+      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, showBirthdayNotifications, showFollowUpNotifications, updatedAt]
       properties:
         id:
           type: integer
@@ -12632,6 +12658,8 @@ components:
         showReferralRevenue:
           type: boolean
         showBirthdayNotifications:
+          type: boolean
+        showFollowUpNotifications:
           type: boolean
         sectionOrder:
           type: array
@@ -12660,6 +12688,8 @@ components:
         showReferralRevenue:
           type: boolean
         showBirthdayNotifications:
+          type: boolean
+        showFollowUpNotifications:
           type: boolean
         sectionOrder:
           type: array

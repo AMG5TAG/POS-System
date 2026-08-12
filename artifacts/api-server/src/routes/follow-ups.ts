@@ -359,6 +359,45 @@ router.get("/follow-ups", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+/**
+ * GET /follow-ups/summary — headline counts for the dashboard banner.
+ *
+ * Always excludes records that have already been followed up, regardless of the
+ * merchant's `hideAlreadySent` display preference: "overdue" means still needs
+ * action, and the banner would otherwise nag about work that is done.
+ */
+router.get("/follow-ups/summary", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const settings = await getOrCreateSettings(merchantId);
+  const windowUnit = settings.windowUnit as WindowUnit;
+  const cutoff = windowCutoff(settings.windowValue, windowUnit);
+
+  const items = await loadDueItems(merchantId, {
+    cutoff,
+    includeServices: settings.includeServices === "true",
+    includeAppointments: settings.includeAppointments === "true",
+    hideAlreadySent: true,
+  });
+
+  // Only count customers we can actually reach on the merchant's default
+  // channel — a banner urging action on unreachable records is just noise.
+  const channel = settings.defaultChannel;
+  const contactable = items.filter((i) =>
+    ((channel === "email" || channel === "both") && i.email) ||
+    ((channel === "sms" || channel === "both") && i.phone));
+
+  res.json({
+    dueCount: items.length,
+    contactableCount: contactable.length,
+    servicesDue: items.filter((i) => i.sourceType === "service_job").length,
+    appointmentsDue: items.filter((i) => i.sourceType === "appointment").length,
+    // Items are sorted oldest-first, so the head is the longest overdue.
+    oldestDaysSince: items[0]?.daysSince ?? 0,
+    windowValue: settings.windowValue,
+    windowUnit,
+  });
+});
+
 // GET /follow-ups/shortcodes
 router.get("/follow-ups/shortcodes", requireAuth, async (_req, res): Promise<void> => {
   res.json({ items: FOLLOW_UP_SHORTCODES, total: FOLLOW_UP_SHORTCODES.length });

@@ -1034,6 +1034,7 @@ router.put("/dashboard/config", requireAuth, async (req, res): Promise<void> => 
     ...(body.showCalendar !== undefined && { showCalendar: body.showCalendar }),
     ...(body.showReferralRevenue !== undefined && { showReferralRevenue: body.showReferralRevenue }),
     ...(body.showBirthdayNotifications !== undefined && { showBirthdayNotifications: body.showBirthdayNotifications }),
+    ...(body.showFollowUpNotifications !== undefined && { showFollowUpNotifications: body.showFollowUpNotifications }),
     ...(body.sectionOrder !== undefined && { sectionOrder: body.sectionOrder }),
   };
 

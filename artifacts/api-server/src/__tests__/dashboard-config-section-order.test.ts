@@ -27,7 +27,7 @@ vi.mock("../middlewares/requireAuth", () => ({
 
 vi.mock("../lib/tax", () => ({ getDefaultTaxRate: vi.fn().mockResolvedValue(0.1), splitGstInclusive: () => ({ gst: 0, net: 0 }) }));
 
-const BASE = { id: 1, merchantId: 1, showStatusTiles: true, showMetricTiles: true, showOverdueBanner: true, showNotifications: true, showServiceJobsPanel: true, showCalendar: true, showReferralRevenue: true, showBirthdayNotifications: true, sectionOrder: null, updatedAt: new Date() };
+const BASE = { id: 1, merchantId: 1, showStatusTiles: true, showMetricTiles: true, showOverdueBanner: true, showNotifications: true, showServiceJobsPanel: true, showCalendar: true, showReferralRevenue: true, showBirthdayNotifications: true, showFollowUpNotifications: true, sectionOrder: null, updatedAt: new Date() };
 
 let app: express.Express;
 
@@ -59,6 +59,13 @@ describe("PUT /api/dashboard/config — sectionOrder persistence", () => {
   it("rejects a non-array sectionOrder with 400", async () => {
     const res = await request(app).put("/api/dashboard/config").send({ sectionOrder: "calendar" });
     expect(res.status).toBe(400);
+  });
+
+  it("persists the follow-up notification toggle on its own", async () => {
+    const res = await request(app).put("/api/dashboard/config").send({ showFollowUpNotifications: false });
+    expect(res.status).toBe(200);
+    expect(capturedPatch).toEqual({ showFollowUpNotifications: false });
+    expect(res.body.showFollowUpNotifications).toBe(false);
   });
 });
 

@@ -64,6 +64,12 @@ async function main() {
     `);
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS follow_up_settings_merchant_id_unique ON follow_up_settings (merchant_id)`);
 
+    // Dashboard toggle for the "follow-ups overdue" banner.
+    await pool.query(`
+      ALTER TABLE dashboard_config
+        ADD COLUMN IF NOT EXISTS show_follow_up_notifications boolean NOT NULL DEFAULT true
+    `);
+
     console.log("follow_up_templates / follow_up_log / follow_up_settings tables ready");
   } catch (e: unknown) {
     console.error((e as Error).message);
