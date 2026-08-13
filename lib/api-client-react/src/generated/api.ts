@@ -53,6 +53,7 @@ import type {
   CameraSnapshot,
   CameraSnapshotInput,
   CancelLaybyBody,
+  CancelNextcloudLoginFlow200,
   CashDrawerEntry,
   CashDrawerEntryInput,
   Category,
@@ -262,6 +263,9 @@ import type {
   MergeCustomerProfilesBody,
   ModifyCompletedSaleInput,
   Module,
+  NextcloudLoginFlowPoll,
+  NextcloudLoginFlowStart,
+  NextcloudLoginFlowStartInput,
   OkResult,
   OnlineStoreSettings,
   OnlineStoreSettingsInput,
@@ -35917,6 +35921,229 @@ export const useUpdateCustomerFilesCloudSettings = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getUpdateCustomerFilesCloudSettingsMutationOptions(options));
+    }
+
+export const getStartNextcloudLoginFlowUrl = () => {
+
+
+
+
+  return `/api/integrations/nextcloud/login-flow/start`
+}
+
+/**
+ * Opens a login session on the merchant's own Nextcloud server and returns
+the URL to send them to for approval. Nextcloud is self-hosted, so there
+is no platform OAuth app: the merchant's server issues an app password
+once they approve, which `poll` then collects.
+
+The poll token stays server-side in the session and is never returned.
+
+ * @summary Begin connecting a Nextcloud server (Login Flow v2)
+ */
+export const startNextcloudLoginFlow = async (nextcloudLoginFlowStartInput: NextcloudLoginFlowStartInput, options?: RequestInit): Promise<NextcloudLoginFlowStart> => {
+
+  return customFetch<NextcloudLoginFlowStart>(getStartNextcloudLoginFlowUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      nextcloudLoginFlowStartInput,)
+  }
+);}
+
+
+
+
+export const getStartNextcloudLoginFlowMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNextcloudLoginFlow>>, TError,{data: BodyType<NextcloudLoginFlowStartInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof startNextcloudLoginFlow>>, TError,{data: BodyType<NextcloudLoginFlowStartInput>}, TContext> => {
+
+const mutationKey = ['startNextcloudLoginFlow'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof startNextcloudLoginFlow>>, {data: BodyType<NextcloudLoginFlowStartInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  startNextcloudLoginFlow(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type StartNextcloudLoginFlowMutationResult = NonNullable<Awaited<ReturnType<typeof startNextcloudLoginFlow>>>
+    export type StartNextcloudLoginFlowMutationBody = BodyType<NextcloudLoginFlowStartInput>
+    export type StartNextcloudLoginFlowMutationError = ErrorType<void>
+
+    /**
+ * @summary Begin connecting a Nextcloud server (Login Flow v2)
+ */
+export const useStartNextcloudLoginFlow = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof startNextcloudLoginFlow>>, TError,{data: BodyType<NextcloudLoginFlowStartInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof startNextcloudLoginFlow>>,
+        TError,
+        {data: BodyType<NextcloudLoginFlowStartInput>},
+        TContext
+      > => {
+      return useMutation(getStartNextcloudLoginFlowMutationOptions(options));
+    }
+
+export const getPollNextcloudLoginFlowUrl = () => {
+
+
+
+
+  return `/api/integrations/nextcloud/login-flow/poll`
+}
+
+/**
+ * Returns `pending` until the merchant approves the login on their server,
+then `connected` — the call that returns `connected` is also the one that
+stores the issued app password in the encrypted vault. Nextcloud expires
+an unapproved flow after 20 minutes, reported as `expired`.
+
+ * @summary Poll a pending Nextcloud login for approval
+ */
+export const pollNextcloudLoginFlow = async ( options?: RequestInit): Promise<NextcloudLoginFlowPoll> => {
+
+  return customFetch<NextcloudLoginFlowPoll>(getPollNextcloudLoginFlowUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getPollNextcloudLoginFlowMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pollNextcloudLoginFlow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof pollNextcloudLoginFlow>>, TError,void, TContext> => {
+
+const mutationKey = ['pollNextcloudLoginFlow'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof pollNextcloudLoginFlow>>, void> = () => {
+
+
+          return  pollNextcloudLoginFlow(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type PollNextcloudLoginFlowMutationResult = NonNullable<Awaited<ReturnType<typeof pollNextcloudLoginFlow>>>
+
+    export type PollNextcloudLoginFlowMutationError = ErrorType<void>
+
+    /**
+ * @summary Poll a pending Nextcloud login for approval
+ */
+export const usePollNextcloudLoginFlow = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof pollNextcloudLoginFlow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof pollNextcloudLoginFlow>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getPollNextcloudLoginFlowMutationOptions(options));
+    }
+
+export const getCancelNextcloudLoginFlowUrl = () => {
+
+
+
+
+  return `/api/integrations/nextcloud/login-flow/cancel`
+}
+
+/**
+ * @summary Abandon a pending Nextcloud login
+ */
+export const cancelNextcloudLoginFlow = async ( options?: RequestInit): Promise<CancelNextcloudLoginFlow200> => {
+
+  return customFetch<CancelNextcloudLoginFlow200>(getCancelNextcloudLoginFlowUrl(),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getCancelNextcloudLoginFlowMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelNextcloudLoginFlow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof cancelNextcloudLoginFlow>>, TError,void, TContext> => {
+
+const mutationKey = ['cancelNextcloudLoginFlow'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof cancelNextcloudLoginFlow>>, void> = () => {
+
+
+          return  cancelNextcloudLoginFlow(requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CancelNextcloudLoginFlowMutationResult = NonNullable<Awaited<ReturnType<typeof cancelNextcloudLoginFlow>>>
+
+    export type CancelNextcloudLoginFlowMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Abandon a pending Nextcloud login
+ */
+export const useCancelNextcloudLoginFlow = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof cancelNextcloudLoginFlow>>, TError,void, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof cancelNextcloudLoginFlow>>,
+        TError,
+        void,
+        TContext
+      > => {
+      return useMutation(getCancelNextcloudLoginFlowMutationOptions(options));
     }
 
 export const getSyncXeroContactsUrl = () => {

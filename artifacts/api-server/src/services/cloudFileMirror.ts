@@ -1,14 +1,16 @@
 import { db, customerFilesCloudSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { readVault } from "./tokenVault";
+import { getNextcloudCredentials, NextcloudNotConnectedError } from "./nextcloudAuth";
+import { uploadBuffer as uploadToNextcloud } from "../lib/nextcloud";
 import { ObjectStorageService } from "../lib/objectStorage";
 import { logger } from "../lib/logger";
 
 /**
  * Cloud storage providers that can receive mirrored customer files. These are
- * the connected, OAuth-vault-backed storage integrations from the Sync page.
+ * the connected, vault-backed storage integrations from the Sync page.
  */
-export const CLOUD_FILE_STORAGE_KEYS = ["onedrive", "google_drive", "dropbox"] as const;
+export const CLOUD_FILE_STORAGE_KEYS = ["onedrive", "google_drive", "dropbox", "nextcloud"] as const;
 export type CloudFileStorageKey = (typeof CLOUD_FILE_STORAGE_KEYS)[number];
 
 export function isCloudFileStorageKey(key: string): key is CloudFileStorageKey {
@@ -64,14 +66,21 @@ export async function mirrorCustomerFileToCloud(
   try {
     const cfg = await getCustomerFilesCloudConfig(merchantId);
     if (!cfg.enabled) return { mirrored: false, reason: "disabled" };
-    if (!isCloudFileStorageKey(cfg.storageKey)) {
+    const storageKey = cfg.storageKey;
+    if (!isCloudFileStorageKey(storageKey)) {
       return { mirrored: false, reason: "no_storage_selected" };
     }
 
-    const vault = await readVault(merchantId, cfg.storageKey);
-    if (!vault?.accessToken) {
-      logger.warn({ merchantId, storageKey: cfg.storageKey }, "Cloud file mirror: storage not connected");
-      return { mirrored: false, reason: "not_connected" };
+    // Nextcloud stores a credential blob rather than a bearer token, so it
+    // resolves its own connection below; the rest share the vault token read.
+    let accessToken = "";
+    if (storageKey !== "nextcloud") {
+      const vault = await readVault(merchantId, storageKey);
+      if (!vault?.accessToken) {
+        logger.warn({ merchantId, storageKey }, "Cloud file mirror: storage not connected");
+        return { mirrored: false, reason: "not_connected" };
+      }
+      accessToken = vault.accessToken;
     }
 
     // Pull the uploaded bytes back from object storage.
@@ -81,17 +90,36 @@ export async function mirrorCustomerFileToCloud(
     const segments = folderSegments(cfg.folder);
     const contentType = input.contentType || "application/octet-stream";
 
-    if (cfg.storageKey === "onedrive") {
-      await uploadToOneDrive(vault.accessToken, segments, input.filename, bytes, contentType);
-    } else if (cfg.storageKey === "google_drive") {
-      await uploadToGoogleDrive(vault.accessToken, segments, input.filename, bytes, contentType);
-    } else {
-      await uploadToDropbox(vault.accessToken, segments, input.filename, bytes);
+    switch (storageKey) {
+      case "onedrive":
+        await uploadToOneDrive(accessToken, segments, input.filename, bytes, contentType);
+        break;
+      case "google_drive":
+        await uploadToGoogleDrive(accessToken, segments, input.filename, bytes, contentType);
+        break;
+      case "dropbox":
+        await uploadToDropbox(accessToken, segments, input.filename, bytes);
+        break;
+      case "nextcloud": {
+        const creds = await getNextcloudCredentials(merchantId);
+        await uploadToNextcloud(creds, segments, input.filename, bytes, contentType);
+        break;
+      }
+      default: {
+        // Exhaustiveness guard: adding a key to CLOUD_FILE_STORAGE_KEYS without
+        // an uploader is a compile error rather than a silent misroute.
+        const unreachable: never = storageKey;
+        throw new Error(`No uploader for storage key: ${String(unreachable)}`);
+      }
     }
 
-    logger.info({ merchantId, provider: cfg.storageKey, filename: input.filename }, "Cloud file mirror: uploaded");
-    return { mirrored: true, provider: cfg.storageKey, folder: segments.join("/") };
+    logger.info({ merchantId, provider: storageKey, filename: input.filename }, "Cloud file mirror: uploaded");
+    return { mirrored: true, provider: storageKey, folder: segments.join("/") };
   } catch (err) {
+    if (err instanceof NextcloudNotConnectedError) {
+      logger.warn({ merchantId }, "Cloud file mirror: Nextcloud not connected");
+      return { mirrored: false, reason: "not_connected" };
+    }
     logger.warn({ merchantId, err }, "Cloud file mirror failed");
     return { mirrored: false, reason: "upload_failed" };
   }

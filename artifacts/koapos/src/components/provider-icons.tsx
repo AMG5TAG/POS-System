@@ -35,6 +35,19 @@ export function OneDriveIcon({ className }: IconProps) {
   );
 }
 
+/** Nextcloud's three-circle mark in Nextcloud blue. */
+export function NextcloudIcon({ className }: IconProps) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <g fill="none" stroke="#0082C9" strokeWidth="1.6">
+        <circle cx="7.4" cy="12" r="3.5" />
+        <circle cx="18.2" cy="12" r="2.1" />
+      </g>
+      <circle cx="12.9" cy="12" r="1.5" fill="#0082C9" />
+    </svg>
+  );
+}
+
 /** Apple logo glyph (monochrome — inherits currentColor). */
 export function AppleLogoIcon({ className }: IconProps) {
   return (

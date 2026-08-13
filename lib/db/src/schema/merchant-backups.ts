@@ -16,7 +16,7 @@ import { merchantsTable } from "./merchants";
  */
 export interface BackupStorageDestination {
   id: string;
-  type: "local" | "s3" | "gcs" | "sftp" | "onedrive";
+  type: "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
   // local
   directory?: string;
   // s3
@@ -34,7 +34,8 @@ export interface BackupStorageDestination {
   username?: string;
   remotePath?: string;
   passwordEnc?: string;
-  // onedrive — uploads use the merchant's connected OneDrive integration token.
+  // onedrive / nextcloud — uploads use the merchant's connected integration
+  // (OneDrive access token / Nextcloud app password); only the folder is stored.
   folder?: string;
 }
 
@@ -45,7 +46,7 @@ export interface BackupStorageDestination {
  * the user-selectable types). It is not a configurable destination.
  */
 export interface BackupLocation {
-  type: "server" | "local" | "s3" | "gcs" | "sftp" | "onedrive";
+  type: "server" | "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
   ref: string;
 }
 

@@ -452,6 +452,7 @@ export const BackupStorageDestinationType = {
   gcs: 'gcs',
   sftp: 'sftp',
   onedrive: 'onedrive',
+  nextcloud: 'nextcloud',
 } as const;
 
 export interface BackupStorageDestination {
@@ -499,6 +500,7 @@ export const BackupStorageDestinationInputType = {
   gcs: 'gcs',
   sftp: 'sftp',
   onedrive: 'onedrive',
+  nextcloud: 'nextcloud',
 } as const;
 
 export interface BackupStorageDestinationInput {
@@ -6541,6 +6543,7 @@ export const CustomerFilesCloudSettingsInputStorageKey = {
   onedrive: 'onedrive',
   google_drive: 'google_drive',
   dropbox: 'dropbox',
+  nextcloud: 'nextcloud',
 } as const;
 
 export interface CustomerFilesCloudSettingsInput {
@@ -6550,6 +6553,35 @@ export interface CustomerFilesCloudSettingsInput {
   storageKey: CustomerFilesCloudSettingsInputStorageKey;
   /** Destination folder path on that provider (set by the platform user) */
   folder: string;
+}
+
+export interface NextcloudLoginFlowStartInput {
+  /** The merchant's Nextcloud address. Accepts a bare host or a full URL; the server normalises it to an origin. */
+  serverUrl: string;
+}
+
+export interface NextcloudLoginFlowStart {
+  /** Open this in a new tab for the merchant to approve. */
+  loginUrl: string;
+  /** The normalised server address the flow was started against. */
+  serverUrl: string;
+}
+
+export type NextcloudLoginFlowPollStatus = typeof NextcloudLoginFlowPollStatus[keyof typeof NextcloudLoginFlowPollStatus];
+
+
+export const NextcloudLoginFlowPollStatus = {
+  pending: 'pending',
+  connected: 'connected',
+  expired: 'expired',
+} as const;
+
+export interface NextcloudLoginFlowPoll {
+  status: NextcloudLoginFlowPollStatus;
+  /** "user @ host" label for the connected account (status=connected). */
+  accountHandle?: string;
+  /** The server the app password was issued by (status=connected). */
+  serverUrl?: string;
 }
 
 export type CustomerFilesCloudSettings = CustomerFilesCloudSettingsInput & {
@@ -7187,6 +7219,10 @@ export const ListQuotesStatus = {
   expired: 'expired',
   converted: 'converted',
 } as const;
+
+export type CancelNextcloudLoginFlow200 = {
+  ok: boolean;
+};
 
 export type ListBackupsParams = {
 limit?: number;

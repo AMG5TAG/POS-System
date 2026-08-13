@@ -19,7 +19,8 @@ import {
   Clock, FolderUp, ShieldCheck, Lightbulb, Save, CalendarClock, AlertTriangle,
 } from "lucide-react";
 import { useListIntegrations, useDisconnectIntegration } from "@workspace/api-client-react";
-import { MicrosoftIcon, OneDriveIcon } from "@/components/provider-icons";
+import { MicrosoftIcon, OneDriveIcon, NextcloudIcon } from "@/components/provider-icons";
+import { NextcloudConnectModal } from "@/components/nextcloud-connect-modal";
 import { BackupSettingsPanel } from "./management-backup";
 import {
   loadCustomerFilesCloudSettings, fetchCustomerFilesCloudSettings, putCustomerFilesCloudSettings,
@@ -44,17 +45,21 @@ const LOGOS: Record<string, { bg: string; src?: string; node?: React.ReactNode }
   google_drive:       { bg: "bg-white border", src: SI("googledrive", "4285F4") },
   onedrive:           { bg: "bg-white border", node: <OneDriveIcon className="w-5 h-5" /> },
   dropbox:            { bg: "bg-[#0061FF]",     src: SI("dropbox",     "ffffff") },
+  nextcloud:          { bg: "bg-white border", node: <NextcloudIcon className="w-5 h-5" /> },
   google_contacts:    { bg: "bg-white border", src: SI("google",      "4285F4") },
   microsoft_contacts: { bg: "bg-white border", node: <MicrosoftIcon className="w-5 h-5" /> },
   apple_icloud:       { bg: "bg-black",         src: SI("apple",       "ffffff") },
 };
 
 const ACCOUNT_KEYS = ["google_contacts", "microsoft_contacts", "apple_icloud"];
-const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox"];
+const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox", "nextcloud"];
 // Customer (contacts) + calendar sync — Google & Microsoft (OAuth) and Apple iCloud (CalDAV/CardDAV).
 const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts", "apple_icloud"]);
 // Apple connects via an Apple ID + app-specific password form, not an OAuth redirect.
 const CREDENTIALS_KEYS = new Set(["apple_icloud"]);
+// Nextcloud is self-hosted: the merchant's own server issues the credential via
+// Login Flow v2, so it uses its own dialog rather than an OAuth redirect.
+const LOGIN_FLOW_KEYS = new Set(["nextcloud"]);
 /* Fallback names for sync accounts, so a saved-but-now-disconnected provider is
    still described in words rather than as a raw key like "microsoft_contacts". */
 const ACCOUNT_LABELS: Record<string, string> = {
@@ -504,6 +509,9 @@ export default function ManagementSyncPage() {
   /* Apple iCloud connect form (Apple ID + app-specific password) */
   const [appleConnectOpen, setAppleConnectOpen] = useState(false);
 
+  /* Nextcloud connect (server address → approve on their server → app password) */
+  const [nextcloudConnectOpen, setNextcloudConnectOpen] = useState(false);
+
   /* OAuth callback lands back here (?success=/?error=) for sync integrations. */
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
@@ -530,6 +538,7 @@ export default function ManagementSyncPage() {
   const connect = (intg: SyncIntegration) => {
     // Apple iCloud connects via a credentials form (Apple ID + app-specific password).
     if (CREDENTIALS_KEYS.has(intg.key)) { setAppleConnectOpen(true); return; }
+    if (LOGIN_FLOW_KEYS.has(intg.key)) { setNextcloudConnectOpen(true); return; }
     window.location.href = `/api/integrations/oauth/${intg.key}/start`;
   };
 
@@ -644,7 +653,7 @@ export default function ManagementSyncPage() {
         {/* ── Cloud Files & Folders ── */}
         <section>
           <SectionHeader icon={Cloud} title="Cloud Files & Folders"
-            desc="Connect cloud storage to send files, reports and backups to OneDrive, Google Drive or Dropbox." />
+            desc="Connect cloud storage to send files, reports and backups to OneDrive, Google Drive, Dropbox or your own Nextcloud." />
           <CustomerFilesCloudPanel storages={storage} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             {storage.map((i) => (
@@ -738,6 +747,17 @@ export default function ManagementSyncPage() {
         onClose={() => setAppleConnectOpen(false)}
         onConnected={() => { setAppleConnectOpen(false); refetch(); toast.success("Apple iCloud connected"); }}
       />
+
+      {/* ── Nextcloud connect (Login Flow v2) ── */}
+      <NextcloudConnectModal
+        open={nextcloudConnectOpen}
+        onClose={() => setNextcloudConnectOpen(false)}
+        onConnected={(handle) => {
+          setNextcloudConnectOpen(false);
+          refetch();
+          toast.success(handle ? `Nextcloud connected (${handle})` : "Nextcloud connected");
+        }}
+      />
     </AppLayout>
   );
 }
@@ -817,3 +837,4 @@ function AppleConnectModal({ open, onClose, onConnected }: { open: boolean; onCl
     </Dialog>
   );
 }
+

@@ -12370,7 +12370,7 @@ connected cloud storage provider, along with the supported providers.
  */
 export const GetCustomerFilesCloudSettingsResponse = zod.object({
   "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
-  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox']).describe('Connected cloud storage provider to mirror files to'),
+  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox', 'nextcloud']).describe('Connected cloud storage provider to mirror files to'),
   "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
 }).and(zod.object({
   "supportedStorageKeys": zod.array(zod.string()).describe('Storage providers that can receive mirrored customer files')
@@ -12386,14 +12386,57 @@ pushed to that folder on the chosen cloud storage.
  */
 export const UpdateCustomerFilesCloudSettingsBody = zod.object({
   "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
-  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox']).describe('Connected cloud storage provider to mirror files to'),
+  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox', 'nextcloud']).describe('Connected cloud storage provider to mirror files to'),
   "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
 })
 
 export const UpdateCustomerFilesCloudSettingsResponse = zod.object({
   "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
-  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox']).describe('Connected cloud storage provider to mirror files to'),
+  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox', 'nextcloud']).describe('Connected cloud storage provider to mirror files to'),
   "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
+})
+
+
+/**
+ * Opens a login session on the merchant's own Nextcloud server and returns
+the URL to send them to for approval. Nextcloud is self-hosted, so there
+is no platform OAuth app: the merchant's server issues an app password
+once they approve, which `poll` then collects.
+
+The poll token stays server-side in the session and is never returned.
+
+ * @summary Begin connecting a Nextcloud server (Login Flow v2)
+ */
+export const StartNextcloudLoginFlowBody = zod.object({
+  "serverUrl": zod.string().describe('The merchant\'s Nextcloud address. Accepts a bare host or a full URL; the server normalises it to an origin.')
+})
+
+export const StartNextcloudLoginFlowResponse = zod.object({
+  "loginUrl": zod.string().describe('Open this in a new tab for the merchant to approve.'),
+  "serverUrl": zod.string().describe('The normalised server address the flow was started against.')
+})
+
+
+/**
+ * Returns `pending` until the merchant approves the login on their server,
+then `connected` — the call that returns `connected` is also the one that
+stores the issued app password in the encrypted vault. Nextcloud expires
+an unapproved flow after 20 minutes, reported as `expired`.
+
+ * @summary Poll a pending Nextcloud login for approval
+ */
+export const PollNextcloudLoginFlowResponse = zod.object({
+  "status": zod.enum(['pending', 'connected', 'expired']),
+  "accountHandle": zod.string().optional().describe('\"user @ host\" label for the connected account (status=connected).'),
+  "serverUrl": zod.string().optional().describe('The server the app password was issued by (status=connected).')
+})
+
+
+/**
+ * @summary Abandon a pending Nextcloud login
+ */
+export const CancelNextcloudLoginFlowResponse = zod.object({
+  "ok": zod.boolean()
 })
 
 
@@ -12484,7 +12527,7 @@ export const GetBackupConfigResponse = zod.object({
   "lastBackupAt": zod.coerce.date().nullish(),
   "destinations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive']),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive', 'nextcloud']),
   "directory": zod.string().nullish(),
   "bucket": zod.string().nullish(),
   "region": zod.string().nullish(),
@@ -12511,7 +12554,7 @@ export const UpdateBackupConfigBody = zod.object({
   "password": zod.string().optional(),
   "destinations": zod.array(zod.object({
   "id": zod.string().optional(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive']),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive', 'nextcloud']),
   "directory": zod.string().optional(),
   "bucket": zod.string().optional(),
   "region": zod.string().optional(),
@@ -12535,7 +12578,7 @@ export const UpdateBackupConfigResponse = zod.object({
   "lastBackupAt": zod.coerce.date().nullish(),
   "destinations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive']),
+  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive', 'nextcloud']),
   "directory": zod.string().nullish(),
   "bucket": zod.string().nullish(),
   "region": zod.string().nullish(),

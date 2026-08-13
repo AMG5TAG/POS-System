@@ -43,6 +43,10 @@ export const INTEGRATIONS = [
   { key: "microsoft_contacts",  label: "Microsoft Account",   section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar.",          authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
   { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple — lets staff/customers authenticate with their Apple ID. (Contacts & Calendar sync is the separate Apple iCloud connection.)", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
   { key: "apple_icloud",        label: "Apple iCloud",        section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to iCloud Contacts and push appointments to Apple Calendar. Connect with your Apple ID and an app-specific password.", authType: "credentials" as const, fields: [{ name: "appleId", label: "Apple ID (email)", type: "text" }, { name: "appPassword", label: "App-specific password", type: "password" }] as F[], useVault: true  },
+  // Nextcloud is self-hosted, so there is no platform-registered app to OAuth
+  // against — the merchant's own server issues the credential via Login Flow v2
+  // (see routes/nextcloud.ts). Hence its own authType.
+  { key: "nextcloud",           label: "Nextcloud",           section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data and mirror customer files to your own Nextcloud server — self-hosted storage you control.", authType: "loginflow" as const, fields: [{ name: "serverUrl", label: "Server address", type: "text" }] as F[], useVault: true  },
   { key: "openai",              label: "OpenAI (Your Key)",   section: "cloud", category: "Cloud Storage & Productivity", description: "Use your own OpenAI API key for AI Insights, demand forecasting, and product descriptions.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
 ] as const;
 
@@ -256,6 +260,7 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   const key = String(req.params.key) as IntegrationKey;
   const intg = INTEGRATIONS.find((i) => i.key === key);
   if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
+  if (intg.authType === "loginflow") { res.status(400).json({ error: "Use the Nextcloud login flow" }); return; }
   if (intg.authType !== "credentials") { res.status(400).json({ error: "Use OAuth flow" }); return; }
   const body = (req.body ?? {}) as Record<string, unknown>;
 

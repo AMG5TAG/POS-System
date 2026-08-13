@@ -73,9 +73,9 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { OneDriveIcon } from "@/components/provider-icons";
+import { OneDriveIcon, NextcloudIcon } from "@/components/provider-icons";
 
-type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive";
+type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
 
 const STORAGE_META: Record<
   StorageType,
@@ -86,7 +86,11 @@ const STORAGE_META: Record<
   gcs: { label: "Google Cloud Storage", icon: Cloud },
   sftp: { label: "SFTP server", icon: Server },
   onedrive: { label: "OneDrive", icon: OneDriveIcon },
+  nextcloud: { label: "Nextcloud", icon: NextcloudIcon },
 };
+
+/** Where Nextcloud archives land when the sub-folder is left blank. */
+const NEXTCLOUD_DEFAULT_FOLDER = "KoaPOS/Backups";
 
 const FREQUENCY_OPTIONS = [
   { value: "disabled", label: "Manual only (no schedule)" },
@@ -186,7 +190,7 @@ function draftToInput(d: DestDraft): BackupStorageDestinationInput {
     if (d.username) base.username = d.username;
     if (d.remotePath) base.remotePath = d.remotePath;
     if (d.password) base.password = d.password;
-  } else if (d.type === "onedrive") {
+  } else if (d.type === "onedrive" || d.type === "nextcloud") {
     if (d.folder) base.folder = d.folder;
   }
   return base;
@@ -436,16 +440,20 @@ export function BackupSettingsPanel() {
   const triggerBackup = useTriggerBackup();
   const restoreBackup = useRestoreBackup();
 
-  // OneDrive backups reuse the OneDrive integration connected on the Sync page.
+  // OneDrive and Nextcloud backups reuse the accounts connected on the Sync
+  // page rather than holding their own credentials on the destination.
   const { data: integrationsRaw } = useListIntegrations({
     query: { queryKey: ["integrations"] },
   });
-  const oneDrive = ((integrationsRaw ?? []) as unknown as Array<{
+  const integrations = (integrationsRaw ?? []) as unknown as Array<{
     key: string;
     status: string;
     accountHandle: string | null;
-  }>).find((i) => i.key === "onedrive");
+  }>;
+  const oneDrive = integrations.find((i) => i.key === "onedrive");
   const oneDriveConnected = oneDrive?.status === "connected";
+  const nextcloud = integrations.find((i) => i.key === "nextcloud");
+  const nextcloudConnected = nextcloud?.status === "connected";
 
   const [frequency, setFrequency] = useState<string>("disabled");
   const [password, setPassword] = useState("");
@@ -913,6 +921,54 @@ export function BackupSettingsPanel() {
                           <p className="text-muted-foreground text-[11px]">
                             A folder inside the KoaPOS app folder in your
                             OneDrive. Leave blank to use the app folder root.
+                          </p>
+                        </div>
+                      </div>
+                    )}
+
+                    {d.type === "nextcloud" && (
+                      <div className="space-y-3">
+                        {nextcloudConnected ? (
+                          <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>
+                              Using your connected Nextcloud
+                              {nextcloud?.accountHandle
+                                ? ` (${nextcloud.accountHandle})`
+                                : ""}
+                              .
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            <span>
+                              Nextcloud isn't connected. Connect your server to
+                              back up here.
+                            </span>
+                            <Link
+                              href="/management/settings-integrations/sync"
+                              className="font-medium underline shrink-0"
+                            >
+                              Connect
+                            </Link>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Folder (optional)</Label>
+                          <Input
+                            placeholder={NEXTCLOUD_DEFAULT_FOLDER}
+                            value={d.folder}
+                            onChange={(e) =>
+                              updateDraft(d.id, { folder: e.target.value })
+                            }
+                          />
+                          <p className="text-muted-foreground text-[11px]">
+                            A folder in your Nextcloud files, created if it
+                            doesn't exist. Leave blank to use{" "}
+                            <span className="font-mono">
+                              {NEXTCLOUD_DEFAULT_FOLDER}
+                            </span>
+                            .
                           </p>
                         </div>
                       </div>

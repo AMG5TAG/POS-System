@@ -22,7 +22,7 @@ import {
   publicDestination,
   type StoredDestination,
 } from "../lib/backup-storage/types";
-import { downloadServerCopy } from "../lib/backup-storage/server";
+import { retrieveArchive } from "../lib/backup-storage";
 import { existsSync } from "fs";
 import type { BackupLocation } from "@workspace/db";
 
@@ -221,28 +221,21 @@ router.post(
     }
 
     // Prefer the local canonical copy; if it's gone (the deployment filesystem
-    // is ephemeral), fall back to the durable server copy in object storage.
+    // is ephemeral), fall back to the durable server copy in object storage,
+    // then to any merchant-controlled copy that can serve it back.
     let archivePath = backup.filePath;
     let cleanup: (() => Promise<void>) | null = null;
     if (!existsSync(archivePath)) {
-      const serverLoc = ((backup.locations ?? []) as BackupLocation[]).find(
-        (l) => l.type === "server",
-      );
-      if (!serverLoc) {
+      const locations = (backup.locations ?? []) as BackupLocation[];
+      const retrieved = await retrieveArchive(locations, merchantId);
+      if (!retrieved) {
         res.status(410).json({
           error: "Backup file is no longer available on this server",
         });
         return;
       }
-      try {
-        const dl = await downloadServerCopy(serverLoc.ref);
-        archivePath = dl.path;
-        cleanup = dl.cleanup;
-      } catch (err) {
-        req.log.error({ merchantId, backupId: id, err }, "Server backup fetch failed");
-        res.status(500).json({ error: "Could not retrieve the backup from the server" });
-        return;
-      }
+      archivePath = retrieved.path;
+      cleanup = retrieved.cleanup;
     }
 
     try {
@@ -280,21 +273,16 @@ router.get("/backups/:id/download", requireAuth, requireManagerOrOwner, async (r
     return;
   }
 
-  // Prefer the local canonical copy; fall back to the durable server copy.
+  // Prefer the local canonical copy; fall back to the durable server copy, then
+  // to any merchant-controlled copy that can serve it back.
   let archivePath = backup.filePath;
   let cleanup: (() => Promise<void>) | null = null;
   if (!existsSync(archivePath)) {
-    const serverLoc = ((backup.locations ?? []) as BackupLocation[]).find((l) => l.type === "server");
-    if (!serverLoc) { res.status(410).json({ error: "Backup file is no longer available on this server" }); return; }
-    try {
-      const dl = await downloadServerCopy(serverLoc.ref);
-      archivePath = dl.path;
-      cleanup = dl.cleanup;
-    } catch (err) {
-      req.log.error({ merchantId, backupId: id, err }, "Server backup fetch failed");
-      res.status(500).json({ error: "Could not retrieve the backup from the server" });
-      return;
-    }
+    const locations = (backup.locations ?? []) as BackupLocation[];
+    const retrieved = await retrieveArchive(locations, merchantId);
+    if (!retrieved) { res.status(410).json({ error: "Backup file is no longer available on this server" }); return; }
+    archivePath = retrieved.path;
+    cleanup = retrieved.cleanup;
   }
 
   const startedAt = backup.startedAt ? new Date(backup.startedAt).toISOString().slice(0, 10) : "backup";

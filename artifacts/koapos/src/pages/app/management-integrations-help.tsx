@@ -160,6 +160,31 @@ const SECTIONS: HelpSection[] = [
           "Sign in to the provider and approve access — backups and contact sync then run automatically.",
         ],
       },
+      {
+        q: "How do I connect my own Nextcloud server?",
+        steps: [
+          "Go to the Sync page and click Connect on Nextcloud.",
+          "Enter your server address (for example https://cloud.example.com) and click Continue.",
+          "Click \"Open Nextcloud to approve\" and grant access in the tab that opens — the dialog finishes on its own.",
+          "Add Nextcloud as a backup destination under Cloud Backup, and/or pick it in \"Save all customer files to the cloud\".",
+        ],
+      },
+      {
+        q: "Is my Nextcloud password stored in KoaPOS?",
+        steps: [
+          "No. You approve the connection on your own Nextcloud, which issues KoaPOS an app password specific to it.",
+          "That app password is encrypted at rest and only ever used for uploads to the folder you choose.",
+          "Revoke it any time from Nextcloud → Settings → Security, or click Disconnect on the Sync page.",
+        ],
+      },
+      {
+        q: "My Nextcloud server won't connect",
+        steps: [
+          "The server must be reachable from the internet over https — KoaPOS cannot reach an address on your local network.",
+          "Check the address is the instance root (https://cloud.example.com), not a page inside it.",
+          "If uploads fail with a size error, raise the upload limit on your server (nginx's client_max_body_size).",
+        ],
+      },
     ],
   },
 ];

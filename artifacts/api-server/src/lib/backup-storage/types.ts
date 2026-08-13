@@ -10,7 +10,7 @@
  */
 import { encryptToken, decryptToken } from "../../services/tokenVault";
 
-export type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive";
+export type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
 
 /** Sanitised destination returned to the client (no secrets, only `*Set` flags). */
 export interface PublicDestination {
@@ -52,7 +52,8 @@ export interface StoredDestination {
   username?: string;
   remotePath?: string;
   passwordEnc?: string;
-  // onedrive (token comes from the connected integration, not stored here)
+  // onedrive / nextcloud (credentials come from the connected integration,
+  // not stored here — only the target folder is per-destination)
   folder?: string;
 }
 
@@ -124,7 +125,7 @@ export function mergeDestination(
     base.remotePath = str(input.remotePath) ?? existing?.remotePath;
     const pw = str(input.password);
     base.passwordEnc = pw ? encryptToken(pw) : existing?.passwordEnc;
-  } else if (type === "onedrive") {
+  } else if (type === "onedrive" || type === "nextcloud") {
     base.folder = str(input.folder) ?? existing?.folder;
   }
   return base;

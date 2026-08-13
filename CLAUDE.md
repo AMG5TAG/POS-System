@@ -50,7 +50,7 @@ Workflow to change an endpoint: edit `openapi.yaml` → run codegen → implemen
 - `artifacts/api-server` — Express 5 API. `src/app.ts` builds the app; `src/routes/index.ts` mounts ~139 feature routers; `src/services/` holds background schedulers and cross-cutting logic (email, SMS, backups, payments, token vault); `src/lib/` holds shared helpers; `src/middlewares/requireAuth.ts` is the session auth middleware.
 - `artifacts/koapos` — React 19 frontend. Pages in `src/pages/` (marketing + authenticated app), auth in `src/lib/auth.tsx` (AuthProvider + `useAuth`).
 - `lib/db` — Drizzle schema, one file per domain in `src/schema/` (merchants, products, customers, transactions, staff, …).
-- `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/object-storage-web` — shared libraries.
+- `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/object-storage-web` — shared libraries. Note that cloud-storage integrations do **not** live here: they are in `artifacts/api-server/src/lib/` (`backup-storage/`, `nextcloud.ts`, `objectStorage.ts`) and `src/services/`.
 - `scripts` (`@workspace/scripts`) — one-off migration/seed scripts wired into `db:push`.
 
 ### Auth
@@ -112,6 +112,18 @@ Each integration is "feature disabled if missing" — the API hides the connect 
 - `APPLE_WALLET_CERT_PEM` / `APPLE_WALLET_KEY_PEM` / `APPLE_WALLET_TEAM_ID` / `APPLE_WALLET_PASS_TYPE_ID` — Apple Wallet loyalty passes.
 - `GOOGLE_WALLET_ISSUER_ID` / `GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_WALLET_PRIVATE_KEY` — Google Wallet loyalty passes.
 - Sign In with Apple: `APPLE_CLIENT_ID` (Service ID, e.g. `com.yourapp.signin`), `APPLE_TEAM_ID` (10-char), `APPLE_KEY_ID` (10-char), `APPLE_PRIVATE_KEY` (full `.p8` contents incl. BEGIN/END headers). These are server-side config secrets and are **not** stored in `oauth_token_vault`; per-merchant Apple tokens issued after the flow are stored in the vault.
+- **Nextcloud needs no env vars.** It is self-hosted per merchant, so there is no platform-registered app — see below.
+
+### Nextcloud (self-hosted storage & backups)
+
+Nextcloud is the one cloud-storage integration with no platform OAuth app: each merchant points at their own server, which issues the credential itself. That gives it a third `authType`, `"loginflow"`, alongside `oauth` and `credentials` in the `INTEGRATIONS` catalogue.
+
+- **Auth — Login Flow v2** (`services/nextcloudAuth.ts`, `routes/nextcloud.ts`). `POST /integrations/nextcloud/login-flow/start` opens a login session on the merchant's server and returns a `loginUrl`; the browser polls `.../poll` until the merchant approves, and the poll that succeeds is what stores the issued **app password** in `oauth_token_vault` under provider key `nextcloud`. The poll token is held in `req.session.nextcloudLoginFlow` and never sent to the browser. Flows expire after 20 minutes. App passwords do not expire, so unlike Google/Microsoft there is **no token refresher**.
+- **Transport — WebDAV** (`lib/nextcloud.ts`), HTTP Basic over `remote.php/dav/files/<user>`. Files over 50 MB use chunked upload v2 (MKCOL a transfer dir → PUT chunks → MOVE `.file` onto the destination), because a single large PUT hits whatever body limit fronts the merchant's server.
+- **SSRF guard**: the server URL is merchant-supplied, so `assertSafeNextcloudUrl` resolves the host and rejects loopback/RFC1918/link-local/CGNAT/multicast answers before every request. Do not add a Nextcloud request path that skips it. `normaliseServerUrl` rejects non-http(s) schemes and rejects plain http under `NODE_ENV=production`. Covered by `src/__tests__/nextcloud-url.test.ts`.
+- **Surfaces**: a backup destination (`lib/backup-storage/nextcloud.ts`, folder defaults to `KoaPOS/Backups`), a customer-file mirror target (`services/cloudFileMirror.ts`), and a restore/download source — `retrieveArchive` in `lib/backup-storage/index.ts` tries the platform `server` copy first, then Nextcloud.
+
+Adding another storage provider means touching the same five places `StorageType` is declared: `lib/backup-storage/types.ts`, `BackupStorageDestination` + `BackupLocation` in `lib/db/src/schema/merchant-backups.ts`, both enums in `openapi.yaml`, and `StorageType`/`STORAGE_META` in `management-backup.tsx`. The `destinations`/`locations` columns are JSONB with TypeScript-only typing, so **no SQL migration is needed** to widen them.
 
 ## Product surface
 

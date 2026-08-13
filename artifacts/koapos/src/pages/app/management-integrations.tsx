@@ -21,7 +21,8 @@ import {
   useListIntegrations, useGetVaultStatus, useDisconnectIntegration, useConnectIntegration,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { OneDriveIcon, MicrosoftIcon } from "@/components/provider-icons";
+import { OneDriveIcon, MicrosoftIcon, NextcloudIcon } from "@/components/provider-icons";
+import { NextcloudConnectModal } from "@/components/nextcloud-connect-modal";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, ChevronDown, ChevronRight, Zap,
@@ -40,7 +41,9 @@ interface Integration {
   section: string;
   category: string;
   description: string;
-  authType: "oauth" | "credentials";
+  // "loginflow" = the merchant's own server issues the credential (Nextcloud
+  // Login Flow v2) — neither a platform OAuth redirect nor a credentials form.
+  authType: "oauth" | "credentials" | "loginflow";
   fields: IntegrationField[];
   useVault: boolean;
   status: "connected" | "disconnected";
@@ -106,6 +109,7 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   // OneDrive/Microsoft use the inline SVGs shared with the Sync page.
   onedrive:             { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: OneDriveIcon },
   dropbox:              { type: "img",  bg: "bg-[#0061FF]",     src: SI("dropbox",       "ffffff") },
+  nextcloud:            { type: "svg",  bg: "bg-white border",  color: "text-[#0082C9]", component: NextcloudIcon },
   google_contacts:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
   microsoft_contacts:   { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: MicrosoftIcon },
   apple_account:        { type: "svg",  bg: "bg-black",          color: "text-white",    component: AppleSvg },
@@ -307,7 +311,9 @@ function IntegrationCard({
               </p>
             ) : (
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
-                {intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
+                {intg.authType === "oauth" ? "Authorise via OAuth 2.0"
+                  : intg.authType === "loginflow" ? "Approve on your own server"
+                  : "Enter API credentials"}
               </p>
             )}
           </div>
@@ -567,6 +573,7 @@ export default function ManagementIntegrationsPage() {
   const [location, setLocation] = useLocation();
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
   const [modalTarget, setModalTarget]   = useState<Integration | null>(null);
+  const [nextcloudOpen, setNextcloudOpen] = useState(false);
 
   /* ─── Sync Contacts dialog state ────────────────────────────────────────── */
   const [syncTarget,         setSyncTarget]         = useState<Integration | null>(null);
@@ -609,6 +616,13 @@ export default function ManagementIntegrationsPage() {
         onSettled: () => setConnecting((c) => ({ ...c, [intg.key]: false })),
       }
     );
+  };
+
+  const handleConnect = (intg: Integration) => {
+    // Nextcloud has no credentials form — it hands off to the merchant's own
+    // server for approval, so it gets its own dialog.
+    if (intg.authType === "loginflow") { setNextcloudOpen(true); return; }
+    setModalTarget(intg);
   };
 
   const handleOAuth = (intg: Integration) => {
@@ -736,7 +750,7 @@ export default function ManagementIntegrationsPage() {
                   {...sec}
                   items={items}
                   connecting={connecting}
-                  onConnect={setModalTarget}
+                  onConnect={handleConnect}
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
                   onNavigate={(href) => setLocation(href)}
@@ -750,6 +764,16 @@ export default function ManagementIntegrationsPage() {
       </div>
 
       <ConnectModal integration={modalTarget} onClose={() => setModalTarget(null)} onSaved={refetchIntegrations} />
+
+      <NextcloudConnectModal
+        open={nextcloudOpen}
+        onClose={() => setNextcloudOpen(false)}
+        onConnected={(handle) => {
+          setNextcloudOpen(false);
+          refetchIntegrations();
+          toast.success(handle ? `Nextcloud connected (${handle})` : "Nextcloud connected");
+        }}
+      />
 
       {/* ── Sync Contacts dialog (Google / Microsoft) ────────────────────── */}
       <Dialog open={!!syncTarget} onOpenChange={(o) => { if (!o) setSyncTarget(null); }}>

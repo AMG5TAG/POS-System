@@ -9156,6 +9156,70 @@ paths:
         "400":
           description: Invalid storageKey or missing folder when enabled
 
+  /integrations/nextcloud/login-flow/start:
+    post:
+      operationId: startNextcloudLoginFlow
+      tags: [integrations]
+      summary: Begin connecting a Nextcloud server (Login Flow v2)
+      description: |
+        Opens a login session on the merchant's own Nextcloud server and returns
+        the URL to send them to for approval. Nextcloud is self-hosted, so there
+        is no platform OAuth app: the merchant's server issues an app password
+        once they approve, which `poll` then collects.
+
+        The poll token stays server-side in the session and is never returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NextcloudLoginFlowStartInput"
+      responses:
+        "200":
+          description: Login session opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextcloudLoginFlowStart"
+        "400":
+          description: Address unreachable, not a Nextcloud server, or rejected
+
+  /integrations/nextcloud/login-flow/poll:
+    post:
+      operationId: pollNextcloudLoginFlow
+      tags: [integrations]
+      summary: Poll a pending Nextcloud login for approval
+      description: |
+        Returns `pending` until the merchant approves the login on their server,
+        then `connected` — the call that returns `connected` is also the one that
+        stores the issued app password in the encrypted vault. Nextcloud expires
+        an unapproved flow after 20 minutes, reported as `expired`.
+      responses:
+        "200":
+          description: Current state of the pending login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextcloudLoginFlowPoll"
+        "400":
+          description: No login in progress, or the credentials failed verification
+
+  /integrations/nextcloud/login-flow/cancel:
+    post:
+      operationId: cancelNextcloudLoginFlow
+      tags: [integrations]
+      summary: Abandon a pending Nextcloud login
+      responses:
+        "200":
+          description: Pending login discarded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+
   /xero/sync/contacts:
     post:
       operationId: syncXeroContacts
@@ -10223,7 +10287,7 @@ components:
       required: [id, type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive, nextcloud] }
         directory: { type: string, nullable: true }
         bucket: { type: string, nullable: true }
         region: { type: string, nullable: true }
@@ -10256,7 +10320,7 @@ components:
       required: [type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive, nextcloud] }
         directory: { type: string }
         bucket: { type: string }
         region: { type: string }
@@ -17388,11 +17452,46 @@ components:
           description: When true, customer file uploads are mirrored to the cloud
         storageKey:
           type: string
-          enum: [onedrive, google_drive, dropbox]
+          enum: [onedrive, google_drive, dropbox, nextcloud]
           description: Connected cloud storage provider to mirror files to
         folder:
           type: string
           description: Destination folder path on that provider (set by the platform user)
+
+    NextcloudLoginFlowStartInput:
+      type: object
+      required: [serverUrl]
+      properties:
+        serverUrl:
+          type: string
+          description: >-
+            The merchant's Nextcloud address. Accepts a bare host or a full URL;
+            the server normalises it to an origin.
+
+    NextcloudLoginFlowStart:
+      type: object
+      required: [loginUrl, serverUrl]
+      properties:
+        loginUrl:
+          type: string
+          description: Open this in a new tab for the merchant to approve.
+        serverUrl:
+          type: string
+          description: The normalised server address the flow was started against.
+
+    NextcloudLoginFlowPoll:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, connected, expired]
+        accountHandle:
+          type: string
+          description: '"user @ host" label for the connected account (status=connected).'
+        serverUrl:
+          type: string
+          description: The server the app password was issued by (status=connected).
 
     CustomerFilesCloudSettings:
       allOf:
