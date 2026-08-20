@@ -374,14 +374,31 @@ export function DashboardCalendar() {
     }
   }
 
+  /*
+   * Legend totals for the month on screen.
+   *
+   * When that month is the current one we stop at today — a running "so far"
+   * figure, so Sales/Invoices read as what has actually happened rather than
+   * being padded by appointments and birthdays still to come. Any other month
+   * is wholly behind or ahead of us, so the whole month is summed.
+   *
+   * `days` covers exactly the requested month (the API pre-fills every date),
+   * so these are plain sums with no date filtering beyond the cut-off.
+   */
+  const viewingCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
+  const countedDays = (data?.days ?? []).filter((d) => !viewingCurrentMonth || d.date <= todayStr);
+
+  const sumBy = (pick: (d: CalendarDay) => number) =>
+    countedDays.reduce((n, d) => n + pick(d), 0);
+
   // Legend
   const legend = [
-    { color: EVENT_COLORS.publicHoliday, label: "Public Holiday" },
-    { color: EVENT_COLORS.sales,         label: "Sales" },
-    { color: EVENT_COLORS.serviceJobs,   label: "Service Jobs" },
-    { color: EVENT_COLORS.invoices,      label: "Invoices" },
-    { color: EVENT_COLORS.appointments,  label: "Appointments" },
-    { color: EVENT_COLORS.birthdays,     label: "Birthdays" },
+    { color: EVENT_COLORS.publicHoliday, label: "Public Holiday", total: countedDays.filter((d) => d.publicHoliday).length },
+    { color: EVENT_COLORS.sales,         label: "Sales",          total: sumBy((d) => d.sales) },
+    { color: EVENT_COLORS.serviceJobs,   label: "Service Jobs",   total: sumBy((d) => d.serviceJobs) },
+    { color: EVENT_COLORS.invoices,      label: "Invoices",       total: sumBy((d) => d.invoices) },
+    { color: EVENT_COLORS.appointments,  label: "Appointments",   total: sumBy((d) => d.appointments.length) },
+    { color: EVENT_COLORS.birthdays,     label: "Birthdays",      total: sumBy((d) => d.customerBirthdays.length) },
   ];
 
   return (
@@ -401,12 +418,24 @@ export function DashboardCalendar() {
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {legend.map((l) => (
-              <div key={l.label} className={cn("text-[10px] px-2 py-0.5 rounded border font-medium", l.color)}>
-                {l.label}
-              </div>
-            ))}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex flex-wrap gap-2">
+              {legend.map((l) => (
+                <div key={l.label} className="flex flex-col items-center gap-1">
+                  <div className={cn("text-[10px] px-2 py-0.5 rounded border font-medium", l.color)}>
+                    {l.label}
+                  </div>
+                  <span className="text-sm font-semibold tabular-nums leading-none">
+                    {isLoading ? "—" : l.total}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {viewingCurrentMonth
+                ? `${monthName} so far — 1–${today.getDate()}`
+                : `${monthName} — full month`}
+            </p>
           </div>
         </CardHeader>
         <CardContent>
