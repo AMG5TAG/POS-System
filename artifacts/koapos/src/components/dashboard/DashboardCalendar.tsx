@@ -421,11 +421,12 @@ export function DashboardCalendar() {
           <div className="space-y-1.5 pt-1">
             <div className="flex flex-wrap gap-2">
               {legend.map((l) => (
-                <div key={l.label} className="flex flex-col items-center gap-1">
-                  <div className={cn("text-[10px] px-2 py-0.5 rounded border font-medium", l.color)}>
-                    {l.label}
-                  </div>
-                  <span className="text-sm font-semibold tabular-nums leading-none">
+                <div
+                  key={l.label}
+                  className={cn("text-[10px] px-2 py-0.5 rounded border font-medium flex items-center gap-1.5", l.color)}
+                >
+                  {l.label}
+                  <span className="text-xs font-semibold tabular-nums">
                     {isLoading ? "—" : l.total}
                   </span>
                 </div>
