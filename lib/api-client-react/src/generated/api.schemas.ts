@@ -32,6 +32,8 @@ export interface FollowUpItem {
   agreedToMarketing: boolean;
   lastFollowUpAt: string | null;
   followUpCount: number;
+  /** When the merchant manually marked this record as followed up without sending a message. Non-null records drop out of the due list on the same rule as ones that were actually sent. */
+  markedDoneAt: string | null;
 }
 
 export interface FollowUpListResponse {
@@ -71,6 +73,34 @@ export interface FollowUpShortcode {
 export interface FollowUpShortcodeListResponse {
   items: FollowUpShortcode[];
   total: number;
+}
+
+export type FollowUpMarkDoneInputTargetsItemSourceType = typeof FollowUpMarkDoneInputTargetsItemSourceType[keyof typeof FollowUpMarkDoneInputTargetsItemSourceType];
+
+
+export const FollowUpMarkDoneInputTargetsItemSourceType = {
+  service_job: 'service_job',
+  appointment: 'appointment',
+} as const;
+
+export type FollowUpMarkDoneInputTargetsItem = {
+  sourceType: FollowUpMarkDoneInputTargetsItemSourceType;
+  sourceId: number;
+};
+
+export interface FollowUpMarkDoneInput {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  targets: FollowUpMarkDoneInputTargetsItem[];
+}
+
+export interface FollowUpMarkDoneResponse {
+  /** Records whose done marker was added or removed */
+  changed: number;
+  /** Targets that were already in the requested state, or not this merchant's */
+  skipped: number;
 }
 
 export interface FollowUpLogEntry {

@@ -2237,7 +2237,7 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="hidden sm:grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -2249,9 +2249,9 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
-                  <div key={i} className="space-y-1">
+                  <div key={i} className="space-y-1 rounded-lg border bg-muted/20 p-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
                   <div
-                    className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${createDragFrom === i ? "opacity-40" : ""} ${createDragFrom !== null && createDragOver === i && createDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
+                    className={`grid grid-cols-[20px_minmax(0,1fr)] gap-x-1.5 gap-y-2 sm:grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] sm:gap-1.5 items-start rounded transition-opacity ${createDragFrom === i ? "opacity-40" : ""} ${createDragFrom !== null && createDragOver === i && createDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); setCreateDragOver(i); }}
                     onDrop={(e) => { e.preventDefault(); if (createDragFrom !== null) reorderLines(createDragFrom, i); setCreateDragFrom(null); setCreateDragOver(null); }}
                   >
@@ -2269,7 +2269,7 @@ export default function POSInvoicesPage() {
                         <Input
                           value={(lineSearch[i] ?? "") !== "" ? lineSearch[i] : line.description}
                           placeholder="Search or type description..."
-                          className={`h-8 text-sm pl-6${lineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
+                          className={`h-9 text-base sm:h-8 sm:text-sm pl-6${lineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
                           onFocus={() => setLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -2307,38 +2307,48 @@ export default function POSInvoicesPage() {
                       )}
                       {lineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].description}</p>}
                     </div>
-                    <div>
-                      <Input type="number" value={line.quantity}
-                        onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-center${lineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {lineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].quantity}</p>}
+                    {/* Amounts — second row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)] gap-1.5 sm:contents">
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Qty</span>
+                        <Input type="number" value={line.quantity}
+                          onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-center${lineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {lineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].quantity}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Price</span>
+                        <Input type="number" step="0.01" value={line.unitPrice || ""}
+                          onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                          placeholder="0.00" className={`h-9 text-base sm:h-8 sm:text-sm text-right${lineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {lineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].unitPrice}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Tax %</span>
+                        <Input type="number" min={0} max={100} value={line.taxRate}
+                          onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-right${lineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {lineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].taxRate}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <Input type="number" step="0.01" value={line.unitPrice || ""}
-                        onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                        placeholder="0.00" className={`h-8 text-sm text-right${lineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {lineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].unitPrice}</p>}
+                    {/* Line total + row actions — third row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 flex items-center gap-1.5 sm:contents">
+                      <div className="flex items-center justify-end h-8 mr-auto sm:mr-0">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mr-1.5 sm:hidden">Total</span>
+                        <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                        onClick={() => duplicateLine(i)} title="Duplicate line">
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => removeLine(i)} disabled={lines.length === 1}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
-                    <div>
-                      <Input type="number" min={0} max={100} value={line.taxRate}
-                        onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-right${lineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {lineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].taxRate}</p>}
-                    </div>
-                    <div className="flex items-center justify-end h-8">
-                      <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
-                      onClick={() => duplicateLine(i)} title="Duplicate line">
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => removeLine(i)} disabled={lines.length === 1}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
                   </div>
                   {line.description.trim() !== "" && line.productId == null && (
-                    <div className="flex items-center gap-2 pl-[26px]">
+                    <div className="flex flex-wrap items-center gap-2 sm:pl-[26px]">
                       <Badge variant="outline" className="text-[10px] shrink-0 gap-1"><Package className="w-2.5 h-2.5" /> Custom item</Badge>
                       <span className="text-[11px] text-muted-foreground shrink-0">Cost price (ex GST)</span>
                       <div className="relative w-28">
@@ -2536,7 +2546,7 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="hidden sm:grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -2548,9 +2558,9 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
-                  <div key={i} className="space-y-1">
+                  <div key={i} className="space-y-1 rounded-lg border bg-muted/20 p-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
                   <div
-                    className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${editDragFrom === i ? "opacity-40" : ""} ${editDragFrom !== null && editDragOver === i && editDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
+                    className={`grid grid-cols-[20px_minmax(0,1fr)] gap-x-1.5 gap-y-2 sm:grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] sm:gap-1.5 items-start rounded transition-opacity ${editDragFrom === i ? "opacity-40" : ""} ${editDragFrom !== null && editDragOver === i && editDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); setEditDragOver(i); }}
                     onDrop={(e) => { e.preventDefault(); if (editDragFrom !== null) reorderEditLines(editDragFrom, i); setEditDragFrom(null); setEditDragOver(null); }}
                   >
@@ -2568,7 +2578,7 @@ export default function POSInvoicesPage() {
                         <Input
                           value={editLineSearch[i] !== undefined && editLineSearch[i] !== "" ? editLineSearch[i] : line.description}
                           placeholder="Search or type description..."
-                          className={`h-8 text-sm pl-6${editLineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
+                          className={`h-9 text-base sm:h-8 sm:text-sm pl-6${editLineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
                           onFocus={() => setEditLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -2610,38 +2620,48 @@ export default function POSInvoicesPage() {
                       )}
                       {editLineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].description}</p>}
                     </div>
-                    <div>
-                      <Input type="number" value={line.quantity}
-                        onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-center${editLineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {editLineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].quantity}</p>}
+                    {/* Amounts — second row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)] gap-1.5 sm:contents">
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Qty</span>
+                        <Input type="number" value={line.quantity}
+                          onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-center${editLineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {editLineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].quantity}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Price</span>
+                        <Input type="number" step="0.01" value={line.unitPrice || ""}
+                          onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                          placeholder="0.00" className={`h-9 text-base sm:h-8 sm:text-sm text-right${editLineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {editLineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].unitPrice}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Tax %</span>
+                        <Input type="number" min={0} max={100} value={line.taxRate}
+                          onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-right${editLineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {editLineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].taxRate}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <Input type="number" step="0.01" value={line.unitPrice || ""}
-                        onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                        placeholder="0.00" className={`h-8 text-sm text-right${editLineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {editLineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].unitPrice}</p>}
+                    {/* Line total + row actions — third row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 flex items-center gap-1.5 sm:contents">
+                      <div className="flex items-center justify-end h-8 mr-auto sm:mr-0">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mr-1.5 sm:hidden">Total</span>
+                        <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                        onClick={() => duplicateEditLine(i)} title="Duplicate line">
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
-                    <div>
-                      <Input type="number" min={0} max={100} value={line.taxRate}
-                        onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-right${editLineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {editLineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].taxRate}</p>}
-                    </div>
-                    <div className="flex items-center justify-end h-8">
-                      <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
-                      onClick={() => duplicateEditLine(i)} title="Duplicate line">
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
                   </div>
                   {line.description.trim() !== "" && line.productId == null && (
-                    <div className="flex items-center gap-2 pl-[26px]">
+                    <div className="flex flex-wrap items-center gap-2 sm:pl-[26px]">
                       <Badge variant="outline" className="text-[10px] shrink-0 gap-1"><Package className="w-2.5 h-2.5" /> Custom item</Badge>
                       <span className="text-[11px] text-muted-foreground shrink-0">Cost price (ex GST)</span>
                       <div className="relative w-28">

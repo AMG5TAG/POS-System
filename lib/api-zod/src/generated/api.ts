@@ -12937,7 +12937,8 @@ export const ListFollowUpsResponse = zod.object({
   "phone": zod.string(),
   "agreedToMarketing": zod.boolean(),
   "lastFollowUpAt": zod.string().nullable(),
-  "followUpCount": zod.number()
+  "followUpCount": zod.number(),
+  "markedDoneAt": zod.string().nullable().describe('When the merchant manually marked this record as followed up without sending a message. Non-null records drop out of the due list on the same rule as ones that were actually sent.')
 })),
   "total": zod.number(),
   "windowValue": zod.number(),
@@ -13061,6 +13062,47 @@ export const SendFollowUpsResponse = zod.object({
   "status": zod.enum(['sent', 'failed', 'skipped']),
   "error": zod.string().optional()
 }))
+})
+
+
+/**
+ * Clears records off the due list when the merchant chased the customer by another means (phone call, in person). Records a log entry with status "done" so the action is auditable and reversible.
+ * @summary Mark records as followed up without sending a message
+ */
+export const markFollowUpsDoneBodyTargetsMax = 500;
+
+
+
+export const MarkFollowUpsDoneBody = zod.object({
+  "targets": zod.array(zod.object({
+  "sourceType": zod.enum(['service_job', 'appointment']),
+  "sourceId": zod.number()
+})).min(1).max(markFollowUpsDoneBodyTargetsMax)
+})
+
+export const MarkFollowUpsDoneResponse = zod.object({
+  "changed": zod.number().describe('Records whose done marker was added or removed'),
+  "skipped": zod.number().describe('Targets that were already in the requested state, or not this merchant\'s')
+})
+
+
+/**
+ * @summary Undo a manual "mark as done" and return records to the due list
+ */
+export const unmarkFollowUpsDoneBodyTargetsMax = 500;
+
+
+
+export const UnmarkFollowUpsDoneBody = zod.object({
+  "targets": zod.array(zod.object({
+  "sourceType": zod.enum(['service_job', 'appointment']),
+  "sourceId": zod.number()
+})).min(1).max(unmarkFollowUpsDoneBodyTargetsMax)
+})
+
+export const UnmarkFollowUpsDoneResponse = zod.object({
+  "changed": zod.number().describe('Records whose done marker was added or removed'),
+  "skipped": zod.number().describe('Targets that were already in the requested state, or not this merchant\'s')
 })
 
 

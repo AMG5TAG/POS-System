@@ -11,7 +11,7 @@ import {
   merchantsTable,
   businessProfileTable,
 } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -186,7 +186,18 @@ interface DueItem {
   agreedToMarketing: boolean;
   lastFollowUpAt: string | null;
   followUpCount: number;
+  markedDoneAt: string | null;
 }
+
+/**
+ * `follow_up_log.status` for a record the merchant cleared by hand instead of
+ * sending anything — chased by phone, in person, or simply no longer worth
+ * chasing. Kept distinct from "sent" so the history stays honest about what was
+ * actually dispatched, and so undoing it can never touch real send records.
+ */
+const DONE_STATUS = "done";
+/** `follow_up_log.channel` for those rows: no message left the building. */
+const DONE_CHANNEL = "manual";
 
 const DAY_MS = 24 * 3600 * 1000;
 
@@ -252,6 +263,7 @@ async function loadDueItems(
         agreedToMarketing: r.agreedToMarketing === "true",
         lastFollowUpAt: null,
         followUpCount: 0,
+        markedDoneAt: null,
       });
     }
   }
@@ -293,32 +305,51 @@ async function loadDueItems(
         agreedToMarketing: r.agreedToMarketing === "true",
         lastFollowUpAt: null,
         followUpCount: 0,
+        markedDoneAt: null,
       });
     }
   }
 
-  // Annotate with prior successful follow-ups so the UI can show (and optionally
-  // hide) records that have already been chased.
+  // Annotate with prior follow-up activity so the UI can show (and optionally
+  // hide) records that have already been chased — whether a message actually
+  // went out ("sent") or the merchant chased them another way and marked the
+  // record done ("done").
   const history = await db
     .select({
       sourceType: followUpLogTable.sourceType,
       sourceId: followUpLogTable.sourceId,
+      status: followUpLogTable.status,
       count: sql<number>`count(*)::int`,
       lastSentAt: sql<Date>`max(${followUpLogTable.sentAt})`,
     })
     .from(followUpLogTable)
-    .where(and(eq(followUpLogTable.merchantId, merchantId), eq(followUpLogTable.status, "sent")))
-    .groupBy(followUpLogTable.sourceType, followUpLogTable.sourceId);
-  const historyByKey = new Map(history.map((h) => [`${h.sourceType}-${h.sourceId}`, h]));
+    .where(and(
+      eq(followUpLogTable.merchantId, merchantId),
+      inArray(followUpLogTable.status, ["sent", DONE_STATUS]),
+    ))
+    .groupBy(followUpLogTable.sourceType, followUpLogTable.sourceId, followUpLogTable.status);
 
-  for (const item of items) {
-    const h = historyByKey.get(item.id);
-    if (!h) continue;
-    item.followUpCount = Number(h.count);
-    item.lastFollowUpAt = new Date(h.lastSentAt).toISOString();
+  const sentByKey = new Map<string, { count: number; lastSentAt: Date }>();
+  const doneAtByKey = new Map<string, Date>();
+  for (const h of history) {
+    const key = `${h.sourceType}-${h.sourceId}`;
+    if (h.status === DONE_STATUS) doneAtByKey.set(key, new Date(h.lastSentAt));
+    else sentByKey.set(key, { count: Number(h.count), lastSentAt: new Date(h.lastSentAt) });
   }
 
-  const visible = opts.hideAlreadySent ? items.filter((i) => i.followUpCount === 0) : items;
+  for (const item of items) {
+    const sent = sentByKey.get(item.id);
+    if (sent) {
+      item.followUpCount = sent.count;
+      item.lastFollowUpAt = sent.lastSentAt.toISOString();
+    }
+    const doneAt = doneAtByKey.get(item.id);
+    if (doneAt) item.markedDoneAt = doneAt.toISOString();
+  }
+
+  const visible = opts.hideAlreadySent
+    ? items.filter((i) => i.followUpCount === 0 && i.markedDoneAt === null)
+    : items;
   // Longest-overdue first — that's the order a merchant works the list in.
   return visible.sort((a, b) => a.completedAt.localeCompare(b.completedAt));
 }
@@ -659,6 +690,136 @@ async function logSend(opts: {
     error: opts.error ?? null,
   });
 }
+
+/* ── Mark as done ──────────────────────────────────────────────────────────── */
+
+const MarkDoneBody = z.object({
+  targets: z.array(z.object({
+    sourceType: z.enum(["service_job", "appointment"]),
+    sourceId: z.number().int().positive(),
+  })).min(1).max(500),
+});
+
+type Target = z.infer<typeof MarkDoneBody>["targets"][number];
+
+/**
+ * Narrow the requested targets to records this merchant actually owns, and
+ * attach each one's customer. `follow_up_log` has no foreign key to the source
+ * row, so an unchecked id would happily write a marker for a record belonging
+ * to someone else. Duplicate targets collapse to one.
+ */
+async function ownedTargets(
+  merchantId: number,
+  targets: Target[],
+): Promise<Array<Target & { customerId: number | null }>> {
+  const jobIds = targets.filter((t) => t.sourceType === "service_job").map((t) => t.sourceId);
+  const apptIds = targets.filter((t) => t.sourceType === "appointment").map((t) => t.sourceId);
+
+  const [jobs, appts] = await Promise.all([
+    jobIds.length
+      ? db.select({ id: serviceJobsTable.id, customerId: serviceJobsTable.customerId })
+          .from(serviceJobsTable)
+          .where(and(eq(serviceJobsTable.merchantId, merchantId), inArray(serviceJobsTable.id, jobIds)))
+      : Promise.resolve([] as { id: number; customerId: number | null }[]),
+    apptIds.length
+      ? db.select({ id: appointmentsTable.id, customerId: appointmentsTable.customerId })
+          .from(appointmentsTable)
+          .where(and(eq(appointmentsTable.merchantId, merchantId), inArray(appointmentsTable.id, apptIds)))
+      : Promise.resolve([] as { id: number; customerId: number | null }[]),
+  ]);
+
+  const customerByKey = new Map<string, number | null>();
+  for (const j of jobs) customerByKey.set(`service_job-${j.id}`, j.customerId ?? null);
+  for (const a of appts) customerByKey.set(`appointment-${a.id}`, a.customerId ?? null);
+
+  const seen = new Set<string>();
+  const owned: Array<Target & { customerId: number | null }> = [];
+  for (const t of targets) {
+    const key = `${t.sourceType}-${t.sourceId}`;
+    if (seen.has(key) || !customerByKey.has(key)) continue;
+    seen.add(key);
+    owned.push({ ...t, customerId: customerByKey.get(key) ?? null });
+  }
+  return owned;
+}
+
+/**
+ * POST /follow-ups/mark-done — clear records off the due list without sending.
+ *
+ * Writes one `follow_up_log` row per record with status "done". Re-marking an
+ * already-done record is a no-op rather than a second row, so the marker stays
+ * a single reversible fact.
+ */
+router.post("/follow-ups/mark-done", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = MarkDoneBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const owned = await ownedTargets(merchantId, parsed.data.targets);
+
+  const alreadyDone = owned.length
+    ? await db
+        .select({ sourceType: followUpLogTable.sourceType, sourceId: followUpLogTable.sourceId })
+        .from(followUpLogTable)
+        .where(and(
+          eq(followUpLogTable.merchantId, merchantId),
+          eq(followUpLogTable.status, DONE_STATUS),
+          inArray(followUpLogTable.sourceId, owned.map((t) => t.sourceId)),
+        ))
+    : [];
+  const doneKeys = new Set(alreadyDone.map((r) => `${r.sourceType}-${r.sourceId}`));
+
+  const rows = owned
+    .filter((t) => !doneKeys.has(`${t.sourceType}-${t.sourceId}`))
+    .map((t) => ({
+      merchantId,
+      sourceType: t.sourceType,
+      sourceId: t.sourceId,
+      customerId: t.customerId,
+      templateId: null,
+      channel: DONE_CHANNEL,
+      status: DONE_STATUS,
+      recipient: "",
+      subject: "Marked as followed up",
+      body: "Marked done by staff — no message was sent.",
+    }));
+
+  if (rows.length) await db.insert(followUpLogTable).values(rows);
+
+  res.json({ changed: rows.length, skipped: parsed.data.targets.length - rows.length });
+});
+
+/**
+ * POST /follow-ups/unmark-done — put records back on the due list.
+ *
+ * Only ever deletes rows whose status is "done", i.e. markers this feature
+ * created. Real send history ("sent" / "failed") is never touched.
+ */
+router.post("/follow-ups/unmark-done", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = MarkDoneBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+
+  const owned = await ownedTargets(merchantId, parsed.data.targets);
+
+  let changed = 0;
+  for (const sourceType of ["service_job", "appointment"] as const) {
+    const ids = owned.filter((t) => t.sourceType === sourceType).map((t) => t.sourceId);
+    if (!ids.length) continue;
+    const removed = await db
+      .delete(followUpLogTable)
+      .where(and(
+        eq(followUpLogTable.merchantId, merchantId),
+        eq(followUpLogTable.status, DONE_STATUS),
+        eq(followUpLogTable.sourceType, sourceType),
+        inArray(followUpLogTable.sourceId, ids),
+      ))
+      .returning({ id: followUpLogTable.id });
+    changed += removed.length;
+  }
+
+  res.json({ changed, skipped: parsed.data.targets.length - changed });
+});
 
 /* ── Settings endpoints ────────────────────────────────────────────────────── */
 

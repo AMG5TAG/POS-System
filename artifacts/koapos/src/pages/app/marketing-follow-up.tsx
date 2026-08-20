@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/select";
 import {
   Clock, Mail, MessageSquare, Send, Wrench, CalendarCheck, FileText, Search,
-  CheckCircle2, AlertTriangle, History, Settings2, RefreshCw, Eye,
+  CheckCircle2, AlertTriangle, History, Settings2, RefreshCw, Eye, Check, Undo2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -36,6 +36,8 @@ import {
   useUpdateFollowUpSettings,
   useSendFollowUps,
   usePreviewFollowUp,
+  useMarkFollowUpsDone,
+  useUnmarkFollowUpsDone,
 } from "@workspace/api-client-react";
 import {
   ShortcodePalette, FALLBACK_SHORTCODES, insertShortcode,
@@ -61,6 +63,8 @@ interface DueItem {
   agreedToMarketing: boolean;
   lastFollowUpAt: string | null;
   followUpCount: number;
+  /** Set when the merchant cleared this record by hand instead of sending. */
+  markedDoneAt: string | null;
 }
 
 interface Template {
@@ -409,6 +413,42 @@ export default function MarketingFollowUpPage() {
     });
   };
 
+  const markDone = useMarkFollowUpsDone();
+  const unmarkDone = useUnmarkFollowUpsDone();
+  const busyMarking = markDone.isPending || unmarkDone.isPending;
+
+  const targetsOf = (items: DueItem[]) =>
+    items.map((i) => ({ sourceType: i.sourceType, sourceId: i.sourceId }));
+
+  /**
+   * Clear records off the due list without sending anything — the merchant
+   * already chased them by phone or in person. Reversible: an undo button sits
+   * on the row whenever "Hide already followed up" is off.
+   */
+  const handleMarkDone = (items: DueItem[]) => {
+    if (items.length === 0) { toast("Select at least one customer first"); return; }
+    markDone.mutate({ data: { targets: targetsOf(items) } }, {
+      onSuccess: (r) => {
+        toast.success(r.changed === 1 ? "Marked as followed up" : `Marked ${r.changed} as followed up`);
+        setSelected(new Set());
+        refetchDue();
+        refetchLog();
+      },
+      onError: () => toast.error("Could not mark as done"),
+    });
+  };
+
+  const handleUndoDone = (item: DueItem) => {
+    unmarkDone.mutate({ data: { targets: targetsOf([item]) } }, {
+      onSuccess: () => {
+        toast.success("Back on the due list");
+        refetchDue();
+        refetchLog();
+      },
+      onError: () => toast.error("Could not undo"),
+    });
+  };
+
   const openSend = (targets: DueItem[]) => {
     if (targets.length === 0) { toast("Select at least one customer first"); return; }
     setSendTargets(targets);
@@ -468,6 +508,13 @@ export default function MarketingFollowUpPage() {
                 <FileText className="w-3.5 h-3.5" /> Templates
               </Button>
             </Link>
+            <Button
+              variant="outline" size="sm" className="gap-1.5 text-xs"
+              onClick={() => handleMarkDone(selectedItems)}
+              disabled={selectedItems.length === 0 || busyMarking}
+            >
+              <Check className="w-3.5 h-3.5" /> Mark Done ({selectedItems.length})
+            </Button>
             <Button className="gap-1.5" onClick={() => openSend(selectedItems)} disabled={selectedItems.length === 0}>
               <Send className="w-4 h-4" /> Send Follow Up ({selectedItems.length})
             </Button>
@@ -671,12 +718,34 @@ export default function MarketingFollowUpPage() {
                             </div>
                           </TableCell>
                           <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                            {i.lastFollowUpAt ? `${fmtDate(i.lastFollowUpAt)} (${i.followUpCount})` : "—"}
+                            {i.markedDoneAt ? (
+                              <Badge variant="outline" className="text-[10px] gap-1 border-emerald-300 text-emerald-700">
+                                <Check className="w-2.5 h-2.5" /> Done {fmtDate(i.markedDoneAt)}
+                              </Badge>
+                            ) : i.lastFollowUpAt ? `${fmtDate(i.lastFollowUpAt)} (${i.followUpCount})` : "—"}
                           </TableCell>
                           <TableCell className="text-right">
-                            <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => openSend([i])}>
-                              <Send className="w-3 h-3" /> Send
-                            </Button>
+                            <div className="flex items-center justify-end gap-1.5">
+                              {i.markedDoneAt ? (
+                                <Button
+                                  size="sm" variant="ghost" className="h-7 text-xs gap-1.5"
+                                  onClick={() => handleUndoDone(i)} disabled={busyMarking}
+                                >
+                                  <Undo2 className="w-3 h-3" /> Undo
+                                </Button>
+                              ) : (
+                                <Button
+                                  size="sm" variant="ghost" className="h-7 text-xs gap-1.5"
+                                  onClick={() => handleMarkDone([i])} disabled={busyMarking}
+                                  title="Clear from the list without sending a message"
+                                >
+                                  <Check className="w-3 h-3" /> Done
+                                </Button>
+                              )}
+                              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" onClick={() => openSend([i])}>
+                                <Send className="w-3 h-3" /> Send
+                              </Button>
+                            </div>
                           </TableCell>
                         </TableRow>
                       ))}

@@ -9777,6 +9777,52 @@ paths:
         "400":
           description: Validation error
 
+  /follow-ups/mark-done:
+    post:
+      operationId: markFollowUpsDone
+      tags: [follow-ups]
+      summary: Mark records as followed up without sending a message
+      description: >-
+        Clears records off the due list when the merchant chased the customer by
+        another means (phone call, in person). Records a log entry with status
+        "done" so the action is auditable and reversible.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpMarkDoneInput" }
+      responses:
+        "200":
+          description: Records marked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpMarkDoneResponse" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /follow-ups/unmark-done:
+    post:
+      operationId: unmarkFollowUpsDone
+      tags: [follow-ups]
+      summary: Undo a manual "mark as done" and return records to the due list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpMarkDoneInput" }
+      responses:
+        "200":
+          description: Records returned to the due list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpMarkDoneResponse" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
   /follow-up-settings:
     get:
       operationId: getFollowUpSettings
@@ -9872,7 +9918,7 @@ components:
     # ── Marketing · Follow Up ─────────────────────────────────────────────────
     FollowUpItem:
       type: object
-      required: [id, sourceType, sourceId, reference, title, device, staffName, completedAt, daysSince, customerId, customerName, email, phone, agreedToMarketing, lastFollowUpAt, followUpCount]
+      required: [id, sourceType, sourceId, reference, title, device, staffName, completedAt, daysSince, customerId, customerName, email, phone, agreedToMarketing, lastFollowUpAt, followUpCount, markedDoneAt]
       properties:
         id: { type: string, description: "Composite key, e.g. service_job-42" }
         sourceType: { type: string, enum: [service_job, appointment] }
@@ -9890,6 +9936,13 @@ components:
         agreedToMarketing: { type: boolean }
         lastFollowUpAt: { type: string, nullable: true }
         followUpCount: { type: integer }
+        markedDoneAt:
+          type: string
+          nullable: true
+          description: >-
+            When the merchant manually marked this record as followed up without
+            sending a message. Non-null records drop out of the due list on the
+            same rule as ones that were actually sent.
 
     FollowUpListResponse:
       type: object
@@ -9931,6 +9984,28 @@ components:
           type: array
           items: { $ref: "#/components/schemas/FollowUpShortcode" }
         total: { type: integer }
+
+    FollowUpMarkDoneInput:
+      type: object
+      required: [targets]
+      properties:
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [sourceType, sourceId]
+            properties:
+              sourceType: { type: string, enum: [service_job, appointment] }
+              sourceId: { type: integer }
+
+    FollowUpMarkDoneResponse:
+      type: object
+      required: [changed, skipped]
+      properties:
+        changed: { type: integer, description: "Records whose done marker was added or removed" }
+        skipped: { type: integer, description: "Targets that were already in the requested state, or not this merchant's" }
 
     FollowUpLogEntry:
       type: object

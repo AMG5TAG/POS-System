@@ -160,6 +160,44 @@ describe("POST /api/follow-ups/send — validation", () => {
   });
 });
 
+describe("POST /api/follow-ups/mark-done and /unmark-done", () => {
+  const target = { sourceType: "service_job", sourceId: 7 };
+
+  for (const path of ["mark-done", "unmark-done"]) {
+    it(`${path} rejects an empty target list`, async () => {
+      const res = await request(app).post(`/api/follow-ups/${path}`).send({ targets: [] });
+      expect(res.status).toBe(400);
+    });
+
+    it(`${path} rejects an unknown source type`, async () => {
+      const res = await request(app).post(`/api/follow-ups/${path}`)
+        .send({ targets: [{ sourceType: "invoice", sourceId: 1 }] });
+      expect(res.status).toBe(400);
+    });
+
+    it(`${path} rejects a non-positive source id`, async () => {
+      const res = await request(app).post(`/api/follow-ups/${path}`)
+        .send({ targets: [{ sourceType: "service_job", sourceId: 0 }] });
+      expect(res.status).toBe(400);
+    });
+
+    it(`${path} rejects more than 500 targets`, async () => {
+      const targets = Array.from({ length: 501 }, (_, n) => ({ sourceType: "appointment", sourceId: n + 1 }));
+      const res = await request(app).post(`/api/follow-ups/${path}`).send({ targets });
+      expect(res.status).toBe(400);
+    });
+
+    // The mocked db resolves every select to [], so no target is ever confirmed
+    // as belonging to this merchant — the ownership filter must drop them all
+    // rather than writing (or deleting) a marker on an unverified record.
+    it(`${path} changes nothing for records the merchant does not own`, async () => {
+      const res = await request(app).post(`/api/follow-ups/${path}`).send({ targets: [target] });
+      expect(res.status).toBe(200);
+      expect(res.body).toEqual({ changed: 0, skipped: 1 });
+    });
+  }
+});
+
 describe("PUT /api/follow-up-settings — validation", () => {
   it("rejects an unsupported window unit", async () => {
     const res = await request(app).put("/api/follow-up-settings").send({ windowUnit: "fortnights" });

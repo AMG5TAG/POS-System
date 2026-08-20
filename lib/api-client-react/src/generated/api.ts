@@ -128,6 +128,8 @@ import type {
   FloorZone,
   FollowUpListResponse,
   FollowUpLogListResponse,
+  FollowUpMarkDoneInput,
+  FollowUpMarkDoneResponse,
   FollowUpPreviewResponse,
   FollowUpSendInput,
   FollowUpSendResponse,
@@ -38614,6 +38616,149 @@ export const useSendFollowUps = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getSendFollowUpsMutationOptions(options));
+    }
+
+export const getMarkFollowUpsDoneUrl = () => {
+
+
+
+
+  return `/api/follow-ups/mark-done`
+}
+
+/**
+ * Clears records off the due list when the merchant chased the customer by another means (phone call, in person). Records a log entry with status "done" so the action is auditable and reversible.
+ * @summary Mark records as followed up without sending a message
+ */
+export const markFollowUpsDone = async (followUpMarkDoneInput: FollowUpMarkDoneInput, options?: RequestInit): Promise<FollowUpMarkDoneResponse> => {
+
+  return customFetch<FollowUpMarkDoneResponse>(getMarkFollowUpsDoneUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpMarkDoneInput,)
+  }
+);}
+
+
+
+
+export const getMarkFollowUpsDoneMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markFollowUpsDone>>, TError,{data: BodyType<FollowUpMarkDoneInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof markFollowUpsDone>>, TError,{data: BodyType<FollowUpMarkDoneInput>}, TContext> => {
+
+const mutationKey = ['markFollowUpsDone'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof markFollowUpsDone>>, {data: BodyType<FollowUpMarkDoneInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  markFollowUpsDone(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MarkFollowUpsDoneMutationResult = NonNullable<Awaited<ReturnType<typeof markFollowUpsDone>>>
+    export type MarkFollowUpsDoneMutationBody = BodyType<FollowUpMarkDoneInput>
+    export type MarkFollowUpsDoneMutationError = ErrorType<void>
+
+    /**
+ * @summary Mark records as followed up without sending a message
+ */
+export const useMarkFollowUpsDone = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof markFollowUpsDone>>, TError,{data: BodyType<FollowUpMarkDoneInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof markFollowUpsDone>>,
+        TError,
+        {data: BodyType<FollowUpMarkDoneInput>},
+        TContext
+      > => {
+      return useMutation(getMarkFollowUpsDoneMutationOptions(options));
+    }
+
+export const getUnmarkFollowUpsDoneUrl = () => {
+
+
+
+
+  return `/api/follow-ups/unmark-done`
+}
+
+/**
+ * @summary Undo a manual "mark as done" and return records to the due list
+ */
+export const unmarkFollowUpsDone = async (followUpMarkDoneInput: FollowUpMarkDoneInput, options?: RequestInit): Promise<FollowUpMarkDoneResponse> => {
+
+  return customFetch<FollowUpMarkDoneResponse>(getUnmarkFollowUpsDoneUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      followUpMarkDoneInput,)
+  }
+);}
+
+
+
+
+export const getUnmarkFollowUpsDoneMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unmarkFollowUpsDone>>, TError,{data: BodyType<FollowUpMarkDoneInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof unmarkFollowUpsDone>>, TError,{data: BodyType<FollowUpMarkDoneInput>}, TContext> => {
+
+const mutationKey = ['unmarkFollowUpsDone'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof unmarkFollowUpsDone>>, {data: BodyType<FollowUpMarkDoneInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  unmarkFollowUpsDone(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UnmarkFollowUpsDoneMutationResult = NonNullable<Awaited<ReturnType<typeof unmarkFollowUpsDone>>>
+    export type UnmarkFollowUpsDoneMutationBody = BodyType<FollowUpMarkDoneInput>
+    export type UnmarkFollowUpsDoneMutationError = ErrorType<void>
+
+    /**
+ * @summary Undo a manual "mark as done" and return records to the due list
+ */
+export const useUnmarkFollowUpsDone = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof unmarkFollowUpsDone>>, TError,{data: BodyType<FollowUpMarkDoneInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof unmarkFollowUpsDone>>,
+        TError,
+        {data: BodyType<FollowUpMarkDoneInput>},
+        TContext
+      > => {
+      return useMutation(getUnmarkFollowUpsDoneMutationOptions(options));
     }
 
 export const getGetFollowUpSettingsUrl = () => {
