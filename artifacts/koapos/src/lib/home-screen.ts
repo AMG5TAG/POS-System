@@ -1,22 +1,33 @@
 /**
  * Per-app "Add to Home Screen" branding.
  *
- * The whole frontend is a single SPA shell with one static manifest
- * (index.html → /manifest.webmanifest), so out of the box every route would
- * install to the phone home screen as the same generic "KoaPOS" icon that
- * reopens "/". The standalone apps (Tech, Mobile POS, Dashboard, Portal) call
- * this at runtime once they know which business they belong to, swapping in an
- * app-specific name, a start URL that reopens *this* app, and — when the
- * merchant has a logo — that logo as the home-screen icon.
+ * The whole frontend is a single SPA shell, so out of the box every route
+ * would install to the phone home screen as the same generic "KoaPOS" icon
+ * that reopens "/". The standalone apps (Tech, Mobile POS, Dashboard, Portal)
+ * call this once they know which business they belong to, so the installed
+ * icon carries that business's name and logo.
  *
- * iOS reads `apple-touch-icon` / `apple-mobile-web-app-title` from the live DOM
- * at the moment the user taps "Add to Home Screen", so updating them at runtime
- * works. Android/Chrome reads the linked manifest, so we generate an
- * app-specific manifest as a blob URL (with absolute icon/start URLs, since
- * relative URLs don't resolve against a blob: base).
+ * Two halves, because the platforms read different things:
+ *
+ * - **Android/Chrome** reads the web app manifest, and reads it *once, at
+ *   document load*, from the `<link rel="manifest">` in the HTML. Rewriting
+ *   that link after React mounts is too late, so the correct manifest URL is
+ *   chosen by an inline script in index.html and served per-app by
+ *   `/api/pwa/manifest.webmanifest?path=…`. That is what makes the installed
+ *   shortcut reopen the app instead of the marketing homepage. This function
+ *   only keeps the link in sync if a caller passes a different `startUrl`.
+ *
+ * - **iOS Safari** reads `apple-touch-icon` / `apple-mobile-web-app-title`
+ *   from the live DOM at the moment the user taps "Add to Home Screen", so
+ *   updating those at runtime does work — that is this function's main job.
  */
 
 const DEFAULT_THEME = "#ecbe04";
+
+/** URL of the server-rendered manifest for a given app path. */
+export function appManifestUrl(startUrl: string): string {
+  return `/api/pwa/manifest.webmanifest?path=${encodeURIComponent(startUrl)}`;
+}
 
 export function setHomeScreenApp(opts: {
   /** Installed app name, e.g. "Acme Repairs POS". */
@@ -52,30 +63,12 @@ export function setHomeScreenApp(opts: {
   if (!appleIcon) { appleIcon = document.createElement("link"); appleIcon.setAttribute("rel", "apple-touch-icon"); document.head.appendChild(appleIcon); }
   appleIcon.setAttribute("href", opts.iconUrl ? absolute(opts.iconUrl) : absolute("/apple-touch-icon.png"));
 
-  // Android/Chrome — app-specific manifest (absolute URLs for blob: resolution).
-  const icons: Array<{ src: string; sizes: string; type: string; purpose: string }> = [
-    { src: absolute("/icon-192.png"), sizes: "192x192", type: "image/png", purpose: "any" },
-    { src: absolute("/icon-512.png"), sizes: "512x512", type: "image/png", purpose: "any" },
-    { src: absolute("/icon-maskable-512.png"), sizes: "512x512", type: "image/png", purpose: "maskable" },
-  ];
-  if (opts.iconUrl) icons.unshift({ src: absolute(opts.iconUrl), sizes: "512x512", type: "image/png", purpose: "any" });
-
-  const manifest = {
-    name: opts.name,
-    short_name: opts.name.length > 12 ? opts.name.slice(0, 12) : opts.name,
-    start_url: absolute(startUrl),
-    scope: absolute(startUrl),
-    display: "standalone",
-    orientation: "portrait",
-    background_color: "#ffffff",
-    theme_color: theme,
-    icons,
-  };
-
+  // Keep the manifest link pointing at this app. index.html already sets it
+  // for the known app routes before the browser reads it; this only matters
+  // when a caller brands a path the inline script does not recognise. Skip the
+  // write when it is already correct, so Chrome is not asked to re-fetch.
+  const href = appManifestUrl(startUrl);
   let link = document.head.querySelector<HTMLLinkElement>('link[rel="manifest"]');
   if (!link) { link = document.createElement("link"); link.setAttribute("rel", "manifest"); document.head.appendChild(link); }
-  const prev = link.getAttribute("href");
-  if (prev && prev.startsWith("blob:")) URL.revokeObjectURL(prev);
-  const blobUrl = URL.createObjectURL(new Blob([JSON.stringify(manifest)], { type: "application/manifest+json" }));
-  link.setAttribute("href", blobUrl);
+  if (link.getAttribute("href") !== href) link.setAttribute("href", href);
 }

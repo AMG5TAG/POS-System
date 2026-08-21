@@ -29,6 +29,7 @@ import {
 } from "./management-hubs";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
+import { useIsMobile } from "@/hooks/use-mobile";
 import {
   useLogout,
   useListCustomers,
@@ -485,7 +486,18 @@ type SearchResultItem = {
   action?: () => void;
 };
 
-function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void }) {
+/**
+ * Universal search.
+ *
+ * `variant="inline"` is the desktop bar that lives in the header. On a phone
+ * there is no room for a text field next to the header's other controls, so
+ * `variant="icon"` renders a single search icon that opens a full-width sheet
+ * — the results list needs the whole screen anyway.
+ */
+function GlobalSearch({ onOpenChange, variant = "inline" }: {
+  onOpenChange?: (open: boolean) => void;
+  variant?: "inline" | "icon";
+}) {
   const [query, setQuery] = useState("");
   const [open, setOpen] = useState(false);
   const [activeIdx, setActiveIdx] = useState(0);
@@ -675,6 +687,104 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
   // Themes setting: hide the universal search bar entirely.
   if (themeSettings.hideSearchBar) return null;
 
+  const onInputKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, totalItems - 1)); }
+    if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
+    if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx]); }
+    if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
+  };
+
+  /* Shared by the desktop dropdown and the mobile sheet — only the height
+     budget differs, so the caller passes the max-height class. */
+  const renderResults = (heightCls: string) =>
+    flatEntries.length === 0 ? (
+      <div className="px-4 py-8 text-sm text-muted-foreground text-center">
+        {isSearching ? "Searching…" : "No results found."}
+      </div>
+    ) : (
+      <div ref={listRef} className={cn("py-1 overflow-y-auto", heightCls)}>
+        {flatEntries.map((entry, i) =>
+          entry.kind === "header" ? (
+            <div key={`h-${i}`} className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
+              {entry.title}
+            </div>
+          ) : (
+            <button
+              key={`item-${entry.idx}`}
+              data-active={entry.idx === activeIdx}
+              onMouseDown={() => go(entry.item)}
+              onMouseEnter={() => setActiveIdx(entry.idx)}
+              className={cn(
+                "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left group",
+                entry.idx === activeIdx
+                  ? "bg-primary text-primary-foreground"
+                  : "hover:bg-muted",
+              )}
+            >
+              <entry.item.icon className={cn("w-4 h-4 shrink-0", entry.idx === activeIdx ? "text-primary-foreground/80" : "text-muted-foreground")} />
+              <span className="flex-1 font-medium truncate">{entry.item.label}</span>
+              {entry.item.sub && (
+                <span className={cn("text-xs shrink-0 max-w-[140px] truncate", entry.idx === activeIdx ? "text-primary-foreground/70" : "text-muted-foreground")}>
+                  {entry.item.sub}
+                </span>
+              )}
+            </button>
+          )
+        )}
+      </div>
+    );
+
+  /* ── Mobile: a lone icon that opens a full-width search sheet ───────── */
+  if (variant === "icon") {
+    return (
+      <>
+        <button
+          onClick={() => setOpenWithCallback(true)}
+          className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+          aria-label="Search" title="Search" aria-expanded={open} aria-haspopup="dialog"
+        >
+          <Search className={cn("w-5 h-5", isSearching && "text-primary animate-pulse")} />
+        </button>
+
+        {open && createPortal(
+          <div className="fixed inset-0 z-50" role="dialog" aria-modal="true" aria-label="Search">
+            <div className="absolute inset-0 bg-black/40" onMouseDown={() => setOpenWithCallback(false)} />
+            <div className="absolute inset-x-0 top-0 bg-background border-b shadow-xl p-3">
+              <div className="flex items-center gap-2">
+                <div className="relative flex-1 min-w-0">
+                  <Search className={cn("absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none", isSearching ? "text-primary animate-pulse" : "text-muted-foreground")} />
+                  <input
+                    ref={inputRef}
+                    type="text"
+                    autoFocus
+                    value={query}
+                    onChange={(e) => { setQuery(e.target.value); setOpenWithCallback(true); }}
+                    onKeyDown={onInputKeyDown}
+                    placeholder="Search customers, products, services…"
+                    className="w-full h-10 pl-9 pr-3 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background"
+                  />
+                </div>
+                <button
+                  onClick={() => setOpenWithCallback(false)}
+                  className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+                  aria-label="Close search"
+                >
+                  <X className="w-5 h-5" />
+                </button>
+              </div>
+              <div className="mt-2 rounded-lg border bg-popover overflow-hidden">
+                {renderResults("max-h-[60dvh]")}
+              </div>
+            </div>
+          </div>,
+          document.body,
+        )}
+
+        <StaffClockDialog open={clockOpen} onOpenChange={setClockOpen} />
+      </>
+    );
+  }
+
   const layout = themeSettings.searchBarLayout;
   const collapsedIcon = layout === "icon" && !open && query.length === 0;
   const outerCls = cn(
@@ -697,12 +807,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
           value={query}
           onFocus={() => setOpenWithCallback(true)}
           onChange={(e) => { setQuery(e.target.value); setOpenWithCallback(true); }}
-          onKeyDown={(e) => {
-            if (e.key === "ArrowDown") { e.preventDefault(); setActiveIdx((i) => Math.min(i + 1, totalItems - 1)); }
-            if (e.key === "ArrowUp")   { e.preventDefault(); setActiveIdx((i) => Math.max(i - 1, 0)); }
-            if (e.key === "Enter" && allItems[activeIdx]) { go(allItems[activeIdx]); }
-            if (e.key === "Escape") { setOpenWithCallback(false); inputRef.current?.blur(); }
-          }}
+          onKeyDown={onInputKeyDown}
           placeholder={collapsedIcon ? "" : "Search customers, products, services…"}
           className={cn(
             "h-9 pl-9 rounded-md border bg-muted/40 text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 focus:bg-background transition-all",
@@ -715,42 +820,7 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
       </div>
       {open && (
         <div className="absolute top-full mt-2 left-0 right-0 bg-popover border rounded-xl shadow-xl z-50 overflow-hidden min-w-[320px]">
-          {flatEntries.length === 0 ? (
-            <div className="px-4 py-8 text-sm text-muted-foreground text-center">
-              {isSearching ? "Searching…" : "No results found."}
-            </div>
-          ) : (
-            <div ref={listRef} className="py-1 max-h-[420px] overflow-y-auto">
-              {flatEntries.map((entry, i) =>
-                entry.kind === "header" ? (
-                  <div key={`h-${i}`} className="px-3 pt-2 pb-0.5 text-[10px] font-semibold uppercase tracking-widest text-muted-foreground/60 select-none">
-                    {entry.title}
-                  </div>
-                ) : (
-                  <button
-                    key={`item-${entry.idx}`}
-                    data-active={entry.idx === activeIdx}
-                    onMouseDown={() => go(entry.item)}
-                    onMouseEnter={() => setActiveIdx(entry.idx)}
-                    className={cn(
-                      "w-full flex items-center gap-3 px-4 py-2 text-sm transition-colors text-left group",
-                      entry.idx === activeIdx
-                        ? "bg-primary text-primary-foreground"
-                        : "hover:bg-muted",
-                    )}
-                  >
-                    <entry.item.icon className={cn("w-4 h-4 shrink-0", entry.idx === activeIdx ? "text-primary-foreground/80" : "text-muted-foreground")} />
-                    <span className="flex-1 font-medium truncate">{entry.item.label}</span>
-                    {entry.item.sub && (
-                      <span className={cn("text-xs shrink-0 max-w-[140px] truncate", entry.idx === activeIdx ? "text-primary-foreground/70" : "text-muted-foreground")}>
-                        {entry.item.sub}
-                      </span>
-                    )}
-                  </button>
-                )
-              )}
-            </div>
-          )}
+          {renderResults("max-h-[420px]")}
         </div>
       )}
       <StaffClockDialog open={clockOpen} onOpenChange={setClockOpen} />
@@ -760,17 +830,20 @@ function GlobalSearch({ onOpenChange }: { onOpenChange?: (open: boolean) => void
 
 /* ─── Breadcrumbs ────────────────────────────────────────────────────────── */
 
-function Breadcrumbs({ location }: { location: string }) {
+/** `compact` keeps the trail to one truncated line — on a phone header a
+    wrapping breadcrumb pushes the action icons off the bar. */
+function Breadcrumbs({ location, compact = false }: { location: string; compact?: boolean }) {
   const labels = routeLabels(location);
+  const shown = compact ? labels.slice(-1) : labels;
   return (
-    <nav className="flex items-center gap-1.5 text-sm flex-wrap">
+    <nav className={cn("flex items-center gap-1.5 text-sm", compact ? "flex-nowrap min-w-0" : "flex-wrap")}>
       <Link href="/dashboard" className="flex items-center justify-center w-7 h-7 rounded-md hover:bg-muted transition-colors shrink-0 text-muted-foreground hover:text-foreground">
         <LayoutGrid className="w-4 h-4" />
       </Link>
-      {labels.map((label, i) => (
+      {shown.map((label, i) => (
         <span key={i} className="flex items-center gap-1.5 min-w-0">
           <ChevronRight className="w-3.5 h-3.5 text-muted-foreground/60 shrink-0" />
-          <span className={cn(i === labels.length - 1 ? "font-semibold text-foreground" : "text-muted-foreground")}>
+          <span className={cn("truncate", i === shown.length - 1 ? "font-semibold text-foreground" : "text-muted-foreground")}>
             {label}
           </span>
         </span>
@@ -965,8 +1038,30 @@ const LAYOUT_OPTIONS: { mode: NavLayoutMode; label: string }[] = [
   { mode: "auto-hide", label: "Auto-hide sidebar"  },
 ];
 
-function LayoutPicker() {
+/** Layout choices, shared by the header popover and the mobile menu. */
+function LayoutOptions({ onPick }: { onPick?: () => void }) {
   const { navLayout, setNavLayout } = useNavLayout();
+  return (
+    <>
+      {LAYOUT_OPTIONS.map(({ mode, label }) => (
+        <button
+          key={mode}
+          onClick={() => { setNavLayout(mode); onPick?.(); }}
+          className={cn(
+            "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors",
+            navLayout === mode ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-foreground",
+          )}
+        >
+          <LayoutPreview mode={mode} active={navLayout === mode} />
+          <span className="flex-1 text-left">{label}</span>
+          {navLayout === mode && <Check className="w-3.5 h-3.5 shrink-0 text-primary" />}
+        </button>
+      ))}
+    </>
+  );
+}
+
+function LayoutPicker() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -991,20 +1086,7 @@ function LayoutPicker() {
       {open && (
         <div className="absolute right-0 top-full mt-2 bg-popover border rounded-xl shadow-xl z-[200] p-2 w-52">
           <p className="text-xs font-medium text-muted-foreground px-2 pb-1.5">Navigation layout</p>
-          {LAYOUT_OPTIONS.map(({ mode, label }) => (
-            <button
-              key={mode}
-              onClick={() => { setNavLayout(mode); setOpen(false); }}
-              className={cn(
-                "w-full flex items-center gap-2.5 px-2 py-1.5 rounded-lg text-sm transition-colors",
-                navLayout === mode ? "bg-primary/10 text-primary font-medium" : "hover:bg-muted text-foreground",
-              )}
-            >
-              <LayoutPreview mode={mode} active={navLayout === mode} />
-              <span className="flex-1 text-left">{label}</span>
-              {navLayout === mode && <Check className="w-3.5 h-3.5 shrink-0 text-primary" />}
-            </button>
-          ))}
+          <LayoutOptions onPick={() => setOpen(false)} />
         </div>
       )}
     </div>
@@ -1013,8 +1095,63 @@ function LayoutPicker() {
 
 /* ─── Accessibility picker ───────────────────────────────────────────────── */
 
-function AccessibilityPicker() {
+/** Text-size and contrast controls, shared by the header popover and the
+    mobile menu — the accessibility settings must stay reachable on a phone. */
+function AccessibilityControls() {
   const { fontSize, setFontSize, contrastMode, setContrastMode } = useAccessibility();
+
+  const fontOptions = [
+    { key: "normal" as const, label: "A",   title: "Normal text size"   },
+    { key: "large"  as const, label: "A",   title: "Large text size",  cls: "text-base" },
+    { key: "xl"     as const, label: "A",   title: "Extra-large text", cls: "text-lg"   },
+  ];
+
+  return (
+    <>
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">Text size</p>
+      <div className="flex gap-1 mb-3">
+        {fontOptions.map(({ key, label, title, cls }) => (
+          <button
+            key={key}
+            onClick={() => setFontSize(key)}
+            title={title}
+            aria-pressed={fontSize === key}
+            className={cn(
+              "flex-1 rounded-lg py-1.5 font-semibold border transition-colors",
+              cls ?? "text-sm",
+              fontSize === key
+                ? "bg-primary/10 border-primary text-primary"
+                : "pill-selector border-border hover:bg-muted text-foreground"
+            )}
+          >
+            {label}
+          </button>
+        ))}
+      </div>
+
+      <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">Contrast</p>
+      <div className="flex gap-1">
+        {(["normal", "high"] as const).map((mode) => (
+          <button
+            key={mode}
+            onClick={() => setContrastMode(mode)}
+            aria-pressed={contrastMode === mode}
+            className={cn(
+              "flex-1 rounded-lg py-1.5 text-xs font-medium border transition-colors",
+              contrastMode === mode
+                ? "bg-primary/10 border-primary text-primary"
+                : "pill-selector border-border hover:bg-muted text-foreground"
+            )}
+          >
+            {mode === "normal" ? "Standard" : "High"}
+          </button>
+        ))}
+      </div>
+    </>
+  );
+}
+
+function AccessibilityPicker() {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -1025,12 +1162,6 @@ function AccessibilityPicker() {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, []);
-
-  const fontOptions = [
-    { key: "normal" as const, label: "A",   title: "Normal text size"   },
-    { key: "large"  as const, label: "A",   title: "Large text size",  cls: "text-base" },
-    { key: "xl"     as const, label: "A",   title: "Extra-large text", cls: "text-lg"   },
-  ];
 
   return (
     <div ref={ref} className="relative">
@@ -1051,46 +1182,109 @@ function AccessibilityPicker() {
           role="dialog"
           aria-label="Accessibility settings"
         >
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">Text size</p>
-          <div className="flex gap-1 mb-3">
-            {fontOptions.map(({ key, label, title, cls }) => (
-              <button
-                key={key}
-                onClick={() => setFontSize(key)}
-                title={title}
-                aria-pressed={fontSize === key}
-                className={cn(
-                  "flex-1 rounded-lg py-1.5 font-semibold border transition-colors",
-                  cls ?? "text-sm",
-                  fontSize === key
-                    ? "bg-primary/10 border-primary text-primary"
-                    : "pill-selector border-border hover:bg-muted text-foreground"
-                )}
-              >
-                {label}
-              </button>
-            ))}
-          </div>
-
-          <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-2">Contrast</p>
-          <div className="flex gap-1">
-            {(["normal", "high"] as const).map((mode) => (
-              <button
-                key={mode}
-                onClick={() => setContrastMode(mode)}
-                aria-pressed={contrastMode === mode}
-                className={cn(
-                  "flex-1 rounded-lg py-1.5 text-xs font-medium border transition-colors",
-                  contrastMode === mode
-                    ? "bg-primary/10 border-primary text-primary"
-                    : "pill-selector border-border hover:bg-muted text-foreground"
-                )}
-              >
-                {mode === "normal" ? "Standard" : "High"}
-              </button>
-            ))}
-          </div>
+          <AccessibilityControls />
         </div>
+      )}
+    </div>
+  );
+}
+
+/* ─── Mobile header actions ──────────────────────────────────────────────── */
+
+/**
+ * The header's right-hand controls on a phone.
+ *
+ * A 56px-tall bar cannot hold the search field, the POS button, the staff
+ * login, the theme toggle and the layout/accessibility pickers at once — on a
+ * narrow screen they used to run into each other. Below the `md` breakpoint
+ * search collapses to its own icon and everything else moves in here, behind a
+ * hamburger. Above it, each header keeps its full row unchanged.
+ *
+ * The menu is portalled and fixed rather than absolutely positioned, because
+ * every layout's page shell is `overflow-hidden` and would otherwise clip it.
+ * `top-14` matches the shared header height.
+ */
+function MobileHeaderActions({ location, isPOSSection, theme, toggleTheme, extra }: {
+  location: string;
+  isPOSSection: boolean;
+  theme: "light" | "dark";
+  toggleTheme: () => void;
+  /** Layout-specific control to place at the top of the menu. */
+  extra?: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(false);
+  const { dayStaff } = useStaffSession();
+
+  useEffect(() => { setOpen(false); }, [location]);
+
+  useEffect(() => {
+    if (!open) return;
+    function onKey(e: KeyboardEvent) { if (e.key === "Escape") setOpen(false); }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open]);
+
+  const rowCls = "w-full flex items-center gap-3 px-2 py-2 rounded-lg text-sm transition-colors hover:bg-muted text-foreground";
+
+  return (
+    <div className="flex items-center gap-0.5 shrink-0">
+      <GlobalSearch variant="icon" />
+
+      {/* Mounted outside the menu portal so the PIN dialog outlives the menu,
+          and so the POS forced-login guard still runs on a phone. */}
+      <StaffLoginButton location={location} variant="hidden" />
+
+      <button
+        onClick={() => setOpen((o) => !o)}
+        className="w-9 h-9 rounded-lg flex items-center justify-center shrink-0 text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
+        aria-label="More actions" title="More actions"
+        aria-expanded={open} aria-haspopup="menu"
+      >
+        <Menu className="w-5 h-5" />
+      </button>
+
+      {open && createPortal(
+        <div className="fixed inset-0 z-50">
+          <div className="absolute inset-0" onMouseDown={() => setOpen(false)} />
+          <div
+            role="menu" aria-label="More actions"
+            className="absolute top-14 right-2 w-64 max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-4.5rem)] overflow-y-auto bg-popover border rounded-xl shadow-xl p-2"
+          >
+            {extra && <div className="px-1 pb-2 empty:hidden">{extra}</div>}
+
+            <Link
+              href="/pos/sell"
+              onClick={() => setOpen(false)}
+              className={cn(rowCls, isPOSSection && "bg-primary/10 text-primary font-medium")}
+            >
+              <ShoppingCart className="w-4 h-4 shrink-0" />
+              <span className="flex-1 text-left">POS</span>
+            </Link>
+
+            <button
+              onClick={() => { setOpen(false); window.dispatchEvent(new CustomEvent("koapos:open-day-staff-login")); }}
+              className={rowCls}
+            >
+              <UserCircle className={cn("w-4 h-4 shrink-0", dayStaff && "text-primary")} />
+              <span className="flex-1 text-left truncate">
+                {dayStaff ? `Signed in: ${dayStaff.staffName}` : "Staff login"}
+              </span>
+            </button>
+
+            <button onClick={() => { toggleTheme(); setOpen(false); }} className={rowCls}>
+              {theme === "dark" ? <Sun className="w-4 h-4 shrink-0" /> : <Moon className="w-4 h-4 shrink-0" />}
+              <span className="flex-1 text-left">{theme === "dark" ? "Light mode" : "Dark mode"}</span>
+            </button>
+
+            <div className="my-2 border-t" />
+            <AccessibilityControls />
+
+            <div className="my-2 border-t" />
+            <p className="text-[11px] font-semibold text-muted-foreground uppercase tracking-wider px-1 pb-1.5">Navigation layout</p>
+            <LayoutOptions onPick={() => setOpen(false)} />
+          </div>
+        </div>,
+        document.body,
       )}
     </div>
   );
@@ -1246,7 +1440,16 @@ function TopNavDropdown({ label, icon: Icon, items, isActive, isOpen, onToggle, 
  * or an explicit sign-out. The POS cart-header staff button is, by contrast,
  * only a temporary one-sale switch that reverts back to this day login.
  */
-function StaffLoginButton({ location }: { location: string }) {
+function StaffLoginButton({ location, variant = "icon" }: {
+  location: string;
+  /**
+   * "hidden" mounts the PIN dialog and the forced-login guard without a
+   * visible trigger. The mobile header menu uses it: its own row fires the
+   * `koapos:open-day-staff-login` event this component already listens for,
+   * so the dialog survives the menu closing instead of unmounting with it.
+   */
+  variant?: "icon" | "hidden";
+}) {
   const { dayStaff, signInForDay, signOutForDay } = useStaffSession();
   const [open, setOpen] = useState(false);
   const [pin, setPin] = useState("");
@@ -1315,22 +1518,24 @@ function StaffLoginButton({ location }: { location: string }) {
 
   return (
     <>
-      <button
-        onClick={() => { setPin(""); setError(""); setOpen(true); }}
-        title={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
-        aria-label={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
-        className={cn(
-          "h-8 rounded-lg flex items-center justify-center gap-1.5 px-2 transition-colors",
-          dayStaff ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
-        )}
-      >
-        <UserCircle className="w-4 h-4 shrink-0" />
-        {dayStaff && (
-          <span className="hidden md:inline text-xs font-semibold max-w-[90px] truncate">
-            {dayStaff.staffName.split(" ")[0]}
-          </span>
-        )}
-      </button>
+      {variant === "icon" && (
+        <button
+          onClick={() => { setPin(""); setError(""); setOpen(true); }}
+          title={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
+          aria-label={dayStaff ? `Signed in for the day: ${dayStaff.staffName}` : "Staff login"}
+          className={cn(
+            "h-8 rounded-lg flex items-center justify-center gap-1.5 px-2 transition-colors",
+            dayStaff ? "text-primary hover:bg-primary/10" : "text-muted-foreground hover:text-foreground hover:bg-muted",
+          )}
+        >
+          <UserCircle className="w-4 h-4 shrink-0" />
+          {dayStaff && (
+            <span className="hidden md:inline text-xs font-semibold max-w-[90px] truncate">
+              {dayStaff.staffName.split(" ")[0]}
+            </span>
+          )}
+        </button>
+      )}
 
       <Dialog open={open} onOpenChange={handleOpenChange}>
         <DialogContent className={cn("sm:max-w-xs", forced && "[&>button.absolute]:hidden")}>
@@ -1412,6 +1617,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
+  const isMobile = useIsMobile();
   const headerRef = useRef<HTMLElement>(null);
   const headerScrolled = useHeaderScrollShadow();
 
@@ -1459,26 +1665,30 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           )}
         </nav>
 
-        {/* Search */}
-        <div className="w-44 xl:w-64 shrink-0">
-          <GlobalSearch onOpenChange={setSearchOpen} />
-        </div>
-
-        {/* Right actions */}
-        <LocationSwitcher />
-        <LayoutPicker />
-        <AccessibilityPicker />
-        <div className={cn("flex items-center gap-1.5 shrink-0 overflow-hidden transition-all duration-300", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <Link href="/pos/sell">
-            <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold h-8 px-3">
-              <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
-            </Button>
-          </Link>
-          <StaffLoginButton location={location} />
-          <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-        </div>
+        {/* Right actions — one search icon plus a hamburger on phones */}
+        {isMobile ? (
+          <MobileHeaderActions location={location} isPOSSection={isPOSSection} theme={theme} toggleTheme={toggleTheme} extra={<LocationSwitcher />} />
+        ) : (
+          <>
+            <div className="w-44 xl:w-64 shrink-0">
+              <GlobalSearch onOpenChange={setSearchOpen} />
+            </div>
+            <LocationSwitcher />
+            <LayoutPicker />
+            <AccessibilityPicker />
+            <div className={cn("flex items-center gap-1.5 shrink-0 overflow-hidden transition-all duration-300", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
+              <Link href="/pos/sell">
+                <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold h-8 px-3">
+                  <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
+                </Button>
+              </Link>
+              <StaffLoginButton location={location} />
+              <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
+                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
+          </>
+        )}
       </header>
 
       <main id="main-content" className="relative flex-1 overflow-y-auto bg-muted/10">{children}</main>
@@ -1577,6 +1787,7 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
   const isOnlineSection     = location === "/online" || location.startsWith("/online/");
   const [searchOpen, setSearchOpen] = useState(false);
   const [moreOpen, setMoreOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   const BottomTab = ({ href, icon: Icon, label, active, onClick }: {
     href?: string; icon: React.ComponentType<{ className?: string }>; label: string; active: boolean; onClick?: () => void;
@@ -1598,23 +1809,29 @@ function BottomNavLayout({ children, location, navigate, user, theme, toggleThem
   return (
     <div className="h-[100dvh] flex flex-col bg-muted/10 overflow-hidden">
       <header className="h-14 flex items-center gap-3 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shrink-0 sticky top-0 z-30 transition-shadow shadow-md">
-        <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
-          <Breadcrumbs location={location} />
+        <div className={cn("overflow-hidden transition-all duration-300 ease-in-out", isMobile ? "flex-1 min-w-0" : "shrink-0", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
+          <Breadcrumbs location={location} compact={isMobile} />
         </div>
-        <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
-        <LayoutPicker />
-        <AccessibilityPicker />
-        <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-          <Link href="/pos/sell">
-            <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
-              <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
-            </Button>
-          </Link>
-          <StaffLoginButton location={location} />
-          <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
-            {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-          </button>
-        </div>
+        {isMobile ? (
+          <MobileHeaderActions location={location} isPOSSection={isPOSSection} theme={theme} toggleTheme={toggleTheme} />
+        ) : (
+          <>
+            <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+            <LayoutPicker />
+            <AccessibilityPicker />
+            <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
+              <Link href="/pos/sell">
+                <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
+                  <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
+                </Button>
+              </Link>
+              <StaffLoginButton location={location} />
+              <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
+                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
+          </>
+        )}
       </header>
 
       <main id="main-content" className="relative flex-1 overflow-y-auto bg-muted/10 pb-16">{children}</main>
@@ -1747,6 +1964,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const [mgmtOpen,     setMgmtOpen]     = useState(isManagementSection);
   const [custsOpen,    setCustsOpen]    = useState(isCustomersSection);
   const [searchOpen, setSearchOpen] = useState(false);
+  const isMobile = useIsMobile();
 
   // Management menus & routes are restricted to Owner and Manager staff roles.
   const canManage = ["owner", "manager"].includes(user?.staffRole ?? "");
@@ -1930,25 +2148,31 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
           <header className="h-14 flex items-center gap-3 px-4 border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 shrink-0 sticky top-0 z-30 transition-shadow shadow-md">
             <SidebarTrigger className={hideSidebar ? "shrink-0" : "md:hidden shrink-0"} />
 
-            <div className={cn("shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
-              <Breadcrumbs location={location} />
+            <div className={cn("overflow-hidden transition-all duration-300 ease-in-out", isMobile ? "flex-1 min-w-0" : "shrink-0", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "opacity-100")}>
+              <Breadcrumbs location={location} compact={isMobile} />
             </div>
 
-            <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
+            {isMobile ? (
+              <MobileHeaderActions location={location} isPOSSection={isPOSSection} theme={theme} toggleTheme={toggleTheme} />
+            ) : (
+              <>
+                <div className="flex-1 min-w-0 flex"><GlobalSearch onOpenChange={setSearchOpen} /></div>
 
-            <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
-              <Link href="/pos/sell">
-                <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
-                  <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
-                </Button>
-              </Link>
-              <StaffLoginButton location={location} />
-              <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
-                {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-              </button>
-            </div>
-            <LayoutPicker />
-            <AccessibilityPicker />
+                <div className={cn("flex items-center gap-2 shrink-0 overflow-hidden transition-all duration-300 ease-in-out", searchOpen ? "max-w-0 opacity-0 pointer-events-none" : "max-w-xs opacity-100")}>
+                  <Link href="/pos/sell">
+                    <Button variant={isPOSSection ? "default" : "outline"} size="sm" className="gap-1.5 font-semibold rounded-md h-8 px-3">
+                      <ShoppingCart className="w-3.5 h-3.5" /><span className="hidden sm:inline">POS</span>
+                    </Button>
+                  </Link>
+                  <StaffLoginButton location={location} />
+                  <button onClick={toggleTheme} className="w-8 h-8 rounded-lg flex items-center justify-center text-muted-foreground hover:text-foreground hover:bg-muted transition-colors" aria-label="Toggle theme">
+                    {theme === "dark" ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+                  </button>
+                </div>
+                <LayoutPicker />
+                <AccessibilityPicker />
+              </>
+            )}
           </header>
 
           <main id="main-content" className="relative flex-1 overflow-y-auto bg-muted/10">{children}</main>

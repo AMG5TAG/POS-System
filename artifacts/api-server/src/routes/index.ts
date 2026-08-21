@@ -130,6 +130,7 @@ import unsubscribeRouter from "./unsubscribe";
 import staffTimesheetsRouter from "./staff-timesheets";
 import tyroSettingsRouter from "./tyro-settings";
 import demoDataRouter from "./demo-data";
+import pwaRouter from "./pwa";
 import techRouter from "./tech";
 import techAppAdminRouter from "./tech-app-admin";
 import mobilePosRouter from "./mobile-pos";
@@ -171,6 +172,7 @@ router.use(publicBookingRouter);
 // applies a blanket `router.use(requireAuth)` (e.g. customerFilesCloudRouter
 // below). A pathless requireAuth in a root-mounted sub-router runs for every
 // later request, so mounting these after it 401s their public endpoints.
+router.use(pwaRouter);
 router.use(portalRouter);
 router.use(productsPublicRouter);
 router.use(techRouter);
