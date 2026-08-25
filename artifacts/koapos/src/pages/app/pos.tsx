@@ -233,6 +233,15 @@ function formatKode(profit: number): string {
 /* Today as a local YYYY-MM-DD (matches a native date input's value). */
 const todayLocalISODate = () => new Date().toLocaleDateString("en-CA");
 
+/** "Mon 3 Mar 2026" for a YYYY-MM-DD sale date, parsed as a local calendar day. */
+const formatSaleDateLabel = (iso: string): string => {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("en-AU", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+  });
+};
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function POSPage() {
@@ -417,10 +426,13 @@ export default function POSPage() {
   /* Reference/description captured when tendering via Direct Deposit (e.g. the
      bank reference or payer name) so the payment can be reconciled later. */
   const [depositDesc, setDepositDesc] = useState("");
-  /* Accounting date the deposit actually landed. Defaults to today (the sale is
-     rung up now) but is back-datable so a deposit that cleared earlier books the
-     sale to that calendar day for reporting. */
-  const [depositDate, setDepositDate] = useState(todayLocalISODate());
+  /* Accounting date for the receipt. Always defaults to today (the sale is being
+     rung up now) but is back-datable for any tender, so a sale entered after the
+     fact — a deposit that cleared earlier, a manual receipt being caught up —
+     books to that calendar day for reporting. Never forward-datable. */
+  const [saleDate, setSaleDate] = useState(todayLocalISODate());
+  /* A sale date other than today books the receipt to that earlier day. */
+  const isBackdatedSale = !!saleDate && saleDate !== todayLocalISODate();
   const [splitLegs, setSplitLegs] = useState<{ method: PaymentMethodId; amount: string }[]>([
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
@@ -1576,7 +1588,7 @@ export default function POSPage() {
       paymentModalInitialMethodRef.current = initialMethod;
       setNumpadInput("");
       setDepositDesc("");
-      setDepositDate(todayLocalISODate());
+      setSaleDate(todayLocalISODate());
       setReceiptMode("idle");
       setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
       setGcPayCardNumber("");
@@ -2184,6 +2196,7 @@ export default function POSPage() {
     setNumpadInput("");
     setGcPayCardNumber("");
     setDepositDesc("");
+    setSaleDate(todayLocalISODate());
     setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
     paymentModalInitialMethodRef.current = null;
     /* Sale is over — any one-sale staff switch reverts to the day's staff. */
@@ -2817,8 +2830,8 @@ export default function POSPage() {
       // in full (the server ignores it on partial legs). Only sent when actually
       // back-dated, mirroring the cart-sale path.
       const invoicePaidAt =
-        paymentMethod === "direct_deposit" && depositDate && depositDate !== todayLocalISODate()
-          ? depositDate
+        saleDate && saleDate !== todayLocalISODate()
+          ? saleDate
           : undefined;
       setInvoicePayPending(true);
       void (async () => {
@@ -2875,6 +2888,7 @@ export default function POSPage() {
           setNumpadInput("");
           setGcPayCardNumber("");
           setDepositDesc("");
+          setSaleDate(todayLocalISODate());
           setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
           paymentModalInitialMethodRef.current = null;
           setPaymentModalOpen(false);
@@ -2988,11 +3002,12 @@ export default function POSPage() {
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
       ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
       ...(giftCardPayment ? { giftCardPayment } : {}),
-      // Direct deposits that cleared on an earlier day are booked to that day for
-      // accounting. Only sent when actually back-dated — a same-day sale keeps its
-      // real timestamp rather than being anchored to noon UTC.
-      ...(paymentMethod === "direct_deposit" && depositDate && depositDate !== todayLocalISODate()
-        ? { paidAt: depositDate }
+      // A receipt entered for an earlier day (a deposit that cleared, a manual
+      // sale being caught up) is booked to that day so every revenue report reads
+      // off the right date. Only sent when actually back-dated — a same-day sale
+      // keeps its real timestamp rather than being anchored to noon UTC.
+      ...(saleDate && saleDate !== todayLocalISODate()
+        ? { paidAt: saleDate }
         : {}),
     };
 
@@ -4276,6 +4291,34 @@ export default function POSPage() {
               })()}
 
               <div className="flex-1" />
+
+              {/* Sale date — always opens on today; back-date to record a receipt
+                  for an earlier day (a deposit that cleared, a sale being caught
+                  up after the fact). Future dates are rejected by the server, so
+                  the picker is capped at today. */}
+              <div className="space-y-1.5">
+                <Label htmlFor="sale-date" className="flex items-center gap-1.5 text-sm">
+                  <CalendarDays className="w-4 h-4 text-muted-foreground" /> Sale date
+                </Label>
+                <Input
+                  id="sale-date"
+                  type="date"
+                  value={saleDate}
+                  max={todayLocalISODate()}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                  className={cn(isBackdatedSale && "border-amber-500 focus-visible:ring-amber-500")}
+                />
+                {isBackdatedSale ? (
+                  <p className="text-xs font-medium text-amber-600 dark:text-amber-500">
+                    Back-dated — books to {formatSaleDateLabel(saleDate)}.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Today. Change it to record a sale from an earlier day.
+                  </p>
+                )}
+              </div>
+
               <Button variant="outline" className="w-full" onClick={tryClosePaymentModal}>
                 Cancel
               </Button>
@@ -4472,22 +4515,6 @@ export default function POSPage() {
                       {!depositDesc.trim() && (
                         <p className="text-xs text-muted-foreground">Required to record this deposit.</p>
                       )}
-                      <div className="space-y-1.5 pt-1">
-                        <Label htmlFor="deposit-date" className="flex items-center gap-1.5 text-sm">
-                          <Banknote className="w-4 h-4 text-muted-foreground" /> Date paid
-                        </Label>
-                        <Input
-                          id="deposit-date"
-                          type="date"
-                          value={depositDate}
-                          max={todayLocalISODate()}
-                          onChange={(e) => setDepositDate(e.target.value)}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Books this sale to the day the deposit landed — for accurate
-                          daily sales &amp; reporting.
-                        </p>
-                      </div>
                     </div>
                   )}
 
