@@ -2468,6 +2468,14 @@ export interface Appointment {
   createdAt: string;
 }
 
+export interface LinkAppointmentServiceJobInput {
+  /**
+     * Service job to link, or null to unlink.
+     * @nullable
+     */
+  serviceJobId: number | null;
+}
+
 export type AppointmentInputStatus = typeof AppointmentInputStatus[keyof typeof AppointmentInputStatus];
 
 

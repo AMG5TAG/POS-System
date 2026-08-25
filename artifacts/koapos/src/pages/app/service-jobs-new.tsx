@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
@@ -7,6 +7,7 @@ import {
   useCreateServiceJob,
   useGetMerchant,
   useSendServiceJobEmail,
+  useLinkAppointmentServiceJob,
   type ServiceJob,
   type Customer,
 } from "@workspace/api-client-react";
@@ -51,6 +52,7 @@ import {
   AlertTriangle,
   Loader2,
   Send,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -214,16 +216,35 @@ function PhotoSlot({ index, value, onChange, onSizeChange, icon, label, accept =
 
 export default function ServiceJobNewPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const queryClient = useQueryClient();
   const createMutation = useCreateServiceJob();
   const sendJobEmailMutation = useSendServiceJobEmail();
+  const linkAppointmentMutation = useLinkAppointmentServiceJob();
+
+  // Prefill from an appointment ("Create service job" on a booking). Parsed once
+  // on mount — these only seed the initial field values, after which the form is
+  // the source of truth and the staff member can change anything.
+  const prefill = useMemo(() => {
+    const q = new URLSearchParams(search);
+    const apptId = Number(q.get("fromAppointment"));
+    return {
+      appointmentId: Number.isFinite(apptId) && apptId > 0 ? apptId : null,
+      appointmentRef: q.get("appointmentRef") ?? "",
+      customerId: q.get("customerId") ?? "",
+      title: q.get("title") ?? "",
+      workDescription: q.get("workDescription") ?? "",
+      bookInDate: q.get("bookInDate") ?? "",
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: merchant } = useGetMerchant();
   const { templates: stickerTemplates } = useStickerTemplates();
   const { printStickers } = useStickerPrinter();
   const { profile: bizProfile } = useBusinessProfile();
 
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(prefill.customerId);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [successJob, setSuccessJob] = useState<ServiceJob | null>(null);
   const [showStickerDialog, setShowStickerDialog] = useState(false);
@@ -266,7 +287,7 @@ export default function ServiceJobNewPage() {
   const { opts: svcOpts, fontCss: svcFontCss } = useSalesTemplate("Service_Ticket");
 
   const [status, setStatus] = useState("pending");
-  const [bookInDate, setBookInDate] = useState(todayISO());
+  const [bookInDate, setBookInDate] = useState(prefill.bookInDate || todayISO());
   const [isPartnerRepair, setIsPartnerRepair] = useState(false);
   const [isCritical, setIsCritical] = useState(false);
   const [isUnderWarranty, setIsUnderWarranty] = useState(false);
@@ -284,7 +305,7 @@ export default function ServiceJobNewPage() {
   const [photoSizes, setPhotoSizes] = useState<number[]>(Array(9).fill(0));
 
   const [additionalEquipment, setAdditionalEquipment] = useState("");
-  const [workDescription, setWorkDescription] = useState("");
+  const [workDescription, setWorkDescription] = useState(prefill.workDescription);
   const [credentials, setCredentials] = useState<Array<{ passwordOrPin: string; accounts: string }>>([
     { passwordOrPin: "", accounts: "" },
   ]);
@@ -335,6 +356,7 @@ export default function ServiceJobNewPage() {
       {
         data: {
           customerId: customerId ? Number(customerId) : null,
+          ...(prefill.title ? { title: prefill.title } : {}),
           status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "awaiting-pickup" | "completed" | "cancelled",
           bookInDate,
           isPartnerRepair,
@@ -362,6 +384,20 @@ export default function ServiceJobNewPage() {
         onSuccess: (job) => {
           queryClient.invalidateQueries({ queryKey: ["listServiceJobs"] });
           setSuccessJob(job);
+          // Point the originating booking at the job it produced. Best-effort:
+          // the job is already saved, so a failed link must not read as a failed
+          // create — we surface it as a warning and leave the job intact.
+          if (prefill.appointmentId) {
+            linkAppointmentMutation.mutate(
+              { id: prefill.appointmentId, data: { serviceJobId: job.id } },
+              {
+                onSuccess: () => {
+                  queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
+                },
+                onError: () => toast.warning("Job created, but linking it to the appointment failed"),
+              },
+            );
+          }
         },
         onError: () => toast.error("Failed to create service job"),
       }
@@ -378,14 +414,30 @@ export default function ServiceJobNewPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0"
-            onClick={() => navigate("/services")}
+            onClick={() => navigate(prefill.appointmentId ? "/appointments" : "/services")}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
             <h1 className="text-xl font-bold">New Service</h1>
+            {prefill.appointmentId && (
+              <p className="text-xs text-muted-foreground">
+                From appointment{prefill.appointmentRef ? ` ${prefill.appointmentRef}` : ""}
+                {prefill.title ? ` — ${prefill.title}` : ""}
+              </p>
+            )}
           </div>
         </div>
+
+        {prefill.appointmentId && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-start gap-3">
+            <CalendarClock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              Details carried over from the booking. Fill in the device information below —
+              the appointment is linked to this job once you save.
+            </p>
+          </div>
+        )}
 
         {/* Customer */}
         <div className="grid grid-cols-1 gap-4">

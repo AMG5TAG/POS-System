@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useMapUrl } from "@/lib/map-provider";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -209,11 +210,49 @@ function SortableHeader({ label, sortKey, activeSortKey, dir, onSort, className 
   );
 }
 
-/* ─── Print helper ───────────────────────────────────────────────────────── */
+/* ─── Reference code ─────────────────────────────────────────────────────── */
 
 function apptRefCode(id: number): string {
   return `KA${String(id).padStart(5, "0")}`;
 }
+
+/* ─── Appointment → service job ──────────────────────────────────────────── */
+
+/** A repair can be raised from any booking that wasn't cancelled or missed. */
+function canRaiseServiceJob(appt: Appointment): boolean {
+  return appt.status !== "cancelled" && appt.status !== "no-show";
+}
+
+/**
+ * Pre-filled "New Service" URL for a booking. The new-service page reads these
+ * params, seeds the form (customer, job title, fault description, book-in date)
+ * and links the appointment to the job once it is saved.
+ */
+function serviceJobUrlFromAppointment(appt: Appointment): string {
+  const params = new URLSearchParams({
+    fromAppointment: String(appt.id),
+    appointmentRef: apptRefCode(appt.id),
+  });
+  if (appt.customerId != null) params.set("customerId", String(appt.customerId));
+  if (appt.title) params.set("title", appt.title);
+
+  // The booking's description and notes are what the customer reported — that is
+  // the fault/work description on the job card.
+  const work = [appt.description, appt.notes].filter(Boolean).join("\n\n");
+  if (work) params.set("workDescription", work);
+
+  // Book-in date is the booking's local calendar day, not the UTC slice of the
+  // ISO timestamp — an evening appointment in AEST is the next day in UTC.
+  const d = new Date(appt.scheduledAt);
+  if (!Number.isNaN(d.getTime())) {
+    const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    params.set("bookInDate", local);
+  }
+
+  return `/services/new-job?${params.toString()}`;
+}
+
+/* ─── Print helper ───────────────────────────────────────────────────────── */
 
 function printAppointment(appt: Appointment) {
   const win = window.open("", "_blank", "width=600,height=700");
@@ -265,6 +304,7 @@ interface DetailDialogProps {
 }
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
+  const [, navigate] = useLocation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSubject, setComposeSubject] = useState("");
@@ -405,15 +445,38 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
             </div>
           )}
 
-          {/* Linked repair job */}
-          {appt.serviceJobNumber && (
-            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-3">
-              <Wrench className="w-4 h-4 text-muted-foreground shrink-0" />
-              <div className="text-sm">
-                <p className="text-xs text-muted-foreground">Linked repair job</p>
-                <p className="font-medium font-mono">{appt.serviceJobNumber}</p>
-              </div>
-            </div>
+          {/* Linked repair job — or the action that creates one from this booking */}
+          {(appt.serviceJobId || canRaiseServiceJob(appt)) && (
+          <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-3">
+            <Wrench className="w-4 h-4 text-muted-foreground shrink-0" />
+            {appt.serviceJobId ? (
+              <>
+                <div className="text-sm flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Linked repair job</p>
+                  <p className="font-medium font-mono truncate">{appt.serviceJobNumber ?? `#${appt.serviceJobId}`}</p>
+                </div>
+                <Button
+                  variant="outline" size="sm" className="gap-1.5 shrink-0"
+                  onClick={() => { onClose(); navigate(`/services/${appt.serviceJobId}`); }}
+                >
+                  <Eye className="w-3.5 h-3.5" /> View job
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="text-sm flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Repair job</p>
+                  <p className="font-medium">Not created yet</p>
+                </div>
+                <Button
+                  size="sm" className="gap-1.5 shrink-0"
+                  onClick={() => { onClose(); navigate(serviceJobUrlFromAppointment(appt)); }}
+                >
+                  <Wrench className="w-3.5 h-3.5" /> Create service job
+                </Button>
+              </>
+            )}
+          </div>
           )}
 
           {/* Notes */}
@@ -1128,6 +1191,7 @@ export default function AppointmentsPage() {
   const [editing, setEditing]         = useState<Appointment | null>(null);
 
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { data: appointmentsData, isLoading } = useListAppointments({}, { query: { queryKey: ["listAppointments"] } });
   const { data: staffData } = useListStaff();
   const deleteMutation          = useDeleteAppointment();
@@ -1419,6 +1483,22 @@ export default function AppointmentsPage() {
                                     <CheckCircle className="w-3 h-3" /> Complete
                                   </button>
                                 )}
+                                {appt.serviceJobId ? (
+                                  <button
+                                    onClick={() => navigate(`/services/${appt.serviceJobId}`)}
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                    title={appt.serviceJobNumber ?? undefined}
+                                  >
+                                    <Wrench className="w-3 h-3" /> Job
+                                  </button>
+                                ) : canRaiseServiceJob(appt) ? (
+                                  <button
+                                    onClick={() => navigate(serviceJobUrlFromAppointment(appt))}
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                  >
+                                    <Wrench className="w-3 h-3" /> Service job
+                                  </button>
+                                ) : null}
                               </div>
                             </td>
                           </tr>

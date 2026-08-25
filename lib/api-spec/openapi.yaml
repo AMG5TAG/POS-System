@@ -2461,6 +2461,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/Appointment"
 
+  /appointments/{id}/service-job:
+    post:
+      operationId: linkAppointmentServiceJob
+      tags: [appointments]
+      summary: Link an appointment to a service job created from it
+      description: >
+        Records the service job that was raised from this appointment. Used by the
+        "Create service job" action, which pre-fills the new-service form from the
+        booking and links the two records once the job is saved.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkAppointmentServiceJobInput"
+      responses:
+        "200":
+          description: Updated appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "404":
+          description: Appointment or service job not found
   # ── Service Jobs ──────────────────────────────────────────────────────────
   /service-jobs:
     get:
@@ -12745,6 +12775,14 @@ components:
         createdAt:
           type: string
           format: date-time
+
+    LinkAppointmentServiceJobInput:
+      type: object
+      required: [serviceJobId]
+      properties:
+        serviceJobId:
+          type: ["integer", "null"]
+          description: Service job to link, or null to unlink.
 
     AppointmentInput:
       type: object

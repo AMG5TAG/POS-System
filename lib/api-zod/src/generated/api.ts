@@ -3573,6 +3573,42 @@ export const UpdateAppointmentResponse = zod.object({
 
 
 /**
+ * Records the service job that was raised from this appointment. Used by the "Create service job" action, which pre-fills the new-service form from the booking and links the two records once the job is saved.
+
+ * @summary Link an appointment to a service job created from it
+ */
+export const LinkAppointmentServiceJobParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const LinkAppointmentServiceJobBody = zod.object({
+  "serviceJobId": zod.number().nullable().describe('Service job to link, or null to unlink.')
+})
+
+export const LinkAppointmentServiceJobResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
+  "serviceJobNumber": zod.string().nullish(),
+  "title": zod.string(),
+  "description": zod.string().nullish(),
+  "scheduledAt": zod.coerce.date(),
+  "endAt": zod.coerce.date().optional(),
+  "durationMinutes": zod.number(),
+  "status": zod.enum(['scheduled', 'completed', 'cancelled', 'no-show']),
+  "notes": zod.string().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "staffName": zod.string().nullish(),
+  "createdAt": zod.coerce.date()
+})
+
+
+/**
  * @summary List all service jobs
  */
 export const ListServiceJobsResponseItem = zod.object({

@@ -208,6 +208,7 @@ import type {
   LeaveRequestItem,
   LeaveRequestListResponse,
   LeaveRequestUpdateInput,
+  LinkAppointmentServiceJobInput,
   ListAppointmentsParams,
   ListBackupsParams,
   ListBrandsParams,
@@ -8671,6 +8672,80 @@ export const useUpdateAppointment = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateAppointmentMutationOptions(options));
+    }
+
+export const getLinkAppointmentServiceJobUrl = (id: number,) => {
+
+
+
+
+  return `/api/appointments/${id}/service-job`
+}
+
+/**
+ * Records the service job that was raised from this appointment. Used by the "Create service job" action, which pre-fills the new-service form from the booking and links the two records once the job is saved.
+
+ * @summary Link an appointment to a service job created from it
+ */
+export const linkAppointmentServiceJob = async (id: number,
+    linkAppointmentServiceJobInput: LinkAppointmentServiceJobInput, options?: RequestInit): Promise<Appointment> => {
+
+  return customFetch<Appointment>(getLinkAppointmentServiceJobUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      linkAppointmentServiceJobInput,)
+  }
+);}
+
+
+
+
+export const getLinkAppointmentServiceJobMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkAppointmentServiceJob>>, TError,{id: number;data: BodyType<LinkAppointmentServiceJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof linkAppointmentServiceJob>>, TError,{id: number;data: BodyType<LinkAppointmentServiceJobInput>}, TContext> => {
+
+const mutationKey = ['linkAppointmentServiceJob'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof linkAppointmentServiceJob>>, {id: number;data: BodyType<LinkAppointmentServiceJobInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  linkAppointmentServiceJob(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type LinkAppointmentServiceJobMutationResult = NonNullable<Awaited<ReturnType<typeof linkAppointmentServiceJob>>>
+    export type LinkAppointmentServiceJobMutationBody = BodyType<LinkAppointmentServiceJobInput>
+    export type LinkAppointmentServiceJobMutationError = ErrorType<void>
+
+    /**
+ * @summary Link an appointment to a service job created from it
+ */
+export const useLinkAppointmentServiceJob = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof linkAppointmentServiceJob>>, TError,{id: number;data: BodyType<LinkAppointmentServiceJobInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof linkAppointmentServiceJob>>,
+        TError,
+        {id: number;data: BodyType<LinkAppointmentServiceJobInput>},
+        TContext
+      > => {
+      return useMutation(getLinkAppointmentServiceJobMutationOptions(options));
     }
 
 export const getListServiceJobsUrl = () => {
