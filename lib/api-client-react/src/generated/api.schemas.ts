@@ -5761,6 +5761,8 @@ export type CustomerSettingsGroupsItem = { [key: string]: unknown };
 
 export type CustomerSettingsRequiredFields = { [key: string]: unknown };
 
+export type CustomerSettingsGroupPricingItem = { [key: string]: unknown };
+
 export interface CustomerSettings {
   groups?: CustomerSettingsGroupsItem[];
   requiredFields?: CustomerSettingsRequiredFields;
@@ -5774,6 +5776,8 @@ export interface CustomerSettings {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  /** Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST / cost ex GST / RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS. */
+  groupPricing?: CustomerSettingsGroupPricingItem[];
   /** Fallback avatar shown for customers without their own photo. Uploaded image or external URL. */
   defaultCustomerImageUrl?: string;
   updatedAt?: string;
@@ -5782,6 +5786,8 @@ export interface CustomerSettings {
 export type CustomerSettingsInputGroupsItem = { [key: string]: unknown };
 
 export type CustomerSettingsInputRequiredFields = { [key: string]: unknown };
+
+export type CustomerSettingsInputGroupPricingItem = { [key: string]: unknown };
 
 export interface CustomerSettingsInput {
   groups?: CustomerSettingsInputGroupsItem[];
@@ -5796,6 +5802,8 @@ export interface CustomerSettingsInput {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  /** Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST / cost ex GST / RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS. */
+  groupPricing?: CustomerSettingsInputGroupPricingItem[];
   defaultCustomerImageUrl?: string;
 }
 

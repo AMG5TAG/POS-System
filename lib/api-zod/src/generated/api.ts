@@ -10549,6 +10549,9 @@ export const GetCustomerSettingsResponse = zod.object({
   "enableLoyalty": zod.boolean().optional(),
   "weeklyDigestOptIn": zod.boolean().optional(),
   "weeklyDigestSendDay": zod.number().min(getCustomerSettingsResponseWeeklyDigestSendDayMin).max(getCustomerSettingsResponseWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
+  "groupPricing": zod.array(zod.object({
+
+}).passthrough()).optional().describe('Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST \/ cost ex GST \/ RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS.'),
   "defaultCustomerImageUrl": zod.string().optional().describe('Fallback avatar shown for customers without their own photo. Uploaded image or external URL.'),
   "updatedAt": zod.coerce.date().optional()
 })
@@ -10574,6 +10577,9 @@ export const UpdateCustomerSettingsBody = zod.object({
   "enableLoyalty": zod.boolean().optional(),
   "weeklyDigestOptIn": zod.boolean().optional(),
   "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsBodyWeeklyDigestSendDayMin).max(updateCustomerSettingsBodyWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
+  "groupPricing": zod.array(zod.object({
+
+}).passthrough()).optional().describe('Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST \/ cost ex GST \/ RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS.'),
   "defaultCustomerImageUrl": zod.string().optional()
 })
 
@@ -10594,6 +10600,9 @@ export const UpdateCustomerSettingsResponse = zod.object({
   "enableLoyalty": zod.boolean().optional(),
   "weeklyDigestOptIn": zod.boolean().optional(),
   "weeklyDigestSendDay": zod.number().min(updateCustomerSettingsResponseWeeklyDigestSendDayMin).max(updateCustomerSettingsResponseWeeklyDigestSendDayMax).optional().describe('Day of week to send digest (0=Sunday … 6=Saturday)'),
+  "groupPricing": zod.array(zod.object({
+
+}).passthrough()).optional().describe('Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST \/ cost ex GST \/ RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS.'),
   "defaultCustomerImageUrl": zod.string().optional().describe('Fallback avatar shown for customers without their own photo. Uploaded image or external URL.'),
   "updatedAt": zod.coerce.date().optional()
 })

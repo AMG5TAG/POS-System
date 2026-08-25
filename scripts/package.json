@@ -33,6 +33,7 @@
     "add-time-cards": "tsx ./src/add-time-cards.ts",
     "add-return-auth-po-files": "tsx ./src/add-return-auth-po-files.ts",
     "add-customer-photo": "tsx ./src/add-customer-photo.ts",
+    "add-customer-group-pricing": "tsx ./src/add-customer-group-pricing.ts",
     "add-custom-payment-methods": "tsx ./src/add-custom-payment-methods.ts",
     "add-invoice-settings-table": "tsx ./src/add-invoice-settings-table.ts",
     "add-dashboard-section-order": "tsx ./src/add-dashboard-section-order.ts",
