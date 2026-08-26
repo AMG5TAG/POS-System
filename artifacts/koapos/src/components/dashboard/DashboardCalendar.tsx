@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User, MessageCircleReply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -20,6 +20,8 @@ const EVENT_COLORS = {
   invoices:      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-700",
   appointments:  "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700",
   birthdays:     "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-700",
+  // Tailwind ships no brown ramp, so this one is spelled out in hex.
+  followUps:     "bg-[#f0e2d3] text-[#7a4a1d] border-[#ddc7ae] dark:bg-[#432a15] dark:text-[#e3c3a0] dark:border-[#7a5333]",
 };
 
 interface SelectedDay {
@@ -231,7 +233,8 @@ function DayCell({
 
   const dayNum = parseInt(day.date.split("-")[2], 10);
   const hasEvents = day.publicHoliday || day.sales > 0 || day.serviceJobs > 0 ||
-    day.invoices > 0 || day.appointments.length > 0 || day.customerBirthdays.length > 0;
+    day.invoices > 0 || day.followUpsCompleted > 0 ||
+    day.appointments.length > 0 || day.customerBirthdays.length > 0;
 
   const apptCount = day.appointments.length;
   const bdayCount = day.customerBirthdays.length;
@@ -270,6 +273,13 @@ function DayCell({
     >
       <CalendarDays className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{apptCount}</span>
     </button>
+  );
+  if (day.followUpsCompleted > 0) rightItems.push(
+    <div key="followups" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.followUps)}
+      title={`${day.followUpsCompleted} follow-up${day.followUpsCompleted === 1 ? "" : "s"} completed`}
+    >
+      <MessageCircleReply className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{day.followUpsCompleted}</span>
+    </div>
   );
 
   const maxRows = 3;
@@ -399,6 +409,7 @@ export function DashboardCalendar() {
     { color: EVENT_COLORS.invoices,      label: "Invoices",       total: sumBy((d) => d.invoices) },
     { color: EVENT_COLORS.appointments,  label: "Appointments",   total: sumBy((d) => d.appointments.length) },
     { color: EVENT_COLORS.birthdays,     label: "Birthdays",      total: sumBy((d) => d.customerBirthdays.length) },
+    { color: EVENT_COLORS.followUps,     label: "Follow Ups",     total: sumBy((d) => d.followUpsCompleted) },
   ];
 
   return (

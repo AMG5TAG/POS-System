@@ -12033,7 +12033,7 @@ components:
 
     CalendarDay:
       type: object
-      required: [date, sales, serviceJobs, invoices, appointments, customerBirthdays]
+      required: [date, sales, serviceJobs, invoices, followUpsCompleted, appointments, customerBirthdays]
       properties:
         date:
           type: string
@@ -12045,6 +12045,12 @@ components:
           type: integer
         invoices:
           type: integer
+        followUpsCompleted:
+          type: integer
+          description: >-
+            Distinct service jobs / appointments that were followed up on this
+            date — a message successfully sent, or the record marked done by
+            hand. Email + SMS on the same record counts once.
         appointments:
           type: array
           items:

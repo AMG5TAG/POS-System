@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable, followUpLogTable } from "@workspace/db";
 import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
@@ -767,6 +767,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     sales: number;
     serviceJobs: number;
     invoices: number;
+    followUpsCompleted: Set<string>;
     appointments: { id: number; title: string; scheduledAt: string; durationMinutes: number; status: string; customerName: string | null; customerPhone: string | null; customerAddress: string | null; notes: string | null }[];
     customerBirthdays: { id: number; firstName: string; lastName: string | null; phone: string | null; email: string | null }[];
   }> = {};
@@ -780,6 +781,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
       sales: 0,
       serviceJobs: 0,
       invoices: 0,
+      followUpsCompleted: new Set<string>(),
       appointments: [],
       customerBirthdays: [],
     };
@@ -889,6 +891,32 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     if (dayMap[key]) dayMap[key].invoices += 1;
   }
 
+  // Follow-ups completed — a record counts as chased on the day it was either
+  // successfully messaged ("sent") or cleared by hand ("done"). "failed" and
+  // "skipped" rows are attempts, not completions, so they are excluded.
+  //
+  // A single follow-up can write one log row per channel (email *and* SMS on the
+  // same job), so dedupe on the source record: the day count answers "how many
+  // customers did we get back to", not "how many messages left the building".
+  const followUps = await db
+    .select({
+      sourceType: followUpLogTable.sourceType,
+      sourceId: followUpLogTable.sourceId,
+      sentAt: followUpLogTable.sentAt,
+    })
+    .from(followUpLogTable)
+    .where(and(
+      eq(followUpLogTable.merchantId, merchantId),
+      inArray(followUpLogTable.status, ["sent", "done"]),
+      gte(followUpLogTable.sentAt, queryStart),
+      lt(followUpLogTable.sentAt, queryEnd),
+    ));
+
+  for (const f of followUps) {
+    const key = toLocalDateKey(f.sentAt, timezone);
+    if (dayMap[key]) dayMap[key].followUpsCompleted.add(`${f.sourceType}-${f.sourceId}`);
+  }
+
   // Customer birthdays (match by month/day). `dateOfBirth` is a Postgres `date`
   // column, so match the month with extract() — comparing on the date's own
   // month is timezone-independent and index-friendly, and (unlike substring)
@@ -931,7 +959,11 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
 
   const days = Object.entries(dayMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, data]) => ({ date, ...data }));
+    .map(([date, data]) => ({
+      ...data,
+      date,
+      followUpsCompleted: data.followUpsCompleted.size,
+    }));
 
   res.json({ year, month, days });
 });

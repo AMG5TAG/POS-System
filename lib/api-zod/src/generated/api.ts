@@ -4998,6 +4998,7 @@ export const GetDashboardCalendarResponse = zod.object({
   "sales": zod.number(),
   "serviceJobs": zod.number(),
   "invoices": zod.number(),
+  "followUpsCompleted": zod.number().describe('Distinct service jobs \/ appointments that were followed up on this date — a message successfully sent, or the record marked done by hand. Email + SMS on the same record counts once.'),
   "appointments": zod.array(zod.object({
   "id": zod.number(),
   "title": zod.string(),
