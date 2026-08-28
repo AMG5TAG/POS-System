@@ -1745,7 +1745,16 @@ function POPrintChoiceDialog({
 type POData = NonNullable<PrintPO>;
 
 function POPrintArea({ po, hw, onDone }: { po: POData; hw: HardwareCfg; onDone: () => void }) {
+  // `onDone` and `hw` are rebuilt on every parent render, so this effect re-runs
+  // whenever the page re-renders (a query refetch is enough). A browser print
+  // used to close that window almost immediately; a bridge print can take
+  // seconds, which is long enough to fire a second job. Print once per mount.
+  const started = useRef(false);
+
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
     let afterprintHandler: (() => void) | undefined;
     let cancelled = false;

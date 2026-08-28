@@ -4,6 +4,7 @@ import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
 import { techAppJobUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
+import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
 
 /**
  * Unified, print-ready Service Job Sheet.
@@ -37,26 +38,6 @@ export interface ServiceSheetBranding {
 export interface ServiceSheetFormFile {
   name: string;
   detail?: string;
-}
-
-/** Canonical human-readable labels for service-job status codes. */
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  "in-progress": "In Progress",
-  "awaiting-parts": "Awaiting Parts",
-  "awaiting-stock": "Awaiting Stock",
-  "at-repairer": "At Repairer",
-  "awaiting-partner-approval": "Awaiting Partner Approval",
-  "partner-replacement": "Partner Replacement",
-  "awaiting-customer": "Awaiting Customer",
-  "awaiting-pickup": "Completed - Awaiting Pickup",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-function humanizeStatus(s: string): string {
-  if (!s) return "";
-  return STATUS_LABELS[s] ?? s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 }
 
 export interface ServiceSheetData {
@@ -138,18 +119,6 @@ function buildQr(text: string): { path: string; size: number } | null {
   }
 }
 
-function mergeCredentials(accounts?: string, logins?: string): string[] {
-  const accts = (accounts ?? "").split("\n").map((s) => s.trim());
-  const pins = (logins ?? "").split("\n").map((s) => s.trim());
-  const max = Math.max(accts.length, pins.length);
-  return Array.from({ length: max }, (_, i) => {
-    const a = accts[i] || "";
-    const p = pins[i] || "";
-    if (a && p) return `${a} — ${p}`;
-    return a || p;
-  }).filter(Boolean);
-}
-
 export function ServiceJobSheet({
   id,
   data,
@@ -172,7 +141,7 @@ export function ServiceJobSheet({
         : "16px";
 
   const dateStr = data.date ? new Date(data.date).toLocaleDateString("en-AU") : "";
-  const credentialLines = mergeCredentials(data.accounts, data.logins);
+  const credentialLines = mergeCredentialLines(data.accounts, data.logins, "\u2014");
   const photos = (data.photos ?? []).filter(Boolean);
   const socialEntries = formatSocialEntries(branding.socialLinks);
 

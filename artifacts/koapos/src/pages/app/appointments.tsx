@@ -13,6 +13,7 @@ import {
   useListStaff,
   useComposeEmail,
   useListServiceJobs,
+  useGetPosSettings,
   Appointment,
   AppointmentInputStatus,
   Staff,
@@ -40,6 +41,8 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { parseHardwareConfig, type HardwareCfg } from "@/lib/hardware-config";
+import { printDocument } from "@/lib/print-router";
 
 /* ─── Status config ──────────────────────────────────────────────────────── */
 
@@ -254,14 +257,12 @@ function serviceJobUrlFromAppointment(appt: Appointment): string {
 
 /* ─── Print helper ───────────────────────────────────────────────────────── */
 
-function printAppointment(appt: Appointment) {
-  const win = window.open("", "_blank", "width=600,height=700");
-  if (!win) return;
+function printAppointment(appt: Appointment, hw?: HardwareCfg) {
   const fmt = (iso: string) => new Date(iso).toLocaleString("en-AU", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
     hour: "numeric", minute: "2-digit", hour12: true,
   });
-  win.document.write(`
+  const html = `
     <html><head><title>Appointment — ${apptRefCode(appt.id)}</title>
     <style>
       body { font-family: sans-serif; max-width: 480px; margin: 32px auto; color: #111; }
@@ -287,10 +288,32 @@ function printAppointment(appt: Appointment) {
     </div>` : ""}
     ${appt.staffName ? `<div class="block"><div class="label">Staff</div><div class="value">${appt.staffName}</div></div>` : ""}
     ${appt.notes ? `<div class="block"><div class="label">Notes</div><div class="value" style="font-weight:normal">${appt.notes}</div></div>` : ""}
-    <script>window.onload=()=>{window.print();}</script>
     </body></html>
-  `);
-  win.document.close();
+  `;
+
+  // The popup prints itself on load; the bridge renders the same markup
+  // headlessly, where that script would be a no-op, so it only goes on here.
+  const openPopup = () => {
+    const win = window.open("", "_blank", "width=600,height=700");
+    if (!win) { toast.error("Allow pop-ups to print"); return; }
+    win.document.write(
+      html.replace("</body>", "<script>window.onload=()=>{window.print();}<\/script></body>"),
+    );
+    win.document.close();
+  };
+
+  if (!hw) { openPopup(); return; }
+
+  void printDocument({
+    purpose: "appointment",
+    hw,
+    paper: "A4",
+    jobName: `Appointment ${appt.id ?? ""}`.trim(),
+    html: () => html,
+    browserFallback: openPopup,
+  }).catch((err: unknown) => {
+    toast.error(err instanceof Error ? err.message : "Couldn't print this appointment");
+  });
 }
 
 /* ─── Detail dialog ──────────────────────────────────────────────────────── */
@@ -304,6 +327,10 @@ interface DetailDialogProps {
 }
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
+  // Hardware config decides whether the slip goes straight to a printer or opens
+  // the usual print window.
+  const { data: apptPosSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const apptHardware = parseHardwareConfig((apptPosSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const [, navigate] = useLocation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
@@ -538,7 +565,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                 <Mail className="w-3.5 h-3.5" /> Email
               </Button>
             )}
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt)}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt, apptHardware)}>
               <Printer className="w-3.5 h-3.5" /> Print
             </Button>
           </div>
@@ -639,6 +666,8 @@ interface BookingDialogProps {
 }
 
 function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
+  const { data: bookPosSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const bookHardware = parseHardwareConfig((bookPosSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
   const [bookedAppt, setBookedAppt]   = useState<Appointment | null>(null);
   const [notificationsSent, setNotificationsSent] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false });
@@ -781,7 +810,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
                   <Mail className="w-3.5 h-3.5" /> Email
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(bookedAppt)}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(bookedAppt, bookHardware)}>
                 <Printer className="w-3.5 h-3.5" /> Print
               </Button>
             </div>

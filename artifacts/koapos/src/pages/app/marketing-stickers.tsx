@@ -7,6 +7,7 @@ import {
   useDeleteStickerTemplate,
   useListQrCodes,
   useGetMerchant,
+  useGetPosSettings,
   type Product,
   type Customer,
 } from "@workspace/api-client-react";
@@ -23,6 +24,8 @@ import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput"
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { DYMO_SIZES, QUICK_CODES, useStickerPrinter, type DymoSize } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import { printDocument } from "@/lib/print-router";
 import { QRCodeSVG } from "qrcode.react";
 import QRCode from "qrcode";
 import JsBarcode from "jsbarcode";
@@ -147,6 +150,10 @@ function QuickCodeMenu({ onPick }: { onPick: (code: string) => void }) {
 }
 
 export default function MarketingStickersPage() {
+  // Designed labels go to the same "Labels & stickers" printer as product and
+  // repair labels.
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const { businessName, logoUrl } = useStickerPrinter();
   const { profile } = useBusinessProfile();
   const { data: merchantData } = useGetMerchant({ query: { queryKey: ["merchant"] } });
@@ -333,10 +340,32 @@ export default function MarketingStickersPage() {
       html,body { margin:0; padding:0; }
       .label { position:relative; width:${effW}mm; height:${effH}mm; overflow:hidden; background:${layout.bg}; font-family: system-ui, sans-serif; }
     </style></head><body><div class="label">${parts.join("")}</div>
-    <script>window.onload=function(){window.focus();window.print();}</script></body></html>`;
-    const w = window.open("", "_blank");
-    if (!w) { toast.error("Allow pop-ups to print"); return; }
-    w.document.write(html); w.document.close();
+    </body></html>`;
+
+    // Route through the same "Labels & stickers" printer the rest of the app
+    // uses, so a designed label and a product label land on the same device.
+    // The popup keeps its self-printing script; the bridge renders headlessly
+    // where that would be a no-op.
+    const openPopup = () => {
+      const w = window.open("", "_blank");
+      if (!w) { toast.error("Allow pop-ups to print"); return; }
+      w.document.write(
+        html.replace("</body>", "<script>window.onload=function(){window.focus();window.print();}<\/script></body>"),
+      );
+      w.document.close();
+    };
+
+    void printDocument({
+      purpose: "label",
+      hw: hardware,
+      // The markup declares its own exact die-cut size, so don't override it.
+      paper: "auto",
+      jobName: "KoaPOS label",
+      html: () => html,
+      browserFallback: openPopup,
+    }).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Couldn't print the label");
+    });
   };
 
   const insertCode = (code: string) => {

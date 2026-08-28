@@ -76,7 +76,19 @@ layers:
 
 **Adding a printable document**: add a member to `PrintPurpose` + `PRINT_PURPOSES` +
 `DEFAULT_ROUTING` in `lib/hardware-config.ts`, then call `printDocument()` at the
-print site passing the existing print flow as `browserFallback`.
+print site passing the existing print flow as `browserFallback`. Only report
+success to the operator when `printDocument` returns something other than
+`"browser"` — the browser path just opens a dialog they can still cancel.
+
+Two hazards worth knowing, both learned the hard way:
+- A `bridge` profile with **no queue name** prints to the machine's *default*
+  printer. Never seed a profile that way; a merchant pairing the bridge for one
+  document would silently redirect another (labels onto the A4 laser). Seed new
+  profiles as `system`.
+- Print effects keyed on props rebuilt each render (`hw`, an inline `onDone`)
+  re-run on any parent re-render. A `window.print()` closed that window in
+  milliseconds; a bridge print takes seconds, which is long enough to fire a
+  second job. Guard with a ref — see `POPrintArea`.
 
 Config lives in two places for a reason:
 - **Merchant-level** (`pos_settings.hardwareConfig` JSON): printer *profiles*

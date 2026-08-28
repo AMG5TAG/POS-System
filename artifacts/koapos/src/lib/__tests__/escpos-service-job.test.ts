@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { charsPerLine, wrap } from "@/lib/escpos";
-import { buildServiceJobDocketBytes, humanizeStatus, mergeCredentialLines } from "@/lib/escpos-service-job";
+import { buildServiceJobDocketBytes } from "@/lib/escpos-service-job";
+import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
 import { DEFAULT_OPTS } from "@/pages/app/management-templates";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 
@@ -103,6 +104,10 @@ describe("mergeCredentialLines", () => {
       "2222",
       "c@d.com",
     ]);
+  });
+
+  it("takes the separator from the renderer, since ESC/POS can't print an en dash", () => {
+    expect(mergeCredentialLines("acct", "1234", "\u2014")).toEqual(["acct \u2014 1234"]);
   });
 });
 

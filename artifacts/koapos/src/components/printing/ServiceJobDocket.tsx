@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { techAppJobUrl } from "@/lib/public-url";
-import { humanizeStatus, mergeCredentialLines } from "@/lib/escpos-service-job";
+import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 
 /**

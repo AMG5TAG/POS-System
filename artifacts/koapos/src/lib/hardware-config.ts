@@ -84,7 +84,9 @@ export type PrintPurpose =
   | "a4Receipt"
   | "purchaseOrder"
   | "eod"
-  | "label";
+  | "label"
+  | "customerForm"
+  | "appointment";
 
 export interface PrintPurposeMeta {
   id: PrintPurpose;
@@ -105,6 +107,8 @@ export const PRINT_PURPOSES: PrintPurposeMeta[] = [
   { id: "purchaseOrder",    label: "Purchase order",      hint: "A4 purchase order",                        paper: "a4"   },
   { id: "eod",              label: "End-of-day report",   hint: "Register close / cash-up report",          paper: "a4"   },
   { id: "label",            label: "Labels & stickers",   hint: "Product, repair, customer and address labels", paper: "label" },
+  { id: "customerForm",     label: "Customer forms",      hint: "Consent, privacy and intake forms",         paper: "a4"   },
+  { id: "appointment",      label: "Appointment slip",    hint: "Printed appointment details",              paper: "a4"   },
 ];
 
 export interface PrinterProfile {
@@ -156,6 +160,8 @@ export const DEFAULT_ROUTING: Partial<Record<PrintPurpose, string>> = {
   purchaseOrder: DOCUMENT_PROFILE_ID,
   eod: DOCUMENT_PROFILE_ID,
   label: LABEL_PROFILE_ID,
+  customerForm: DOCUMENT_PROFILE_ID,
+  appointment: DOCUMENT_PROFILE_ID,
 };
 
 export const DEFAULT_HW: HardwareCfg = {
@@ -193,12 +199,15 @@ function seedProfiles(printer: PrinterCfg): PrinterProfile[] {
       bridgePrinterName: "",
     },
     {
-      // Label printers are usually shared across the shop rather than sitting on
-      // one till, so this profile is seeded for the bridge. Until the bridge is
-      // paired it falls back to the browser print dialog, exactly as before.
+      // Seeded on the browser dialog, NOT the bridge. A bridge profile with no
+      // queue name selected prints to the machine's *default* printer — so
+      // seeding this as a bridge printer would mean that the moment a merchant
+      // paired the bridge for anything else, every label silently started coming
+      // out of the office A4 laser. Switching this to the bridge is a deliberate
+      // step, taken alongside choosing the label queue.
       id: LABEL_PROFILE_ID,
       label: "Label printer",
-      transport: "bridge",
+      transport: "system",
       paper: "label",
       bridgePrinterName: "",
     },

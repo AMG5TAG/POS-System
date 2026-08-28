@@ -9,41 +9,9 @@
  */
 import { EscPos, charsPerLine, cols, toAscii, wrap } from "@/lib/escpos";
 import { techAppJobUrl } from "@/lib/public-url";
+import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 import type { TplOpts } from "@/pages/app/management-templates";
-
-/** Canonical human-readable labels for service-job status codes. */
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  "in-progress": "In Progress",
-  "awaiting-parts": "Awaiting Parts",
-  "awaiting-stock": "Awaiting Stock",
-  "at-repairer": "At Repairer",
-  "awaiting-partner-approval": "Awaiting Partner Approval",
-  "partner-replacement": "Partner Replacement",
-  "awaiting-customer": "Awaiting Customer",
-  "awaiting-pickup": "Completed - Awaiting Pickup",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-export function humanizeStatus(s: string): string {
-  if (!s) return "";
-  return STATUS_LABELS[s] ?? s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
-/** Merge the parallel account/PIN lines the job stores into display lines. */
-export function mergeCredentialLines(accounts?: string, logins?: string): string[] {
-  const accts = (accounts ?? "").split("\n").map((s) => s.trim());
-  const pins = (logins ?? "").split("\n").map((s) => s.trim());
-  const max = Math.max(accts.length, pins.length);
-  return Array.from({ length: max }, (_, i) => {
-    const a = accts[i] || "";
-    const p = pins[i] || "";
-    if (a && p) return `${a} - ${p}`;
-    return a || p;
-  }).filter(Boolean);
-}
 
 /**
  * Encode a service job docket to ESC/POS bytes, finishing with a feed + auto-cut.

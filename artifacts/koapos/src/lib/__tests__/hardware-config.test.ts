@@ -15,9 +15,10 @@ describe("parseHardwareConfig", () => {
     expect(receipt).toMatchObject({ transport: "serial", paper: "58mm", model: "partner-rp630", ipAddress: "10.0.0.5" });
     // A4 stays on the browser dialog, so nothing about today's behaviour changes.
     expect(hw.printers.find((p) => p.id === DOCUMENT_PROFILE_ID)).toMatchObject({ transport: "system", paper: "a4" });
-    // Labels are usually a shared LAN printer, so the profile is seeded for the
-    // bridge; unpaired, printDocument still falls back to the browser.
-    expect(hw.printers.find((p) => p.id === LABEL_PROFILE_ID)).toMatchObject({ transport: "bridge", paper: "label" });
+    // Labels are seeded on the browser dialog: a bridge profile with no queue
+    // name prints to the machine default, which would quietly send every label
+    // to the A4 laser as soon as the bridge was paired for anything else.
+    expect(hw.printers.find((p) => p.id === LABEL_PROFILE_ID)).toMatchObject({ transport: "system", paper: "label" });
     expect(hw.routing).toEqual(DEFAULT_ROUTING);
     expect(hw.bridge.enabled).toBe(false);
   });
@@ -76,6 +77,12 @@ describe("routing helpers", () => {
       const id = DEFAULT_ROUTING[purpose.id];
       expect(id, purpose.id).toBeTruthy();
       expect(hw.printers.map((p) => p.id), purpose.id).toContain(id);
+    }
+  });
+
+  it("routes A4 documents that have no printer of their own at the document printer", () => {
+    for (const purpose of ["customerForm", "appointment", "purchaseOrder", "eod"] as const) {
+      expect(profileForPurpose(hw, purpose)?.id, purpose).toBe(DOCUMENT_PROFILE_ID);
     }
   });
 
