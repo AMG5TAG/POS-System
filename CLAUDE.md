@@ -51,10 +51,63 @@ Workflow to change an endpoint: edit `openapi.yaml` → run codegen → implemen
 - `artifacts/koapos` — React 19 frontend. Pages in `src/pages/` (marketing + authenticated app), auth in `src/lib/auth.tsx` (AuthProvider + `useAuth`).
 - `lib/db` — Drizzle schema, one file per domain in `src/schema/` (merchants, products, customers, transactions, staff, …).
 - `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/object-storage-web` — shared libraries. Note that cloud-storage integrations do **not** live here: they are in `artifacts/api-server/src/lib/` (`backup-storage/`, `nextcloud.ts`, `objectStorage.ts`) and `src/services/`.
+- `artifacts/print-bridge` (`@workspace/print-bridge`) — a standalone, dependency-free Node service that runs **on the merchant's till**, not on the server. It is what lets the browser print without the OS print dialog. Not part of the deployed app; built to a single `dist/index.mjs` and installed on each till. See "Printing" below and its own README.
 - `scripts` (`@workspace/scripts`) — one-off migration/seed scripts wired into `db:push`.
 
 ### Auth
 Session-based (not JWT): `express-session` + `bcryptjs`, signed with `SESSION_SECRET`. The frontend's custom fetch (`lib/api-client-react/src/custom-fetch.ts`) sends `credentials: 'include'` so cookies flow through the Replit proxy. CORS is `origin: true, credentials: true` — both are required for session cookies to work.
+
+### Printing
+
+A browser can only print silently over WebUSB/Web Serial (raw ESC/POS to a thermal
+printer) — everything else hits the OS print dialog, and nothing in a browser can
+route two documents to two different printers. So printing is split across three
+layers:
+
+1. **`lib/escpos.ts` + `lib/escpos-service-job.ts`** — encode a document to raw
+   ESC/POS bytes (receipts, 80mm service dockets, drawer kicks, native QR).
+2. **Transports** — `lib/escpos-transport.ts` (WebUSB / Web Serial, browser-native)
+   and `lib/print-bridge.ts` (HTTP client for the local Print Bridge).
+3. **`lib/print-router.ts`** — `printDocument({ purpose, hw, escpos, html, browserFallback })`
+   is the single entry point. It resolves the printer profile the merchant routed
+   that *purpose* to and degrades through the transports in order: WebUSB/Serial →
+   bridge raw → bridge HTML → the caller's existing `window.print()` path. A print
+   is therefore never blocked; the worst case is the dialog merchants see today.
+
+**Adding a printable document**: add a member to `PrintPurpose` + `PRINT_PURPOSES` +
+`DEFAULT_ROUTING` in `lib/hardware-config.ts`, then call `printDocument()` at the
+print site passing the existing print flow as `browserFallback`.
+
+Config lives in two places for a reason:
+- **Merchant-level** (`pos_settings.hardwareConfig` JSON): printer *profiles*
+  (`printers`) and the purpose→profile map (`routing`). Shared by every till.
+  Purely additive — `parseHardwareConfig` synthesises profiles from the legacy
+  single `printer` field, so **no migration and no data loss** for existing merchants.
+- **Device-level** (localStorage, `lib/print-bridge.ts`): bridge URL, pairing token,
+  and per-till queue-name overrides — because Windows print-queue names differ
+  between machines.
+
+Two generations of printer config coexist: the legacy `hardwareConfig.printer`
+(still the master switch for the WebUSB/Serial device and the auto-print toggles)
+and the newer `printers`/`routing`. The Hardware settings UI keeps them in step —
+`patchPR` in `management-registers.tsx` mirrors edits into the `receipt-printer`
+profile. Don't let them drift.
+
+Service jobs print in two shapes from the same data: the A4 `ServiceJobSheet` and
+the 80mm `ServiceJobDocket` (+ its ESC/POS encoder). `lib/service-job-print.ts`
+owns the choice; the default paper is the `serviceSheetPaper` template option.
+
+Labels/stickers (`lib/sticker-config.tsx`) route through the same router but are
+**never** ESC/POS — DYMO-class printers use their own driver protocol, so they take
+the bridge's HTML path with `paper: "auto"`, which preserves the exact die-cut
+`@page` size the label markup declares. The label printer is expected to be shared
+on the LAN: the bridge addresses printers by Windows *queue name*, so LAN printing
+works via the OS, but a queue **shared from another PC** is a per-user connection
+and is invisible when the bridge runs as a service (`SYSTEM`). Install such printers
+machine-wide on a TCP/IP port. `/v1/health` reports `runningAsService` and the
+Hardware settings surface a warning. The `network` transport on a profile (IP + port
+9100) is *not* this — it's a raw socket the browser can't open and the cloud API
+server can't reach, and still falls back to the print dialog.
 
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.

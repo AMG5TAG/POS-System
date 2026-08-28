@@ -123,6 +123,8 @@ export interface TplOpts {
   showFormsFiles:       boolean;
   showServiceQr:        boolean;
   defaultPrintCopies:   string;
+  /** Paper the service job prints on by default: "a4" sheet or "80mm" docket. */
+  serviceSheetPaper:    string;
   // Customer PDF section toggles
   showTransactions:     boolean;
   showAppointments:     boolean;
@@ -157,6 +159,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
   showLogins: false, showFormsFiles: false, showServiceQr: true, defaultPrintCopies: "1",
+  serviceSheetPaper: "a4",
   showTransactions: true, showAppointments: true, showServiceJobs: true,
   showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
   showReferralLink: false, referralLinkText: "",
@@ -344,6 +347,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss.", quickCodes: true },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
+      { section: "Print",    key: "serviceSheetPaper",    label: "Default Paper",            type: "select",   options: [{ value: "a4", label: "A4 job sheet" }, { value: "80mm", label: "80mm thermal docket" }], hint: "Pre-selected when printing a job. Either can still be chosen at print time." },
       { section: "Print",    key: "defaultPrintCopies",   label: "Default Print Copies",     type: "text",     placeholder: "1", hint: "Number of copies pre-filled in the print dialog" },
       { section: "Referral", key: "showReferralLink",     label: "Show Platform Referral Link", type: "toggle", hint: "Adds your KoaPOS referral link to earn rewards" },
       { section: "Referral", key: "referralLinkText",     label: "Referral Label",              type: "text",   placeholder: "Refer a friend and earn rewards!" },

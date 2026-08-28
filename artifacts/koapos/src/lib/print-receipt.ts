@@ -4,6 +4,9 @@ import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
 import { publicOrigin, techAppJobUrl } from "@/lib/public-url";
+import type { HardwareCfg, PrintPurpose } from "@/lib/hardware-config";
+import type { BridgePaper } from "@/lib/print-bridge";
+import { printDocument } from "@/lib/print-router";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -209,7 +212,20 @@ export function applyTemplateVars(text: string | undefined | null, vars: Record<
   return text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_, k: string) => vars[k.toLowerCase()] ?? "");
 }
 
-function openPrintWindow(html: string, title: string): void {
+/**
+ * Where a document should print. When supplied, the print router gets first
+ * refusal — it sends the document straight to the printer the merchant routed
+ * this purpose at (via the Print Bridge) and only falls back to the popup below
+ * when nothing silent is configured or reachable.
+ */
+export interface PrintRoute {
+  purpose: PrintPurpose;
+  hw: HardwareCfg;
+  paper?: BridgePaper;
+  copies?: number;
+}
+
+function popupPrintWindow(html: string, title: string): void {
   const win = window.open("", "_blank", "width=900,height=700");
   if (!win) {
     // eslint-disable-next-line no-console
@@ -220,6 +236,27 @@ function openPrintWindow(html: string, title: string): void {
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 800);
+}
+
+function openPrintWindow(html: string, title: string, route?: PrintRoute): void {
+  if (!route) {
+    popupPrintWindow(html, title);
+    return;
+  }
+  void printDocument({
+    purpose: route.purpose,
+    hw: route.hw,
+    paper: route.paper ?? "A4",
+    copies: route.copies,
+    jobName: title,
+    html: () => html,
+    browserFallback: () => popupPrintWindow(html, title),
+  }).catch((err: unknown) => {
+    // printDocument only rejects if the fallback itself failed, so there is
+    // nothing left to retry — surfacing it beats printing nothing silently.
+    // eslint-disable-next-line no-console
+    console.error(`Could not print "${title}"`, err);
+  });
 }
 
 /* ─── Thermal / 80mm receipt ────────────────────────────────────────────── */
@@ -451,6 +488,7 @@ function printA4Document(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
   const receiptNum = tx.receiptNumber ? tx.receiptNumber : `${tx.id}`;
   const escReceiptNum = esc(receiptNum);
@@ -544,15 +582,16 @@ function printA4Document(
     options,
   });
 
-  openPrintWindow(html, `${windowLabel} ${escReceiptNum}`);
+  openPrintWindow(html, `${windowLabel} ${escReceiptNum}`, route);
 }
 
 export function printA4Invoice(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
-  printA4Document("Tax Invoice", "completed", "Invoice", tx, businessInfo, opts);
+  printA4Document("Tax Invoice", "completed", "Invoice", tx, businessInfo, opts, route);
 }
 
 /* ─── A4 quote ─────────────────────────────────────────────────────────── */
@@ -562,8 +601,9 @@ export function printA4Quote(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
-  printA4Document("Quote", "quote", "Quote", tx, businessInfo, opts);
+  printA4Document("Quote", "quote", "Quote", tx, businessInfo, opts, route);
 }
 
 /* ─── A4 sales receipt ─────────────────────────────────────────────────── */
@@ -573,6 +613,7 @@ export async function printA4Receipt(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): Promise<void> {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
@@ -970,7 +1011,7 @@ export async function printA4Receipt(
 ${body}
 </body></html>`;
 
-  openPrintWindow(html, `Receipt ${escReceiptNum}`);
+  openPrintWindow(html, `Receipt ${escReceiptNum}`, route);
 }
 
 /* ─── A4 service job report ─────────────────────────────────────────────── */
@@ -1008,6 +1049,7 @@ export function printA4ServiceJob(
   businessInfo?: ReceiptBusinessInfo,
   customerOverride?: { name?: string; email?: string; phone?: string },
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
@@ -1249,5 +1291,5 @@ export function printA4ServiceJob(
 </div>
 </body></html>`;
 
-  openPrintWindow(html, `Service Report ${escJobNum}`);
+  openPrintWindow(html, `Service Report ${escJobNum}`, route);
 }

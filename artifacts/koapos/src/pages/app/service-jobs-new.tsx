@@ -6,6 +6,7 @@ import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput"
 import {
   useCreateServiceJob,
   useGetMerchant,
+  useGetPosSettings,
   useSendServiceJobEmail,
   useLinkAppointmentServiceJob,
   type ServiceJob,
@@ -58,6 +59,12 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useSalesTemplate } from "@/lib/use-sales-template";
+import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import {
+  printServiceJobDocument, serviceJobPaperFromOpts,
+  SERVICE_PAPER_LABEL, type ServicePaper,
+} from "@/lib/service-job-print";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
 import { techAppJobUrl } from "@/lib/public-url";
 
@@ -285,6 +292,12 @@ export default function ServiceJobNewPage() {
   const businessName = merchant?.businessName ?? "";
 
   const { opts: svcOpts, fontCss: svcFontCss } = useSalesTemplate("Service_Ticket");
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
+  const defaultServicePaper = serviceJobPaperFromOpts(svcOpts);
+  /* Which paper the *next* print uses — only needed so the matching @page rule
+     is in the document before window.print() fires. */
+  const [printPaper, setPrintPaper] = useState<ServicePaper>("a4");
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(prefill.bookInDate || todayISO());
@@ -403,6 +416,90 @@ export default function ServiceJobNewPage() {
       }
     );
   }
+
+  /* Branding + data shared by the A4 sheet and the 80mm docket, so the two
+     outputs can never drift apart. */
+  const sheetBranding = {
+    businessName: merchant?.businessName ?? "Service Centre",
+    abn: bizProfile?.abn,
+    website: bizProfile?.website,
+    email: bizProfile?.contactEmail ?? merchant?.email ?? undefined,
+    address: [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      bizProfile?.state,
+      bizProfile?.postcode,
+    ].filter(Boolean).join(", "),
+    brandColor,
+    logo: bizProfile?.logo,
+    socialLinks: bizProfile?.socialLinks,
+    techAppUsername: merchant?.username ?? undefined,
+  };
+
+  const sheetData = {
+    jobId: successJob?.id ?? null,
+    jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
+    date: bookInDate || Date.now(),
+    status,
+    customerName: selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in"),
+    customerPhone: selectedCustomer?.phone ?? undefined,
+    customerEmail: selectedCustomer?.email ?? undefined,
+    deviceType,
+    deviceModel: deviceDescription,
+    serialNumber,
+    condition,
+    workDescription,
+    additionalEquipment,
+    accounts: credentials.map((c) => c.accounts.trim()).join("\n"),
+    logins: credentials.map((c) => c.passwordOrPin.trim()).join("\n"),
+    photos,
+    signature: signature || undefined,
+    isCritical,
+    isUnderWarranty,
+    isPartnerRepair,
+    partnerRepairCode,
+  };
+
+  /* Print the just-booked job. Goes straight to the routed printer when one is
+     reachable (ESC/POS over USB/serial, or the Print Bridge) and otherwise
+     reveals the hidden print area and uses window.print(). */
+  const printJobSheet = (paper: ServicePaper) => {
+    setPrintPaper(paper);
+    const printMode = paper === "80mm" ? "docket" : "sheet";
+    const browserFallback = () => new Promise<void>((resolve) => {
+      document.body.setAttribute("data-print", printMode);
+      let done = false;
+      let guard = 0;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(guard);
+        document.body.removeAttribute("data-print");
+        resolve();
+      };
+      window.addEventListener("afterprint", finish, { once: true });
+      guard = window.setTimeout(finish, 30_000);
+      window.print();
+    });
+
+    setTimeout(() => {
+      void printServiceJobDocument({
+        paper,
+        copies: 1,
+        hw: hardware,
+        data: sheetData,
+        branding: sheetBranding,
+        opts: svcOpts,
+        fontCss: svcFontCss,
+        elementId: paper === "80mm" ? "svc-job-docket-print-area" : "svc-job-sheet-print-area",
+        browserFallback,
+      })
+        .then((method) => {
+          if (method !== "browser") toast.success(`${SERVICE_PAPER_LABEL[paper].title} sent to the printer`);
+        })
+        .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't print this job"));
+    }, 80);
+  };
 
   return (
     <>
@@ -776,22 +873,21 @@ export default function ServiceJobNewPage() {
               </a>
             </Button>
           )}
-          <Button
-            className="w-full gap-2"
-            variant="outline"
-            onClick={() => {
-              setTimeout(() => {
-                document.body.setAttribute("data-print", "sheet");
-                const cleanup = () => document.body.removeAttribute("data-print");
-                window.addEventListener("afterprint", cleanup, { once: true });
-                setTimeout(cleanup, 30_000);
-                window.print();
-              }, 80);
-            }}
-          >
-            <Printer className="w-4 h-4" />
-            Print Job Sheet
-          </Button>
+          {/* Job sheet — A4 or 80mm, defaulting to the saved Service Ticket
+              template's paper. Both carry the same fields. */}
+          <div className="grid grid-cols-2 gap-2">
+            {(["a4", "80mm"] as const).map((paper) => (
+              <Button
+                key={paper}
+                className="w-full gap-2"
+                variant={paper === defaultServicePaper ? "default" : "outline"}
+                onClick={() => printJobSheet(paper)}
+              >
+                <Printer className="w-4 h-4" />
+                {SERVICE_PAPER_LABEL[paper].title}
+              </Button>
+            ))}
+          </div>
           <Button
             className="w-full gap-2"
             variant="outline"
@@ -900,71 +996,53 @@ export default function ServiceJobNewPage() {
     {/* Print-only areas — hidden on screen, shown during window.print() */}
     <style dangerouslySetInnerHTML={{ __html:
       `@media screen {
-        #svc-job-sheet-print-area { display: none !important; }
+        #svc-job-sheet-print-area, #svc-job-docket-print-area { display: none !important; }
       }
       @media print {
         body * { visibility: hidden !important; }
         body[data-print="sheet"] #svc-job-sheet-print-area,
-        body[data-print="sheet"] #svc-job-sheet-print-area * { visibility: visible !important; }
+        body[data-print="sheet"] #svc-job-sheet-print-area *,
+        body[data-print="docket"] #svc-job-docket-print-area,
+        body[data-print="docket"] #svc-job-docket-print-area * { visibility: visible !important; }
         /* Collapse the (hidden) app content to zero height so it can't paginate
            into a second sheet. The print area is position:fixed (viewport-
            relative), so #root's overflow does NOT clip it — but with #root
            collapsed only one page is generated, so the fixed sheet, which Chrome
            would otherwise repeat on every page, now prints exactly once. */
-        body[data-print="sheet"] #root { height: 0 !important; overflow: hidden !important; }
-        body[data-print="sheet"] #svc-job-sheet-print-area {
+        body[data-print="sheet"] #root,
+        body[data-print="docket"] #root { height: 0 !important; overflow: hidden !important; }
+        body[data-print="sheet"] #svc-job-sheet-print-area,
+        body[data-print="docket"] #svc-job-docket-print-area {
           display: block !important;
           position: fixed !important; left: 0 !important; top: 0 !important;
-          width: 100% !important; box-sizing: border-box !important;
+          box-sizing: border-box !important;
         }
-        @page { size: A4 portrait; margin: 10mm; }
+        body[data-print="sheet"] #svc-job-sheet-print-area { width: 100% !important; }
+        body[data-print="docket"] #svc-job-docket-print-area { width: 80mm !important; }
       }`
     }} />
+    {/* @page can't be switched by an attribute selector, so the roll size is
+        only declared while the docket is the visible print area. */}
+    <style dangerouslySetInnerHTML={{ __html:
+      printPaper === "80mm"
+        ? "@media print { @page { size: 80mm auto; margin: 0; } }"
+        : "@media print { @page { size: A4 portrait; margin: 10mm; } }"
+    }} />
 
-    {/* ── Job Sheet print area (unified template) ──────────────────── */}
+    {/* ── Job Sheet print areas (unified template, both papers) ─────── */}
     <ServiceJobSheet
       id="svc-job-sheet-print-area"
       opts={svcOpts}
       fontCss={svcFontCss}
-      branding={{
-        businessName: merchant?.businessName ?? "Service Centre",
-        abn: bizProfile?.abn,
-        website: bizProfile?.website,
-        email: bizProfile?.contactEmail ?? merchant?.email ?? undefined,
-        address: [
-          (merchant as { address?: string } | undefined)?.address,
-          (merchant as { city?: string } | undefined)?.city,
-          bizProfile?.state,
-          bizProfile?.postcode,
-        ].filter(Boolean).join(", "),
-        brandColor,
-        logo: bizProfile?.logo,
-        socialLinks: bizProfile?.socialLinks,
-        techAppUsername: merchant?.username ?? undefined,
-      }}
-      data={{
-        jobId: successJob?.id ?? null,
-        jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
-        date: bookInDate || Date.now(),
-        status,
-        customerName: selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in"),
-        customerPhone: selectedCustomer?.phone ?? undefined,
-        customerEmail: selectedCustomer?.email ?? undefined,
-        deviceType,
-        deviceModel: deviceDescription,
-        serialNumber,
-        condition,
-        workDescription,
-        additionalEquipment,
-        accounts: credentials.map((c) => c.accounts.trim()).join("\n"),
-        logins: credentials.map((c) => c.passwordOrPin.trim()).join("\n"),
-        photos,
-        signature: signature || undefined,
-        isCritical,
-        isUnderWarranty,
-        isPartnerRepair,
-        partnerRepairCode,
-      }}
+      branding={sheetBranding}
+      data={sheetData}
+    />
+    <ServiceJobDocket
+      id="svc-job-docket-print-area"
+      opts={svcOpts}
+      fontCss={svcFontCss}
+      branding={sheetBranding}
+      data={sheetData}
     />
 
     </>

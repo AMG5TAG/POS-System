@@ -41,7 +41,7 @@ function fmtAUD(n: number): string {
 }
 
 /** Left label + right value packed to `width`, truncating the label if needed. */
-function cols(left: string, right: string, width: number): string {
+export function cols(left: string, right: string, width: number): string {
   const r = toAscii(right);
   let l = toAscii(left);
   const maxL = width - r.length - 1;
@@ -52,7 +52,7 @@ function cols(left: string, right: string, width: number): string {
 }
 
 /** Small fluent builder accumulating ESC/POS bytes. */
-class EscPos {
+export class EscPos {
   private buf: number[] = [];
   raw(...b: number[]): this { for (const x of b) this.buf.push(x & 0xff); return this; }
   text(s: string): this { for (const ch of toAscii(s)) this.buf.push(ch.charCodeAt(0) & 0xff); return this; }
@@ -65,7 +65,56 @@ class EscPos {
   feed(n = 1): this { return this.raw(ESC, 0x64, n & 0xff); }
   /** GS V — feed then partial cut. */
   cut(): this { return this.raw(GS, 0x56, 66, 3); }
+  /**
+   * GS ( k — native QR code. Uses the Epson-standard model-2 sequence that
+   * Partner Tech and virtually every other ESC/POS thermal printer implements:
+   * select model, set module size, set error correction, store the payload,
+   * then print it. Long payloads are skipped rather than truncated into an
+   * unscannable code.
+   */
+  qr(data: string, moduleSize = 6): this {
+    const bytes = Array.from(toAscii(data), (ch) => ch.charCodeAt(0) & 0xff);
+    if (!bytes.length || bytes.length > 700) return this;
+    const store = bytes.length + 3;
+    return this
+      .raw(GS, 0x28, 0x6b, 0x04, 0x00, 0x31, 0x41, 0x32, 0x00)              // model 2
+      .raw(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x43, Math.max(1, Math.min(16, moduleSize)))
+      .raw(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x45, 0x31)                     // error correction M
+      .raw(GS, 0x28, 0x6b, store & 0xff, (store >> 8) & 0xff, 0x31, 0x50, 0x30, ...bytes)
+      .raw(GS, 0x28, 0x6b, 0x03, 0x00, 0x31, 0x51, 0x30);                    // print
+  }
   build(): Uint8Array { return new Uint8Array(this.buf); }
+}
+
+/** Break `text` into lines no wider than `width`, splitting on whitespace. */
+export function wrap(text: string | null | undefined, width: number): string[] {
+  // Split before folding to ASCII: toAscii drops every byte outside the printable
+  // range, newlines included, which would glue a multi-line note into one run.
+  const paragraphs = (text ?? "").replace(/\r/g, "").split("\n");
+  if (!paragraphs.some((p) => toAscii(p).trim())) return [];
+  const out: string[] = [];
+  for (const raw of paragraphs) {
+    const paragraph = toAscii(raw);
+    if (!paragraph.trim()) { out.push(""); continue; }
+    let line = "";
+    for (const word of paragraph.trim().split(/\s+/)) {
+      if (!line.length) {
+        line = word;
+      } else if (line.length + 1 + word.length <= width) {
+        line += ` ${word}`;
+      } else {
+        out.push(line);
+        line = word;
+      }
+      // A single word longer than the roll gets hard-split so it can't vanish.
+      while (line.length > width) {
+        out.push(line.slice(0, width));
+        line = line.slice(width);
+      }
+    }
+    if (line.length) out.push(line);
+  }
+  return out;
 }
 
 /** ESC p — cash-drawer kick pulse (pin 2). `pulseMs` in ~2ms units, clamped. */

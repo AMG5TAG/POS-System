@@ -13,6 +13,7 @@ import {
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
   useGetMerchant,
+  useGetPosSettings,
   ApiError,
   type PurchaseOrder,
 } from "@workspace/api-client-react";
@@ -34,6 +35,9 @@ import { toast } from "sonner";
 import { uploadFile } from "@/lib/upload";
 import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
+import { parseHardwareConfig, type HardwareCfg } from "@/lib/hardware-config";
+import { printDocument } from "@/lib/print-router";
+import { standaloneHtmlFrom } from "@/lib/print-dom";
 
 type POStatus = "Draft" | "Ordered" | "Partially Received" | "Fully Received" | "Cancelled"
               | "Sent" | "Partial" | "Received"; // legacy values
@@ -210,6 +214,8 @@ export default function ProductsPurchaseOrdersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [items, setItems] = useState<POItem[]>([{ ...EMPTY_ITEM }]);
   const [printPO, setPrintPO] = useState<PrintPO | null>(null);
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   /* PO whose print-choice screen is open (A4 PO vs. sale tickets). */
   const [printChoicePO, setPrintChoicePO] = useState<PurchaseOrder | null>(null);
   const [viewingPO, setViewingPO] = useState<PurchaseOrder | null>(null);
@@ -1394,7 +1400,7 @@ export default function ProductsPurchaseOrdersPage() {
       />
 
       {/* ── Auto-print after PO creation ─────────────────────────────── */}
-      {printPO && <POPrintArea po={printPO} onDone={() => setPrintPO(null)} />}
+      {printPO && <POPrintArea po={printPO} hw={hardware} onDone={() => setPrintPO(null)} />}
     </AppLayout>
   );
 }
@@ -1738,32 +1744,52 @@ function POPrintChoiceDialog({
 
 type POData = NonNullable<PrintPO>;
 
-function POPrintArea({ po, onDone }: { po: POData; onDone: () => void }) {
+function POPrintArea({ po, hw, onDone }: { po: POData; hw: HardwareCfg; onDone: () => void }) {
   useEffect(() => {
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
     let afterprintHandler: (() => void) | undefined;
+    let cancelled = false;
 
     const t = setTimeout(() => {
-      document.body.setAttribute("data-print", "po");
+      // The browser path reveals the hidden print area and uses window.print();
+      // the router only reaches for it when nothing silent is configured.
+      const browserFallback = () => new Promise<void>((resolve) => {
+        document.body.setAttribute("data-print", "po");
+        afterprintHandler = () => {
+          document.body.removeAttribute("data-print");
+          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
+          resolve();
+        };
+        window.addEventListener("afterprint", afterprintHandler, { once: true });
+        window.print();
+        fallbackTimer = setTimeout(afterprintHandler, 30_000);
+      });
 
-      afterprintHandler = () => {
-        document.body.removeAttribute("data-print");
-        if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
-        onDone();
-      };
-
-      window.addEventListener("afterprint", afterprintHandler, { once: true });
-      window.print();
-      fallbackTimer = setTimeout(afterprintHandler, 30_000);
+      void printDocument({
+        purpose: "purchaseOrder",
+        hw,
+        paper: "A4",
+        jobName: `Purchase order ${po.poNumber ?? po.id ?? ""}`.trim(),
+        html: () => standaloneHtmlFrom(document.getElementById("po-print-area"), {
+          title: `Purchase order ${po.poNumber ?? po.id ?? ""}`.trim(),
+        }),
+        browserFallback,
+      })
+        .then((method) => {
+          if (method !== "browser") toast.success("Purchase order sent to the printer");
+        })
+        .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't print this purchase order"))
+        .finally(() => { if (!cancelled) onDone(); });
     }, 150);
 
     return () => {
+      cancelled = true;
       clearTimeout(t);
       document.body.removeAttribute("data-print");
       if (afterprintHandler) window.removeEventListener("afterprint", afterprintHandler);
       if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
     };
-  }, [onDone]);
+  }, [onDone, hw, po]);
 
   const deliveryCharge = (po as { deliveryCharge?: number }).deliveryCharge ?? 0;
   const deliveryTaxMode = ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode;

@@ -4,9 +4,12 @@ import {
 } from "lucide-react";
 import JsBarcode from "jsbarcode";
 import QRCode from "qrcode";
-import { useGetMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, useGetPosSettings } from "@workspace/api-client-react";
+import { toast } from "sonner";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { publicOrigin } from "@/lib/public-url";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import { isSilentRoute, printDocument } from "@/lib/print-router";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -1290,6 +1293,8 @@ export interface PrintStickersArgs {
 export function useStickerPrinter() {
   const { templates } = useStickerTemplates();
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const { profile } = useBusinessProfile();
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
@@ -1327,10 +1332,36 @@ export function useStickerPrinter() {
     });
   };
 
+  /**
+   * Send one label document to the printer the merchant routed "Labels &
+   * stickers" at. Label printers (DYMO and friends) don't speak ESC/POS, so this
+   * is always the HTML path — the label markup already declares its exact
+   * die-cut size in `@page`, and the bridge passes that through untouched.
+   *
+   * Returns whether a print was started, keeping the existing synchronous
+   * contract: when nothing silent is configured this is literally the old
+   * iframe call, so behaviour is unchanged for merchants without a bridge.
+   */
+  const routeLabels = (html: string): boolean => {
+    if (!isSilentRoute(hardware, "label", false)) return printLabelHtmlViaIframe(html);
+
+    void printDocument({
+      purpose: "label",
+      hw: hardware,
+      paper: "auto",
+      jobName: "KoaPOS labels",
+      html: () => html,
+      browserFallback: () => { printLabelHtmlViaIframe(html); },
+    }).catch((err: unknown) => {
+      toast.error(err instanceof Error ? err.message : "Couldn't print the label");
+    });
+    return true;
+  };
+
   const printStickers = (args: PrintStickersArgs): boolean => {
     const html = buildStickersHtml(args);
     if (!html) return false;
-    return printLabelHtmlViaIframe(html);
+    return routeLabels(html);
   };
 
   /**
@@ -1346,7 +1377,7 @@ export function useStickerPrinter() {
     const bodyOf = (doc: string) => doc.match(/<body>([\s\S]*?)<\/body>/i)?.[1] ?? "";
     const mergedBody = docs.map(bodyOf).join("\n");
     const merged = docs[0].replace(/<body>[\s\S]*?<\/body>/i, `<body>\n${mergedBody}\n</body>`);
-    return printLabelHtmlViaIframe(merged);
+    return routeLabels(merged);
   };
 
   return { printStickers, printStickersBatch, buildStickersHtml, defaultTemplateFor, businessName, brandColor, logoUrl };

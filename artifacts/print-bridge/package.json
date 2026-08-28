@@ -1,0 +1,23 @@
+{
+  "name": "@workspace/print-bridge",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "KoaPOS Print Bridge \u2014 local silent-print service for Windows/macOS/Linux tills",
+  "bin": {
+    "koapos-print-bridge": "./dist/index.mjs"
+  },
+  "scripts": {
+    "dev": "tsx src/index.ts",
+    "build": "node ./build.mjs",
+    "start": "node ./dist/index.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "devDependencies": {
+    "@types/node": "catalog:",
+    "esbuild": "0.27.3",
+    "tsx": "catalog:",
+    "vitest": "^4.1.7"
+  }
+}

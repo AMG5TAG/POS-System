@@ -16,7 +16,7 @@ import { useQueryClient } from "@tanstack/react-query";
 
 export default function POSRefundPage() {
   const queryClient = useQueryClient();
-  const { printReceipt } = useDocumentTemplate();
+  const { printRefundReceipt } = useDocumentTemplate();
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
   const hardware = useMemo(() => parseHardwareConfig(posSettingsData?.hardwareConfig), [posSettingsData]);
   const [search, setSearch] = useState("");
@@ -52,7 +52,7 @@ export default function POSRefundPage() {
           // Auto-print a refund receipt when the register is configured to.
           // Non-fatal — the refund is already recorded.
           if (hardware.printer.enabled && hardware.printer.autoPrintOnRefund) {
-            void printReceipt(refunded).catch(() => { /* non-fatal */ });
+            void printRefundReceipt(refunded).catch(() => { /* non-fatal */ });
           }
         },
         onError: () => toast.error("Failed to process refund"),

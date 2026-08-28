@@ -34,9 +34,13 @@ import {
 import { KEYBOARD_SHORTCUTS } from "@/lib/keyboard-shortcuts";
 import {
   parseHardwareConfig, resolvePrinterConnection, findPrinterModel, PRINTER_MODELS,
+  RECEIPT_PROFILE_ID,
   type HardwareCfg, type CashDrawerCfg, type PrinterCfg, type ScannerCfg,
 } from "@/lib/hardware-config";
 import { connectUsbPrinter, connectSerialPrinter, printTestReceipt, openCashDrawer } from "@/lib/thermal-printer";
+import {
+  PrintBridgeCard, PrinterRoutingCard, useBridgeStatus,
+} from "@/components/hardware/PrintBridgePanel";
 import {
   getEnabledPaymentMethods, getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
   parseCustomPaymentMethods, type CustomPaymentMethod,
@@ -851,8 +855,34 @@ function HardwareSection() {
     upsert.mutate({ data: { hardwareConfig: JSON.stringify(next) } });
   };
   const patchCD = (p: Partial<CashDrawerCfg>)  => save({ ...hw, cashDrawer: { ...hw.cashDrawer, ...p } });
-  const patchPR = (p: Partial<PrinterCfg>)      => save({ ...hw, printer:    { ...hw.printer,    ...p } });
+  /**
+   * Editing the receipt printer also updates the "Receipt printer" profile that
+   * document routing points at, so the two generations of config can't drift
+   * apart and start printing to different places.
+   */
+  const patchPR = (p: Partial<PrinterCfg>) => {
+    const printer = { ...hw.printer, ...p };
+    const printers = hw.printers.map((profile) =>
+      profile.id === RECEIPT_PROFILE_ID
+        ? {
+            ...profile,
+            transport: p.connection ?? profile.transport,
+            paper: p.paperWidth ?? profile.paper,
+            model: p.model ?? profile.model,
+            ipAddress: p.ipAddress ?? profile.ipAddress,
+            port: p.port ?? profile.port,
+          }
+        : profile,
+    );
+    save({ ...hw, printer, printers });
+  };
   const patchSC = (p: Partial<ScannerCfg>)      => save({ ...hw, scanner:    { ...hw.scanner,    ...p } });
+  /** Top-level patch for the profile/routing/bridge sections. */
+  const patchHW = (p: Partial<HardwareCfg>)     => save({ ...hw, ...p });
+
+  // Probing the bridge hits localhost, so only do it once the merchant has
+  // switched the feature on.
+  const { status: bridgeStatus, checking: bridgeChecking, refresh: refreshBridge } = useBridgeStatus(hw.bridge.enabled);
 
   /* Pick a printer model preset — seeds paper width + connection defaults. */
   const applyModel = (id: string) => {
@@ -1005,11 +1035,22 @@ function HardwareSection() {
                   {printerConn === "serial" ? <Settings2 className="w-3.5 h-3.5" /> : <Usb className="w-3.5 h-3.5" />} Connect printer
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={runTestPrint} disabled={!nativeConn}><Zap className="w-3.5 h-3.5" /> Print test ticket</Button>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={runTestPrint} disabled={!nativeConn && !bridgeStatus?.paired}><Zap className="w-3.5 h-3.5" /> Print test ticket</Button>
             </div>
           </div>
         )}
       </div>
+
+      {/* Silent printing to named printers, and which document goes where. */}
+      <PrintBridgeCard
+        hw={hw}
+        onChange={patchHW}
+        status={bridgeStatus}
+        checking={bridgeChecking}
+        refresh={refreshBridge}
+      />
+      <PrinterRoutingCard hw={hw} onChange={patchHW} status={bridgeStatus} />
+
       <div className="rounded-xl border overflow-hidden">
         <div className="flex items-center gap-4 px-5 py-4 border-b bg-muted/20">
           <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/30"><ScanLine className="w-4 h-4 text-green-700 dark:text-green-400" /></div>

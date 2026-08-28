@@ -3,7 +3,7 @@ import type { Transaction } from "@workspace/api-client-react";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { warrantyLabel } from "@/lib/warranty";
-import { parseHardwareConfig } from "@/lib/hardware-config";
+import { parseHardwareConfig, type PrintPurpose } from "@/lib/hardware-config";
 import { printThermalReceipt } from "@/lib/thermal-printer";
 import {
   printA4Invoice as rawPrintA4Invoice,
@@ -11,6 +11,7 @@ import {
   printA4Receipt as rawPrintA4Receipt,
   printA4ServiceJob as rawPrintA4ServiceJob,
   normalizeReceiptStyle,
+  type PrintRoute,
   type ReceiptBusinessInfo,
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
@@ -80,6 +81,8 @@ export interface DocumentTemplateController {
   businessInfo: ReceiptBusinessInfo;
   /** Print an 80mm thermal receipt using the saved Thermal_Receipt template. */
   printReceipt: (tx: Transaction) => Promise<void>;
+  /** Same receipt, routed at the "Refund receipt" printer instead of the sale one. */
+  printRefundReceipt: (tx: Transaction) => Promise<void>;
   /** Print an A4 tax invoice using the saved Invoice template. */
   printInvoice: (tx: Transaction) => void;
   /** Print an A4 quote using the saved Quote template (same layout, "Quote" heading). */
@@ -161,21 +164,27 @@ export function useDocumentTemplate(): DocumentTemplateController {
     profileLoading ||
     merchantLoading;
 
+  /** Route descriptor for a purpose, so each document lands on its own printer. */
+  const route = (purpose: PrintPurpose): PrintRoute => ({ purpose, hw: hardware });
+
+  const thermalReceipt = (tx: Transaction, purpose: PrintPurpose) =>
+    printThermalReceipt(withWarranty(tx), businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
+      overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
+    }), hardware, purpose).then(() => { /* method (usb/serial/bridge/html) is internal */ });
+
   return {
     isLoading,
     businessInfo,
-    printReceipt: (tx) =>
-      printThermalReceipt(withWarranty(tx), businessInfo, toReceiptOpts(receipt.opts, receipt.fontCss, {
-        overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
-      }), hardware).then(() => { /* method (usb/serial/html) is internal */ }),
+    printReceipt: (tx) => thermalReceipt(tx, "receipt"),
+    printRefundReceipt: (tx) => thermalReceipt(tx, "refund"),
     printInvoice: (tx) =>
       rawPrintA4Invoice(withWarranty(tx), businessInfo, toReceiptOpts(invoice.opts, invoice.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
-      })),
+      }), route("invoice")),
     printQuote: (tx) =>
       rawPrintA4Quote(tx, businessInfo, toReceiptOpts(quote.opts, quote.fontCss, {
         overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
-      })),
+      }), route("quote")),
     printA4Receipt: (tx, overallDiscountPct) =>
       rawPrintA4Receipt(
         withWarranty(tx),
@@ -186,6 +195,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
           paymentTypes: profile?.paymentTypes,
           overallDiscountPct: overallDiscountPct ?? (tx as { discountPct?: number | null }).discountPct ?? undefined,
         }),
+        route("a4Receipt"),
       ),
     printServiceJob: (job, customerOverride) =>
       rawPrintA4ServiceJob(
@@ -193,6 +203,7 @@ export function useDocumentTemplate(): DocumentTemplateController {
         businessInfo,
         customerOverride,
         toReceiptOpts(service.opts, service.fontCss),
+        route("serviceJobSheet"),
       ),
   };
 }
