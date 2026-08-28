@@ -182,6 +182,14 @@ to your own tool. Raw ESC/POS printing is unaffected.
 printers* above. Almost always a service install (`SYSTEM`) plus a printer connected
 under a user login. Reinstall it on a TCP/IP port, or run the bridge at login.
 
+**`Failed to execute 'open' on 'USBDevice'. Access denied.`** — this is the browser's
+WebUSB path, not the bridge. The printer already has a Windows driver bound to it
+(usbprint.sys, installed with the print queue), and Chrome can't take it over: a
+printer can be driven by WebUSB *or* be installed as a Windows printer, not both.
+Set that printer's connection to **Print Bridge** in Hardware settings — the bridge
+prints raw ESC/POS through the Windows queue, so the driver stays where it is and
+nothing needs replacing.
+
 **Nothing happens on an 80 mm queue** — the Windows driver must be the printer's own
 ESC/POS driver (or a generic "Generic / Text Only" queue). Raw bytes bypass driver
 rendering entirely, so a driver that expects graphics will discard them.

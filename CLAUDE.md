@@ -80,7 +80,14 @@ print site passing the existing print flow as `browserFallback`. Only report
 success to the operator when `printDocument` returns something other than
 `"browser"` — the browser path just opens a dialog they can still cancel.
 
-Two hazards worth knowing, both learned the hard way:
+Three hazards worth knowing, all learned the hard way:
+- **WebUSB and a Windows print queue are mutually exclusive for the same device.**
+  A printer installed as a Windows printer has usbprint.sys bound to it, so
+  `USBDevice.open()` fails with `Access denied`. There is no code fix — the
+  merchant either replaces the driver with WinUSB (losing the queue) or uses the
+  Print Bridge, which prints raw ESC/POS *through* the queue. The bridge exists
+  largely for this reason.
+
 - A `bridge` profile with **no queue name** prints to the machine's *default*
   printer. Never seed a profile that way; a merchant pairing the bridge for one
   document would silently redirect another (labels onto the A4 laser). Seed new

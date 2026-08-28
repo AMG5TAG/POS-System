@@ -16,8 +16,14 @@ interface UsbEndpoint { endpointNumber: number; direction: "in" | "out" }
 interface UsbAlternate { interfaceClass: number; endpoints: UsbEndpoint[] }
 interface UsbInterface { interfaceNumber: number; alternate: UsbAlternate }
 interface UsbConfiguration { interfaces: UsbInterface[] }
-interface UsbDevice {
+export interface UsbDevice {
   configuration: UsbConfiguration | null;
+  /** Every configuration, readable without opening the device. */
+  configurations: UsbConfiguration[];
+  vendorId: number;
+  productId: number;
+  productName?: string;
+  manufacturerName?: string;
   open(): Promise<void>;
   close(): Promise<void>;
   selectConfiguration(n: number): Promise<void>;
@@ -57,7 +63,14 @@ export async function connectUsbPrinter(): Promise<void> {
   if (!usb) throw new Error("WebUSB isn't supported in this browser. Use Chrome or Edge on desktop/Android.");
   // Empty filter list shows all devices so any ESC/POS printer (incl. the RP-700,
   // whose USB vendor id varies by build) is selectable.
-  await usb.requestDevice({ filters: [] });
+  const device = await usb.requestDevice({ filters: [] });
+  if (!hasPrinterInterface(device)) {
+    throw new Error(
+      `${describeDevice(device)} doesn't look like a USB printer — it exposes no printer interface. ` +
+      "Pick the receipt printer from the list, or use the Print Bridge if the printer is installed as a " +
+      "Windows printer.",
+    );
+  }
 }
 
 /** Prompt the user to pick + grant a serial (RS-232 / USB-serial) printer. */
@@ -72,7 +85,55 @@ export async function connectSerialPrinter(): Promise<void> {
 async function firstUsbDevice(): Promise<UsbDevice | null> {
   const usb = getUsb();
   if (!usb) return null;
-  return (await usb.getDevices())[0] ?? null;
+  const devices = await usb.getDevices();
+  // The chooser lists every device (printer vendor ids vary too much to filter
+  // on), so the granted list can contain unrelated hardware from an earlier
+  // mis-click. Prefer one that actually exposes a printer interface rather than
+  // opening whatever happens to be first — opening the wrong device fails with
+  // the same "Access denied" as a driver conflict and sends you hunting.
+  return devices.find(hasPrinterInterface) ?? devices[0] ?? null;
+}
+
+/** USB printer class is 0x07. Readable without opening the device. */
+export function hasPrinterInterface(device: UsbDevice): boolean {
+  try {
+    return (device.configurations ?? []).some((cfg) =>
+      cfg.interfaces.some((i) => i.alternate?.interfaceClass === 7),
+    );
+  } catch {
+    return false;
+  }
+}
+
+function describeDevice(device: UsbDevice): string {
+  const name = [device.manufacturerName, device.productName].filter(Boolean).join(" ").trim();
+  const ids = `${device.vendorId?.toString(16).padStart(4, "0")}:${device.productId?.toString(16).padStart(4, "0")}`;
+  return name ? `${name} (${ids})` : ids;
+}
+
+/**
+ * Turn a raw WebUSB open() rejection into something the operator can act on.
+ *
+ * "Access denied" on Windows almost always means the printer already has a
+ * kernel driver bound to it — which is exactly what happens when it's installed
+ * as a Windows printer queue. usbprint.sys owns the device and Chrome cannot
+ * claim it. The two are mutually exclusive, and the Print Bridge is the way out:
+ * it prints raw ESC/POS *through* the Windows queue, so the driver can stay.
+ */
+export function openFailureMessage(err: unknown, device: UsbDevice): string {
+  const raw = err instanceof Error ? err.message : String(err);
+  const denied = /access denied|SecurityError/i.test(raw)
+    || (err instanceof DOMException && err.name === "SecurityError");
+
+  if (!denied) return `Couldn't open the USB printer ${describeDevice(device)}: ${raw}`;
+
+  return (
+    `Windows won't let the browser take over ${describeDevice(device)} — it already has a printer ` +
+    "driver attached. A printer can be driven by WebUSB or be installed as a Windows printer, not both. " +
+    "Switch this printer's connection to \"Print Bridge\" in Hardware settings (it prints through the " +
+    "Windows queue, so the driver stays) — or, to keep using WebUSB, replace the driver with WinUSB and " +
+    "remove the Windows print queue. Close any other tab or app holding the printer first."
+  );
 }
 async function firstSerialPort(): Promise<SerialPortLike | null> {
   const serial = getSerial();
@@ -81,7 +142,11 @@ async function firstSerialPort(): Promise<SerialPortLike | null> {
 }
 
 async function sendUsb(device: UsbDevice, data: Uint8Array): Promise<void> {
-  await device.open();
+  try {
+    await device.open();
+  } catch (err) {
+    throw new Error(openFailureMessage(err, device));
+  }
   try {
     if (!device.configuration) await device.selectConfiguration(1);
     const cfg = device.configuration;
