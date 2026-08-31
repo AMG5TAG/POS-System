@@ -51,12 +51,12 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
           <p className="text-xs">
             Proudly Australian. 🇦🇺 Designed and Hosted by{" "}
             <a
-              href="https://koastal.com.au"
+              href="https://www.koastal.com.au"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-foreground transition-colors"
             >
-              KoaSOFT – Web Design, Software and App Development
+              Koastal – Web Design, Software and App Development
             </a>
           </p>
         </div>
