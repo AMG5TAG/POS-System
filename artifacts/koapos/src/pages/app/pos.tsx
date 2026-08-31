@@ -325,8 +325,7 @@ export default function POSPage() {
     items: { description: string; quantity: number; unitPrice: number; taxRate: number }[];
     createdAt: string;
   };
-  const { opts: invoiceOpts } = useSalesTemplate("Invoice");
-  const { printInvoice: printInvoiceTpl } = useDocumentTemplate();
+  const { printInvoice: printInvoiceTpl, invoiceEmailTemplate } = useDocumentTemplate();
   const createInvoiceMutation = useCreateInvoice();
   const sendInvoiceEmailMutation = useSendInvoiceEmail();
   const [invoiceSendTarget, setInvoiceSendTarget] = useState<CreatedInvoice | null>(null);
@@ -2749,32 +2748,12 @@ export default function POSPage() {
     amountPaid: inv.amountPaid,
   } as Transaction);
 
-  const invoiceEmailTemplate = () => ({
-    templateId: "e-pro",
-    subjectLine:      invoiceEmailSubject.trim() || invoiceOpts.subjectLine,
-    customGreeting:   invoiceOpts.customGreeting,
-    customMessage:    invoiceOpts.customMessage,
-    customSignOff:    invoiceOpts.customSignOff,
-    footerText:       invoiceOpts.footerText,
-    thankYouMsg:      invoiceOpts.thankYouMsg,
-    showGstBreakdown: invoiceOpts.showGstBreakdown,
-    showWebsite:      invoiceOpts.showWebsite,
-    showSocialLinks:  invoiceOpts.showSocialLinks,
-    showLogo:         invoiceOpts.showLogo,
-    brandColor:       businessProfile.brandColors?.[0] ?? "#4f46e5",
-    logo:             businessProfile.logo ?? "",
-    website:          businessProfile.website ?? "",
-    contactEmail:     businessProfile.contactEmail ?? "",
-    tagline:          businessProfile.tagline ?? "",
-    socialLinks:      businessProfile.socialLinks ?? {},
-  });
-
   const sendInvoiceEmail = async (email: string) => {
     if (!invoiceSendTarget) return;
     try {
       await sendInvoiceEmailMutation.mutateAsync({
         id: invoiceSendTarget.id,
-        data: { email, template: invoiceEmailTemplate() } as Parameters<typeof sendInvoiceEmailMutation.mutateAsync>[0]["data"],
+        data: { email, template: invoiceEmailTemplate(invoiceEmailSubject) } as Parameters<typeof sendInvoiceEmailMutation.mutateAsync>[0]["data"],
       });
     } catch {
       throw new Error("Failed to send email");

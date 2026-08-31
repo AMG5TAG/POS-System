@@ -63,7 +63,7 @@ import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
 import { parseHardwareConfig } from "@/lib/hardware-config";
 import {
   printServiceJobDocument, serviceJobPaperFromOpts,
-  SERVICE_PAPER_LABEL, type ServicePaper,
+  serviceDocketDensity, SERVICE_PAPER_LABEL, type ServicePaper,
 } from "@/lib/service-job-print";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
 import { techAppJobUrl } from "@/lib/public-url";
@@ -87,6 +87,16 @@ const DEVICE_TYPES = [
 
 /** Device types that don't need tech-specific fields (description, serial, damage, logins, photos). */
 const MEDIA_DEVICE_TYPES = new Set(["VHS Tape", "DVD", "Cassette Tape", "Pictures"]);
+
+/* Media that arrives as a stack: one job covers a count of items, not one
+   device, so the booking form asks how many instead of for a serial. */
+const QUANTITY_DEVICE_TYPES = new Set(["VHS Tape", "DVD", "Cassette Tape", "Pictures"]);
+
+/** "VHS Tape" → "vhs tapes", "Pictures" → "pictures" (already plural). */
+function countedLabel(deviceType: string): string {
+  const lower = deviceType.toLowerCase();
+  return lower.endsWith("s") ? lower : `${lower}s`;
+}
 
 function todayISO() {
   return new Date().toISOString().split("T")[0];
@@ -291,10 +301,13 @@ export default function ServiceJobNewPage() {
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
 
-  const { opts: svcOpts, fontCss: svcFontCss } = useSalesTemplate("Service_Ticket");
+  const { opts: svcOpts, fontCss: svcFontCss, selectedStyle: svcStyle } = useSalesTemplate("Service_Ticket");
   const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
   const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
-  const defaultServicePaper = serviceJobPaperFromOpts(svcOpts);
+  const defaultServicePaper = serviceJobPaperFromOpts(svcOpts, svcStyle);
+  /* Docket layout from the saved style — the compact thermal style prints the
+     same fields on less roll. */
+  const docketDensity = serviceDocketDensity(svcStyle);
   /* Which paper the *next* print uses — only needed so the matching @page rule
      is in the document before window.print() fires. */
   const [printPaper, setPrintPaper] = useState<ServicePaper>("a4");
@@ -307,6 +320,8 @@ export default function ServiceJobNewPage() {
 
   const [deviceType, setDeviceType] = useState("");
   const [deviceDescription, setDeviceDescription] = useState("");
+  const [deviceColour, setDeviceColour] = useState("");
+  const [deviceQuantity, setDeviceQuantity] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [condition, setCondition] = useState("");
   const [partnerRepairCode, setPartnerRepairCode] = useState("");
@@ -377,6 +392,10 @@ export default function ServiceJobNewPage() {
           isUnderWarranty,
           deviceType: deviceType || null,
           deviceDescription: deviceDescription || null,
+          deviceColour: deviceColour || null,
+          deviceQuantity: QUANTITY_DEVICE_TYPES.has(deviceType) && deviceQuantity
+            ? Math.max(1, parseInt(deviceQuantity, 10) || 1)
+            : null,
           serialNumber: serialNumber || null,
           condition: condition || null,
           partnerRepairCode: partnerRepairCode || null,
@@ -446,6 +465,10 @@ export default function ServiceJobNewPage() {
     customerEmail: selectedCustomer?.email ?? undefined,
     deviceType,
     deviceModel: deviceDescription,
+    deviceColour,
+    deviceQuantity: QUANTITY_DEVICE_TYPES.has(deviceType) && deviceQuantity
+      ? Math.max(1, parseInt(deviceQuantity, 10) || 1)
+      : undefined,
     serialNumber,
     condition,
     workDescription,
@@ -491,6 +514,7 @@ export default function ServiceJobNewPage() {
         branding: sheetBranding,
         opts: svcOpts,
         fontCss: svcFontCss,
+        density: docketDensity,
         elementId: paper === "80mm" ? "svc-job-docket-print-area" : "svc-job-sheet-print-area",
         browserFallback,
       })
@@ -637,15 +661,45 @@ export default function ServiceJobNewPage() {
             </div>
           </div>
 
+          {/* Counted media — how many tapes/discs came in under this job */}
+          {QUANTITY_DEVICE_TYPES.has(deviceType) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  placeholder="e.g. 12"
+                  value={deviceQuantity}
+                  onChange={(e) => setDeviceQuantity(e.target.value.replace(/[^0-9]/g, ""))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  How many {countedLabel(deviceType)} were booked in
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Device detail fields — hidden for media-only items */}
           {!MEDIA_DEVICE_TYPES.has(deviceType) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Brand and Colour on the first row, Serial beside Known Damage
+                  on the second — the order a device is written up at the counter. */}
               <div className="space-y-1.5">
-                <Label>Device Description (Brand / Colour)</Label>
+                <Label>Brand</Label>
                 <Input
-                  placeholder="e.g. Apple MacBook Pro, Space Grey..."
+                  placeholder="e.g. Apple MacBook Pro..."
                   value={deviceDescription}
                   onChange={(e) => setDeviceDescription(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Colour</Label>
+                <Input
+                  placeholder="e.g. Space Grey..."
+                  value={deviceColour}
+                  onChange={(e) => setDeviceColour(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -1041,6 +1095,7 @@ export default function ServiceJobNewPage() {
       id="svc-job-docket-print-area"
       opts={svcOpts}
       fontCss={svcFontCss}
+      density={docketDensity}
       branding={sheetBranding}
       data={sheetData}
     />

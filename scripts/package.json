@@ -43,6 +43,9 @@
     "hash-staff-pins": "tsx ./src/hash-staff-pins.ts",
     "patch-koastal-recurring-invoices": "tsx ./src/patch-koastal-recurring-invoices.ts",
     "backfill-resize-logos": "tsx ./src/backfill-resize-logos.ts",
+    "seed-email-template-from-invoice": "tsx ./src/seed-email-template-from-invoice.ts",
+    "add-service-job-device-colour": "tsx ./src/add-service-job-device-colour.ts",
+    "add-service-job-device-quantity": "tsx ./src/add-service-job-device-quantity.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

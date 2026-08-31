@@ -16,7 +16,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
-  Hash, ClipboardList, KeyRound, Package, StickyNote, Camera, Upload, X,
+  Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
   Trash2, Eye, ChevronLeft, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
@@ -442,7 +442,7 @@ export function ServiceJobDetailDialog({
             </div>
 
             {/* Device */}
-            {(showAll || job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
+            {(showAll || job.deviceType || job.deviceDescription || job.deviceColour || job.deviceQuantity != null || job.serialNumber || job.condition) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                   <div className="flex items-center gap-2">
@@ -458,6 +458,8 @@ export function ServiceJobDetailDialog({
                 </div>
                 {(job.deviceType || showAll) && <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType ?? (showAll ? "—" : null)} />}
                 {(job.deviceDescription || showAll) && <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription ?? (showAll ? "—" : null)} />}
+                {(job.deviceColour || showAll) && <DetailRow icon={Palette}            label="Colour"        value={job.deviceColour ?? (showAll ? "—" : null)} />}
+                {(job.deviceQuantity != null || showAll) && <DetailRow icon={Layers}     label="Quantity"      value={job.deviceQuantity != null ? String(job.deviceQuantity) : (showAll ? "—" : null)} />}
                 {(job.serialNumber || showAll) && <DetailRow icon={Hash}              label="Serial Number" value={job.serialNumber ?? (showAll ? "—" : null)} />}
                 {(job.condition || showAll) && <DetailRow icon={AlertCircle}       label="Known Damage / Condition"  value={job.condition ?? (showAll ? "—" : null)} />}
                 {/* Logins / Accounts */}

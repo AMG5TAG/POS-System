@@ -202,6 +202,17 @@ export function buildReceiptBytes(
   if (footer) b.line(footer);
   if (custom) for (const l of custom.split("\n")) b.line(l);
 
+  /* Custom QR. A thermal head can't reproduce the uploaded PNG, but a QR picked
+     from Marketing > QR Codes also carries what it *encodes*, and that the
+     printer can draw itself — same destination, same scan, no raster. An
+     uploaded image has no payload, so it stays an HTML-path-only feature. */
+  if (o.showCustomQr && o.customQrData) {
+    b.line();
+    b.qr(o.customQrData, printer.paperWidth === "58mm" ? 4 : 6);
+    const caption = resolve(o.customQrCaption);
+    if (caption) b.line(caption);
+  }
+
   b.feed(3).cut();
   return b.build();
 }

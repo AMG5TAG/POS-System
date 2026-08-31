@@ -114,7 +114,14 @@ profile. Don't let them drift.
 
 Service jobs print in two shapes from the same data: the A4 `ServiceJobSheet` and
 the 80mm `ServiceJobDocket` (+ its ESC/POS encoder). `lib/service-job-print.ts`
-owns the choice; the default paper is the `serviceSheetPaper` template option.
+owns the choice. The Service Ticket template catalogue carries both papers —
+`ss-standard`/`ss-compact` (A4) and `ss-thermal`/`ss-thermal-compact` (80mm) — so
+the saved `selectedStyle` sets the default paper *and* the docket's density
+(`serviceDocketDensity` in `lib/service-sheet-fields.ts`, read by both docket
+renderers). The `serviceSheetPaper` template option still decides when the saved
+style is an A4 one, which is what keeps pre-existing 80mm merchants unchanged;
+picking a thermal style writes it to `80mm` so the two can't disagree. Compact is
+a *density*, never a smaller field set — a job prints the same content on either.
 
 Labels/stickers (`lib/sticker-config.tsx`) route through the same router but are
 **never** ESC/POS — DYMO-class printers use their own driver protocol, so they take
@@ -127,6 +134,55 @@ machine-wide on a TCP/IP port. `/v1/health` reports `runningAsService` and the
 Hardware settings surface a warning. The `network` transport on a profile (IP + port
 9100) is *not* this — it's a raw socket the browser can't open and the cloud API
 server can't reach, and still falls back to the print dialog.
+
+### QR codes
+
+`lib/qr-render.ts` is the only QR renderer: settings, the payload each QR *type*
+encodes (`buildQRDataString`), the styled-dot options, and the framed SVG → PNG
+export. Marketing › QR Codes designs codes with it; Management › Templates lets a
+merchant pick one for a document's Custom QR (`SavedQrPicker`).
+
+Picking a code stores three things on the template: a **rendered PNG data URL**
+(`customQrImage`), the **saved code's id** (`customQrCodeId`, so a redesign can be
+pulled through with Refresh), and **what it encodes** (`customQrData`). The image
+is a snapshot on purpose — invoice PDFs render on the server, which can't run the
+browser-only renderer — and it is the field every document already draws, so a
+picked code needed no new plumbing in any renderer. `customQrData` exists for the
+one path that can't draw an image: the ESC/POS receipt encodes the payload as a
+native QR instead. A tracked code encodes `/api/qr/r/:id`, so re-render through
+`qrEntryData` rather than reading `entry.url`.
+
+Custom QR reaches every document: the thermal receipt (HTML + ESC/POS), A4
+receipt, invoice, quote, the A4 service sheet, the 80mm service docket (HTML +
+ESC/POS), the Customer PDF, the server-rendered invoice/quote PDFs, and the
+invoice/quote **email bodies** (`lib/custom-qr-email.ts`). The invoice email body
+takes its QR from the **Email** row (the template that owns the body), the
+attached PDF from the **Invoice** row; the seed script below starts them
+identical. Quote emails take both from the Quote row.
+
+Every template category now reaches a renderer. Two were inert until recently:
+
+- **Email** drives the invoice email body. `lib/email-template.ts` resolves the
+  saved row server-side (`savedEmailTemplate`) and layers the caller's payload
+  over it (`mergeEmailTemplate`), which is what makes a *background* send —
+  auto-send, the reminder/overdue scheduler, neither of which passes a template —
+  carry the merchant's wording. A caller's empty string means "nothing typed",
+  never "clear the saved value", so blanks are dropped before the merge. The
+  Email row also picks the email layout via its style id (`e-pro`/`e-casual`/
+  `e-minimal`). The client payload comes from `invoiceEmailTemplate()` on
+  `useDocumentTemplate` — one builder for all three send call sites.
+  Invoice emails previously took their wording from the *Invoice* template, so
+  `scripts/seed-email-template-from-invoice.ts` (in the `db:push` chain) copies it
+  across: it creates a missing Email row, and otherwise fills only blank/absent
+  keys. It never overwrites, and is idempotent.
+- **Customer PDF**: `useDocumentTemplate` exposes `customerPdfTemplate` (branding,
+  font, header/footer, section toggles, custom QR) and `customers.tsx` passes it
+  to `exportCustomerPDF`. The whole template was inert before, so merchants who
+  saved one will see their export change to match it — logo included.
+
+Which template owns which document: the email **body** is the Email template's;
+the **attached PDF** is the Invoice (or Quote) template's. They are separate
+documents with separate custom QRs — the seed above starts them identical.
 
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.

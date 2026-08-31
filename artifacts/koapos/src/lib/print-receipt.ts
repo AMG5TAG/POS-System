@@ -54,6 +54,9 @@ export interface ReceiptTemplateOpts {
   customQrImage?: string;
   /** Caption printed under the custom QR. */
   customQrCaption?: string;
+  /** What a QR picked from Marketing › QR Codes encodes. Only the ESC/POS path
+   *  uses it — the HTML paths draw `customQrImage`, which carries the design. */
+  customQrData?: string;
   showLoyaltyEarned?: boolean;
   showBarcode?: boolean;
   /** Print each product's serial number(s) / IMEI under its line on the receipt. */
@@ -1023,6 +1026,8 @@ export interface ServiceJobPrintData {
   bookInDate: string;
   deviceType?: string | null;
   deviceDescription?: string | null;
+  deviceColour?: string | null;
+  deviceQuantity?: number | null;
   serialNumber?: string | null;
   condition?: string | null;
   workDescription?: string | null;
@@ -1237,12 +1242,14 @@ export function printA4ServiceJob(
     </div>
   </div>
 
-  ${tpl.showDeviceDetails && (job.deviceType || job.deviceDescription || job.serialNumber || job.condition) ? `
+  ${tpl.showDeviceDetails && (job.deviceType || job.deviceDescription || job.deviceColour || job.deviceQuantity != null || job.serialNumber || job.condition) ? `
   <div class="section">
     <div class="section-title">Device Information</div>
     <table class="detail">
       ${row("Device Type", job.deviceType)}
       ${row("Description", job.deviceDescription)}
+      ${row("Colour", job.deviceColour)}
+      ${row("Quantity", job.deviceQuantity != null ? String(job.deviceQuantity) : null)}
       ${row("Serial Number", job.serialNumber)}
       ${row("Condition", job.condition)}
     </table>

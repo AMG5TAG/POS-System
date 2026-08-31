@@ -6,6 +6,7 @@ import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { buildInvoicePdf } from "../services/invoicePdf";
+import { customQrEmailBlock } from "../lib/custom-qr-email";
 import { applyEstimateApprovalToJob, markJobAwaitingApproval } from "../services/quoteApproval";
 import {
   ListQuotesQueryParams,
@@ -420,6 +421,9 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
     fontFamily:             tplRow?.fontFamily || null,
     styleVariant:           tplRow?.selectedStyle || null,
     showCustomerQr:         Boolean(tplOpts.showCustomerQr),
+    showCustomQr:           Boolean(tplOpts.showCustomQr),
+    customQrImage:          (tplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (tplOpts.customQrCaption as string | undefined) || null,
     showLoyaltyEarned:      Boolean(tplOpts.showLoyaltyEarned),
     showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
     showBarcode:            Boolean(tplOpts.showBarcode),
@@ -475,6 +479,10 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
 
   const logoBlock = (bp?.logo) ? `<img src="${bp.logo}" alt="${bizName}" style="max-height:48px;max-width:140px;display:block;margin-bottom:8px"/>` : "";
 
+  // Saved Quote template row. Read before the body so the emailed QR and the QR
+  // on the attached PDF are always the one code.
+  const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
+
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#222;">
       <div style="border-bottom:3px solid ${brandColor};padding-bottom:12px;margin-bottom:20px;">${logoBlock}<h2 style="margin:0;font-size:18px;">${bizName}</h2></div>
@@ -495,10 +503,10 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
         <div style="font-size:16px;font-weight:bold;margin-top:8px;color:${brandColor};">Total: ${totalStr}</div>
       </div>
       ${q.notes ? `<p style="margin-top:24px;font-size:13px;color:#555;border-top:1px solid #eee;padding-top:16px;">${q.notes}</p>` : ""}
+      ${customQrEmailBlock(tplOpts)}
       <p style="margin-top:28px;font-size:13px;color:#444;">— The team at ${bizName}</p>
     </div>`;
 
-  const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
   const billingAddr = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
     || row.customerAddress || null;
   let bpBrandColors: string[] = [];
@@ -537,6 +545,9 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
     logoUrl:         bp?.logo || null,
     showLogo:              tplRow ? tplRow.showLogo : true,
     showGstBreakdown:      tplOpts.showGstBreakdown !== undefined ? Boolean(tplOpts.showGstBreakdown) : true,
+    showCustomQr:          Boolean(tplOpts.showCustomQr),
+    customQrImage:         (tplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:       (tplOpts.customQrCaption as string | undefined) || null,
     fontFamily:            tplRow?.fontFamily || null,
     styleVariant:          tplRow?.selectedStyle || null,
   });

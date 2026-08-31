@@ -30,6 +30,8 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
     bookInDate: job.bookInDate,
     deviceType: job.deviceType ?? null,
     deviceDescription: job.deviceDescription ?? null,
+    deviceColour: job.deviceColour ?? null,
+    deviceQuantity: job.deviceQuantity ?? null,
     serialNumber: job.serialNumber ?? null,
     condition: job.condition ?? null,
     partnerRepairCode: job.partnerRepairCode ?? null,
@@ -132,6 +134,9 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       bookInDate: typeof body.bookInDate === "string" ? body.bookInDate : today,
       deviceType: typeof body.deviceType === "string" ? body.deviceType : null,
       deviceDescription: typeof body.deviceDescription === "string" ? body.deviceDescription : null,
+      deviceColour: typeof body.deviceColour === "string" ? body.deviceColour : null,
+      // A count of items booked in; anything under 1 is a typo, not a quantity.
+      deviceQuantity: body.deviceQuantity != null ? Math.max(1, Math.round(Number(body.deviceQuantity) || 1)) : null,
       serialNumber: typeof body.serialNumber === "string" ? body.serialNumber : null,
       condition: typeof body.condition === "string" ? body.condition : null,
       partnerRepairCode: typeof body.partnerRepairCode === "string" ? body.partnerRepairCode : null,
@@ -180,6 +185,12 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   if (body.staffId !== undefined) updates.staffId = body.staffId ? Number(body.staffId) : null;
   if (typeof body.deviceType === "string") updates.deviceType = body.deviceType;
   if (typeof body.deviceDescription === "string") updates.deviceDescription = body.deviceDescription;
+  if (typeof body.deviceColour === "string") updates.deviceColour = body.deviceColour;
+  if (body.deviceQuantity !== undefined) {
+    updates.deviceQuantity = body.deviceQuantity == null
+      ? null
+      : Math.max(1, Math.round(Number(body.deviceQuantity) || 1));
+  }
   if (typeof body.serialNumber === "string") updates.serialNumber = body.serialNumber;
   if (typeof body.condition === "string") updates.condition = body.condition;
   if (typeof body.partnerRepairCode === "string") updates.partnerRepairCode = body.partnerRepairCode;
@@ -441,6 +452,8 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
   <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;width:140px;color:#666;font-size:12px;">Device Type</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceType)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Description</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceDescription)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Colour</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceColour)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Quantity</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceQuantity != null ? String(job.deviceQuantity) : null)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Serial Number</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.serialNumber)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Condition</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.condition)}</td></tr>
   </table>
@@ -465,7 +478,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     to: toEmail,
     subject: `Service Job Update — #${job.jobNumber}`,
     html,
-    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
+    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nColour: ${formatVal(job.deviceColour)}\nQuantity: ${formatVal(job.deviceQuantity != null ? String(job.deviceQuantity) : null)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
   });
 
   if (!result.success) {
@@ -505,6 +518,8 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
       bookInDate: today,
       deviceType: orig.deviceType ?? null,
       deviceDescription: orig.deviceDescription ?? null,
+      deviceColour: orig.deviceColour ?? null,
+      deviceQuantity: orig.deviceQuantity ?? null,
       serialNumber: orig.serialNumber ?? null,
       condition: orig.condition ?? null,
       workDescription: orig.workDescription ?? null,
@@ -555,6 +570,8 @@ router.post("/service-jobs/:id/reopen", requireAuth, async (req, res): Promise<v
       bookInDate: today,
       deviceType: orig.deviceType ?? null,
       deviceDescription: orig.deviceDescription ?? null,
+      deviceColour: orig.deviceColour ?? null,
+      deviceQuantity: orig.deviceQuantity ?? null,
       serialNumber: orig.serialNumber ?? null,
       condition: orig.condition ?? null,
       workDescription: orig.workDescription ?? null,

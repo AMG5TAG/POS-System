@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { techAppJobUrl } from "@/lib/public-url";
-import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
+import { humanizeStatus, mergeCredentialLines, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 
 /**
@@ -19,6 +19,10 @@ import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printi
  * Everything is inline-styled and pinned to 72mm (80mm roll minus the printable
  * margin) so the layout survives being serialised and printed elsewhere — the
  * Print Bridge renders this exact markup in headless Chromium.
+ *
+ * `density` mirrors the ESC/POS encoder: "compact" carries the same job fields
+ * and only trims the branding block and the whitespace around them, so a docket
+ * looks the same whichever transport printed it.
  */
 
 /** Printable width inside an 80mm roll. 58mm rolls print 48mm. */
@@ -33,18 +37,17 @@ const wrapStyle: CSSProperties = {
   wordBreak: "break-word",
 };
 
-const sectionTitle: CSSProperties = {
-  fontWeight: "bold",
-  fontSize: "11px",
-  textTransform: "uppercase",
-  letterSpacing: "0.4px",
-  margin: "6px 0 2px",
-};
-
-const dividerStyle: CSSProperties = {
-  borderTop: `1px dashed ${RULE}`,
-  margin: "6px 0",
-};
+/** Type scale + spacing per density. Compact only tightens; it hides no field. */
+const METRICS = {
+  standard: {
+    pad: "2mm", font: "11px", lineHeight: 1.35, gap: "6px",
+    business: "15px", jobNo: "18px", qr: "26mm", signGap: "12mm", logo: "14mm",
+  },
+  compact: {
+    pad: "1.5mm", font: "10px", lineHeight: 1.2, gap: "3px",
+    business: "14px", jobNo: "17px", qr: "20mm", signGap: "8mm", logo: "10mm",
+  },
+} as const;
 
 /** Build a QR as an SVG path synchronously so it is in the DOM before print. */
 function buildQr(text: string): { path: string; size: number } | null {
@@ -82,6 +85,7 @@ export function ServiceJobDocket({
   opts,
   fontCss,
   paperWidth = "80mm",
+  density = "standard",
 }: {
   id: string;
   data: ServiceSheetData;
@@ -89,8 +93,19 @@ export function ServiceJobDocket({
   opts: TplOpts;
   fontCss: string;
   paperWidth?: "80mm" | "58mm";
+  density?: ServiceDocketDensity;
 }) {
   const widthMm = paperWidth === "58mm" ? 48 : ROLL_WIDTH_MM;
+  const compact = density === "compact";
+  const m = METRICS[compact ? "compact" : "standard"];
+  const dividerStyle: CSSProperties = { borderTop: `1px dashed ${RULE}`, margin: `${m.gap} 0` };
+  const sectionTitle: CSSProperties = {
+    fontWeight: "bold",
+    fontSize: compact ? "10px" : "11px",
+    textTransform: "uppercase",
+    letterSpacing: "0.4px",
+    margin: `${m.gap} 0 2px`,
+  };
   const dateStr = data.date ? new Date(data.date).toLocaleDateString("en-AU") : "";
   const credentialLines = opts.showLogins ? mergeCredentialLines(data.accounts, data.logins) : [];
 
@@ -107,6 +122,12 @@ export function ServiceJobDocket({
     data.isPartnerRepair ? `PARTNER REPAIR${data.partnerRepairCode ? ` ${data.partnerRepairCode}` : ""}` : "",
   ].filter(Boolean);
 
+  // Same guard as every other document: only render a source we recognise, so a
+  // stray value can't become an arbitrary request from a printed page.
+  const customQrSrc = opts.showCustomQr && /^(https?:|data:image\/)/.test(opts.customQrImage || "")
+    ? opts.customQrImage
+    : "";
+
   const headerText = (opts.headerText || "").replace(/<[^>]*>/g, "").trim() || "SERVICE JOB";
   const footerText = (opts.footerText || "").replace(/<[^>]*>/g, "").trim();
 
@@ -118,10 +139,10 @@ export function ServiceJobDocket({
         background: "white",
         color: "#000",
         boxSizing: "border-box",
-        padding: "2mm",
+        padding: m.pad,
         fontFamily: fontCss,
-        fontSize: "11px",
-        lineHeight: 1.35,
+        fontSize: m.font,
+        lineHeight: m.lineHeight,
       }}
     >
       {/* ── Header ──────────────────────────────────────────────── */}
@@ -130,22 +151,24 @@ export function ServiceJobDocket({
           <img
             src={branding.logo}
             alt="Logo"
-            style={{ maxHeight: "14mm", maxWidth: "100%", objectFit: "contain", display: "block", margin: "0 auto 3px" }}
+            style={{ maxHeight: m.logo, maxWidth: "100%", objectFit: "contain", display: "block", margin: "0 auto 3px" }}
           />
         )}
-        <div style={{ fontSize: "15px", fontWeight: "bold", ...wrapStyle }}>
+        <div style={{ fontSize: m.business, fontWeight: "bold", ...wrapStyle }}>
           {branding.businessName || "Service Centre"}
         </div>
         {opts.showAbn && branding.abn && <div style={{ color: MUTED }}>ABN {branding.abn}</div>}
-        {branding.address && <div style={{ color: MUTED, ...wrapStyle }}>{branding.address}</div>}
-        {opts.showWebsite && branding.website && <div style={{ color: MUTED, ...wrapStyle }}>{branding.website}</div>}
-        {branding.email && <div style={{ color: MUTED, ...wrapStyle }}>{branding.email}</div>}
-        <div style={{ fontWeight: "bold", marginTop: "4px", letterSpacing: "1px" }}>{headerText}</div>
+        {/* Address / web / email are the lines the compact roll drops — the
+            customer has them on the receipt, and they cost three lines here. */}
+        {!compact && branding.address && <div style={{ color: MUTED, ...wrapStyle }}>{branding.address}</div>}
+        {!compact && opts.showWebsite && branding.website && <div style={{ color: MUTED, ...wrapStyle }}>{branding.website}</div>}
+        {!compact && branding.email && <div style={{ color: MUTED, ...wrapStyle }}>{branding.email}</div>}
+        <div style={{ fontWeight: "bold", marginTop: compact ? "2px" : "4px", letterSpacing: "1px" }}>{headerText}</div>
       </div>
 
       {/* ── Job identity ────────────────────────────────────────── */}
       <div style={dividerStyle} />
-      <div style={{ textAlign: "center", fontSize: "18px", fontWeight: "bold", ...wrapStyle }}>{data.jobNumber}</div>
+      <div style={{ textAlign: "center", fontSize: m.jobNo, fontWeight: "bold", ...wrapStyle }}>{data.jobNumber}</div>
       <div style={{ marginTop: "3px" }}>
         {dateStr && (
           <div style={{ display: "flex", justifyContent: "space-between" }}>
@@ -181,6 +204,8 @@ export function ServiceJobDocket({
           <div style={sectionTitle}>Device</div>
           <Field label="Type" value={data.deviceType} />
           <Field label="Model" value={data.deviceModel} />
+          <Field label="Colour" value={data.deviceColour} />
+          <Field label="Quantity" value={data.deviceQuantity != null ? String(data.deviceQuantity) : ""} />
           <Field label="Serial" value={data.serialNumber} />
           <Field label="Condition" value={data.condition} />
         </>
@@ -246,7 +271,7 @@ export function ServiceJobDocket({
           {data.signature ? (
             <img src={data.signature} alt="customer signature" style={{ maxHeight: "18mm", maxWidth: "100%", display: "block" }} />
           ) : (
-            <div style={{ height: "12mm" }} />
+            <div style={{ height: m.signGap }} />
           )}
           <div style={{ borderTop: `1px solid ${RULE}`, paddingTop: "2px", fontSize: "10px" }}>
             Customer signature
@@ -260,8 +285,8 @@ export function ServiceJobDocket({
           <div style={dividerStyle} />
           <div style={{ textAlign: "center" }}>
             <svg
-              width="26mm"
-              height="26mm"
+              width={m.qr}
+              height={m.qr}
               viewBox={`0 0 ${qr.size} ${qr.size}`}
               shapeRendering="crispEdges"
               role="img"
@@ -276,8 +301,23 @@ export function ServiceJobDocket({
         </>
       )}
 
+      {/* ── Custom QR ───────────────────────────────────────────── */}
+      {customQrSrc && (
+        <>
+          <div style={dividerStyle} />
+          <div style={{ textAlign: "center" }}>
+            <img
+              src={customQrSrc}
+              alt="custom qr"
+              style={{ width: m.qr, height: m.qr, objectFit: "contain", display: "block", margin: "0 auto" }}
+            />
+            {opts.customQrCaption && <div style={{ fontSize: "10px" }}>{opts.customQrCaption}</div>}
+          </div>
+        </>
+      )}
+
       {footerText && (
-        <div style={{ textAlign: "center", marginTop: "6px", fontSize: "10px", ...wrapStyle }}>{footerText}</div>
+        <div style={{ textAlign: "center", marginTop: m.gap, fontSize: "10px", ...wrapStyle }}>{footerText}</div>
       )}
     </div>
   );

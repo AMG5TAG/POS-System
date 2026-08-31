@@ -1748,6 +1748,13 @@ export interface ServiceJob {
   /** @nullable */
   deviceDescription?: string | null;
   /** @nullable */
+  deviceColour?: string | null;
+  /**
+     * How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.
+     * @nullable
+     */
+  deviceQuantity?: number | null;
+  /** @nullable */
   serialNumber?: string | null;
   /** @nullable */
   condition?: string | null;
@@ -1837,6 +1844,13 @@ export interface ServiceJobInput {
   deviceType?: string | null;
   /** @nullable */
   deviceDescription?: string | null;
+  /** @nullable */
+  deviceColour?: string | null;
+  /**
+     * How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.
+     * @nullable
+     */
+  deviceQuantity?: number | null;
   /** @nullable */
   serialNumber?: string | null;
   /** @nullable */

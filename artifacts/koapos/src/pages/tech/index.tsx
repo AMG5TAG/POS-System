@@ -43,6 +43,8 @@ type TechJobSummary = {
 type TechJobDetail = TechJobSummary & {
   customerPhone: string | null;
   customerEmail: string | null;
+  deviceColour: string | null;
+  deviceQuantity: number | null;
   serialNumber: string | null;
   condition: string | null;
   workDescription: string | null;
@@ -507,6 +509,8 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
 
           <div className="rounded-2xl border bg-card p-4 space-y-3">
             <DetailRow label="Device" value={[job.deviceType, job.deviceDescription].filter(Boolean).join(" — ")} />
+            <DetailRow label="Colour" value={job.deviceColour} />
+            <DetailRow label="Quantity" value={job.deviceQuantity != null ? String(job.deviceQuantity) : null} />
             <DetailRow label="Serial Number" value={job.serialNumber} mono />
             <DetailRow label="Condition" value={job.condition} />
             <DetailRow label="Fault / Work Required" value={job.workDescription} />

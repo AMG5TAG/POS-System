@@ -47,7 +47,7 @@ import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
 import { parseHardwareConfig } from "@/lib/hardware-config";
 import {
   isServiceJobRouteSilent, printServiceJobDocument, serviceJobPaperFromOpts,
-  SERVICE_PAPER_LABEL, type ServicePaper,
+  serviceDocketDensity, SERVICE_PAPER_LABEL, type ServicePaper,
 } from "@/lib/service-job-print";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
@@ -328,7 +328,10 @@ export default function ServiceJobsPage() {
   const { printStickers } = useStickerPrinter();
 
   /* Read active service-sheet template + opts from Management > Templates */
-  const { opts: serviceOpts, fontCss: serviceFontCss } = useSalesTemplate("Service_Ticket");
+  const { opts: serviceOpts, fontCss: serviceFontCss, selectedStyle: serviceStyle } = useSalesTemplate("Service_Ticket");
+  /* The saved Service Ticket style picks the docket layout: the thermal styles
+     print the roll, and the compact one prints it tighter. */
+  const docketDensity = serviceDocketDensity(serviceStyle);
 
   /* Branding + data shared by the A4 sheet and the 80mm docket, so the two
      outputs can never drift apart. */
@@ -359,6 +362,8 @@ export default function ServiceJobsPage() {
     customerEmail: pj.customerEmail ?? undefined,
     deviceType: pj.deviceType ?? undefined,
     deviceModel: pj.deviceDescription ?? undefined,
+    deviceColour: pj.deviceColour ?? undefined,
+    deviceQuantity: pj.deviceQuantity ?? undefined,
     serialNumber: pj.serialNumber ?? undefined,
     condition: pj.condition ?? undefined,
     workDescription: pj.workDescription ?? undefined,
@@ -410,6 +415,7 @@ export default function ServiceJobsPage() {
         branding: sheetBranding,
         opts: serviceOpts,
         fontCss: serviceFontCss,
+        density: docketDensity,
         elementId: `${printMode}-print-area`,
         browserFallback,
       })
@@ -852,7 +858,7 @@ export default function ServiceJobsPage() {
         onClose={() => setPrintChoiceJob(null)}
         onSelect={(mode, copies, paper) => { const job = printChoiceJob!; setPrintChoiceJob(null); startPrint(job, mode, copies, paper); }}
         defaultCopies={Math.max(1, parseInt(serviceOpts.defaultPrintCopies ?? "1") || 1)}
-        defaultPaper={serviceJobPaperFromOpts(serviceOpts)}
+        defaultPaper={serviceJobPaperFromOpts(serviceOpts, serviceStyle)}
       />
 
       {/* ── Print areas ─────────────────────────────────────────────────── */}
@@ -917,6 +923,7 @@ export default function ServiceJobsPage() {
                       id={`sj-docket-copy-${i}`}
                       opts={serviceOpts}
                       fontCss={serviceFontCss}
+                      density={docketDensity}
                       branding={sheetBranding}
                       data={sheetData}
                     />

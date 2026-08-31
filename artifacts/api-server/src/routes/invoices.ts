@@ -6,6 +6,8 @@ import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
+import { customQrEmailBlock } from "../lib/custom-qr-email";
+import { mergeEmailTemplate, savedEmailTemplate } from "../lib/email-template";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 import { getInvoiceSettings } from "./invoice-settings";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
@@ -1439,10 +1441,11 @@ export async function sendInvoiceEmailInternal(
 
   if (!row) return { success: false, notFound: true };
 
-  const [merchant, bp, emailTplRow, settings] = await Promise.all([
+  const [merchant, bp, invoiceTplRow, emailTplRow, settings] = await Promise.all([
     db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId)).then((r) => r[0]),
     db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).then((r) => r[0]),
     db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Invoice"))).then((r) => r[0]),
+    db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Email"))).then((r) => r[0]),
     getInvoiceSettings(merchantId),
   ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
@@ -1450,8 +1453,13 @@ export async function sendInvoiceEmailInternal(
   const cName = customerName(row.customerFirstName, row.customerLastName, row.customerCompany);
   const lines = (inv.items as LineItem[] | null) ?? [];
 
-  /* ── Resolve template options (with sensible defaults) ── */
-  const tpl = template ?? {};
+  /* ── Resolve template options ──────────────────────────────────────────
+   * The body is the Email template's document; the attached PDF keeps its own
+   * (the Invoice row below). See lib/email-template.ts for the merge rules. */
+  const emailTplOpts = (emailTplRow?.options ?? {}) as Record<string, unknown>;
+  const tpl = mergeEmailTemplate(savedEmailTemplate(emailTplRow, bp), template) as InvoiceEmailTemplate;
+
+  const invoiceTplOpts = (invoiceTplRow?.options ?? {}) as Record<string, unknown>;
   const tplId            = tpl.templateId ?? "e-pro";
   const brandColor       = tpl.brandColor ?? "#4f46e5";
   const totalStr         = `$${parseFloat(inv.total).toFixed(2)}`;
@@ -1566,6 +1574,7 @@ export async function sendInvoiceEmailInternal(
       <p style="margin-top:28px;font-size:13px;color:#444;">${signOff}</p>
       <p style="margin-top:24px;font-size:13px;font-weight:600;text-align:center;color:${brandColor};">${thankYou}</p>
       ${tpl.showWebsite && tpl.website ? `<p style="margin-top:8px;font-size:12px;text-align:center;"><a href="${tpl.website}" style="color:${brandColor};">${tpl.website}</a></p>` : ""}
+      ${customQrEmailBlock(emailTplOpts)}
       ${socialsBlock}
       ${footer ? `<p style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">${footer}</p>` : ""}
     </div>`;
@@ -1574,7 +1583,6 @@ export async function sendInvoiceEmailInternal(
   const billingAddrForPdf = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
     || row.customerAddress
     || null;
-  const emailTplOpts = (emailTplRow?.options ?? {}) as Record<string, unknown>;
   const pdfBuffer = settings.attachPdf ? await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
@@ -1605,35 +1613,35 @@ export async function sendInvoiceEmailInternal(
     brandColor:      tpl.brandColor || (() => { try { return (JSON.parse(bp?.brandColors || "[]") as string[])[0] || null; } catch { return null; } })(),
     logoUrl:         tpl.logo || bp?.logo || null,
     // ── Template settings ────────────────────────────────────────────────
-    showLogo:              emailTplRow ? emailTplRow.showLogo : true,
-    showAbn:               emailTplOpts.showAbn !== undefined ? Boolean(emailTplOpts.showAbn) : true,
-    showWebsite:           emailTplOpts.showWebsite !== undefined ? Boolean(emailTplOpts.showWebsite) : true,
-    showTagline:           Boolean(emailTplOpts.showTagline),
+    showLogo:              invoiceTplRow ? invoiceTplRow.showLogo : true,
+    showAbn:               invoiceTplOpts.showAbn !== undefined ? Boolean(invoiceTplOpts.showAbn) : true,
+    showWebsite:           invoiceTplOpts.showWebsite !== undefined ? Boolean(invoiceTplOpts.showWebsite) : true,
+    showTagline:           Boolean(invoiceTplOpts.showTagline),
     businessTagline:       bp?.tagline || null,
-    showGstBreakdown:      emailTplOpts.showGstBreakdown !== undefined ? Boolean(emailTplOpts.showGstBreakdown) : true,
-    headerText:            resolveNullable(emailTplRow?.headerHtml || (emailTplOpts.headerText as string | undefined) || null),
-    thankYouMsg:           resolveNullable((emailTplOpts.thankYouMsg as string | undefined) || null),
-    footerText:            resolveNullable(emailTplRow?.footerHtml || (emailTplOpts.footerText as string | undefined) || null),
-    paymentTerms:          resolveNullable((emailTplOpts.paymentTerms as string | undefined) || null),
-    invoiceNotes:          resolveNullable((emailTplOpts.invoiceNotes as string | undefined) || null),
-    bankDetails:           resolveNullable((emailTplOpts.bankDetails as string | undefined) || null),
-    paymentSectionHeading: resolveNullable((emailTplOpts.paymentSectionHeading as string | undefined) || null),
-    showAllCustomerDetails: Boolean(emailTplOpts.showAllCustomerDetails),
-    showSocialLinks:        Boolean(emailTplOpts.showSocialLinks),
-    socialIconBrandColors:  Boolean(emailTplOpts.socialIconBrandColors),
+    showGstBreakdown:      invoiceTplOpts.showGstBreakdown !== undefined ? Boolean(invoiceTplOpts.showGstBreakdown) : true,
+    headerText:            resolveNullable(invoiceTplRow?.headerHtml || (invoiceTplOpts.headerText as string | undefined) || null),
+    thankYouMsg:           resolveNullable((invoiceTplOpts.thankYouMsg as string | undefined) || null),
+    footerText:            resolveNullable(invoiceTplRow?.footerHtml || (invoiceTplOpts.footerText as string | undefined) || null),
+    paymentTerms:          resolveNullable((invoiceTplOpts.paymentTerms as string | undefined) || null),
+    invoiceNotes:          resolveNullable((invoiceTplOpts.invoiceNotes as string | undefined) || null),
+    bankDetails:           resolveNullable((invoiceTplOpts.bankDetails as string | undefined) || null),
+    paymentSectionHeading: resolveNullable((invoiceTplOpts.paymentSectionHeading as string | undefined) || null),
+    showAllCustomerDetails: Boolean(invoiceTplOpts.showAllCustomerDetails),
+    showSocialLinks:        Boolean(invoiceTplOpts.showSocialLinks),
+    socialIconBrandColors:  Boolean(invoiceTplOpts.socialIconBrandColors),
     socialLinks:            tpl.socialLinks ?? (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
-    fontFamily:             emailTplRow?.fontFamily || null,
-    styleVariant:           emailTplRow?.selectedStyle || null,
-    showCustomerQr:         Boolean(emailTplOpts.showCustomerQr),
-    showCustomQr:           Boolean(emailTplOpts.showCustomQr),
-    customQrImage:          (emailTplOpts.customQrImage as string | undefined) || null,
-    customQrCaption:        (emailTplOpts.customQrCaption as string | undefined) || null,
-    showLoyaltyEarned:      Boolean(emailTplOpts.showLoyaltyEarned),
-    showPaymentMethods:     Boolean(emailTplOpts.showPaymentMethods),
-    showBarcode:            Boolean(emailTplOpts.showBarcode),
-    showReferralLink:       Boolean(emailTplOpts.showReferralLink),
-    customMessage:          resolveNullable((emailTplOpts.customMessage as string | undefined) || null),
-    referralLinkText:       (emailTplOpts.referralLinkText as string | undefined) || null,
+    fontFamily:             invoiceTplRow?.fontFamily || null,
+    styleVariant:           invoiceTplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(invoiceTplOpts.showCustomerQr),
+    showCustomQr:           Boolean(invoiceTplOpts.showCustomQr),
+    customQrImage:          (invoiceTplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (invoiceTplOpts.customQrCaption as string | undefined) || null,
+    showLoyaltyEarned:      Boolean(invoiceTplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(invoiceTplOpts.showPaymentMethods),
+    showBarcode:            Boolean(invoiceTplOpts.showBarcode),
+    showReferralLink:       Boolean(invoiceTplOpts.showReferralLink),
+    customMessage:          resolveNullable((invoiceTplOpts.customMessage as string | undefined) || null),
+    referralLinkText:       (invoiceTplOpts.referralLinkText as string | undefined) || null,
     // Customer-profile QR encodes the stable scan-to-lookup customer code, mirroring
     // the download path so the emailed PDF matches the merchant's saved template.
     customerCode:           inv.customerId ? `CUS-${inv.customerId}` : null,

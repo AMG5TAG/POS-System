@@ -14,8 +14,6 @@ import {
   useGetInvoice, useSendInvoiceEmail, useSendInvoiceSms, useAddInvoiceEvent,
   useGetMerchant, getGetInvoiceQueryKey, type Invoice, type Transaction,
 } from "@workspace/api-client-react";
-import { useBusinessProfile } from "@/lib/business-profile";
-import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -67,9 +65,7 @@ export function InvoiceSendDialog({
   const queryClient = useQueryClient();
   const { data: invoice } = useGetInvoice(invoiceId ?? 0, { query: { enabled: invoiceId != null, queryKey: getGetInvoiceQueryKey(invoiceId ?? 0) } });
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
-  const { profile } = useBusinessProfile();
-  const { opts: invoiceOpts } = useSalesTemplate("Invoice");
-  const { printInvoice: printInvoiceTpl } = useDocumentTemplate();
+  const { printInvoice: printInvoiceTpl, invoiceEmailTemplate } = useDocumentTemplate();
   const sendEmailMutation = useSendInvoiceEmail();
   const sendSmsMutation = useSendInvoiceSms();
   const addEventMutation = useAddInvoiceEvent();
@@ -84,26 +80,6 @@ export function InvoiceSendDialog({
     }
   }, [open, invoice, merchant?.businessName]);
 
-  const emailTemplatePayload = () => ({
-    templateId: "e-pro",
-    subjectLine:      emailSubject.trim() || invoiceOpts.subjectLine,
-    customGreeting:   invoiceOpts.customGreeting,
-    customMessage:    invoiceOpts.customMessage,
-    customSignOff:    invoiceOpts.customSignOff,
-    footerText:       invoiceOpts.footerText,
-    thankYouMsg:      invoiceOpts.thankYouMsg,
-    showGstBreakdown: invoiceOpts.showGstBreakdown,
-    showWebsite:      invoiceOpts.showWebsite,
-    showSocialLinks:  invoiceOpts.showSocialLinks,
-    showLogo:         invoiceOpts.showLogo,
-    brandColor:       profile.brandColors?.[0] ?? "#4f46e5",
-    logo:             profile.logo ?? "",
-    website:          profile.website ?? "",
-    contactEmail:     profile.contactEmail ?? "",
-    tagline:          profile.tagline ?? "",
-    socialLinks:      profile.socialLinks ?? {},
-  });
-
   const recordEvent = async (type: string, detail?: string) => {
     if (!invoice) return;
     try {
@@ -116,7 +92,7 @@ export function InvoiceSendDialog({
     if (!invoice) { toast.error("Invoice still loading — try again in a moment."); return; }
     await sendEmailMutation.mutateAsync({
       id: invoice.id,
-      data: { email, template: emailTemplatePayload() } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
+      data: { email, template: invoiceEmailTemplate(emailSubject) } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
     });
     toast.success("Invoice emailed");
     queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invoice.id) });

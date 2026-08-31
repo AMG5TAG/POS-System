@@ -174,14 +174,53 @@ describe("PATCH /api/service-jobs/:id — completed lock", () => {
   });
 });
 
+/* A media job (VHS, DVD, cassette) covers a stack of items rather than one
+   device, so the booking form asks for a count. */
+describe("POST /api/service-jobs — device quantity", () => {
+  const create = (body: Record<string, unknown>) =>
+    request(app).post("/api/service-jobs").send({ title: "Tape transfer", ...body });
+
+  it("stores the count booked in", async () => {
+    const res = await create({ deviceType: "VHS Tape", deviceQuantity: 12 });
+    expect(res.status).toBe(201);
+    expect(res.body.deviceQuantity).toBe(12);
+  });
+
+  it("is null for a single device that never asked", async () => {
+    const res = await create({ deviceType: "Laptop" });
+    expect(res.status).toBe(201);
+    expect(res.body.deviceQuantity).toBeNull();
+  });
+
+  it("rounds up a typo rather than booking in zero items", async () => {
+    expect((await create({ deviceType: "DVD", deviceQuantity: 0 })).body.deviceQuantity).toBe(1);
+    expect((await create({ deviceType: "DVD", deviceQuantity: -3 })).body.deviceQuantity).toBe(1);
+    expect((await create({ deviceType: "DVD", deviceQuantity: 2.6 })).body.deviceQuantity).toBe(3);
+  });
+
+  it("can be corrected later, and cleared back to none", async () => {
+    seedJob({ status: "in-progress", deviceType: "Cassette Tape", deviceQuantity: 5 });
+    const bumped = await request(app).patch("/api/service-jobs/42").send({ deviceQuantity: 9 });
+    expect(bumped.status).toBe(200);
+    expect(jobRow(42).deviceQuantity).toBe(9);
+
+    const cleared = await request(app).patch("/api/service-jobs/42").send({ deviceQuantity: null });
+    expect(cleared.status).toBe(200);
+    expect(jobRow(42).deviceQuantity).toBeNull();
+  });
+});
+
 describe("POST /api/service-jobs/:id/reopen", () => {
   it("creates a new pending repair linked to the original, leaving the original completed", async () => {
-    seedJob({ status: "completed", deviceType: "Phone", deviceDescription: "iPhone 13" });
+    seedJob({ status: "completed", deviceType: "Phone", deviceDescription: "iPhone 13", deviceColour: "Midnight" });
     const res = await request(app).post("/api/service-jobs/42/reopen").send({});
     expect(res.status).toBe(201);
     expect(res.body.status).toBe("pending");
     expect(res.body.reopenedFromJobId).toBe(42);
     expect(res.body.deviceType).toBe("Phone");
+    // The same physical device comes back over the counter, colour and all.
+    expect(res.body.deviceDescription).toBe("iPhone 13");
+    expect(res.body.deviceColour).toBe("Midnight");
     expect(res.body.repairWarrantyDays).toBe(30);
     // Original untouched.
     expect(jobRow(42).status).toBe("completed");

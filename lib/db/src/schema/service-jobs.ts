@@ -15,7 +15,11 @@ export const serviceJobsTable = pgTable("service_jobs", {
   bookInDate: text("book_in_date").notNull().default(""),
   // Device info
   deviceType: text("device_type"),
+  /** Brand / model, e.g. "Apple MacBook Pro". Labelled "Brand" on the booking form. */
   deviceDescription: text("device_description"),
+  deviceColour: text("device_colour"),
+  /** Items booked in under one job — media types arrive as a stack of tapes/discs. */
+  deviceQuantity: integer("device_quantity"),
   serialNumber: text("serial_number"),
   condition: text("condition"),
   partnerRepairCode: text("partner_repair_code"),

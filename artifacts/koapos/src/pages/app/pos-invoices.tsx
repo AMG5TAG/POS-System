@@ -13,7 +13,6 @@ import {
   useGetInvoiceSettings, useGetPosSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useBusinessProfile } from "@/lib/business-profile";
 import { useStaffSession } from "@/lib/staff-day-session";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { setPendingInvoicePayment } from "@/lib/pending-invoice-payment";
@@ -34,7 +33,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/utils";
-import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
@@ -554,15 +552,10 @@ export default function POSInvoicesPage() {
     ? _parsedDefaultTaxRate
     : 10;
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
-  const { profile } = useBusinessProfile();
   const { data: loyaltySettings } = useGetLoyaltySettings();
   // Merchant invoicing defaults (Management → Invoices & Services → Invoices).
   const { data: invoiceSettings } = useGetInvoiceSettings();
-  // invoiceOpts still drives the email composer defaults below. The printed /
-  // downloaded invoice + quote now render through the centralized document
-  // template controller (shared buildInvoiceHtml layout + backend PDF).
-  const { opts: invoiceOpts } = useSalesTemplate("Invoice");
-  const { printInvoice: printInvoiceTpl } = useDocumentTemplate();
+  const { printInvoice: printInvoiceTpl, invoiceEmailTemplate } = useDocumentTemplate();
 
   /* ── Sync initial line state when default tax rate loads ── */
   useEffect(() => {
@@ -1102,28 +1095,6 @@ export default function POSInvoicesPage() {
   };
 
   /* ── Send email ── */
-  const getEmailTemplatePayload = () => {
-    return {
-      templateId: "e-pro",
-      subjectLine:        emailSubject.trim() || invoiceOpts.subjectLine,
-      customGreeting:     invoiceOpts.customGreeting,
-      customMessage:      invoiceOpts.customMessage,
-      customSignOff:      invoiceOpts.customSignOff,
-      footerText:         invoiceOpts.footerText,
-      thankYouMsg:        invoiceOpts.thankYouMsg,
-      showGstBreakdown:   invoiceOpts.showGstBreakdown,
-      showWebsite:        invoiceOpts.showWebsite,
-      showSocialLinks:    invoiceOpts.showSocialLinks,
-      showLogo:           invoiceOpts.showLogo,
-      brandColor:         profile.brandColors?.[0] ?? "#4f46e5",
-      logo:               profile.logo ?? "",
-      website:            profile.website ?? "",
-      contactEmail:       profile.contactEmail ?? "",
-      tagline:            profile.tagline ?? "",
-      socialLinks:        profile.socialLinks ?? {},
-    };
-  };
-
   /* Open the unified Send dialog for an invoice, optionally pre-selecting a
    * delivery method. Seeds the email subject from the invoice + business name. */
   const openSend = (inv: Invoice, method: SendMethodKey | null = null) => {
@@ -1139,7 +1110,7 @@ export default function POSInvoicesPage() {
     try {
       await sendEmailMutation.mutateAsync({
         id: invId,
-        data: { email, template: getEmailTemplatePayload() } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
+        data: { email, template: invoiceEmailTemplate(emailSubject) } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
       });
     } catch {
       throw new Error("Failed to send email");

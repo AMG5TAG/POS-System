@@ -48,6 +48,11 @@ import {
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
 } from "@/lib/print-receipt";
+import { SavedQrPicker } from "@/components/templates/saved-qr-picker";
+import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
+import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
+import { isThermalServiceStyle, serviceDocketDensity } from "@/lib/service-sheet-fields";
+import { standaloneHtmlFrom } from "@/lib/print-dom";
 import { formatSocialEntries, KNOWN_SOCIAL_PLATFORMS, getSocialBrandColor } from "@/lib/social-links";
 import { SocialIcon } from "@/components/printing/SocialIcon";
 import { FontPicker } from "@/components/ui/font-picker";
@@ -100,10 +105,18 @@ export interface TplOpts {
   showLoyaltyEarned:    boolean;
   showCustomerQr:       boolean;
   showAllCustomerDetails: boolean;
-  // Custom QR — a merchant-supplied QR code image shown on the document
+  // Custom QR — a merchant-supplied QR code image shown on the document.
+  // It is either uploaded/linked by URL, or rendered from one of the codes the
+  // merchant designed in Marketing › QR Codes, in which case customQrCodeId
+  // records which one so it can be refreshed after a redesign.
   showCustomQr:         boolean;
-  customQrImage:        string;  // data: URL (uploaded) or https URL
+  customQrImage:        string;  // data: URL (uploaded or rendered) or https URL
   customQrCaption:      string;
+  customQrCodeId:       string;
+  customQrCodeLabel:    string;
+  /** What the linked code encodes. Lets the ESC/POS receipt print it natively —
+   *  a thermal encoder can't print the image, but it can encode the payload. */
+  customQrData:         string;
   sendAfterSale:        boolean;
   sendForLayby:         boolean;
   printCustomerCopy:    boolean;
@@ -153,6 +166,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false, socialIconBrandColors: false,
   showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
   showCustomQr: false, customQrImage: "", customQrCaption: "",
+  customQrCodeId: "", customQrCodeLabel: "", customQrData: "",
   sendAfterSale: true, sendForLayby: true, printCustomerCopy: false, showBarcode: false,
   showSerialNumber: true,
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
@@ -200,9 +214,17 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
     setIsDefault(true);
   }, []);
 
+  /**
+   * Persist the template. `overrides` is applied to the live options *and* to
+   * what is written, so a click that changes both the style and an option (the
+   * Service Ticket styles, which carry their own paper) saves one consistent
+   * row instead of writing the pre-click state.
+   */
   const save = useCallback(
-    (selectedStyle: string) => {
-      const { headerText, footerText, showLogo, fontFamily, ...rest } = opts;
+    (selectedStyle: string, overrides?: Partial<TplOpts>) => {
+      const merged = overrides ? { ...opts, ...overrides } : opts;
+      if (overrides) setOpts(merged);
+      const { headerText, footerText, showLogo, fontFamily, ...rest } = merged;
       upsert.mutate(
         {
           templateType: category as "Invoice" | "Thermal_Receipt" | "A4_Receipt" | "Quote" | "Service_Ticket" | "Customer_PDF" | "Email",
@@ -237,7 +259,7 @@ function useTplOpts(category: Category, templates: SalesTemplate[]) {
 interface FieldDef {
   key: keyof TplOpts;
   label: string;
-  type: "text" | "textarea" | "toggle" | "select" | "fontpicker" | "image";
+  type: "text" | "textarea" | "toggle" | "select" | "fontpicker" | "image" | "qrpicker";
   options?: { value: string; label: string }[];
   placeholder?: string;
   hint?: string;
@@ -246,7 +268,22 @@ interface FieldDef {
   rows?: number;
 }
 
-function getOptionsConfig(category: Category): FieldDef[] {
+/**
+ * Fields for a category. `templateId` matters for Service Ticket only: an 80mm
+ * style already names its paper, and several sheet options (photos, the call
+ * history grid, the job-no type scale) exist only on A4 — they stay editable,
+ * labelled for what they affect, so switching back to A4 finds them unchanged.
+ */
+function getOptionsConfig(category: Category, templateId?: string): FieldDef[] {
+  const fields = optionsConfig(category);
+  if (category !== "Service_Ticket" || !isThermalServiceStyle(templateId)) return fields;
+  const a4Only = new Set<keyof TplOpts>(["showPhotos", "showCallHistory", "callHistoryRows", "jobNoFontSize"]);
+  return fields
+    .filter((f) => f.key !== "serviceSheetPaper")
+    .map((f) => (a4Only.has(f.key) ? { ...f, hint: `A4 sheet only — the 80mm docket ignores this.${f.hint ? ` ${f.hint}` : ""}` } : f));
+}
+
+function optionsConfig(category: Category): FieldDef[] {
   switch (category) {
     case "Thermal_Receipt": return [
       { section: "Header", key: "showLogo",          label: "Show Business Logo",  type: "toggle" },
@@ -263,6 +300,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",   key: "showCustomerQr",     label: "Show Customer QR",    type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Body",   key: "loyaltyQrText",      label: "QR Scan Label",       type: "text",   placeholder: "Scan to view customer loyalty profile" },
       { section: "Custom QR", key: "showCustomQr",     label: "Show Custom QR Code", type: "toggle", hint: "Attach your own QR (menu, payment, review link…)" },
+      { section: "Custom QR", key: "customQrCodeId",  label: "Use a Saved QR Code", type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",    label: "Custom QR Image",     type: "image",  hint: "Upload a QR image or paste an image URL" },
       { section: "Custom QR", key: "customQrCaption",  label: "QR Caption",          type: "text",   placeholder: "e.g. Scan to view our menu" },
       { section: "Footer", key: "thankYouMsg",        label: "Thank You Message",   type: "text",     placeholder: "Thank you for your purchase!", quickCodes: true },
@@ -282,6 +320,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Customer", key: "showCustomerQr",          label: "Show Customer QR Code",     type: "toggle", hint: "QR code linked to customer loyalty profile" },
       { section: "Customer", key: "loyaltyQrText",           label: "QR Scan Label",             type: "text",   placeholder: "Scan to view customer loyalty profile" },
       { section: "Custom QR", key: "showCustomQr",           label: "Show Custom QR Code",       type: "toggle", hint: "Attach your own QR (menu, payment, review link…)" },
+      { section: "Custom QR", key: "customQrCodeId",         label: "Use a Saved QR Code",       type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",          label: "Custom QR Image",           type: "image",  hint: "Upload a QR image or paste an image URL" },
       { section: "Custom QR", key: "customQrCaption",        label: "QR Caption",                type: "text",   placeholder: "e.g. Scan to view our menu" },
       { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
@@ -310,6 +349,7 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. QUOTE / ESTIMATE", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
       { section: "Custom QR", key: "showCustomQr",           label: "Show Custom QR Code",       type: "toggle", hint: "Attach your own QR (menu, payment, review link…)" },
+      { section: "Custom QR", key: "customQrCodeId",         label: "Use a Saved QR Code",       type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",          label: "Custom QR Image",           type: "image",  hint: "Upload a QR image or paste an image URL" },
       { section: "Custom QR", key: "customQrCaption",        label: "QR Caption",                type: "text",   placeholder: "e.g. Scan to view our menu" },
       { section: "Body",     key: "fontFamily",              label: "Font Family",               type: "fontpicker" },
@@ -341,13 +381,14 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
       { section: "Sections", key: "showServiceQr",      label: "Show Tech App QR",         type: "toggle", hint: "Adds a QR that opens the job in the Tech App when scanned" },
       { section: "Custom QR", key: "showCustomQr",         label: "Show Custom QR Code",      type: "toggle", hint: "Attach your own QR (booking, payment, review link…)" },
+      { section: "Custom QR", key: "customQrCodeId",       label: "Use a Saved QR Code",      type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",        label: "Custom QR Image",          type: "image",  hint: "Upload a QR image or paste an image URL" },
       { section: "Custom QR", key: "customQrCaption",      label: "QR Caption",               type: "text",   placeholder: "e.g. Scan to book your next service" },
       { section: "Footer",   key: "showSocialLinks",      label: "Show Business Socials",    type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss.", quickCodes: true },
       { section: "Footer",   key: "footerText",           label: "Footer Text",              type: "text",     placeholder: "Thank you for your business!", quickCodes: true },
-      { section: "Print",    key: "serviceSheetPaper",    label: "Default Paper",            type: "select",   options: [{ value: "a4", label: "A4 job sheet" }, { value: "80mm", label: "80mm thermal docket" }], hint: "Pre-selected when printing a job. Either can still be chosen at print time." },
+      { section: "Print",    key: "serviceSheetPaper",    label: "Default Paper",            type: "select",   options: [{ value: "a4", label: "A4 job sheet" }, { value: "80mm", label: "80mm thermal docket" }], hint: "Pre-selected when printing a job. Either can still be chosen at print time. Picking an 80mm style above sets this for you." },
       { section: "Print",    key: "defaultPrintCopies",   label: "Default Print Copies",     type: "text",     placeholder: "1", hint: "Number of copies pre-filled in the print dialog" },
       { section: "Referral", key: "showReferralLink",     label: "Show Platform Referral Link", type: "toggle", hint: "Adds your KoaPOS referral link to earn rewards" },
       { section: "Referral", key: "referralLinkText",     label: "Referral Label",              type: "text",   placeholder: "Refer a friend and earn rewards!" },
@@ -363,6 +404,10 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Body",   key: "showFormSubmissions", label: "Form Submissions",       type: "toggle" },
       { section: "Body",   key: "showWarningNote",     label: "Customer Warning Note",  type: "toggle", hint: "The red alert note shown on the customer profile" },
       { section: "Body",   key: "showInternalNotes",   label: "Internal Notes",         type: "toggle", hint: "Staff-only notes field on the customer record" },
+      { section: "Custom QR", key: "showCustomQr",     label: "Show Custom QR Code",    type: "toggle", hint: "Prints one scannable code at the end of the export" },
+      { section: "Custom QR", key: "customQrCodeId",   label: "Use a Saved QR Code",    type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
+      { section: "Custom QR", key: "customQrImage",    label: "Custom QR Image",        type: "image",  hint: "Upload a QR image or paste an image URL" },
+      { section: "Custom QR", key: "customQrCaption",  label: "QR Caption",             type: "text",   placeholder: "e.g. Scan to book your next service" },
       { section: "Footer", key: "footerText",          label: "Footer Text",            type: "text",   placeholder: "e.g. Confidential — internal use only", quickCodes: true },
     ];
     case "Email": return [
@@ -372,6 +417,10 @@ function getOptionsConfig(category: Category): FieldDef[] {
       { section: "Content",  key: "customGreeting",        label: "Greeting",             type: "text",     placeholder: "Hi {{customer.first_name}},", quickCodes: true },
       { section: "Content",  key: "customMessage",         label: "Body Message",         type: "textarea", placeholder: "Write the main body of your email…", quickCodes: true, rows: 5 },
       { section: "Content",  key: "customSignOff",         label: "Sign-off",             type: "textarea", placeholder: "Warm regards,\n{{business.name}}", quickCodes: true, rows: 2 },
+      { section: "Custom QR", key: "showCustomQr",          label: "Show Custom QR Code",  type: "toggle", hint: "Adds the code to the email body. Hosted image URLs display in every mail client; an uploaded image is a data: URL, which some clients (Gmail among them) won't load — the same rule as your logo." },
+      { section: "Custom QR", key: "customQrCodeId",        label: "Use a Saved QR Code",  type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
+      { section: "Custom QR", key: "customQrImage",         label: "Custom QR Image",      type: "image",  hint: "Upload a QR image or paste an image URL" },
+      { section: "Custom QR", key: "customQrCaption",       label: "QR Caption",           type: "text",   placeholder: "e.g. Scan to book your next service" },
       { section: "Footer",   key: "footerText",            label: "Footer Text",          type: "textarea", placeholder: "e.g. contact details, opening hours, unsubscribe note", quickCodes: true },
       { section: "Footer",   key: "showWebsite",           label: "Show Website",         type: "toggle" },
       { section: "Footer",   key: "showSocialLinks",       label: "Show Business Socials", type: "toggle", hint: "Pulls social links from Business Info" },
@@ -733,10 +782,19 @@ function OptionsPanel({
   onFieldFocus: (key: string | null) => void;
   onFieldInsert: (key: string, insert: (code: string) => void) => void;
 }) {
-  const fields = getOptionsConfig(category);
+  const fields = getOptionsConfig(category, templateId);
   const sections = [...new Set(fields.map((f) => f.section ?? "General"))];
 
   const inputRefs = useRef<Record<string, HTMLInputElement | HTMLTextAreaElement | null>>({});
+
+  /* Replacing the image by hand breaks its link to a saved QR code — keeping
+     the link would offer a Refresh that silently overwrites what was uploaded. */
+  const clearQrLink = (key: keyof TplOpts) => {
+    if (key !== "customQrImage" || !opts.customQrCodeId) return;
+    update("customQrCodeId", "");
+    update("customQrCodeLabel", "");
+    update("customQrData", "");
+  };
 
   const registerInsert = (key: string) => (code: string) => {
     const el = inputRefs.current[key];
@@ -828,6 +886,26 @@ function OptionsPanel({
                           <option key={o.value} value={o.value}>{o.label}</option>
                         ))}
                       </select>
+                    ) : f.type === "qrpicker" ? (
+                      <SavedQrPicker
+                        codeId={opts.customQrCodeId}
+                        codeLabel={opts.customQrCodeLabel}
+                        onPick={(image, entry, data) => {
+                          update("customQrImage", image);
+                          update("customQrCodeId", entry.id);
+                          update("customQrCodeLabel", entry.label);
+                          update("customQrData", data);
+                          // Picking a code is the merchant asking for it on the
+                          // document; leaving the section switched off would look
+                          // like the pick didn't take.
+                          update("showCustomQr", true);
+                        }}
+                        onUnlink={() => {
+                          update("customQrCodeId", "");
+                          update("customQrCodeLabel", "");
+                          update("customQrData", "");
+                        }}
+                      />
                     ) : f.type === "image" ? (
                       <div className="space-y-1.5">
                         {val ? (
@@ -836,7 +914,7 @@ function OptionsPanel({
                             <Button
                               size="sm" variant="outline" type="button"
                               className="h-7 text-xs gap-1 text-destructive border-destructive/30 hover:bg-destructive/5"
-                              onClick={() => update(f.key, "" as TplOpts[typeof f.key])}
+                              onClick={() => { update(f.key, "" as TplOpts[typeof f.key]); clearQrLink(f.key); }}
                             >
                               <X className="w-3 h-3" /> Remove
                             </Button>
@@ -852,7 +930,7 @@ function OptionsPanel({
                               if (!file) return;
                               if (file.size > 512 * 1024) { toast.error("QR image must be under 512KB"); return; }
                               const reader = new FileReader();
-                              reader.onload = () => update(f.key, String(reader.result) as TplOpts[typeof f.key]);
+                              reader.onload = () => { update(f.key, String(reader.result) as TplOpts[typeof f.key]); clearQrLink(f.key); };
                               reader.onerror = () => toast.error("Couldn't read that image");
                               reader.readAsDataURL(file);
                             }}
@@ -860,7 +938,7 @@ function OptionsPanel({
                         </label>
                         <Input
                           value={val.startsWith("data:") ? "" : val}
-                          onChange={(e) => update(f.key, e.target.value as TplOpts[typeof f.key])}
+                          onChange={(e) => { update(f.key, e.target.value as TplOpts[typeof f.key]); clearQrLink(f.key); }}
                           placeholder="…or paste an image URL"
                           className="text-xs h-8 placeholder:text-[10px]"
                         />
@@ -893,6 +971,9 @@ function OptionsPanel({
                         className="text-xs h-8 placeholder:text-[10px]"
                       />
                     )}
+                    {/* Toggles show their hint beside the switch; every other
+                        field type had nowhere to put one until now. */}
+                    {f.hint && <p className="text-[10px] text-muted-foreground leading-snug">{f.hint}</p>}
                   </div>
                 );
               })}
@@ -941,9 +1022,13 @@ const TEMPLATES: Record<Category, TemplateOption[]> = {
     { id: "q-modern",  name: "Modern",       style: "bold",         description: "Bold accent header, two-column quote layout"         },
     { id: "q-minimal", name: "Minimal",      style: "minimal",      description: "Plain A4, minimal branding, fast to produce"        },
   ],
+  /* Two papers in one catalogue: picking a thermal style *is* the paper choice,
+     which is why the Default Paper option disappears while one is selected. */
   Service_Ticket: [
-    { id: "ss-standard", name: "Standard", style: "professional", description: "Full A4 sheet — all sections, grid layout, call history" },
-    { id: "ss-compact",  name: "Compact",  style: "minimal",      description: "Condensed layout, fewer rows, fits more on one page"     },
+    { id: "ss-standard",        name: "A4 Standard",  style: "professional", description: "Full A4 sheet — all sections, grid layout, call history"       },
+    { id: "ss-compact",         name: "A4 Compact",   style: "minimal",      description: "Condensed layout, fewer rows, fits more on one page"           },
+    { id: "ss-thermal",         name: "80mm Docket",  style: "professional", description: "Thermal roll — full branding, every section, Tech App QR"      },
+    { id: "ss-thermal-compact", name: "80mm Compact", style: "minimal",      description: "Thermal roll, tightened — same job details on less paper"      },
   ],
   Customer_PDF: [
     { id: "cp-standard", name: "Standard", style: "professional", description: "Branded header, full customer history export" },
@@ -1509,6 +1594,12 @@ function EmailPreview({ templateId, businessName, abn, website, email: contactEm
       <div className="px-4 py-3 space-y-2 text-[11px] text-gray-700 leading-relaxed">
         <p className="font-medium text-gray-800">{greeting}</p>
         <p className="whitespace-pre-wrap">{bodyText}</p>
+        {opts.showCustomQr && opts.customQrImage && (
+          <div className="flex flex-col items-center gap-0.5 pt-1">
+            <img src={opts.customQrImage} alt="Custom QR" className="w-12 h-12 object-contain border border-gray-200 rounded-sm bg-white p-0.5" />
+            {opts.customQrCaption && <p className="text-[9px] text-gray-400 text-center">{opts.customQrCaption}</p>}
+          </div>
+        )}
         <p className="whitespace-pre-wrap pt-1 text-gray-600">{signOff}</p>
       </div>
 
@@ -1538,6 +1629,90 @@ function SMSPreview({ templateId, businessName, website, opts }: PreviewProps) {
       </div>
     </div>
   ) : null;
+}
+
+/* ─── 80mm docket preview ─────────────────────────────────────────────────────
+ * The thermal Service Ticket styles preview the *real* `ServiceJobDocket` — the
+ * same component the counter printer's browser/bridge path renders — rather than
+ * a mock. There is no second layout to keep in step, and what the merchant tunes
+ * here is literally what comes off the roll.
+ */
+
+/** Print-area id the docket preview mounts under, serialized by Print Preview. */
+const DOCKET_PREVIEW_ID = "tpl-service-docket-preview";
+
+const DOCKET_DEMO_JOB: ServiceSheetData = {
+  jobId: 999999,
+  jobNumber: "SVC-0001",
+  date: new Date(),
+  status: "in-progress",
+  customerName: "Sarah Johnson",
+  customerPhone: "(03) 9000 1111",
+  customerEmail: "sarah@email.com",
+  deviceType: "iPhone",
+  deviceModel: "iPhone 14 Pro",
+  deviceColour: "Deep Purple",
+  serialNumber: "ABC123456",
+  condition: "Good — light scuffs on frame",
+  workDescription: "Screen replacement. Customer reports touch unresponsive on the right edge.",
+  additionalEquipment: "Charging cable, silicone case",
+  accounts: "apple.id@email.com",
+  logins: "1234",
+  notes: "Customer will collect tomorrow after 3pm.",
+  isUnderWarranty: false,
+  isCritical: false,
+  formsFiles: [{ name: "Repair consent", detail: "signed 18/05" }],
+};
+
+function ServiceDocketPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, referralCode, referralUrl, opts }: PreviewProps) {
+  const resolve = (text: string) => resolveCode(text, businessName, abn, website, email, referralCode, referralUrl);
+  const branding: ServiceSheetBranding = {
+    businessName, abn, website, email, address, brandColor,
+    logo: logo || undefined,
+    socialLinks,
+    techAppUsername: "demo",
+  };
+  // Quick codes are resolved for the preview only — the stored template keeps
+  // the {{…}} placeholders, which the print path resolves per job.
+  const previewOpts: TplOpts = {
+    ...opts,
+    headerText: resolve(opts.headerText),
+    footerText: resolve(opts.footerText),
+    warrantyText: resolve(opts.warrantyText),
+  };
+  return (
+    <ServiceJobDocket
+      id={DOCKET_PREVIEW_ID}
+      data={DOCKET_DEMO_JOB}
+      branding={branding}
+      opts={previewOpts}
+      fontCss={resolveFontCss(opts.fontFamily)}
+      density={serviceDocketDensity(templateId)}
+    />
+  );
+}
+
+/** Open the rendered docket in a print window at true 80mm roll width. */
+function printDocketPreview(): void {
+  let html: string;
+  try {
+    html = standaloneHtmlFrom(document.getElementById(DOCKET_PREVIEW_ID), {
+      title: "Service job docket",
+      css: "@page { size: 80mm auto; margin: 0; }",
+    });
+  } catch {
+    toast.error("The docket preview hasn't rendered yet — try again in a moment.");
+    return;
+  }
+  const win = window.open("", "_blank", "width=420,height=760,scrollbars=yes");
+  if (!win) {
+    toast.error("Popup blocked — allow popups to print the preview.");
+    return;
+  }
+  win.document.write(html);
+  win.document.close();
+  win.focus();
+  setTimeout(() => win.print(), 600);
 }
 
 /* ─── Service Sheet Preview ─────────────────────────────────────────────── */
@@ -1791,6 +1966,14 @@ function CustomerPdfPreview({ businessName, brandColor, logo, email, abn, websit
         )}
       </div>
 
+      {/* Custom QR — closes the export, below the last section */}
+      {opts.showCustomQr && opts.customQrImage && (
+        <div className="flex flex-col items-center gap-0.5 pt-2">
+          <img src={opts.customQrImage} alt="Custom QR" className="w-10 h-10 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
+          {opts.customQrCaption && <p className="text-[7px] text-gray-400 text-center">{opts.customQrCaption}</p>}
+        </div>
+      )}
+
       {/* Footer */}
       <div className="mt-1.5 pt-1 border-t flex items-center justify-between text-[7px] text-gray-400">
         <span className="truncate">{footerText}</span>
@@ -1955,6 +2138,20 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
   const dbRow = templates.find((t) => t.templateType === activeCategory);
   const activeStyle = dbRow?.selectedStyle ?? DEFAULT_STYLE[activeCategory];
 
+  /**
+   * Pick a style and save it. For Service Tickets the style also carries the
+   * paper, so the two are written together and can never disagree: a thermal
+   * style forces 80mm, and stepping back to an A4 style clears it again. A
+   * merchant who had set 80mm against an A4 style keeps that — nothing is
+   * rewritten unless the choice actually crosses between the papers.
+   */
+  const chooseStyle = (styleId: string) => {
+    setPreviewId(styleId);
+    if (activeCategory !== "Service_Ticket") { save(styleId); return; }
+    if (isThermalServiceStyle(styleId)) { save(styleId, { serviceSheetPaper: "80mm" }); return; }
+    save(styleId, isThermalServiceStyle(activeStyle) ? { serviceSheetPaper: "a4" } : undefined);
+  };
+
   const handlePreview = useCallback(() => {
     const businessInfo: ReceiptBusinessInfo = {
       businessName: merchant?.businessName || "Your Business",
@@ -2042,6 +2239,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       bookInDate: "2026-05-18",
       deviceType: "iPhone",
       deviceDescription: "iPhone 14 Pro",
+      deviceColour: "Deep Purple",
       serialNumber: "ABC123456",
       condition: "good",
       workDescription: "Screen replacement",
@@ -2071,7 +2269,10 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
         printA4Invoice(demoTx, businessInfo, receiptOpts);
         break;
       case "Service_Ticket":
-        printA4ServiceJob(demoJob, businessInfo, undefined, receiptOpts);
+        // The 80mm styles print the mounted docket preview itself; the A4 ones
+        // go through the sheet renderer as before.
+        if (isThermalServiceStyle(previewId)) printDocketPreview();
+        else printA4ServiceJob(demoJob, businessInfo, undefined, receiptOpts);
         break;
     }
   }, [activeCategory, opts, merchant, profile, previewId]);
@@ -2082,7 +2283,9 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       case "Invoice":
       case "A4_Receipt":       return <InvoicePreview      {...previewProps} />;
       case "Quote":            return <InvoicePreview      {...previewProps} />;
-      case "Service_Ticket":   return <ServiceSheetPreview {...previewProps} />;
+      case "Service_Ticket":   return isThermalServiceStyle(previewId)
+        ? <ServiceDocketPreview {...previewProps} />
+        : <ServiceSheetPreview  {...previewProps} />;
       case "Customer_PDF":     return <CustomerPdfPreview  {...previewProps} />;
       case "Email":            return <EmailPreview        {...previewProps} />;
     }
@@ -2151,14 +2354,14 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
             {/* Full-width styles row */}
             <div className="space-y-2">
               <p className="text-[10px] font-semibold text-muted-foreground px-0.5 uppercase tracking-wider">{CATEGORY_META[activeCategory].label} Styles</p>
-              <div className="flex gap-3">
+              <div className="flex flex-wrap gap-3">
                 {currentTemplates.map((tpl) => {
                   const isActiveStyle = activeStyle === tpl.id;
                   const previewing    = previewId === tpl.id;
                   const SIcon         = STYLE_ICONS[tpl.style];
                   return (
-                    <div key={tpl.id} onClick={() => { setPreviewId(tpl.id); save(tpl.id); }}
-                      className={cn("flex-1 rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
+                    <div key={tpl.id} onClick={() => chooseStyle(tpl.id)}
+                      className={cn("flex-1 min-w-[180px] rounded-xl border p-2.5 cursor-pointer transition-all space-y-1.5",
                         previewing ? "border-primary bg-primary/5 ring-1 ring-primary/30" : "hover:border-muted-foreground/30 hover:bg-muted/30"
                       )}
                     >
@@ -2256,8 +2459,12 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-80 min-h-[452px] flex flex-col">{renderPreview()}</div>
                   )}
                   {activeCategory === "Service_Ticket" && (
-                    /* A4 portrait page — same 210 × 297 ratio as the other A4 docs. */
-                    <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-80 min-h-[452px] flex flex-col">{renderPreview()}</div>
+                    isThermalServiceStyle(previewId)
+                      /* 80mm roll — the docket sets its own 72mm width, so the
+                         card just wraps it rather than imposing a page size. */
+                      ? <div className="bg-white shadow-lg rounded border border-gray-200 p-2">{renderPreview()}</div>
+                      /* A4 portrait page — same 210 × 297 ratio as the other A4 docs. */
+                      : <div className="bg-white shadow-lg rounded border border-gray-200 p-5 w-80 min-h-[452px] flex flex-col">{renderPreview()}</div>
                   )}
                   {activeCategory === "Customer_PDF" && (
                     <div className="bg-white shadow-lg rounded border border-gray-200 p-4 w-full max-w-md">{renderPreview()}</div>

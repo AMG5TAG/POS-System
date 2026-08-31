@@ -54,6 +54,9 @@ export interface ServiceSheetData {
   customerEmail?: string;
   deviceType?: string;
   deviceModel?: string;
+  deviceColour?: string;
+  /** Items booked in under this job (media stacks); omitted for single devices. */
+  deviceQuantity?: number;
   serialNumber?: string;
   condition?: string;
   workDescription?: string;
@@ -236,6 +239,8 @@ export function ServiceJobSheet({
               <div style={labelStyle}>Device</div>
               {data.deviceType && <div><strong>Type:</strong> {data.deviceType}</div>}
               {data.deviceModel && <div><strong>Model:</strong> {data.deviceModel}</div>}
+              {data.deviceColour && <div><strong>Colour:</strong> {data.deviceColour}</div>}
+              {data.deviceQuantity != null && <div><strong>Quantity:</strong> {data.deviceQuantity}</div>}
               {data.serialNumber && <div><strong>Serial:</strong> {data.serialNumber}</div>}
               {data.condition && <div><strong>Condition:</strong> {data.condition}</div>}
             </div>

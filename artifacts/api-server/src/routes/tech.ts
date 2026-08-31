@@ -120,6 +120,8 @@ function formatJobDetail(
     ...formatJobSummary(job, customer),
     customerPhone: customer?.phone ?? null,
     customerEmail: customer?.email ?? null,
+    deviceColour: job.deviceColour ?? null,
+    deviceQuantity: job.deviceQuantity ?? null,
     serialNumber: job.serialNumber ?? null,
     condition: job.condition ?? null,
     workDescription: job.workDescription ?? null,

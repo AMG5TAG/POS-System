@@ -1029,7 +1029,7 @@ function CustomerDetailInner({
 }) {
   const queryClient = useQueryClient();
   const mapUrl = useMapUrl();
-  const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
+  const { printReceipt, printA4Receipt, printServiceJob, customerPdfTemplate, isLoading: tplLoading } = useDocumentTemplate();
   const { printStickers } = useStickerPrinter();
   const qrLookup = useEntityQrLookup();
   const [tab, setTab] = useState<DetailTab>("details");
@@ -2101,6 +2101,9 @@ function CustomerDetailInner({
             formSubmissions: (formSubmissions as FormSubmission[]),
             allForms:      (allForms as FormTemplate[]),
             merchantName: merchantUsername ?? undefined,
+            // Management → Templates → Misc → Customer PDF: branding, font,
+            // header/footer, section toggles and the custom QR.
+            template: customerPdfTemplate,
           });
         }}
         onLabel={printCustomerLabel}

@@ -16,7 +16,29 @@ import {
   type ReceiptTemplateOpts,
   type ServiceJobPrintData,
 } from "@/lib/print-receipt";
+import type { CustomerPdfTemplate } from "@/lib/customer-pdf";
 import type { TplOpts } from "@/pages/app/management-templates";
+
+/** Shape of the optional `template` on the send-invoice-email request. */
+export interface InvoiceEmailTemplatePayload {
+  templateId: string;
+  subjectLine: string;
+  customGreeting: string;
+  customMessage: string;
+  customSignOff: string;
+  footerText: string;
+  thankYouMsg: string;
+  showGstBreakdown: boolean;
+  showWebsite: boolean;
+  showSocialLinks: boolean;
+  showLogo: boolean;
+  brandColor: string;
+  logo: string;
+  website: string;
+  contactEmail: string;
+  tagline: string;
+  socialLinks: Record<string, string>;
+}
 
 /** Business-level extras (style + chips/socials) layered onto the template opts. */
 interface ReceiptOptsExtra {
@@ -42,6 +64,7 @@ function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra)
     showCustomerQr: opts.showCustomerQr,
     showCustomQr: opts.showCustomQr,
     customQrImage: opts.customQrImage,
+    customQrData: opts.customQrData,
     customQrCaption: opts.customQrCaption,
     showLoyaltyEarned: opts.showLoyaltyEarned,
     showBarcode: opts.showBarcode,
@@ -96,6 +119,20 @@ export interface DocumentTemplateController {
     job: ServiceJobPrintData,
     customerOverride?: { name?: string; email?: string; phone?: string },
   ) => void;
+  /**
+   * Payload for `POST /invoices/:id/email` — the saved **Email** template's
+   * wording, style and branding. `subject` overrides the template's subject line
+   * when the send dialog has one typed for this send.
+   *
+   * The server resolves the same row when a caller sends nothing (auto-send, the
+   * reminder scheduler), so this only has to carry what the operator changed.
+   */
+  invoiceEmailTemplate: (subject?: string) => InvoiceEmailTemplatePayload;
+  /** The saved Customer_PDF template, shaped for `exportCustomerPDF`. Unlike the
+   *  printers above, the PDF builder is called directly by the customers page —
+   *  the mapping lives here so every document still resolves its template in one
+   *  place. */
+  customerPdfTemplate: CustomerPdfTemplate;
 }
 
 /**
@@ -114,6 +151,8 @@ export function useDocumentTemplate(): DocumentTemplateController {
   const quote = useSalesTemplate("Quote");
   const a4Receipt = useSalesTemplate("A4_Receipt");
   const service = useSalesTemplate("Service_Ticket");
+  const customerPdf = useSalesTemplate("Customer_PDF");
+  const email = useSalesTemplate("Email");
   const { profile, isLoading: profileLoading } = useBusinessProfile();
   const { data: merchant, isLoading: merchantLoading } = useGetMerchant();
   const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
@@ -161,6 +200,8 @@ export function useDocumentTemplate(): DocumentTemplateController {
     quote.isLoading ||
     a4Receipt.isLoading ||
     service.isLoading ||
+    customerPdf.isLoading ||
+    email.isLoading ||
     profileLoading ||
     merchantLoading;
 
@@ -172,9 +213,55 @@ export function useDocumentTemplate(): DocumentTemplateController {
       overallDiscountPct: (tx as { discountPct?: number | null }).discountPct ?? undefined,
     }), hardware, purpose).then(() => { /* method (usb/serial/bridge/html) is internal */ });
 
+  const invoiceEmailTemplate = (subject?: string): InvoiceEmailTemplatePayload => ({
+    // The Email template's style ids (e-pro / e-casual / e-minimal) pick the
+    // email layout server-side.
+    templateId:       email.selectedStyle || "e-pro",
+    subjectLine:      subject?.trim() || email.opts.subjectLine,
+    customGreeting:   email.opts.customGreeting,
+    customMessage:    email.opts.customMessage,
+    customSignOff:    email.opts.customSignOff,
+    footerText:       email.opts.footerText,
+    thankYouMsg:      email.opts.thankYouMsg,
+    showGstBreakdown: email.opts.showGstBreakdown,
+    showWebsite:      email.opts.showWebsite,
+    showSocialLinks:  email.opts.showSocialLinks,
+    showLogo:         email.opts.showLogo,
+    brandColor:       businessInfo.brandColor || "#4f46e5",
+    logo:             businessInfo.logo || "",
+    website:          businessInfo.website || "",
+    contactEmail:     businessInfo.email || "",
+    tagline:          businessInfo.tagline || "",
+    socialLinks:      profile?.socialLinks ?? {},
+  });
+
+  const customerPdfTemplate: CustomerPdfTemplate = {
+    brandColor: businessInfo.brandColor || null,
+    logoUrl: businessInfo.logo || null,
+    showLogo: customerPdf.opts.showLogo,
+    // The PDF maps this to its nearest built-in family, so pass the stored key.
+    fontFamily: customerPdf.fontFamily,
+    headerText: customerPdf.opts.headerText,
+    footerText: customerPdf.opts.footerText,
+    showCustomQr: customerPdf.opts.showCustomQr,
+    customQrImage: customerPdf.opts.customQrImage,
+    customQrCaption: customerPdf.opts.customQrCaption,
+    sections: {
+      transactions:    customerPdf.opts.showTransactions,
+      appointments:    customerPdf.opts.showAppointments,
+      serviceJobs:     customerPdf.opts.showServiceJobs,
+      notes:           customerPdf.opts.showNotes,
+      formSubmissions: customerPdf.opts.showFormSubmissions,
+      warningNote:     customerPdf.opts.showWarningNote,
+      internalNotes:   customerPdf.opts.showInternalNotes,
+    },
+  };
+
   return {
     isLoading,
     businessInfo,
+    invoiceEmailTemplate,
+    customerPdfTemplate,
     printReceipt: (tx) => thermalReceipt(tx, "receipt"),
     printRefundReceipt: (tx) => thermalReceipt(tx, "refund"),
     printInvoice: (tx) =>
