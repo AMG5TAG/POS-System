@@ -922,6 +922,60 @@ export const DeleteDigitalCodeParams = zod.object({
 
 
 /**
+ * Matches on the last 9 digits, so "0400 000 000" and "+61400000000" are the same customer. Returns an empty list when the number is too short to identify anyone. Used to warn before a duplicate is created.
+ * @summary Find existing customers with the same phone number
+ */
+export const LookupCustomersByPhoneQueryParams = zod.object({
+  "phone": zod.coerce.string(),
+  "excludeId": zod.coerce.number().optional().describe('Customer to leave out — the one being edited.')
+})
+
+export const LookupCustomersByPhoneResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "firstName": zod.string().nullish(),
+  "lastName": zod.string().nullish(),
+  "email": zod.string().nullish(),
+  "phone": zod.string().nullish(),
+  "address": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "photoUrl": zod.string().nullish(),
+  "dateOfBirth": zod.string().nullish(),
+  "loyaltyPoints": zod.number().optional(),
+  "totalSpent": zod.number().optional(),
+  "visitCount": zod.number().optional(),
+  "createdAt": zod.coerce.date(),
+  "company": zod.string().nullish(),
+  "abn": zod.string().nullish(),
+  "referredBy": zod.string().nullish(),
+  "whatsappSameAsPhone": zod.string().nullish(),
+  "billingStreet": zod.string().nullish(),
+  "billingCity": zod.string().nullish(),
+  "billingState": zod.string().nullish(),
+  "billingPostcode": zod.string().nullish(),
+  "billingCountry": zod.string().nullish(),
+  "shippingStreet": zod.string().nullish(),
+  "shippingCity": zod.string().nullish(),
+  "shippingState": zod.string().nullish(),
+  "shippingPostcode": zod.string().nullish(),
+  "shippingCountry": zod.string().nullish(),
+  "customerGroup": zod.string().nullish(),
+  "warningNote": zod.string().nullish(),
+  "agreedToMarketing": zod.string().nullish(),
+  "portalToken": zod.string().nullish(),
+  "referralCode": zod.string().nullish(),
+  "heardFrom": zod.string().nullish(),
+  "heardFromDetails": zod.string().nullish(),
+  "referredByCustomerId": zod.number().nullish(),
+  "tierName": zod.string().nullish(),
+  "tierUpdatedAt": zod.coerce.date().nullish()
+})),
+  "total": zod.number()
+})
+
+
+/**
  * @summary List customers
  */
 export const ListCustomersQueryParams = zod.object({

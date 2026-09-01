@@ -6748,6 +6748,14 @@ export type ImportProductsBody = {
   file: Blob;
 };
 
+export type LookupCustomersByPhoneParams = {
+phone: string;
+/**
+ * Customer to leave out — the one being edited.
+ */
+excludeId?: number;
+};
+
 export type ListCustomersParams = {
 search?: string;
 heardFrom?: string;

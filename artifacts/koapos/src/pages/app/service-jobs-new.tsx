@@ -9,6 +9,7 @@ import {
   useGetPosSettings,
   useSendServiceJobEmail,
   useLinkAppointmentServiceJob,
+  ApiError,
   type ServiceJob,
   type Customer,
 } from "@workspace/api-client-react";
@@ -153,6 +154,33 @@ const TOTAL_WARN_BYTES  = 7 * 1024 * 1024;  // 7 MB total — banner warning
 function fmtBytes(b: number) {
   if (b >= 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024).toFixed(0)} KB`;
+}
+
+/* A failed book-in used to surface as a bare "Failed to create service job",
+   which is the same toast whether the photos blew the request-size limit, the
+   session had expired, or the server errored — so an operator (and anyone
+   debugging over the phone) had nothing to go on. Name the cause instead, and
+   carry the server's own message through for anything unrecognised. */
+function createFailureMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) {
+    return "Couldn't reach the server — check your connection and try again.";
+  }
+  const detail = (err.data as { error?: string; message?: string } | null);
+  const serverMessage = detail?.error ?? detail?.message;
+  switch (err.status) {
+    case 401:
+      return "Your session has expired — sign in again, then re-save this job.";
+    case 403:
+      return serverMessage ?? "You don't have permission to create service jobs.";
+    case 413:
+      return "Too large to save — the attached photos/video exceed the 10 MB upload limit. Remove or resize them and try again.";
+    case 429:
+      return "Too many requests — wait a moment and try again.";
+    default:
+      return serverMessage
+        ? `Couldn't create the service job: ${serverMessage} (HTTP ${err.status})`
+        : `Couldn't create the service job (HTTP ${err.status} ${err.statusText}).`;
+  }
 }
 
 interface PhotoSlotProps {
@@ -431,7 +459,7 @@ export default function ServiceJobNewPage() {
             );
           }
         },
-        onError: () => toast.error("Failed to create service job"),
+        onError: (err) => toast.error(createFailureMessage(err)),
       }
     );
   }

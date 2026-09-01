@@ -6,6 +6,7 @@ import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { errorHandler } from "./middlewares/errorHandler";
 import { publicOrigin } from "./lib/publicUrl";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
@@ -119,5 +120,7 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
+
+app.use(errorHandler);
 
 export default app;

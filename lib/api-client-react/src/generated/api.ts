@@ -247,6 +247,7 @@ import type {
   LocationInput,
   LocationList,
   LoginInput,
+  LookupCustomersByPhoneParams,
   LowStockAlertSettings,
   LowStockAlertSettingsInput,
   LoyaltyLeaderboard,
@@ -3490,6 +3491,91 @@ export const useDeleteDigitalCode = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getDeleteDigitalCodeMutationOptions(options));
     }
+
+export const getLookupCustomersByPhoneUrl = (params: LookupCustomersByPhoneParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/customers/lookup-phone?${stringifiedParams}` : `/api/customers/lookup-phone`
+}
+
+/**
+ * Matches on the last 9 digits, so "0400 000 000" and "+61400000000" are the same customer. Returns an empty list when the number is too short to identify anyone. Used to warn before a duplicate is created.
+ * @summary Find existing customers with the same phone number
+ */
+export const lookupCustomersByPhone = async (params: LookupCustomersByPhoneParams, options?: RequestInit): Promise<CustomerList> => {
+
+  return customFetch<CustomerList>(getLookupCustomersByPhoneUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getLookupCustomersByPhoneQueryKey = (params?: LookupCustomersByPhoneParams,) => {
+    return [
+    `/api/customers/lookup-phone`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getLookupCustomersByPhoneQueryOptions = <TData = Awaited<ReturnType<typeof lookupCustomersByPhone>>, TError = ErrorType<unknown>>(params: LookupCustomersByPhoneParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupCustomersByPhone>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getLookupCustomersByPhoneQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof lookupCustomersByPhone>>> = ({ signal }) => lookupCustomersByPhone(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof lookupCustomersByPhone>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type LookupCustomersByPhoneQueryResult = NonNullable<Awaited<ReturnType<typeof lookupCustomersByPhone>>>
+export type LookupCustomersByPhoneQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Find existing customers with the same phone number
+ */
+
+export function useLookupCustomersByPhone<TData = Awaited<ReturnType<typeof lookupCustomersByPhone>>, TError = ErrorType<unknown>>(
+ params: LookupCustomersByPhoneParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof lookupCustomersByPhone>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getLookupCustomersByPhoneQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListCustomersUrl = (params?: ListCustomersParams,) => {
   const normalizedParams = new URLSearchParams();

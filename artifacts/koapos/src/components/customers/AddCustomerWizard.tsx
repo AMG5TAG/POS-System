@@ -4,9 +4,11 @@ import {
   useUpdateCustomer,
   useGetMerchant,
   useListCustomers,
+  useLookupCustomersByPhone,
   getListCustomersQueryKey,
   Customer,
 } from "@workspace/api-client-react";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { validateABN } from "@/lib/abn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -24,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch } from "lucide-react";
+import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch, Phone } from "lucide-react";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -122,6 +124,33 @@ export function AddCustomerWizard({
   const createMutation = useCreateCustomer();
   const updateMutation = useUpdateCustomer();
 
+  /* ── Duplicate phone check ───────────────────────────────────────────────
+   * Runs in the background as the number is typed and matches on digits, so the
+   * regular who is already on file as "+61 400 000 000" is found when the
+   * counter types "0400000000". Advisory only: a household can legitimately
+   * share a number, so it names who has it and lets the operator decide. */
+  const debouncedPhone = useDebounce(form.phone.trim(), 400);
+  const phoneDigits = debouncedPhone.replace(/\D/g, "");
+  const { data: phoneMatchData, isFetching: phoneChecking } = useLookupCustomersByPhone(
+    { phone: debouncedPhone, ...(editingCustomer ? { excludeId: editingCustomer.id } : {}) },
+    {
+      query: {
+        // Below six digits nothing can be identified, so don't ask.
+        enabled: open && phoneDigits.length >= 6,
+        queryKey: ["customer-phone-lookup", debouncedPhone, editingCustomer?.id ?? 0],
+        staleTime: 30_000,
+      },
+    },
+  );
+  const phoneMatches = useMemo(
+    () => (phoneMatchData?.items ?? []) as Customer[],
+    [phoneMatchData],
+  );
+  const [pendingDuplicate, setPendingDuplicate] = useState(false);
+
+  const customerLabel = (c: Customer) =>
+    [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || c.company || c.email || `Customer #${c.id}`;
+
   useEffect(() => {
     if (!open) return;
     let initialForm: CustomerForm;
@@ -192,7 +221,15 @@ export function AddCustomerWizard({
 
   const inv = () => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
 
-  const handleSave = () => {
+  const handleSave = (force = false) => {
+    // Adding a customer whose number is already on file is usually a mistake, so
+    // it takes a deliberate second click. Editing is exempt: the match list
+    // already excludes the record being edited. The check is debounced, but the
+    // phone is two steps back in the wizard, so it has always settled by here.
+    if (!force && !editingCustomer && phoneMatches.length > 0) {
+      setPendingDuplicate(true);
+      return;
+    }
     const payload = buildPayload();
     if (editingCustomer) {
       updateMutation.mutate({ id: editingCustomer.id, data: payload }, {
@@ -274,6 +311,40 @@ export function AddCustomerWizard({
                 </Field>
                 <Field label="Phone">
                   <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="0400 000 000" />
+                  {phoneChecking && phoneMatches.length === 0 && (
+                    <p className="text-xs text-muted-foreground pl-1">Checking for existing customers…</p>
+                  )}
+                  {phoneMatches.length > 0 && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 space-y-1.5">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {phoneMatches.length === 1
+                          ? "This number is already on file"
+                          : `This number is already on ${phoneMatches.length} customers`}
+                      </p>
+                      {phoneMatches.map((c) => (
+                        <div key={c.id} className="flex items-center justify-between gap-2 text-xs text-amber-900">
+                          <span className="min-w-0 truncate">
+                            <strong>{customerLabel(c)}</strong>
+                            {c.phone && <span className="ml-1.5 opacity-80">{c.phone}</span>}
+                          </span>
+                          {onCreated && (
+                            <Button
+                              type="button" size="sm" variant="outline"
+                              className="h-6 shrink-0 gap-1 px-2 text-[11px] border-amber-400 bg-white hover:bg-amber-100"
+                              onClick={() => {
+                                onCreated(c);
+                                onOpenChange(false);
+                                toast.success(`Using ${customerLabel(c)}`);
+                              }}
+                            >
+                              <Phone className="w-3 h-3" /> Use this customer
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer mt-1 pl-1">
                     <Checkbox checked={form.whatsappSameAsPhone} onCheckedChange={(v) => setField("whatsappSameAsPhone", !!v)} />
                     <span className="flex items-center gap-1">
@@ -597,6 +668,26 @@ export function AddCustomerWizard({
     <CustomerNavGuard />
 
     {/* Unsaved changes guard — dialog close (Escape / click outside) */}
+    <AlertDialog open={pendingDuplicate} onOpenChange={setPendingDuplicate}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>This phone number is already on file</AlertDialogTitle>
+          <AlertDialogDescription>
+            {phoneMatches.length === 1
+              ? `${customerLabel(phoneMatches[0])} already has ${form.phone.trim()}.`
+              : `${phoneMatches.map(customerLabel).join(", ")} already have ${form.phone.trim()}.`}
+            {" "}Adding this customer creates a second record for the same number.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setPendingDuplicate(false)}>Go back</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setPendingDuplicate(false); handleSave(true); }}>
+            Add anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <AlertDialog open={pendingClose} onOpenChange={setPendingClose}>
       <AlertDialogContent>
         <AlertDialogHeader>

@@ -10,6 +10,7 @@ import {
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull, inArray } from "drizzle-orm";
 import { formatAddressParts } from "../lib/address";
+import { phoneMatchKey } from "../lib/phone-match";
 import crypto from "node:crypto";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -150,6 +151,36 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
 }
 
 /* ── CRUD ──────────────────────────────────────────────────────────────────── */
+
+/**
+ * Existing customers holding a phone number. The booking/add-customer forms call
+ * this as the number is typed, so a second record for a regular is caught before
+ * it is created rather than merged later.
+ *
+ * Matching is on the digits, not the string: the same number reaches us as
+ * "0400 000 000", "0400000000" and "+61400000000" depending on who typed it.
+ * `right(digits, n)` compares the tail so the trunk prefix and country code both
+ * fall away — see lib/phone-match.ts, which is the same rule in TypeScript.
+ */
+router.get("/customers/lookup-phone", requireAuth, async (req, res): Promise<void> => {
+  const key = phoneMatchKey(typeof req.query.phone === "string" ? req.query.phone : "");
+  if (!key) { res.json({ items: [], total: 0 }); return; }
+
+  const digits = sql`regexp_replace(coalesce(${customersTable.phone}, ''), '[^0-9]', '', 'g')`;
+  const conditions = [
+    eq(customersTable.merchantId, req.session.merchantId!),
+    sql`length(${digits}) >= ${key.length}`,
+    sql`right(${digits}, ${key.length}) = ${key}`,
+  ];
+  const excludeId = Number(req.query.excludeId);
+  if (Number.isFinite(excludeId) && excludeId > 0) {
+    conditions.push(sql`${customersTable.id} <> ${excludeId}`);
+  }
+
+  // A handful is all a "did you mean this customer?" prompt can show.
+  const matches = await db.select().from(customersTable).where(and(...conditions)).limit(5);
+  res.json({ items: matches.map(formatCustomer), total: matches.length });
+});
 
 router.get("/customers", requireAuth, async (req, res): Promise<void> => {
   const queryParams = ListCustomersQueryParams.safeParse(req.query);
