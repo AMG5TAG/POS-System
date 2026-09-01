@@ -92,14 +92,67 @@ export function capitalizeFirst(value: string): string {
 }
 
 /**
- * Mutates the value of a text input/textarea in-place so its first character is
- * capitalised, preserving the caret position. Safe to call from an onChange
- * handler before forwarding the event to a consumer.
+ * Capitalises the first letter of *every* word, for fields holding a person's
+ * name. `capitalizeFirst` only reaches the first character of the value, which
+ * leaves "mary jane" as "Mary jane" — fine for prose, wrong for a name.
+ *
+ * Words break on whitespace, hyphens and apostrophes, so "mary-jane o'brien"
+ * becomes "Mary-Jane O'Brien". Everything after the first letter is left exactly
+ * as typed rather than lowercased, which is what lets "McDonald", "MacLeod" and
+ * "DeVries" survive being retyped — the alternative silently corrupts them.
+ *
+ * Opt a field in with the standard `autoCapitalize="words"` attribute, which
+ * also tells a phone or tablet keyboard to do the same thing natively.
  */
-export function applyCapitalizeFirst(
+export function capitalizeName(value: string): string {
+  if (!value) return value;
+  if (valueLooksLikeUrl(value)) return value;
+  return value.replace(/(^|[\s\-'\u2019])(\S)/gu, (match, sep: string, ch: string) => {
+    const upper = ch.toUpperCase();
+    // A handful of characters grow when uppercased ("ß" → "SS"), which would
+    // shift the caret out from under the typist mid-word. Leave those be.
+    if (upper.length !== ch.length) return match;
+    return sep + upper;
+  });
+}
+
+/**
+ * The import variant of `capitalizeName`, for names arriving from a spreadsheet
+ * rather than a keyboard.
+ *
+ * It adds one rule: a word that is *entirely* uppercase is title-cased, so the
+ * "JANE SMITH" that legacy systems love to export lands as "Jane Smith". Typing
+ * deliberately doesn't do this — a person holding shift means it — but a CSV
+ * dump carries no such intent.
+ *
+ * A mixed-case word is still left alone, which is what keeps "McDonald" and
+ * "MacLeod" intact through an import: only shouting is corrected, never a
+ * capital someone chose.
+ */
+export function capitalizeImportedName(value: string): string {
+  if (!value) return value;
+  if (valueLooksLikeUrl(value)) return value;
+  return value.replace(/[^\s\-'\u2019]+/gu, (word) => {
+    const isShouting = word === word.toUpperCase() && word !== word.toLowerCase();
+    const first = word.charAt(0).toUpperCase();
+    if (first.length !== word.charAt(0).length) return word;
+    return first + (isShouting ? word.slice(1).toLowerCase() : word.slice(1));
+  });
+}
+
+/**
+ * Mutates the value of a text input/textarea in-place so it is capitalised,
+ * preserving the caret position. Safe to call from an onChange handler before
+ * forwarding the event to a consumer.
+ *
+ * Both transforms preserve the value's length, so the caret never needs moving
+ * — it is restored as-is rather than guessed at.
+ */
+function applyTransform(
   el: HTMLInputElement | HTMLTextAreaElement,
+  transform: (value: string) => string,
 ): void {
-  const next = capitalizeFirst(el.value);
+  const next = transform(el.value);
   if (next === el.value) return;
   const start = el.selectionStart;
   const end = el.selectionEnd;
@@ -110,4 +163,17 @@ export function applyCapitalizeFirst(
   } catch {
     /* some input types throw on setSelectionRange — ignore */
   }
+}
+
+export function applyCapitalizeFirst(
+  el: HTMLInputElement | HTMLTextAreaElement,
+): void {
+  applyTransform(el, capitalizeFirst);
+}
+
+/** As `applyCapitalizeFirst`, but capitalising every word. */
+export function applyCapitalizeName(
+  el: HTMLInputElement | HTMLTextAreaElement,
+): void {
+  applyTransform(el, capitalizeName);
 }

@@ -8,18 +8,11 @@ import { deflateSync } from "node:zlib";
 import forge from "node-forge";
 import { publicDomain } from "../lib/publicUrl";
 import { applyEstimateApprovalToJob } from "../services/quoteApproval";
+import { resolvePortalAccess } from "../lib/portalAuth";
 
 const router: IRouter = Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function findCustomerByToken(token: string) {
-  const [row] = await db
-    .select()
-    .from(customersTable)
-    .where(eq(customersTable.portalToken, token));
-  return row ?? null;
-}
 
 // ── Pure-JS PNG builder (no deps) ────────────────────────────────────────────
 
@@ -261,8 +254,9 @@ router.get("/portal/resolve-domain", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const [merchant] = await db
     .select({ businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
@@ -312,8 +306,9 @@ const UpdateProfileBody = z.object({
 });
 
 router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const parsed = UpdateProfileBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -350,8 +345,9 @@ router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token/appointments", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const rows = await db
     .select()
@@ -379,8 +375,9 @@ const BookAppointmentBody = z.object({
 });
 
 router.post("/portal/:token/appointments", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const parsed = BookAppointmentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -409,8 +406,9 @@ router.post("/portal/:token/appointments", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token/services", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const rows = await db
     .select()
@@ -436,8 +434,9 @@ router.get("/portal/:token/services", async (req, res): Promise<void> => {
 
 // ── Customer-facing quote approval ──────────────────────────────────────────
 router.get("/portal/:token/quotes", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const rows = await db
     .select()
@@ -464,8 +463,9 @@ router.get("/portal/:token/quotes", async (req, res): Promise<void> => {
 });
 
 router.post("/portal/:token/quotes/:quoteId/respond", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
   const quoteId = Number(req.params.quoteId);
   const decision = String((req.body ?? {}).decision ?? "");
   if (decision !== "accept" && decision !== "decline") { res.status(400).json({ error: "Invalid decision" }); return; }
@@ -496,8 +496,9 @@ router.post("/portal/:token/quotes/:quoteId/respond", async (req, res): Promise<
 });
 
 router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const certPem    = process.env.APPLE_WALLET_CERT_PEM;
   const keyPem     = process.env.APPLE_WALLET_KEY_PEM;
@@ -538,8 +539,9 @@ router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token/google-wallet", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const issuerId     = process.env.GOOGLE_WALLET_ISSUER_ID;
   const serviceEmail = process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL;

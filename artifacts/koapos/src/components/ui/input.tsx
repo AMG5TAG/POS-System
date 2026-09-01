@@ -1,7 +1,7 @@
 import * as React from "react"
 
 import { cn } from "@/lib/utils"
-import { shouldAutoCapitalize, applyCapitalizeFirst } from "@/lib/auto-capitalize"
+import { shouldAutoCapitalize, applyCapitalizeFirst, applyCapitalizeName } from "@/lib/auto-capitalize"
 
 export interface InputProps extends React.ComponentProps<"input"> {
   /** Opt out of the app-wide auto-capitalise-first-letter behaviour. */
@@ -18,9 +18,15 @@ const Input = React.forwardRef<HTMLInputElement, InputProps>(
       placeholder: props.placeholder,
     })
 
+    // `autoCapitalize="words"` is the standard attribute a name field already
+    // wants, since it tells a phone or tablet keyboard to capitalise each word.
+    // Honouring it here makes the same prop do the same thing on a desktop till.
+    const applyCap =
+      props.autoCapitalize === "words" ? applyCapitalizeName : applyCapitalizeFirst
+
     const handleChange = autoCap
       ? (e: React.ChangeEvent<HTMLInputElement>) => {
-          applyCapitalizeFirst(e.currentTarget)
+          applyCap(e.currentTarget)
           onChange?.(e)
         }
       : onChange
