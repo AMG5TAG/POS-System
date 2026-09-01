@@ -4,13 +4,12 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && export PORT=\"${PORT:-8080}\" && pnpm run build && pnpm run start",
+    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
-    "transfer-merchant": "tsx scripts/transfer-merchant.ts",
-    "db-fingerprint": "tsx scripts/db-fingerprint.ts"
+    "transfer-merchant": "tsx scripts/transfer-merchant.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",

@@ -10622,13 +10622,6 @@ components:
           type: boolean
         passwordChangeAlertEmail:
           type: boolean
-        requirePortalPassword:
-          type: boolean
-          description: >-
-            When true, a customer who has set a portal password must enter it;
-            the portalToken in the URL then identifies the account rather than
-            granting access to it. Customers who have not set one yet are still
-            admitted by the token and are prompted to set a password.
         createdAt:
           type: string
           format: date-time
@@ -10677,8 +10670,6 @@ components:
         securityAlertEmail:
           type: boolean
         passwordChangeAlertEmail:
-          type: boolean
-        requirePortalPassword:
           type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────

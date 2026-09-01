@@ -335,8 +335,8 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <PillInput label="First Name" value={form.firstName} onChange={setField("firstName")} autoCapitalize="words" />
-                <PillInput label="Last Name"  value={form.lastName}  onChange={setField("lastName")} autoCapitalize="words" />
+                <PillInput label="First Name" value={form.firstName} onChange={setField("firstName")} />
+                <PillInput label="Last Name"  value={form.lastName}  onChange={setField("lastName")} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <PillInput label="Email" required type="email" value={form.email} onChange={setField("email")} />

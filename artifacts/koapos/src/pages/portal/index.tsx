@@ -5,7 +5,7 @@ import { QRCodeSVG } from "qrcode.react";
 import {
   Star, User, Calendar, Wrench, Loader2, Phone, Mail, MapPin,
   CheckCircle2, Clock, AlertCircle, Copy, Check, ExternalLink,
-  ChevronLeft, Wallet, FileText, LogOut,
+  ChevronLeft, Wallet, FileText,
 } from "lucide-react";
 import { setHomeScreenApp } from "@/lib/home-screen";
 import { Button } from "@/components/ui/button";
@@ -61,30 +61,7 @@ interface ServiceJob {
 
 /* ── Fetching hooks ─────────────────────────────────────────────────────────── */
 
-export interface PortalAuthState {
-  found: boolean;
-  required: boolean;
-  hasPassword: boolean;
-  authenticated: boolean;
-  contactHint: string | null;
-  businessName: string | null;
-}
-
-/* Which screen to show, answered before we have a session — the portal data
-   itself is a 401 for a customer who has set a password and hasn't signed in. */
-function usePortalAuthState(token: string) {
-  return useQuery<PortalAuthState>({
-    queryKey: ["portal-auth", token],
-    queryFn: async () => {
-      const r = await fetch(`/api/portal/${token}/auth/state`, { credentials: "include" });
-      if (!r.ok) throw new Error("Portal not found");
-      return r.json();
-    },
-    retry: false,
-  });
-}
-
-function usePortalData(token: string, enabled = true) {
+function usePortalData(token: string) {
   return useQuery<PortalData>({
     queryKey: ["portal", token],
     queryFn: async () => {
@@ -92,7 +69,6 @@ function usePortalData(token: string, enabled = true) {
       if (!r.ok) throw new Error("Portal not found");
       return r.json();
     },
-    enabled,
     retry: false,
   });
 }
@@ -360,14 +336,13 @@ function ProfileTab({ data, token }: { data: PortalData; token: string }) {
     }
   };
 
-  const field = (label: string, key: keyof typeof form, type = "text", autoCapitalize?: "words") => (
+  const field = (label: string, key: keyof typeof form, type = "text") => (
     <div className="space-y-1.5">
       <Label className="text-xs font-medium text-gray-600">{label}</Label>
       <Input
         type={type}
         value={form[key]}
         onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))}
-        autoCapitalize={autoCapitalize}
         className="text-sm"
       />
     </div>
@@ -377,8 +352,8 @@ function ProfileTab({ data, token }: { data: PortalData; token: string }) {
     <div className="p-4 space-y-4">
       <div className="rounded-xl bg-white border p-4 space-y-3">
         <p className="text-sm font-semibold text-gray-800 mb-1">Personal Details</p>
-        {field("First Name",    "firstName", "text", "words")}
-        {field("Last Name",     "lastName",  "text", "words")}
+        {field("First Name",    "firstName")}
+        {field("Last Name",     "lastName")}
         {field("Email",         "email",       "email")}
         {field("Phone",         "phone",       "tel")}
         {field("Street Address", "billingStreet")}
@@ -659,156 +634,6 @@ const TABS = [
 
 type PortalTab = typeof TABS[number]["id"];
 
-/* ── Sign-in ────────────────────────────────────────────────────────────────── */
-
-/**
- * Shown when the merchant requires a password and this customer has set one.
- * The portalToken in the URL still identifies the account — it just no longer
- * opens it — so this screen needs nothing from the customer but the password.
- */
-function PortalLogin({ token, auth }: { token: string; auth: PortalAuthState }) {
-  const qc = useQueryClient();
-  const [password, setPassword] = useState("");
-  const [error, setError] = useState<string | null>(null);
-  const [busy, setBusy] = useState(false);
-  const [resetSent, setResetSent] = useState(false);
-
-  async function submit(e: React.FormEvent) {
-    e.preventDefault();
-    setBusy(true);
-    setError(null);
-    try {
-      const r = await fetch(`/api/portal/${token}/auth/login`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ password }),
-      });
-      if (!r.ok) {
-        const body = await r.json().catch(() => ({}));
-        setError(body.error ?? "Incorrect password.");
-        return;
-      }
-      await qc.invalidateQueries({ queryKey: ["portal-auth", token] });
-      await qc.invalidateQueries({ queryKey: ["portal", token] });
-    } catch {
-      setError("Couldn't reach the server — check your connection and try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  async function requestReset() {
-    setBusy(true);
-    try {
-      await fetch(`/api/portal/${token}/auth/request-setup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ purpose: "reset" }),
-      });
-      setResetSent(true);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-gray-50">
-      <form onSubmit={submit} className="w-full max-w-sm space-y-4">
-        <div className="text-center space-y-1">
-          <div className="w-12 h-12 rounded-2xl bg-amber-400 flex items-center justify-center text-black font-bold text-lg mx-auto">
-            {(auth.businessName ?? "?").charAt(0).toUpperCase()}
-          </div>
-          <h1 className="font-semibold text-lg pt-2">{auth.businessName ?? "Customer Portal"}</h1>
-          <p className="text-sm text-gray-500">Enter your password to view your account.</p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="portal-password">Password</Label>
-          <Input
-            id="portal-password"
-            type="password"
-            autoComplete="current-password"
-            value={password}
-            onChange={(e) => setPassword(e.target.value)}
-            autoFocus
-          />
-        </div>
-
-        {error && <p className="text-sm text-red-600">{error}</p>}
-
-        <Button type="submit" className="w-full" disabled={busy || !password}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Sign in"}
-        </Button>
-
-        {resetSent ? (
-          <p className="text-xs text-center text-gray-500">
-            If we have contact details for you, a reset link is on its way
-            {auth.contactHint ? ` to ${auth.contactHint}` : ""}. It expires in an hour.
-          </p>
-        ) : (
-          <button type="button" onClick={requestReset} disabled={busy}
-                  className="w-full text-xs text-gray-500 hover:text-gray-700 underline underline-offset-2">
-            Forgot your password?
-          </button>
-        )}
-      </form>
-    </div>
-  );
-}
-
-/**
- * Invitation, not a wall. The merchant requires a password but this customer
- * hasn't set one, so the portal stays open — turning the setting on must never
- * lock an existing customer out of their own account.
- */
-function SetUpPrompt({ token, auth, onDismiss }: { token: string; auth: PortalAuthState; onDismiss: () => void }) {
-  const [sent, setSent] = useState(false);
-  const [busy, setBusy] = useState(false);
-
-  async function send() {
-    setBusy(true);
-    try {
-      await fetch(`/api/portal/${token}/auth/request-setup`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        credentials: "include",
-        body: JSON.stringify({ purpose: "setup" }),
-      });
-      setSent(true);
-    } catch {
-      toast.error("Couldn't send the link — please try again.");
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  if (sent) {
-    return (
-      <div className="mx-4 mt-4 rounded-xl border border-green-200 bg-green-50 p-3 text-sm text-green-800">
-        Check {auth.contactHint ?? "your messages"} for a link to set your password. It expires in an hour.
-      </div>
-    );
-  }
-
-  return (
-    <div className="mx-4 mt-4 rounded-xl border border-amber-200 bg-amber-50 p-3 space-y-2">
-      <p className="text-sm font-medium text-amber-900">Secure your account</p>
-      <p className="text-xs text-amber-800">
-        Set a password so only you can see your repairs, quotes and rewards. We'll send a link
-        {auth.contactHint ? ` to ${auth.contactHint}` : " to the contact details we have on file"}.
-      </p>
-      <div className="flex gap-2">
-        <Button size="sm" onClick={send} disabled={busy}>
-          {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Send me a link"}
-        </Button>
-        <Button size="sm" variant="ghost" onClick={onDismiss}>Not now</Button>
-      </div>
-    </div>
-  );
-}
-
 export default function PortalPage() {
   const { businessUsername, token } = useParams<{ businessUsername?: string; token: string }>();
   const [tab, setTab] = useState<PortalTab>("loyalty");
@@ -826,27 +651,7 @@ export default function PortalPage() {
     retry: false,
   });
 
-  const { data: auth, isLoading: authLoading } = usePortalAuthState(token ?? "");
-  const [setUpDismissed, setSetUpDismissed] = useState(false);
-  const queryClient = useQueryClient();
-
-  /* Ending the session has to drop the cached account data with it — the portal
-     payload is already in the query cache, and leaving it there would keep the
-     previous customer's details on screen behind a login form. */
-  async function signOut() {
-    try {
-      await fetch("/api/portal/auth/logout", { method: "POST", credentials: "include" });
-    } catch {
-      /* The session is server-side; a failed call just means still signed in. */
-    }
-    queryClient.removeQueries({ queryKey: ["portal", token] });
-    await queryClient.invalidateQueries({ queryKey: ["portal-auth", token] });
-  }
-
-  /* A customer who has set a password is a 401 until they sign in, so don't
-     fire the profile query at all — it would only render "Portal not found". */
-  const needsLogin = Boolean(auth?.required && auth.hasPassword && !auth.authenticated);
-  const { data, isLoading, error } = usePortalData(token ?? "", Boolean(auth?.found) && !needsLogin);
+  const { data, isLoading, error } = usePortalData(token ?? "");
 
   /* Brand the home-screen icon for this business's customer portal. */
   useEffect(() => {
@@ -887,18 +692,6 @@ export default function PortalPage() {
 
   const effectiveUsername = businessUsername ?? resolvedDomain?.username ?? undefined;
 
-  if (authLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="w-8 h-8 animate-spin text-amber-500" />
-      </div>
-    );
-  }
-
-  if (needsLogin && auth) {
-    return <PortalLogin token={token} auth={auth} />;
-  }
-
   if (isLoading) {
     return (
       <div className="min-h-screen flex items-center justify-center">
@@ -930,24 +723,10 @@ export default function PortalPage() {
           <p className="font-semibold text-sm truncate leading-tight">{data.merchant.businessName}</p>
           <p className="text-xs text-gray-400">Customer Portal</p>
         </div>
-        {/* Only offered when a password actually gates this account — without a
-            session to end, signing out would do nothing the customer can see. */}
-        {auth?.authenticated && (
-          <button
-            type="button"
-            onClick={signOut}
-            className="ml-auto shrink-0 flex items-center gap-1.5 text-xs text-gray-500 hover:text-gray-800 px-2 py-1.5 rounded-lg hover:bg-gray-100"
-          >
-            <LogOut className="w-3.5 h-3.5" /> Sign out
-          </button>
-        )}
       </header>
 
       {/* Content */}
       <main className="flex-1 overflow-y-auto pb-24 max-w-md mx-auto w-full">
-        {auth?.required && !auth.hasPassword && !setUpDismissed && (
-          <SetUpPrompt token={token} auth={auth} onDismiss={() => setSetUpDismissed(true)} />
-        )}
         {tab === "loyalty"      && <LoyaltyTab      data={data} token={token} businessUsername={effectiveUsername} />}
         {tab === "profile"      && <ProfileTab      data={data} token={token} />}
         {tab === "appointments" && <AppointmentsTab token={token} />}

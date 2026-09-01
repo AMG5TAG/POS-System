@@ -22,7 +22,6 @@ import { lazyWithRetry } from "@/lib/lazy-retry";
 
 const CustomerDisplayPage = lazyWithRetry(() => import("@/pages/app/customer-display"));
 const PortalPage = lazyWithRetry(() => import("@/pages/portal"));
-const PortalSetPasswordPage = lazyWithRetry(() => import("@/pages/portal/set-password"));
 const BookingPage = lazyWithRetry(() => import("@/pages/booking"));
 const TechAppPage = lazyWithRetry(() => import("@/pages/tech"));
 const DashboardAppPage = lazyWithRetry(() => import("@/pages/dashboard-app"));
@@ -311,9 +310,6 @@ function Router() {
       <Route path="/customer-display">
         <PublicRoute component={CustomerDisplayPage} />
       </Route>
-      <Route path="/b/:businessUsername/c/:token/set-password">
-        <PublicRoute component={PortalSetPasswordPage} />
-      </Route>
       <Route path="/b/:businessUsername/c/:token">
         <PublicRoute component={PortalPage} />
       </Route>
@@ -328,9 +324,6 @@ function Router() {
       </Route>
       <Route path="/b/:businessUsername/t/posapp">
         <PublicRoute component={MobilePosAppPage} />
-      </Route>
-      <Route path="/c/:token/set-password">
-        <PublicRoute component={PortalSetPasswordPage} />
       </Route>
       <Route path="/c/:token">
         <PublicRoute component={PortalPage} />

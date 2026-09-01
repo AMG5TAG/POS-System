@@ -12,7 +12,6 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
-import { capitalizeImportedName } from "@/lib/auto-capitalize";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -77,16 +76,6 @@ function expandCountryValue(value: string): string {
 }
 
 const COUNTRY_FIELD_KEYS = new Set(["billingCountry", "country"]);
-
-/* Names arrive from a spreadsheet in whatever case the merchant's old system
-   wrote them, and are capitalised on the way in so an imported customer is
-   indistinguishable from one typed at the till. Unlike typed entry this also
-   title-cases a fully-uppercase word, because "JANE SMITH" out of a legacy
-   export is an artefact rather than a choice — see capitalizeImportedName.
-   Applies to a row that updates an existing customer as well as a new one:
-   an import already overwrites the matched customer's name with the CSV's, so
-   only the casing of that write changes. */
-const NAME_FIELD_KEYS = new Set(["firstName", "lastName"]);
 
 const STATE_CODE_TO_NAME: Record<string, string> = {
   /* Australia */
@@ -1020,8 +1009,6 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (val !== undefined) {
           if (field.key === "agreedToMarketing") {
             payload[field.key] = MARKETING_TRUTHY.has(String(val).trim().toLowerCase()) ? "true" : "false";
-          } else if (NAME_FIELD_KEYS.has(field.key)) {
-            payload[field.key] = capitalizeImportedName(String(val));
           } else if (field.key === "physicalOrPrintedCard") {
             // CSV column is friendly-named, but the API field remains `isEpay`.
             payload.isEpay = val;
@@ -1170,7 +1157,6 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
       let val = col ? (row[col] ?? "") : "";
       if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) val = expandCountryValue(val);
       if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   val = expandStateValue(val);
-      if (NAME_FIELD_KEYS.has(field.key)) val = capitalizeImportedName(val.trim());
       out[field.key] = val;
     }
     return out;

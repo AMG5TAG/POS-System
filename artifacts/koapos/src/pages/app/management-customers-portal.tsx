@@ -7,8 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
-import { Link2, Copy, Check, Loader2, ShieldCheck } from "lucide-react";
-import { Switch } from "@/components/ui/switch";
+import { Link2, Copy, Check, Loader2 } from "lucide-react";
 
 function CustomerPortalCard({ merchant }: { merchant: { username?: string | null; portalDomain?: string | null } | null }) {
   const qc = useQueryClient();
@@ -118,77 +117,6 @@ function CustomerPortalCard({ merchant }: { merchant: { username?: string | null
   );
 }
 
-/**
- * The portal was originally reachable by link alone. That is fine for a link
- * texted to a customer, but the service sticker QR now points here too — and
- * that sticker lives on the customer's device, on a bench, in a shop. This is
- * the switch that makes the link an identifier rather than a key.
- */
-function PortalPasswordCard({ merchant }: { merchant: { requirePortalPassword?: boolean } | null }) {
-  const qc = useQueryClient();
-  const [saving, setSaving] = useState(false);
-  const enabled = merchant?.requirePortalPassword ?? false;
-
-  const handleToggle = async (next: boolean) => {
-    setSaving(true);
-    try {
-      const r = await fetch("/api/merchants/me", {
-        method: "PATCH",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ requirePortalPassword: next }),
-      });
-      const json = await r.json().catch(() => ({}));
-      if (!r.ok) { toast.error(json.error ?? "Failed to save setting"); return; }
-      toast.success(next ? "Customers will be asked to set a password" : "Password requirement turned off");
-      qc.invalidateQueries({ queryKey: ["merchant"] });
-    } catch {
-      toast.error("Network error");
-    } finally {
-      setSaving(false);
-    }
-  };
-
-  return (
-    <Card>
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <ShieldCheck className="h-4 w-4" /> Password protection
-        </CardTitle>
-        <CardDescription>
-          Require customers to set a password before their portal link opens their account.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="space-y-4">
-        <div className="flex items-start justify-between gap-4">
-          <div className="space-y-1">
-            <Label htmlFor="require-portal-password">Require a customer password</Label>
-            <p className="text-xs text-muted-foreground">
-              Off by default, and turning it on locks nobody out: customers who haven't set a
-              password yet keep their existing access and are invited to create one.
-            </p>
-          </div>
-          <Switch
-            id="require-portal-password"
-            checked={enabled}
-            disabled={saving}
-            onCheckedChange={handleToggle}
-          />
-        </div>
-
-        <div className="rounded-lg border border-dashed bg-muted/20 p-4 space-y-1.5">
-          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What changes once it's on</p>
-          <ul className="text-xs text-muted-foreground space-y-1 list-disc list-inside">
-            <li>Customers are emailed (or texted) a one-time link to choose a password — holding the portal link isn't enough to set one.</li>
-            <li>Once a customer has a password, every portal link for them asks for it, including repair status texts you've already sent.</li>
-            <li>Customers without a password are unaffected until they set one.</li>
-          </ul>
-        </div>
-      </CardContent>
-    </Card>
-  );
-}
-
 export default function ManagementCustomersPortalPage() {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
 
@@ -199,10 +127,7 @@ export default function ManagementCustomersPortalPage() {
           <h1 className="text-2xl font-bold">Customer Portal</h1>
           <p className="text-sm text-muted-foreground mt-0.5">Configure your customer-facing portal URL and custom domain.</p>
         </div>
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <CustomerPortalCard merchant={merchant ?? null} />
-          <PortalPasswordCard merchant={merchant ?? null} />
-        </div>
+        <CustomerPortalCard merchant={merchant ?? null} />
       </div>
     </AppLayout>
   );

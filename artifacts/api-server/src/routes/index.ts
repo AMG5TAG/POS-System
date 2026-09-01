@@ -46,7 +46,6 @@ import loyaltyRouter from "./loyalty";
 import serviceSettingsRouter from "./service-settings";
 import invoiceSettingsRouter from "./invoice-settings";
 import portalRouter from "./portal";
-import portalAuthRouter from "./portal-auth";
 import cashDrawerRouter from "./cash-drawer";
 import parkedSalesRouter from "./parked-sales";
 import purchaseOrdersRouter from "./purchase-orders";
@@ -174,7 +173,6 @@ router.use(publicBookingRouter);
 // below). A pathless requireAuth in a root-mounted sub-router runs for every
 // later request, so mounting these after it 401s their public endpoints.
 router.use(pwaRouter);
-router.use(portalAuthRouter);
 router.use(portalRouter);
 router.use(productsPublicRouter);
 router.use(techRouter);

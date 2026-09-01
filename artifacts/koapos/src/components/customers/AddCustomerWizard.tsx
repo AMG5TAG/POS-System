@@ -299,10 +299,10 @@ export function AddCustomerWizard({
               </div>
               <FieldRow>
                 <Field label="First Name">
-                  <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" autoCapitalize="words" />
+                  <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" />
                 </Field>
                 <Field label="Last Name">
-                  <Input value={form.lastName} onChange={(e) => setField("lastName", e.target.value)} placeholder="Doe" autoCapitalize="words" />
+                  <Input value={form.lastName} onChange={(e) => setField("lastName", e.target.value)} placeholder="Doe" />
                 </Field>
               </FieldRow>
               <FieldRow>

@@ -2,7 +2,6 @@ import { useState } from "react";
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, CheckCircle2, Wrench } from "lucide-react";
-import { capitalizeName } from "@/lib/auto-capitalize";
 
 interface ShopInfo { businessName: string; logoUrl: string | null; deviceTypes: string[] }
 
@@ -74,11 +73,8 @@ export default function BookingPage() {
         ) : (
           <form onSubmit={submit} className="bg-white rounded-2xl border p-5 space-y-3">
             <div className="grid grid-cols-2 gap-3">
-              {/* Plain inputs rather than the app's <Input>, so the name
-                  capitalisation the rest of the app gets for free is applied
-                  here by hand. */}
-              <Field label="First name *"><input className={inputCls} autoCapitalize="words" value={form.firstName} onChange={(e) => set("firstName", capitalizeName(e.target.value))} /></Field>
-              <Field label="Last name"><input className={inputCls} autoCapitalize="words" value={form.lastName} onChange={(e) => set("lastName", capitalizeName(e.target.value))} /></Field>
+              <Field label="First name *"><input className={inputCls} value={form.firstName} onChange={(e) => set("firstName", e.target.value)} /></Field>
+              <Field label="Last name"><input className={inputCls} value={form.lastName} onChange={(e) => set("lastName", e.target.value)} /></Field>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <Field label="Email"><input type="email" className={inputCls} value={form.email} onChange={(e) => set("email", e.target.value)} /></Field>

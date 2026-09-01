@@ -37,7 +37,6 @@ export const GetMeResponse = zod.object({
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
-  "requirePortalPassword": zod.boolean().optional().describe('When true, a customer who has set a portal password must enter it; the portalToken in the URL then identifies the account rather than granting access to it. Customers who have not set one yet are still admitted by the token and are prompted to set a password.'),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
   "emailVerified": zod.boolean().optional(),
@@ -90,7 +89,6 @@ export const LoginResponse = zod.object({
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
-  "requirePortalPassword": zod.boolean().optional().describe('When true, a customer who has set a portal password must enter it; the portalToken in the URL then identifies the account rather than granting access to it. Customers who have not set one yet are still admitted by the token and are prompted to set a password.'),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
   "emailVerified": zod.boolean().optional(),
@@ -183,7 +181,6 @@ export const GetMerchantResponse = zod.object({
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
-  "requirePortalPassword": zod.boolean().optional().describe('When true, a customer who has set a portal password must enter it; the portalToken in the URL then identifies the account rather than granting access to it. Customers who have not set one yet are still admitted by the token and are prompted to set a password.'),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
   "emailVerified": zod.boolean().optional(),
@@ -217,8 +214,7 @@ export const UpdateMerchantBody = zod.object({
   "loginNotifyEmailFailed": zod.boolean().optional(),
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
-  "passwordChangeAlertEmail": zod.boolean().optional(),
-  "requirePortalPassword": zod.boolean().optional()
+  "passwordChangeAlertEmail": zod.boolean().optional()
 })
 
 export const UpdateMerchantResponse = zod.object({
@@ -239,7 +235,6 @@ export const UpdateMerchantResponse = zod.object({
   "loginNotifyEmailNewLocation": zod.boolean().optional(),
   "securityAlertEmail": zod.boolean().optional(),
   "passwordChangeAlertEmail": zod.boolean().optional(),
-  "requirePortalPassword": zod.boolean().optional().describe('When true, a customer who has set a portal password must enter it; the portalToken in the URL then identifies the account rather than granting access to it. Customers who have not set one yet are still admitted by the token and are prompted to set a password.'),
   "createdAt": zod.coerce.date(),
   "staffRole": zod.enum(['owner', 'manager', 'cashier']).optional(),
   "emailVerified": zod.boolean().optional(),
