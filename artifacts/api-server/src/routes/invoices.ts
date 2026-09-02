@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import { completeLinkedWork } from "../lib/linked-work";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
@@ -217,20 +218,12 @@ async function appendInvoiceEvent(id: number, merchantId: number, event: Invoice
 
 /**
  * When an invoice is linked to a service job or appointment, that work has been
- * billed, so flip the linked record to "completed" (mirrors how a POS sale
- * completes its linked service/appointment). Safe to call with nulls.
+ * billed, so flip the linked record to "completed". Shares `completeLinkedWork`
+ * with every POS sale path so the rule stays identical across the two. Safe to
+ * call with nulls.
  */
 async function completeLinkedRecords(merchantId: number, serviceJobId?: number | null, appointmentId?: number | null): Promise<void> {
-  if (serviceJobId != null) {
-    await db.update(serviceJobsTable)
-      .set({ status: "completed" })
-      .where(and(eq(serviceJobsTable.id, serviceJobId), eq(serviceJobsTable.merchantId, merchantId)));
-  }
-  if (appointmentId != null) {
-    await db.update(appointmentsTable)
-      .set({ status: "completed" })
-      .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
-  }
+  await completeLinkedWork(db, merchantId, { serviceJobId, appointmentId });
 }
 
 /** Credit (sign +1) or claw back (sign -1) loyalty points/value for an invoice.

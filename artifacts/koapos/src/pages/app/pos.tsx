@@ -2976,6 +2976,11 @@ export default function POSPage() {
       staffId: currentStaff?.id,
       loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
       notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+      /* Send the link as ids as well as the notes marker. The marker is what the
+         receipt prints; the ids are what the server completes the job/appointment
+         from, so an edited note or a renamed job can't quietly leave the work open. */
+      serviceJobId: linkedService?.id ?? undefined,
+      appointmentId: linkedAppointment?.id ?? undefined,
       receiptNumber,
       idempotencyKey,
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),

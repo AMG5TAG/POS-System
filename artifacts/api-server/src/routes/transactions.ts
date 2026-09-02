@@ -17,6 +17,7 @@ import { sendEmail } from "../services/email";
 import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
 import { isUniqueViolation } from "../lib/document-numbers";
 import { reconcileOversellLedger } from "../lib/oversellLedger";
+import { completeLinkedWork, mergeLinkedWork } from "../lib/linked-work";
 
 const router: IRouter = Router();
 
@@ -176,6 +177,8 @@ export async function finalizeSale(
     requestedDiscountTotal: clientRequestedDiscountTotal,
     discountPct: clientDiscountPct,
     paidAt: rawPaidAt,
+    serviceJobId: linkedServiceJobId,
+    appointmentId: linkedAppointmentId,
   } = body;
 
   const idempotencyKey =
@@ -889,30 +892,15 @@ export async function finalizeSale(
       }
     }
 
-    if (notes) {
-      const serviceMatch = notes.match(/\[Service #([^:]+):/);
-      if (serviceMatch) {
-        const jobNumber = serviceMatch[1].trim();
-        await tx
-          .update(serviceJobsTable)
-          .set({ status: "completed" })
-          .where(and(
-            eq(serviceJobsTable.jobNumber, jobNumber),
-            eq(serviceJobsTable.merchantId, merchantId),
-          ));
-      }
-      const apptMatch = notes.match(/\[Appt #(\d+):/);
-      if (apptMatch) {
-        const apptId = parseInt(apptMatch[1], 10);
-        await tx
-          .update(appointmentsTable)
-          .set({ status: "completed" })
-          .where(and(
-            eq(appointmentsTable.id, apptId),
-            eq(appointmentsTable.merchantId, merchantId),
-          ));
-      }
-    }
+    // Selling the work finishes it. The ids on the body are authoritative; the
+    // `[Service #...]` / `[Appt #...]` notes markers are the fallback for older
+    // POS builds and for a parked BNPL sale whose body predates this field.
+    // Inside the sale's own transaction, so a sale can never commit having
+    // failed to close the job it billed.
+    await completeLinkedWork(tx, merchantId, mergeLinkedWork(
+      { serviceJobId: linkedServiceJobId, appointmentId: linkedAppointmentId },
+      notes,
+    ));
 
     return row;
         });
@@ -1308,16 +1296,14 @@ router.post("/transactions/:id/modify", requireAuth, async (req, res): Promise<v
         const [job] = await tx.select().from(serviceJobsTable)
           .where(and(eq(serviceJobsTable.jobNumber, jobNum), eq(serviceJobsTable.merchantId, merchantId)));
         if (!job) throw new HttpError(404, "Service job not found");
-        await tx.update(serviceJobsTable).set({ status: "completed" })
-          .where(and(eq(serviceJobsTable.id, job.id), eq(serviceJobsTable.merchantId, merchantId)));
+        await completeLinkedWork(tx, merchantId, { serviceJobId: job.id });
         appendMarker(`[Service #${job.jobNumber}: ${job.deviceType || job.deviceDescription || "service"}]`);
       }
       if (appointmentId != null) {
         const [appt] = await tx.select().from(appointmentsTable)
           .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
         if (!appt) throw new HttpError(404, "Appointment not found");
-        await tx.update(appointmentsTable).set({ status: "completed" })
-          .where(and(eq(appointmentsTable.id, appt.id), eq(appointmentsTable.merchantId, merchantId)));
+        await completeLinkedWork(tx, merchantId, { appointmentId: appt.id });
         appendMarker(`[Appt #${appt.id}: ${appt.title}]`);
       }
       if (notes !== (transaction.notes ?? "")) updates.notes = notes;

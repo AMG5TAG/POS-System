@@ -11671,6 +11671,19 @@ components:
               type: integer
             amount:
               type: number
+        serviceJobId:
+          type: ["integer", "null"]
+          description: >-
+            The service job this sale is billing. The job is marked completed
+            when the sale is recorded. Authoritative — when omitted the server
+            falls back to the `[Service #...]` marker in notes, which is how
+            older clients and parked BNPL sales carry the link.
+        appointmentId:
+          type: ["integer", "null"]
+          description: >-
+            The appointment this sale is billing. The appointment is marked
+            completed when the sale is recorded. Falls back to the
+            `[Appt #...]` notes marker when omitted.
         paidAt:
           type: string
           description: >-

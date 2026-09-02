@@ -3,6 +3,7 @@ import { db, merchantsTable, staffTable, productsTable, customersTable, invoices
 import { matchStaffByPin } from "../lib/staff-pin";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
+import { completeLinkedWork } from "../lib/linked-work";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
 
@@ -451,15 +452,11 @@ router.post("/mobile-pos/sale", async (req, res): Promise<void> => {
     }).returning();
 
     // A linked service job / appointment is marked completed by the sale,
-    // matching the main POS behaviour.
-    if (links.serviceJobId != null) {
-      await tx.update(serviceJobsTable).set({ status: "completed" })
-        .where(and(eq(serviceJobsTable.id, links.serviceJobId), eq(serviceJobsTable.merchantId, mpos.merchantId)));
-    }
-    if (links.appointmentId != null) {
-      await tx.update(appointmentsTable).set({ status: "completed" })
-        .where(and(eq(appointmentsTable.id, links.appointmentId), eq(appointmentsTable.merchantId, mpos.merchantId)));
-    }
+    // through the same helper the main POS and the invoice paths use.
+    await completeLinkedWork(tx, mpos.merchantId, {
+      serviceJobId: links.serviceJobId,
+      appointmentId: links.appointmentId,
+    });
 
     // Decrement tracked stock for product-linked lines.
     for (const i of priced) {

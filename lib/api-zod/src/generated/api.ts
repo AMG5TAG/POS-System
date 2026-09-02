@@ -2136,6 +2136,8 @@ export const CreateTransactionBody = zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
 }).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.'),
+  "serviceJobId": zod.number().nullish().describe('The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.'),
+  "appointmentId": zod.number().nullish().describe('The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.'),
   "paidAt": zod.string().optional().describe('Optional accounting date for the sale. The transaction\'s createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of \"now\". Used for tenders that actually landed on an earlier day, e.g. a direct deposit \/ bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future.')
 })
 
