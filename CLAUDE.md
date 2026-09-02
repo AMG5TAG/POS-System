@@ -213,6 +213,48 @@ To rotate without forcing every merchant to reconnect:
 
 Rows undecryptable under **either** key are invalidated on startup (`disconnectedReason: "key_rotated"`); those merchants must reconnect the affected integrations.
 
+### Reading the production database
+
+Production is Neon, and `PROD_DATABASE_URL` authenticates as `neondb_owner` —
+the database **owner**, with full read/write/DDL over live merchant data. There
+is no "just SELECT" version of that credential, so it is not the one to reach
+for when you only need to look.
+
+Use **`scripts/prod-query.sh`** instead:
+
+```bash
+scripts/prod-query.sh "SELECT count(*) FROM merchants"
+scripts/prod-query.sh --csv "SELECT id, name FROM merchants LIMIT 5"
+```
+
+It connects as `claude_ro`, a role holding `SELECT` and nothing else. The role's
+absent write grants are the actual security boundary — everything else is
+defence in depth: the script aborts unless `SELECT current_user` returns
+`claude_ro`, forces `default_transaction_read_only=on`, and caps statement and
+idle-in-transaction time. The password is never an argument; it comes from
+`~/.pgpass`, so it appears in no env var, no argv and no connection string.
+
+Because it is one fixed entry point it can be allowlisted alone
+(`Bash(scripts/prod-query.sh:*)`) without allowlisting bare `psql`, which would
+expose the owner credential.
+
+**Production holds real customer PII** — names, emails, phone numbers, purchase
+history. Prefer aggregates over row dumps and select only the columns you need;
+anything read enters the agent transcript.
+
+Two things this setup does *not* cover:
+
+- **Writes.** For a migration, backfill or bug repro against real data, create a
+  Neon **branch** — copy-on-write, near-instant, and it cannot affect
+  production. Keep the existing script convention for actual changes:
+  dry-run by default, `--commit` to write, printing the DB host it connected to
+  (see `artifacts/api-server/scripts/backfill-structured-addresses.ts`).
+- **One-off operator setup.** Creating the `claude_ro` role and populating
+  `~/.pgpass` are manual tasks, deliberately not scripted into the repo. The
+  role needs `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for the owner, or every
+  `db:push` that adds a table leaves it unable to see the new one. To revoke:
+  `DROP OWNED BY claude_ro; DROP ROLE claude_ro;`.
+
 ### System email env vars
 Platform-level fallback when a merchant has no email provider configured in Management → Email. Essential for auth emails (password reset, login alerts). Set **one** option:
 
