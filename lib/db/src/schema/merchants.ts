@@ -17,6 +17,11 @@ export const merchantsTable = pgTable("merchants", {
   logoUrl: text("logo_url"),
   username: text("username").unique(),
   portalDomain: text("portal_domain").unique(),
+  /* When "true", a customer who has set a portal password must supply it — the
+     portalToken in the URL then identifies the account rather than granting it.
+     Defaults off so existing portals (and every link already sent to a customer)
+     keep working exactly as before until a merchant opts in. */
+  requirePortalPassword: text("require_portal_password").notNull().default("false"),
   loginNotifyEmail: text("login_notify_email").notNull().default("false"),
   loginNotifyEmailFailed: text("login_notify_email_failed").notNull().default("false"),
   loginNotifyEmailNewLocation: text("login_notify_email_new_location").notNull().default("true"),
