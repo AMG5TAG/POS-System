@@ -473,6 +473,10 @@ import type {
   StockTakeProgressInput,
   StoreCreditInput,
   StoreCreditResult,
+  StorefrontApiKeyCreated,
+  StorefrontApiKeyInput,
+  StorefrontApiKeyListResponse,
+  StorefrontApiManifest,
   Subscription,
   Supplier,
   SupplierInput,
@@ -24430,6 +24434,301 @@ export const useUpsertOnlineStoreThirdparty = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getUpsertOnlineStoreThirdpartyMutationOptions(options));
     }
+
+export const getListStorefrontApiKeysUrl = () => {
+
+
+
+
+  return `/api/storefront-api-keys`
+}
+
+/**
+ * @summary List Storefront Data API keys, with the scope catalogue
+ */
+export const listStorefrontApiKeys = async ( options?: RequestInit): Promise<StorefrontApiKeyListResponse> => {
+
+  return customFetch<StorefrontApiKeyListResponse>(getListStorefrontApiKeysUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListStorefrontApiKeysQueryKey = () => {
+    return [
+    `/api/storefront-api-keys`
+    ] as const;
+    }
+
+
+export const getListStorefrontApiKeysQueryOptions = <TData = Awaited<ReturnType<typeof listStorefrontApiKeys>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStorefrontApiKeys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListStorefrontApiKeysQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listStorefrontApiKeys>>> = ({ signal }) => listStorefrontApiKeys({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listStorefrontApiKeys>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListStorefrontApiKeysQueryResult = NonNullable<Awaited<ReturnType<typeof listStorefrontApiKeys>>>
+export type ListStorefrontApiKeysQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary List Storefront Data API keys, with the scope catalogue
+ */
+
+export function useListStorefrontApiKeys<TData = Awaited<ReturnType<typeof listStorefrontApiKeys>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listStorefrontApiKeys>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListStorefrontApiKeysQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getCreateStorefrontApiKeyUrl = () => {
+
+
+
+
+  return `/api/storefront-api-keys`
+}
+
+/**
+ * @summary Issue a Storefront Data API key (returns the secret once)
+ */
+export const createStorefrontApiKey = async (storefrontApiKeyInput: StorefrontApiKeyInput, options?: RequestInit): Promise<StorefrontApiKeyCreated> => {
+
+  return customFetch<StorefrontApiKeyCreated>(getCreateStorefrontApiKeyUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      storefrontApiKeyInput,)
+  }
+);}
+
+
+
+
+export const getCreateStorefrontApiKeyMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStorefrontApiKey>>, TError,{data: BodyType<StorefrontApiKeyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createStorefrontApiKey>>, TError,{data: BodyType<StorefrontApiKeyInput>}, TContext> => {
+
+const mutationKey = ['createStorefrontApiKey'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createStorefrontApiKey>>, {data: BodyType<StorefrontApiKeyInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  createStorefrontApiKey(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CreateStorefrontApiKeyMutationResult = NonNullable<Awaited<ReturnType<typeof createStorefrontApiKey>>>
+    export type CreateStorefrontApiKeyMutationBody = BodyType<StorefrontApiKeyInput>
+    export type CreateStorefrontApiKeyMutationError = ErrorType<void>
+
+    /**
+ * @summary Issue a Storefront Data API key (returns the secret once)
+ */
+export const useCreateStorefrontApiKey = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createStorefrontApiKey>>, TError,{data: BodyType<StorefrontApiKeyInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof createStorefrontApiKey>>,
+        TError,
+        {data: BodyType<StorefrontApiKeyInput>},
+        TContext
+      > => {
+      return useMutation(getCreateStorefrontApiKeyMutationOptions(options));
+    }
+
+export const getRevokeStorefrontApiKeyUrl = (id: number,) => {
+
+
+
+
+  return `/api/storefront-api-keys/${id}`
+}
+
+/**
+ * @summary Revoke a Storefront Data API key
+ */
+export const revokeStorefrontApiKey = async (id: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getRevokeStorefrontApiKeyUrl(id),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getRevokeStorefrontApiKeyMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeStorefrontApiKey>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof revokeStorefrontApiKey>>, TError,{id: number}, TContext> => {
+
+const mutationKey = ['revokeStorefrontApiKey'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof revokeStorefrontApiKey>>, {id: number}> = (props) => {
+          const {id} = props ?? {};
+
+          return  revokeStorefrontApiKey(id,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type RevokeStorefrontApiKeyMutationResult = NonNullable<Awaited<ReturnType<typeof revokeStorefrontApiKey>>>
+
+    export type RevokeStorefrontApiKeyMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Revoke a Storefront Data API key
+ */
+export const useRevokeStorefrontApiKey = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof revokeStorefrontApiKey>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof revokeStorefrontApiKey>>,
+        TError,
+        {id: number},
+        TContext
+      > => {
+      return useMutation(getRevokeStorefrontApiKeyMutationOptions(options));
+    }
+
+export const getGetStorefrontApiManifestUrl = (id: number,) => {
+
+
+
+
+  return `/api/storefront-api-keys/${id}/manifest`
+}
+
+/**
+ * @summary Connection brief for a key, for the merchant's AI or developer
+ */
+export const getStorefrontApiManifest = async (id: number, options?: RequestInit): Promise<StorefrontApiManifest> => {
+
+  return customFetch<StorefrontApiManifest>(getGetStorefrontApiManifestUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetStorefrontApiManifestQueryKey = (id: number,) => {
+    return [
+    `/api/storefront-api-keys/${id}/manifest`
+    ] as const;
+    }
+
+
+export const getGetStorefrontApiManifestQueryOptions = <TData = Awaited<ReturnType<typeof getStorefrontApiManifest>>, TError = ErrorType<void>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStorefrontApiManifest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetStorefrontApiManifestQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getStorefrontApiManifest>>> = ({ signal }) => getStorefrontApiManifest(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getStorefrontApiManifest>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetStorefrontApiManifestQueryResult = NonNullable<Awaited<ReturnType<typeof getStorefrontApiManifest>>>
+export type GetStorefrontApiManifestQueryError = ErrorType<void>
+
+
+/**
+ * @summary Connection brief for a key, for the merchant's AI or developer
+ */
+
+export function useGetStorefrontApiManifest<TData = Awaited<ReturnType<typeof getStorefrontApiManifest>>, TError = ErrorType<void>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getStorefrontApiManifest>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetStorefrontApiManifestQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getListShippingCarriersUrl = () => {
 

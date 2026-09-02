@@ -6,6 +6,7 @@
  * do: a third-party store owns its own design, features and domain.
  */
 import { useState, useEffect, useRef } from "react";
+import { Link, useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -18,7 +19,7 @@ import { cn } from "@/lib/utils";
 import { BrandIcon } from "@/components/brand-icon";
 import {
   Store, Wrench, Settings2, Building2, Upload, ExternalLink, CheckCircle2,
-  Image as ImageIcon, Package, ShoppingBag, Users, CreditCard,
+  Image as ImageIcon, Package, ShoppingBag, Users, CreditCard, Sparkles, KeyRound, Boxes,
 } from "lucide-react";
 import { useGetMerchant, useGetOnlineStoreThirdparty, useUpsertOnlineStoreThirdparty } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
@@ -30,6 +31,7 @@ import {
 
 export default function OnlineStoreStorefrontPage() {
   const { site, mutateSite, updateSite, togglePublish } = useOnlineStore();
+  const [, navigate] = useLocation();
 
   const { data: rawThirdParty } = useGetOnlineStoreThirdparty({ query: { queryKey: ["online-store-thirdparty"] } });
   const upsertThirdParty = useUpsertOnlineStoreThirdparty();
@@ -89,9 +91,14 @@ export default function OnlineStoreStorefrontPage() {
     toast.success("Logo set as favicon");
   };
 
+  const isHeadless = thirdParty?.providerId === "headless";
+
   const connectThirdParty = () => {
     if (!connectProvider) return;
-    if (!connectForm.url.trim()) { toast.error("Store URL is required"); return; }
+    // The Data API has no platform to point at, so it is the one provider that
+    // does not need a store URL — the merchant may not have built the site yet.
+    const providerKind = THIRDPARTY_PROVIDERS.find((p) => p.id === connectProvider)?.kind;
+    if (providerKind !== "api" && !connectForm.url.trim()) { toast.error("Store URL is required"); return; }
     const tp: ThirdParty = {
       providerId:  connectProvider,
       storeUrl:    connectForm.url.trim(),
@@ -149,7 +156,6 @@ export default function OnlineStoreStorefrontPage() {
 
         {site.mode === "thirdparty" ? (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
             <Card>
               <CardHeader className="pb-3"><CardTitle className="text-base">Available Platforms</CardTitle><CardDescription>Choose a platform to connect to your store</CardDescription></CardHeader>
               <CardContent>
@@ -158,8 +164,12 @@ export default function OnlineStoreStorefrontPage() {
                     const isConnected = thirdParty?.providerId === p.id && thirdParty?.connected;
                     return (
                       <button key={p.id} onClick={() => { setConnectProvider(p.id); setConnectForm({ url: thirdParty?.storeUrl || "", apiKey: "" }); }}
-                        className={cn("flex items-center gap-3 rounded-lg border p-3 text-left transition-all", isConnected ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800" : "hover:bg-muted/40")}>
-                        <BrandIcon name={p.id} size={28} className="shrink-0" />
+                        className={cn("flex items-center gap-3 rounded-lg border p-3 text-left transition-all",
+                          isConnected ? "border-emerald-300 bg-emerald-50 dark:bg-emerald-950/20 dark:border-emerald-800"
+                            : p.kind === "api" ? "border-primary/40 bg-primary/5 hover:bg-primary/10" : "hover:bg-muted/40")}>
+                        {p.kind === "api"
+                          ? <Sparkles className="w-7 h-7 shrink-0 text-primary" />
+                          : <BrandIcon name={p.id} size={28} className="shrink-0" />}
                         <div className="min-w-0 flex-1"><p className="text-sm font-semibold truncate">{p.name}</p><p className="text-[11px] text-muted-foreground truncate">{p.tagline}</p></div>
                         {isConnected && <CheckCircle2 className="w-4 h-4 text-emerald-500 shrink-0" />}
                       </button>
@@ -180,34 +190,43 @@ export default function OnlineStoreStorefrontPage() {
                         <p className="text-sm font-semibold">{THIRDPARTY_PROVIDERS.find((p) => p.id === thirdParty.providerId)?.name}</p>
                         <Badge variant="secondary" className="ml-auto text-[10px]">Connected</Badge>
                       </div>
-                      <p className="text-xs text-muted-foreground break-all">{thirdParty.storeUrl}</p>
+                      <p className="text-xs text-muted-foreground break-all">{thirdParty.storeUrl || (isHeadless ? "Your own website, wherever it is hosted" : "")}</p>
                       <p className="text-[11px] text-muted-foreground">Connected {new Date(thirdParty.connectedAt).toLocaleString("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit" })}</p>
                     </div>
                     <div className="flex gap-2">
-                      <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
-                        <a href={thirdParty.storeUrl.startsWith("http") ? thirdParty.storeUrl : `https://${thirdParty.storeUrl}`} target="_blank" rel="noreferrer">
-                          <ExternalLink className="w-3.5 h-3.5" /> Open store
-                        </a>
-                      </Button>
+                      {isHeadless ? (
+                        <Button size="sm" className="flex-1 gap-1.5" asChild>
+                          <Link href="/management/online-store/data-api"><KeyRound className="w-3.5 h-3.5" /> Manage API keys</Link>
+                        </Button>
+                      ) : (
+                        <Button variant="outline" size="sm" className="flex-1 gap-1.5" asChild>
+                          <a href={thirdParty.storeUrl.startsWith("http") ? thirdParty.storeUrl : `https://${thirdParty.storeUrl}`} target="_blank" rel="noreferrer">
+                            <ExternalLink className="w-3.5 h-3.5" /> Open store
+                          </a>
+                        </Button>
+                      )}
                       <Button variant="outline" size="sm" className="flex-1 gap-1.5 text-destructive hover:text-destructive" onClick={disconnectThirdParty}>Disconnect</Button>
                     </div>
                     <Separator />
                     <div className="space-y-2">
-                      <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">What syncs</p>
-                      {[{ icon: Package, label: "Products & inventory" }, { icon: ShoppingBag, label: "Orders (read & fulfil)" }, { icon: Users, label: "Customers" }, { icon: CreditCard, label: "Payments & refunds" }].map(({ icon: Icon, label }) => (
-                        <div key={label} className="flex items-center gap-2 text-xs"><Icon className="w-3.5 h-3.5 text-muted-foreground" /><span>{label}</span><Badge variant="secondary" className="ml-auto text-[10px]">Active</Badge></div>
+                      <p className="text-xs font-semibold uppercase text-muted-foreground tracking-wide">{isHeadless ? "What your site can read" : "What syncs"}</p>
+                      {(isHeadless
+                        ? [{ icon: Package, label: "Products, categories & brands" }, { icon: Boxes, label: "Stock levels" }, { icon: Users, label: "Customers (if you allow it)" }, { icon: ShoppingBag, label: "Sales (if you allow it)" }]
+                        : [{ icon: Package, label: "Products & inventory" }, { icon: ShoppingBag, label: "Orders (read & fulfil)" }, { icon: Users, label: "Customers" }, { icon: CreditCard, label: "Payments & refunds" }]
+                      ).map(({ icon: Icon, label }) => (
+                        <div key={label} className="flex items-center gap-2 text-xs"><Icon className="w-3.5 h-3.5 text-muted-foreground" /><span>{label}</span><Badge variant="secondary" className="ml-auto text-[10px]">{isHeadless ? "Read-only" : "Active"}</Badge></div>
                       ))}
                     </div>
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground text-sm">
                     <Store className="w-10 h-10 mx-auto mb-2 opacity-30" />
-                    No third-party store connected yet. Choose a platform on the left to get started.
+                    No third-party store connected yet. Choose a platform on the left — or <strong>Build your own (AI)</strong> to
+                    get a read-only Data API key for a site you build yourself.
                   </div>
                 )}
               </CardContent>
             </Card>
-          </div>
           </div>
         ) : (
           <>
@@ -272,6 +291,36 @@ export default function OnlineStoreStorefrontPage() {
           {connectProvider && (() => {
             const provider = THIRDPARTY_PROVIDERS.find((p) => p.id === connectProvider);
             if (!provider) return null;
+            if (provider.kind === "api") {
+              return (
+                <>
+                  <DialogHeader>
+                    <DialogTitle className="flex items-center gap-2"><Sparkles className="w-5 h-5 text-primary" />Build your own store</DialogTitle>
+                    <DialogDescription>
+                      Nothing to connect to here — you build the site, and KoaPOS gives it read-only access to your data.
+                    </DialogDescription>
+                  </DialogHeader>
+                  <div className="space-y-3">
+                    <div className="rounded-md border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1.5">
+                      <p>On the next page you create an <strong className="text-foreground">API key</strong> and download a
+                        <strong className="text-foreground"> connection file</strong> — one document that tells an AI coding tool
+                        (or a developer) everything it needs to read your products, stock, and — if you allow it — your
+                        customers and sales.</p>
+                      <p>The access is <strong className="text-foreground">read-only</strong>: a key can never change anything in KoaPOS.</p>
+                    </div>
+                    <Field label="Your website address (optional)">
+                      <Input value={connectForm.url} onChange={(e) => setConnectForm((f) => ({ ...f, url: e.target.value }))} placeholder="yourstore.com.au" />
+                    </Field>
+                  </div>
+                  <DialogFooter>
+                    <Button variant="outline" onClick={() => setConnectProvider(null)}>Cancel</Button>
+                    <Button onClick={() => { connectThirdParty(); navigate("/management/online-store/data-api"); }} className="gap-1.5">
+                      <KeyRound className="w-3.5 h-3.5" /> Continue to Data API
+                    </Button>
+                  </DialogFooter>
+                </>
+              );
+            }
             return (
               <>
                 <DialogHeader>

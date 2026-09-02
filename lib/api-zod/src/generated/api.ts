@@ -8695,6 +8695,62 @@ export const UpsertOnlineStoreThirdpartyResponse = zod.object({
 
 
 /**
+ * @summary List Storefront Data API keys, with the scope catalogue
+ */
+export const ListStorefrontApiKeysResponse = zod.object({
+  "items": zod.array(zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "keyPrefix": zod.string(),
+  "scopes": zod.array(zod.string()),
+  "lastUsedAt": zod.string().nullish(),
+  "requestCount": zod.number(),
+  "expiresAt": zod.string().nullish(),
+  "revokedAt": zod.string().nullish(),
+  "createdAt": zod.string()
+})),
+  "scopes": zod.array(zod.object({
+  "id": zod.string(),
+  "label": zod.string(),
+  "description": zod.string(),
+  "sensitive": zod.boolean()
+})),
+  "baseUrl": zod.string()
+})
+
+
+/**
+ * @summary Issue a Storefront Data API key (returns the secret once)
+ */
+export const CreateStorefrontApiKeyBody = zod.object({
+  "name": zod.string().optional(),
+  "scopes": zod.array(zod.string()).optional(),
+  "expiresInDays": zod.number().nullish()
+})
+
+
+/**
+ * @summary Revoke a Storefront Data API key
+ */
+export const RevokeStorefrontApiKeyParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+
+/**
+ * @summary Connection brief for a key, for the merchant's AI or developer
+ */
+export const GetStorefrontApiManifestParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetStorefrontApiManifestResponse = zod.object({
+  "filename": zod.string(),
+  "content": zod.string()
+})
+
+
+/**
  * @summary List shipping carriers with connection state
  */
 export const ListShippingCarriersResponse = zod.object({

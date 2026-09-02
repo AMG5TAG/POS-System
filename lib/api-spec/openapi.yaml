@@ -6347,6 +6347,68 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OnlineStoreThirdparty" }
 
+  /storefront-api-keys:
+    get:
+      operationId: listStorefrontApiKeys
+      summary: List Storefront Data API keys, with the scope catalogue
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontApiKeyListResponse" }
+    post:
+      operationId: createStorefrontApiKey
+      summary: Issue a Storefront Data API key (returns the secret once)
+      tags: [OnlineStore]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/StorefrontApiKeyInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontApiKeyCreated" }
+        "400":
+          description: Too many active keys
+
+  /storefront-api-keys/{id}:
+    delete:
+      operationId: revokeStorefrontApiKey
+      summary: Revoke a Storefront Data API key
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Revoked
+
+  /storefront-api-keys/{id}/manifest:
+    get:
+      operationId: getStorefrontApiManifest
+      summary: Connection brief for a key, for the merchant's AI or developer
+      tags: [OnlineStore]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/StorefrontApiManifest" }
+        "404":
+          description: Not found
+
   /shipping-carriers:
     get:
       operationId: listShippingCarriers
@@ -15503,6 +15565,60 @@ components:
         apiKey:       { type: string }
         connected:    { type: string }
         connectedAt:  { type: string }
+
+    StorefrontApiScope:
+      type: object
+      required: [id, label, description, sensitive]
+      properties:
+        id:          { type: string }
+        label:       { type: string }
+        description: { type: string }
+        sensitive:   { type: boolean }
+
+    StorefrontApiKey:
+      type: object
+      required: [id, name, keyPrefix, scopes, requestCount, createdAt]
+      properties:
+        id:           { type: integer }
+        name:         { type: string }
+        keyPrefix:    { type: string }
+        scopes:       { type: array, items: { type: string } }
+        lastUsedAt:   { type: string, nullable: true }
+        requestCount: { type: integer }
+        expiresAt:    { type: string, nullable: true }
+        revokedAt:    { type: string, nullable: true }
+        createdAt:    { type: string }
+
+    StorefrontApiKeyListResponse:
+      type: object
+      required: [items, scopes, baseUrl]
+      properties:
+        items:   { type: array, items: { $ref: "#/components/schemas/StorefrontApiKey" } }
+        scopes:  { type: array, items: { $ref: "#/components/schemas/StorefrontApiScope" } }
+        baseUrl: { type: string }
+
+    StorefrontApiKeyInput:
+      type: object
+      properties:
+        name:          { type: string }
+        scopes:        { type: array, items: { type: string } }
+        expiresInDays: { type: integer, nullable: true }
+
+    StorefrontApiManifest:
+      type: object
+      required: [filename, content]
+      properties:
+        filename: { type: string }
+        content:  { type: string }
+
+    StorefrontApiKeyCreated:
+      allOf:
+        - $ref: "#/components/schemas/StorefrontApiKey"
+        - type: object
+          required: [key, manifest]
+          properties:
+            key:      { type: string, description: "The secret. Returned once, never stored in plaintext." }
+            manifest: { $ref: "#/components/schemas/StorefrontApiManifest" }
 
     ShippingCarrier:
       type: object

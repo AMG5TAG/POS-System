@@ -5,7 +5,7 @@ import {
   UserSquare2, Clock, Coins, Monitor, Map, MapPin, Camera, Scale, TabletSmartphone, LayoutDashboard,
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Calculator,
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, FolderSync, MessageSquare, Palette,
-  LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon, Store, Paintbrush,
+  LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon, Store, Paintbrush, KeyRound,
 } from "lucide-react";
 
 /**
@@ -130,6 +130,7 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Design",     href: "/management/online-store/design",     icon: Palette },
       { name: "Features",   href: "/management/online-store/features",   icon: Layers  },
       { name: "Domain",     href: "/management/online-store/domain",     icon: Link2   },
+      { name: "Data API",   href: "/management/online-store/data-api",   icon: KeyRound },
     ],
   },
   {

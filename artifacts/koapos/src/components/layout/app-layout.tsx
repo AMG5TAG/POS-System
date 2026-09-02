@@ -21,7 +21,7 @@ import {
   Megaphone, QrCode, BarChart2, Send, Zap, UserPlus, Sparkles, Sticker,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
   CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
-  MapPin, Repeat, Puzzle, Recycle, Image as ImageIcon,
+  MapPin, Repeat, Puzzle, Recycle, Image as ImageIcon, KeyRound,
 } from "lucide-react";
 import {
   MANAGEMENT_SUBNAV, HUB_ROUTE_LABELS,
@@ -240,6 +240,7 @@ const SEARCH_INDEX = [
   { label: "Online Store · Design",     href: "/management/online-store/design",      icon: Palette,      group: "Management" },
   { label: "Online Store · Features",   href: "/management/online-store/features",    icon: Layers,       group: "Management" },
   { label: "Online Store · Domain",     href: "/management/online-store/domain",      icon: Link2,        group: "Management" },
+  { label: "Online Store · Data API",   href: "/management/online-store/data-api",    icon: KeyRound,     group: "Management" },
   { label: "POS Registers",      href: "/management/staff-operations/pos-registers",        icon: Monitor,         group: "Management" },
   { label: "Sales Settings",     href: "/management/sales-settings",   icon: Receipt,         group: "Management" },
   { label: "Sales Templates",     href: "/management/customisation/templates/sales",   icon: LayoutTemplate,  group: "Management" },

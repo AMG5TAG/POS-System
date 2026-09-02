@@ -78,6 +78,8 @@ import paymentMethodSurchargesRouter from "./payment-method-surcharges";
 import laybySettingsRouter from "./layby-settings";
 import kpiRouter from "./kpi";
 import qrRouter from "./qr";
+import storefrontApiRouter from "./storefront-api";
+import storefrontApiKeysRouter from "./storefront-api-keys";
 import emailTemplatesRouter from "./email-templates";
 import emailCampaignsRouter from "./email-campaigns";
 import smsTemplatesRouter from "./sms-templates";
@@ -213,6 +215,13 @@ router.use(payrollRouter);
 // Mounting them after the blanket guard 401s scans with {"error":"Unauthorized"}.
 router.use(qrRouter);
 router.use(shortlinksRouter);
+// storefrontApiRouter is the merchant's OWN data, read by the website they built
+// elsewhere. It authenticates with an issued API key instead of a session, so it
+// must sit before the blanket-requireAuth routers below — those would 401 a
+// caller that has no cookie and never will. Its own middleware rejects any
+// request without a valid key, and scopes it from there.
+router.use(storefrontApiRouter);
+router.use(storefrontApiKeysRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);
 router.use(autoSyncSettingsRouter);

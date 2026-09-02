@@ -80,6 +80,7 @@ export * from "./shortlink-settings";
 export * from "./marketing-events";
 export * from "./online-store-settings";
 export * from "./online-store-thirdparty";
+export * from "./storefront-api-keys";
 export * from "./shipping-carriers";
 export * from "./marketplace-connections";
 export * from "./delivery-orders";

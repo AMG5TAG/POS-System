@@ -155,6 +155,7 @@ const OnlineStoreStorefrontPage = lazyWithRetry(() => import("@/pages/app/online
 const OnlineStoreDesignPage = lazyWithRetry(() => import("@/pages/app/online-store/design"));
 const OnlineStoreFeaturesPage = lazyWithRetry(() => import("@/pages/app/online-store/features"));
 const OnlineStoreDomainPage = lazyWithRetry(() => import("@/pages/app/online-store/domain"));
+const OnlineStoreDataApiPage = lazyWithRetry(() => import("@/pages/app/online-store/data-api"));
 const OnlineDeliveryOrdersPage = lazyWithRetry(() => import("@/pages/app/online-delivery-orders"));
 const OnlineShippingPage = lazyWithRetry(() => import("@/pages/app/online-shipping"));
 const OnlineMarketplacePage = lazyWithRetry(() => import("@/pages/app/online-marketplace"));
@@ -690,6 +691,9 @@ function Router() {
       </Route>
       <Route path="/management/online-store/domain">
         <ManagementProtectedRoute component={OnlineStoreDomainPage} />
+      </Route>
+      <Route path="/management/online-store/data-api">
+        <ManagementProtectedRoute component={OnlineStoreDataApiPage} />
       </Route>
       <Route path="/management/marketing-reports/online-store"><Redirect to="/management/online-store/storefront" /></Route>
       <Route path="/management/marketing-reports/email">

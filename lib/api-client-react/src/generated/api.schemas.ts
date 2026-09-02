@@ -4761,6 +4761,48 @@ export interface OnlineStoreThirdpartyInput {
   connectedAt?: string;
 }
 
+export interface StorefrontApiScope {
+  id: string;
+  label: string;
+  description: string;
+  sensitive: boolean;
+}
+
+export interface StorefrontApiKey {
+  id: number;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  lastUsedAt?: string | null;
+  requestCount: number;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+}
+
+export interface StorefrontApiKeyListResponse {
+  items: StorefrontApiKey[];
+  scopes: StorefrontApiScope[];
+  baseUrl: string;
+}
+
+export interface StorefrontApiKeyInput {
+  name?: string;
+  scopes?: string[];
+  expiresInDays?: number | null;
+}
+
+export interface StorefrontApiManifest {
+  filename: string;
+  content: string;
+}
+
+export type StorefrontApiKeyCreated = StorefrontApiKey & {
+  /** The secret. Returned once, never stored in plaintext. */
+  key: string;
+  manifest: StorefrontApiManifest;
+};
+
 export interface ShippingCarrier {
   id: number;
   merchantId: number;

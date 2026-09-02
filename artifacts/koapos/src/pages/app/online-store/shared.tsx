@@ -180,7 +180,18 @@ export const DEFAULT_SITE: SiteSettings = {
   footer: { ...DEFAULT_FOOTER },
 };
 
-export const THIRDPARTY_PROVIDERS = [
+/**
+ * Platforms a merchant can point their store at instead of the KoaPOS builder.
+ *
+ * `headless` is the odd one out and deliberately so: there is no platform to
+ * connect to, because the merchant (or their AI) is building the site
+ * themselves. Choosing it hands them a read-only Data API key instead of asking
+ * for someone else's credentials — the connection runs the other way.
+ */
+export const THIRDPARTY_PROVIDERS: Array<{
+  id: string; name: string; tagline: string; color: string; kind?: "api";
+}> = [
+  { id: "headless",    name: "Build your own (AI)", tagline: "Read-only Data API for a site you build yourself", color: "#efbf04", kind: "api" },
   { id: "shopify",     name: "Shopify",          tagline: "All-in-one ecommerce",          color: "#96BF47" },
   { id: "woocommerce", name: "WooCommerce",       tagline: "WordPress ecommerce plugin",    color: "#7F54B3" },
   { id: "bigcommerce", name: "BigCommerce",       tagline: "Enterprise-grade ecommerce",    color: "#121118" },

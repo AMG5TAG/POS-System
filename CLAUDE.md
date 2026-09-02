@@ -322,6 +322,40 @@ Nextcloud is the one cloud-storage integration with no platform OAuth app: each 
 
 Adding another storage provider means touching the same five places `StorageType` is declared: `lib/backup-storage/types.ts`, `BackupStorageDestination` + `BackupLocation` in `lib/db/src/schema/merchant-backups.ts`, both enums in `openapi.yaml`, and `StorageType`/`STORAGE_META` in `management-backup.tsx`. The `destinations`/`locations` columns are JSONB with TypeScript-only typing, so **no SQL migration is needed** to widen them.
 
+### Storefront Data API (merchants' own sites / AI-built stores)
+
+Every other integration points KoaPOS *at* somebody else's platform. This one
+runs the other way: KoaPOS issues a credential and a website the merchant built
+elsewhere — increasingly by an AI agent — reads their data through it. It is
+offered as a provider (`headless`, "Build your own (AI)") in the Online Store
+third-party grid, and managed at Management › Online Store › Data API.
+
+- **Keys** live in `storefront_api_keys`. Only a SHA-256 hash is stored, so the
+  plaintext exists in exactly one response — the create call — and can never be
+  shown again. `keyPrefix` is what the UI displays. Revocation and expiry are
+  nullable timestamps; a revoked, expired or unknown key all return the same
+  401, so a caller cannot learn which.
+- **`lib/storefront-api.ts` describes the API once**: scopes, endpoints, limits,
+  and `buildConnectionManifest` — the Markdown brief the merchant downloads and
+  hands to their AI (base URL, auth, every endpoint, paging, errors, security
+  and privacy rules, plus a JSON block for tools that parse rather than read).
+  `routes/storefront-api.ts` implements exactly those paths and
+  `storefront-api.test.ts` asserts the two lists match, so the brief cannot
+  promise an endpoint that does not exist. **Add an endpoint in both places.**
+- **Scopes** are `products:read`, `inventory:read`, `customers:read`,
+  `sales:read`. The last two expose real customer PII and are never defaults;
+  granting one adds a privacy section to the brief. Scopes are fixed for a key's
+  life — changing them means issuing a new key.
+- **Everything is read-only and merchant-scoped**: `merchantId` comes from the
+  key, never from the request. A leaked key costs confidentiality, never money
+  or stock.
+- Two rate limiters, and the order matters: an IP-keyed one *before*
+  authentication counting only failures (key guessing), and a per-key one after.
+  A per-key limiter alone cannot bound requests that never authenticate.
+- The router is mounted before the blanket-`requireAuth` routers in
+  `routes/index.ts`, for the same reason `qrRouter` is: its callers have no
+  session cookie and never will.
+
 ## Product surface
 
 Public marketing (Landing / Pricing / Register / Login); Dashboard (analytics, sales chart, KPIs); POS Register (product grid + cart + payment modal card/cash/split); Products (CRUD, categories, inventory, SKU, pricing); Customers (CRM, loyalty, spend, visits); Transactions (history, receipts, refunds); Inventory (stock levels, low-stock alerts); Staff (roles, PIN); Modules (enable/disable add-ons); Settings (business + regional).
