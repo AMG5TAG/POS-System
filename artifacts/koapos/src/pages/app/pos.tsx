@@ -4891,8 +4891,8 @@ export default function POSPage() {
           <DialogHeader><DialogTitle className="flex items-center gap-2"><UserRound className="w-4 h-4" /> Walk-in Customer</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Enter the customer's name. They won't be added to the system and won't earn loyalty rewards.</p>
           <div className="space-y-3">
-            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, firstName: e.target.value })); }} placeholder="Jane" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
-            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, lastName: e.target.value })); }} placeholder="Smith" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, firstName: e.target.value })); }} placeholder="Jane" autoCapitalize="words" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, lastName: e.target.value })); }} placeholder="Smith" autoCapitalize="words" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={tryCloseWalkIn}>Cancel</Button>
