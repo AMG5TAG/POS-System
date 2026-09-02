@@ -116,7 +116,9 @@ const ManagementLocationsPage = lazyWithRetry(() => import("@/pages/app/manageme
 const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
 /** Email templates = the same editor scoped to the "email" section (outgoing emails). */
 const ManagementEmailTemplatesPage = () => <ManagementTemplatesPage section="email" />;
-const ManagementFormsPage = lazyWithRetry(() => import("@/pages/app/management-forms"));
+const FormsPage = lazyWithRetry(() => import("@/pages/app/forms-files/forms"));
+const FilesPage = lazyWithRetry(() => import("@/pages/app/forms-files/files"));
+const CloudStoragePage = lazyWithRetry(() => import("@/pages/app/forms-files/cloud"));
 const ManagementStickersPage = lazyWithRetry(() => import("@/pages/app/management-stickers"));
 const InventoryWastagePage = lazyWithRetry(() => import("@/pages/app/inventory-wastage"));
 const SettingsTaxPage = lazyWithRetry(() => import("@/pages/app/settings-tax"));
@@ -700,16 +702,15 @@ function Router() {
       <Route path="/management/settings-integrations/sms">
         <ManagementProtectedRoute component={SettingsSmsPage} />
       </Route>
-      {/* Forms & Files hub — the page's tabs are real routes, so each is a menu
-          entry and a linkable page (see management-forms.tsx). */}
+      {/* Forms & Files hub — one page per menu entry (see pages/app/forms-files). */}
       <Route path="/management/forms-files/forms">
-        <ManagementProtectedRoute component={ManagementFormsPage} />
+        <ManagementProtectedRoute component={FormsPage} />
       </Route>
       <Route path="/management/forms-files/files">
-        <ManagementProtectedRoute component={ManagementFormsPage} />
+        <ManagementProtectedRoute component={FilesPage} />
       </Route>
       <Route path="/management/forms-files/cloud">
-        <ManagementProtectedRoute component={ManagementFormsPage} />
+        <ManagementProtectedRoute component={CloudStoragePage} />
       </Route>
       <Route path="/management/forms-files/uploads">
         <ManagementProtectedRoute component={ManagementUploadsPage} />
