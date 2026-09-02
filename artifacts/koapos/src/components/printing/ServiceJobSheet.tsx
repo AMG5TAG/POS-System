@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
-import { techAppJobUrl } from "@/lib/public-url";
+import { serviceJobQrUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
 import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
 
@@ -30,9 +30,6 @@ export interface ServiceSheetBranding {
   logo?: string;
   /** Configured social links (e.g. { facebook: "...", instagram: "..." }). */
   socialLinks?: Record<string, string>;
-  /** Business username — forms the Tech App address (/b/:username/t/webapp).
-      When present, the sheet QR deep-links into the Tech App for this job. */
-  techAppUsername?: string;
 }
 
 export interface ServiceSheetFormFile {
@@ -41,9 +38,8 @@ export interface ServiceSheetFormFile {
 }
 
 export interface ServiceSheetData {
-  /** Database id — drives the bottom-left QR code that deep-links into the
-      Tech App for this job (/b/:username/t/webapp?job=:id). Omit to print
-      without a QR. */
+  /** Database id — drives the bottom-left QR code, which encodes the job's
+      stable resolver (/api/qr/j/:id). Omit to print without a QR. */
   jobId?: number | null;
   jobNumber: string;
   date?: string | number | Date | null;
@@ -151,16 +147,15 @@ export function ServiceJobSheet({
   const showCustomer = opts.showCustomerDetails;
   const showDevice = opts.showDeviceDetails;
 
-  /* Bottom-left QR — scanning opens the job in the Tech App
-     (/b/:username/t/webapp?job=:id). Falls back to the staff Service View only
-     when no business username is configured (the Tech App can't exist without
-     one). The `?job=` deep link is also understood by the Tech App's in-app
-     scanner. */
+  /* Bottom-left QR — the sheet is printed once and then follows the device, so
+     the ink carries the job's stable resolver rather than a destination that
+     goes stale: the server sends a scan to the Tech App while the job is open
+     and to the customer's portal once it is completed. */
   const showQr = opts.showServiceQr !== false; // default on; template toggle can hide it
   const qrTarget = useMemo(() => {
     if (data.jobId == null || !showQr) return null;
-    return techAppJobUrl(branding.techAppUsername, data.jobId);
-  }, [data.jobId, branding.techAppUsername, showQr]);
+    return serviceJobQrUrl(data.jobId);
+  }, [data.jobId, showQr]);
   const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   return (
@@ -396,7 +391,7 @@ export function ServiceJobSheet({
         </div>
       )}
 
-      {/* ── Tech App QR — bottom-left corner ───────────────────── */}
+      {/* ── Service job QR — bottom-left corner ────────────────── */}
       {qr && (
         <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-start", alignItems: "flex-end", gap: "8px" }}>
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "4px", padding: "5px", background: "white" }}>
@@ -413,8 +408,8 @@ export function ServiceJobSheet({
             </svg>
           </div>
           <div style={{ fontSize: "9px", color: MUTED, lineHeight: 1.4, paddingBottom: "2px" }}>
-            Scan to open in the<br />
-            <strong>Tech App</strong> — {data.jobNumber}
+            Scan to open<br />
+            <strong>this job</strong> — {data.jobNumber}
           </div>
         </div>
       )}

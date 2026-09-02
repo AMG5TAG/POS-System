@@ -1,7 +1,7 @@
 import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
-import { techAppJobUrl } from "@/lib/public-url";
+import { serviceJobQrUrl } from "@/lib/public-url";
 import { humanizeStatus, mergeCredentialLines, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 
@@ -112,8 +112,8 @@ export function ServiceJobDocket({
   const showQr = opts.showServiceQr !== false;
   const qrTarget = useMemo(() => {
     if (data.jobId == null || !showQr) return null;
-    return techAppJobUrl(branding.techAppUsername, data.jobId);
-  }, [data.jobId, branding.techAppUsername, showQr]);
+    return serviceJobQrUrl(data.jobId);
+  }, [data.jobId, showQr]);
   const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   const flags = [
@@ -279,7 +279,7 @@ export function ServiceJobDocket({
         </>
       )}
 
-      {/* ── Tech App QR ─────────────────────────────────────────── */}
+      {/* ── Service job QR ──────────────────────────────────────── */}
       {qr && (
         <>
           <div style={dividerStyle} />
@@ -295,7 +295,7 @@ export function ServiceJobDocket({
               <rect width={qr.size} height={qr.size} fill="#ffffff" />
               <path d={qr.path} fill="#000000" />
             </svg>
-            <div style={{ fontSize: "10px" }}>Scan to open in the Tech App</div>
+            <div style={{ fontSize: "10px" }}>Scan to open this job</div>
             <div style={{ fontSize: "10px", fontWeight: "bold" }}>{data.jobNumber}</div>
           </div>
         </>

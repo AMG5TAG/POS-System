@@ -54,6 +54,14 @@ describe("public QR / shortlink resolvers survive the blanket-auth routers", () 
     expect(res.body).not.toEqual({ error: "Unauthorized" });
   });
 
+  it("GET /api/qr/j/:jobId is reachable without a session (not 401)", async () => {
+    // The service-job resolver a printed repair sticker encodes — scanned by
+    // customers, who never have a session.
+    const res = await request(app).get("/api/qr/j/1");
+    expect(res.status).not.toBe(401);
+    expect(res.body).not.toEqual({ error: "Unauthorized" });
+  });
+
   it("GET /api/shortlinks/r/:slug is reachable without a session (not 401)", async () => {
     const res = await request(app).get("/api/shortlinks/r/some-slug");
     expect(res.status).not.toBe(401);

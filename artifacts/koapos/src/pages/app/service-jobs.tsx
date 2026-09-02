@@ -38,7 +38,7 @@ import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
-import { techAppJobUrl } from "@/lib/public-url";
+import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
 import { SendButton } from "@/components/send/send-dialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
@@ -349,7 +349,6 @@ export default function ServiceJobsPage() {
     brandColor,
     logo: (profile as { logo?: string }).logo,
     socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
-    techAppUsername: merchant?.username ?? undefined,
   };
 
   const buildSheetData = (pj: ServiceJob): ServiceSheetData => ({
@@ -449,7 +448,7 @@ export default function ServiceJobsPage() {
         password: (job.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
         // Tech App deep link for the optional service QR (shown when the saved
         // repair template enables it).
-        serviceQrUrl: job.id != null ? techAppJobUrl(merchant?.username, job.id) : "",
+        serviceQrUrl: job.id != null ? serviceJobQrUrl(job.id) : "",
       },
     });
     if (!ok) toast.error("Couldn't open the print dialog — please try again");

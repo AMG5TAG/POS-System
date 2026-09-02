@@ -379,7 +379,7 @@ function optionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "callHistoryRows",      label: "Call History Rows",        type: "text",     placeholder: "6", hint: "Number of blank rows for manual notes" },
       { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
-      { section: "Sections", key: "showServiceQr",      label: "Show Tech App QR",         type: "toggle", hint: "Adds a QR that opens the job in the Tech App when scanned" },
+      { section: "Sections", key: "showServiceQr",      label: "Show job QR",              type: "toggle", hint: "Adds a QR that opens the job when scanned — the Tech App while it is open, the customer\u2019s portal once completed" },
       { section: "Custom QR", key: "showCustomQr",         label: "Show Custom QR Code",      type: "toggle", hint: "Attach your own QR (booking, payment, review link…)" },
       { section: "Custom QR", key: "customQrCodeId",       label: "Use a Saved QR Code",      type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",        label: "Custom QR Image",          type: "image",  hint: "Upload a QR image or paste an image URL" },
@@ -1670,7 +1670,6 @@ function ServiceDocketPreview({ templateId, businessName, abn, website, email, a
     businessName, abn, website, email, address, brandColor,
     logo: logo || undefined,
     socialLinks,
-    techAppUsername: "demo",
   };
   // Quick codes are resolved for the preview only — the stored template keeps
   // the {{…}} placeholders, which the print path resolves per job.
@@ -2161,7 +2160,6 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       brandColor: (profile.brandColors ?? [])[0] || "#efbf04",
       tagline: profile.tagline || "",
       logo: profile.logo || "",
-      techAppUsername: merchant?.username ?? undefined,
     };
     const receiptOpts: ReceiptTemplateOpts = {
       showLogo: opts.showLogo,

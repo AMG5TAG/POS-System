@@ -191,7 +191,6 @@ export function useDocumentTemplate(): DocumentTemplateController {
     phone: m?.phone ?? "",
     address: [m?.address, m?.city, p?.state, p?.postcode].filter(Boolean).join(", "),
     partnerReferralCode: m?.partnerReferralCode ?? "",
-    techAppUsername: merchant?.username ?? undefined,
   };
 
   const isLoading =

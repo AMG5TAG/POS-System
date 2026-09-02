@@ -7,7 +7,7 @@ import QRCode from "qrcode";
 import { useGetMerchant, useGetPosSettings } from "@workspace/api-client-react";
 import { toast } from "sonner";
 import { useBusinessProfile } from "@/lib/business-profile";
-import { publicOrigin } from "@/lib/public-url";
+import { publicOrigin, serviceJobQrUrl } from "@/lib/public-url";
 import { parseHardwareConfig } from "@/lib/hardware-config";
 import { isSilentRoute, printDocument } from "@/lib/print-router";
 
@@ -236,7 +236,7 @@ export const STICKER_TYPES: StickerType[] = [
       { key: "showUsername", label: "Username",      defaultValue: "false", type: "toggle" },
       { key: "showPassword", label: "Password",      defaultValue: "false", type: "toggle" },
       { key: "showBarcode",  label: "Barcode",       defaultValue: "false", type: "toggle" },
-      { key: "showServiceQr", label: "Tech App QR",  defaultValue: "false", type: "toggle" },
+      { key: "showServiceQr", label: "Job QR",       defaultValue: "false", type: "toggle" },
       { key: "showBizName",  label: "Business Name", defaultValue: "true", type: "toggle" },
     ],
   },
@@ -365,8 +365,9 @@ export function barcodeDataUrl(value: string): string {
 /**
  * Render a QR code as a PNG data URL synchronously (so it's ready before a label
  * is written to a print iframe — unlike `QRCode.toDataURL`, which is async). The
- * repair/service sticker uses this to print a Tech App deep link the technician
- * can scan to open the job. Returns "" when there's no value or no DOM (SSR).
+ * repair/service sticker uses this to print the job's QR resolver, which staff
+ * or the customer can scan to open it. Returns "" when there's no value or no
+ * DOM (SSR).
  */
 export function qrDataUrl(value: string, px = 256): string {
   if (typeof document === "undefined" || !value) return "";
@@ -395,9 +396,9 @@ export function qrDataUrl(value: string, px = 256): string {
   }
 }
 
-/** Sample Tech App URL used to render a representative QR in editor previews
+/** Sample service-job URL used to render a representative QR in editor previews
  *  when no real job URL has been supplied yet. */
-const SAMPLE_SERVICE_QR_URL = `${publicOrigin()}/b/demo/t/techapp?job=0`;
+const SAMPLE_SERVICE_QR_URL = serviceJobQrUrl(0);
 
 /** Sample customer code used to render a representative QR in editor previews
  *  when no real customer has been supplied yet. */
@@ -531,8 +532,8 @@ export function LabelPreview({
   const barcodeValue = stickerBarcodeValue(type.id, f) || "1234567890";
   const barcodeUrl   = show("showBarcode") ? barcodeDataUrl(barcodeValue) : "";
 
-  // Service QR — repair stickers can carry a Tech App deep link the technician
-  // scans to open the job. Falls back to a sample URL so the editor preview
+  // Service QR — repair stickers can carry the job's QR resolver, which opens
+  // the job when scanned. Falls back to a sample URL so the editor preview
   // always shows a representative code.
   const serviceQrSrc = type.id === "repair" && show("showServiceQr")
     ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
@@ -1029,7 +1030,7 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   // (plain text included). Rendered full-width at the bottom of the label.
   const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
 
-  // Service QR — repair stickers can carry a Tech App deep link. Uses the real
+  // Service QR — repair stickers can carry the job's QR resolver. Uses the real
   // job URL when supplied (the actual print paths pass one); falls back to a
   // sample so a test print from the Stickers editor still shows the code, matching
   // the on-screen preview.

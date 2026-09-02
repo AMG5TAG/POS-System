@@ -6,7 +6,7 @@ import { customerDisplayName } from "../lib/customer-name";
 import { matchStaffByPin } from "../lib/staff-pin";
 import { sendSms } from "../services/sms";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
-import { publicDomain } from "../lib/publicUrl";
+import { customerPortalUrl } from "../lib/publicUrl";
 
 /**
  * Technician web app ("Tech App") API.
@@ -497,12 +497,7 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
         .from(merchantsTable)
         .where(eq(merchantsTable.id, tech.merchantId));
       const bizName = merchant?.businessName ?? "Your repair shop";
-      const domain = publicDomain(req);
-      const portalUrl = merchant?.portalDomain
-        ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
-        : merchant?.username
-          ? `https://${domain}/b/${merchant.username}/c/${customer.portalToken}`
-          : null;
+      const portalUrl = customerPortalUrl(merchant, customer.portalToken, req);
       const smsLabel: Record<string, string> = {
         "in-progress":       "In Progress",
         "awaiting-customer": "Ready — awaiting your decision",

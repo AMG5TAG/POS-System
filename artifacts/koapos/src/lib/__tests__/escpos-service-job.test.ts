@@ -15,7 +15,6 @@ const branding: ServiceSheetBranding = {
   email: "hi@koastal.com.au",
   address: "New South Wales 2259",
   brandColor: "#efbf04",
-  techAppUsername: "koastal",
 };
 
 const data: ServiceSheetData = {
@@ -162,14 +161,16 @@ describe("buildServiceJobDocketBytes", () => {
     expect(Array.from(bytes.slice(-4))).toEqual([0x1d, 0x56, 66, 3]);
   });
 
-  it("encodes the Tech App QR, and omits it when the template hides it", () => {
+  it("encodes the service-job QR resolver, and omits it when the template hides it", () => {
     // GS ( k -- the model-2 QR command prefix.
     const hasQrCommand = (b: Uint8Array) =>
       b.some((_, i) => b[i] === 0x1d && b[i + 1] === 0x28 && b[i + 2] === 0x6b);
 
     const withQr = buildServiceJobDocketBytes(data, branding, opts, "80mm");
     expect(hasQrCommand(withQr)).toBe(true);
-    expect(textOf(withQr)).toContain("koastal");
+    // The ink carries the stable resolver, never a Tech App deep link: the
+    // sticker outlives the job's status. See lib/public-url.ts.
+    expect(textOf(withQr)).toContain("/api/qr/j/42");
 
     const noQr = buildServiceJobDocketBytes(data, branding, { ...opts, showServiceQr: false }, "80mm");
     expect(hasQrCommand(noQr)).toBe(false);
@@ -213,7 +214,7 @@ describe("buildServiceJobDocketBytes", () => {
       expect(linesOf(compact).length).toBeLessThan(linesOf(standard).length);
     });
 
-    it("still cuts, and still carries a scannable Tech App QR", () => {
+    it("still cuts, and still carries a scannable service-job QR", () => {
       const hasQrCommand = (b: Uint8Array) =>
         b.some((_, i) => b[i] === 0x1d && b[i + 1] === 0x28 && b[i + 2] === 0x6b);
       expect(hasQrCommand(compact)).toBe(true);
@@ -246,7 +247,7 @@ describe("service docket custom QR", () => {
   const qrCommands = (b: Uint8Array) =>
     b.reduce((n, _, i) => (b[i] === 0x1d && b[i + 1] === 0x28 && b[i + 2] === 0x6b ? n + 1 : n), 0);
 
-  it("encodes a picked code alongside the Tech App QR, with its caption", () => {
+  it("encodes a picked code alongside the service-job QR, with its caption", () => {
     const opts = { ...base, showCustomQr: true, customQrData: "https://koastal.com.au/book", customQrCaption: "Book your next service" };
     const bytes = buildServiceJobDocketBytes(data, branding, opts, "80mm");
     expect(qrCommands(bytes)).toBeGreaterThan(qrCommands(buildServiceJobDocketBytes(data, branding, base, "80mm")));

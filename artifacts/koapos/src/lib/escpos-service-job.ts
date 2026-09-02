@@ -8,7 +8,7 @@
  * roll, so the docket prints a signature *line* and leaves photos to the A4 sheet.
  */
 import { EscPos, charsPerLine, cols, toAscii, wrap } from "@/lib/escpos";
-import { techAppJobUrl } from "@/lib/public-url";
+import { serviceJobQrUrl } from "@/lib/public-url";
 import { humanizeStatus, mergeCredentialLines, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 import type { TplOpts } from "@/pages/app/management-templates";
@@ -151,7 +151,7 @@ export function buildServiceJobDocketBytes(
   /* ── Tech App QR ────────────────────────────────────────────────────────── */
   b.line(divider).align("center");
   if (opts.showServiceQr !== false && data.jobId != null) {
-    const target = techAppJobUrl(branding.techAppUsername, data.jobId);
+    const target = serviceJobQrUrl(data.jobId);
     if (target) {
       b.qr(target, paperWidth === "58mm" || compact ? 4 : 6);
       b.line("Scan to open in the Tech App");

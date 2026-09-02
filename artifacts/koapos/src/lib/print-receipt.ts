@@ -3,7 +3,7 @@ import { buildInvoiceHtml } from "@workspace/sales-documents";
 import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
-import { publicOrigin, techAppJobUrl } from "@/lib/public-url";
+import { publicOrigin, serviceJobQrUrl } from "@/lib/public-url";
 import type { HardwareCfg, PrintPurpose } from "@/lib/hardware-config";
 import type { BridgePaper } from "@/lib/print-bridge";
 import { printDocument } from "@/lib/print-router";
@@ -19,9 +19,6 @@ export interface ReceiptBusinessInfo {
   phone?: string;
   address?: string;
   partnerReferralCode?: string;
-  /** Business username — forms the Tech App address (/b/:username/t/techapp).
-      When present, the service report QR deep-links into the Tech App for the job. */
-  techAppUsername?: string;
 }
 
 /** Normalized layout family shared by the Management preview and the printers. */
@@ -1125,9 +1122,10 @@ export function printA4ServiceJob(
     isPartner   ? `<span class="badge badge-purple">Partner Repair</span>` : "",
   ].filter(Boolean).join(" ");
 
-  // Tech App QR — scanning opens the job in the Tech App (/b/:username/t/techapp?job=:id).
+  // Service job QR — encodes the job's stable resolver; the server decides at
+  // scan time whether that is the Tech App or the customer portal.
   const qrMarkup = tpl.showServiceQr && job.id != null
-    ? qrSvg(techAppJobUrl(businessInfo?.techAppUsername, job.id), 96)
+    ? qrSvg(serviceJobQrUrl(job.id), 96)
     : "";
 
   // Merchant-supplied custom QR image.

@@ -19,19 +19,16 @@ export function publicOrigin(): string {
 }
 
 /**
- * Public deep link that opens a service job in the Tech App
- * (/b/:username/t/techapp?job=:id). The `?job=` parameter is also understood by
- * the Tech App's in-app scanner. When no business username is configured the
- * Tech App can't exist, so this falls back to the staff Service View.
+ * The value a service job's QR encodes. Deliberately NOT the Tech App url: a
+ * sticker is printed once and then lives on the device, so whatever is in the
+ * ink must stay valid for the whole job. This resolver is stable for the life of
+ * the job and picks the destination at scan time — the Tech App while the job is
+ * open, the customer's portal once it is completed (see routes/qr.ts).
  *
- * Single source of truth for the QR target printed on the A4 service sheet,
- * the A4 service report and the repair/service sticker.
+ * Needs no username: the server resolves the merchant from the job.
  */
-export function techAppJobUrl(username: string | null | undefined, jobId: number | string): string {
-  const origin = publicOrigin();
-  return username
-    ? `${origin}/b/${encodeURIComponent(username)}/t/techapp?job=${jobId}`
-    : `${origin}/service-jobs/${jobId}`;
+export function serviceJobQrUrl(jobId: number | string): string {
+  return `${publicOrigin()}/api/qr/j/${jobId}`;
 }
 
 /**

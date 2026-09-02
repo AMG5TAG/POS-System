@@ -8,7 +8,7 @@ import { escapeHtml } from "../lib/html-escape";
 import { sendEmail } from "../services/email";
 import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
-import { publicDomain } from "../lib/publicUrl";
+import { customerPortalUrl } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
 import { getServiceWarrantyDefaults } from "./service-settings";
 
@@ -285,12 +285,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
       .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
     const bizName = merchant?.businessName ?? "Your repair shop";
-    const domain  = publicDomain(req);
-    const portalUrl = merchant?.portalDomain
-      ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
-      : merchant?.username
-        ? `https://${domain}/b/${merchant.username}/c/${customer.portalToken}`
-        : null;
+    const portalUrl = customerPortalUrl(merchant, customer.portalToken, req);
 
     const statusLabel: Record<string, string> = {
       "in-progress":         "In Progress",
@@ -345,14 +340,7 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
     .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
   const bizName   = merchant?.businessName ?? "Your repair shop";
-  const domain    = publicDomain(req);
-  const portalUrl = customer?.portalToken
-    ? merchant?.portalDomain
-      ? `https://${merchant.portalDomain}/c/${customer.portalToken}`
-      : merchant?.username
-        ? `https://${domain}/b/${merchant.username}/c/${customer.portalToken}`
-        : null
-    : null;
+  const portalUrl = customerPortalUrl(merchant, customer?.portalToken, req);
 
   const statusLabel: Record<string, string> = {
     "pending":                     "Pending",

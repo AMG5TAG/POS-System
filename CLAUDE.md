@@ -152,6 +152,20 @@ one path that can't draw an image: the ESC/POS receipt encodes the payload as a
 native QR instead. A tracked code encodes `/api/qr/r/:id`, so re-render through
 `qrEntryData` rather than reading `entry.url`.
 
+The **service job QR** (A4 sheet, 80mm docket, repair sticker) is a second
+resolver, `/api/qr/j/:jobId` — `serviceJobQrUrl` on the frontend, the route in
+`routes/qr.ts`. A sticker is printed once and then lives on the device for
+weeks, so the ink can never be re-encoded; it therefore carries a url that is
+stable for the life of the job and the destination is chosen at scan time: the
+Tech App deep link while the job is open, the customer's portal once it is
+`completed` (falling back to the Tech App when there is no portal to open — a
+sticker that opens nothing is worse than one that opens the staff view). Never
+print `techAppJobUrl` directly. That resolver hands the portal to whoever scans
+the sticker, since the portal token *is* the credential; `merchants.requirePortalPassword`
+is the intended control. `customerPortalUrl` in `lib/publicUrl.ts` builds the
+portal address for both the resolver and the status-change SMS (admin and Tech
+App) so the three cannot drift.
+
 Custom QR reaches every document: the thermal receipt (HTML + ESC/POS), A4
 receipt, invoice, quote, the A4 service sheet, the 80mm service docket (HTML +
 ESC/POS), the Customer PDF, the server-rendered invoice/quote PDFs, and the

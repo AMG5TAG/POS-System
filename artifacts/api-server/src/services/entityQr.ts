@@ -50,11 +50,12 @@ export async function registerCustomerQr(merchantId: number, customerId: number,
   await upsertQr(merchantId, `customer-${customerId}`, "customer", name || `Customer ${customerId}`, `CUS-${customerId}`, null);
 }
 
-/** Persist (or refresh) a service job's QR — Tech App deep link, expiring in 30 days. */
+/** Persist (or refresh) a service job's QR — the job's stable resolver
+    (`/api/qr/j/:id`, the same value a printed sticker encodes), expiring in 30
+    days. Storing the resolver rather than a Tech App deep link is what keeps the
+    row valid once the job completes and the destination becomes the portal. */
 export async function registerServiceQr(merchantId: number, jobId: number, label: string | null): Promise<void> {
-  const username = await merchantUsername(merchantId);
-  const origin = publicOrigin();
-  const url = username ? `${origin}/b/${encodeURIComponent(username)}/t/techapp?job=${jobId}` : `${origin}/service-jobs/${jobId}`;
+  const url = `${publicOrigin()}/api/qr/j/${jobId}`;
   const expiresAt = new Date(Date.now() + SERVICE_QR_TTL_DAYS * 86_400_000);
   await upsertQr(merchantId, `service-${jobId}`, "service", label || `Service ${jobId}`, url, expiresAt);
 }

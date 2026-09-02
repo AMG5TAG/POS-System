@@ -67,7 +67,7 @@ import {
   serviceDocketDensity, SERVICE_PAPER_LABEL, type ServicePaper,
 } from "@/lib/service-job-print";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
-import { techAppJobUrl } from "@/lib/public-url";
+import { serviceJobQrUrl } from "@/lib/public-url";
 
 const DEVICE_TYPES = [
   "AIO",
@@ -324,7 +324,7 @@ export default function ServiceJobNewPage() {
     password: (successJob?.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
     // Tech App deep link for the optional service QR (shown when the repair
     // template enables it).
-    serviceQrUrl: successJob?.id != null ? techAppJobUrl(merchant?.username, successJob.id) : "",
+    serviceQrUrl: successJob?.id != null ? serviceJobQrUrl(successJob.id) : "",
   };
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
@@ -480,7 +480,6 @@ export default function ServiceJobNewPage() {
     brandColor,
     logo: bizProfile?.logo,
     socialLinks: bizProfile?.socialLinks,
-    techAppUsername: merchant?.username ?? undefined,
   };
 
   const sheetData = {
