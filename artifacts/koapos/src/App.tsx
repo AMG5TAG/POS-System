@@ -151,7 +151,10 @@ const MarketingFollowUpTemplatesPage = lazyWithRetry(() => import("@/pages/app/m
 const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
-const ManagementOnlineStorePage = lazyWithRetry(() => import("@/pages/app/management-online-store"));
+const OnlineStoreStorefrontPage = lazyWithRetry(() => import("@/pages/app/online-store/storefront"));
+const OnlineStoreDesignPage = lazyWithRetry(() => import("@/pages/app/online-store/design"));
+const OnlineStoreFeaturesPage = lazyWithRetry(() => import("@/pages/app/online-store/features"));
+const OnlineStoreDomainPage = lazyWithRetry(() => import("@/pages/app/online-store/domain"));
 const OnlineDeliveryOrdersPage = lazyWithRetry(() => import("@/pages/app/online-delivery-orders"));
 const OnlineShippingPage = lazyWithRetry(() => import("@/pages/app/online-shipping"));
 const OnlineMarketplacePage = lazyWithRetry(() => import("@/pages/app/online-marketplace"));
@@ -547,9 +550,6 @@ function Router() {
       <Route path="/management/products-inventory/modifier-groups">
         <ManagementProtectedRoute component={SettingsModifierGroupsPage} />
       </Route>
-      <Route path="/management/products-inventory/sales">
-        <ManagementProtectedRoute component={ManagementTemplatesPage} />
-      </Route>
       <Route path="/management/products-inventory/loaners">
         <ManagementProtectedRoute component={ManagementLoanersPage} />
       </Route>
@@ -565,19 +565,34 @@ function Router() {
       <Route path="/management/settings-integrations/locations">
         <ManagementProtectedRoute component={ManagementLocationsPage} />
       </Route>
-      <Route path="/management/templates/misc">
-        <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
+      {/* Customisation hub — everything that changes how KoaPOS looks and what it prints. */}
+      <Route path="/management/customisation/themes">
+        <ManagementProtectedRoute component={SettingsThemesPage} />
       </Route>
-      <Route path="/management/templates/email">
-        <ManagementProtectedRoute component={ManagementEmailTemplatesPage} />
+      <Route path="/management/customisation/templates/sales">
+        <ManagementProtectedRoute component={ManagementTemplatesPage} />
       </Route>
-      <Route path="/management/products-inventory/labels">
+      <Route path="/management/customisation/templates/labels">
         <ManagementProtectedRoute component={ManagementStickersPage} />
       </Route>
-      {/* Legacy "stickers" path → unified Labels page */}
-      <Route path="/management/products-inventory/stickers"><Redirect to="/management/products-inventory/labels" /></Route>
+      <Route path="/management/customisation/templates/misc">
+        <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
+      </Route>
+      <Route path="/management/customisation/templates/emails">
+        <ManagementProtectedRoute component={ManagementEmailTemplatesPage} />
+      </Route>
+      <Route path="/management/customisation/uploads">
+        <ManagementProtectedRoute component={ManagementUploadsPage} />
+      </Route>
+      {/* Previous homes of the Customisation pages */}
+      <Route path="/management/products-inventory/sales"><Redirect to="/management/customisation/templates/sales" /></Route>
+      <Route path="/management/products-inventory/labels"><Redirect to="/management/customisation/templates/labels" /></Route>
+      <Route path="/management/templates/misc"><Redirect to="/management/customisation/templates/misc" /></Route>
+      <Route path="/management/templates/email"><Redirect to="/management/customisation/templates/emails" /></Route>
+      {/* Legacy "stickers" paths → unified Labels page */}
+      <Route path="/management/products-inventory/stickers"><Redirect to="/management/customisation/templates/labels" /></Route>
       {/* Sticker Templates merged into the unified Labels page */}
-      <Route path="/management/sticker-templates"><Redirect to="/management/products-inventory/labels" /></Route>
+      <Route path="/management/sticker-templates"><Redirect to="/management/customisation/templates/labels" /></Route>
       <Route path="/management/calculators">
         <Redirect to="/management/products-inventory/3d-prints" />
       </Route>
@@ -663,9 +678,20 @@ function Router() {
       <Route path="/management/marketing-reports/referrals">
         <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
-      <Route path="/management/marketing-reports/online-store">
-        <ManagementProtectedRoute component={ManagementOnlineStorePage} />
+      {/* Online Store hub — one settings record, four pages (see pages/app/online-store). */}
+      <Route path="/management/online-store/storefront">
+        <ManagementProtectedRoute component={OnlineStoreStorefrontPage} />
       </Route>
+      <Route path="/management/online-store/design">
+        <ManagementProtectedRoute component={OnlineStoreDesignPage} />
+      </Route>
+      <Route path="/management/online-store/features">
+        <ManagementProtectedRoute component={OnlineStoreFeaturesPage} />
+      </Route>
+      <Route path="/management/online-store/domain">
+        <ManagementProtectedRoute component={OnlineStoreDomainPage} />
+      </Route>
+      <Route path="/management/marketing-reports/online-store"><Redirect to="/management/online-store/storefront" /></Route>
       <Route path="/management/marketing-reports/email">
         <ManagementProtectedRoute component={SettingsEmailPage} />
       </Route>
@@ -695,9 +721,7 @@ function Router() {
       <Route path="/management/settings-integrations/surcharges">
         <ManagementProtectedRoute component={SettingsSurchargesPage} />
       </Route>
-      <Route path="/management/settings-integrations/themes">
-        <ManagementProtectedRoute component={SettingsThemesPage} />
-      </Route>
+      <Route path="/management/settings-integrations/themes"><Redirect to="/management/customisation/themes" /></Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
       </Route>
@@ -713,9 +737,7 @@ function Router() {
       <Route path="/management/settings-integrations/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
       </Route>
-      <Route path="/management/settings-integrations/uploads">
-        <ManagementProtectedRoute component={ManagementUploadsPage} />
-      </Route>
+      <Route path="/management/settings-integrations/uploads"><Redirect to="/management/customisation/uploads" /></Route>
       <Route path="/management/settings-integrations/sync">
         <ManagementProtectedRoute component={ManagementSyncPage} />
       </Route>
@@ -876,9 +898,9 @@ function Router() {
       <Route path="/management/inventory"><Redirect to="/management/products-inventory/inventory" /></Route>
       <Route path="/management/product-types"><Redirect to="/management/products-inventory/product-types" /></Route>
       <Route path="/management/modifier-groups"><Redirect to="/management/products-inventory/modifier-groups" /></Route>
-      <Route path="/management/templates"><Redirect to="/management/products-inventory/sales" /></Route>
-      <Route path="/management/misc-templates"><Redirect to="/management/templates/misc" /></Route>
-      <Route path="/management/stickers"><Redirect to="/management/products-inventory/labels" /></Route>
+      <Route path="/management/templates"><Redirect to="/management/customisation/templates/sales" /></Route>
+      <Route path="/management/misc-templates"><Redirect to="/management/customisation/templates/misc" /></Route>
+      <Route path="/management/stickers"><Redirect to="/management/customisation/templates/labels" /></Route>
       <Route path="/management/calculators/3d-printing"><Redirect to="/management/products-inventory/3d-prints" /></Route>
       <Route path="/management/calculators/pc-builder"><Redirect to="/management/products-inventory/pc-builder" /></Route>
       <Route path="/management/staff/timesheet"><Redirect to="/management/staff-operations/timesheets" /></Route>
@@ -901,7 +923,7 @@ function Router() {
       <Route path="/management/kpis"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing-reports/kpis-targets"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing/referrals"><Redirect to="/management/marketing-reports/referrals" /></Route>
-      <Route path="/management/online-store"><Redirect to="/management/marketing-reports/online-store" /></Route>
+      <Route path="/management/online-store"><Redirect to="/management/online-store/storefront" /></Route>
       <Route path="/management/email"><Redirect to="/management/marketing-reports/email" /></Route>
       <Route path="/management/sms"><Redirect to="/management/settings-integrations/sms" /></Route>
       <Route path="/management/forms"><Redirect to="/management/marketing-reports/forms-files" /></Route>

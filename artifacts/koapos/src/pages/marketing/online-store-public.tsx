@@ -3,7 +3,7 @@ import { useQuery } from "@tanstack/react-query";
 import { Loader2, Store, Mail, Phone, Facebook, Instagram, Twitter } from "lucide-react";
 import {
   apiToSite, BlockPreview, blockWrapperStyle, blockColSpan, isBlockLive, type SiteSettings,
-} from "@/pages/app/management-online-store";
+} from "@/pages/app/online-store/shared";
 import {
   CartProvider, CartButton, CartDrawer, ShoppableProducts, ProductDetailProvider, OrderTracker, isProductBlock, type Catalog,
 } from "@/pages/marketing/storefront-commerce";

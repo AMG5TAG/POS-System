@@ -1,5 +1,5 @@
 import { useEffect } from "react";
-import type { Page } from "@/pages/app/management-online-store";
+import type { Page } from "@/pages/app/online-store/shared";
 import type { Catalog } from "./storefront-commerce";
 
 /*

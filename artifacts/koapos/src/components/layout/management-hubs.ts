@@ -5,7 +5,7 @@ import {
   UserSquare2, Clock, Coins, Monitor, Map, MapPin, Camera, Scale, TabletSmartphone, LayoutDashboard,
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Calculator,
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, FolderSync, MessageSquare, Palette,
-  LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon,
+  LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon, Store, Paintbrush,
 } from "lucide-react";
 
 /**
@@ -119,13 +119,41 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
           { name: "Email Signatures", href: "/management/marketing-reports/generators/email-signatures", icon: Mail   },
         ],
       },
-      { name: "Online Store",   href: "/management/marketing-reports/online-store",   icon: Globe    },
       { name: "Forms & Files",  href: "/management/marketing-reports/forms-files",    icon: FileText },
       { name: "AI Assistant",   href: "/management/marketing-reports/ai-assistant",   icon: Brain    },
     ],
   },
   {
-    name: "Settings & Integrations", icon: Settings, defaultHref: "/management/settings-integrations/account",
+    name: "Online Store", icon: Store, defaultHref: "/management/online-store/storefront",
+    children: [
+      { name: "Storefront", href: "/management/online-store/storefront", icon: Store   },
+      { name: "Design",     href: "/management/online-store/design",     icon: Palette },
+      { name: "Features",   href: "/management/online-store/features",   icon: Layers  },
+      { name: "Domain",     href: "/management/online-store/domain",     icon: Link2   },
+    ],
+  },
+  {
+    name: "Customisation", icon: Paintbrush, defaultHref: "/management/customisation/themes",
+    children: [
+      { name: "Themes",  href: "/management/customisation/themes",  icon: Palette   },
+      {
+        name: "Templates", icon: LayoutTemplate,
+        children: [
+          { name: "Sales",  href: "/management/customisation/templates/sales",  icon: LayoutTemplate },
+          { name: "Labels", href: "/management/customisation/templates/labels", icon: Printer,
+            matchPaths: [
+              "/management/products-inventory/labels", "/management/products-inventory/stickers",
+              "/management/sticker-templates",
+            ] }, // legacy paths → redirect to Labels
+          { name: "Misc",   href: "/management/customisation/templates/misc",   icon: FileText },
+          { name: "Emails", href: "/management/customisation/templates/emails", icon: Mail     },
+        ],
+      },
+      { name: "Uploads", href: "/management/customisation/uploads", icon: ImageIcon },
+    ],
+  },
+  {
+    name: "Settings", icon: Settings, defaultHref: "/management/settings-integrations/account",
     children: [
       { name: "Account",          href: "/management/settings-integrations/account",          icon: UserCircle     },
       { name: "Locations",        href: "/management/settings-integrations/locations",        icon: MapPin         },
@@ -133,17 +161,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
         matchPaths: ["/management/settings-integrations/business-details/regional"] },
       { name: "Tax",              href: "/management/settings-integrations/tax",              icon: Receipt        },
       { name: "Surcharges",       href: "/management/settings-integrations/surcharges",       icon: Percent        },
-      { name: "Themes",           href: "/management/settings-integrations/themes",           icon: Palette        },
-      {
-        name: "Templates", icon: LayoutTemplate,
-        children: [
-          { name: "Sales",  href: "/management/products-inventory/sales",  icon: LayoutTemplate },
-          { name: "Labels", href: "/management/products-inventory/labels", icon: Printer,
-            matchPaths: ["/management/products-inventory/stickers", "/management/sticker-templates"] }, // legacy paths → redirect to Labels
-          { name: "Misc",   href: "/management/templates/misc",  icon: FileText },
-          { name: "Emails", href: "/management/templates/email", icon: Mail     },
-        ],
-      },
       { name: "SMS",              href: "/management/settings-integrations/sms",              icon: MessageSquare  },
       { name: "Emails",           href: "/management/marketing-reports/email",                icon: Mail           },
       { name: "Integrations",     href: "/management/settings-integrations/integrations",     icon: Plug,
@@ -154,7 +171,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
         ] },
       { name: "Sync",             href: "/management/settings-integrations/sync",             icon: FolderSync    },
       { name: "Import / Export",  href: "/management/settings-integrations/import-export",    icon: ArrowLeftRight },
-      { name: "Uploads",          href: "/management/settings-integrations/uploads",          icon: ImageIcon      },
       { name: "Misc",             href: "/management/settings-integrations/system/misc",      icon: MoreHorizontal,
         matchPaths: ["/management/settings-integrations/system"] },
       { name: "Feedback",         href: "/management/settings-integrations/feedback",         icon: MessageSquare  },

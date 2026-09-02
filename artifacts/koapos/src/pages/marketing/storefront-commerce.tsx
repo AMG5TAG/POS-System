@@ -2,7 +2,7 @@ import {
   createContext, useContext, useState, useEffect, useMemo, useCallback, type ReactNode,
 } from "react";
 import { ShoppingCart, X, Plus, Minus, Trash2, Package, Loader2, CheckCircle2, Search, Star, BadgeCheck } from "lucide-react";
-import type { Block, ThemeSettings } from "@/pages/app/management-online-store";
+import type { Block, ThemeSettings } from "@/pages/app/online-store/shared";
 import { cn } from "@/lib/utils";
 
 /*
