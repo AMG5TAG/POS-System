@@ -243,6 +243,8 @@ export async function finalizeSale(
   // ── Recompute every monetary value from DB-authoritative product prices ──
   // Client-supplied unitPrice / totalPrice / taxAmount are treated as hints
   // only; the persisted record is built from product.price + product.taxRate.
+  // The one exception is an open-price product (catalogue price $0.00), whose
+  // price is by definition entered at the till — see the line loop below.
   // Client `discount` per line is honoured but clamped to [0, lineGross]
   // so a forged discount cannot drive totals negative or below zero.
   // productId === 0 signals a custom / one-off item — it bypasses the DB lookup
@@ -301,7 +303,17 @@ export async function finalizeSale(
       itemName   = (i.productName || (i.giftCardIssue ? "Gift Card" : "Custom Item")).slice(0, 200);
     } else {
       const product = productMap.get(i.productId)!;
-      unitPrice  = parseFloat(product.price);
+      const catalogPrice = parseFloat(product.price);
+      // Open-price ("custom pricing") products: a $0.00 catalogue price is the
+      // merchant's convention for "priced at the till" — the POS refuses to add
+      // such a product until the cashier types a price and a reason
+      // (`zeroPricePending` in pos.tsx). Repricing those lines from the catalogue
+      // forced them back to $0 and the sale was rejected as a totals mismatch.
+      // The product row is what authorises the override, so trusting the client
+      // price here opens no tampering hole: a product with a real price on file
+      // is still charged that price, whatever the client asks for.
+      const openPriced = !Number.isFinite(catalogPrice) || catalogPrice === 0;
+      unitPrice  = openPriced ? Math.max(0, i.unitPrice ?? 0) : catalogPrice;
       taxRatePct = product.taxRate != null ? parseFloat(product.taxRate) : 10;
       itemName   = product.name;
     }
