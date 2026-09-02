@@ -317,6 +317,9 @@ export default function POSQuotesPage() {
         })),
         total: q.total,
         createdAt: q.createdAt,
+        // Carry the service job the quote was raised against, so paying the
+        // converted sale completes the job the way any other linked sale does.
+        serviceJobId: q.serviceJobId ?? null,
       });
       await convertMutation.mutateAsync({ id: q.id, data: {} });
       toast.success("Quote loaded into POS");

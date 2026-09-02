@@ -583,6 +583,9 @@ export default function POSPage() {
      linked object carries only a customerId; when that customer isn't already in
      the loaded picker list we fetch it by id (see useGetCustomer below). */
   const [pendingLinkCustomerId, setPendingLinkCustomerId] = useState<number | null>(null);
+  /* A converted quote hands over the service job it was raised against; the job
+     itself has to be fetched before it can be shown as a link chip. */
+  const [pendingLinkServiceJobId, setPendingLinkServiceJobId] = useState<number | null>(null);
 
   /* AI upsell coach */
   const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
@@ -947,7 +950,7 @@ export default function POSPage() {
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
-  const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
+  const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen || pendingLinkServiceJobId != null } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
   /* Resolve the full Customer for a linked service/appointment whose customer
      wasn't in the loaded picker list. Gated on pendingLinkCustomerId. */
@@ -1374,6 +1377,7 @@ export default function POSPage() {
         }>;
         total: number;
         createdAt: string;
+        serviceJobId?: number | null;
       };
 
       /* Build CartItem[] — fall back to a minimal Product stub if the full
@@ -1392,6 +1396,7 @@ export default function POSPage() {
       });
 
       setCart(restoredCart);
+      if (sale.serviceJobId != null) setPendingLinkServiceJobId(sale.serviceJobId);
       setOverallDiscount("");
       setSaleNotes("");
       setSelectedCustomer(null);
@@ -1450,6 +1455,19 @@ export default function POSPage() {
     if (linkCustomerData.warningNote) setWarningCustomer(linkCustomerData);
     setPendingLinkCustomerId(null);
   }, [pendingLinkCustomerId, linkCustomerData]);
+
+  /* Adopt the service job handed over by a converted quote, once the job list
+     has loaded. Links it exactly as the picker would, so the sale carries the
+     job id and the receipt carries its marker — without which paying for a
+     converted quote would leave the job open. */
+  useEffect(() => {
+    if (pendingLinkServiceJobId == null) return;
+    const job = serviceJobs?.find((j) => j.id === pendingLinkServiceJobId);
+    if (!job) return;
+    linkService(job);
+    setPendingLinkServiceJobId(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingLinkServiceJobId, serviceJobs]);
 
   /* ── Keep cart/customer refs in sync for stale-closure-safe beacon calls ─── */
   useEffect(() => { cartRef.current = cart; }, [cart]);
