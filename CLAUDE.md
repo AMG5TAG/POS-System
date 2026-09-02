@@ -255,11 +255,18 @@ Two things this setup does *not* cover:
   production. Keep the existing script convention for actual changes:
   dry-run by default, `--commit` to write, printing the DB host it connected to
   (see `artifacts/api-server/scripts/backfill-structured-addresses.ts`).
-- **One-off operator setup.** Creating the `claude_ro` role and populating
-  `~/.pgpass` are manual tasks, deliberately not scripted into the repo. The
-  role needs `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for the owner, or every
-  `db:push` that adds a table leaves it unable to see the new one. To revoke:
+- **One-off operator setup.** Creating the `claude_ro` role stays manual and
+  deliberately unscripted, because it needs the owner credential. The SQL is in
+  the header of `scripts/setup-pgpass.sh`. The role needs
+  `ALTER DEFAULT PRIVILEGES ... GRANT SELECT` for the owner, or every `db:push`
+  that adds a table leaves it unable to see the new one. To revoke:
   `DROP OWNED BY claude_ro; DROP ROLE claude_ro;`.
+
+  Storing the password *is* scripted: `scripts/setup-pgpass.sh` writes the
+  `~/.pgpass` entry (prompting, or from `CLAUDE_RO_PASSWORD`), never taking it
+  as an argument, replacing only its own line so other credentials in the file
+  survive, and verifying through `prod-query.sh`. Run it once per machine —
+  `~/.pgpass` does not survive a rebuilt home directory.
 
 ### System email env vars
 Platform-level fallback when a merchant has no email provider configured in Management → Email. Essential for auth emails (password reset, login alerts). Set **one** option:
