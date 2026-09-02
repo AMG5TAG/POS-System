@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -395,8 +396,13 @@ export default function ManagementFormsPage() {
   const updateForm  = useUpdateForm();
   const deleteForm  = useDeleteForm();
 
-  // Tab navigation
-  const [activeTab, setActiveTab] = useState<"forms" | "files" | "cloud">("forms");
+  /* Tab navigation lives in the URL, so each tab is a real entry in the Forms &
+     Files menu (and a linkable, bookmarkable page) rather than in-page state the
+     nav cannot see. The path is the source of truth; clicking a tab pushes it. */
+  const [location, navigate] = useLocation();
+  const activeTab: "forms" | "files" | "cloud" =
+    location.endsWith("/files") ? "files" : location.endsWith("/cloud") ? "cloud" : "forms";
+  const setActiveTab = (tab: "forms" | "files" | "cloud") => navigate(`/management/forms-files/${tab}`);
   const { data: integrationsData = [] } = useListIntegrations();
   const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox"]);
   const cloudIntegrations = (integrationsData as unknown as { key: string; label: string; status: string; connectedAt: string | null }[])

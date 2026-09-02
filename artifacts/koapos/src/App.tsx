@@ -582,9 +582,7 @@ function Router() {
       <Route path="/management/customisation/templates/emails">
         <ManagementProtectedRoute component={ManagementEmailTemplatesPage} />
       </Route>
-      <Route path="/management/customisation/uploads">
-        <ManagementProtectedRoute component={ManagementUploadsPage} />
-      </Route>
+      <Route path="/management/customisation/uploads"><Redirect to="/management/forms-files/uploads" /></Route>
       {/* Previous homes of the Customisation pages */}
       <Route path="/management/products-inventory/sales"><Redirect to="/management/customisation/templates/sales" /></Route>
       <Route path="/management/products-inventory/labels"><Redirect to="/management/customisation/templates/labels" /></Route>
@@ -702,9 +700,22 @@ function Router() {
       <Route path="/management/settings-integrations/sms">
         <ManagementProtectedRoute component={SettingsSmsPage} />
       </Route>
-      <Route path="/management/marketing-reports/forms-files">
+      {/* Forms & Files hub — the page's tabs are real routes, so each is a menu
+          entry and a linkable page (see management-forms.tsx). */}
+      <Route path="/management/forms-files/forms">
         <ManagementProtectedRoute component={ManagementFormsPage} />
       </Route>
+      <Route path="/management/forms-files/files">
+        <ManagementProtectedRoute component={ManagementFormsPage} />
+      </Route>
+      <Route path="/management/forms-files/cloud">
+        <ManagementProtectedRoute component={ManagementFormsPage} />
+      </Route>
+      <Route path="/management/forms-files/uploads">
+        <ManagementProtectedRoute component={ManagementUploadsPage} />
+      </Route>
+      <Route path="/management/forms-files"><Redirect to="/management/forms-files/forms" /></Route>
+      <Route path="/management/marketing-reports/forms-files"><Redirect to="/management/forms-files/forms" /></Route>
       <Route path="/management/marketing-reports/ai-assistant">
         <ManagementProtectedRoute component={ManagementAIPage} />
       </Route>
@@ -741,7 +752,7 @@ function Router() {
       <Route path="/management/settings-integrations/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
       </Route>
-      <Route path="/management/settings-integrations/uploads"><Redirect to="/management/customisation/uploads" /></Route>
+      <Route path="/management/settings-integrations/uploads"><Redirect to="/management/forms-files/uploads" /></Route>
       <Route path="/management/settings-integrations/sync">
         <ManagementProtectedRoute component={ManagementSyncPage} />
       </Route>
@@ -930,7 +941,7 @@ function Router() {
       <Route path="/management/online-store"><Redirect to="/management/online-store/storefront" /></Route>
       <Route path="/management/email"><Redirect to="/management/marketing-reports/email" /></Route>
       <Route path="/management/sms"><Redirect to="/management/settings-integrations/sms" /></Route>
-      <Route path="/management/forms"><Redirect to="/management/marketing-reports/forms-files" /></Route>
+      <Route path="/management/forms"><Redirect to="/management/forms-files/forms" /></Route>
       <Route path="/management/ai"><Redirect to="/management/marketing-reports/ai-assistant" /></Route>
       <Route path="/management/account"><Redirect to="/management/settings-integrations/account" /></Route>
       <Route path="/management/business"><Redirect to="/management/settings-integrations/business-details" /></Route>

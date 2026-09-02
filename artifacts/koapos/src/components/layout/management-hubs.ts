@@ -6,6 +6,7 @@ import {
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Calculator,
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, FolderSync, MessageSquare, Palette,
   LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon, Store, Paintbrush, KeyRound,
+  FolderOpen, ClipboardList,
 } from "lucide-react";
 
 /**
@@ -119,7 +120,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
           { name: "Email Signatures", href: "/management/marketing-reports/generators/email-signatures", icon: Mail   },
         ],
       },
-      { name: "Forms & Files",  href: "/management/marketing-reports/forms-files",    icon: FileText },
       { name: "AI Assistant",   href: "/management/marketing-reports/ai-assistant",   icon: Brain    },
     ],
   },
@@ -131,6 +131,15 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Features",   href: "/management/online-store/features",   icon: Layers  },
       { name: "Domain",     href: "/management/online-store/domain",     icon: Link2   },
       { name: "Data API",   href: "/management/online-store/data-api",   icon: KeyRound },
+    ],
+  },
+  {
+    name: "Forms & Files", icon: FolderOpen, defaultHref: "/management/forms-files/forms",
+    children: [
+      { name: "Forms",         href: "/management/forms-files/forms",   icon: ClipboardList },
+      { name: "Files",         href: "/management/forms-files/files",   icon: FolderOpen    },
+      { name: "Cloud Storage", href: "/management/forms-files/cloud",   icon: HardDrive     },
+      { name: "Uploads",       href: "/management/forms-files/uploads", icon: ImageIcon     },
     ],
   },
   {
@@ -150,7 +159,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
           { name: "Emails", href: "/management/customisation/templates/emails", icon: Mail     },
         ],
       },
-      { name: "Uploads", href: "/management/customisation/uploads", icon: ImageIcon },
     ],
   },
   {
