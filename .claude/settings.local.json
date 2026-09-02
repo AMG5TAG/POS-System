@@ -1,6 +1,10 @@
 {
   "permissions": {
     "allow": [
+      "Bash(scripts/prod-query.sh:*)",
+      "Bash(./scripts/prod-query.sh:*)",
+      "Bash(bash scripts/prod-query.sh:*)",
+      "Bash(/home/runner/workspace/scripts/prod-query.sh:*)",
       "Bash(awk '/key:.*purchases|key:.*suppliers|key:.*categories|key:.*brands|key:.*tags|key:.*transactions/{found=1} found{print; if\\(/\\\\},/\\) {print \"---\"; found=0}}' /home/runner/workspace/artifacts/koapos/src/pages/app/management-import-export.tsx)",
       "Bash(awk *)",
       "Bash(xargs ls -la)",

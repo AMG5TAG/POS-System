@@ -33,11 +33,15 @@ export PGCONNECT_TIMEOUT=15
 
 url="postgresql://${RO_USER}@${RO_HOST}:${RO_PORT}/${RO_DB}?sslmode=require"
 
-# Refuse to proceed if we are not who we expect to be.
-who="$(psql "$url" -Atc 'SELECT current_user' 2>/dev/null || true)"
+# Refuse to proceed if we are not who we expect to be. Keep the server's own
+# error: "connected as <failed>" with no reason sends you hunting the wrong bug.
+err="$(mktemp)"; trap 'rm -f "$err"' EXIT
+who="$(psql "$url" -Atc 'SELECT current_user' 2>"$err" || true)"
 if [ "$who" != "$RO_USER" ]; then
   echo "refusing to run: connected as '${who:-<failed>}', expected '$RO_USER'" >&2
-  echo "(is ~/.pgpass set up? run setup-pgpass.sh)" >&2
+  [ -s "$err" ] && sed 's/^/  psql: /' "$err" >&2
+  echo "  (no ~/.pgpass? run setup-pgpass.sh. Connection refused/timed out? this" >&2
+  echo "   shell may have no outbound network access to the Neon host.)" >&2
   exit 1
 fi
 
