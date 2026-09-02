@@ -83,7 +83,12 @@ export async function completeLinkedWork(
     if (open.length > 0) {
       await executor
         .update(serviceJobsTable)
-        .set({ status: "completed" })
+        // completedAt anchors the repair-warranty window, so it has to be
+        // stamped here exactly as the Service Jobs status editor does — a job
+        // closed by taking payment earns the same warranty as one closed by
+        // hand. Only ever set on the transition in, which the terminal-status
+        // filter above already guarantees.
+        .set({ status: "completed", completedAt: new Date() })
         .where(and(
           inArray(serviceJobsTable.id, open.map((j) => j.id)),
           eq(serviceJobsTable.merchantId, merchantId),

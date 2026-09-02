@@ -95,7 +95,17 @@ describe("completeLinkedWork", () => {
     rows.serviceJobs = [{ id: 5, status: "in_progress" }];
     const res = await completeLinkedWork(db, 1, { serviceJobId: 5 });
     expect(res.serviceJobIds).toEqual([5]);
-    expect(updates).toEqual([{ table: "serviceJobs", set: { status: "completed" } }]);
+    expect(updates).toHaveLength(1);
+    expect(updates[0].table).toBe("serviceJobs");
+    expect(updates[0].set.status).toBe("completed");
+  });
+
+  /* completedAt anchors the repair-warranty window. A job closed by a sale has
+     to earn the same warranty as one closed from the status editor. */
+  it("stamps completedAt so the repair warranty window starts", async () => {
+    rows.serviceJobs = [{ id: 5, status: "in_progress" }];
+    await completeLinkedWork(db, 1, { serviceJobId: 5 });
+    expect(updates[0].set.completedAt).toBeInstanceOf(Date);
   });
 
   it("completes an open service job referenced only by its notes marker", async () => {
@@ -109,6 +119,7 @@ describe("completeLinkedWork", () => {
     const res = await completeLinkedWork(db, 1, { appointmentId: 48 });
     expect(res.appointmentIds).toEqual([48]);
     expect(updates).toEqual([{ table: "appointments", set: { status: "completed" } }]);
+    // Appointments have no completedAt column — status alone closes them.
   });
 
   it("completes both when a sale links a job and an appointment", async () => {
