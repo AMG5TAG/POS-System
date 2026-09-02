@@ -234,6 +234,12 @@ defence in depth: the script aborts unless `SELECT current_user` returns
 idle-in-transaction time. The password is never an argument; it comes from
 `~/.pgpass`, so it appears in no env var, no argv and no connection string.
 
+The wrapper unsets `PGPASSWORD`/`PGUSER`/`PGHOST`/`PGDATABASE` before connecting,
+and must keep doing so. Replit sets those for a *different* Neon database, and
+libpq reads `PGPASSWORD` **in preference to** `~/.pgpass` — so leaving them set
+sends the wrong password and fails as `password authentication failed for user
+claude_ro`, which looks like a broken `~/.pgpass` and is not.
+
 Because it is one fixed entry point it can be allowlisted alone
 (`Bash(scripts/prod-query.sh:*)`) without allowlisting bare `psql`, which would
 expose the owner credential.

@@ -27,7 +27,15 @@ fmt=(); if [ "${1:-}" = "--csv" ]; then fmt=(--csv); shift; fi
 if [ $# -gt 0 ]; then sql="$*"; else sql="$(cat)"; fi
 [ -n "${sql//[[:space:]]/}" ] || { echo "usage: prod-query.sh [--csv] \"SELECT ...\"" >&2; exit 2; }
 
-# Belt and braces on top of the role's own grants.
+# Clear libpq's environment defaults. Replit sets PGPASSWORD/PGUSER/PGHOST for
+# a DIFFERENT database, and libpq reads PGPASSWORD in preference to ~/.pgpass —
+# so leaving it set sends the wrong password and the connection fails as
+# "password authentication failed for user claude_ro", which reads like a
+# broken ~/.pgpass and is not. Unsetting these makes the URL below, plus
+# ~/.pgpass, the only inputs.
+unset PGPASSWORD PGUSER PGHOST PGPORT PGDATABASE PGSERVICE PGOPTIONS PGSSLMODE
+
+# Belt and braces on top of the role's own ALTER ROLE ... SET defaults.
 export PGOPTIONS="-c default_transaction_read_only=on -c statement_timeout=30s -c idle_in_transaction_session_timeout=60s"
 export PGCONNECT_TIMEOUT=15
 
