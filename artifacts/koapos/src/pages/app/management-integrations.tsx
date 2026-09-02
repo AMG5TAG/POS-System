@@ -18,17 +18,17 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
-  useGetSocialFeedSettings, useUpdateSocialFeedSettings,
   useListIntegrations, useGetVaultStatus, useDisconnectIntegration, useConnectIntegration,
 } from "@workspace/api-client-react";
-import type { SocialFeedSettingsInput } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
+import { OneDriveIcon, MicrosoftIcon, NextcloudIcon } from "@/components/provider-icons";
+import { NextcloudConnectModal } from "@/components/nextcloud-connect-modal";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
-  ShieldCheck, Clock, ChevronDown, ChevronRight, Zap,
+  ShieldCheck, ChevronDown, ChevronRight, Zap,
   CreditCard, KeyRound, RefreshCw,
   Landmark, ShoppingBag, Megaphone, Cloud,
-  Settings, Users,
+  Settings, Users, HelpCircle,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -41,9 +41,10 @@ interface Integration {
   section: string;
   category: string;
   description: string;
-  authType: "oauth" | "credentials";
+  // "loginflow" = the merchant's own server issues the credential (Nextcloud
+  // Login Flow v2) — neither a platform OAuth redirect nor a credentials form.
+  authType: "oauth" | "credentials" | "loginflow";
   fields: IntegrationField[];
-  comingSoon: boolean;
   useVault: boolean;
   status: "connected" | "disconnected";
   connectedAt: string | null;
@@ -82,6 +83,20 @@ function TyroSvg({ className }: { className?: string }) {
   );
 }
 
+// Official Zip Pay wordmark (from zip.co). Two-tone brand colours — Zip ink
+// (#1A0826) + Zip violet (#AA8FFF) — so it's rendered on a white tile rather
+// than the monochrome currentColor treatment used for single-colour glyphs.
+function ZipSvg({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 216 96" className={className} fill="none" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+      <path d="M72.3735 26.0004L79.0028 80H143.895L137.262 26.0004H72.3735Z" fill="#AA8FFF" />
+      <path d="M211.943 45.4415C210.446 33.3035 200.911 25.9478 187.953 26.0003H144.778L151.41 79.9999H170.825L169.498 69.204H190.048C206.23 69.1982 213.638 59.1202 211.943 45.4415ZM187.959 54.0607L167.651 54.0811L166.058 41.1203L186.482 41.1378C191.282 41.1961 193.739 43.898 194.136 47.5978C194.381 49.9816 193.292 54.0607 187.962 54.0607H187.959Z" fill="#1A0826" />
+      <path d="M92.2064 19.0612C95.6468 15.4014 95.0787 9.27881 90.9376 5.38595C86.7964 1.4931 80.6504 1.30417 77.2101 4.9639C73.7698 8.62364 74.3379 14.7462 78.479 18.639C82.6201 22.5319 88.7661 22.7209 92.2064 19.0612Z" fill="#1A0826" />
+      <path d="M4.77643 64.9121L6.62923 80H71.4714L69.3501 62.7208H39.1159L38.8533 60.5762L66.6979 41.1204L64.8392 26.0004H0L2.12124 43.2796H32.405L32.6705 45.4387L4.77643 64.9121Z" fill="#1A0826" />
+    </svg>
+  );
+}
+
 type LogoCfg =
   | { type: "img";  src: string; bg: string; pad?: boolean }
   | { type: "text"; bg: string; color: string; label: string; cls?: string }
@@ -90,19 +105,20 @@ type LogoCfg =
 const LOGO_MAP: Record<string, LogoCfg> = {
   /* Cloud Storage & Productivity */
   google_drive:         { type: "img",  bg: "bg-white border",  src: SI("googledrive",   "4285F4") },
-  onedrive:             { type: "img",  bg: "bg-[#0078D4]",     src: SI("onedrive",      "ffffff") },
+  // Microsoft brand marks were pulled from simple-icons (those slugs 404), so
+  // OneDrive/Microsoft use the inline SVGs shared with the Sync page.
+  onedrive:             { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: OneDriveIcon },
   dropbox:              { type: "img",  bg: "bg-[#0061FF]",     src: SI("dropbox",       "ffffff") },
-  proton_drive:         { type: "img",  bg: "bg-[#6D4AFF]",     src: SI("proton",        "ffffff") },
+  nextcloud:            { type: "svg",  bg: "bg-white border",  color: "text-[#0082C9]", component: NextcloudIcon },
   google_contacts:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  microsoft_contacts:   { type: "img",  bg: "bg-[#0078D4]",     src: SI("microsoft",     "ffffff") },
+  microsoft_contacts:   { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: MicrosoftIcon },
   apple_account:        { type: "svg",  bg: "bg-black",          color: "text-white",    component: AppleSvg },
+  apple_icloud:         { type: "img",  bg: "bg-[#3693F3]",     src: SI("icloud",        "ffffff") },
   openai:               { type: "img",  bg: "bg-black",          src: SI("openai",        "ffffff") },
   zapier:               { type: "img",  bg: "bg-[#FF4A00]",     src: SI("zapier",        "ffffff") },
   deputy:               { type: "img",  bg: "bg-[#FF8C00]",     src: SI("deputy",        "ffffff") },
   /* Accounting & Finance */
   xero:                 { type: "img",  bg: "bg-[#13B5EA]",     src: SI("xero",          "ffffff") },
-  quickbooks:           { type: "img",  bg: "bg-[#2CA01C]",     src: SI("quickbooks",    "ffffff") },
-  myob:                 { type: "img",  bg: "bg-[#6A1F70]",     src: SI("myob",          "ffffff") },
   /* E-Commerce & Marketplaces */
   shopify:              { type: "img",  bg: "bg-[#96BF48]",     src: SI("shopify",       "ffffff") },
   ebay:                 { type: "img",  bg: "bg-white border",  src: SI("ebay",          "E53238") },
@@ -118,19 +134,13 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   paypal:               { type: "img",  bg: "bg-[#003087]",     src: SI("paypal",        "ffffff") },
   wechat_alipay:        { type: "img",  bg: "bg-[#07C160]",     src: SI("wechat",        "ffffff") },
   afterpay:             { type: "img",  bg: "bg-[#B2FCE4]",     src: SI("afterpay",      "000000") },
-  zip:                  { type: "img",  bg: "bg-[#1A0826]",     src: SI("zippay",        "ffffff") },
+  zip:                  { type: "svg",  bg: "bg-white border",  color: "text-[#1A0826]", component: ZipSvg },
   klarna:               { type: "img",  bg: "bg-[#FFB3C7]",     src: SI("klarna",        "000000") },
   apple_wallet:         { type: "img",  bg: "bg-black",          src: SI("apple",         "ffffff") },
   google_pay:           { type: "img",  bg: "bg-white border",  src: SI("googlepay",     "000000") },
-  /* Marketing & Socials */
+  /* Marketing */
   google_ads:           { type: "img",  bg: "bg-white border",  src: SI("googleads",     "4285F4") },
-  meta_business:        { type: "img",  bg: "bg-[#0082FB]",     src: SI("meta",          "ffffff") },
-  twitter_x:            { type: "img",  bg: "bg-black",          src: SI("x",             "ffffff") },
-  tiktok_business:      { type: "img",  bg: "bg-black",          src: SI("tiktok",        "ffffff") },
-  linkedin_business:    { type: "img",  bg: "bg-[#0A66C2]",     src: SI("linkedin",      "ffffff") },
-  instagram_business:   { type: "img",  bg: "bg-[#E4405F]",     src: SI("instagram",     "ffffff") },
   google_business:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  youtube_channel:      { type: "img",  bg: "bg-[#FF0000]",     src: SI("youtube",       "ffffff") },
   mailchimp:            { type: "img",  bg: "bg-[#FFE01B]",     src: SI("mailchimp",     "000000") },
 };
 
@@ -165,7 +175,7 @@ function IntegrationLogo({ integrationKey, size = "md" }: { integrationKey: stri
 function ConnectModal({ integration, onClose, onSaved }: { integration: Integration | null; onClose: () => void; onSaved: () => void }) {
   const [values, setValues] = useState<Record<string, string>>({});
   const connectMutation = useConnectIntegration();
-  useEffect(() => { if (integration) setValues({}); }, [integration]);
+  useEffect(() => { if (integration) { setValues({}); } }, [integration]);
   if (!integration) return null;
   const handleSave = () => {
     connectMutation.mutate(
@@ -185,6 +195,12 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
             <span>Connect {integration.label}</span>
           </DialogTitle>
           <DialogDescription>{integration.description}</DialogDescription>
+          <a
+            href={`/management/settings-integrations/integrations/help#${integration.section}`}
+            className="inline-flex items-center gap-1 text-xs text-primary hover:underline"
+          >
+            <HelpCircle className="w-3.5 h-3.5" /> How to connect {integration.label}
+          </a>
         </DialogHeader>
         <div className="space-y-4 py-2">
           {integration.fields.map((f) => (
@@ -193,11 +209,40 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
               <Input id={f.name} type={f.type} value={values[f.name] ?? ""} onChange={(e) => setValues((v) => ({ ...v, [f.name]: e.target.value }))} autoComplete="off" />
             </div>
           ))}
+          {["zip", "afterpay", "klarna"].includes(integration.key) && (() => {
+            const webhookUrl = `${window.location.origin}/api/webhooks/${integration.key}`;
+            return (
+              <div className="rounded-lg bg-muted/50 border px-3 py-2.5 space-y-1.5">
+                <p className="text-[11px] font-medium text-muted-foreground">
+                  In your {integration.label} merchant dashboard, add this webhook URL and paste the signing secret it gives you above:
+                </p>
+                <div className="flex items-center gap-2">
+                  <code className="flex-1 text-[11px] bg-background border rounded px-2 py-1 truncate" title={webhookUrl}>
+                    {webhookUrl}
+                  </code>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    className="h-7 px-2 text-[11px] shrink-0"
+                    onClick={() => {
+                      void navigator.clipboard.writeText(webhookUrl)
+                        .then(() => toast.success("Webhook URL copied"))
+                        .catch(() => toast.error("Couldn't copy — select and copy manually"));
+                    }}
+                  >
+                    Copy
+                  </Button>
+                </div>
+              </div>
+            );
+          })()}
         </div>
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Cancel</Button>
           <Button onClick={handleSave} disabled={connectMutation.isPending} className="gap-1.5">
-            {connectMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />} Save & Connect
+            {connectMutation.isPending && <Loader2 className="w-4 h-4 animate-spin" />}
+            Save & Connect
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -206,6 +251,15 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
 }
 
 /* ─── Integration card ───────────────────────────────────────────────────── */
+
+/* Integrations that have a dedicated setup/config wizard reachable *after*
+   connecting. The connected card shows a "Configure" button linking here so
+   merchants can re-enter the wizard (org selection, account mapping, sync
+   settings) instead of only being able to disconnect. */
+const CONFIG_ROUTES: Record<string, string> = {
+  xero:        "/management/settings-integrations/integrations/xero",
+  tyro_eftpos: "/management/settings-integrations/integrations/tyro-eftpos",
+};
 
 function IntegrationCard({
   intg, busy, onConnect, onDisconnect, onOAuth, onNavigate, onSyncContacts,
@@ -227,7 +281,6 @@ function IntegrationCard({
         : needsReconnect
         ? "border-amber-300 dark:border-amber-700 shadow-sm shadow-amber-100 dark:shadow-amber-950"
         : "border-border hover:-translate-y-0.5",
-      intg.comingSoon && "opacity-60",
     )}>
       {/* Connected accent strip */}
       {isConnected && <div className="h-1 bg-gradient-to-r from-emerald-400 via-emerald-500 to-teal-400" />}
@@ -236,19 +289,13 @@ function IntegrationCard({
       <div className="p-5 flex flex-col gap-4 flex-1">
         {/* Logo + title row */}
         <div className="flex items-start gap-3.5">
-          {/* Logo with Coming Soon overlay badge */}
           <div className="relative shrink-0">
             <IntegrationLogo integrationKey={intg.key} size="lg" />
-            {intg.comingSoon && (
-              <span className="absolute -bottom-1.5 -right-1.5 inline-flex items-center gap-0.5 rounded-full bg-slate-700 px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-wide text-white shadow">
-                <Clock className="w-2 h-2" /> Soon
-              </span>
-            )}
           </div>
           <div className="flex-1 min-w-0 pt-1 min-h-[40px]">
             <div className="flex items-center gap-2 flex-wrap">
               <span className="font-semibold text-sm leading-tight">{intg.label}</span>
-              {!intg.comingSoon && intg.authType === "oauth" && (
+              {intg.authType === "oauth" && (
                 <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600 border border-blue-100 dark:bg-blue-950/40 dark:text-blue-300 dark:border-blue-900">
                   <ShieldCheck className="w-3 h-3" /> OAuth
                 </span>
@@ -264,7 +311,9 @@ function IntegrationCard({
               </p>
             ) : (
               <p className="text-[11px] text-muted-foreground mt-0.5 leading-tight">
-                {intg.comingSoon ? "Coming soon" : intg.authType === "oauth" ? "Authorise via OAuth 2.0" : "Enter API credentials"}
+                {intg.authType === "oauth" ? "Authorise via OAuth 2.0"
+                  : intg.authType === "loginflow" ? "Approve on your own server"
+                  : "Enter API credentials"}
               </p>
             )}
           </div>
@@ -275,8 +324,8 @@ function IntegrationCard({
           {intg.description}
         </p>
 
-        {/* OAuth not configured warning */}
-        {intg.authType === "oauth" && intg.oauthConfigured === false && !isConnected && !intg.comingSoon && (
+        {/* OAuth not configured warning (Xero routes to its wizard, which has its own messaging) */}
+        {intg.authType === "oauth" && intg.key !== "xero" && intg.oauthConfigured === false && !isConnected && (
           <div className="flex items-start gap-2 rounded-lg bg-amber-50 border border-amber-200 dark:bg-amber-950/30 dark:border-amber-800 px-3 py-2 text-[11px] text-amber-700 dark:text-amber-300">
             <AlertCircle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
             <span>OAuth credentials not configured — see .env.example</span>
@@ -293,11 +342,7 @@ function IntegrationCard({
 
         {/* Action row */}
         <div className={cn("pt-3 border-t flex items-center justify-between gap-2", isConnected && "border-emerald-200 dark:border-emerald-800")}>
-          {intg.comingSoon ? (
-            <Button variant="outline" size="sm" className="gap-1.5 text-muted-foreground w-full" disabled>
-              <Clock className="w-3.5 h-3.5" /> Coming Soon
-            </Button>
-          ) : isConnected ? (
+          {isConnected ? (
             <div className="flex items-center justify-between w-full gap-2">
               <Badge className="gap-1 bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700 px-2 py-0.5 text-[11px]">
                 <CheckCircle2 className="w-3 h-3" /> Connected
@@ -314,15 +359,15 @@ function IntegrationCard({
                     <Users className="w-3 h-3" /> Sync Contacts
                   </Button>
                 )}
-                {onNavigate && (
+                {onNavigate && CONFIG_ROUTES[intg.key] && (
                   <Button
                     variant="ghost"
                     size="sm"
                     className="gap-1.5 text-xs h-7 px-2"
-                    onClick={() => onNavigate("/management/settings-integrations/integrations/tyro-eftpos")}
-                    title="Terminal settings"
+                    onClick={() => onNavigate(CONFIG_ROUTES[intg.key])}
+                    title="Open setup & settings"
                   >
-                    <Settings className="w-3 h-3" /> Settings
+                    <Settings className="w-3 h-3" /> Configure
                   </Button>
                 )}
                 <Button
@@ -342,7 +387,7 @@ function IntegrationCard({
               size="sm"
               className={cn("gap-1.5 w-full", needsReconnect && "bg-amber-600 hover:bg-amber-700 text-white")}
               onClick={onOAuth}
-              disabled={busy || intg.oauthConfigured === false}
+              disabled={busy || (intg.oauthConfigured === false && intg.key !== "xero")}
             >
               {busy ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : needsReconnect ? <RefreshCw className="w-3.5 h-3.5" /> : <ExternalLink className="w-3.5 h-3.5" />}
               {needsReconnect ? "Reconnect" : "Connect Account"}
@@ -368,12 +413,12 @@ function IntegrationCard({
 /* ─── Section (collapsible, shared by all groups) ─────────────────────────────────── */
 
 function Section({
-  title, description, icon: Icon, accent, iconBg, iconColor,
+  id, title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
   onNavigate, onSyncContacts,
   defaultOpen = false,
 }: {
-  title: string; description: string;
+  id: string; title: string; description: string;
   icon: React.ComponentType<{ className?: string }>;
   accent: string; iconBg: string; iconColor: string;
   items: Integration[];
@@ -421,6 +466,15 @@ function Section({
       </button>
 
       {open && (
+        <>
+        <div className="flex justify-end -mt-1">
+          <a
+            href={`/management/settings-integrations/integrations/help#${id}`}
+            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+          >
+            <HelpCircle className="w-3.5 h-3.5" /> How to connect these
+          </a>
+        </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
           {items.map((intg) => (
             <IntegrationCard
@@ -430,7 +484,7 @@ function Section({
               onConnect={() => onConnect(intg)}
               onDisconnect={() => onDisconnect(intg)}
               onOAuth={() => onOAuth(intg)}
-              onNavigate={intg.key === "tyro_eftpos" ? onNavigate : undefined}
+              onNavigate={CONFIG_ROUTES[intg.key] ? onNavigate : undefined}
               onSyncContacts={
                 (intg.key === "google_contacts" || intg.key === "microsoft_contacts") && onSyncContacts
                   ? () => onSyncContacts(intg)
@@ -439,6 +493,7 @@ function Section({
             />
           ))}
         </div>
+        </>
       )}
     </section>
   );
@@ -476,9 +531,9 @@ const ALL_SECTIONS = [
   },
   {
     id: "marketing",
-    title: "Marketing & Socials",
+    title: "Marketing",
     icon: Megaphone,
-    description: "Ad campaigns, social posts, email flows, and customer audience targeting",
+    description: "Ad campaigns, email flows, and customer audience targeting",
     accent: "bg-pink-50/60 border-pink-200 dark:bg-pink-950/20 dark:border-pink-900",
     iconBg: "bg-pink-100 dark:bg-pink-900/40",
     iconColor: "text-pink-600 dark:text-pink-400",
@@ -496,10 +551,13 @@ const ALL_SECTIONS = [
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
-// Cloud-storage and account/contacts integrations now live on the consolidated
-// Sync page (Management → Settings & Integrations → Sync), so they are hidden here.
+// Account/contacts integrations are configured on the consolidated Sync page
+// (Management → Settings & Integrations → Sync), so they are hidden here.
+// The cloud-storage destinations (Google Drive, OneDrive, Dropbox) stay
+// visible: the Cloud Storage section is where merchants expect to connect a
+// backup destination, and the Sync page still owns what actually gets synced
+// once connected.
 export const SYNC_INTEGRATION_KEYS = new Set([
-  "google_drive", "onedrive", "dropbox", "proton_drive",
   "google_contacts", "microsoft_contacts", "apple_account",
 ]);
 
@@ -515,6 +573,7 @@ export default function ManagementIntegrationsPage() {
   const [location, setLocation] = useLocation();
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
   const [modalTarget, setModalTarget]   = useState<Integration | null>(null);
+  const [nextcloudOpen, setNextcloudOpen] = useState(false);
 
   /* ─── Sync Contacts dialog state ────────────────────────────────────────── */
   const [syncTarget,         setSyncTarget]         = useState<Integration | null>(null);
@@ -559,8 +618,19 @@ export default function ManagementIntegrationsPage() {
     );
   };
 
+  const handleConnect = (intg: Integration) => {
+    // Nextcloud has no credentials form — it hands off to the merchant's own
+    // server for approval, so it gets its own dialog.
+    if (intg.authType === "loginflow") { setNextcloudOpen(true); return; }
+    setModalTarget(intg);
+  };
+
   const handleOAuth = (intg: Integration) => {
-    if (intg.key === "xero") { window.location.href = "/api/xero/auth/start"; return; }
+    // Xero has a dedicated setup wizard (org selection + GL account mapping). Send
+    // users there rather than firing the OAuth redirect directly — the wizard shows
+    // a clear state when the platform Xero app isn't configured yet, instead of the
+    // backend silently bouncing back here (which looks like the page just refreshed).
+    if (intg.key === "xero") { setLocation("/management/settings-integrations/integrations/xero"); return; }
     // apple_account uses the named /apple/start route (form_post callback requires exact redirect_uri)
     if (intg.key === "apple_account") { window.location.href = "/api/integrations/oauth/apple/start"; return; }
     window.location.href = `/api/integrations/oauth/${intg.key}/start`;
@@ -586,6 +656,12 @@ export default function ManagementIntegrationsPage() {
             <p className="text-muted-foreground text-sm mt-1 max-w-xl">
               Connect third-party services to extend KoaPOS. OAuth tokens are encrypted and stored securely in the platform vault.
             </p>
+            <a
+              href="/management/settings-integrations/integrations/help"
+              className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline mt-2"
+            >
+              <HelpCircle className="w-4 h-4" /> Connection guide — how to connect each app
+            </a>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
             {connectedCount > 0 && (
@@ -674,10 +750,10 @@ export default function ManagementIntegrationsPage() {
                   {...sec}
                   items={items}
                   connecting={connecting}
-                  onConnect={setModalTarget}
+                  onConnect={handleConnect}
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
-                  onNavigate={sec.id === "payments" ? (href) => setLocation(href) : undefined}
+                  onNavigate={(href) => setLocation(href)}
                   onSyncContacts={sec.id === "cloud" ? (intg) => { setSyncTarget(intg); setSyncIncludeNotes(false); setSyncNotesConflict("append"); } : undefined}
                   defaultOpen={sectionsWithReconnect.has(sec.id)}
                 />
@@ -688,6 +764,16 @@ export default function ManagementIntegrationsPage() {
       </div>
 
       <ConnectModal integration={modalTarget} onClose={() => setModalTarget(null)} onSaved={refetchIntegrations} />
+
+      <NextcloudConnectModal
+        open={nextcloudOpen}
+        onClose={() => setNextcloudOpen(false)}
+        onConnected={(handle) => {
+          setNextcloudOpen(false);
+          refetchIntegrations();
+          toast.success(handle ? `Nextcloud connected (${handle})` : "Nextcloud connected");
+        }}
+      />
 
       {/* ── Sync Contacts dialog (Google / Microsoft) ────────────────────── */}
       <Dialog open={!!syncTarget} onOpenChange={(o) => { if (!o) setSyncTarget(null); }}>

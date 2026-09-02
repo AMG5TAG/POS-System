@@ -1,17 +1,23 @@
 import app from "./app";
 import { logger } from "./lib/logger";
 import { scheduleRecurringInvoices } from "./services/recurringInvoiceScheduler";
+import { scheduleInvoiceReminders } from "./services/invoiceReminderScheduler";
 import { scheduleMarketingAutomation } from "./services/marketingAutomationScheduler";
 import { scheduleReferralDigest } from "./services/referralDigestScheduler";
 import { scheduleLowStockAlerts } from "./services/lowStockAlertScheduler";
+import { schedulePaymentAttemptsExpiry } from "./services/paymentAttemptsExpiryScheduler";
 import { scheduleLoginAttemptsCleanup } from "./services/loginAttemptsCleanupScheduler";
 import { ensureLoginCleanupFunction } from "./services/loginCleanupSetup";
 import { ensureReportViews } from "./services/reportViewsSetup";
 import { schedulePasswordResetTokensCleanup } from "./services/passwordResetTokensCleanupScheduler";
 import { scheduleBackups } from "./services/backupScheduler";
-import { scheduleSocialPosts } from "./services/socialPostScheduler";
+import { scheduleAutoSync } from "./services/autoSyncScheduler";
+import { scheduleKpiResets } from "./services/kpiResetScheduler";
+import { scheduleScheduledReports } from "./services/scheduledReportsScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 import { checkSchemaDrift } from "./services/schemaDriftCheck";
+import { clearScheduledIntervals } from "./lib/shutdown";
+import { closePdfBrowser } from "./services/htmlToPdf";
 
 assertVaultKeyConfigured();
 
@@ -41,7 +47,7 @@ async function bootstrap() {
     process.exit(1);
   }
 
-  app.listen(port, (err) => {
+  const server = app.listen(port, (err) => {
     if (err) {
       logger.error({ err }, "Error listening on port");
       process.exit(1);
@@ -49,12 +55,16 @@ async function bootstrap() {
 
     logger.info({ port }, "Server listening");
   scheduleRecurringInvoices(logger);
+  scheduleInvoiceReminders(logger);
   scheduleMarketingAutomation(logger);
   scheduleReferralDigest(logger);
   scheduleLowStockAlerts(logger);
+  schedulePaymentAttemptsExpiry(logger);
   schedulePasswordResetTokensCleanup(logger);
   scheduleBackups(logger);
-  scheduleSocialPosts(logger);
+  scheduleAutoSync(logger);
+  scheduleKpiResets(logger);
+  scheduleScheduledReports(logger);
   ensureLoginCleanupFunction(logger).then(() => {
     scheduleLoginAttemptsCleanup(logger);
   }).catch((err) => {
@@ -79,6 +89,33 @@ async function bootstrap() {
       });
     });
   });
+
+  // Graceful shutdown: stop the schedulers firing mid-teardown, stop accepting
+  // new connections and let in-flight requests drain, then close the shared
+  // Chromium instance so it isn't orphaned. A hard timeout forces exit if
+  // connections won't drain.
+  let shuttingDown = false;
+  const shutdown = (signal: string): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    logger.info({ signal }, "Graceful shutdown initiated");
+    clearScheduledIntervals();
+    const forced = setTimeout(() => {
+      logger.warn("Shutdown timed out; forcing exit");
+      process.exit(1);
+    }, 10_000);
+    forced.unref();
+    server.close(() => {
+      closePdfBrowser()
+        .catch((err) => logger.error({ err }, "Error closing PDF browser on shutdown"))
+        .finally(() => {
+          logger.info("Graceful shutdown complete");
+          process.exit(0);
+        });
+    });
+  };
+  process.on("SIGTERM", () => shutdown("SIGTERM"));
+  process.on("SIGINT", () => shutdown("SIGINT"));
 }
 
 bootstrap();

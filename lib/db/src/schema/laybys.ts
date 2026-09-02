@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, jsonb, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, jsonb, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -30,6 +30,8 @@ export const laybysTable = pgTable("laybys", {
 }, (t) => [
   index("laybys_merchant_id_idx").on(t.merchantId),
   index("laybys_customer_id_idx").on(t.customerId),
+  // Layby references are unique per merchant — max+1 generator + retry on conflict.
+  uniqueIndex("laybys_merchant_reference_unique").on(t.merchantId, t.reference),
 ]);
 
 export const laybyPaymentsTable = pgTable("layby_payments", {
@@ -37,9 +39,22 @@ export const laybyPaymentsTable = pgTable("layby_payments", {
   laybyId: integer("layby_id").notNull().references(() => laybysTable.id),
   amount: numeric("amount", { precision: 10, scale: 2 }).notNull(),
   paymentMethod: text("payment_method").notNull().default("cash"),
+  // Pass-on surcharge collected on top of `amount` for this installment when the
+  // payment method is configured to pass its acceptance cost to the customer
+  // (see payment_method_surcharges). 0 when none. Recorded on top of the amount
+  // applied to the balance — it does not reduce what's owed.
+  surchargeAmount: numeric("surcharge_amount", { precision: 10, scale: 2 }).notNull().default("0"),
   note: text("note"),
+  // Idempotency key for the payment attempt that created this leg (stamped on the
+  // first leg of a split). Lets a retried/double-clicked payment be deduped so a
+  // layby is never double-charged — mirrors the invoice payment dedupe. Nullable:
+  // legacy rows and split follow-on legs carry null, which the unique index below
+  // permits multiple of (Postgres treats NULLs as distinct).
+  idempotencyKey: text("idempotency_key"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
-});
+}, (t) => [
+  uniqueIndex("layby_payments_layby_idem_unique").on(t.laybyId, t.idempotencyKey),
+]);
 
 export const insertLaybySchema = createInsertSchema(laybysTable).omit({ id: true, createdAt: true, updatedAt: true });
 export const insertLaybyPaymentSchema = createInsertSchema(laybyPaymentsTable).omit({ id: true, createdAt: true });

@@ -16,6 +16,8 @@ function fmt(row: typeof customerSettingsTable.$inferSelect) {
     weeklyDigestOptIn:      row.weeklyDigestOptIn === "true",
     weeklyDigestSendDay:    row.weeklyDigestSendDay,
     referralSettings:       JSON.parse(row.referralSettings    || "{}"),
+    groupPricing:           JSON.parse(row.groupPricing        || "[]"),
+    defaultCustomerImageUrl: row.defaultCustomerImageUrl,
     updatedAt:              row.updatedAt,
   };
 }
@@ -45,6 +47,8 @@ const DEFAULTS = {
   weeklyDigestOptIn:      false,
   weeklyDigestSendDay:    1,
   referralSettings:       {},
+  groupPricing:           [],
+  defaultCustomerImageUrl: "",
 };
 
 router.get("/customer-settings", requireAuth, async (req, res): Promise<void> => {
@@ -70,6 +74,8 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
     weeklyDigestOptIn:      String(body.weeklyDigestOptIn === true ? "true" : "false"),
     weeklyDigestSendDay:    sendDay,
     referralSettings:       JSON.stringify(body.referralSettings ?? {}),
+    groupPricing:           JSON.stringify(Array.isArray(body.groupPricing) ? body.groupPricing : []),
+    defaultCustomerImageUrl: String(body.defaultCustomerImageUrl ?? ""),
   };
 
   const [existing] = await db.select({ id: customerSettingsTable.id }).from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));

@@ -43,4 +43,24 @@ const ScrollBar = React.forwardRef<
 ))
 ScrollBar.displayName = ScrollAreaPrimitive.ScrollAreaScrollbar.displayName
 
+/**
+ * Radix gives the viewport's content wrapper `display:table; min-width:100%`.
+ * A table box sizes to its content, and `truncate` (white-space:nowrap) makes a
+ * row's min-content width the FULL untruncated string — so rows grow wider than
+ * the ScrollArea, text never truncates, and anything pinned to the right of the
+ * row (a badge, a total, a button) is pushed out and clipped.
+ *
+ * Add this to any ScrollArea whose children rely on `truncate` to fit. Forcing
+ * the wrapper back to `block` makes rows respect the container width again.
+ *
+ * Do NOT add it to a deliberately horizontal scroller (e.g. a `flex w-max`
+ * strip) — those need the wrapper to exceed the container.
+ *
+ * It is opt-in rather than the component default because the two usages that
+ * must not have it (a horizontal strip, and a real `<table>` whose column
+ * layout would change) would each need an escape hatch.
+ */
+export const SCROLL_AREA_TRUNCATE_FIX =
+  "[&_[data-radix-scroll-area-viewport]>div]:!block"
+
 export { ScrollArea, ScrollBar }

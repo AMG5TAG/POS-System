@@ -1,4 +1,6 @@
 import type { DailyClose } from "@workspace/api-client-react";
+import type { HardwareCfg } from "@/lib/hardware-config";
+import { printDocument } from "@/lib/print-router";
 
 const fmt$ = (n: number) =>
   `$${Math.abs(n).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -16,7 +18,12 @@ const fmtDateTime = (s: string) =>
     hour: "2-digit", minute: "2-digit",
   });
 
-export function printDailyClose(row: DailyClose, businessName?: string) {
+/**
+ * Print the end-of-day report. With `hw` supplied it goes through the print
+ * router, so a merchant who has routed "End-of-day report" at a printer gets it
+ * silently; otherwise it opens the usual print window.
+ */
+export function printDailyClose(row: DailyClose, businessName?: string, hw?: HardwareCfg) {
   const b = row.breakdown as Record<string, number>;
   const variance = row.variance;
   const isOver = variance > 0;
@@ -89,15 +96,31 @@ export function printDailyClose(row: DailyClose, businessName?: string) {
     KoaPOS &nbsp;·&nbsp; Report generated ${new Date().toLocaleString("en-AU")}
   </div>
 
-  <script>window.onload = () => { window.print(); }</script>
 </body>
 </html>`;
 
-  const w = window.open("", "_blank", "width=700,height=900");
-  if (w) {
-    w.document.write(html);
+  const openPopup = () => {
+    // The popup prints itself on load; the bridge renders the same markup
+    // headlessly, where that script would be a no-op, so it only goes on here.
+    const w = window.open("", "_blank", "width=700,height=900");
+    if (!w) return;
+    w.document.write(html.replace("</body>", "<script>window.onload = () => { window.print(); }<\/script></body>"));
     w.document.close();
-  }
+  };
+
+  if (!hw) { openPopup(); return; }
+
+  void printDocument({
+    purpose: "eod",
+    hw,
+    paper: "A4",
+    jobName: `End of day ${row.closeDate}`,
+    html: () => html,
+    browserFallback: openPopup,
+  }).catch((err: unknown) => {
+    // eslint-disable-next-line no-console
+    console.error("Could not print the end-of-day report", err);
+  });
 }
 
 export function exportDailyClosesCSV(rows: DailyClose[]) {

@@ -4,11 +4,13 @@
   "private": true,
   "type": "module",
   "scripts": {
-    "dev": "export NODE_ENV=development && pnpm run build && pnpm run start",
+    "dev": "export NODE_ENV=development && export PORT=\"${PORT:-8080}\" && pnpm run build && pnpm run start",
     "build": "node ./build.mjs",
     "start": "node --enable-source-maps ./dist/index.mjs",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "test": "vitest run --config vitest.config.ts"
+    "test": "vitest run --config vitest.config.ts",
+    "transfer-merchant": "tsx scripts/transfer-merchant.ts",
+    "db-fingerprint": "tsx scripts/db-fingerprint.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
@@ -30,15 +32,18 @@
     "express-rate-limit": "^8.5.2",
     "express-session": "^1.19.0",
     "google-auth-library": "^10.6.2",
-    "multer": "^2.1.1",
+    "helmet": "^8.2.0",
+    "multer": "^2.2.0",
     "node-forge": "^1.4.0",
-    "nodemailer": "^8.0.7",
+    "nodemailer": "^9.0.3",
     "pdfkit": "^0.18.0",
     "pino": "^9.14.0",
-    "puppeteer": "^24.10.0",
     "pino-http": "^10.5.0",
+    "puppeteer": "^24.10.0",
+    "qrcode": "^1.5.4",
     "ssh2": "^1.17.0",
     "ssh2-sftp-client": "^12.1.1",
+    "tsdav": "^2.3.1",
     "zod": "catalog:"
   },
   "devDependencies": {
@@ -57,6 +62,7 @@
     "pino-pretty": "^13.1.3",
     "supertest": "^7.2.2",
     "thread-stream": "3.1.0",
+    "tsx": "catalog:",
     "vitest": "^4.1.7"
   }
 }

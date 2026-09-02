@@ -259,7 +259,7 @@ router.get("/payroll/auth/callback", async (req, res): Promise<void> => {
     return;
   }
 
-  // Resolve the provider's connection identifier (Xero tenant / MYOB company file).
+  // Resolve the provider's connection identifier (e.g. the Xero tenant).
   let tenantId = "";
   let tenantName = "";
   try {

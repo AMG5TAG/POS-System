@@ -1,18 +1,23 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Link2, Copy, Trash2, ExternalLink, Clock, Plus, Link as LinkIcon } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Link2, Copy, Trash2, ExternalLink, Clock, Plus, Link as LinkIcon, Rocket, CheckCircle2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import {
   useListShortlinks,
   useCreateShortlink,
   useDeleteShortlink,
+  useListLandingPages,
+  useGetMerchant,
 } from "@workspace/api-client-react";
+import { useLandingPageNames } from "@/lib/landing-page-names";
+import { publicOrigin } from "@/lib/public-url";
 import {
   SHORT_DOMAIN,
   RESERVED_ENDINGS,
@@ -53,6 +58,27 @@ export default function MarketingShortlinksPage() {
   const deleteShortlink = useDeleteShortlink();
 
   const links = (shortlinksResponse?.items ?? []) as ShortlinkFromApi[];
+
+  /* Landing pages as shortlink targets — mirror the QR generator's list so a
+     merchant can point a branded short link straight at one of their pages
+     without hunting for its public URL. */
+  const { data: landingResponse } = useListLandingPages({ query: { queryKey: ["landing-pages"] } });
+  const { data: merchant }        = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const landingNames = useLandingPageNames();
+  const landingOptions = useMemo(() => {
+    const username = String((merchant as Record<string, unknown> | undefined)?.username ?? "").toLowerCase();
+    return ((landingResponse?.items ?? []) as unknown as Record<string, unknown>[])
+      .filter((p) => String(p.isTemplate ?? "false") !== "true")
+      .map((p) => {
+        const slug = String(p.slug ?? "");
+        const id = String(p.id ?? slug);
+        return {
+          id,
+          label: String(landingNames[id] || p.title || slug || "Untitled page"),
+          url:   `${publicOrigin()}/b/${username || "your-username"}/l/${slug}`,
+        };
+      });
+  }, [landingResponse, merchant, landingNames]);
 
   const [longUrl, setLongUrl]   = useState("https://");
   const [label, setLabel]       = useState("");
@@ -140,6 +166,25 @@ export default function MarketingShortlinksPage() {
                 <CardTitle className="text-base flex items-center gap-2"><Plus className="w-4 h-4" /> New Shortlink</CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
+                {landingOptions.length > 0 && (
+                  <div className="space-y-1.5">
+                    <Label className="flex items-center gap-1.5"><Rocket className="w-3.5 h-3.5" /> Link to a Landing Page <span className="text-muted-foreground font-normal">(optional)</span></Label>
+                    <Select
+                      value=""
+                      onValueChange={(id) => {
+                        const p = landingOptions.find((x) => x.id === id);
+                        if (p) { setLongUrl(p.url); if (!label.trim()) setLabel(p.label); }
+                      }}
+                    >
+                      <SelectTrigger><SelectValue placeholder="Choose one of your landing pages…" /></SelectTrigger>
+                      <SelectContent>
+                        {landingOptions.map((p) => <SelectItem key={p.id} value={p.id}>{p.label}</SelectItem>)}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-[11px] text-muted-foreground">Picks the page and fills the destination below — or enter any URL manually.</p>
+                  </div>
+                )}
+
                 <div className="space-y-1.5">
                   <Label>Destination URL</Label>
                   <Input
@@ -186,8 +231,11 @@ export default function MarketingShortlinksPage() {
                   <p className="text-[11px] text-muted-foreground">Comma-separated tags to help organise your links.</p>
                 </div>
 
-                <Button className="w-full gap-1.5" onClick={create} disabled={!isValidUrl || !!endingError || createShortlink.isPending}>
-                  <Link2 className="w-4 h-4" /> Create Shortlink
+                {/* Only disabled while a create is in flight. URL/ending validation
+                    is handled by create() with clear toast messages, so the button
+                    is never left mysteriously greyed-out with no explanation. */}
+                <Button className="w-full gap-1.5" onClick={create} disabled={createShortlink.isPending}>
+                  <Link2 className="w-4 h-4" /> {createShortlink.isPending ? "Creating…" : "Create Shortlink"}
                 </Button>
               </CardContent>
             </Card>
@@ -232,9 +280,10 @@ export default function MarketingShortlinksPage() {
                         <ExternalLink className="w-4 h-4" />
                       </Button>
                     </div>
-                    <div className="rounded-lg border border-amber-200 bg-amber-50/60 dark:bg-amber-900/10 dark:border-amber-700/30 p-3">
-                      <p className="text-xs text-amber-800 dark:text-amber-300">
-                        <strong>Note:</strong> To make shortlinks active and redirect visitors, your domain must be pointed to KoaPOS and shortlink routing must be enabled.
+                    <div className="rounded-lg border border-emerald-200 bg-emerald-50/60 dark:bg-emerald-900/10 dark:border-emerald-700/30 p-3">
+                      <p className="text-xs text-emerald-800 dark:text-emerald-300 flex items-start gap-1.5">
+                        <CheckCircle2 className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                        <span>Your shortlink is live on <strong>{SHORT_DOMAIN}</strong> and ready to share — it redirects visitors to your destination and tracks every click.</span>
                       </p>
                     </div>
                   </div>

@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo } from "react";
 import { Link } from "wouter";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQueryClient, useQuery } from "@tanstack/react-query";
 import {
   useListQrCodes,
   useListShortlinks,
@@ -12,14 +12,18 @@ import {
   useGetSalesChart,
   useGetTopProducts,
   useListTransactions,
-  useListCustomers,
+  getListTransactionsQueryKey,
   useListStaff,
   useListInventory,
   useListCashDrawerEntries,
+  useListDailyCloses,
   useListWastage,
   useGetTaxSettings,
   useGetLoyaltySettings,
+  useListGiftCards,
+  useGetGiftCardSettings,
   useGetProfitLoss,
+  useGetCostOfGoods,
   useGetSalesSummary,
   useGetInventoryValuation,
   useGetProductPerformance,
@@ -44,6 +48,8 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn, formatCurrency, exportToCsv } from "@/lib/utils";
+import { Delta } from "@/components/reports/Delta";
+import { useAllCustomers } from "@/hooks/use-all-customers";
 import {
   TrendingUp, CreditCard, Package2, Monitor, DollarSign, Users,
   BarChart3, Activity, Banknote, SlidersHorizontal, LayoutGrid,
@@ -51,7 +57,7 @@ import {
   ShoppingCart, AlertCircle, CheckCircle2, Package, UserSquare2,
   ArrowUpRight, ArrowDownRight, Percent, Hash, Mail, Clock, Plus,
   FileText, Settings2, QrCode, Link2, Globe, ExternalLink,
-  MousePointerClick, Trash2,
+  MousePointerClick, Trash2, ChevronRight,
 } from "lucide-react";
 import {
   Area, AreaChart, Bar, BarChart, Cell, ResponsiveContainer,
@@ -69,25 +75,36 @@ const TOOLTIP_ITEM_STYLE = { color: "hsl(var(--foreground))" } as const;
 
 /* ─── Date helpers ───────────────────────────────────────────────────────── */
 
-type Preset = "today" | "7" | "30" | "90" | "year" | "custom";
+type Preset = "today" | "7" | "month" | "90" | "year" | "custom";
 
 const DATE_PRESETS: { id: Preset; label: string }[] = [
   { id: "today", label: "Today"   },
   { id: "7",     label: "7 Days"  },
-  { id: "30",    label: "30 Days" },
+  { id: "month", label: "Month"   },
   { id: "90",    label: "90 Days" },
   { id: "year",  label: "Year"    },
 ];
 
-function toISO(d: Date): string { return d.toISOString().split("T")[0]; }
+// Build the YYYY-MM-DD string from LOCAL date components — toISOString() would
+// convert to UTC first, which in AEST (UTC+10/+11) shifts dates back a day for
+// most of the local morning ("Today" would query yesterday until ~10-11am).
+function toISO(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${p(d.getMonth() + 1)}-${p(d.getDate())}`;
+}
 
 function presetDates(p: Preset): { from: string; to: string } {
   const now = new Date();
   const to  = toISO(now);
   if (p === "today") return { from: to, to };
+  // "Month" is month-to-date: 1st of the current month → today.
+  if (p === "month") {
+    const first = new Date(now.getFullYear(), now.getMonth(), 1);
+    return { from: toISO(first), to };
+  }
   const d = new Date(now);
   if (p === "year") d.setFullYear(d.getFullYear() - 1);
-  else d.setDate(d.getDate() - (p === "7" ? 7 : p === "30" ? 30 : 90));
+  else d.setDate(d.getDate() - (p === "7" ? 7 : 90));
   return { from: toISO(d), to };
 }
 
@@ -106,6 +123,7 @@ const REPORT_TABS = [
   { id: "inventory",         label: "Inventory",         icon: Package2          },
   { id: "register-closures", label: "Register Closures", icon: Monitor           },
   { id: "profit-loss",       label: "Profit & Loss",     icon: DollarSign        },
+  { id: "cost-of-goods",     label: "Cost of Goods",     icon: Package           },
   { id: "customer-insights", label: "Customer Insights", icon: Users             },
   { id: "top-products",      label: "Top Products",      icon: BarChart3         },
   { id: "user-activity",     label: "User Activity",     icon: Activity          },
@@ -116,19 +134,19 @@ const REPORT_TABS = [
   { id: "gst-bas",           label: "GST / BAS",         icon: Receipt           },
   { id: "gift-cards",        label: "Gift Cards",        icon: Gift              },
   { id: "store-credit",      label: "Store Credit",      icon: Wallet            },
-  { id: "analytics",         label: "Analytics",         icon: Globe             },
 ] as const;
 
 type ReportTabId = (typeof REPORT_TABS)[number]["id"];
 
 /* ─── Shared UI helpers ──────────────────────────────────────────────────── */
 
-function KpiTile({ label, value, sub, accent = false }: { label: string; value: string; sub?: string; accent?: boolean }) {
+function KpiTile({ label, value, sub, accent = false, delta }: { label: string; value: string; sub?: string; accent?: boolean; delta?: React.ReactNode }) {
   return (
     <div className={cn("rounded-xl border p-5", accent ? "bg-primary/5" : "bg-card")}>
       <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">{label}</p>
       <p className={cn("text-3xl font-bold mt-2", accent ? "text-primary" : "")}>{value}</p>
       {sub && <p className="text-xs text-muted-foreground mt-1">{sub}</p>}
+      {delta && <div className="text-xs mt-1.5">{delta} <span className="text-muted-foreground ml-0.5">vs prev</span></div>}
     </div>
   );
 }
@@ -163,15 +181,16 @@ const ExportBtn = ({ rows, filename, columns }: {
 const PAYMENT_COLORS: Record<string, string> = {
   card: "#6366f1", cash: "#22c55e", split: "#f59e0b",
   voucher: "#ec4899", store_credit: "#8b5cf6", loyalty: "#06b6d4",
-  laybuy: "#f97316", direct_deposit: "#14b8a6", other: "#94a3b8",
+  laybuy: "#f97316", direct_deposit: "#14b8a6", zip: "#7c3aed", afterpay: "#00b389", klarna: "#ffb3c7", other: "#94a3b8",
 };
 
 /* ─── Tab: Sales ─────────────────────────────────────────────────────────── */
 
-function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales, txCount, avgSaleValue }: {
+function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales, txCount, avgSaleValue, prev }: {
   summary: { totalSales: number; transactionCount: number; averageOrderValue: number; posSales?: number; invoiceSales?: number; posCount?: number; invoiceCount?: number } | undefined;
   summaryLoading: boolean; chartData: { label: string; sales: number; transactions: number }[] | undefined;
   chartLoading: boolean; totalSales: number; txCount: number; avgSaleValue: number;
+  prev?: { totalSales?: number; posSales?: number; posCount?: number; invoiceSales?: number; averageOrderValue?: number } | null;
 }) {
   const posSales     = summary?.posSales     ?? totalSales;
   const invoiceSales = summary?.invoiceSales ?? 0;
@@ -180,10 +199,14 @@ function SalesTab({ summary, summaryLoading, chartData, chartLoading, totalSales
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <KpiTile label="Total Revenue" value={summaryLoading ? "—" : formatCurrency(totalSales)} sub="POS + Invoices" accent />
-        <KpiTile label="POS Transactions" value={summaryLoading ? "—" : posCount.toLocaleString()} sub={formatCurrency(posSales)} />
-        <KpiTile label="Invoice Revenue" value={summaryLoading ? "—" : formatCurrency(invoiceSales)} sub={`${invoiceCount} paid invoice${invoiceCount !== 1 ? "s" : ""}`} />
-        <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction" />
+        <KpiTile label="Total Revenue" value={summaryLoading ? "—" : formatCurrency(totalSales)} sub="POS + Invoices" accent
+          delta={prev ? <Delta current={totalSales} previous={prev.totalSales ?? 0} prefix="$" /> : undefined} />
+        <KpiTile label="POS Transactions" value={summaryLoading ? "—" : posCount.toLocaleString()} sub={formatCurrency(posSales)}
+          delta={prev ? <Delta current={posCount} previous={prev.posCount ?? 0} /> : undefined} />
+        <KpiTile label="Invoice Revenue" value={summaryLoading ? "—" : formatCurrency(invoiceSales)} sub={`${invoiceCount} paid invoice${invoiceCount !== 1 ? "s" : ""}`}
+          delta={prev ? <Delta current={invoiceSales} previous={prev.invoiceSales ?? 0} prefix="$" /> : undefined} />
+        <KpiTile label="Avg Sale Value" value={summaryLoading ? "—" : formatCurrency(avgSaleValue)} sub="Per transaction"
+          delta={prev ? <Delta current={avgSaleValue} previous={prev.averageOrderValue ?? 0} prefix="$" /> : undefined} />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
         <SectionHeader title="Daily Sales" action={<ExportBtn filename="daily-sales" rows={(chartData ?? []) as unknown as Record<string, unknown>[]} columns={[{ key: "label", label: "Date" }, { key: "sales", label: "Revenue" }, { key: "transactions", label: "Transactions" }]} />} />
@@ -471,33 +494,30 @@ function InventoryTab() {
 /* ─── Tab: Register Closures ─────────────────────────────────────────────── */
 
 function RegisterClosuresTab() {
-  const { data, isLoading } = useListCashDrawerEntries();
-  const entries = data ?? [];
+  // End-of-day register closures live in daily_closes (the same records the
+  // Daily Reports page shows), NOT the cash-drawer movement log.
+  // High limit so KPI aggregates cover the full history (≈3 years of daily closes).
+  const { data, isLoading } = useListDailyCloses({ limit: 1000, offset: 0 });
+  const closes = useMemo(
+    () => (data ?? []).slice().sort((a, b) => b.closeDate.localeCompare(a.closeDate)),
+    [data],
+  );
 
-  const byDate = useMemo(() => {
-    const map: Record<string, { date: string; in: number; out: number; count: number }> = {};
-    for (const e of entries) {
-      const d = e.shiftDate ?? e.createdAt?.split("T")[0] ?? "—";
-      if (!map[d]) map[d] = { date: d, in: 0, out: 0, count: 0 };
-      map[d].count++;
-      if (e.amount >= 0) map[d].in  += e.amount;
-      else               map[d].out += Math.abs(e.amount);
-    }
-    return Object.values(map).sort((a, b) => b.date.localeCompare(a.date));
-  }, [entries]);
+  const totalGross = closes.reduce((s, r) => s + ((r.breakdown as Record<string, number>)?.grossSales ?? 0), 0);
+  const totalVariance = closes.reduce((s, r) => s + Math.abs(r.variance), 0);
 
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiTile label="Closure Days" value={isLoading ? "—" : byDate.length.toString()} sub="Recorded shifts" accent />
-        <KpiTile label="Total In" value={isLoading ? "—" : formatCurrency(byDate.reduce((s, r) => s + r.in, 0))} sub="Cash counted in" />
-        <KpiTile label="Total Out" value={isLoading ? "—" : formatCurrency(byDate.reduce((s, r) => s + r.out, 0))} sub="Cash counted out" />
+        <KpiTile label="Closures" value={isLoading ? "—" : closes.length.toString()} sub="End-of-day records" accent />
+        <KpiTile label="Gross Sales" value={isLoading ? "—" : formatCurrency(totalGross)} sub="Across all closures" />
+        <KpiTile label="Total Variance" value={isLoading ? "—" : formatCurrency(totalVariance)} sub="Counted vs expected" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Daily Register Summary" action={<ExportBtn />} />
+        <SectionHeader title="Register Closures" action={<ExportBtn />} />
         {isLoading ? (
           <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
-        ) : byDate.length === 0 ? (
+        ) : closes.length === 0 ? (
           <div className="flex flex-col items-center py-14 gap-3">
             <Monitor className="w-10 h-10 text-muted-foreground/30" />
             <p className="text-sm text-muted-foreground">No register closures recorded yet.</p>
@@ -507,21 +527,21 @@ function RegisterClosuresTab() {
             <thead>
               <tr className="bg-muted/30 border-b">
                 <th className="text-left px-5 py-3 font-medium text-muted-foreground">Date</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Entries</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Cash In</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Cash Out</th>
-                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Net</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Closed By</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Expected</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Counted</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Variance</th>
               </tr>
             </thead>
             <tbody>
-              {byDate.map((row) => (
-                <tr key={row.date} className="border-b last:border-0 hover:bg-muted/20">
-                  <td className="px-5 py-3 font-medium">{row.date}</td>
-                  <td className="px-5 py-3 text-right text-muted-foreground">{row.count}</td>
-                  <td className="px-5 py-3 text-right text-emerald-600 font-medium">{formatCurrency(row.in)}</td>
-                  <td className="px-5 py-3 text-right text-red-500 font-medium">{formatCurrency(row.out)}</td>
-                  <td className={cn("px-5 py-3 text-right font-semibold", row.in - row.out >= 0 ? "text-emerald-600" : "text-red-500")}>
-                    {formatCurrency(row.in - row.out)}
+              {closes.map((row) => (
+                <tr key={row.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="px-5 py-3 font-medium">{row.closeDate}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{row.closedByName || "—"}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(row.expectedCash)}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(row.countedCash)}</td>
+                  <td className={cn("px-5 py-3 text-right font-semibold", row.variance === 0 ? "text-muted-foreground" : Math.abs(row.variance) > 5 ? "text-red-500" : "text-emerald-600")}>
+                    {formatCurrency(row.variance)}
                   </td>
                 </tr>
               ))}
@@ -538,11 +558,15 @@ function RegisterClosuresTab() {
 function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: string }) {
   const { data, isLoading } = useGetProfitLoss({ startDate, endDate });
 
+  // Date of the daily-breakdown row the user clicked to drill into; null = closed.
+  const [selectedDate, setSelectedDate] = useState<string | null>(null);
+
   const grossRevenue    = data?.grossRevenue    ?? 0;
   const exGstRevenue    = data?.exGstRevenue    ?? 0;
   const taxCollected    = data?.taxCollected    ?? 0;
   const totalCogs       = data?.totalCogs       ?? 0;
   const netProfit       = data?.netProfit       ?? 0;
+  const surchargeCost   = data?.surchargeCost   ?? 0;
   const grossMarginPct  = data?.grossMarginPct  ?? 0;
   const refundTotal     = data?.refundTotal     ?? 0;
   const discountTotal   = data?.discountTotal   ?? 0;
@@ -553,15 +577,20 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
   const cogsShare  = exGstRevenue > 0 ? (totalCogs / exGstRevenue) * 100 : 0;
   const taxShare   = netRevenue   > 0 ? (taxCollected / netRevenue) * 100 : 0;
 
+  // Accurate P&L waterfall. Gross Revenue is the GST-inclusive amount actually
+  // charged (already net of discounts), so discounts/refunds are NOT subtracted
+  // again here — they're shown separately below for reference. Net Profit ties
+  // exactly to the backend: Revenue (ex-GST) − COGS.
   const plRows = [
-    { label: "Gross Revenue",         value: grossRevenue,   positive: true                    },
-    { label: "Refunds",               value: -refundTotal,   positive: false                   },
-    { label: "Discounts Applied",     value: -discountTotal, positive: false                   },
-    { label: "Net Revenue",           value: netRevenue - discountTotal, positive: true, bold: true },
-    { label: "GST Collected",         value: -taxCollected,  positive: false                   },
-    { label: "Revenue (ex-GST)",      value: exGstRevenue,   positive: true,  bold: true       },
-    { label: "True COGS",             value: -totalCogs,     positive: false                   },
-    { label: "Net Profit",            value: netProfit,      positive: netProfit >= 0, bold: true, accent: true },
+    { label: "Gross Revenue (incl. GST)", value: grossRevenue,  bold: false },
+    { label: "GST Collected",             value: -taxCollected, bold: false },
+    { label: "Revenue (ex-GST)",          value: exGstRevenue,  bold: true  },
+    { label: "True COGS",                 value: -totalCogs,    bold: false },
+    // Only shown when the merchant absorbs surcharges, to avoid clutter otherwise.
+    ...(surchargeCost > 0
+      ? [{ label: "Payment surcharges (absorbed)", value: -surchargeCost, bold: false }]
+      : []),
+    { label: "Net Profit",                value: netProfit,     bold: true, accent: true },
   ];
 
   /* chart: show net profit per day as a bar */
@@ -650,6 +679,21 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
                   </tbody>
                 </table>
               )}
+              {/* Refunds & discounts are already reflected in the figures above;
+                  shown here for reference, not as part of the profit waterfall. */}
+              {!isLoading && (refundTotal > 0 || discountTotal > 0) && (
+                <div className="px-5 py-3 border-t text-xs text-muted-foreground space-y-1">
+                  <p className="font-medium text-muted-foreground/80">For reference (already reflected above)</p>
+                  <div className="flex justify-between">
+                    <span>Refunds processed</span>
+                    <span className="tabular-nums">{formatCurrency(refundTotal)}</span>
+                  </div>
+                  <div className="flex justify-between">
+                    <span>Discounts given</span>
+                    <span className="tabular-nums">{formatCurrency(discountTotal)}</span>
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* ── Margin breakdown bars ───────────────────────────────────── */}
@@ -684,7 +728,7 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
           {/* ── Daily breakdown table ───────────────────────────────────────── */}
           {dailyRows.length > 0 && (
             <div className="rounded-xl border bg-card overflow-hidden">
-              <SectionHeader title="Daily Breakdown" />
+              <SectionHeader title="Daily Breakdown" action={<span className="text-xs text-muted-foreground">Click a day to see its sales &amp; products</span>} />
               <table className="w-full text-sm">
                 <thead>
                   <tr className="bg-muted/30 border-b">
@@ -694,11 +738,20 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">GST</th>
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">COGS</th>
                     <th className="text-right px-5 py-3 font-medium text-muted-foreground">Net Profit</th>
+                    <th className="px-3 py-3 w-8" aria-hidden="true" />
                   </tr>
                 </thead>
                 <tbody>
                   {dailyRows.map((row) => (
-                    <tr key={row.date} className="border-b last:border-0 hover:bg-muted/20">
+                    <tr
+                      key={row.date}
+                      onClick={() => setSelectedDate(row.date)}
+                      onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); setSelectedDate(row.date); } }}
+                      tabIndex={0}
+                      role="button"
+                      title={`View sales & products sold on ${row.date}`}
+                      className="group border-b last:border-0 cursor-pointer hover:bg-muted/30 focus:bg-muted/30 focus:outline-none"
+                    >
                       <td className="px-5 py-3 text-muted-foreground font-mono text-xs">{row.date}</td>
                       <td className="px-5 py-3 text-right text-muted-foreground">{row.transactionCount.toLocaleString()}</td>
                       <td className="px-5 py-3 text-right font-medium">{formatCurrency(row.grossRevenue)}</td>
@@ -707,12 +760,332 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
                       <td className={cn("px-5 py-3 text-right font-semibold", row.netProfit >= 0 ? "text-emerald-600" : "text-red-500")}>
                         {formatCurrency(row.netProfit)}
                       </td>
+                      <td className="px-3 py-3 text-right">
+                        <ChevronRight className="w-4 h-4 text-muted-foreground/40 group-hover:text-muted-foreground transition-colors" />
+                      </td>
                     </tr>
                   ))}
                 </tbody>
               </table>
             </div>
           )}
+
+          <DailySalesDetailDialog
+            date={selectedDate}
+            onOpenChange={(open) => { if (!open) setSelectedDate(null); }}
+          />
+        </>
+      )}
+    </div>
+  );
+}
+
+/* ── Drill-down: all sales & products sold on a single day ─────────────────── */
+
+function DailySalesDetailDialog({
+  date, onOpenChange,
+}: {
+  date: string | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  // Fetch the day's transactions only while the dialog is open. The backend
+  // filters by date range; we also pin to the exact day client-side so a
+  // boundary-inclusive `to` can't leak adjacent days into the list.
+  const txParams = { from: date ?? undefined, to: date ?? undefined, limit: 500 };
+  const { data, isLoading } = useListTransactions(
+    txParams,
+    { query: { enabled: !!date, queryKey: getListTransactionsQueryKey(txParams) } },
+  );
+
+  const txs = useMemo(
+    () => (data?.items ?? []).filter((tx) => (tx.createdAt ?? "").slice(0, 10) === date),
+    [data, date],
+  );
+
+  // Aggregate line items across the day into "products sold", ranked by revenue.
+  const products = useMemo(() => {
+    const map = new Map<string, { name: string; quantity: number; revenue: number }>();
+    for (const tx of txs) {
+      for (const it of tx.items ?? []) {
+        const key  = `${it.productId}|${it.productName}`;
+        const prev = map.get(key) ?? { name: it.productName, quantity: 0, revenue: 0 };
+        prev.quantity += it.quantity;
+        prev.revenue  += it.totalPrice;
+        map.set(key, prev);
+      }
+    }
+    return [...map.values()].sort((a, b) => b.revenue - a.revenue);
+  }, [txs]);
+
+  const totalRevenue = txs.reduce((s, tx) => s + tx.total, 0);
+  const unitsSold    = products.reduce((s, p) => s + p.quantity, 0);
+
+  return (
+    <Dialog open={!!date} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
+        <DialogHeader>
+          <DialogTitle>Sales on {date}</DialogTitle>
+          <DialogDescription>
+            {isLoading
+              ? "Loading…"
+              : `${txs.length.toLocaleString()} transaction${txs.length !== 1 ? "s" : ""} · ${unitsSold.toLocaleString()} item${unitsSold !== 1 ? "s" : ""} sold · ${formatCurrency(totalRevenue)}`}
+          </DialogDescription>
+        </DialogHeader>
+
+        {isLoading ? (
+          <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2">
+            <RefreshCw className="w-4 h-4 animate-spin" /> Loading day…
+          </div>
+        ) : txs.length === 0 ? (
+          <div className="flex flex-col items-center py-14 gap-3">
+            <Receipt className="w-10 h-10 text-muted-foreground/30" />
+            <p className="text-sm text-muted-foreground">No transactions recorded on this day.</p>
+          </div>
+        ) : (
+          <div className="space-y-6">
+            {/* Products sold */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b">
+                <ShoppingCart className="w-4 h-4 text-muted-foreground" />
+                <p className="font-semibold text-sm">Products Sold</p>
+                <ExportBtn
+                  filename={`products-sold-${date}`}
+                  rows={products as unknown as Record<string, unknown>[]}
+                  columns={[{ key: "name", label: "Product" }, { key: "quantity", label: "Qty" }, { key: "revenue", label: "Revenue" }]}
+                />
+              </div>
+              {products.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">No products on this day.</p>
+              ) : (
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="bg-muted/30 border-b">
+                      <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Product</th>
+                      <th className="text-right px-5 py-2.5 font-medium text-muted-foreground">Qty</th>
+                      <th className="text-right px-5 py-2.5 font-medium text-muted-foreground">Revenue</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {products.map((p, i) => (
+                      <tr key={i} className="border-b last:border-0 hover:bg-muted/20">
+                        <td className="px-5 py-2.5">{p.name}</td>
+                        <td className="px-5 py-2.5 text-right text-muted-foreground">{p.quantity.toLocaleString()}</td>
+                        <td className="px-5 py-2.5 text-right font-medium">{formatCurrency(p.revenue)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+
+            {/* All sales */}
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <div className="flex items-center gap-2 px-5 py-3 border-b">
+                <Receipt className="w-4 h-4 text-muted-foreground" />
+                <p className="font-semibold text-sm">All Sales</p>
+              </div>
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Receipt</th>
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Time</th>
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground hidden sm:table-cell">Payment</th>
+                    <th className="text-left  px-5 py-2.5 font-medium text-muted-foreground">Status</th>
+                    <th className="text-right px-5 py-2.5 font-medium text-muted-foreground">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {txs.map((tx) => {
+                    const itemSummary = (tx.items ?? [])
+                      .map((it) => `${it.quantity}× ${it.productName}`)
+                      .join(", ");
+                    return (
+                      <tr key={tx.id} className="border-b last:border-0 hover:bg-muted/20 align-top">
+                        <td className="px-5 py-2.5">
+                          <div className="font-mono text-xs">{tx.receiptNumber || `#${tx.id}`}</div>
+                          {itemSummary && (
+                            <div className="text-xs text-muted-foreground/70 mt-0.5 max-w-xs truncate" title={itemSummary}>{itemSummary}</div>
+                          )}
+                        </td>
+                        <td className="px-5 py-2.5 text-muted-foreground whitespace-nowrap">
+                          {tx.createdAt ? new Date(tx.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : "—"}
+                        </td>
+                        <td className="px-5 py-2.5 text-muted-foreground capitalize hidden sm:table-cell">{tx.paymentMethod.replace(/_/g, " ")}</td>
+                        <td className="px-5 py-2.5">
+                          <Badge variant={tx.status === "completed" ? "secondary" : "outline"} className="capitalize">{tx.status.replace(/_/g, " ")}</Badge>
+                        </td>
+                        <td className="px-5 py-2.5 text-right font-medium whitespace-nowrap">{formatCurrency(tx.total)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+/* ─── Tab: Cost of Goods ─────────────────────────────────────────────────── */
+
+function fmtMonth(m: string): string {
+  const [y, mo] = m.split("-");
+  if (!y || !mo) return m;
+  return new Date(Number(y), Number(mo) - 1, 1).toLocaleDateString("en-AU", { month: "short", year: "2-digit" });
+}
+
+function CostOfGoodsTab({ startDate, endDate }: { startDate: string; endDate: string }) {
+  const { data, isLoading } = useGetCostOfGoods({ startDate, endDate });
+
+  const totals    = data?.totals;
+  const monthly   = data?.monthly   ?? [];
+  const suppliers = data?.suppliers ?? [];
+
+  const cogsSold      = totals?.cogsSold          ?? 0;
+  const purchaseSpend = totals?.purchaseSpend     ?? 0;
+  const goodsSpend    = totals?.goodsSpend        ?? 0;
+  const shippingCost  = totals?.shippingCost      ?? 0;
+  const poCount       = totals?.purchaseOrderCount ?? 0;
+
+  const chartData = monthly.map((m) => ({
+    label:         fmtMonth(m.month),
+    cogsSold:      m.cogsSold,
+    purchaseSpend: m.purchaseSpend,
+    shippingCost:  m.shippingCost,
+  }));
+
+  const hasData = monthly.length > 0 || suppliers.length > 0;
+
+  return (
+    <div className="space-y-5">
+      {/* ── KPI strip ──────────────────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+        <KpiTile label="COGS Sold"      value={isLoading ? "—" : formatCurrency(cogsSold)}      sub="Cost of items sold" accent />
+        <KpiTile label="Purchase Spend" value={isLoading ? "—" : formatCurrency(purchaseSpend)} sub={`${poCount.toLocaleString()} purchase order${poCount !== 1 ? "s" : ""}`} />
+        <KpiTile label="Goods Cost"     value={isLoading ? "—" : formatCurrency(goodsSpend)}    sub="Stock purchased (ex shipping)" />
+        <KpiTile label="Shipping Cost"  value={isLoading ? "—" : formatCurrency(shippingCost)}  sub="Delivery on purchase orders" />
+        <KpiTile label="Suppliers"      value={isLoading ? "—" : suppliers.length.toLocaleString()} sub="With spend in range" />
+      </div>
+
+      {/* empty state */}
+      {!isLoading && !hasData && (
+        <div className="rounded-xl border bg-card flex flex-col items-center py-16 gap-3">
+          <Package className="w-12 h-12 text-muted-foreground/25" />
+          <p className="text-sm font-medium text-muted-foreground">No cost-of-goods data for this period.</p>
+          <p className="text-xs text-muted-foreground/70">Record sales or purchase orders, or widen the date range.</p>
+        </div>
+      )}
+
+      {(isLoading || hasData) && (
+        <>
+          {/* ── Monthly spend ────────────────────────────────────────────── */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title="Monthly Spend" action={<ExportBtn filename="cost-of-goods-monthly" rows={monthly as unknown as Record<string, unknown>[]} columns={[{ key: "month", label: "Month" }, { key: "cogsSold", label: "COGS Sold" }, { key: "cogsPos", label: "COGS POS" }, { key: "cogsInvoice", label: "COGS Invoices" }, { key: "cogsLayby", label: "COGS Laybys" }, { key: "goodsSpend", label: "PO Goods" }, { key: "shippingCost", label: "Shipping" }, { key: "purchaseSpend", label: "PO Total" }, { key: "purchaseOrderCount", label: "PO Count" }]} />} />
+            <div className="p-5">
+              {isLoading ? (
+                <div className="h-44 flex items-center justify-center text-muted-foreground text-sm gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Loading…</div>
+              ) : chartData.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-10">No monthly data for this period.</p>
+              ) : (
+                <div className="h-44">
+                  <ResponsiveContainer width="100%" height="100%">
+                    <BarChart data={chartData} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+                      <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                      <XAxis dataKey="label" stroke="hsl(var(--muted-foreground))" fontSize={11} tickLine={false} axisLine={false} />
+                      <YAxis stroke="hsl(var(--muted-foreground))" fontSize={10} tickLine={false} axisLine={false} tickFormatter={(v) => `$${v}`} />
+                      <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} formatter={(v: number) => formatCurrency(v)} />
+                      <Legend wrapperStyle={{ fontSize: 11 }} />
+                      <Bar dataKey="cogsSold"      name="COGS Sold"      fill="hsl(var(--primary))" radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="purchaseSpend" name="Purchase Spend" fill="#f59e0b"             radius={[2, 2, 0, 0]} />
+                      <Bar dataKey="shippingCost"  name="Shipping"       fill="#94a3b8"             radius={[2, 2, 0, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                </div>
+              )}
+            </div>
+            {monthly.length > 0 && (
+              <table className="w-full text-sm border-t">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Month</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">COGS Sold</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">PO Goods</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Shipping</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Purchase Spend</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden sm:table-cell">POs</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {monthly.map((m) => (
+                    <tr key={m.month} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-5 py-3 font-medium">{fmtMonth(m.month)}</td>
+                      <td className="px-5 py-3 text-right">{formatCurrency(m.cogsSold)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{formatCurrency(m.goodsSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground">{formatCurrency(m.shippingCost)}</td>
+                      <td className="px-5 py-3 text-right font-medium">{formatCurrency(m.purchaseSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden sm:table-cell">{m.purchaseOrderCount.toLocaleString()}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            )}
+          </div>
+
+          {/* ── Spend by supplier: bought-from (POs) vs sold-of (COGS) ───── */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title="Spend by Supplier" action={<ExportBtn filename="cost-of-goods-suppliers" rows={suppliers as unknown as Record<string, unknown>[]} columns={[{ key: "supplierName", label: "Supplier" }, { key: "purchaseOrderCount", label: "POs" }, { key: "itemsOrdered", label: "Items" }, { key: "goodsSpend", label: "Goods" }, { key: "shippingCost", label: "Shipping" }, { key: "purchaseSpend", label: "Purchase Spend" }, { key: "soldCogs", label: "Sold COGS" }]} />} />
+            <p className="px-5 py-2.5 text-xs text-muted-foreground border-b bg-muted/10">
+              <strong className="text-foreground/70">Purchase Spend</strong> = bought from the supplier (purchase orders, incl. shipping). <strong className="text-foreground/70">Sold COGS</strong> = cost of goods sold for products assigned to that supplier.
+            </p>
+            {isLoading ? (
+              <div className="py-12 flex items-center justify-center text-muted-foreground text-sm gap-2"><RefreshCw className="w-4 h-4 animate-spin" /> Loading…</div>
+            ) : suppliers.length === 0 ? (
+              <div className="flex flex-col items-center py-14 gap-3">
+                <Package className="w-10 h-10 text-muted-foreground/30" />
+                <p className="text-sm text-muted-foreground">No supplier activity in this period.</p>
+              </div>
+            ) : (
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="bg-muted/30 border-b">
+                    <th className="text-left  px-5 py-3 font-medium text-muted-foreground">Supplier</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden sm:table-cell">POs</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden md:table-cell">Items</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden lg:table-cell">Goods</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground hidden lg:table-cell">Shipping</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Purchase Spend</th>
+                    <th className="text-right px-5 py-3 font-medium text-muted-foreground">Sold COGS</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {suppliers.map((s) => (
+                    <tr key={s.supplierName} className="border-b last:border-0 hover:bg-muted/20">
+                      <td className="px-5 py-3 font-medium">{s.supplierName}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden sm:table-cell">{s.purchaseOrderCount.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden md:table-cell">{s.itemsOrdered.toLocaleString()}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{formatCurrency(s.goodsSpend)}</td>
+                      <td className="px-5 py-3 text-right text-muted-foreground hidden lg:table-cell">{formatCurrency(s.shippingCost)}</td>
+                      <td className="px-5 py-3 text-right font-semibold">{formatCurrency(s.purchaseSpend)}</td>
+                      <td className="px-5 py-3 text-right font-semibold">{formatCurrency(s.soldCogs)}</td>
+                    </tr>
+                  ))}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-muted/20 border-t font-semibold">
+                    <td className="px-5 py-3">Total</td>
+                    <td className="px-5 py-3 text-right hidden sm:table-cell">{poCount.toLocaleString()}</td>
+                    <td className="px-5 py-3 text-right hidden md:table-cell">—</td>
+                    <td className="px-5 py-3 text-right hidden lg:table-cell">{formatCurrency(goodsSpend)}</td>
+                    <td className="px-5 py-3 text-right hidden lg:table-cell">{formatCurrency(shippingCost)}</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(purchaseSpend)}</td>
+                    <td className="px-5 py-3 text-right">{formatCurrency(cogsSold)}</td>
+                  </tr>
+                </tfoot>
+              </table>
+            )}
+          </div>
         </>
       )}
     </div>
@@ -722,8 +1095,8 @@ function ProfitLossTab({ startDate, endDate }: { startDate: string; endDate: str
 /* ─── Tab: Customer Insights ─────────────────────────────────────────────── */
 
 function CustomerInsightsTab() {
-  const { data, isLoading } = useListCustomers({ limit: 200 });
-  const customers = data?.items ?? [];
+  // Aggregate across the whole customer base, not a single capped page.
+  const { customers, isLoading } = useAllCustomers();
   const topBySpend   = [...customers].sort((a, b) => (b.totalSpent ?? 0) - (a.totalSpent ?? 0)).slice(0, 10);
   const topByLoyalty = [...customers].sort((a, b) => (b.loyaltyPoints ?? 0) - (a.loyaltyPoints ?? 0)).slice(0, 5);
   const totalSpend   = customers.reduce((s, c) => s + (c.totalSpent ?? 0), 0);
@@ -872,7 +1245,9 @@ function TopProductsTab({ apiPeriod }: { apiPeriod: GetDashboardSummaryPeriod })
 
 function UserActivityTab({ fromDate }: { fromDate: string }) {
   const { data: staffData, isLoading: staffLoading } = useListStaff();
-  const { data: txData,    isLoading: txLoading    } = useListTransactions({ limit: 500 });
+  // Filter by date server-side (before the row limit) so the period's activity
+  // isn't crowded out by newer out-of-range transactions.
+  const { data: txData,    isLoading: txLoading    } = useListTransactions({ limit: 500, from: fromDate || undefined });
   const staff = staffData ?? [];
   const txs   = (txData?.items ?? []).filter((tx) => !fromDate || (tx.createdAt ?? "") >= fromDate);
 
@@ -1518,37 +1893,69 @@ function GstBasTab({ summary, summaryLoading }: {
 /* ─── Tab: Gift Cards ────────────────────────────────────────────────────── */
 
 function GiftCardsTab() {
+  const { data, isLoading } = useListGiftCards({ limit: 1000 });
+  const { data: settings } = useGetGiftCardSettings();
+  const cards = data?.items ?? [];
+
+  const issued      = cards.reduce((s, c) => s + (c.initialValue ?? 0), 0);
+  const redeemed    = cards.reduce((s, c) => s + Math.max(0, (c.initialValue ?? 0) - (c.currentBalance ?? 0)), 0);
+  const outstanding = cards.reduce((s, c) => s + (c.status !== "expired" ? (c.currentBalance ?? 0) : 0), 0);
+  const expired     = cards.reduce((s, c) => s + (c.status === "expired" ? (c.currentBalance ?? 0) : 0), 0);
+
   return (
     <div className="space-y-5">
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
-        <KpiTile label="Cards Issued" value="0" sub="Total issued" accent />
-        <KpiTile label="Outstanding Balance" value={formatCurrency(0)} sub="Unredeemed value" />
-        <KpiTile label="Redeemed" value={formatCurrency(0)} sub="Lifetime" />
+        <KpiTile label="Cards Issued" value={isLoading ? "—" : cards.length.toString()} sub="Total issued" accent />
+        <KpiTile label="Outstanding Balance" value={isLoading ? "—" : formatCurrency(outstanding)} sub="Unredeemed liability" />
+        <KpiTile label="Redeemed" value={isLoading ? "—" : formatCurrency(redeemed)} sub="Lifetime" />
       </div>
       <div className="rounded-xl border bg-card overflow-hidden">
-        <SectionHeader title="Gift Card Activity" action={
-          <Button size="sm" className="gap-1.5"><Plus className="w-3.5 h-3.5" /> Issue Card</Button>
-        } />
-        <div className="flex flex-col items-center py-16 gap-4">
-          <div className="w-16 h-16 rounded-2xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
-            <Gift className="w-8 h-8 text-pink-500" />
+        <SectionHeader title="Gift Card Activity" action={<ExportBtn />} />
+        {isLoading ? (
+          <p className="text-sm text-muted-foreground text-center py-12">Loading…</p>
+        ) : cards.length === 0 ? (
+          <div className="flex flex-col items-center py-16 gap-4">
+            <div className="w-16 h-16 rounded-2xl bg-pink-100 dark:bg-pink-900/30 flex items-center justify-center">
+              <Gift className="w-8 h-8 text-pink-500" />
+            </div>
+            <div className="text-center">
+              <p className="font-semibold text-lg">No gift cards yet</p>
+              <p className="text-sm text-muted-foreground mt-1 max-w-xs">Issue gift cards at the POS register. They'll appear here for tracking and reporting.</p>
+            </div>
           </div>
-          <div className="text-center">
-            <p className="font-semibold text-lg">No gift cards yet</p>
-            <p className="text-sm text-muted-foreground mt-1 max-w-xs">Issue gift cards at the POS register. They'll appear here for tracking and reporting.</p>
-          </div>
-          <Button variant="outline" size="sm">Learn about Gift Cards</Button>
-        </div>
+        ) : (
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="bg-muted/30 border-b">
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Card</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Issued To</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Initial</th>
+                <th className="text-right px-5 py-3 font-medium text-muted-foreground">Balance</th>
+                <th className="text-left px-5 py-3 font-medium text-muted-foreground">Status</th>
+              </tr>
+            </thead>
+            <tbody>
+              {cards.map((c) => (
+                <tr key={c.id} className="border-b last:border-0 hover:bg-muted/20">
+                  <td className="px-5 py-3 font-medium font-mono text-xs">{c.cardNumber}</td>
+                  <td className="px-5 py-3 text-muted-foreground">{c.issuedTo || "—"}</td>
+                  <td className="px-5 py-3 text-right">{formatCurrency(c.initialValue ?? 0)}</td>
+                  <td className="px-5 py-3 text-right font-medium">{formatCurrency(c.currentBalance ?? 0)}</td>
+                  <td className="px-5 py-3 capitalize text-muted-foreground">{c.status}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
       </div>
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
         <div className="rounded-xl border bg-card p-5 space-y-3">
           <p className="font-semibold">Configuration</p>
           <div className="space-y-3">
             {[
-              { label: "Expiry Period",  value: "Never"  },
-              { label: "Min. Value",     value: "$5.00"  },
-              { label: "Max. Value",     value: "$500.00"},
-              { label: "Partial Redemption", value: "Enabled" },
+              { label: "Expiry Period",      value: settings?.expiryMonths ? `${settings.expiryMonths} months` : "Never" },
+              { label: "Partial Redemption", value: settings?.allowPartialRedemptions === "false" ? "Disabled" : "Enabled" },
+              { label: "Card Prefix",        value: settings?.prefix || "—" },
             ].map((r) => (
               <div key={r.label} className="flex justify-between text-sm border-b pb-2 last:border-0 last:pb-0">
                 <span className="text-muted-foreground">{r.label}</span>
@@ -1561,10 +1968,10 @@ function GiftCardsTab() {
           <p className="font-semibold">Liability Summary</p>
           <p className="text-xs text-muted-foreground">Total outstanding gift card balances represent a liability on your books.</p>
           {[
-            { label: "Issued (all time)",  value: formatCurrency(0) },
-            { label: "Redeemed (all time)",value: formatCurrency(0) },
-            { label: "Expired",            value: formatCurrency(0) },
-            { label: "Outstanding (Liability)", value: formatCurrency(0) },
+            { label: "Issued (all time)",       value: formatCurrency(issued) },
+            { label: "Redeemed (all time)",     value: formatCurrency(redeemed) },
+            { label: "Expired",                 value: formatCurrency(expired) },
+            { label: "Outstanding (Liability)", value: formatCurrency(outstanding) },
           ].map((r) => (
             <div key={r.label} className="flex justify-between text-sm border-b pb-2 last:border-0 last:pb-0">
               <span className="text-muted-foreground">{r.label}</span>
@@ -1581,8 +1988,7 @@ function GiftCardsTab() {
 
 function StoreCreditTab() {
   const { data: loyaltyData } = useGetLoyaltySettings();
-  const { data: customerData, isLoading } = useListCustomers({ limit: 200 });
-  const customers    = customerData?.items ?? [];
+  const { customers, isLoading } = useAllCustomers();
   const totalPoints  = customers.reduce((s, c) => s + (c.loyaltyPoints ?? 0), 0);
   const dollarValue  = loyaltyData?.pointsPerDollar
     ? totalPoints / Number(loyaltyData.pointsPerDollar)
@@ -1676,10 +2082,13 @@ function _groupByDay(items: { createdAt: string }[], days = 30): Record<string, 
   const now = new Date();
   for (let i = days - 1; i >= 0; i--) {
     const d = new Date(now); d.setDate(d.getDate() - i);
-    result[d.toISOString().split("T")[0]] = 0;
+    result[toISO(d)] = 0; // local-date key, matching how records are bucketed below
   }
   for (const item of items) {
-    const day = (item.createdAt ?? "").split("T")[0];
+    // createdAt is a UTC ISO timestamp — convert to the LOCAL day so evening
+    // events (post-2pm UTC = post-midnight AEST) land in the right bucket.
+    if (!item.createdAt) continue;
+    const day = toISO(new Date(item.createdAt));
     if (day in result) result[day]++;
   }
   return result;
@@ -1695,7 +2104,181 @@ function _countBy<T>(items: T[], key: (x: T) => string): { name: string; value: 
 
 const _CHART_COLORS = ["#6366f1", "#22c55e", "#f59e0b", "#ec4899", "#8b5cf6", "#06b6d4", "#f97316", "#14b8a6"];
 
-function AnalyticsTab() {
+/* ─── Marketing engagement (real scans / clicks / views) ──────────────────── */
+
+interface MktAnalytics {
+  days: number;
+  totals: { total: number; unique: number; shortlink: number; landing: number; qr: number };
+  byDay: { date: string; shortlink: number; landing: number; qr: number }[];
+  byDevice: { name: string; value: number }[];
+  byCountry: { name: string; value: number }[];
+  topTargets: { kind: string; slug: string; count: number }[];
+}
+
+const _DEVICE_LABEL: Record<string, string> = {
+  mobile: "Mobile", tablet: "Tablet", desktop: "Desktop", bot: "Bot", unknown: "Unknown",
+};
+
+function EngagementAnalytics() {
+  const [days, setDays] = useState(30);
+  const { data, isLoading } = useQuery<MktAnalytics>({
+    queryKey: ["marketing-analytics", days],
+    queryFn: async () => {
+      const r = await fetch(`/api/marketing-analytics?days=${days}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load analytics");
+      return r.json() as Promise<MktAnalytics>;
+    },
+    staleTime: 60_000,
+  });
+
+  // Build a continuous date axis for the window from the sparse per-day rows.
+  const series = useMemo(() => {
+    const map = new Map((data?.byDay ?? []).map((d) => [d.date, d]));
+    const out: { label: string; Scans: number; Clicks: number; Views: number }[] = [];
+    const today = new Date();
+    for (let i = days - 1; i >= 0; i--) {
+      const dt = new Date(today);
+      dt.setDate(today.getDate() - i);
+      const key = `${dt.getFullYear()}-${String(dt.getMonth() + 1).padStart(2, "0")}-${String(dt.getDate()).padStart(2, "0")}`;
+      const e = map.get(key);
+      out.push({
+        label: dt.toLocaleDateString("en-AU", { day: "numeric", month: "short" }),
+        Clicks: e?.shortlink ?? 0,
+        Views: e?.landing ?? 0,
+        Scans: e?.qr ?? 0,
+      });
+    }
+    return out;
+  }, [data, days]);
+
+  const totals = data?.totals;
+  const hasData = (totals?.total ?? 0) > 0;
+
+  const periodBtn = (d: number, label: string) => (
+    <button
+      key={d}
+      onClick={() => setDays(d)}
+      className={cn("px-2.5 py-1 rounded-md text-xs font-medium transition-colors",
+        days === d ? "bg-primary text-primary-foreground" : "border text-muted-foreground hover:bg-muted/50")}
+    >{label}</button>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between flex-wrap gap-2">
+        <div>
+          <h2 className="text-lg font-semibold">Engagement</h2>
+          <p className="text-xs text-muted-foreground">Real scans, clicks &amp; views — device and location where the network provides it.</p>
+        </div>
+        <div className="flex items-center gap-1.5">{periodBtn(7, "7d")}{periodBtn(30, "30d")}{periodBtn(90, "90d")}</div>
+      </div>
+
+      {isLoading ? (
+        <div className="rounded-xl border bg-card p-10 text-center text-sm text-muted-foreground">Loading engagement…</div>
+      ) : !hasData ? (
+        <div className="rounded-xl border bg-card p-8 text-center text-sm text-muted-foreground">
+          No scans, clicks, or views recorded in this period yet. Engagement appears here once people use your
+          shortlinks, landing pages, or <span className="font-medium text-foreground">trackable</span> QR codes.
+        </div>
+      ) : (
+        <>
+          {/* KPI tiles */}
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
+            <KpiTile label="Total Engagements" value={(totals?.total ?? 0).toLocaleString()} sub={`Last ${days} days`} accent />
+            <KpiTile label="Unique Visitors" value={(totals?.unique ?? 0).toLocaleString()} sub="Approx. (by network)" />
+            <KpiTile label="QR Scans" value={(totals?.qr ?? 0).toLocaleString()} sub="Trackable QRs" />
+            <KpiTile label="Shortlink Clicks" value={(totals?.shortlink ?? 0).toLocaleString()} sub="koast.al links" />
+            <KpiTile label="Landing Views" value={(totals?.landing ?? 0).toLocaleString()} sub="Public pages" />
+          </div>
+
+          {/* Engagement over time */}
+          <div className="rounded-xl border bg-card overflow-hidden">
+            <SectionHeader title={`Engagement — Last ${days} Days`} />
+            <div className="p-5">
+              <ResponsiveContainer width="100%" height={220}>
+                <AreaChart data={series}>
+                  <defs>
+                    <linearGradient id="gScans" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#6366f1" stopOpacity={0.3} /><stop offset="95%" stopColor="#6366f1" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="gClicks" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#22c55e" stopOpacity={0.3} /><stop offset="95%" stopColor="#22c55e" stopOpacity={0} /></linearGradient>
+                    <linearGradient id="gViews" x1="0" y1="0" x2="0" y2="1"><stop offset="5%" stopColor="#f59e0b" stopOpacity={0.3} /><stop offset="95%" stopColor="#f59e0b" stopOpacity={0} /></linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="hsl(var(--border))" />
+                  <XAxis dataKey="label" tick={{ fontSize: 10 }} tickLine={false} axisLine={false}
+                    interval={Math.max(0, Math.floor(series.length / 6))} />
+                  <YAxis allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={24} />
+                  <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                  <Legend wrapperStyle={{ fontSize: 11 }} />
+                  <Area type="monotone" dataKey="Scans" stroke="#6366f1" fill="url(#gScans)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Clicks" stroke="#22c55e" fill="url(#gClicks)" strokeWidth={2} />
+                  <Area type="monotone" dataKey="Views" stroke="#f59e0b" fill="url(#gViews)" strokeWidth={2} />
+                </AreaChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+
+          {/* Devices + Countries */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="By Device" />
+              <div className="p-5">
+                <ResponsiveContainer width="100%" height={220}>
+                  <PieChart>
+                    <Pie data={(data?.byDevice ?? []).map((d) => ({ name: _DEVICE_LABEL[d.name] ?? d.name, value: d.value }))}
+                      dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} innerRadius={45} paddingAngle={2}>
+                      {(data?.byDevice ?? []).map((_, i) => <Cell key={i} fill={_CHART_COLORS[i % _CHART_COLORS.length]} />)}
+                    </Pie>
+                    <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                    <Legend wrapperStyle={{ fontSize: 11 }} />
+                  </PieChart>
+                </ResponsiveContainer>
+              </div>
+            </div>
+
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="By Location" />
+              <div className="p-5">
+                {(data?.byCountry ?? []).length === 0 ? (
+                  <div className="flex flex-col items-center py-10 gap-2 text-muted-foreground">
+                    <Globe className="w-8 h-8 opacity-20" />
+                    <p className="text-sm text-center">No location data.<br />The host network isn't passing geo headers.</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={220}>
+                    <BarChart data={data?.byCountry ?? []} layout="vertical" barSize={14}>
+                      <CartesianGrid strokeDasharray="3 3" horizontal={false} stroke="hsl(var(--border))" />
+                      <XAxis type="number" allowDecimals={false} tick={{ fontSize: 10 }} tickLine={false} axisLine={false} />
+                      <YAxis type="category" dataKey="name" tick={{ fontSize: 10 }} tickLine={false} axisLine={false} width={70} />
+                      <Tooltip contentStyle={TOOLTIP_CONTENT_STYLE} itemStyle={TOOLTIP_ITEM_STYLE} />
+                      <Bar dataKey="value" name="Engagements" fill="#06b6d4" radius={[0, 4, 4, 0]} />
+                    </BarChart>
+                  </ResponsiveContainer>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Top targets */}
+          {(data?.topTargets ?? []).length > 0 && (
+            <div className="rounded-xl border bg-card overflow-hidden">
+              <SectionHeader title="Top Performing" />
+              <div className="divide-y">
+                {(data?.topTargets ?? []).map((t, i) => (
+                  <div key={i} className="flex items-center gap-3 px-5 py-2.5 text-sm">
+                    <Badge variant="outline" className="text-[10px] capitalize">{t.kind}</Badge>
+                    <span className="flex-1 truncate font-medium">{t.slug}</span>
+                    <span className="tabular-nums text-muted-foreground">{t.count.toLocaleString()}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+export function AnalyticsTab() {
   const { data: qrResp }    = useListQrCodes();
   const { data: linksResp } = useListShortlinks();
   const { data: pagesResp } = useListLandingPages();
@@ -1733,7 +2316,14 @@ function AnalyticsTab() {
   }
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-8">
+
+      {/* ── Real engagement (scans / clicks / views with device + location) ── */}
+      <EngagementAnalytics />
+
+      {/* ── Assets created (counts + styles) ── */}
+      <div className="space-y-6">
+      <h2 className="text-lg font-semibold">Your marketing assets</h2>
 
       {/* ── KPI tiles ── */}
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
@@ -1956,6 +2546,7 @@ function AnalyticsTab() {
         </div>
       )}
 
+      </div>
     </div>
   );
 }
@@ -1964,12 +2555,14 @@ function AnalyticsTab() {
 
 export default function ReportsPage() {
   const [activeTab, setActiveTab] = useState<ReportTabId>("sales");
-  const [preset, setPreset]       = useState<Preset>("30");
-  const init                      = presetDates("30");
+  const [preset, setPreset]       = useState<Preset>("month");
+  const init                      = presetDates("month");
   const [fromDate, setFromDate]   = useState(init.from);
   const [toDate,   setToDate]     = useState(init.to);
-  const [apiPeriod, setApiPeriod] = useState<GetDashboardSummaryPeriod>(presetToApiPeriod("30"));
+  const [apiPeriod, setApiPeriod] = useState<GetDashboardSummaryPeriod>(presetToApiPeriod("month"));
   const [refreshKey, setRefresh]  = useState(0);
+  // Compare the current period's KPIs against the previous equivalent period.
+  const [compare, setCompare]     = useState(false);
 
   useEffect(() => {
     const hash = window.location.hash.replace("#", "") as ReportTabId;
@@ -1988,20 +2581,23 @@ export default function ReportsPage() {
     setRefresh((k) => k + 1);
   };
 
+  // Month is treated as calendar month-to-date (1st → today) for both KPIs & chart.
+  const monthMode = apiPeriod === "month" ? "calendar_mtd" as const : undefined;
   const { data: summary, isLoading: summaryLoading } = useGetDashboardSummary(
-    { period: apiPeriod },
-    { query: { queryKey: ["reports-summary", apiPeriod, refreshKey] } },
+    { period: apiPeriod, ...(monthMode ? { monthMode } : {}), ...(compare ? { compare: true } : {}) },
+    { query: { queryKey: ["reports-summary", apiPeriod, refreshKey, compare] } },
   );
   const safeChartPeriod = (apiPeriod === "today" || apiPeriod === "yesterday") ? "week" : apiPeriod;
   const { data: chartData, isLoading: chartLoading } = useGetSalesChart(
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    { period: safeChartPeriod as any },
+    { period: safeChartPeriod as any, ...(monthMode ? { monthMode } : {}) },
     { query: { queryKey: ["reports-chart", apiPeriod, refreshKey] } },
   );
 
   const totalSales   = summary?.totalSales       ?? 0;
   const txCount      = summary?.transactionCount ?? 0;
   const avgSaleValue = txCount > 0 ? totalSales / txCount : 0;
+  const prev         = (compare ? summary?.previous : null) ?? null;
 
   return (
     <AppLayout>
@@ -2029,7 +2625,7 @@ export default function ReportsPage() {
                   "px-3 py-1.5 rounded-lg text-sm font-medium transition-colors border",
                   preset === p.id
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-background hover:bg-muted text-foreground border-border",
+                    : "pill-selector bg-background hover:bg-muted text-foreground border-border",
                 )}
               >
                 {p.label}
@@ -2043,6 +2639,12 @@ export default function ReportsPage() {
             <Button variant="outline" size="sm" className="gap-1.5 h-8" onClick={handleRefresh}>
               <RefreshCw className="w-3.5 h-3.5" /> Refresh
             </Button>
+            {activeTab === "sales" && (
+              <label className="flex items-center gap-2 rounded-lg border px-3 h-8 text-sm cursor-pointer select-none">
+                <Switch checked={compare} onCheckedChange={setCompare} className="scale-90" />
+                Compare
+              </label>
+            )}
           </div>
         </div>
 
@@ -2056,7 +2658,7 @@ export default function ReportsPage() {
                 "inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors",
                 activeTab === id
                   ? "bg-primary text-primary-foreground"
-                  : "text-muted-foreground hover:text-foreground hover:bg-muted",
+                  : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted",
               )}
             >
               <Icon className="w-3.5 h-3.5" />
@@ -2066,11 +2668,12 @@ export default function ReportsPage() {
         </div>
 
         {/* ── Tab content ──────────────────────────────────────────────────── */}
-        {activeTab === "sales"             && <SalesTab summary={summary} summaryLoading={summaryLoading} chartData={chartData} chartLoading={chartLoading} totalSales={totalSales} txCount={txCount} avgSaleValue={avgSaleValue} />}
+        {activeTab === "sales"             && <SalesTab summary={summary} summaryLoading={summaryLoading} chartData={chartData} chartLoading={chartLoading} totalSales={totalSales} txCount={txCount} avgSaleValue={avgSaleValue} prev={prev} />}
         {activeTab === "payments"          && <PaymentsTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "inventory"         && <InventoryTab />}
         {activeTab === "register-closures" && <RegisterClosuresTab />}
         {activeTab === "profit-loss"       && <ProfitLossTab startDate={fromDate} endDate={toDate} />}
+        {activeTab === "cost-of-goods"     && <CostOfGoodsTab startDate={fromDate} endDate={toDate} />}
         {activeTab === "customer-insights" && <CustomerInsightsTab />}
         {activeTab === "top-products"      && <TopProductsTab apiPeriod={apiPeriod} />}
         {activeTab === "user-activity"     && <UserActivityTab fromDate={fromDate} />}
@@ -2081,7 +2684,6 @@ export default function ReportsPage() {
         {activeTab === "gst-bas"           && <GstBasTab summary={summary} summaryLoading={summaryLoading} />}
         {activeTab === "gift-cards"        && <GiftCardsTab />}
         {activeTab === "store-credit"      && <StoreCreditTab />}
-        {activeTab === "analytics"         && <AnalyticsTab />}
 
       </div>
     </AppLayout>

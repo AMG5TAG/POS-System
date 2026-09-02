@@ -15,8 +15,11 @@ import {
   type FormTemplate, type FormSubmission,
 } from "@/lib/forms-api";
 import { FormRenderer } from "./FormRenderer";
-import { useGetMerchant } from "@workspace/api-client-react";
+import { useGetMerchant, useGetPosSettings } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import { printDocument, printHtmlViaIframe } from "@/lib/print-router";
+import { buildFormPrintHtml } from "@/lib/print-form";
 
 interface Props {
   sourceType: "transaction" | "service_job" | "appointment" | "manual";
@@ -32,6 +35,8 @@ export function FormsAttachmentPanel({
   sourceType, sourceId, customerId, customerName, customerEmail, customerPhone, staffId,
 }: Props) {
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const { profile } = useBusinessProfile();
   const [selectedFormId, setSelectedFormId] = useState<string>("");
   const [fillingFormId, setFillingFormId] = useState<number | null>(null);
@@ -79,10 +84,37 @@ export function FormsAttachmentPanel({
     }
   };
 
-  const handlePrint = () => {
-    window.print();
+  /**
+   * Print one filled-in form as its own A4 document. This used to be a bare
+   * `window.print()`, which printed the entire app — sidebar, dialog overlay and
+   * all — and then claimed success whether or not anything reached a printer.
+   */
+  const printForm = (formId: number, data: Record<string, unknown>) => {
+    const form = forms.find(f => f.id === formId);
+    if (!form) { toast.error("That form is no longer available"); return; }
+
+    const html = buildFormPrintHtml({
+      form,
+      data,
+      business: businessProfile,
+      customer: { name: customerName, email: customerEmail, phone: customerPhone },
+    });
+
     setShowPrintSave(null);
-    toast.success("Sent to printer");
+    void printDocument({
+      purpose: "customerForm",
+      hw: hardware,
+      paper: "A4",
+      jobName: form.name,
+      html: () => html,
+      browserFallback: () => { printHtmlViaIframe(html); },
+    })
+      .then(method => {
+        // Only claim it printed when it actually went straight to a printer —
+        // the browser path just opens a dialog the operator can still cancel.
+        if (method !== "browser") toast.success("Form sent to the printer");
+      })
+      .catch(err => toast.error(err instanceof Error ? err.message : "Couldn't print this form"));
   };
 
   const handleSaveToProfile = () => {
@@ -195,7 +227,7 @@ export function FormsAttachmentPanel({
               staffMode
               isSubmitting={createSubmission.isPending}
               onSubmit={data => handleSubmit(data, fillingForm.id, true)}
-              onPrint={handlePrint}
+              onPrint={data => printForm(fillingForm.id, data)}
               onSaveToProfile={handleSaveToProfile}
             />
           )}
@@ -210,7 +242,7 @@ export function FormsAttachmentPanel({
           </DialogHeader>
           <p className="text-sm text-muted-foreground">The form has been saved. What would you like to do next?</p>
           <div className="flex gap-2 pt-2">
-            <Button variant="outline" className="flex-1" onClick={handlePrint}>
+            <Button variant="outline" className="flex-1" onClick={() => printForm(showPrintSave!.formId, showPrintSave!.data)}>
               <Printer className="h-4 w-4 mr-1.5" /> Print Form
             </Button>
             <Button className="flex-1" onClick={handleSaveToProfile}>

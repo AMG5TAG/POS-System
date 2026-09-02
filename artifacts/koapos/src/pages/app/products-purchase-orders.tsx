@@ -10,13 +10,14 @@ import {
   useSendPurchaseOrderEmail,
   useListProducts,
   useListSuppliers,
-  useRequestUploadUrl,
-  useConfirmUpload,
   getListProductsQueryKey,
   getListPurchaseOrdersQueryKey,
+  useGetMerchant,
+  useGetPosSettings,
   ApiError,
   type PurchaseOrder,
 } from "@workspace/api-client-react";
+import { publicProductUrl } from "@/lib/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -29,14 +30,21 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, Paperclip, FileText, ExternalLink, ShieldCheck } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
+import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
+import { parseHardwareConfig, type HardwareCfg } from "@/lib/hardware-config";
+import { printDocument } from "@/lib/print-router";
+import { standaloneHtmlFrom } from "@/lib/print-dom";
 
 type POStatus = "Draft" | "Ordered" | "Partially Received" | "Fully Received" | "Cancelled"
               | "Sent" | "Partial" | "Received"; // legacy values
 type TaxMode  = "exclusive" | "inclusive";
-type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number };
+type POItem   = { productName: string; quantity: number; unitCost: number; received: number; productId?: number; tracksSerial?: boolean };
+/* Minimal product shape needed to render a sale-ticket (price label). */
+type ProductRecord = { id: number; name: string; sku?: string | null; price?: number | null; barcode?: string | null; category?: { name?: string } | null; tracksSerial?: boolean };
 
 interface SupplierOption { id: number; name: string }
 
@@ -58,6 +66,16 @@ function getStatusBadge(status: string): { variant: "default" | "secondary" | "o
 
 const PO_STATUSES: POStatus[] = ["Draft", "Ordered", "Partially Received", "Fully Received", "Cancelled"];
 
+// Supplier payment tenders offered when recording a payment on a PO.
+const PO_PAYMENT_METHODS: { value: string; label: string }[] = [
+  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "card",          label: "Credit / Debit Card" },
+  { value: "eftpos",        label: "EFTPOS" },
+  { value: "cash",          label: "Cash" },
+  { value: "cheque",        label: "Cheque" },
+  { value: "other",         label: "Other" },
+];
+
 const EMPTY_FORM = {
   supplierId:      null as number | null,
   supplierName:    "",
@@ -67,7 +85,12 @@ const EMPTY_FORM = {
   status:          "Draft" as POStatus,
   deliveryCharge:  0,
   deliveryTaxMode: "exclusive" as TaxMode,
+  distributeDelivery: false,
   invoiceAttachments: [] as string[],
+  // Supplier payment recorded at creation.
+  payNow:          false,
+  paymentMethod:   "bank_transfer",
+  paymentAmount:   "" as string, // blank = full amount
 };
 const EMPTY_ITEM: POItem = { productName: "", quantity: 1, unitCost: 0, received: 0 };
 
@@ -84,6 +107,102 @@ function calcDelivery(charge: number, mode: TaxMode) {
   }
 }
 
+/* ── GST calculator ────────────────────────────────────────────────────────
+   Standalone helper for merchants working from a supplier quote: enter an
+   amount that either excludes or includes GST and see the full breakdown.
+   Mirrors the ATO/Moneysmart GST calculator. Purely informational — it does
+   not feed into the PO totals. */
+
+function GstCalculator() {
+  const [open, setOpen]     = useState(false);
+  const [amount, setAmount] = useState("");
+  const [mode, setMode]     = useState<TaxMode>("exclusive");
+
+  const parsed = parseFloat(amount);
+  const value  = Number.isFinite(parsed) && parsed > 0 ? parsed : 0;
+  const result = calcDelivery(value, mode);
+
+  return (
+    <div className="rounded-lg border bg-muted/20">
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        className="w-full flex items-center gap-2 px-3 py-2.5 text-left"
+      >
+        <Calculator className="w-4 h-4 text-muted-foreground" />
+        <span className="text-sm font-medium flex-1">Tax Calculator</span>
+        <span className="text-xs text-muted-foreground">{open ? "Hide" : "Show"}</span>
+        <ChevronDown className={cn("w-4 h-4 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+
+      {open && (
+        <div className="px-3 pb-3 space-y-3">
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Amount</Label>
+              <div className="relative">
+                <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                <Input
+                  type="number"
+                  inputMode="decimal"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  className="pl-6"
+                  value={amount}
+                  onChange={(e) => setAmount(e.target.value)}
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">This amount</Label>
+              <div className="flex rounded-md border overflow-hidden h-9">
+                {(["exclusive", "inclusive"] as TaxMode[]).map((m) => (
+                  <button
+                    key={m}
+                    type="button"
+                    onClick={() => setMode(m)}
+                    className={cn(
+                      "flex-1 text-xs font-medium transition-colors",
+                      mode === m
+                        ? "bg-primary text-primary-foreground"
+                        : "bg-background hover:bg-muted/60 text-muted-foreground"
+                    )}
+                  >
+                    {m === "exclusive" ? "Excludes GST" : "Includes GST"}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-md bg-background border px-3 py-2 space-y-1 text-xs">
+            <div className={cn("flex justify-between", mode === "exclusive" ? "text-muted-foreground" : "font-medium")}>
+              <span>Price excluding GST</span>
+              <span>{formatCurrency(result.exGst)}</span>
+            </div>
+            <div className="flex justify-between text-muted-foreground">
+              <span>GST (10%)</span>
+              <span>{formatCurrency(result.gst)}</span>
+            </div>
+            <div className={cn("flex justify-between border-t pt-1 mt-1", mode === "inclusive" ? "text-muted-foreground" : "font-medium")}>
+              <span>Price including GST</span>
+              <span>{formatCurrency(result.incGst)}</span>
+            </div>
+          </div>
+
+          <p className="text-[11px] text-muted-foreground">
+            {mode === "exclusive"
+              ? "Adds 10% GST to the amount entered."
+              : "Splits out the GST already contained in the amount entered (÷ 11)."}
+            {" "}Reference only — this does not change the order totals.
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
 type PrintPO = Awaited<ReturnType<typeof import("@workspace/api-client-react").createPurchaseOrder>>;
 
 export default function ProductsPurchaseOrdersPage() {
@@ -95,6 +214,10 @@ export default function ProductsPurchaseOrdersPage() {
   const [form, setForm] = useState(EMPTY_FORM);
   const [items, setItems] = useState<POItem[]>([{ ...EMPTY_ITEM }]);
   const [printPO, setPrintPO] = useState<PrintPO | null>(null);
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
+  /* PO whose print-choice screen is open (A4 PO vs. sale tickets). */
+  const [printChoicePO, setPrintChoicePO] = useState<PurchaseOrder | null>(null);
   const [viewingPO, setViewingPO] = useState<PurchaseOrder | null>(null);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -102,8 +225,6 @@ export default function ProductsPurchaseOrdersPage() {
   const [receiveDialogOpen, setReceiveDialogOpen] = useState(false);
 
   /* Supplier dropdown */
-  const requestUploadUrl = useRequestUploadUrl();
-  const confirmUpload    = useConfirmUpload();
   const [uploadingInvoice, setUploadingInvoice] = useState(false);
   const invoiceFileRef = useRef<HTMLInputElement>(null);
 
@@ -142,6 +263,58 @@ export default function ProductsPurchaseOrdersPage() {
     return () => document.removeEventListener("mousedown", handler);
   }, []);
 
+  /* Full product catalogue + sticker printer, used to print "sale tickets"
+     (price labels) for the products brought in when a PO is completed. */
+  const { data: allProductsData } = useListProducts({ limit: 100000 }, { query: { queryKey: ["products", "po-full"] } });
+  const productsById = useMemo(() => {
+    const m = new Map<number, ProductRecord>();
+    for (const p of (allProductsData?.items ?? []) as ProductRecord[]) m.set(p.id, p);
+    return m;
+  }, [allProductsData]);
+  const { printStickersBatch, defaultTemplateFor, businessName } = useStickerPrinter();
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const merchantUsername = (merchant as { username?: string | null } | undefined)?.username;
+  const hasProductTemplate = !!defaultTemplateFor("product");
+
+  /* Build the sale-ticket print jobs for a PO: one label per received unit of
+     each catalogued line item. Returns the jobs and the total ticket count. */
+  const ticketsForPO = (po: PurchaseOrder | null) => {
+    const jobs: PrintStickersArgs[] = [];
+    let count = 0;
+    for (const it of ((po?.items ?? []) as POItem[])) {
+      const qty = it.received || it.quantity || 0;
+      const product = it.productId != null ? productsById.get(it.productId) : undefined;
+      if (!product || qty <= 0) continue;
+      count += qty;
+      jobs.push({
+        typeId: "product",
+        quantity: qty,
+        context: { merchant: { name: businessName } },
+        fieldsOverride: {
+          productName: product.name,
+          sku: product.sku ?? "",
+          price: product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
+          barcode: product.barcode ?? "",
+          category: product.category?.name ?? "",
+          productQrUrl: publicProductUrl(merchantUsername, product.id),
+        },
+      });
+    }
+    return { jobs, count };
+  };
+
+  const handlePrintTickets = (po: PurchaseOrder | null) => {
+    const { jobs, count } = ticketsForPO(po);
+    if (count === 0) {
+      toast.error("No catalogued products to print tickets for.");
+      return;
+    }
+    const ok = printStickersBatch(jobs);
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+    else toast.success(`Printing ${count} sale ticket${count > 1 ? "s" : ""}`);
+    setPrintChoicePO(null);
+  };
+
   const { data: orders = [], isLoading } = useListPurchaseOrders({});
   const createPO      = useCreatePurchaseOrder();
   const updatePO      = useUpdatePurchaseOrder();
@@ -166,14 +339,14 @@ export default function ProductsPurchaseOrdersPage() {
     .filter((o) => (tab === "history" ? isFullyReceived(o) : !isFullyReceived(o)));
 
   const addItem = () => setItems((p) => [...p, { ...EMPTY_ITEM }]);
-  const updateItem = (i: number, field: keyof POItem, value: string | number) =>
+  const updateItem = (i: number, field: keyof POItem, value: string | number | boolean) =>
     setItems((prev) => prev.map((item, idx) => idx === i ? { ...item, [field]: value } : item));
   const removeItem = (i: number) => setItems((prev) => prev.filter((_, idx) => idx !== i));
 
-  const addProductFromSearch = (product: { id: number; name: string; price: number; costPrice?: number | null }) => {
+  const addProductFromSearch = (product: { id: number; name: string; price: number; costPrice?: number | null; tracksSerial?: boolean }) => {
     setItems((prev) => [
       ...prev.filter((it) => it.productName),
-      { productName: product.name, quantity: 1, unitCost: product.costPrice ?? 0, received: 0, productId: product.id },
+      { productName: product.name, quantity: 1, unitCost: product.costPrice ?? 0, received: 0, productId: product.id, tracksSerial: product.tracksSerial ?? false },
     ]);
     setProductSearchQuery("");
     setShowProductResults(false);
@@ -189,11 +362,6 @@ export default function ProductsPurchaseOrdersPage() {
   };
 
   const openEdit = (po: (typeof orders)[0]) => {
-    // Fully received POs are locked — editing is not permitted.
-    if (isFullyReceived(po)) {
-      toast.error("Fully received purchase orders can't be edited.");
-      return;
-    }
     setEditingId(po.id);
     setForm({
       supplierId:         po.supplierId ?? null,
@@ -204,7 +372,12 @@ export default function ProductsPurchaseOrdersPage() {
       status:             po.status as POStatus,
       deliveryCharge:     (po as { deliveryCharge?: number }).deliveryCharge ?? 0,
       deliveryTaxMode:    ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode,
+      distributeDelivery: (po as { distributeDelivery?: boolean }).distributeDelivery ?? false,
       invoiceAttachments: (po as { invoiceUrls?: string[] }).invoiceUrls ?? [],
+      // Payment is recorded at creation only; not editable here.
+      payNow:          false,
+      paymentMethod:   "bank_transfer",
+      paymentAmount:   "",
     });
     setItems((po.items ?? []).map((i) => ({
       productName: i.productName ?? "",
@@ -212,6 +385,7 @@ export default function ProductsPurchaseOrdersPage() {
       unitCost:    i.unitCost ?? 0,
       received:    i.received ?? 0,
       productId:   i.productId ?? undefined,
+      tracksSerial: i.productId != null ? (productsById.get(i.productId)?.tracksSerial ?? false) : false,
     })));
     setProductSearchQuery("");
     setSupplierSearchQuery(po.supplierName ?? "");
@@ -225,11 +399,7 @@ export default function ProductsPurchaseOrdersPage() {
     }
     setUploadingInvoice(true);
     try {
-      const result = await requestUploadUrl.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
-      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUpload.mutateAsync({ data: { objectPath: result.objectPath } });
-      const url = `/api/storage${result.objectPath}`;
+      const { url } = await uploadFile(file);
       setForm((prev) => ({ ...prev, invoiceAttachments: [...prev.invoiceAttachments, url] }));
       toast.success("Invoice attached");
     } catch (e) {
@@ -257,6 +427,13 @@ export default function ProductsPurchaseOrdersPage() {
   const handleSave = () => {
     const validItems = items.filter((i) => i.productName);
     if (!validItems.length) { toast.error("Add at least one item"); return; }
+    // A PO can only be marked complete once goods have actually been received.
+    // Receiving happens via the Receive Goods worksheet (which sets received > 0);
+    // this blocks manually flipping the status to complete with nothing received.
+    if (isFullyReceived({ status: form.status }) && !validItems.some((i) => (i.received ?? 0) > 0)) {
+      toast.error("Can't mark this order as fully received — no items have been received yet. Use \"Receive Inventory\" to receive at least one item first.");
+      return;
+    }
     const payload = {
       supplierId:      form.supplierId ?? undefined,
       orderNumber:     form.orderNumber || undefined,
@@ -266,15 +443,31 @@ export default function ProductsPurchaseOrdersPage() {
       notes:           form.notes || undefined,
       deliveryCharge:  form.deliveryCharge,
       deliveryTaxMode: form.deliveryTaxMode,
+      distributeDelivery: form.distributeDelivery,
       invoiceUrls:     form.invoiceAttachments,
       items:           validItems,
     };
+
+    // Optional supplier payment recorded at creation. A blank amount means "pay in
+    // full"; we flag payFull so the server settles at its own computed total (no
+    // client/server GST rounding drift). A part amount is sent as paymentAmount.
+    let paymentFields: { payFull?: boolean; paymentAmount?: number; paymentMethod?: string } = {};
+    if (form.payNow) {
+      const enteredRaw = form.paymentAmount.trim();
+      const entered = enteredRaw === "" ? grandTotal : (parseFloat(enteredRaw) || 0);
+      if (!(entered > 0)) { toast.error("Enter a payment amount greater than zero"); return; }
+      const isFull = entered >= grandTotal - 0.005;
+      paymentFields = isFull
+        ? { payFull: true, paymentMethod: form.paymentMethod }
+        : { paymentAmount: Math.round(entered * 100) / 100, paymentMethod: form.paymentMethod };
+    }
     if (editingId !== null) {
       updatePO.mutate(
         { id: editingId, data: payload },
         {
           onSuccess: () => {
             invalidateList();
+            queryClient.invalidateQueries({ queryKey: ["products"] });
             toast.success("Purchase order updated");
             setDialogOpen(false);
           },
@@ -283,9 +476,10 @@ export default function ProductsPurchaseOrdersPage() {
       );
     } else {
       const prefixes = loadCodePrefixes();
-      createPO.mutate({ data: { ...payload, poNumberPrefix: prefixes.poPrefix, poNumberDigits: prefixes.poDigits } }, {
+      createPO.mutate({ data: { ...payload, ...paymentFields, poNumberPrefix: prefixes.poPrefix, poNumberDigits: prefixes.poDigits } }, {
         onSuccess: (data) => {
           invalidateList();
+          queryClient.invalidateQueries({ queryKey: ["products"] });
           toast.success(`${data.poNumber} created`);
           setDialogOpen(false);
           setTimeout(() => setPrintPO(data), 100);
@@ -295,16 +489,30 @@ export default function ProductsPurchaseOrdersPage() {
     }
   };
 
-  const handleDelete = (id: number) => {
-    deletePO.mutate({ id }, {
-      onSuccess: () => { invalidateList(); toast.success("Purchase order deleted"); },
+  const handleDelete = (po: (typeof orders)[0]) => {
+    const totalReceived = (po.items ?? []).reduce((s, i) => s + (i.received ?? 0), 0);
+    const lines = [
+      `Delete purchase order ${po.poNumber}?`,
+      "",
+      "This permanently deletes the order AND reverses every change it made:",
+      totalReceived > 0
+        ? `• Removes ${totalReceived} received unit${totalReceived === 1 ? "" : "s"} from product stock`
+        : "• No stock to reverse (nothing was received)",
+      "• Removes any unsold serial numbers this order added",
+      "• Removes this order's cost-price history and restores prior cost prices",
+      "",
+      "This cannot be undone.",
+    ];
+    if (!window.confirm(lines.join("\n"))) return;
+    deletePO.mutate({ id: po.id }, {
+      onSuccess: () => { invalidateList(); toast.success("Purchase order deleted and its changes reversed"); },
       onError: () => toast.error("Failed to delete"),
     });
   };
 
   const productList = Array.isArray(productResults)
     ? productResults
-    : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null }[] } | undefined)?.items ?? [];
+    : (productResults as { items?: { id: number; name: string; price: number; costPrice?: number | null; tracksSerial?: boolean }[] } | undefined)?.items ?? [];
 
   /* ── Totals ─────────────────────────────────────────────────────────── */
   const itemsSubtotal    = items.reduce((s, i) => s + i.quantity * i.unitCost, 0);
@@ -404,18 +612,26 @@ export default function ProductsPurchaseOrdersPage() {
                     <td className="p-3" onClick={() => setViewingPO(po)}>
                       {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
                     </td>
-                    <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>{formatCurrency(po.totalCost ?? 0)}</td>
+                    <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>
+                      <div>{formatCurrency(po.totalCost ?? 0)}</div>
+                      {po.paymentStatus === "paid" && (
+                        <Badge variant="outline" className="mt-1 border-green-500 text-green-700 dark:text-green-400 text-[10px] font-normal">Paid</Badge>
+                      )}
+                      {po.paymentStatus === "partial" && (
+                        <Badge variant="outline" className="mt-1 border-amber-400 text-amber-700 dark:text-amber-400 text-[10px] font-normal">
+                          {formatCurrency(po.amountPaid ?? 0)} paid
+                        </Badge>
+                      )}
+                    </td>
                     <td className="p-3 flex gap-1 justify-end">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="View details" onClick={() => setViewingPO(po)}>
                         <Eye className="w-3.5 h-3.5" />
                       </Button>
-                      {!isFullyReceived(po) && (
-                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
-                          <Pencil className="w-3.5 h-3.5" />
-                        </Button>
-                      )}
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={(e) => { e.stopPropagation(); openEdit(po); }}>
+                        <Pencil className="w-3.5 h-3.5" />
+                      </Button>
                       <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
-                        title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po.id); }}>
+                        title="Delete" onClick={(e) => { e.stopPropagation(); handleDelete(po); }}>
                         <Trash2 className="w-3.5 h-3.5" />
                       </Button>
                     </td>
@@ -614,11 +830,9 @@ export default function ProductsPurchaseOrdersPage() {
 
               <DialogFooter className="flex gap-2 pt-2 sm:justify-between">
                 <div className="flex gap-2">
-                  {!isFullyReceived(po) && (
-                    <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
-                      <Pencil className="w-4 h-4 mr-1.5" /> Edit
-                    </Button>
-                  )}
+                  <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
+                    <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                  </Button>
                   {(po.status === "Ordered" || po.status === "Partially Received" || po.status === "Sent" || po.status === "Partial") && (
                     <Button onClick={() => setReceiveDialogOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">
                       <PackageCheck className="w-4 h-4" /> Receive Inventory
@@ -630,7 +844,7 @@ export default function ProductsPurchaseOrdersPage() {
                     {emailLoading ? <Loader2 className="w-4 h-4 mr-1.5 animate-spin" /> : <Mail className="w-4 h-4 mr-1.5" />}
                     Email to Supplier
                   </Button>
-                  <Button variant="outline" onClick={() => setPrintPO(po as unknown as PrintPO)}>
+                  <Button variant="outline" onClick={() => setPrintChoicePO(po)}>
                     <Printer className="w-4 h-4 mr-1.5" /> Print
                   </Button>
                 </div>
@@ -861,24 +1075,37 @@ export default function ProductsPurchaseOrdersPage() {
                 </Button>
               </div>
               <div className="grid grid-cols-12 gap-2 px-1 mb-1">
-                <p className="col-span-5 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product Name</p>
+                <p className="col-span-4 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Product Name</p>
                 <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center">Qty</p>
-                <p className="col-span-3 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit Cost</p>
+                <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center">Received</p>
+                <p className="col-span-2 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Unit Cost</p>
+                <p className="col-span-1 text-[10px] font-semibold uppercase tracking-wide text-muted-foreground text-center" title="Tick if this product carries a Serial Number / IMEI to capture on receiving">Serial #</p>
               </div>
               {items.map((item, i) => (
                 <div key={i} className="grid grid-cols-12 gap-2 items-center">
-                  <Input className="col-span-5" placeholder="Item name" value={item.productName}
+                  <Input className="col-span-4" placeholder="Item name" value={item.productName}
                     onChange={(e) => updateItem(i, "productName", e.target.value)} />
                   <Input className="col-span-2 text-center" type="number" min={1} placeholder="Qty"
                     value={item.quantity}
                     onChange={(e) => updateItem(i, "quantity", parseInt(e.target.value) || 1)} />
-                  <div className="col-span-3 relative">
+                  <Input className="col-span-2 text-center" type="number" min={0} max={item.quantity}
+                    title="Units received — editing this adjusts product stock"
+                    value={item.received}
+                    onChange={(e) => updateItem(i, "received", Math.max(0, Math.min(item.quantity, parseInt(e.target.value) || 0)))} />
+                  <div className="col-span-2 relative">
                     <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
                     <Input className="pl-6" type="number" step="0.01" placeholder="0.00"
                       value={item.unitCost || ""}
                       onChange={(e) => updateItem(i, "unitCost", parseFloat(e.target.value) || 0)} />
                   </div>
-                  <Button variant="ghost" size="icon" className="col-span-2 h-8 text-destructive hover:text-destructive"
+                  <div className="col-span-1 flex justify-center">
+                    <input type="checkbox" className="rounded border-muted-foreground/40 accent-primary h-4 w-4"
+                      checked={item.tracksSerial ?? false}
+                      title={item.productId ? "This product carries a Serial Number / IMEI — prompt for it when receiving and selling" : "Add a catalogued product to this line to track serial numbers"}
+                      disabled={!item.productId}
+                      onChange={(e) => updateItem(i, "tracksSerial", e.target.checked)} />
+                  </div>
+                  <Button variant="ghost" size="icon" className="col-span-1 h-8 text-destructive hover:text-destructive"
                     onClick={() => removeItem(i)}>
                     <Trash2 className="w-3.5 h-3.5" />
                   </Button>
@@ -966,7 +1193,26 @@ export default function ProductsPurchaseOrdersPage() {
                   )}
                 </div>
               )}
+
+              {/* Landed cost: fold shipping into each product's cost of goods */}
+              {form.deliveryCharge > 0 && (
+                <label className="flex items-start gap-2 mt-1 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    className="mt-0.5 rounded border-muted-foreground/40 accent-primary shrink-0"
+                    checked={form.distributeDelivery}
+                    onChange={(e) => setForm({ ...form, distributeDelivery: e.target.checked })}
+                  />
+                  <span className="text-xs text-muted-foreground">
+                    <span className="font-medium text-foreground">Distribute shipping across product costs</span><br />
+                    Spread the delivery charge across the line items (by value) and add it to each product's cost of goods.
+                  </span>
+                </label>
+              )}
             </div>
+
+            {/* ── Tax Calculator ──────────────────────────────────────────── */}
+            <GstCalculator />
 
             <div className="space-y-1.5">
               <Label>Notes</Label>
@@ -1055,6 +1301,66 @@ export default function ProductsPurchaseOrdersPage() {
               </div>
             </div>
 
+            {/* ── Supplier payment (new POs only) ──────────────────────── */}
+            {editingId === null && (
+              <div className="rounded-lg border px-4 py-3 space-y-3">
+                <label className="flex items-center gap-2.5 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    className="h-4 w-4 rounded border-input accent-primary"
+                    checked={form.payNow}
+                    onChange={(e) => setForm({ ...form, payNow: e.target.checked })}
+                  />
+                  <span className="text-sm font-medium">Record a payment to the supplier</span>
+                </label>
+
+                {form.payNow && (() => {
+                  const enteredRaw = form.paymentAmount.trim();
+                  const entered = enteredRaw === "" ? grandTotal : (parseFloat(enteredRaw) || 0);
+                  const overpay = entered > grandTotal + 0.005;
+                  const isFull = entered > 0 && !overpay && entered >= grandTotal - 0.005;
+                  return (
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Amount</Label>
+                        <Input
+                          type="number" inputMode="decimal" min="0" step="0.01"
+                          placeholder={grandTotal.toFixed(2)}
+                          value={form.paymentAmount}
+                          onChange={(e) => setForm({ ...form, paymentAmount: e.target.value })}
+                          className={overpay ? "border-destructive" : ""}
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                            onClick={() => setForm({ ...form, paymentAmount: "" })}>
+                            Full amount
+                          </Button>
+                          <p className="text-[11px] text-muted-foreground">
+                            {overpay
+                              ? "Exceeds total — will be capped."
+                              : isFull
+                                ? "Pays this order in full."
+                                : entered > 0
+                                  ? `Leaves ${formatCurrency(Math.max(0, grandTotal - entered))} owing.`
+                                  : "Blank = full amount."}
+                          </p>
+                        </div>
+                      </div>
+                      <div className="space-y-1.5">
+                        <Label className="text-xs">Method</Label>
+                        <Select value={form.paymentMethod} onValueChange={(v) => setForm({ ...form, paymentMethod: v })}>
+                          <SelectTrigger><SelectValue /></SelectTrigger>
+                          <SelectContent>
+                            {PO_PAYMENT_METHODS.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+            )}
+
             <div className="flex justify-end gap-2 pt-1">
               <Button variant="outline" onClick={() => setDialogOpen(false)}>Cancel</Button>
               <Button onClick={handleSave} disabled={createPO.isPending || updatePO.isPending}>
@@ -1074,12 +1380,27 @@ export default function ProductsPurchaseOrdersPage() {
           onSuccess={(updated) => {
             setViewingPO(updated);
             invalidateList();
+            // Goods are in — offer to print the PO and/or sale tickets.
+            setPrintChoicePO(updated);
           }}
         />
       )}
 
+      {/* ── Print choice (A4 PO vs. sale tickets) ────────────────────── */}
+      <POPrintChoiceDialog
+        po={printChoicePO}
+        ticketCount={ticketsForPO(printChoicePO).count}
+        hasProductTemplate={hasProductTemplate}
+        onClose={() => setPrintChoicePO(null)}
+        onPrintPO={() => {
+          if (printChoicePO) setPrintPO(printChoicePO as unknown as PrintPO);
+          setPrintChoicePO(null);
+        }}
+        onPrintTickets={() => handlePrintTickets(printChoicePO)}
+      />
+
       {/* ── Auto-print after PO creation ─────────────────────────────── */}
-      {printPO && <POPrintArea po={printPO} onDone={() => setPrintPO(null)} />}
+      {printPO && <POPrintArea po={printPO} hw={hardware} onDone={() => setPrintPO(null)} />}
     </AppLayout>
   );
 }
@@ -1099,16 +1420,16 @@ function ReceiveGoodsDialog({
 }) {
   const items = po.items ?? [];
 
-  // Warranty products require a serial number per received unit.
-  const { data: productsData } = useListProducts(undefined, { query: { queryKey: ["products"] } });
-  const warrantyByProductId = useMemo(() => {
+  // Serial-tracked products require a serial number / IMEI per received unit.
+  const { data: productsData } = useListProducts({ limit: 100000 }, { query: { queryKey: ["products", "po-full"] } });
+  const serialByProductId = useMemo(() => {
     const m = new Map<number, boolean>();
-    for (const p of (productsData?.items ?? []) as Array<{ id: number; warrantyDuration?: number | null }>) {
-      if ((p.warrantyDuration ?? 0) > 0) m.set(p.id, true);
+    for (const p of (productsData?.items ?? []) as Array<{ id: number; tracksSerial?: boolean | null }>) {
+      if (p.tracksSerial) m.set(p.id, true);
     }
     return m;
   }, [productsData]);
-  const isWarrantyItem = (item: { productId?: number | null }) => item.productId != null && warrantyByProductId.has(item.productId);
+  const isSerialItem = (item: { productId?: number | null }) => item.productId != null && serialByProductId.has(item.productId);
 
   // Default each field to the remaining unreceived balance
   const [qtys, setQtys] = useState<Record<number, number>>(() => {
@@ -1134,13 +1455,28 @@ function ReceiveGoodsDialog({
 
   const totalReceiving = Object.values(qtys).reduce((s, v) => s + (v || 0), 0);
 
+  // Lines whose product is currently oversold (sold below zero). The units being
+  // received first cover those backordered sales, so the merchant ends up "short"
+  // versus what they'd expect on the shelf. We surface this and gate the confirm.
+  const oversoldLines = useMemo(
+    () => items.filter((i) => (i.oversoldUnits ?? 0) > 0),
+    [items],
+  );
+  const describeOversell = (i: (typeof items)[number]) => {
+    const sales = (i.oversellSales ?? [])
+      .map((s) => `${s.receiptNumber ?? "unknown sale"} (${s.quantity})`)
+      .join(", ");
+    const plural = (i.oversellSales?.length ?? 0) === 1 ? "" : "s";
+    return `${i.productName} is oversold by ${i.oversoldUnits} unit(s) — receiving now first covers sale${plural}: ${sales}`;
+  };
+
   const handleConfirm = () => {
     setSubmitError(null);
     const receiving = items.filter((i) => i.id != null && (qtys[i.id!] ?? 0) > 0);
 
-    // Every warranty unit being received needs a serial number.
+    // Every serial-tracked unit being received needs a serial number / IMEI.
     for (const i of receiving) {
-      if (!isWarrantyItem(i)) continue;
+      if (!isSerialItem(i)) continue;
       const qty = qtys[i.id!];
       const entered = (serials[i.id!] ?? []).slice(0, qty).map((s) => (s ?? "").trim());
       if (entered.length < qty || entered.some((s) => !s)) {
@@ -1156,12 +1492,25 @@ function ReceiveGoodsDialog({
     const receiveItems: ReceiptItem[] = receiving.map((i) => ({
       poItemId: i.id!,
       quantityReceiving: qtys[i.id!],
-      ...(isWarrantyItem(i) ? { serialNumbers: (serials[i.id!] ?? []).slice(0, qtys[i.id!]).map((s) => s.trim()) } : {}),
+      ...(isSerialItem(i) ? { serialNumbers: (serials[i.id!] ?? []).slice(0, qtys[i.id!]).map((s) => s.trim()) } : {}),
     }));
 
     if (!receiveItems.length) {
       setSubmitError("Enter at least one quantity to receive.");
       return;
+    }
+
+    // Gate the receipt when an item being received is already oversold: the new
+    // units immediately cover the backordered sale(s), so warn (with receipt
+    // numbers) and require confirmation before committing.
+    const oversoldReceiving = receiving.filter((i) => (i.oversoldUnits ?? 0) > 0);
+    if (oversoldReceiving.length) {
+      const lines = oversoldReceiving.map((i) => `• ${describeOversell(i)}`).join("\n");
+      const ok = window.confirm(
+        `Heads up — some items are already oversold:\n\n${lines}\n\n` +
+        `The units you receive will immediately cover these sales, so your on-hand count stays short by those amounts. Continue receiving?`
+      );
+      if (!ok) return;
     }
 
     receivePO.mutate(
@@ -1210,7 +1559,7 @@ function ReceiveGoodsDialog({
                 const remaining = Math.max(0, (item.quantity ?? 0) - (item.received ?? 0));
                 const isFullyReceived = remaining === 0;
                 const qtyNow = item.id != null ? (qtys[item.id] ?? 0) : 0;
-                const showSerials = isWarrantyItem(item) && qtyNow > 0;
+                const showSerials = isSerialItem(item) && qtyNow > 0;
                 return (
                   <Fragment key={item.id}>
                   <tr className={cn(isFullyReceived && "opacity-50 bg-muted/20")}>
@@ -1254,7 +1603,7 @@ function ReceiveGoodsDialog({
                     <tr className="bg-muted/20">
                       <td colSpan={4} className="p-3">
                         <p className="text-xs font-medium flex items-center gap-1.5 mb-2">
-                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Serial numbers ({qtyNow} required — warranty item)
+                          <ShieldCheck className="w-3.5 h-3.5 text-emerald-600" /> Serial numbers / IMEI ({qtyNow} required — serial-tracked item)
                         </p>
                         <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                           {Array.from({ length: qtyNow }, (_, k) => (
@@ -1282,6 +1631,23 @@ function ReceiveGoodsDialog({
           <span className="text-muted-foreground">Total units receiving now</span>
           <span className="font-bold text-lg">{totalReceiving}</span>
         </div>
+
+        {oversoldLines.length > 0 && (
+          <div className="text-xs flex items-start gap-1.5 rounded-lg bg-amber-50 dark:bg-amber-950/20 border border-amber-200 dark:border-amber-900 px-3 py-2.5 text-amber-800 dark:text-amber-300">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5 text-amber-500" />
+            <div className="space-y-1">
+              <p className="font-medium">Some items are oversold — incoming stock covers backordered sales first.</p>
+              <ul className="list-disc pl-4 space-y-0.5">
+                {oversoldLines.map((i) => (
+                  <li key={i.id}>
+                    <strong>{i.productName}</strong> is short {i.oversoldUnits} — covers{" "}
+                    {(i.oversellSales ?? []).map((s) => `${s.receiptNumber ?? "unknown sale"} (${s.quantity})`).join(", ")}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          </div>
+        )}
 
         <div className="text-xs text-muted-foreground flex items-start gap-1.5 rounded-lg bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-900 px-3 py-2.5">
           <PackageCheck className="w-3.5 h-3.5 shrink-0 mt-0.5 text-blue-500" />
@@ -1316,36 +1682,123 @@ function ReceiveGoodsDialog({
   );
 }
 
+/* ── Print choice dialog ──────────────────────────────────────────────── */
+
+function POPrintChoiceDialog({
+  po,
+  ticketCount,
+  hasProductTemplate,
+  onClose,
+  onPrintPO,
+  onPrintTickets,
+}: {
+  po: PurchaseOrder | null;
+  ticketCount: number;
+  hasProductTemplate: boolean;
+  onClose: () => void;
+  onPrintPO: () => void;
+  onPrintTickets: () => void;
+}) {
+  const ticketsDisabled = !hasProductTemplate || ticketCount === 0;
+  return (
+    <Dialog open={!!po} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-base">Print — {po?.poNumber}</DialogTitle>
+        </DialogHeader>
+        <div className="grid grid-cols-2 gap-3 py-2">
+          <button
+            onClick={onPrintPO}
+            className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors"
+          >
+            <Printer className="w-8 h-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold text-sm">Purchase Order</p>
+              <p className="text-xs text-muted-foreground mt-0.5">A4 document</p>
+            </div>
+          </button>
+          <button
+            onClick={onPrintTickets}
+            disabled={ticketsDisabled}
+            className="flex flex-col items-center gap-3 p-5 rounded-xl border-2 border-border hover:border-primary hover:bg-primary/5 transition-colors disabled:opacity-50 disabled:pointer-events-none"
+          >
+            <Tags className="w-8 h-8 text-primary" />
+            <div className="text-center">
+              <p className="font-semibold text-sm">Sale Tickets</p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {!hasProductTemplate
+                  ? "No product label template"
+                  : ticketCount === 0
+                    ? "No products brought in"
+                    : `${ticketCount} label${ticketCount > 1 ? "s" : ""} for products brought in`}
+              </p>
+            </div>
+          </button>
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ── Print area component ─────────────────────────────────────────────── */
 
 type POData = NonNullable<PrintPO>;
 
-function POPrintArea({ po, onDone }: { po: POData; onDone: () => void }) {
+function POPrintArea({ po, hw, onDone }: { po: POData; hw: HardwareCfg; onDone: () => void }) {
+  // `onDone` and `hw` are rebuilt on every parent render, so this effect re-runs
+  // whenever the page re-renders (a query refetch is enough). A browser print
+  // used to close that window almost immediately; a bridge print can take
+  // seconds, which is long enough to fire a second job. Print once per mount.
+  const started = useRef(false);
+
   useEffect(() => {
+    if (started.current) return;
+    started.current = true;
+
     let fallbackTimer: ReturnType<typeof setTimeout> | undefined;
     let afterprintHandler: (() => void) | undefined;
+    let cancelled = false;
 
     const t = setTimeout(() => {
-      document.body.setAttribute("data-print", "po");
+      // The browser path reveals the hidden print area and uses window.print();
+      // the router only reaches for it when nothing silent is configured.
+      const browserFallback = () => new Promise<void>((resolve) => {
+        document.body.setAttribute("data-print", "po");
+        afterprintHandler = () => {
+          document.body.removeAttribute("data-print");
+          if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
+          resolve();
+        };
+        window.addEventListener("afterprint", afterprintHandler, { once: true });
+        window.print();
+        fallbackTimer = setTimeout(afterprintHandler, 30_000);
+      });
 
-      afterprintHandler = () => {
-        document.body.removeAttribute("data-print");
-        if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
-        onDone();
-      };
-
-      window.addEventListener("afterprint", afterprintHandler, { once: true });
-      window.print();
-      fallbackTimer = setTimeout(afterprintHandler, 30_000);
+      void printDocument({
+        purpose: "purchaseOrder",
+        hw,
+        paper: "A4",
+        jobName: `Purchase order ${po.poNumber ?? po.id ?? ""}`.trim(),
+        html: () => standaloneHtmlFrom(document.getElementById("po-print-area"), {
+          title: `Purchase order ${po.poNumber ?? po.id ?? ""}`.trim(),
+        }),
+        browserFallback,
+      })
+        .then((method) => {
+          if (method !== "browser") toast.success("Purchase order sent to the printer");
+        })
+        .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't print this purchase order"))
+        .finally(() => { if (!cancelled) onDone(); });
     }, 150);
 
     return () => {
+      cancelled = true;
       clearTimeout(t);
       document.body.removeAttribute("data-print");
       if (afterprintHandler) window.removeEventListener("afterprint", afterprintHandler);
       if (fallbackTimer !== undefined) clearTimeout(fallbackTimer);
     };
-  }, [onDone]);
+  }, [onDone, hw, po]);
 
   const deliveryCharge = (po as { deliveryCharge?: number }).deliveryCharge ?? 0;
   const deliveryTaxMode = ((po as { deliveryTaxMode?: string }).deliveryTaxMode ?? "exclusive") as TaxMode;

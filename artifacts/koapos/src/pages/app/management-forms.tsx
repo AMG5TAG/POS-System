@@ -33,7 +33,6 @@ const CLOUD_META: Record<string, { label: string; bg: string; text: string; src?
   google_drive: { label: "Google Drive", bg: "bg-[#4285F4]", text: "G", src: _SI("googledrive", "ffffff") },
   onedrive:     { label: "OneDrive",     bg: "bg-[#0078D4]", text: "O", src: _SI("onedrive",    "ffffff") },
   dropbox:      { label: "Dropbox",      bg: "bg-[#0061FF]", text: "D", src: _SI("dropbox",     "ffffff") },
-  proton_drive: { label: "Proton Drive", bg: "bg-[#6D4AFF]", text: "P", src: _SI("proton",      "ffffff") },
 };
 
 function CloudFallbackImg({ src, alt, size, fallback }: { src: string; alt: string; size: string; fallback: string }) {
@@ -399,7 +398,7 @@ export default function ManagementFormsPage() {
   // Tab navigation
   const [activeTab, setActiveTab] = useState<"forms" | "files" | "cloud">("forms");
   const { data: integrationsData = [] } = useListIntegrations();
-  const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox", "proton_drive"]);
+  const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox"]);
   const cloudIntegrations = (integrationsData as unknown as { key: string; label: string; status: string; connectedAt: string | null }[])
     .filter(i => CLOUD_KEYS.has(i.key));
 

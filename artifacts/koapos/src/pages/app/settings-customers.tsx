@@ -7,6 +7,10 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { useCustomerSettings, type CustomerGroup, type CustomerRequiredFields } from "@/lib/customer-settings";
 import { exportCustomerGroupsCSV, exportCustomerGroupsXLSX, exportCustomerGroupsPDF } from "@/lib/customer-groups-export";
 import {
+  makeDefaultRule, formulaLabel, BASIS_LABELS,
+  type GroupPricingRule, type PriceBasis,
+} from "@/lib/group-pricing";
+import {
   useListCustomers,
   getListCustomersQueryKey,
   useBulkMergePreview,
@@ -28,12 +32,68 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Separator } from "@/components/ui/separator";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import { toast } from "sonner";
 import {
   Plus, Pencil, Trash2, Users, ScanSearch, Merge,
   Phone, User, CheckCircle2, Loader2, AlertCircle,
-  Download, FileSpreadsheet, FileText, ChevronDown, EyeOff, RotateCcw,
+  Download, FileSpreadsheet, FileText, ChevronDown, EyeOff, RotateCcw, Percent,
 } from "lucide-react";
+
+/* ─── Per-group default markup ────────────────────────────────────────────────
+ * Groups can carry an automatic price derived from each product's cost, e.g.
+ * Trade = cost ex GST + 40%. The full rule model (which also supports an RRP
+ * basis, discounts and per-category overrides) lives in lib/group-pricing.ts
+ * and is edited in full on Management → Discounts; this page exposes the common
+ * case — a straight markup off cost, inc or ex GST.
+ */
+
+/** The bases this page edits. RRP-based rules are set on Management → Discounts. */
+const COST_BASES: PriceBasis[] = ["cost_inc", "cost_ex"];
+
+interface PricingForm {
+  pricingEnabled: boolean;
+  pricingBasis: PriceBasis;
+  pricingPercent: string;
+  pricingCapAtRRP: boolean;
+}
+
+const BLANK_PRICING_FORM: PricingForm = {
+  pricingEnabled: false,
+  pricingBasis: "cost_inc",
+  pricingPercent: "40",
+  pricingCapAtRRP: true,
+};
+
+/** Seed the dialog fields from a saved rule. */
+function pricingFormFromRule(rule: GroupPricingRule | undefined): PricingForm {
+  if (!rule) return { ...BLANK_PRICING_FORM };
+  const { basis, percent, capAtRRP } = rule.formula;
+  return {
+    pricingEnabled: rule.enabled,
+    // An RRP-based rule can't be represented here; fall back to cost inc GST and
+    // warn (see pricingNeedsConversion) rather than silently showing the wrong basis.
+    pricingBasis: COST_BASES.includes(basis) ? basis : "cost_inc",
+    pricingPercent: String(percent),
+    pricingCapAtRRP: capAtRRP,
+  };
+}
+
+/**
+ * True when the saved rule uses something this dialog can't express (an RRP
+ * basis or a discount), so saving here would convert it to a markup off cost.
+ */
+function pricingNeedsConversion(rule: GroupPricingRule | undefined): boolean {
+  if (!rule || !rule.enabled) return false;
+  return !COST_BASES.includes(rule.formula.basis) || rule.formula.mode !== "markup";
+}
+
+/** Percent entry is free text; keep it a sane, non-negative number. */
+function clampPercent(raw: string): number {
+  const n = parseFloat(raw);
+  if (!Number.isFinite(n) || n < 0) return 0;
+  return Math.round(Math.min(n, 10_000) * 100) / 100;
+}
 
 const IGNORED_BUCKETS_KEY = "koapos_ignored_duplicate_buckets";
 
@@ -98,7 +158,10 @@ export default function SettingsCustomersPage() {
 
   const [groupDialogOpen, setGroupDialogOpen] = useState(false);
   const [editingGroup, setEditingGroup]         = useState<CustomerGroup | null>(null);
-  const [groupForm, setGroupForm]               = useState({ name: "", description: "", color: "#3b82f6" });
+  const [groupForm, setGroupForm]               = useState({
+    name: "", description: "", color: "#3b82f6",
+    ...BLANK_PRICING_FORM,
+  });
   const [deleteConfirm, setDeleteConfirm]       = useState<string | null>(null);
 
   const { isDirty: isGroupDirty, markClean: markGroupClean } = useFormDirty(groupForm);
@@ -129,8 +192,12 @@ export default function SettingsCustomersPage() {
   }, {});
   const total = customers.length;
 
+  /** The saved pricing rule for a group, if it has one. */
+  const ruleFor = (groupId: string): GroupPricingRule | undefined =>
+    settings.groupPricing.find(r => r.groupId === groupId);
+
   const openAdd = () => {
-    const f = { name: "", description: "", color: "#3b82f6" };
+    const f = { name: "", description: "", color: "#3b82f6", ...BLANK_PRICING_FORM };
     setEditingGroup(null);
     setGroupForm(f);
     markGroupClean(f);
@@ -138,7 +205,10 @@ export default function SettingsCustomersPage() {
   };
 
   const openEdit = (g: CustomerGroup) => {
-    const f = { name: g.name, description: g.description, color: g.color };
+    const f = {
+      name: g.name, description: g.description, color: g.color,
+      ...pricingFormFromRule(ruleFor(g.id)),
+    };
     setEditingGroup(g);
     setGroupForm(f);
     markGroupClean(f);
@@ -147,14 +217,41 @@ export default function SettingsCustomersPage() {
 
   const saveGroup = () => {
     if (!groupForm.name.trim()) return;
+    const { name, description, color } = groupForm;
     const groups = [...settings.groups];
+
+    let groupId: string;
     if (editingGroup) {
+      groupId = editingGroup.id;
       const idx = groups.findIndex(g => g.id === editingGroup.id);
-      if (idx >= 0) groups[idx] = { ...editingGroup, ...groupForm, name: groupForm.name.trim() };
+      if (idx >= 0) groups[idx] = { ...editingGroup, name: name.trim(), description, color };
     } else {
-      groups.push({ id: crypto.randomUUID(), ...groupForm, name: groupForm.name.trim() });
+      groupId = crypto.randomUUID();
+      groups.push({ id: groupId, name: name.trim(), description, color });
     }
-    save({ groups });
+
+    /* Merge the markup into this group's rule rather than replacing it, so the
+       per-category overrides configured on Management → Discounts survive an
+       edit made here. */
+    const existing = ruleFor(groupId) ?? makeDefaultRule(groupId);
+    const nextRule: GroupPricingRule = {
+      ...existing,
+      groupId,
+      enabled: groupForm.pricingEnabled,
+      formula: {
+        ...existing.formula,
+        basis: groupForm.pricingBasis,
+        mode: "markup",
+        percent: clampPercent(groupForm.pricingPercent),
+        capAtRRP: groupForm.pricingCapAtRRP,
+      },
+    };
+    const groupPricing = [
+      ...settings.groupPricing.filter(r => r.groupId !== groupId),
+      nextRule,
+    ];
+
+    save({ groups, groupPricing });
     toast.success(editingGroup ? "Group updated" : "Group added");
     markGroupClean();
     setGroupDialogOpen(false);
@@ -164,7 +261,11 @@ export default function SettingsCustomersPage() {
 
   const doDelete = () => {
     if (!deleteConfirm) return;
-    save({ groups: settings.groups.filter(g => g.id !== deleteConfirm) });
+    save({
+      groups: settings.groups.filter(g => g.id !== deleteConfirm),
+      /* A rule for a group that no longer exists would never resolve — drop it. */
+      groupPricing: settings.groupPricing.filter(r => r.groupId !== deleteConfirm),
+    });
     toast.success("Group deleted");
     setDeleteConfirm(null);
   };
@@ -394,6 +495,18 @@ export default function SettingsCustomersPage() {
                       {g.description || <span className="italic">No description</span>}
                     </p>
 
+                    {/* Automatic pricing, so the markup is visible without opening the group. */}
+                    {(() => {
+                      const rule = ruleFor(g.id);
+                      if (!rule?.enabled) return null;
+                      return (
+                        <span className="inline-flex items-center gap-1.5 self-start rounded-md border bg-background px-2 py-1 text-[11px] font-medium text-muted-foreground">
+                          <Percent className="w-3 h-3 shrink-0" />
+                          {formulaLabel(rule.formula)}
+                        </span>
+                      );
+                    })()}
+
                     <div className="flex items-center gap-2 pt-2 border-t">
                       <div className="flex-1 bg-muted rounded-full h-1.5 overflow-hidden">
                         <div
@@ -471,6 +584,25 @@ export default function SettingsCustomersPage() {
                 </SelectContent>
               </Select>
               <p className="text-xs text-muted-foreground">Applied automatically when a new customer is added.</p>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-1.5">
+              <Label>Default Customer Image</Label>
+              <div className="flex items-start gap-4">
+                <div className="w-24 shrink-0">
+                  <ImageUploader
+                    value={settings.defaultCustomerImageUrl}
+                    onChange={(url) => save({ defaultCustomerImageUrl: url })}
+                    aspectRatio="square"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground pt-1 max-w-xs">
+                  Fallback avatar shown for customers who don't have their own photo. Drop or click to upload an
+                  image, or use the URL option to link an external image.
+                </p>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -830,6 +962,91 @@ export default function SettingsCustomersPage() {
                   {groupForm.name || "Preview"}
                 </span>
               </div>
+            </div>
+
+            {/* ── Default markup off cost ─────────────────────────────────── */}
+            <Separator />
+            <div className="space-y-3">
+              <div className="flex items-start gap-2.5">
+                <Checkbox
+                  id="group-pricing-enabled"
+                  checked={groupForm.pricingEnabled}
+                  onCheckedChange={(c) => setGroupForm(f => ({ ...f, pricingEnabled: c === true }))}
+                  className="mt-0.5"
+                />
+                <div className="space-y-0.5">
+                  <Label htmlFor="group-pricing-enabled" className="flex items-center gap-1.5 cursor-pointer">
+                    <Percent className="w-3.5 h-3.5 text-muted-foreground" /> Default price from cost
+                  </Label>
+                  <p className="text-xs text-muted-foreground">
+                    Price products for this group automatically as a markup on cost.
+                  </p>
+                </div>
+              </div>
+
+              {groupForm.pricingEnabled && (
+                <div className="space-y-3 pl-6">
+                  <div className="space-y-1.5">
+                    <Label>Cost basis</Label>
+                    <Select
+                      value={groupForm.pricingBasis}
+                      onValueChange={(v) => setGroupForm(f => ({ ...f, pricingBasis: v as PriceBasis }))}
+                    >
+                      <SelectTrigger><SelectValue /></SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="cost_inc">Cost price incl. GST</SelectItem>
+                        <SelectItem value="cost_ex">Cost price excl. GST</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label htmlFor="group-pricing-percent">Markup</Label>
+                    <div className="relative">
+                      <Input
+                        id="group-pricing-percent"
+                        type="number"
+                        min={0}
+                        step="0.01"
+                        inputMode="decimal"
+                        value={groupForm.pricingPercent}
+                        onChange={(e) => setGroupForm(f => ({ ...f, pricingPercent: e.target.value }))}
+                        className="pr-7"
+                      />
+                      <span className="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">%</span>
+                    </div>
+                  </div>
+
+                  <div className="flex items-start gap-2.5">
+                    <Checkbox
+                      id="group-pricing-cap"
+                      checked={groupForm.pricingCapAtRRP}
+                      onCheckedChange={(c) => setGroupForm(f => ({ ...f, pricingCapAtRRP: c === true }))}
+                      className="mt-0.5"
+                    />
+                    <Label htmlFor="group-pricing-cap" className="text-sm font-normal cursor-pointer leading-snug">
+                      Never charge more than the standard sell price
+                    </Label>
+                  </div>
+
+                  <p className="text-xs text-muted-foreground rounded-lg border bg-muted/30 px-3 py-2">
+                    <span className="font-medium text-foreground">
+                      {groupForm.name.trim() || "This group"} = {BASIS_LABELS[groupForm.pricingBasis]} + {clampPercent(groupForm.pricingPercent)}%
+                      {groupForm.pricingCapAtRRP ? " (max RRP)" : ""}
+                    </span>
+                    <br />
+                    Applies to products that have a cost price. Category exceptions are
+                    set on Management → Discounts.
+                  </p>
+
+                  {editingGroup && pricingNeedsConversion(ruleFor(editingGroup.id)) && (
+                    <p className="text-xs text-amber-600 dark:text-amber-500 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2">
+                      This group currently uses <span className="font-medium">{formulaLabel(ruleFor(editingGroup.id)!.formula)}</span>,
+                      set on Management → Discounts. Saving here replaces it with the markup above.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>

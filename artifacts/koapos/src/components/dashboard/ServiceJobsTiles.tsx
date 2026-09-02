@@ -4,6 +4,7 @@ import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Tru
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
+import { FollowUpBanner } from "./FollowUpBanner";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -23,6 +24,7 @@ function statusLabel(status: string): string {
     case "awaiting-partner-approval": return "Awaiting Partner Approval";
     case "partner-replacement": return "Partner Replacement";
     case "awaiting-customer": return "Awaiting Customer";
+    case "awaiting-pickup": return "Completed - Awaiting Pickup";
     case "completed": return "Completed";
     case "cancelled": return "Cancelled";
     default: return status.charAt(0).toUpperCase() + status.slice(1);
@@ -39,6 +41,7 @@ function statusColor(status: string) {
     case "awaiting-partner-approval": return "bg-indigo-100 text-indigo-700 border-indigo-200";
     case "partner-replacement": return "bg-teal-100 text-teal-700 border-teal-200";
     case "awaiting-customer": return "bg-orange-100 text-orange-700 border-orange-200";
+    case "awaiting-pickup": return "bg-lime-100 text-lime-700 border-lime-200";
     case "completed": return "bg-emerald-100 text-emerald-700 border-emerald-200";
     case "cancelled": return "bg-gray-100 text-gray-500 border-gray-200";
     default: return "bg-muted text-muted-foreground border-border";
@@ -65,7 +68,9 @@ function StatusTile({ icon, value, label, bg, iconColor, valueColor, dot }: Stat
         <span className={cn("text-3xl font-bold tabular-nums", valueColor)}>{value}</span>
         {dot && <span className="w-2.5 h-2.5 rounded-full bg-red-500 shrink-0" />}
       </div>
-      <span className="text-[11px] font-semibold tracking-wider text-center opacity-70 uppercase">{label}</span>
+      {/* Tiles use light pastel backgrounds with no dark variant, so pin the label
+          to a dark colour — otherwise it inherits white in dark mode and vanishes. */}
+      <span className="text-[11px] font-semibold tracking-wider text-center uppercase text-gray-700">{label}</span>
     </div>
   );
 }
@@ -172,7 +177,7 @@ function KpiDashboardTile({ href }: { href?: string }) {
   if (!result?.kpi) {
     return (
       <div
-        onClick={() => navigate("/management/marketing-reports/kpis-targets")}
+        onClick={() => navigate("/management/staff-operations/kpis-targets")}
         className="rounded-2xl border border-dashed bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
       >
         <Target className="w-5 h-5 text-muted-foreground/50" />
@@ -201,7 +206,7 @@ function KpiDashboardTile({ href }: { href?: string }) {
 
   return (
     <div
-      onClick={() => navigate(href ?? "/management/marketing-reports/kpis-targets")}
+      onClick={() => navigate(href ?? "/management/staff-operations/kpis-targets")}
       className={cn("rounded-2xl border p-4 flex flex-col gap-1.5 min-h-[100px] w-full cursor-pointer hover:shadow-sm transition-all", statusColor.bg, statusColor.border)}
     >
       <div className="flex items-center justify-between gap-1">
@@ -235,10 +240,12 @@ export function ServiceJobsTiles({
   showStatusTiles = true,
   showMetricTiles = true,
   showOverdueBanner = true,
+  showFollowUpBanner = true,
 }: {
   showStatusTiles?: boolean;
   showMetricTiles?: boolean;
   showOverdueBanner?: boolean;
+  showFollowUpBanner?: boolean;
 }) {
   const { data: jobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-dash"] } });
   const { data: appointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appts-dash"] } });
@@ -249,7 +256,12 @@ export function ServiceJobsTiles({
   const inProgress = jobs.filter((j) => !["completed", "partner-replacement", "cancelled"].includes(j.status as string)).length;
   const awaitingCustomer = jobs.filter((j) => (j.status as string) === "awaiting-customer").length;
   const pending = jobs.filter((j) => (j.status as string) === "pending").length;
-  const critical = jobs.filter((j) => j.isCritical).length;
+  // Only count critical jobs that are still open — a flagged job that has been
+  // completed or cancelled is no longer actionable. Matches the wall-display
+  // endpoint (dashboard-app-public.ts), which counts critical among active jobs.
+  const critical = jobs.filter(
+    (j) => j.isCritical && !["completed", "cancelled"].includes(j.status as string)
+  ).length;
 
   const now = new Date();
   const upcomingAppts = (appointmentsData ?? []).filter(
@@ -344,8 +356,9 @@ export function ServiceJobsTiles({
         </div>
       )}
 
-      {/* Overdue banner */}
+      {/* Overdue banner, then the follow-up nudge directly beneath it */}
       {showOverdueBanner && <OverdueBanner jobs={jobs} />}
+      {showFollowUpBanner && <FollowUpBanner />}
     </div>
   );
 }

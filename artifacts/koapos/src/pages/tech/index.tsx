@@ -4,8 +4,10 @@ import {
   Wrench, ScanLine, Loader2, LogOut, ChevronLeft, Phone, Mail,
   AlertTriangle, ShieldAlert, Search, ShieldCheck, KeyRound, Camera,
   StickyNote, Upload, FileText, Play, X, ChevronDown,
+  CalendarClock, Plus, Clock, User, Check,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { setHomeScreenApp } from "@/lib/home-screen";
 
 /**
  * Tech App — mobile companion for technicians.
@@ -41,6 +43,8 @@ type TechJobSummary = {
 type TechJobDetail = TechJobSummary & {
   customerPhone: string | null;
   customerEmail: string | null;
+  deviceColour: string | null;
+  deviceQuantity: number | null;
   serialNumber: string | null;
   condition: string | null;
   workDescription: string | null;
@@ -56,6 +60,23 @@ type TechJobDetail = TechJobSummary & {
   canChangeStatus: boolean;
 };
 
+type TechAppointment = {
+  id: number;
+  title: string;
+  customerId: number | null;
+  customerName: string | null;
+  customerPhone: string | null;
+  staffId: number | null;
+  staffName: string | null;
+  scheduledAt: string;
+  endAt: string;
+  durationMinutes: number;
+  status: string;
+  notes: string | null;
+};
+
+type TechCustomerLite = { id: number; name: string; phone: string | null };
+
 const STATUS_LABELS: Record<string, string> = {
   pending: "Pending",
   "in-progress": "In Progress",
@@ -65,6 +86,7 @@ const STATUS_LABELS: Record<string, string> = {
   "awaiting-partner-approval": "Awaiting Partner Approval",
   "partner-replacement": "Partner Replacement",
   "awaiting-customer": "Awaiting Customer",
+  "awaiting-pickup": "Completed - Awaiting Pickup",
   completed: "Completed",
   cancelled: "Cancelled",
 };
@@ -78,6 +100,7 @@ const STATUS_COLORS: Record<string, string> = {
   "awaiting-partner-approval": "bg-cyan-100 text-cyan-700",
   "partner-replacement": "bg-cyan-100 text-cyan-700",
   "awaiting-customer": "bg-pink-100 text-pink-700",
+  "awaiting-pickup": "bg-lime-100 text-lime-700",
   completed: "bg-emerald-100 text-emerald-700",
   cancelled: "bg-red-100 text-red-700",
 };
@@ -486,6 +509,8 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
 
           <div className="rounded-2xl border bg-card p-4 space-y-3">
             <DetailRow label="Device" value={[job.deviceType, job.deviceDescription].filter(Boolean).join(" — ")} />
+            <DetailRow label="Colour" value={job.deviceColour} />
+            <DetailRow label="Quantity" value={job.deviceQuantity != null ? String(job.deviceQuantity) : null} />
             <DetailRow label="Serial Number" value={job.serialNumber} mono />
             <DetailRow label="Condition" value={job.condition} />
             <DetailRow label="Fault / Work Required" value={job.workDescription} />
@@ -707,6 +732,8 @@ function ScanTab({ onOpenJob }: { onOpenJob: (id: number) => void }) {
       onOpenJob(id);
     } else if (r.status === 403) {
       setPrivacyScreen(true);
+    } else if (r.status === 410) {
+      setMessage("This service QR code has expired (over 30 days old). Ask staff to reprint the ticket.");
     } else if (r.status === 404) {
       setMessage("No service job matches that ticket.");
     } else if (r.status === 401) {
@@ -809,17 +836,361 @@ function LoginScreen({
   );
 }
 
+/* ── Appointments ────────────────────────────────────────────────────── */
+
+const APPT_STATUS_STYLE: Record<string, { label: string; cls: string }> = {
+  scheduled: { label: "Scheduled", cls: "bg-blue-100 text-blue-700" },
+  completed: { label: "Completed", cls: "bg-emerald-100 text-emerald-700" },
+  cancelled: { label: "Cancelled", cls: "bg-red-100 text-red-700" },
+  "no-show":  { label: "No-show",  cls: "bg-amber-100 text-amber-700" },
+};
+
+const APPT_DURATIONS = [15, 30, 45, 60, 90, 120];
+
+function ApptStatusBadge({ status }: { status: string }) {
+  const s = APPT_STATUS_STYLE[status] ?? { label: status, cls: "bg-slate-100 text-slate-700" };
+  return (
+    <span className={cn("inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-semibold", s.cls)}>
+      {s.label}
+    </span>
+  );
+}
+
+const pad2 = (n: number) => String(n).padStart(2, "0");
+
+/** ISO timestamp → local <input type=date>/<input type=time> values. */
+function toLocalDateParts(iso: string): { date: string; time: string } {
+  const d = new Date(iso);
+  return { date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}` };
+}
+
+/** Default a new appointment to the next full hour. */
+function defaultDateParts(): { date: string; time: string } {
+  const d = new Date();
+  d.setMinutes(0, 0, 0);
+  d.setHours(d.getHours() + 1);
+  return { date: `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(d.getDate())}`, time: `${pad2(d.getHours())}:${pad2(d.getMinutes())}` };
+}
+
+function fmtApptWhen(iso: string): string {
+  return new Date(iso).toLocaleString(undefined, {
+    weekday: "short", day: "numeric", month: "short", hour: "numeric", minute: "2-digit",
+  });
+}
+
+function fmtDuration(mins: number): string {
+  const h = Math.floor(mins / 60);
+  const m = mins % 60;
+  if (h === 0) return `${m} min`;
+  return m ? `${h}h ${m}m` : `${h}h`;
+}
+
+/** Type-ahead customer search backed by /api/tech/customers. */
+function CustomerPicker({ value, onChange }: {
+  value: { id: number; name: string } | null;
+  onChange: (c: { id: number; name: string } | null) => void;
+}) {
+  const [q, setQ] = useState("");
+  const [results, setResults] = useState<TechCustomerLite[]>([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open) return;
+    const term = q.trim();
+    if (term.length < 1) { setResults([]); setLoading(false); return; }
+    let cancelled = false;
+    setLoading(true);
+    const t = setTimeout(() => {
+      void techFetch<{ items: TechCustomerLite[] }>(`/customers?q=${encodeURIComponent(term)}`).then((r) => {
+        if (cancelled) return;
+        setResults(r.ok && r.data ? r.data.items : []);
+        setLoading(false);
+      });
+    }, 250);
+    return () => { cancelled = true; clearTimeout(t); };
+  }, [q, open]);
+
+  if (value) {
+    return (
+      <div className="flex items-center justify-between rounded-xl border bg-card px-3 py-2.5">
+        <span className="flex items-center gap-2 text-sm min-w-0">
+          <User className="w-4 h-4 text-muted-foreground shrink-0" />
+          <span className="truncate">{value.name}</span>
+        </span>
+        <button type="button" onClick={() => onChange(null)} className="p-1 rounded-lg hover:bg-muted text-muted-foreground" aria-label="Clear customer">
+          <X className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  }
+
+  return (
+    <div className="relative">
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={q}
+          onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+          onFocus={() => setOpen(true)}
+          placeholder="Search customer (optional)…"
+          className="w-full rounded-xl border bg-card pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+        />
+      </div>
+      {open && q.trim().length > 0 && (
+        <div className="absolute z-10 mt-1 w-full rounded-xl border bg-popover shadow-lg max-h-56 overflow-auto">
+          {loading ? (
+            <div className="flex justify-center py-4"><Loader2 className="w-4 h-4 animate-spin text-muted-foreground" /></div>
+          ) : results.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">No matches</p>
+          ) : results.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => { onChange({ id: c.id, name: c.name }); setOpen(false); setQ(""); }}
+              className="w-full text-left px-3 py-2.5 hover:bg-muted text-sm border-b last:border-0"
+            >
+              <p className="truncate">{c.name}</p>
+              {c.phone && <p className="text-xs text-muted-foreground truncate">{c.phone}</p>}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+/** Full-screen create/edit sheet. `existing` null → create. */
+function AppointmentForm({ existing, onClose, onSaved }: {
+  existing: TechAppointment | null;
+  onClose: () => void;
+  onSaved: (a: TechAppointment) => void;
+}) {
+  const initial = existing ? toLocalDateParts(existing.scheduledAt) : defaultDateParts();
+  const [customer, setCustomer] = useState<{ id: number; name: string } | null>(
+    existing?.customerId ? { id: existing.customerId, name: existing.customerName ?? "Customer" } : null,
+  );
+  const [title, setTitle] = useState(existing?.title ?? "");
+  const [date, setDate] = useState(initial.date);
+  const [time, setTime] = useState(initial.time);
+  const [duration, setDuration] = useState(existing?.durationMinutes ?? 30);
+  const [status, setStatus] = useState(existing?.status ?? "scheduled");
+  const [notes, setNotes] = useState(existing?.notes ?? "");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const labelCls = "text-[10px] font-bold uppercase tracking-wider text-muted-foreground";
+  const fieldCls = "w-full rounded-xl border bg-card px-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/40";
+
+  const save = async () => {
+    setError(null);
+    if (!date || !time) { setError("Pick a date and time."); return; }
+    const when = new Date(`${date}T${time}`);
+    if (isNaN(when.getTime())) { setError("That date/time isn't valid."); return; }
+    setSaving(true);
+    const body = {
+      scheduledAt: when.toISOString(),
+      durationMinutes: duration,
+      title: title.trim() || undefined,
+      customerId: customer?.id ?? null,
+      status,
+      notes: notes.trim() || null,
+    };
+    const r = existing
+      ? await techFetch<TechAppointment>(`/appointments/${existing.id}`, { method: "PATCH", body: JSON.stringify(body) })
+      : await techFetch<TechAppointment>("/appointments", { method: "POST", body: JSON.stringify(body) });
+    setSaving(false);
+    if (r.ok && r.data) onSaved(r.data);
+    else setError((r.data as { error?: string } | null)?.error ?? "Couldn't save — try again.");
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 bg-background flex flex-col max-w-lg mx-auto">
+      <header className="sticky top-0 z-10 bg-background/95 backdrop-blur border-b px-2 py-2 flex items-center gap-1">
+        <button onClick={onClose} className="p-2 rounded-lg hover:bg-muted text-muted-foreground" aria-label="Close">
+          <X className="w-5 h-5" />
+        </button>
+        <p className="flex-1 text-sm font-bold">{existing ? "Edit appointment" : "New appointment"}</p>
+      </header>
+
+      <div className="flex-1 overflow-auto px-4 py-4 space-y-4" style={{ paddingBottom: "6rem" }}>
+        <div className="space-y-1.5">
+          <label className={labelCls}>Customer</label>
+          <CustomerPicker value={customer} onChange={setCustomer} />
+        </div>
+
+        <div className="space-y-1.5">
+          <label className={labelCls}>Title</label>
+          <input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="e.g. Pickup, Consultation…" className={fieldCls} />
+          <p className="text-[11px] text-muted-foreground">Leave blank to name it after the customer.</p>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className={labelCls}>Date</label>
+            <input type="date" value={date} onChange={(e) => setDate(e.target.value)} className={fieldCls} />
+          </div>
+          <div className="space-y-1.5">
+            <label className={labelCls}>Time</label>
+            <input type="time" value={time} onChange={(e) => setTime(e.target.value)} className={fieldCls} />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div className="space-y-1.5">
+            <label className={labelCls}>Duration</label>
+            <select value={duration} onChange={(e) => setDuration(parseInt(e.target.value, 10))} className={fieldCls}>
+              {APPT_DURATIONS.map((m) => <option key={m} value={m}>{fmtDuration(m)}</option>)}
+            </select>
+          </div>
+          <div className="space-y-1.5">
+            <label className={labelCls}>Status</label>
+            <select value={status} onChange={(e) => setStatus(e.target.value)} className={fieldCls}>
+              {Object.entries(APPT_STATUS_STYLE).map(([v, s]) => <option key={v} value={v}>{s.label}</option>)}
+            </select>
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <label className={labelCls}>Notes</label>
+          <textarea value={notes} onChange={(e) => setNotes(e.target.value)} rows={3} placeholder="Anything the team should know…" className={cn(fieldCls, "resize-none")} />
+        </div>
+
+        {error && <p className="text-sm text-red-600 font-medium">{error}</p>}
+      </div>
+
+      <div className="fixed bottom-0 inset-x-0 max-w-lg mx-auto border-t bg-background p-3" style={{ paddingBottom: "calc(env(safe-area-inset-bottom) + 0.75rem)" }}>
+        <button
+          onClick={() => void save()}
+          disabled={saving}
+          className="w-full rounded-xl bg-primary text-primary-foreground py-3 font-semibold text-sm disabled:opacity-50 active:scale-[0.99] transition-transform flex items-center justify-center gap-2"
+        >
+          {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+          {existing ? "Save changes" : "Create appointment"}
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function AppointmentCard({ a, onOpen }: { a: TechAppointment; onOpen: () => void }) {
+  const past = new Date(a.endAt).getTime() < Date.now();
+  return (
+    <button
+      onClick={onOpen}
+      className={cn("w-full text-left rounded-2xl border bg-card p-4 active:scale-[0.99] transition-transform", past && "opacity-70")}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <p className="font-bold text-sm truncate">{a.title}</p>
+        <ApptStatusBadge status={a.status} />
+      </div>
+      <p className="flex items-center gap-1.5 text-sm mt-1.5 text-muted-foreground">
+        <Clock className="w-3.5 h-3.5 shrink-0" />
+        {fmtApptWhen(a.scheduledAt)} · {fmtDuration(a.durationMinutes)}
+      </p>
+      {a.customerName && (
+        <p className="flex items-center gap-1.5 text-xs mt-1 truncate">
+          <User className="w-3.5 h-3.5 text-muted-foreground shrink-0" /> {a.customerName}
+        </p>
+      )}
+    </button>
+  );
+}
+
+function AppointmentsTab() {
+  const [appts, setAppts] = useState<TechAppointment[] | null>(null);
+  const [error, setError] = useState(false);
+  const [search, setSearch] = useState("");
+  /** null = list view, "new" = create, object = edit. */
+  const [formFor, setFormFor] = useState<TechAppointment | "new" | null>(null);
+
+  const load = useCallback(() => {
+    setError(false);
+    void techFetch<{ items: TechAppointment[] }>("/appointments").then((r) => {
+      if (r.ok && r.data) setAppts(r.data.items);
+      else setError(true);
+    });
+  }, []);
+  useEffect(() => { load(); }, [load]);
+
+  if (formFor !== null) {
+    return (
+      <AppointmentForm
+        existing={formFor === "new" ? null : formFor}
+        onClose={() => setFormFor(null)}
+        onSaved={() => { setFormFor(null); setAppts(null); load(); }}
+      />
+    );
+  }
+
+  const q = search.trim().toLowerCase();
+  const filtered = (appts ?? []).filter((a) =>
+    !q || a.title.toLowerCase().includes(q) || (a.customerName ?? "").toLowerCase().includes(q));
+  const now = Date.now();
+  const upcoming = filtered.filter((a) => new Date(a.endAt).getTime() >= now);
+  const past = filtered.filter((a) => new Date(a.endAt).getTime() < now).reverse();
+
+  return (
+    <div className="space-y-3 pb-4">
+      <button
+        onClick={() => setFormFor("new")}
+        className="w-full rounded-xl bg-primary text-primary-foreground py-2.5 font-semibold text-sm active:scale-[0.99] transition-transform flex items-center justify-center gap-2"
+      >
+        <Plus className="w-4 h-4" /> New appointment
+      </button>
+
+      <div className="relative">
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+        <input
+          value={search}
+          onChange={(e) => setSearch(e.target.value)}
+          placeholder="Search title or customer…"
+          className="w-full rounded-xl border bg-card pl-9 pr-3 py-2.5 text-sm outline-none focus:ring-2 focus:ring-primary/40"
+        />
+      </div>
+
+      {error ? (
+        <p className="text-sm text-muted-foreground text-center py-16">Couldn't load appointments — pull down to retry.</p>
+      ) : appts === null ? (
+        <div className="flex justify-center py-16"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>
+      ) : filtered.length === 0 ? (
+        <p className="text-sm text-muted-foreground text-center py-16">
+          {q ? `No appointments match "${search}"` : "No appointments yet — tap “New appointment”."}
+        </p>
+      ) : (
+        <>
+          {upcoming.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-1">Upcoming</p>
+              {upcoming.map((a) => <AppointmentCard key={a.id} a={a} onOpen={() => setFormFor(a)} />)}
+            </div>
+          )}
+          {past.length > 0 && (
+            <div className="space-y-2">
+              <p className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground pt-2">Past</p>
+              {past.map((a) => <AppointmentCard key={a.id} a={a} onOpen={() => setFormFor(a)} />)}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
 /* ── Root page ───────────────────────────────────────────────────────── */
 
 export default function TechAppPage() {
-  const [, params] = useRoute("/b/:businessUsername/t/webapp");
-  const username = params?.businessUsername ?? "";
+  // Canonical route is /t/techapp; /t/webapp is kept as a legacy alias so
+  // already-printed service-ticket QR codes keep resolving.
+  const [, techParams] = useRoute("/b/:businessUsername/t/techapp");
+  const [, legacyParams] = useRoute("/b/:businessUsername/t/webapp");
+  const username = techParams?.businessUsername ?? legacyParams?.businessUsername ?? "";
 
   const [phase, setPhase] = useState<"boot" | "login" | "app" | "no-business">("boot");
   const [business, setBusiness] = useState<TechBusiness | null>(null);
   const [staff, setStaff] = useState<TechStaff | null>(null);
 
-  const [tab, setTab] = useState<"services" | "scan">("services");
+  const [tab, setTab] = useState<"services" | "scan" | "appoint">("services");
   const [openJobId, setOpenJobId] = useState<number | null>(null);
 
   /* Deep link: a printed sheet QR opens /b/:username/t/webapp?job=:id. Capture
@@ -837,6 +1208,11 @@ export default function TechAppPage() {
       setPendingJobId(null);
     }
   }, [phase, pendingJobId]);
+
+  /* Brand the home-screen icon for this business's Tech App. */
+  useEffect(() => {
+    if (business) setHomeScreenApp({ name: `${business.businessName} Tech`, iconUrl: business.logoUrl });
+  }, [business]);
 
   /* Boot: resolve business + restore an existing tech session */
   useEffect(() => {
@@ -917,32 +1293,44 @@ export default function TechAppPage() {
           <JobDetailView jobId={openJobId} onBack={() => setOpenJobId(null)} />
         ) : tab === "services" ? (
           <ServicesList onOpen={setOpenJobId} />
+        ) : tab === "appoint" ? (
+          <AppointmentsTab />
         ) : (
           <ScanTab onOpenJob={(id) => { setOpenJobId(id); setTab("services"); }} />
         )}
       </main>
 
-      {/* Bottom nav — Services / Scan */}
+      {/* Bottom nav — Services / Appoint / Scan */}
       <nav className="fixed bottom-0 inset-x-0 z-30 bg-background border-t max-w-lg mx-auto" style={{ paddingBottom: "env(safe-area-inset-bottom)" }}>
-        <div className="grid grid-cols-2">
+        <div className="grid grid-cols-3">
           <button
             onClick={() => { setTab("services"); setOpenJobId(null); }}
             className={cn(
-              "flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors",
+              "flex flex-col items-center gap-1 py-3.5 text-xs font-semibold transition-colors",
               tab === "services" && openJobId == null ? "text-primary" : "text-muted-foreground",
             )}
           >
-            <Wrench className="w-5 h-5" />
+            <Wrench className="w-6 h-6" />
             Services
+          </button>
+          <button
+            onClick={() => { setTab("appoint"); setOpenJobId(null); }}
+            className={cn(
+              "flex flex-col items-center gap-1 py-3.5 text-xs font-semibold transition-colors",
+              tab === "appoint" && openJobId == null ? "text-primary" : "text-muted-foreground",
+            )}
+          >
+            <CalendarClock className="w-6 h-6" />
+            Appoint
           </button>
           <button
             onClick={() => { setTab("scan"); setOpenJobId(null); }}
             className={cn(
-              "flex flex-col items-center gap-1 py-3 text-[11px] font-semibold transition-colors",
+              "flex flex-col items-center gap-1 py-3.5 text-xs font-semibold transition-colors",
               tab === "scan" && openJobId == null ? "text-primary" : "text-muted-foreground",
             )}
           >
-            <ScanLine className="w-5 h-5" />
+            <ScanLine className="w-6 h-6" />
             Scan
           </button>
         </div>

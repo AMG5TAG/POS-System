@@ -127,7 +127,7 @@ export default function ManagementReportsVoidAuditPage() {
                 "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
                 days === o.value
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background border-border hover:bg-muted",
+                  : "pill-selector bg-background border-border hover:bg-muted",
               )}>
               {o.label}
             </button>
@@ -139,7 +139,7 @@ export default function ManagementReportsVoidAuditPage() {
                 "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
                 filterAction === a
                   ? "bg-primary text-primary-foreground border-primary"
-                  : "bg-background border-border hover:bg-muted",
+                  : "pill-selector bg-background border-border hover:bg-muted",
               )}>
               {a === "" ? "All" : ACTION_LABELS[a]}
             </button>

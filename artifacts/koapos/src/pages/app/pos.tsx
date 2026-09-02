@@ -7,8 +7,10 @@ import { takePendingCart } from "@/lib/pending-cart";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useOfflineQueue } from "@/hooks/use-offline-queue";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
+import { parseHardwareConfig } from "@/lib/hardware-config";
 import { warrantyLabel } from "@/lib/warranty";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CameraPosPiP } from "@/components/cameras/CameraPosPiP";
@@ -16,42 +18,49 @@ import { PosWebcamCapture } from "@/components/cameras/PosWebcamCapture";
 import { useSidebar } from "@/components/ui/sidebar";
 import {
   useListProducts, useListCategories, useCreateTransaction,
-  useListCustomers, useGetLoyaltySettings, useListStaff,
+  useListCustomers, useGetCustomer, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
-  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useVerifyStaffPin,
+  useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useUpsertPosSettings, useVerifyStaffPin,
+  useGetPaymentSurcharges,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
+  useGetPosFavourites, useUpdatePosFavourites,
+  useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
+  useCreateTimeCardSession, getListTimeCardSessionsQueryKey,
   Product, Customer, Staff, ServiceJob, Appointment,
   TransactionInputPaymentMethod, TransactionPaymentMethod, TransactionStatus, Transaction,
   GiftCardValidateResponse, customFetch,
 } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { SendDialog } from "@/components/send/send-dialog";
 import { useButtonStyle } from "@/lib/button-style";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency } from "@/lib/utils";
 import { customerDisplayName } from "@/lib/customer-name";
 import {
   ALL_PAYMENT_METHODS, getEnabledPaymentMethods, PaymentMethodId,
-  getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS,
+  getEnabledIntegrationPayments, INTEGRATION_PAYMENT_LABELS, ASYNC_PAYMENT_PROVIDERS,
   ACTIVE_REGISTER_KEY,
   getStaffLoginMessage, setStaffAcknowledged, hasStaffAcknowledged,
   type StaffLoginMessage,
 } from "@/pages/app/management-registers";
 import {
   loadRegisterSession, saveRegisterSession, clearRegisterSession, getOrCreateDeviceId,
-  ACTIVE_REGISTER_ID_KEY, parseStaffPosPrefs,
+  ACTIVE_REGISTER_ID_KEY, parseStaffPosPrefs, parseCustomPaymentMethods,
   type RegisterSession,
 } from "@/lib/pos-local-settings";
+import { resolveCustomPaymentIcon } from "@/lib/custom-payment-icons";
 import { useStaffSession } from "@/lib/staff-day-session";
 import { loyaltyUnitName, loyaltyProgramName } from "@/lib/loyalty-naming";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -74,6 +83,7 @@ import {
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
+import { CustomerAvatar } from "@/components/customers/CustomerAvatar";
 import QRCode from "qrcode";
 
 /* ─── Denomination constants (open-till count) ───────────────────────────── */
@@ -105,9 +115,9 @@ function openDenomTotal(counts: Record<number, string>): number {
 /* ─── POS layout class maps (account settings + per-staff overrides) ─────── */
 
 const TILE_SIZE_CLASSES: Record<"compact" | "normal" | "large", { image: string; body: string; name: string; price: string }> = {
-  compact: { image: "h-[110px]", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
-  normal:  { image: "h-[150px]", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
-  large:   { image: "h-[190px]", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
+  compact: { image: "aspect-square", body: "p-1.5",  name: "text-[11px] min-h-[1.6rem]", price: "text-xs" },
+  normal:  { image: "aspect-square", body: "p-2.5",  name: "text-xs min-h-[2rem]",       price: "text-sm" },
+  large:   { image: "aspect-square", body: "p-3.5",  name: "text-sm min-h-[2.5rem]",     price: "text-base" },
 };
 
 /* Minimum tile width per size — drives how many columns fit. The grid fills as
@@ -155,7 +165,7 @@ type CartItem = {
   pricingRuleDiscount?: number;
   pricingRuleLabel?: string;
   modifiers?: Modifier[];
-  /** Serial numbers for warranty products — one per unit sold. */
+  /** Serial numbers for serial-tracked products — one per unit sold. */
   serials?: string[];
 };
 
@@ -220,12 +230,26 @@ function formatKode(profit: number): string {
   return `KK${sign}${String(n).padStart(3, "0")}`;
 }
 
+/* Today as a local YYYY-MM-DD (matches a native date input's value). */
+const todayLocalISODate = () => new Date().toLocaleDateString("en-CA");
+
+/** "Mon 3 Mar 2026" for a YYYY-MM-DD sale date, parsed as a local calendar day. */
+const formatSaleDateLabel = (iso: string): string => {
+  const [y, m, d] = iso.split("-").map(Number);
+  if (!y || !m || !d) return iso;
+  return new Date(y, m - 1, d).toLocaleDateString("en-AU", {
+    weekday: "short", day: "numeric", month: "short", year: "numeric",
+  });
+};
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function POSPage() {
   const [, setLocation] = useLocation();
   /* product browse */
   const [search, setSearch] = useState("");
+  // Debounced so the product query fires on pause, not on every keystroke.
+  const debouncedSearch = useDebounce(search);
   const [posTab, setPosTab]             = useState<"favourites" | "browse">("favourites");
   const [categoryPath, setCategoryPath] = useState<number[]>([]);
   /* Which register THIS device operates — persisted per device so each
@@ -236,11 +260,28 @@ export default function POSPage() {
 
   const [favouriteIds, setFavouriteIds] = useState<Set<number>>(new Set());
 
+  /* Favourites are persisted per register via /api/pos-favourites so a pinned
+     list survives reloads and is shared across this register's devices. */
+  const { data: favouritesData } = useGetPosFavourites(
+    { registerId: activeRegisterId },
+    { query: { queryKey: ["pos-favourites", activeRegisterId] } },
+  );
+  const updateFavourites = useUpdatePosFavourites();
+
+  useEffect(() => {
+    if (!favouritesData) return;
+    try {
+      const arr = JSON.parse(favouritesData.productIds || "[]");
+      setFavouriteIds(new Set(Array.isArray(arr) ? arr.filter((n): n is number => typeof n === "number") : []));
+    } catch { setFavouriteIds(new Set()); }
+  }, [favouritesData]);
+
   const toggleFavourite = (id: number, e: React.MouseEvent) => {
     e.stopPropagation();
     setFavouriteIds(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
+      updateFavourites.mutate({ data: { registerId: activeRegisterId, productIds: JSON.stringify([...next]) } });
       return next;
     });
   };
@@ -271,6 +312,25 @@ export default function POSPage() {
   /* merchant / business data for receipts */
   const { data: merchantData } = useGetMerchant();
   const { profile: businessProfile } = useBusinessProfile();
+
+  /* Create-invoice-from-POS: turning the current cart into an unpaid invoice is
+     offered as a checkout payment option. These power the create + send flow. */
+  type CreatedInvoice = {
+    id: number; invoiceNumber: string;
+    customerId: number | null; customerName?: string | null;
+    customerEmail?: string | null; customerPhone?: string | null;
+    status: string; subtotal: number; taxTotal: number; total: number;
+    amountPaid: number;
+    discountType: string | null; discountValue: number | null; discountTotal: number | null;
+    items: { description: string; quantity: number; unitPrice: number; taxRate: number }[];
+    createdAt: string;
+  };
+  const { printInvoice: printInvoiceTpl, invoiceEmailTemplate } = useDocumentTemplate();
+  const createInvoiceMutation = useCreateInvoice();
+  const sendInvoiceEmailMutation = useSendInvoiceEmail();
+  const [invoiceSendTarget, setInvoiceSendTarget] = useState<CreatedInvoice | null>(null);
+  const [invoiceCreating, setInvoiceCreating] = useState(false);
+  const [invoiceEmailSubject, setInvoiceEmailSubject] = useState("");
 
   /* pos settings — used for role discount limits */
   const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
@@ -308,6 +368,7 @@ export default function POSPage() {
       tileSize: (tile && ["compact", "normal", "large"].includes(tile) ? tile : "normal") as "compact" | "normal" | "large",
       showPrices: posSettingsData ? posSettingsData.gridShowPrices === "true" : true,
       showStockBadges: posSettingsData?.gridShowStockBadges === "true",
+      showQuickViewSupplier: posSettingsData ? posSettingsData.quickViewShowSupplier !== "false" : true,
       cartPosition: (posSettingsData?.gridCartPosition === "left" ? "left" : "right") as "left" | "right",
     };
     return { ...base, ...parseStaffPosPrefs(dayStaffMember?.posPrefs) };
@@ -340,7 +401,10 @@ export default function POSPage() {
 
   /* active print template */
   const { opts: thermalOpts, fontCss: thermalFontCss } = useSalesTemplate("Thermal_Receipt");
-  const { printA4Receipt } = useDocumentTemplate();
+  const { printA4Receipt, printReceipt } = useDocumentTemplate();
+
+  /* Register hardware config — drives auto-print on sale/refund. */
+  const hardware = useMemo(() => parseHardwareConfig(posSettingsData?.hardwareConfig), [posSettingsData]);
 
   /* parked sales — API-backed */
   const queryClient = useQueryClient();
@@ -354,7 +418,20 @@ export default function POSPage() {
   const [payMethod, setPayMethod] = useState<PaymentMethodId>(
     () => getEnabledPaymentMethods()[0] ?? "cash"
   );
+  // "invoice" isn't a real stored tender (not in PaymentMethodId), so it's
+  // compared via String() — mirroring how integration methods are handled.
+  const isInvoiceMethod = String(payMethod) === "invoice";
   const [numpadInput, setNumpadInput] = useState("");
+  /* Reference/description captured when tendering via Direct Deposit (e.g. the
+     bank reference or payer name) so the payment can be reconciled later. */
+  const [depositDesc, setDepositDesc] = useState("");
+  /* Accounting date for the receipt. Always defaults to today (the sale is being
+     rung up now) but is back-datable for any tender, so a sale entered after the
+     fact — a deposit that cleared earlier, a manual receipt being caught up —
+     books to that calendar day for reporting. Never forward-datable. */
+  const [saleDate, setSaleDate] = useState(todayLocalISODate());
+  /* A sale date other than today books the receipt to that earlier day. */
+  const isBackdatedSale = !!saleDate && saleDate !== todayLocalISODate();
   const [splitLegs, setSplitLegs] = useState<{ method: PaymentMethodId; amount: string }[]>([
     { method: "cash", amount: "" },
     { method: "eftpos", amount: "" },
@@ -374,7 +451,7 @@ export default function POSPage() {
   const [tempItemDiscardConfirmOpen, setTempItemDiscardConfirmOpen] = useState(false);
   const [zeroPriceDiscardConfirmOpen, setZeroPriceDiscardConfirmOpen] = useState(false);
 
-  /* warranty serial-number collection at checkout */
+  /* serial-number collection at checkout (serial-tracked products) */
   const [serialPrompt, setSerialPrompt] = useState<null | {
     method: TransactionInputPaymentMethod; amountTendered: number;
     extraNote?: string; giftCardPayment?: { cardId: number; amount: number };
@@ -389,6 +466,14 @@ export default function POSPage() {
   const [modPickerGroups, setModPickerGroups] = useState<ModifierGroup[]>([]);
   // Quick-view: inspect a product without adding it to the sale.
   const [quickViewProduct, setQuickViewProduct] = useState<Product | null>(null);
+  // Whether the Quick View panel shows the product's supplier — an account-wide,
+  // server-synced POS setting (quickViewShowSupplier).
+  const upsertPosSettings = useUpsertPosSettings({
+    mutation: { onSuccess: () => queryClient.invalidateQueries({ queryKey: ["pos-settings"] }) },
+  });
+  const toggleQuickViewSupplier = (v: boolean) => {
+    upsertPosSettings.mutate({ data: { quickViewShowSupplier: String(v) } });
+  };
   const [modPickerSelected, setModPickerSelected] = useState<Record<number, number[]>>({});
   /* gift card — payment */
   const [gcPayCardNumber, setGcPayCardNumber] = useState("");
@@ -399,6 +484,7 @@ export default function POSPage() {
   const isPaymentDirty =
     numpadInput !== "" ||
     gcPayCardNumber !== "" ||
+    depositDesc !== "" ||
     splitLegs.some(l => l.amount !== "") ||
     (paymentModalInitialMethodRef.current !== null && payMethod !== paymentModalInitialMethodRef.current);
 
@@ -450,6 +536,14 @@ export default function POSPage() {
   // succeeds or the cart is cleared, starting a fresh key for the next sale.
   const idempotencyKeyRef = useRef<string | null>(null);
 
+  /* Async buy-now-pay-later providers (Zip, Afterpay) — scan-to-pay. The sale is
+     parked server-side and only recorded once the provider captures, so the POS
+     shows a pending dialog (QR + polling) instead of completing instantly. The
+     completion-UI inputs are snapshotted at create time because capture happens
+     later, outside the checkout closure. */
+  const [payPending, setPayPending] = useState<{ provider: string; label: string; attemptId: number; qrPayload: string | null; expiresAt: string | null; status: string; error: string | null; amount: number } | null>(null);
+  const paySnapRef = useRef<SaleCompletionSnapshot | null>(null);
+
   // Refs kept in sync with state so pagehide / unmount cleanup can read the
   // latest cart without stale closures.
   const cartRef = useRef<CartItem[]>([]);
@@ -458,6 +552,7 @@ export default function POSPage() {
   const hasAutoParkedRef = useRef(false);
   const [pendingRestoreCustomerId, setPendingRestoreCustomerId] = useState<number | null>(null);
   const [customerSearch, setCustomerSearch] = useState("");
+  const debouncedCustomerSearch = useDebounce(customerSearch);
   const [customerOpen, setCustomerOpen] = useState(false);
   const [walkInDialogOpen, setWalkInDialogOpen] = useState(false);
   const customerDropdownRef = useRef<HTMLDivElement>(null);
@@ -484,6 +579,10 @@ export default function POSPage() {
   const [linkedAppointment, setLinkedAppointment] = useState<Appointment | null>(null);
   const [serviceLinkOpen, setServiceLinkOpen] = useState(false);
   const [linkSearch, setLinkSearch] = useState("");
+  /* A linked service/appointment adopts its customer as the sale's customer. The
+     linked object carries only a customerId; when that customer isn't already in
+     the loaded picker list we fetch it by id (see useGetCustomer below). */
+  const [pendingLinkCustomerId, setPendingLinkCustomerId] = useState<number | null>(null);
 
   /* AI upsell coach */
   const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
@@ -532,6 +631,10 @@ export default function POSPage() {
   const [openDenomCounts, setOpenDenomCounts] = useState<Record<number, string>>({});
   const [openNotes, setOpenNotes] = useState("");
   const [closeFormData, setCloseFormData] = useState({ cashCounted: "", eftposDeclared: "", notes: "" });
+  /* Other registers still open when this one closes — populated (when the
+     "prompt to close all open registers" setting is on) to drive the close-all
+     confirmation dialog. */
+  const [closeAllCandidates, setCloseAllCandidates] = useState<Array<{ id: number; registerId: string; openedBy: string }>>([]);
 
   /* Device locking — tracks the server-side session ID for the local till and
      whether another device has an open till for this register. */
@@ -551,7 +654,9 @@ export default function POSPage() {
       return;
     }
     const deviceId = getOrCreateDeviceId();
-    const float = openDenomTotal(openDenomCounts);
+    /* Operations registers have no cash drawer — open with a $0 float and no
+       cash count. Every other register type uses the counted opening float. */
+    const float = isOperationsRegister ? 0 : openDenomTotal(openDenomCounts);
     const session: RegisterSession = {
       openedAt: new Date().toISOString(),
       openedBy: dayStaffMember?.name ?? currentStaff?.name ?? null,
@@ -567,12 +672,13 @@ export default function POSPage() {
     setOpenRegisterDialogOpen(false);
     setOpenDenomCounts({});
     setOpenNotes("");
-    setCashMovementPrintOpen(true);
+    /* Skip the cash-movement (float) slip for cashless Operations registers. */
+    if (!isOperationsRegister) setCashMovementPrintOpen(true);
     toast.success("Register opened");
 
     /* Sync to server so other devices can detect this till is in use. */
     createServerSession.mutate(
-      { data: { registerId: activeRegisterId, openedBy: session.openedBy ?? "", openingFloat: String(float), openingNotes: openNotes, deviceId } },
+      { data: { registerId: activeRegisterId, staffId: dayStaffMember?.id ?? null, openedBy: session.openedBy ?? "", openingFloat: String(float), openingNotes: openNotes, deviceId } },
       {
         onSuccess: (row) => {
           const id = (row as { id?: number })?.id;
@@ -674,6 +780,28 @@ export default function POSPage() {
         txCount: session?.txCount ?? 0,
       }});
     }
+
+    /* When enabled, offer to also close every OTHER register still open for the
+       business (across devices). The current session (sid) is excluded — it was
+       just closed above. */
+    if (promptCloseAllRegisters) {
+      const items = (allSessionsData as { items?: Array<{ id: number; registerId?: string; openedBy?: string; closedAt?: string | null }> })?.items ?? [];
+      const others = items
+        .filter((s) => !s.closedAt && s.id !== sid)
+        .map((s) => ({ id: s.id, registerId: s.registerId ?? "", openedBy: s.openedBy ?? "" }));
+      if (others.length > 0) setCloseAllCandidates(others);
+    }
+  };
+
+  /* Close every other open register the prompt surfaced (one PATCH each). */
+  const handleCloseAllRegisters = () => {
+    const closedAt = new Date().toISOString();
+    const count = closeAllCandidates.length;
+    closeAllCandidates.forEach((s) => updateServerSession.mutate({ id: s.id, data: { closedAt } }));
+    setCloseAllCandidates([]);
+    queryClient.invalidateQueries({ queryKey: ["pos-all-sessions"] });
+    queryClient.invalidateQueries({ queryKey: ["pos-open-sessions", activeRegisterId] });
+    toast.success(`Closed ${count} other open ${count === 1 ? "register" : "registers"}`);
   };
 
   const printEodReport = () => {
@@ -780,6 +908,9 @@ export default function POSPage() {
 
   const { data: registersData } = useListPosRegisters();
   const activeRegister = (registersData?.items ?? []).find((r) => r.registerId === activeRegisterId);
+  /* "Operations" registers are invoicing & quoting only — they have no cash
+     drawer, so opening one must not prompt for an opening cash float. */
+  const isOperationsRegister = String(activeRegister?.type ?? "Cash") === "Operations";
 
   /* Server-side session hooks for device locking */
   const createServerSession = useCreatePosRegisterSession();
@@ -788,10 +919,17 @@ export default function POSPage() {
     { registerId: activeRegisterId },
     { query: { queryKey: ["pos-open-sessions", activeRegisterId], refetchInterval: 30_000 } }
   );
+  /* Merchant-wide sessions (all registers) — only fetched when the "prompt to
+     close all open registers" setting is on, to drive that prompt on close. */
+  const promptCloseAllRegisters = posSettingsData?.promptCloseAllRegisters === "true";
+  const { data: allSessionsData } = useListPosRegisterSessions(
+    undefined,
+    { query: { queryKey: ["pos-all-sessions"], enabled: promptCloseAllRegisters, refetchInterval: 30_000 } }
+  );
 
   const { data: productsData } = useListProducts(
-    { search: search || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
-    { query: { queryKey: ["products", search, effectiveCategoryId] } }
+    { search: debouncedSearch || undefined, categoryId: effectiveCategoryId || undefined, limit: 200 },
+    { query: { queryKey: ["products", debouncedSearch, effectiveCategoryId] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: pricingRulesData } = useQuery<{ rules: PricingRule[] }>({
@@ -804,13 +942,18 @@ export default function POSPage() {
   });
   const activePricingRules = (pricingRulesData?.rules ?? []).filter(r => r.isActive === "true");
   const { data: customersData } = useListCustomers(
-    { search: customerSearch || undefined, limit: 100 },
-    { query: { queryKey: ["customers-pos", customerSearch], enabled: customerOpen } }
+    { search: debouncedCustomerSearch || undefined, limit: 100 },
+    { query: { queryKey: ["customers-pos", debouncedCustomerSearch], enabled: customerOpen } }
   );
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { isOnline, pendingCount, queueSale } = useOfflineQueue();
   const { data: serviceJobs } = useListServiceJobs({ query: { queryKey: ["service-jobs-pos"], enabled: serviceLinkOpen } });
   const { data: appointments } = useListAppointments(undefined, { query: { queryKey: ["appointments-pos"], enabled: serviceLinkOpen } });
+  /* Resolve the full Customer for a linked service/appointment whose customer
+     wasn't in the loaded picker list. Gated on pendingLinkCustomerId. */
+  const { data: linkCustomerData } = useGetCustomer(pendingLinkCustomerId ?? 0, {
+    query: { queryKey: ["customer-link", pendingLinkCustomerId], enabled: pendingLinkCustomerId != null },
+  });
 
   /* Filter the full service-job / appointment lists by the link-dialog search. */
   const linkQuery = linkSearch.trim().toLowerCase();
@@ -831,6 +974,7 @@ export default function POSPage() {
     );
   }, [appointments, linkQuery]);
   const createTransactionMutation      = useCreateTransaction();
+  const createTimeCardSessionMutation  = useCreateTimeCardSession();
   const validateGiftCardMutation       = useValidateGiftCard();
   const recordInvoicePaymentMutation   = useRecordInvoicePayment();
 
@@ -955,9 +1099,29 @@ export default function POSPage() {
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
   }, [cart, overallDiscount, customerTier, customerGroupId]);
 
+  /* Per-payment-method surcharge. When the selected method is configured to pass
+     its acceptance cost on to the customer, it's added to the amount charged.
+     The server recomputes this authoritatively and stores it; here it only
+     drives the amount due / tender so the cashier collects the right amount. */
+  const { data: surchargeConfig } = useGetPaymentSurcharges({ query: { queryKey: ["payment-surcharges"] } });
+  // Applies to both ordinary sales and invoice-balance payments. "split" has no
+  // config entry, so split payments yield 0 — matching the server, which only
+  // surcharges single-method payments.
+  /* In Invoice Payment Mode the amount charged is the payment amount handed over
+     from the invoices page (a partial payment when less than the balance),
+     capped at the outstanding balance. Falls back to the full balance. */
+  const invoiceCharge = invoicePay ? Math.min(invoicePay.amount ?? invoicePay.balance, invoicePay.balance) : 0;
+  const saleSurcharge = useMemo(() => {
+    const base = invoicePay ? invoiceCharge : total;
+    const cfg = (surchargeConfig?.items ?? []).find((s) => s.paymentMethod === String(payMethod));
+    if (!cfg || !cfg.enabled || !cfg.passOn) return 0;
+    return Math.round(((cfg.percent / 100) * base + cfg.fixed) * 100) / 100;
+  }, [surchargeConfig, payMethod, total, invoicePay, invoiceCharge]);
+
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
-     the locked remaining balance; otherwise it's the cart total. */
-  const effectiveTotal = invoicePay ? invoicePay.balance : total;
+     the (possibly partial) invoice payment amount; otherwise it's the cart total
+     — either way plus any passed-on surcharge for the chosen payment method. */
+  const effectiveTotal = Math.round(((invoicePay ? invoiceCharge : total) + saleSurcharge) * 100) / 100;
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
@@ -1277,6 +1441,16 @@ export default function POSPage() {
     }
   }, [pendingRestoreCustomerId, customersData]);
 
+  /* Adopt the customer fetched for a linked service/appointment (the case where
+     the customer wasn't already in the loaded picker list). */
+  useEffect(() => {
+    if (pendingLinkCustomerId == null || linkCustomerData?.id !== pendingLinkCustomerId) return;
+    setSelectedCustomer(linkCustomerData);
+    setWalkIn(null);
+    if (linkCustomerData.warningNote) setWarningCustomer(linkCustomerData);
+    setPendingLinkCustomerId(null);
+  }, [pendingLinkCustomerId, linkCustomerData]);
+
   /* ── Keep cart/customer refs in sync for stale-closure-safe beacon calls ─── */
   useEffect(() => { cartRef.current = cart; }, [cart]);
   useEffect(() => { selectedCustomerRef.current = selectedCustomer; }, [selectedCustomer]);
@@ -1412,6 +1586,8 @@ export default function POSPage() {
       setPayMethod(initialMethod);
       paymentModalInitialMethodRef.current = initialMethod;
       setNumpadInput("");
+      setDepositDesc("");
+      setSaleDate(todayLocalISODate());
       setReceiptMode("idle");
       setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
       setGcPayCardNumber("");
@@ -1516,6 +1692,12 @@ export default function POSPage() {
      Auto-fill exact amount for EFTPOS, card, and direct deposit
      then focus the Complete Sale button so the cashier can just press Enter. */
   useEffect(() => {
+    // This only manages the payment modal's numpad, so it must not run while the
+    // modal is closed. Otherwise, after a card/eftpos sale, clearCart() empties
+    // the cart (effectiveTotal → 0) and this effect would re-fill numpadInput
+    // with "0.00", leaving isPaymentDirty true and the nav guard wrongly warning
+    // "Payment in progress" on a completed sale.
+    if (!paymentModalOpen) return;
     const autoExactMethods: PaymentMethodId[] = ["eftpos", "card", "direct_deposit"];
     if (payMethod !== "cash" && payMethod !== "loyalty" && !autoExactMethods.includes(payMethod)) {
       setNumpadInput("");
@@ -1524,13 +1706,16 @@ export default function POSPage() {
       setGcPayCardNumber("");
       setGcValidation(null);
     }
+    if (payMethod !== "direct_deposit") {
+      setDepositDesc("");
+    }
     if (autoExactMethods.includes(payMethod)) {
       setNumpadInput(effectiveTotal.toFixed(2));
       setTimeout(() => {
         completeSaleRef.current?.focus();
       }, 0);
     }
-  }, [payMethod, effectiveTotal]);
+  }, [payMethod, effectiveTotal, paymentModalOpen]);
 
   const handleNumpad = (key: string) => {
     setNumpadInput(prev => {
@@ -2009,6 +2194,8 @@ export default function POSPage() {
        doesn't keep reporting "Payment in progress" after a completed sale. */
     setNumpadInput("");
     setGcPayCardNumber("");
+    setDepositDesc("");
+    setSaleDate(todayLocalISODate());
     setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
     paymentModalInitialMethodRef.current = null;
     /* Sale is over — any one-sale staff switch reverts to the day's staff. */
@@ -2248,6 +2435,33 @@ export default function POSPage() {
     if (c.warningNote) setWarningCustomer(c);
   };
 
+  /* Adopt a linked service/appointment's customer as the sale's customer. The
+     linked object carries only a customerId (+ denormalised name), so resolve
+     the full Customer: use the already-loaded picker list when possible, else
+     fetch by id via pendingLinkCustomerId → useGetCustomer. A link with no
+     customer, or one that already matches, leaves the current selection alone. */
+  const adoptLinkedCustomer = (customerId: number | null | undefined) => {
+    if (customerId == null || selectedCustomer?.id === customerId) return;
+    const found = customersData?.items?.find((c) => c.id === customerId);
+    if (found) {
+      setSelectedCustomer(found);
+      setWalkIn(null);
+      if (found.warningNote) setWarningCustomer(found);
+    } else {
+      setPendingLinkCustomerId(customerId);
+    }
+  };
+
+  const linkService = (sj: ServiceJob) => {
+    setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false);
+    adoptLinkedCustomer(sj.customerId);
+  };
+
+  const linkAppointment = (apt: Appointment) => {
+    setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false);
+    adoptLinkedCustomer(apt.customerId);
+  };
+
   const confirmWalkIn = () => {
     if (!walkInForm.firstName.trim()) { toast.error("Please enter a first name"); return; }
     setWalkIn({ firstName: walkInForm.firstName.trim(), lastName: walkInForm.lastName.trim() });
@@ -2349,6 +2563,217 @@ export default function POSPage() {
     setApprovalPinError("");
   };
 
+  /* Snapshot of everything the receipt / completion UI needs, captured at the
+     moment a sale is submitted. For instant sales it's used synchronously; for
+     Zip it's stashed in a ref and replayed when the capture webhook/poll lands. */
+  type SaleCompletionSnapshot = {
+    paymentMethod: string;
+    total: number;
+    subtotal: number;
+    taxTotal: number;
+    cart: CartItem[];
+    customer: Customer | null;
+    loyaltyAmount: number;
+    loyaltyUnit: string;
+    overallDiscountPct: number | null;
+  };
+
+  /* Drive the shared post-sale UI (receipt, KPI refresh, cart clear) from a
+     completed transaction + its snapshot. Shared by the instant path and Zip. */
+  const completeSaleUi = (data: Transaction, snap: SaleCompletionSnapshot) => {
+    idempotencyKeyRef.current = null;
+    invalidateSalesKpiQueries(queryClient);
+    try {
+      if (sessionSnap) {
+        const s = { ...sessionSnap };
+        s.sales = s.sales ?? {};
+        s.sales[snap.paymentMethod] = (s.sales[snap.paymentMethod] ?? 0) + snap.total;
+        s.txCount = (s.txCount ?? 0) + 1;
+        setSessionSnap(s);
+        saveRegisterSession(s);
+      }
+    } catch { /* ignore */ }
+    // Time Cards: each sold "time_card" line spins up a timer (status "ready")
+    // that staff start from the dashboard / POS Time Cards screen.
+    try {
+      const custName = snap.customer
+        ? `${snap.customer.firstName ?? ""} ${snap.customer.lastName ?? ""}`.trim() || "Walk-in"
+        : "Walk-in";
+      for (const item of snap.cart) {
+        const ep = item.product as Product & { timeCardMinutes?: number | null };
+        if (ep.productType !== "time_card") continue;
+        const perCardSeconds = Math.max(0, (ep.timeCardMinutes ?? 0) * 60);
+        if (perCardSeconds <= 0) continue;
+        const purchasedSeconds = perCardSeconds * item.quantity;
+        void createTimeCardSessionMutation.mutateAsync({
+          data: {
+            transactionId: data.id,
+            productId: ep.id,
+            customerId: snap.customer?.id,
+            customerName: custName,
+            label: ep.name,
+            purchasedSeconds,
+          },
+        }).then(() => {
+          queryClient.invalidateQueries({ queryKey: getListTimeCardSessionsQueryKey() });
+        }).catch(() => { /* non-fatal: sale already completed */ });
+      }
+    } catch { /* ignore */ }
+    setCompletedCart(snap.cart);
+    setCompletedIssuedGiftCards(data.issuedGiftCards ?? []);
+    setCompletedPaymentMethod(snap.paymentMethod);
+    setCompletedSubtotal(snap.subtotal);
+    setCompletedTaxTotal(snap.taxTotal);
+    setCompletedCustomer(snap.customer);
+    setCompletedLoyaltyAmount(snap.loyaltyAmount);
+    setCompletedLoyaltyUnit(snap.loyaltyUnit);
+    setCompletedOverallDiscountPct(snap.overallDiscountPct);
+    clearCart();
+    setCompletedTx(data);
+    setCompletedTotal(snap.total);
+    setReceiptEmail(snap.customer?.email ?? "");
+    setReceiptPhone(snap.customer?.phone ?? "");
+    setReceiptMode("idle");
+    setSelectedCustomer(null);
+    setWalkIn(null);
+    setPaymentModalOpen(false);
+    setTimeout(() => setReceiptOpen(true), 250);
+    // Auto-print the receipt when the register is configured to (native ESC/POS
+    // over USB/serial, or the HTML print path as a fallback). Non-fatal: the sale
+    // is already recorded and the receipt dialog is open for a manual reprint.
+    if (hardware.printer.enabled && hardware.printer.autoPrintOnSale) {
+      void printReceipt(data).catch(() => { /* manual reprint still available */ });
+    }
+  };
+
+  /* Park a sale as an async (BNPL) charge and open the pending dialog. The server
+     records nothing until the provider captures; polling + the webhook converge
+     via settleAttempt. */
+  const startAsyncPayment = (provider: string, label: string, data: Record<string, unknown>, snap: SaleCompletionSnapshot) => {
+    paySnapRef.current = snap;
+    void (async () => {
+      try {
+        const r = await customFetch<{ id: number; qrPayload: string | null; expiresAt: string | null; status: string; amount: number }>(
+          `/api/payments/${provider}/create`, { method: "POST", body: JSON.stringify(data) },
+        );
+        setPayPending({ provider, label, attemptId: r.id, qrPayload: r.qrPayload, expiresAt: r.expiresAt, status: r.status, error: null, amount: r.amount });
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : `Failed to start ${label} payment`;
+        toast.error(msg);
+      }
+    })();
+  };
+
+  /* ── Create an invoice from the current cart ───────────────────────────────
+     GST is handled exactly like the Invoices page: unitPrice is GST-inclusive
+     and tax is extracted per line by the server. Per-line discounts/modifiers
+     are folded into the unit price; whole-of-sale discounts (manual overall +
+     loyalty tier) are passed as a single fixed invoice discount. */
+  const buildInvoiceItemsFromCart = () => cart.map((i) => {
+    const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
+    const lineGross = (unitPriceFor(i) + modAdj) * i.quantity;
+    const lineAfterItemDisc = Math.max(0, lineGross - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
+    const unit = i.quantity > 0 ? lineAfterItemDisc / i.quantity : lineAfterItemDisc;
+    return {
+      description: i.product.name,
+      quantity: i.quantity,
+      unitPrice: Math.round(unit * 100) / 100,
+      taxRate: i.product.taxRate ?? 10,
+      productId: i.giftCardNumber ? null : i.product.id,
+      costPrice: (i.product as Product & { costPrice?: number }).costPrice ?? null,
+    };
+  });
+
+  const handleCreateInvoice = async () => {
+    if (!selectedCustomer) { toast.error("Select a customer to create an invoice"); return; }
+    if (cart.length === 0) { toast.error("Add at least one item to invoice"); return; }
+    setInvoiceCreating(true);
+    try {
+      const discAmt = Math.round((overallDiscountAmt + tierDiscountAmt) * 100) / 100;
+      const noteParts = [
+        linkedService ? `[Service #${linkedService.jobNumber}: ${linkedService.deviceType || linkedService.deviceDescription || "service"}]` : null,
+        linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
+        saleNotes.trim() || null,
+      ].filter(Boolean) as string[];
+      const body = {
+        customerId: selectedCustomer.id,
+        staffId: currentStaff?.id ?? null,
+        items: buildInvoiceItemsFromCart(),
+        notes: noteParts.length ? noteParts.join(" | ") : undefined,
+        serviceJobId: linkedService?.id ?? null,
+        appointmentId: linkedAppointment?.id ?? null,
+        discount: discAmt > 0 ? { type: "fixed" as const, value: discAmt } : undefined,
+      };
+      const created = await createInvoiceMutation.mutateAsync({
+        data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"],
+      }) as unknown as CreatedInvoice;
+
+      const bizName = merchantData?.businessName ?? "Your Business";
+      clearCart();
+      setSelectedCustomer(null);
+      setWalkIn(null);
+      setPaymentModalOpen(false);
+      setInvoiceEmailSubject(`Invoice ${created.invoiceNumber} from ${bizName}`);
+      setInvoiceSendTarget(created);
+      toast.success(`Invoice ${created.invoiceNumber} created`);
+    } catch {
+      toast.error("Failed to create invoice");
+    } finally {
+      setInvoiceCreating(false);
+    }
+  };
+
+  /* Adapt a created invoice to the Transaction shape the shared document
+     template prints (mirrors the Invoices page). Invoice.subtotal is already
+     GST-exclusive, so a GST-inclusive subtotal is passed to round-trip. */
+  const invoiceToTransaction = (inv: CreatedInvoice): Transaction => ({
+    id: inv.id,
+    merchantId: 0,
+    customerId: inv.customerId,
+    customer: (inv.customerName || inv.customerEmail)
+      ? ({ firstName: inv.customerName ?? "", lastName: "", email: inv.customerEmail ?? "", phone: inv.customerPhone ?? "" } as unknown as Transaction["customer"])
+      : undefined,
+    receiptNumber: inv.invoiceNumber,
+    status: inv.status as unknown as Transaction["status"],
+    subtotal: inv.subtotal + inv.taxTotal,
+    taxTotal: inv.taxTotal,
+    discountTotal: inv.discountTotal ?? 0,
+    total: inv.total,
+    paymentMethod: "" as unknown as Transaction["paymentMethod"],
+    items: (inv.items ?? []).map((l) => ({
+      productId: 0, productName: l.description, quantity: l.quantity,
+      unitPrice: l.unitPrice, totalPrice: l.quantity * l.unitPrice,
+    })),
+    createdAt: inv.createdAt,
+    amountPaid: inv.amountPaid,
+  } as Transaction);
+
+  const sendInvoiceEmail = async (email: string) => {
+    if (!invoiceSendTarget) return;
+    try {
+      await sendInvoiceEmailMutation.mutateAsync({
+        id: invoiceSendTarget.id,
+        data: { email, template: invoiceEmailTemplate(invoiceEmailSubject) } as Parameters<typeof sendInvoiceEmailMutation.mutateAsync>[0]["data"],
+      });
+    } catch {
+      throw new Error("Failed to send email");
+    }
+    toast.success("Invoice emailed");
+  };
+
+  const downloadInvoicePdf = async (inv: CreatedInvoice) => {
+    try {
+      const blob = await getInvoicePdf(inv.id);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${inv.invoiceNumber}.pdf`;
+      document.body.appendChild(a); a.click(); a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      toast.error("Failed to generate PDF");
+    }
+  };
+
   const handleCheckout = (
     paymentMethod: TransactionInputPaymentMethod,
     amountTendered: number,
@@ -2369,7 +2794,9 @@ export default function POSPage() {
     if (invoicePay) {
       if (invoicePayPending) return;
       const inv = invoicePay;
-      const amount = inv.balance;
+      // The (possibly partial) amount handed over from the invoices page, capped
+      // at the outstanding balance.
+      const amount = Math.min(inv.amount ?? inv.balance, inv.balance);
       // When settling via split, send structured legs so each method is recorded
       // and reported separately (gift cards use the single-payment path).
       const invoiceSplitLegs = paymentMethod === "split"
@@ -2377,14 +2804,22 @@ export default function POSPage() {
             .map(l => ({ method: l.method as string, amount: parseFloat(l.amount) || 0 }))
             .filter(l => l.amount > 0)
         : [];
+      // Direct deposits that cleared earlier settle the invoice on that day for
+      // accounting. paidAt only takes effect when the payment settles the invoice
+      // in full (the server ignores it on partial legs). Only sent when actually
+      // back-dated, mirroring the cart-sale path.
+      const invoicePaidAt =
+        saleDate && saleDate !== todayLocalISODate()
+          ? saleDate
+          : undefined;
       setInvoicePayPending(true);
       void (async () => {
         try {
           await recordInvoicePaymentMutation.mutateAsync({
             id: inv.invoiceId,
             data: invoiceSplitLegs.length > 0 && !giftCardPayment
-              ? { amount, payments: invoiceSplitLegs, idempotencyKey }
-              : { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}) },
+              ? { amount, payments: invoiceSplitLegs, idempotencyKey, ...(invoicePaidAt ? { paidAt: invoicePaidAt } : {}) }
+              : { amount, method: paymentMethod, idempotencyKey, ...(giftCardPayment ? { giftCardPayment } : {}), ...(invoicePaidAt ? { paidAt: invoicePaidAt } : {}) },
           });
           idempotencyKeyRef.current = null;
           const methodLabel = ALL_PAYMENT_METHODS.find(m => m.id === paymentMethod)?.label ?? paymentMethod;
@@ -2426,7 +2861,15 @@ export default function POSPage() {
           setReceiptPhone(inv.customerPhone ?? "");
           setReceiptMode("idle");
           setInvoicePay(null);
+          /* Clear all payment-entry state so the navigation guard doesn't keep
+             reporting "Payment in progress" after a settled invoice payment
+             (this path has no cart, so clearCart() isn't called). */
           setNumpadInput("");
+          setGcPayCardNumber("");
+          setDepositDesc("");
+          setSaleDate(todayLocalISODate());
+          setSplitLegs([{ method: "cash", amount: "" }, { method: "eftpos", amount: "" }]);
+          paymentModalInitialMethodRef.current = null;
           setPaymentModalOpen(false);
           setSaleStaff(null); /* payment done — revert any one-sale staff switch */
           /* A paid invoice counts toward revenue KPIs — refresh every KPI /
@@ -2444,12 +2887,12 @@ export default function POSPage() {
       return;
     }
 
-    // Warranty products require a serial number per unit. If any warranty line is
-    // missing serials, open the serial-collection prompt and abort this attempt;
+    // Serial-tracked products require a serial number per unit. If any such line
+    // is missing serials, open the serial-collection prompt and abort this attempt;
     // the modal re-runs handleCheckout once serials are entered.
     const needSerials = cart.filter((i) => {
-      const wd = (i.product as { warrantyDuration?: number }).warrantyDuration ?? 0;
-      return wd > 0 && (i.serials?.filter(Boolean).length ?? 0) < i.quantity;
+      const tracks = (i.product as { tracksSerial?: boolean }).tracksSerial ?? false;
+      return tracks && (i.serials?.filter(Boolean).length ?? 0) < i.quantity;
     });
     if (needSerials.length > 0) {
       const init: Record<number, string[]> = {};
@@ -2525,85 +2968,53 @@ export default function POSPage() {
       loyaltyAmount > 0 &&
       paymentMethod !== "loyalty";
 
-    createTransactionMutation.mutate({
-      data: {
-        items: txItems, paymentMethod, subtotal, taxTotal,
-        discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
-        total, amountTendered,
-        customerId: selectedCustomer?.id,
-        staffId: currentStaff?.id,
-        loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
-        notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
-        receiptNumber,
-        idempotencyKey,
-        ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
-        ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
-        ...(giftCardPayment ? { giftCardPayment } : {}),
-      }
-    }, {
-      onSuccess: (data) => {
-        idempotencyKeyRef.current = null;
-        /* Completed sales drive the KPI / dashboard numbers — refresh them. */
-        invalidateSalesKpiQueries(queryClient);
-        // Track session sales by payment method (in-memory only)
-        try {
-          if (sessionSnap) {
-            const s = { ...sessionSnap };
-            const pm = paymentMethod as string;
-            s.sales = s.sales ?? {};
-            s.sales[pm] = (s.sales[pm] ?? 0) + total;
-            s.txCount = (s.txCount ?? 0) + 1;
-            setSessionSnap(s);
-            saveRegisterSession(s);
-          }
-        } catch { /* ignore */ }
-        // Capture total + cart before clearing
-        const saleTotal = total;
-        setCompletedCart([...cart]);
-        // Gift cards are now issued atomically by the server inside the same DB
-        // transaction — no separate createGiftCard call needed. The response
-        // contains issuedGiftCards so the cashier can hand the code to the customer.
-        setCompletedIssuedGiftCards(data.issuedGiftCards ?? []);
-        setCompletedPaymentMethod(paymentMethod);
-        setCompletedSubtotal(subtotal);
-        setCompletedTaxTotal(taxTotal);
-        setCompletedCustomer(selectedCustomer);
-        setCompletedLoyaltyAmount(sendLoyaltyEarned ? loyaltyAmount : 0);
-        setCompletedLoyaltyUnit(loyaltyUnit);
-        setCompletedOverallDiscountPct(
-          overallDiscountMode === "percent" && overallDiscountAmt > 0
-            ? (parseFloat(overallDiscountPctInput) || null)
-            : null,
-        );
-        clearCart();
-        setCompletedTx(data);
-        setCompletedTotal(saleTotal);
-        setReceiptEmail(selectedCustomer?.email ?? "");
-        setReceiptPhone(selectedCustomer?.phone ?? "");
-        setReceiptMode("idle");
-        setSelectedCustomer(null);
-        setWalkIn(null);
-        // Close payment modal first, then open receipt after animation completes
-        setPaymentModalOpen(false);
-        setTimeout(() => setReceiptOpen(true), 250);
-      },
+    const data = {
+      items: txItems, paymentMethod, subtotal, taxTotal,
+      discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
+      total, amountTendered,
+      customerId: selectedCustomer?.id,
+      staffId: currentStaff?.id,
+      loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
+      notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
+      receiptNumber,
+      idempotencyKey,
+      ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
+      ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
+      ...(giftCardPayment ? { giftCardPayment } : {}),
+      // A receipt entered for an earlier day (a deposit that cleared, a manual
+      // sale being caught up) is booked to that day so every revenue report reads
+      // off the right date. Only sent when actually back-dated — a same-day sale
+      // keeps its real timestamp rather than being anchored to noon UTC.
+      ...(saleDate && saleDate !== todayLocalISODate()
+        ? { paidAt: saleDate }
+        : {}),
+    };
+
+    const completionSnapshot: SaleCompletionSnapshot = {
+      paymentMethod, total, subtotal, taxTotal,
+      cart: [...cart],
+      customer: selectedCustomer,
+      loyaltyAmount: sendLoyaltyEarned ? loyaltyAmount : 0,
+      loyaltyUnit,
+      overallDiscountPct: overallDiscountMode === "percent" && overallDiscountAmt > 0
+        ? (parseFloat(overallDiscountPctInput) || null)
+        : null,
+    };
+
+    // Async BNPL providers (Zip, Afterpay): park the sale and hand off to the
+    // pending dialog rather than recording a completed transaction now.
+    if (ASYNC_PAYMENT_PROVIDERS.has(paymentMethod)) {
+      const label = INTEGRATION_PAYMENT_LABELS[paymentMethod] ?? paymentMethod;
+      startAsyncPayment(paymentMethod, label, data, completionSnapshot);
+      return;
+    }
+
+    createTransactionMutation.mutate({ data }, {
+      onSuccess: (tx) => completeSaleUi(tx, completionSnapshot),
       onError: (err: unknown) => {
         const isNetworkError = err instanceof Error && (err.message.includes("fetch") || err.message.includes("network") || err.message.includes("Failed to fetch") || !navigator.onLine);
         if (isNetworkError || !navigator.onLine) {
-          queueSale("/api/transactions", JSON.stringify({
-            items: txItems, paymentMethod, subtotal, taxTotal,
-            discountTotal: (discountTotal + tierDiscountAmt) > 0 ? discountTotal + tierDiscountAmt : undefined,
-            total, amountTendered,
-            customerId: selectedCustomer?.id,
-            staffId: currentStaff?.id,
-            loyaltyEarned: sendLoyaltyEarned ? loyaltyAmount : undefined,
-            notes: notesParts.length > 0 ? notesParts.join(" | ") : undefined,
-            receiptNumber,
-            idempotencyKey,
-            ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
-            ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
-            ...(giftCardPayment ? { giftCardPayment } : {}),
-          }));
+          queueSale("/api/transactions", JSON.stringify(data));
           setPaymentModalOpen(false);
           clearCart();
           setSelectedCustomer(null);
@@ -2624,9 +3035,59 @@ export default function POSPage() {
   // resume the sale after cart serials are applied (next render).
   latestCheckout.current = handleCheckout;
 
+  /* Render the provider QR. Providers may return a ready image (data:/http) or a
+     raw token; for a token we encode it ourselves so it's always scannable. */
+  const [payQr, setPayQr] = useState<string | null>(null);
+  useEffect(() => {
+    const payload = payPending?.qrPayload;
+    if (!payload) { setPayQr(null); return; }
+    if (payload.startsWith("data:") || /^https?:\/\/.*\.(png|svg|gif|jpe?g)(\?|$)/i.test(payload)) {
+      setPayQr(payload);
+      return;
+    }
+    let cancelled = false;
+    QRCode.toDataURL(payload, { width: 220, margin: 1 })
+      .then((u) => { if (!cancelled) setPayQr(u); })
+      .catch(() => { if (!cancelled) setPayQr(null); });
+    return () => { cancelled = true; };
+  }, [payPending?.qrPayload]);
+
+  /* Poll the parked attempt until it reaches a terminal state. The webhook is
+     the primary signal; this poll is the fallback so the POS still resolves if
+     the webhook is delayed or undelivered. */
+  useEffect(() => {
+    if (!payPending || payPending.error || payPending.status === "captured") return;
+    const label = payPending.label;
+    let cancelled = false;
+    const poll = async () => {
+      try {
+        const r = await customFetch<{ status: string; transactionId: number | null; failureReason: string | null }>(
+          `/api/payments/${payPending.attemptId}/status`, { method: "GET" },
+        );
+        if (cancelled) return;
+        if (r.status === "captured" && r.transactionId) {
+          const tx = await customFetch<Transaction>(`/api/transactions/${r.transactionId}`, { method: "GET" });
+          if (cancelled) return;
+          const snap = paySnapRef.current;
+          setPayPending(null);
+          if (snap) completeSaleUi(tx, snap);
+          toast.success(`${label} payment approved`);
+        } else if (["declined", "expired", "cancelled", "failed"].includes(r.status)) {
+          setPayPending((p) => (p ? { ...p, status: r.status, error: r.failureReason ?? `${label} payment ${r.status}` } : null));
+        } else if (r.status !== payPending.status) {
+          setPayPending((p) => (p ? { ...p, status: r.status } : null));
+        }
+      } catch { /* transient — keep polling */ }
+    };
+    const iv = setInterval(() => { void poll(); }, 3000);
+    void poll();
+    return () => { cancelled = true; clearInterval(iv); };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [payPending?.attemptId, payPending?.status, payPending?.error]);
+
   const confirmSerials = () => {
     for (const arr of Object.values(serialInputs)) {
-      if (arr.some((s) => !s.trim())) { toast.error("Enter a serial number for every warranty unit"); return; }
+      if (arr.some((s) => !s.trim())) { toast.error("Enter a serial number for every serial-tracked unit"); return; }
     }
     const all = Object.values(serialInputs).flat().map((s) => s.trim());
     if (new Set(all).size !== all.length) { toast.error("Serial numbers must be unique"); return; }
@@ -2787,11 +3248,15 @@ export default function POSPage() {
                     {(() => {
                       const imgSrc = productImageSrc(product.imageUrl, defaultProductImage);
                       return imgSrc
-                        ? <img src={imgSrc} alt={product.name} className="w-full h-full object-contain" />
+                        ? <img src={imgSrc} alt={product.name} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-contain" />
                         : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
                     })()}
                     {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
-                      <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
+                      product.stockQuantity <= 0 ? (
+                        <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0 bg-red-600 text-white border-transparent hover:bg-red-600">OOS</Badge>
+                      ) : (
+                        <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0">Low</Badge>
+                      )
                     )}
                     {posLayout.showStockBadges && product.trackInventory && product.stockQuantity != null && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       <Badge variant="secondary" className="absolute bottom-1.5 right-1.5 text-[10px] px-1 py-0 tabular-nums">{product.stockQuantity}</Badge>
@@ -2981,9 +3446,19 @@ export default function POSPage() {
               {/* Customer chip or search button — takes remaining space */}
               {activeCustomerName ? (
                 <div className={cn("flex-1 flex items-center gap-2 rounded-lg px-2.5 py-1.5 min-w-0", !walkIn && selectedCustomer?.warningNote ? "bg-destructive/10 border border-destructive/20" : "bg-muted/40")}>
-                  <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", walkIn ? "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400" : "bg-primary/15 text-primary")}>
-                    {walkIn ? "?" : ((selectedCustomer?.firstName?.[0] ?? "") + (selectedCustomer?.lastName?.[0] ?? "")).toUpperCase() || "?"}
-                  </div>
+                  {walkIn ? (
+                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                      ?
+                    </div>
+                  ) : (
+                    <CustomerAvatar
+                      firstName={selectedCustomer?.firstName}
+                      lastName={selectedCustomer?.lastName}
+                      photoUrl={selectedCustomer?.photoUrl}
+                      className="w-6 h-6"
+                      textClassName="text-[10px]"
+                    />
+                  )}
                   <div className="flex-1 min-w-0">
                     <p className="text-xs font-medium truncate">{activeCustomerName}</p>
                     {walkIn && <p className="text-[10px] text-amber-600 dark:text-amber-400">Walk-in · No loyalty</p>}
@@ -3073,16 +3548,21 @@ export default function POSPage() {
                   ) : (
                     filteredCustomers.map(c => {
                       const name = customerDisplayName(c);
-                      const initials = (((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")) || c.company?.[0] || "?").toUpperCase();
                       return (
                         <button
                           key={c.id}
                           onClick={() => selectCustomer(c)}
                           className="w-full text-left px-3 py-2.5 hover:bg-muted/40 flex items-center gap-2.5 transition-colors"
                         >
-                          <div className={cn("w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0", c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary")}>
-                            {initials}
-                          </div>
+                          <CustomerAvatar
+                            firstName={c.firstName}
+                            lastName={c.lastName}
+                            company={c.company}
+                            photoUrl={c.photoUrl}
+                            className="w-7 h-7"
+                            textClassName="text-[10px]"
+                            variant={c.warningNote ? "warning" : "default"}
+                          />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{name}</p>
                             <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
@@ -3139,13 +3619,21 @@ export default function POSPage() {
                 {invoicePay.customerName && (
                   <p className="text-xs text-muted-foreground">Customer: {invoicePay.customerName}</p>
                 )}
+                {invoiceCharge < invoicePay.balance - 0.005 && (
+                  <div className="flex justify-between items-baseline">
+                    <span className="text-sm text-muted-foreground">Balance due</span>
+                    <span className="text-sm font-medium">{formatCurrency(invoicePay.balance)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between items-baseline border-t pt-2">
-                  <span className="text-sm text-muted-foreground">Balance due</span>
-                  <span className="text-lg font-bold text-primary">{formatCurrency(invoicePay.balance)}</span>
+                  <span className="text-sm text-muted-foreground">{invoiceCharge < invoicePay.balance - 0.005 ? "Paying now" : "Balance due"}</span>
+                  <span className="text-lg font-bold text-primary">{formatCurrency(invoiceCharge)}</span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground max-w-xs">
-                The terminal is locked to this invoice balance. Choose any payment method and tap Charge to record the payment.
+                {invoiceCharge < invoicePay.balance - 0.005
+                  ? `Recording a partial payment of ${formatCurrency(invoiceCharge)}. ${formatCurrency(invoicePay.balance - invoiceCharge)} will remain outstanding.`
+                  : "The terminal is locked to this invoice balance. Choose any payment method and tap Charge to record the payment."}
               </p>
             </div>
           ) : cart.length === 0 ? (
@@ -3155,7 +3643,7 @@ export default function POSPage() {
               <p className="text-xs mt-1">Tap products to add them to the sale.</p>
             </div>
           ) : (
-          <ScrollArea className="flex-1 w-full">
+          <ScrollArea className={cn("flex-1 w-full", SCROLL_AREA_TRUNCATE_FIX)}>
               <div className="p-2.5 space-y-1.5 w-full overflow-x-hidden">
                 {cart.map((item) => {
                   const modAdj = (item.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
@@ -3567,6 +4055,11 @@ export default function POSPage() {
               <div className="rounded-xl bg-muted/40 border px-5 py-4 text-center">
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1">Amount Due</p>
                 <p className="text-4xl font-bold tabular-nums">{formatCurrency(effectiveTotal)}</p>
+                {saleSurcharge > 0 && (
+                  <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
+                    {formatCurrency((invoicePay ? invoiceCharge : total))} + {formatCurrency(saleSurcharge)} surcharge
+                  </p>
+                )}
                 {numpadInput && parseFloat(numpadInput) > 0 && (
                   <p className="text-sm text-muted-foreground mt-1.5 tabular-nums">
                     {changeDue > 0
@@ -3588,10 +4081,23 @@ export default function POSPage() {
                   label: INTEGRATION_PAYMENT_LABELS[key] ?? key,
                   isIntegration: true,
                 }));
+                // Merchant-defined tenders (Management → POS Registers). Sourced
+                // from server settings so they appear without a localStorage sync.
+                const customMethods = parseCustomPaymentMethods(posSettingsData?.customPaymentMethods)
+                  .filter(m => m.enabled);
                 const allMethods = [
                   ...builtIn.map(m => ({ id: m.id as PaymentMethodId, label: m.label, Icon: m.icon, isIntegration: false })),
                   ...integrationMethods.map(m => ({ ...m, Icon: CreditCard })),
+                  ...customMethods.map(m => ({
+                    id: `__custom__${m.id}` as PaymentMethodId,
+                    label: m.label,
+                    Icon: resolveCustomPaymentIcon(m.icon),
+                    isIntegration: false,
+                  })),
                   { id: "gift_card" as PaymentMethodId, label: "Gift Card", Icon: Gift, isIntegration: false },
+                  // Creating an invoice is only offered for a normal sale — not
+                  // when the terminal is locked to settling an existing invoice.
+                  ...(invoicePay ? [] : [{ id: "invoice" as PaymentMethodId, label: "Invoice", Icon: FileText, isIntegration: false }]),
                 ];
                 const splitEligible = ALL_PAYMENT_METHODS.filter(m => enabledIds.includes(m.id) && m.id !== "split" && m.id !== "laybuy");
                 if (payMethod === "split") {
@@ -3669,7 +4175,7 @@ export default function POSPage() {
                           className={`flex items-center gap-2 px-3 py-2.5 rounded-lg border text-sm font-medium transition-all text-left
                             ${payMethod === id
                               ? "border-primary bg-primary/10 text-primary"
-                              : "border-border bg-background hover:border-primary/40 hover:bg-muted/60 text-foreground"}`}
+                              : "pill-selector border-border bg-background hover:border-primary/40 hover:bg-muted/60 text-foreground"}`}
                         >
                           <Icon className="w-3.5 h-3.5 shrink-0" />
                           <span className="truncate text-xs">{label}{isIntegration && <span className="ml-1 text-[9px] opacity-60 font-normal">↗</span>}</span>
@@ -3764,6 +4270,34 @@ export default function POSPage() {
               })()}
 
               <div className="flex-1" />
+
+              {/* Sale date — always opens on today; back-date to record a receipt
+                  for an earlier day (a deposit that cleared, a sale being caught
+                  up after the fact). Future dates are rejected by the server, so
+                  the picker is capped at today. */}
+              <div className="space-y-1.5">
+                <Label htmlFor="sale-date" className="flex items-center gap-1.5 text-sm">
+                  <CalendarDays className="w-4 h-4 text-muted-foreground" /> Sale date
+                </Label>
+                <Input
+                  id="sale-date"
+                  type="date"
+                  value={saleDate}
+                  max={todayLocalISODate()}
+                  onChange={(e) => setSaleDate(e.target.value)}
+                  className={cn(isBackdatedSale && "border-amber-500 focus-visible:ring-amber-500")}
+                />
+                {isBackdatedSale ? (
+                  <p className="text-xs font-medium text-amber-600 dark:text-amber-500">
+                    Back-dated — books to {formatSaleDateLabel(saleDate)}.
+                  </p>
+                ) : (
+                  <p className="text-xs text-muted-foreground">
+                    Today. Change it to record a sale from an earlier day.
+                  </p>
+                )}
+              </div>
+
               <Button variant="outline" className="w-full" onClick={tryClosePaymentModal}>
                 Cancel
               </Button>
@@ -3878,7 +4412,7 @@ export default function POSPage() {
                                       "flex-1 py-1.5 rounded-lg border text-xs font-medium transition-all",
                                       gcRemainingMethod === m
                                         ? "border-primary bg-primary/10 text-primary"
-                                        : "border-border bg-background hover:border-primary/40"
+                                        : "pill-selector border-border bg-background hover:border-primary/40"
                                     )}
                                   >
                                     {m === "cash" ? "Cash" : "EFTPOS"}
@@ -3902,6 +4436,39 @@ export default function POSPage() {
 
                   <div className="flex-1" />
                 </div>
+              ) : isInvoiceMethod ? (
+                /* ── Invoice (create from cart) ── */
+                <div className="flex-1 flex flex-col gap-3">
+                  <div className="border rounded-xl px-4 py-4 bg-muted/20 space-y-2">
+                    <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground">Invoice Summary</p>
+                    <div className="flex items-center justify-between text-sm">
+                      <span className="text-muted-foreground">Customer</span>
+                      <span className="font-semibold truncate max-w-[60%] text-right">
+                        {selectedCustomer ? customerDisplayName(selectedCustomer) : "— required —"}
+                      </span>
+                    </div>
+                    {(linkedService || linkedAppointment) && (
+                      <div className="flex items-center justify-between text-xs">
+                        <span className="text-muted-foreground">Linked</span>
+                        <span className="font-medium truncate max-w-[60%] text-right">
+                          {linkedService ? `Service #${linkedService.jobNumber}` : `Appt #${linkedAppointment?.id}`}
+                        </span>
+                      </div>
+                    )}
+                    <div className="border-t pt-2 flex items-center justify-between">
+                      <span className="text-sm font-semibold">Invoice total</span>
+                      <span className="text-lg font-bold tabular-nums">{formatCurrency(total)}</span>
+                    </div>
+                  </div>
+                  {!selectedCustomer && (
+                    <div className="rounded-xl border border-amber-200 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-3 space-y-1">
+                      <p className="text-xs font-semibold text-amber-700 dark:text-amber-400">Customer required</p>
+                      <p className="text-xs text-amber-600 dark:text-amber-500">Select a customer before creating an invoice.</p>
+                    </div>
+                  )}
+                  <p className="text-xs text-muted-foreground">An unpaid invoice will be created from this cart. You can email or print it next.</p>
+                  <div className="flex-1" />
+                </div>
               ) : (
                 <>
                   {/* Display */}
@@ -3910,6 +4477,25 @@ export default function POSPage() {
                       {numpadInput || "0.00"}
                     </span>
                   </div>
+
+                  {/* Direct Deposit reference/description */}
+                  {payMethod === "direct_deposit" && (
+                    <div className="space-y-1.5">
+                      <Label htmlFor="deposit-desc" className="flex items-center gap-1.5 text-sm">
+                        <Banknote className="w-4 h-4 text-muted-foreground" /> Deposit Description
+                      </Label>
+                      <Input
+                        id="deposit-desc"
+                        autoFocus
+                        value={depositDesc}
+                        onChange={(e) => setDepositDesc(e.target.value)}
+                        placeholder="Bank reference / payer name…"
+                      />
+                      {!depositDesc.trim() && (
+                        <p className="text-xs text-muted-foreground">Required to record this deposit.</p>
+                      )}
+                    </div>
+                  )}
 
                   {/* Numpad grid */}
                   <div className="grid grid-cols-3 gap-2 flex-1">
@@ -3968,7 +4554,10 @@ export default function POSPage() {
                 disabled={
                   createTransactionMutation.isPending ||
                   invoicePayPending ||
+                  invoiceCreating ||
+                  (isInvoiceMethod && !selectedCustomer) ||
                   (payMethod === "gift_card" && (!gcValidation?.valid)) ||
+                  (payMethod === "direct_deposit" && !depositDesc.trim()) ||
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
@@ -3993,6 +4582,7 @@ export default function POSPage() {
                 }
                 onClick={() => {
                   // Gate flows that need a dedicated lifecycle.
+                  if (isInvoiceMethod) { void handleCreateInvoice(); return; }
                   if (payMethod === "gift_card" && gcValidation?.valid) {
                     const gc = gcValidation;
                     const applied = gc.applicableAmount;
@@ -4033,13 +4623,31 @@ export default function POSPage() {
                   // Compute the tag locally and pass it through handleCheckout
                   // so we don't depend on async setState reaching the payload.
                   const isIntegration = String(payMethod).startsWith("__intg__");
+                  const intgKey = isIntegration ? String(payMethod).slice("__intg__".length) : null;
+                  // Merchant-defined custom tenders carry no payment-method enum
+                  // value, so they record as a generic "other" tender with the
+                  // method name preserved in an audit note.
+                  const isCustom = String(payMethod).startsWith("__custom__");
+                  const customId = isCustom ? String(payMethod).slice("__custom__".length) : null;
+                  // Async BNPL integrations (Zip, Afterpay) have a real payment
+                  // flow — recorded as a first-class tender (handleCheckout routes
+                  // them to the pending dialog). Other integrations are still
+                  // recorded as a generic "other" tender with an audit note.
+                  const isAsyncProvider = !!intgKey && ASYNC_PAYMENT_PROVIDERS.has(intgKey);
                   const apiMethod: TransactionInputPaymentMethod =
-                    isIntegration ? "other" : payMethod as TransactionInputPaymentMethod;
+                    isAsyncProvider ? intgKey as TransactionInputPaymentMethod
+                    : (isIntegration || isCustom) ? "other"
+                    : payMethod as TransactionInputPaymentMethod;
                   let extraNote: string | undefined;
-                  if (isIntegration) {
-                    const key = String(payMethod).slice("__intg__".length);
-                    const label = INTEGRATION_PAYMENT_LABELS[key] ?? key;
-                    extraNote = `[Payment via ${label} (${key})]`;
+                  if (isCustom) {
+                    const label = parseCustomPaymentMethods(posSettingsData?.customPaymentMethods)
+                      .find(m => m.id === customId)?.label ?? "Custom";
+                    extraNote = `[Payment via ${label}]`;
+                  } else if (isIntegration && !isAsyncProvider) {
+                    const label = INTEGRATION_PAYMENT_LABELS[intgKey!] ?? intgKey!;
+                    extraNote = `[Payment via ${label} (${intgKey})]`;
+                  } else if (payMethod === "direct_deposit" && depositDesc.trim()) {
+                    extraNote = `[Deposit: ${depositDesc.trim()}]`;
                   }
                   // For loyalty payments, tender the entered loyalty amount
                   // (not the auto-defaulted total) so the server deducts
@@ -4050,12 +4658,37 @@ export default function POSPage() {
                   handleCheckout(apiMethod, tendered, extraNote);
                 }}
               >
-                {(createTransactionMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
+                {isInvoiceMethod
+                  ? (invoiceCreating ? "Creating Invoice…" : "Create Invoice")
+                  : (createTransactionMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
               </Button>
             </div>
           </div>
         </DialogContent>
       </Dialog>
+
+      {/* ─── Invoice send (after create-from-POS) ─── */}
+      <SendDialog
+        open={!!invoiceSendTarget}
+        onOpenChange={(o) => { if (!o) setInvoiceSendTarget(null); }}
+        title="Send Invoice"
+        documentLabel={invoiceSendTarget?.invoiceNumber}
+        reprintLabel="Print"
+        reprintSub="Print invoice"
+        reprintButtonLabel="Print Invoice"
+        reprintHint={invoiceSendTarget ? <>This will open a print preview for invoice <strong>{invoiceSendTarget.invoiceNumber}</strong>.</> : null}
+        onReprint={() => { if (invoiceSendTarget) void printInvoiceTpl(invoiceToTransaction(invoiceSendTarget)); }}
+        reprintExtraActions={invoiceSendTarget ? [{ label: "Download PDF", onClick: () => downloadInvoicePdf(invoiceSendTarget) }] : undefined}
+        defaultEmail={invoiceSendTarget?.customerEmail ?? ""}
+        emailHint="A PDF copy of the invoice will be attached."
+        emailExtra={
+          <div className="space-y-1.5">
+            <Label className="text-xs">Subject</Label>
+            <Input type="text" placeholder="Invoice subject…" value={invoiceEmailSubject} onChange={(e) => setInvoiceEmailSubject(e.target.value)} />
+          </div>
+        }
+        onEmail={sendInvoiceEmail}
+      />
 
       {/* ─── Leave sale confirmation (navigation guard) ─── */}
       <LeaveSaleDialog />
@@ -4258,8 +4891,8 @@ export default function POSPage() {
           <DialogHeader><DialogTitle className="flex items-center gap-2"><UserRound className="w-4 h-4" /> Walk-in Customer</DialogTitle></DialogHeader>
           <p className="text-sm text-muted-foreground">Enter the customer's name. They won't be added to the system and won't earn loyalty rewards.</p>
           <div className="space-y-3">
-            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, firstName: e.target.value })); }} placeholder="Jane" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
-            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, lastName: e.target.value })); }} placeholder="Smith" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">First Name *</Label><Input value={walkInForm.firstName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, firstName: e.target.value })); }} placeholder="Jane" autoCapitalize="words" className="mt-1" autoFocus onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
+            <div><Label className="text-xs">Last Name</Label><Input value={walkInForm.lastName} onChange={e => { setFormTouched(true); setWalkInForm(f => ({ ...f, lastName: e.target.value })); }} placeholder="Smith" autoCapitalize="words" className="mt-1" onKeyDown={e => e.key === "Enter" && confirmWalkIn()} /></div>
           </div>
           <DialogFooter>
             <Button variant="outline" onClick={tryCloseWalkIn}>Cancel</Button>
@@ -4335,7 +4968,7 @@ export default function POSPage() {
                 <div className="flex gap-4">
                   <div className="w-28 h-28 shrink-0 bg-muted rounded-lg flex items-center justify-center overflow-hidden">
                     {imgSrc
-                      ? <img src={imgSrc} alt={p.name} className="w-full h-full object-contain" />
+                      ? <img src={imgSrc} alt={p.name} loading="eager" decoding="async" draggable={false} className="w-full h-full object-contain" />
                       : <span className="text-4xl font-bold text-muted-foreground/20">{p.name.charAt(0)}</span>}
                   </div>
                   <div className="flex-1 min-w-0 space-y-1.5">
@@ -4345,15 +4978,19 @@ export default function POSPage() {
                     <div className="flex flex-wrap gap-1">
                       {typeName && <Badge variant="secondary" className="text-[10px]">{typeName}</Badge>}
                       {stockEligible && (
-                        <Badge variant={isLow ? "destructive" : "outline"} className="text-[10px] tabular-nums">
-                          {p.stockQuantity} in stock{isLow ? " · Low" : ""}
-                        </Badge>
+                        (p.stockQuantity ?? 0) <= 0 ? (
+                          <Badge variant="destructive" className="text-[10px] tabular-nums bg-red-600 text-white border-transparent hover:bg-red-600">OOS · out of stock</Badge>
+                        ) : (
+                          <Badge variant={isLow ? "destructive" : "outline"} className="text-[10px] tabular-nums">
+                            {p.stockQuantity} in stock{isLow ? " · Low" : ""}
+                          </Badge>
+                        )
                       )}
                     </div>
                     <dl className="text-xs text-muted-foreground space-y-0.5 pt-1">
                       {p.sku && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">SKU</dt><dd className="truncate">{p.sku}</dd></div>}
                       {p.barcode && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Barcode</dt><dd className="truncate">{p.barcode}</dd></div>}
-                      {p.supplier && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Supplier</dt><dd className="truncate">{p.supplier}</dd></div>}
+                      {posLayout.showQuickViewSupplier && p.supplier && <div className="flex gap-1.5"><dt className="font-medium text-foreground/70">Supplier</dt><dd className="truncate">{p.supplier}</dd></div>}
                     </dl>
                   </div>
                 </div>
@@ -4363,6 +5000,12 @@ export default function POSPage() {
                     {tags.map(t => <Badge key={t} variant="outline" className="text-[10px]">{t}</Badge>)}
                   </div>
                 )}
+                <div className="flex items-center justify-between border-t pt-3">
+                  <Label htmlFor="qv-show-supplier" className="text-xs text-muted-foreground flex items-center gap-1.5 cursor-pointer">
+                    <Package className="w-3.5 h-3.5" /> Show supplier
+                  </Label>
+                  <Switch id="qv-show-supplier" checked={posLayout.showQuickViewSupplier} onCheckedChange={toggleQuickViewSupplier} disabled={upsertPosSettings.isPending} />
+                </div>
                 <DialogFooter>
                   <Button variant="outline" onClick={() => setQuickViewProduct(null)}>Close</Button>
                   <Button onClick={() => { setQuickViewProduct(null); fetchModifiersAndShow(p); }}>Add to sale</Button>
@@ -4390,11 +5033,11 @@ export default function POSPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
-              <ScrollArea className="max-h-44 border rounded-lg">
+              <ScrollArea className={cn("max-h-44 border rounded-lg", SCROLL_AREA_TRUNCATE_FIX)}>
                 {filteredServiceJobs.length === 0
                   ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No service jobs match your search." : "No service jobs found."}</div>
                   : <div className="divide-y">{filteredServiceJobs.map(sj => (
-                      <button key={sj.id} onClick={() => { setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false); }}
+                      <button key={sj.id} onClick={() => linkService(sj)}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
                         <LinkIcon className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         <div className="flex-1 min-w-0">
@@ -4408,11 +5051,11 @@ export default function POSPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
-              <ScrollArea className="max-h-44 border rounded-lg">
+              <ScrollArea className={cn("max-h-44 border rounded-lg", SCROLL_AREA_TRUNCATE_FIX)}>
                 {filteredAppointments.length === 0
                   ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No appointments match your search." : "No appointments found."}</div>
                   : <div className="divide-y">{filteredAppointments.map(apt => (
-                      <button key={apt.id} onClick={() => { setLinkedAppointment(apt); setLinkedService(null); setServiceLinkOpen(false); }}
+                      <button key={apt.id} onClick={() => linkAppointment(apt)}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedAppointment?.id === apt.id && "bg-primary/10 text-primary")}>
                         <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
                         <div className="flex-1 min-w-0">
@@ -4489,13 +5132,13 @@ export default function POSPage() {
         prefillName={customerSearch}
       />
 
-      {/* ─── Warranty serial-number collection ─── */}
+      {/* ─── Serial-number collection (serial-tracked products) ─── */}
       <Dialog open={!!serialPrompt} onOpenChange={(o) => { if (!o) setSerialPrompt(null); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial Numbers Required</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><ShieldCheck className="w-4 h-4" /> Serial / IMEI Required</DialogTitle>
           </DialogHeader>
-          <p className="text-sm text-muted-foreground">These warranty items need a serial number per unit. Pick an in-stock serial or type one in.</p>
+          <p className="text-sm text-muted-foreground">These items need a serial number or IMEI per unit. Select one from stock below, or type one in.</p>
           <div className="space-y-4 max-h-[55vh] overflow-y-auto pr-1">
             {Object.entries(serialInputs).map(([pidStr, arr]) => {
               const pid = Number(pidStr);
@@ -4507,28 +5150,51 @@ export default function POSPage() {
                   {arr.map((val, k) => {
                     const usedElsewhere = new Set(arr.filter((_, j) => j !== k).map((s) => s.trim()).filter(Boolean));
                     const options = avail.filter((s) => !usedElsewhere.has(s));
+                    const setVal = (v: string) => setSerialInputs((prev) => {
+                      const next = { ...prev, [pid]: [...prev[pid]] };
+                      next[pid][k] = v;
+                      return next;
+                    });
                     return (
-                      <div key={k} className="flex items-center gap-2">
-                        <span className="text-xs text-muted-foreground w-10 shrink-0">#{k + 1}</span>
-                        <Input
-                          list={`serials-${pid}`}
-                          value={val}
-                          onChange={(e) => setSerialInputs((prev) => {
-                            const next = { ...prev, [pid]: [...prev[pid]] };
-                            next[pid][k] = e.target.value;
-                            return next;
-                          })}
-                          placeholder="Serial number"
-                          className="h-8 font-mono text-sm"
-                        />
-                        <datalist id={`serials-${pid}`}>
-                          {options.map((s) => <option key={s} value={s} />)}
-                        </datalist>
+                      <div key={k} className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground w-10 shrink-0">#{k + 1}</span>
+                          <Input
+                            list={`serials-${pid}`}
+                            value={val}
+                            onChange={(e) => setVal(e.target.value)}
+                            placeholder="Serial number / IMEI"
+                            className="h-8 font-mono text-sm"
+                          />
+                          <datalist id={`serials-${pid}`}>
+                            {options.map((s) => <option key={s} value={s} />)}
+                          </datalist>
+                        </div>
+                        {/* Clickable list of in-stock serials/IMEIs for this unit. */}
+                        {options.length > 0 && (
+                          <div className="flex flex-wrap gap-1 pl-12">
+                            {options.map((s) => (
+                              <button
+                                key={s}
+                                type="button"
+                                onClick={() => setVal(val === s ? "" : s)}
+                                className={cn(
+                                  "text-[11px] font-mono px-1.5 py-0.5 rounded border transition-colors",
+                                  val === s
+                                    ? "bg-primary text-primary-foreground border-primary"
+                                    : "text-muted-foreground hover:bg-muted",
+                                )}
+                              >
+                                {s}
+                              </button>
+                            ))}
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                   <p className="text-[11px] text-muted-foreground">
-                    {avail.length > 0 ? `${avail.length} in stock — start typing to pick one.` : "No serials in stock for this item; enter one to record it."}
+                    {avail.length > 0 ? `${avail.length} in stock — tap one above or type a serial / IMEI.` : "No serials in stock for this item; enter one to record it."}
                   </p>
                 </div>
               );
@@ -4709,7 +5375,13 @@ export default function POSPage() {
               </div>
             </div>
 
-            {/* Opening float — denomination count */}
+            {/* Opening float — denomination count. Operations registers have no
+                cash drawer, so the cash-in prompt is omitted for them. */}
+            {isOperationsRegister ? (
+              <div className="rounded-xl bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
+                This is an invoicing &amp; quoting register — no opening cash float is required.
+              </div>
+            ) : (
             <div className="space-y-3">
               <Label className="flex items-center gap-1.5">
                 <Banknote className="w-4 h-4 text-muted-foreground" /> Count Cash in Drawer
@@ -4767,6 +5439,7 @@ export default function POSPage() {
                 </p>
               </div>
             </div>
+            )}
 
             {/* Notes */}
             <div className="space-y-1.5">
@@ -5243,6 +5916,72 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* ── BNPL (Zip / Afterpay) pending dialog ───────────────────────────── */}
+      <Dialog open={!!payPending} onOpenChange={(o) => { if (!o) setPayPending(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>{payPending?.label ?? "Payment"}</DialogTitle>
+          </DialogHeader>
+          {payPending?.error ? (
+            <div className="py-4 text-center space-y-2">
+              <p className="font-medium text-destructive">{payPending.error}</p>
+              <p className="text-sm text-muted-foreground">No charge was completed — try another payment method.</p>
+            </div>
+          ) : (
+            <div className="py-2 flex flex-col items-center gap-4 text-center">
+              {payQr ? (
+                <img src={payQr} alt={`${payPending?.label ?? "Payment"} QR code`} className="w-52 h-52 rounded-lg border bg-white p-2" />
+              ) : (
+                <div className="w-52 h-52 rounded-lg border flex items-center justify-center">
+                  <Loader2 className="w-10 h-10 animate-spin text-muted-foreground" />
+                </div>
+              )}
+              <div className="space-y-1">
+                <p className="font-medium">Ask the customer to scan with the {payPending?.label} app</p>
+                {payPending && <p className="text-lg font-semibold">{formatCurrency(payPending.amount)}</p>}
+                <p className="text-sm text-muted-foreground flex items-center justify-center gap-1.5">
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Waiting for approval…
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayPending(null)}>
+              {payPending?.error ? "Close" : "Cancel"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Close all open registers — offered after this register is closed when the
+          "prompt to close all open registers" setting is on and others remain open.
+          Rendered last so it stacks ON TOP of the End-of-Day dialog that
+          handleCloseRegister also opens (later-in-DOM wins for equal z-index). */}
+      <AlertDialog open={closeAllCandidates.length > 0} onOpenChange={(o) => { if (!o) setCloseAllCandidates([]); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Close all open registers?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {closeAllCandidates.length} other {closeAllCandidates.length === 1 ? "register is" : "registers are"} still open for your business. Close {closeAllCandidates.length === 1 ? "it" : "them all"} now?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="max-h-40 overflow-y-auto rounded-md border divide-y text-sm">
+            {closeAllCandidates.map((s) => (
+              <div key={s.id} className="flex items-center justify-between px-3 py-2 gap-2">
+                <span className="font-medium truncate">{s.registerId || "Register"}</span>
+                {s.openedBy && <span className="text-xs text-muted-foreground truncate">{s.openedBy}</span>}
+              </div>
+            ))}
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Keep them open</AlertDialogCancel>
+            <AlertDialogAction onClick={handleCloseAllRegisters}>
+              Close {closeAllCandidates.length === 1 ? "register" : "all"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       </POSPageExpander>
 

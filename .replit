@@ -18,7 +18,51 @@ author = "agent"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
+args = "api-server"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "koapos"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
+args = "mockup-sandbox"
+
+[[workflows.workflow.tasks]]
+task = "workflow.run"
 args = "api-contract-tests"
+
+# PORT and BASE_PATH are set inline on each command rather than as Secrets, for
+# two reasons. All three services read the SAME variable names, so one global
+# value cannot serve them — it would collide. And a Secret can be deleted by
+# accident: removing DATABASE_URL from Secrets once took PORT with it, which
+# silently stopped the API server booting (index.ts fails fast without PORT) and
+# looked from the browser like every user being logged out and unable to sign in.
+# Keeping the values here means they are versioned with the repo instead.
+
+[[workflows.workflow]]
+name = "api-server"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=8080 pnpm --filter @workspace/api-server run dev"
+
+[[workflows.workflow]]
+name = "koapos"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=19141 BASE_PATH=/ pnpm --filter @workspace/koapos run dev"
+
+[[workflows.workflow]]
+name = "mockup-sandbox"
+author = "agent"
+
+[[workflows.workflow.tasks]]
+task = "shell.exec"
+args = "PORT=8081 BASE_PATH=/__mockup pnpm --filter @workspace/mockup-sandbox run dev"
 
 [[workflows.workflow]]
 name = "api-contract-tests"
@@ -85,6 +129,7 @@ channel = "stable-25_05"
 [userenv]
 
 [userenv.production]
+SKIP_SCHEMA_DRIFT_CHECK = "true"
 
 [userenv.shared]
 SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"

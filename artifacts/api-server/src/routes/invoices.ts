@@ -1,17 +1,28 @@
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable } from "@workspace/db";
-import { eq, and, desc, asc, sql } from "drizzle-orm";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
+import { customQrEmailBlock } from "../lib/custom-qr-email";
+import { mergeEmailTemplate, savedEmailTemplate } from "../lib/email-template";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
+import { getInvoiceSettings } from "./invoice-settings";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
+import { sendInvoiceSms } from "../services/invoiceSms";
+import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import crypto from "node:crypto";
 import {
   RecordInvoicePaymentBody,
+  ReverseInvoicePaymentBody,
+  ReverseInvoicePaymentParams,
+  ReverseInvoicePaymentResponse,
   AddInvoiceEventBody,
   SendInvoiceEmailBody,
+  SendInvoiceSmsBody,
+  SendInvoiceSmsParams,
   ListInvoicesQueryParams,
   CreateInvoiceBody,
   UpdateInvoiceBody,
@@ -104,7 +115,35 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string; amount?: number; idempotencyKey?: string };
+type InvoiceEvent = { id?: string; type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; reverses?: string; idempotencyKey?: string };
+
+// A planned instalment on an invoice's payment schedule. Coverage is derived
+// from amountPaid, so only the plan (label/amount/dueDate) is stored.
+type Instalment = { label?: string | null; amount: number; dueDate?: string | null };
+
+/* Normalise a client-supplied payment schedule into the stored shape, dropping
+   malformed entries. Returns null when there's nothing usable so the column
+   stays empty rather than holding an empty array. */
+function sanitizeSchedule(input: unknown): Instalment[] | null {
+  if (!Array.isArray(input)) return null;
+  const out: Instalment[] = [];
+  for (const raw of input) {
+    const r = raw as { label?: unknown; amount?: unknown; dueDate?: unknown };
+    const amount = round2(Number(r?.amount));
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    let dueDate: string | null = null;
+    if (typeof r.dueDate === "string" && r.dueDate.trim() !== "") {
+      const d = new Date(r.dueDate);
+      dueDate = Number.isNaN(d.getTime()) ? null : d.toISOString();
+    }
+    out.push({
+      label: typeof r.label === "string" && r.label.trim() !== "" ? r.label.trim() : null,
+      amount,
+      dueDate,
+    });
+  }
+  return out.length ? out : null;
+}
 
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
@@ -147,6 +186,7 @@ function fmt(
     discountTotal: inv.discountTotal  ? parseFloat(inv.discountTotal)  : null,
     items: (inv.items as LineItem[] | null) ?? [],
     events: (inv.events as InvoiceEvent[] | null) ?? [],
+    paymentSchedule: (inv.paymentSchedule as Instalment[] | null) ?? null,
     dueDate: inv.dueDate?.toISOString() ?? null,
     paidAt: inv.paidAt?.toISOString() ?? null,
     viewedAt: inv.viewedAt?.toISOString() ?? null,
@@ -193,8 +233,10 @@ async function completeLinkedRecords(merchantId: number, serviceJobId?: number |
   }
 }
 
-/** Credit loyalty points/value to a customer when an invoice is fully settled. */
-async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: number, customerId: number, invoiceTotal: number) {
+/** Credit (sign +1) or claw back (sign -1) loyalty points/value for an invoice.
+ *  Clawback mirrors the original credit so reversing a paid invoice removes
+ *  exactly what settling it awarded. */
+async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: number, customerId: number, invoiceTotal: number, sign: 1 | -1 = 1) {
   if (invoiceTotal <= 0) return;
   const [loyaltyRow] = await executor
     .select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
@@ -238,7 +280,7 @@ async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: num
   if (earned > 0) {
     await executor
       .update(customersTable)
-      .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned}` })
+      .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} + ${earned * sign})` })
       .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
   }
 }
@@ -278,6 +320,55 @@ async function applyInvoiceStock(tx: DbExecutor, merchantId: number, items: unkn
     const newQty = Math.max(0, product.stockQuantity + direction * qty);
     await tx.update(productsTable).set({ stockQuantity: newQty }).where(eq(productsTable.id, productId));
   }
+}
+
+/** Confirm a client-supplied foreign-key id actually belongs to this merchant.
+ *  Returns the id when it resolves to a live row, otherwise null. Used to guard
+ *  invoice inserts/updates against stale client state (e.g. a device whose
+ *  cached day-staff id predates a data restore that renumbered staff): without
+ *  this the raw FK constraint throws an opaque 500 and invoice creation fails.
+ *  `null`/`undefined` inputs pass straight through as null (field is optional). */
+async function resolveMerchantFk(
+  table: typeof staffTable | typeof customersTable | typeof serviceJobsTable | typeof appointmentsTable,
+  merchantId: number,
+  id: number | null | undefined,
+): Promise<number | null> {
+  if (id == null) return null;
+  const [row] = await db
+    .select({ id: table.id })
+    .from(table)
+    .where(and(eq(table.id, id), eq(table.merchantId, merchantId)));
+  return row ? id : null;
+}
+
+/** Snapshot each product-linked line item's cost price (server-authoritative),
+ *  so invoice COGS in reports reflects the cost at invoicing rather than trusting
+ *  whatever the client sent. Free-text lines (no productId) are left untouched.
+ *
+ *  Exception: when a product carries no meaningful cost on file (catalog cost is
+ *  null/0 — e.g. an item that also had no sell price, which the POS prompts the
+ *  cashier to price at invoicing time), we DON'T clobber a positive client-supplied
+ *  cost with 0. The catalog only wins when it actually has a cost to assert. */
+async function snapshotInvoiceLineCosts(merchantId: number, lines: LineItem[]): Promise<LineItem[]> {
+  const arr = (Array.isArray(lines) ? lines : []) as Array<LineItem & { productId?: number; costPrice?: number }>;
+  const ids = [...new Set(arr.map((l) => l.productId).filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+  if (ids.length === 0) return lines;
+  const rows = await db
+    .select({ id: productsTable.id, costPrice: productsTable.costPrice })
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)));
+  const costById = new Map(rows.map((r) => [r.id, r.costPrice != null ? parseFloat(r.costPrice) : NaN]));
+  return arr.map((l) => {
+    if (typeof l.productId === "number" && costById.has(l.productId)) {
+      const catalogCost = costById.get(l.productId)!;
+      // Catalog cost wins only when it's a real, positive cost. When it's 0/unset,
+      // keep the cost the cashier entered for this line (falling back to 0).
+      if (Number.isFinite(catalogCost) && catalogCost > 0) return { ...l, costPrice: catalogCost };
+      const clientCost = typeof l.costPrice === "number" && Number.isFinite(l.costPrice) ? l.costPrice : 0;
+      return { ...l, costPrice: clientCost };
+    }
+    return l;
+  });
 }
 
 /** Roll an invoice total into (or back out of) a customer's lifetime spend.
@@ -381,47 +472,73 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     invoiceDigits,
     recurring,
     discount: discountInput,
+    paymentSchedule,
     serviceJobId,
     appointmentId,
   } = bodyParsed.data;
 
   const merchantId = req.session.merchantId!;
-  const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
+  const invSettings = await getInvoiceSettings(merchantId);
+
+  // Validate client-supplied foreign keys against this merchant before insert.
+  // A stale value (e.g. a cached day-staff id from before a data restore) would
+  // otherwise hit the DB FK constraint and surface as an opaque 500. Staff
+  // attribution and the optional service-job/appointment links are non-critical,
+  // so an unresolved id is dropped to null rather than failing the whole invoice.
+  const safeStaffId = await resolveMerchantFk(staffTable, merchantId, staffId);
+  const safeCustomerId = await resolveMerchantFk(customersTable, merchantId, customerId);
+  const safeServiceJobId = await resolveMerchantFk(serviceJobsTable, merchantId, serviceJobId);
+  const safeAppointmentId = await resolveMerchantFk(appointmentsTable, merchantId, appointmentId);
+  if (staffId != null && safeStaffId == null) {
+    console.warn(`[invoices] POST /invoices: staffId ${staffId} does not belong to merchant ${merchantId}; creating invoice without staff attribution`);
+  }
+
+  const rawLines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
+  const lines = await snapshotInvoiceLineCosts(merchantId, rawLines);
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(invoicesTable)
-    .where(eq(invoicesTable.merchantId, merchantId));
-
-  const prefix = (invoicePrefix ?? "KI").toUpperCase();
+  // Prefer the merchant's invoice-settings prefix; fall back to the client value
+  // then the historical "KI" default so existing numbering is preserved.
+  const prefix = (invSettings.numberPrefix || invoicePrefix || "KI").toUpperCase();
   const digits = Math.max(1, Math.min(10, invoiceDigits ?? 5));
-  const invNumber = `${prefix}${String(Number(countRow.count) + 1).padStart(digits, "0")}`;
 
-  const [inv] = await db.insert(invoicesTable).values({
-    merchantId,
-    customerId: customerId ?? null,
-    staffId: staffId ?? null,
-    invoiceNumber: invNumber,
-    status: "draft",
-    subtotal: String(subtotal),
-    taxTotal: String(taxTotal),
-    total: String(total),
-    discountType:  discountInput?.type ?? null,
-    discountValue: discountInput?.value != null ? String(discountInput.value) : null,
-    discountTotal: discountAmount > 0 ? String(discountAmount) : null,
-    items: lines.length ? lines : null,
-    // dueDate / recurringStartDate columns are timestamps — they must be Date
-    // objects, not the raw "YYYY-MM-DD" strings from the client.
-    dueDate: dueDate ? new Date(dueDate) : null,
-    notes: notes ?? null,
-    serviceJobId: serviceJobId ?? null,
-    appointmentId: appointmentId ?? null,
-    isRecurring: recurring ? "true" : "false",
-    recurringFrequency: recurring?.frequency ?? null,
-    recurringOccurrences: recurring?.occurrences ?? null,
-    recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
-  }).returning();
+  // Number = <prefix><max existing suffix + 1>. Derived per attempt so a
+  // concurrent create (or a deleted-then-reused count) can't collide; the unique
+  // (merchantId, invoiceNumber) index makes it authoritative and the retry bumps
+  // the suffix on the rare conflict.
+  const inv = await withUniqueRetry("invoices_merchant_invoice_number_unique", async (tryIndex) => {
+    const existing = await db
+      .select({ n: invoicesTable.invoiceNumber })
+      .from(invoicesTable)
+      .where(eq(invoicesTable.merchantId, merchantId));
+    const invNumber = `${prefix}${String(nextSequential(existing.map((r) => r.n), tryIndex)).padStart(digits, "0")}`;
+    const [created] = await db.insert(invoicesTable).values({
+      merchantId,
+      customerId: safeCustomerId,
+      staffId: safeStaffId,
+      invoiceNumber: invNumber,
+      status: "draft",
+      subtotal: String(subtotal),
+      taxTotal: String(taxTotal),
+      total: String(total),
+      discountType:  discountInput?.type ?? null,
+      discountValue: discountInput?.value != null ? String(discountInput.value) : null,
+      discountTotal: discountAmount > 0 ? String(discountAmount) : null,
+      items: lines.length ? lines : null,
+      paymentSchedule: sanitizeSchedule(paymentSchedule),
+      // dueDate / recurringStartDate columns are timestamps — they must be Date
+      // objects, not the raw "YYYY-MM-DD" strings from the client.
+      dueDate: dueDate ? new Date(dueDate) : null,
+      notes: notes ?? null,
+      serviceJobId: safeServiceJobId,
+      appointmentId: safeAppointmentId,
+      isRecurring: recurring ? "true" : "false",
+      recurringFrequency: recurring?.frequency ?? null,
+      recurringOccurrences: recurring?.occurrences ?? null,
+      recurringStartDate: recurring?.startDate ? new Date(recurring.startDate) : null,
+    }).returning();
+    return created;
+  });
 
   // Fetch with full customer details
   const [row] = await db
@@ -447,6 +564,28 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
     : fmt(inv);
   assertValidInvoiceResponse(GetInvoiceResponse, createInvoiceBody, "POST /invoices");
   res.status(201).json(createInvoiceBody);
+
+  // Fire-and-forget auto-send: deliver the new invoice to the customer when the
+  // merchant has enabled it, via the configured channel(s). Runs after responding
+  // so invoice creation never blocks on PDF generation / email delivery.
+  const autoSendBase = publicOrigin(req);
+  void (async () => {
+    try {
+      if (!invSettings.autoSendOnCreate) return;
+      const method = invSettings.defaultSendMethod;
+      const custEmail = row?.customerEmail ?? null;
+      if ((method === "email" || method === "both") && custEmail) {
+        const r = await sendInvoiceEmailInternal(merchantId, inv.id, { to: custEmail, baseUrl: autoSendBase, kind: "invoice" });
+        if (!r.success) console.warn(`[invoices] auto-send email failed for invoice ${inv.id}: ${r.error}`);
+      }
+      if (method === "sms" || method === "both") {
+        const r = await sendInvoiceSms(merchantId, inv.id, "invoice");
+        if (!r.success && !r.skipped) console.warn(`[invoices] auto-send SMS failed for invoice ${inv.id}: ${r.error}`);
+      }
+    } catch (err) {
+      console.warn(`[invoices] auto-send error for invoice ${inv.id}:`, err);
+    }
+  })();
 });
 
 // PATCH /invoices/:id/viewed
@@ -501,7 +640,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const { id } = paramsResult.data;
   const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
-  const { status, notes, dueDate, customerId, items, recurring, discount, serviceJobId, appointmentId } = bodyParsed.data;
+  const { status, notes, dueDate, customerId, items, recurring, discount, paymentSchedule, serviceJobId, appointmentId } = bodyParsed.data;
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
@@ -512,19 +651,30 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       // Any explicit non-paid status (sent/draft/overdue/cancelled) clears recorded payments.
       if (status !== "partial") updates.amountPaid = "0";
     }
+    // Cancelling a recurring template must stop it from generating further
+    // invoices. The scheduler already skips cancelled rows, but clear the
+    // recurrence flag here too so the record's state is unambiguous.
+    if (status === "cancelled") updates.isRecurring = "false";
   }
   if (notes !== undefined) updates.notes = notes;
   if (dueDate !== undefined) updates.dueDate = dueDate ? new Date(dueDate) : null;
-  if (customerId !== undefined) updates.customerId = customerId ?? null;
-  if (serviceJobId !== undefined) updates.serviceJobId = serviceJobId ?? null;
-  if (appointmentId !== undefined) updates.appointmentId = appointmentId ?? null;
+  // Validate FK ids against the merchant (mirrors POST /invoices) so a stale
+  // client value can't trip the DB constraint and turn an edit into a 500.
+  const updMerchantId = req.session.merchantId!;
+  if (customerId !== undefined) updates.customerId = await resolveMerchantFk(customersTable, updMerchantId, customerId);
+  if (serviceJobId !== undefined) updates.serviceJobId = await resolveMerchantFk(serviceJobsTable, updMerchantId, serviceJobId);
+  if (appointmentId !== undefined) updates.appointmentId = await resolveMerchantFk(appointmentsTable, updMerchantId, appointmentId);
   if (items !== undefined || discount !== undefined) {
     // Fetch existing items/discount if only one was sent
     const [existing] = await db
       .select({ items: invoicesTable.items, discountType: invoicesTable.discountType, discountValue: invoicesTable.discountValue })
       .from(invoicesTable)
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
-    const lines: LineItem[] = items ?? ((existing?.items as LineItem[] | null) ?? []);
+    // Re-snapshot costs only when new line data is supplied; otherwise keep the
+    // existing items' original cost snapshots intact.
+    const lines: LineItem[] = items !== undefined
+      ? await snapshotInvoiceLineCosts(req.session.merchantId!, items as LineItem[])
+      : ((existing?.items as LineItem[] | null) ?? []);
     const discountInput: Discount | null = discount !== undefined ? discount : (
       existing?.discountType && existing?.discountValue
         ? { type: existing.discountType as "fixed" | "percent", value: parseFloat(existing.discountValue) }
@@ -538,6 +688,9 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     updates.discountType  = discountInput?.type ?? null;
     updates.discountValue = discountInput?.value != null ? String(discountInput.value) : null;
     updates.discountTotal = discountAmount > 0 ? String(discountAmount) : null;
+  }
+  if (paymentSchedule !== undefined) {
+    updates.paymentSchedule = sanitizeSchedule(paymentSchedule);
   }
   if (recurring !== undefined) {
     updates.isRecurring = recurring?.enabled ? "true" : "false";
@@ -649,7 +802,28 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     res.status(400).json({ error: bodyParsed.error.message });
     return;
   }
-  const { amount, method, payments, giftCardPayment, idempotencyKey: rawIdempotencyKey } = bodyParsed.data;
+  const { amount, method, payments, giftCardPayment, note: rawNote, idempotencyKey: rawIdempotencyKey, paidAt: rawPaidAt } = bodyParsed.data;
+  const note = typeof rawNote === "string" && rawNote.trim() !== "" ? rawNote.trim() : undefined;
+
+  // Optional accounting date: when this payment settles the invoice in full, stamp
+  // paidAt (and thus the reporting sale date) with the day the money actually
+  // landed — e.g. a direct deposit that cleared earlier — rather than "now".
+  // A bare YYYY-MM-DD is anchored at noon UTC so `(paid_at)::date` lands on the
+  // chosen calendar day in every real (±12h) timezone. Future dates are rejected.
+  let settledAt: Date | undefined;
+  if (typeof rawPaidAt === "string" && rawPaidAt.trim() !== "") {
+    const raw = rawPaidAt.trim();
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw);
+    if (Number.isNaN(d.getTime())) {
+      res.status(400).json({ error: "Invalid paidAt date" });
+      return;
+    }
+    if (d.getTime() > Date.now() + 86_400_000) {
+      res.status(400).json({ error: "paidAt cannot be in the future" });
+      return;
+    }
+    settledAt = d;
+  }
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
@@ -685,6 +859,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   // Captured for after-commit completion of any linked service job / appointment.
   let settledServiceJobId: number | null = null;
   let settledAppointmentId: number | null = null;
+  // Pass-on surcharges for the chosen method(s), collected on top of each leg's
+  // amount. Config is merchant-global, so it's read once outside the lock.
+  const surchargeMap = await getPassOnSurchargeMap(merchantId);
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -761,18 +938,27 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     // per-method reporting can attribute each leg correctly. The settlement
     // summary (paid in full / balance remaining) is noted on the first leg, and
     // the idempotency key is stamped on the first leg only.
-    const ts = new Date().toISOString();
+    const ts = (settledAt ?? new Date()).toISOString();
     const settleNote = fullyPaid
       ? `— paid in full`
       : `— balance $${balance.toFixed(2)} remaining`;
-    const legEvents: InvoiceEvent[] = legs.map((leg, i) => ({
-      type: "payment",
-      timestamp: ts,
-      detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}`,
-      amount: leg.amount,
-      ...(leg.method ? { method: leg.method } : {}),
-      ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
-    }));
+    const noteSuffix = note ? ` — ${note}` : "";
+    const legEvents: InvoiceEvent[] = legs.map((leg, i) => {
+      // Surcharge applies to single-method payments only (a split's legs aren't
+      // surcharged, matching the POS terminal), so the amount collected stays in
+      // sync with what the UI shows.
+      const legSurcharge = isSplit ? 0 : surchargeForLeg(surchargeMap, leg.method, leg.amount);
+      return {
+        id: crypto.randomUUID(),
+        type: "payment",
+        timestamp: ts,
+        detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${legSurcharge > 0 ? ` + $${legSurcharge.toFixed(2)} surcharge` : ""}${i === 0 ? noteSuffix : ""}`,
+        amount: leg.amount,
+        ...(legSurcharge > 0 ? { surchargeAmount: legSurcharge } : {}),
+        ...(leg.method ? { method: leg.method } : {}),
+        ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
+      };
+    });
     const events: InvoiceEvent[] = [
       ...((cur.events as InvoiceEvent[] | null) ?? []),
       ...legEvents,
@@ -783,7 +969,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       .set({
         amountPaid: String(newPaid),
         status: newStatus,
-        paidAt: fullyPaid ? new Date() : null,
+        paidAt: fullyPaid ? (settledAt ?? new Date()) : null,
         events,
       })
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
@@ -834,6 +1020,116 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   const paymentBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
   assertValidInvoiceResponse(RecordInvoicePaymentResponse, paymentBody, "POST /invoices/:id/payment");
   res.json(paymentBody);
+});
+
+// POST /invoices/:id/payment/reverse — reverse or correct a recorded payment
+router.post("/invoices/:id/payment/reverse", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = ReverseInvoicePaymentParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+  const bodyParsed = ReverseInvoicePaymentBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const { amount: rawAmount, eventId, reason } = bodyParsed.data;
+  const reverseAmount = round2(Number(rawAmount));
+  if (!Number.isFinite(reverseAmount) || reverseAmount <= 0) {
+    res.status(400).json({ error: "A positive reversal amount is required" });
+    return;
+  }
+
+  let notFound = false;
+  let payErrorStatus = 0;
+  let payErrorMessage = "";
+  // Read-modify-write under a row lock, mirroring the payment route, so a
+  // reversal can't race a concurrent payment and corrupt amountPaid / status.
+  await db.transaction(async (tx) => {
+    const [cur] = await tx
+      .select({
+        total: invoicesTable.total,
+        amountPaid: invoicesTable.amountPaid,
+        status: invoicesTable.status,
+        customerId: invoicesTable.customerId,
+        events: invoicesTable.events,
+        items: invoicesTable.items,
+      })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
+      .for("update");
+    if (!cur) { notFound = true; return; }
+
+    const total = parseFloat(cur.total ?? "0");
+    const prevPaid = parseFloat(cur.amountPaid ?? "0");
+    if (prevPaid <= 0) { payErrorStatus = 400; payErrorMessage = "This invoice has no recorded payments to reverse"; return; }
+    if (reverseAmount > prevPaid + 0.005) { payErrorStatus = 400; payErrorMessage = "Reversal exceeds the amount paid"; return; }
+
+    const newPaid = round2(Math.max(0, prevPaid - reverseAmount));
+    const wasFullyPaid = prevPaid >= total - 0.005;
+    const stillFullyPaid = newPaid >= total - 0.005;
+    // Revert to "partial" while a balance remains; once nothing's paid, drop back
+    // to "sent" (the invoice had been issued to collect payment).
+    const newStatus = stillFullyPaid ? "paid" : newPaid > 0 ? "partial" : "sent";
+
+    // The reversed leg's method, when we can resolve it, makes the trail read
+    // naturally ("Visa payment reversed") and lets reporting net it off by method.
+    const existingEvents = (cur.events as InvoiceEvent[] | null) ?? [];
+    const reversedLeg = eventId ? existingEvents.find((e) => e.id === eventId) : undefined;
+    const ts = new Date().toISOString();
+    const detail = `Payment of $${reverseAmount.toFixed(2)} reversed${reversedLeg?.method ? ` (${reversedLeg.method})` : ""}${reason ? ` — ${reason}` : ""}`;
+    const reversalEvent: InvoiceEvent = {
+      id: crypto.randomUUID(),
+      type: "payment-reversal",
+      timestamp: ts,
+      detail,
+      amount: -reverseAmount,
+      ...(reversedLeg?.method ? { method: reversedLeg.method } : {}),
+      ...(eventId ? { reverses: eventId } : {}),
+    };
+
+    await tx
+      .update(invoicesTable)
+      .set({
+        amountPaid: String(newPaid),
+        status: newStatus,
+        paidAt: stillFullyPaid ? new Date() : null,
+        events: [...existingEvents, reversalEvent],
+      })
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+
+    // Leaving the fully-paid state un-does the same side effects settling it
+    // applied: restore stock, back out lifetime spend, and claw back loyalty.
+    if (wasFullyPaid && !stillFullyPaid) {
+      await applyInvoiceStock(tx, merchantId, cur.items, 1);
+      await applyInvoiceCustomerSpend(tx, merchantId, cur.customerId, total, -1);
+      if (cur.customerId) {
+        await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total, -1);
+      }
+    }
+  });
+
+  if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (payErrorStatus) { res.status(payErrorStatus).json({ error: payErrorMessage }); return; }
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  const reverseBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(ReverseInvoicePaymentResponse, reverseBody, "POST /invoices/:id/payment/reverse");
+  res.json(reverseBody);
 });
 
 // DELETE /invoices/:id
@@ -906,6 +1202,30 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
   const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
   let bpBrandColors: string[] = [];
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* use default */ }
+
+  // Resolve Sales-Template quick codes ({{invoice.number}}, {{customer.name}}, …)
+  // in the downloadable PDF's template-driven text fields.
+  const pdfQuickCodeVars = buildInvoiceQuickCodeVars({
+    invoiceNumber:     inv.invoiceNumber,
+    totalStr:          `$${Number(inv.total).toFixed(2)}`,
+    subtotalStr:       `$${Number(inv.subtotal).toFixed(2)}`,
+    gstStr:            `$${Number(inv.taxTotal).toFixed(2)}`,
+    invoiceDateStr:    inv.createdAt ? new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }) : "",
+    businessName:      merchant?.businessName ?? "Your Business",
+    businessEmail:     bp?.contactEmail ?? merchant?.email ?? "",
+    businessWebsite:   bp?.website ?? "",
+    businessAbn:       bp?.abn ?? "",
+    businessPhone:     merchant?.phone ?? "",
+    businessTagline:   bp?.tagline ?? "",
+    businessAddress:   [merchant?.address, merchant?.city].filter(Boolean).join(", "),
+    customerName:      inv.customerName ?? "",
+    customerFirstName: (inv.customerName ?? "").split(" ")[0] ?? "",
+    customerEmail:     inv.customerEmail ?? "",
+    customerPhone:     inv.customerPhone ?? "",
+  });
+  const pdfResolveNullable = (s: string | null | undefined): string | null =>
+    typeof s === "string" ? applyQuickCodes(s, pdfQuickCodeVars) : (s ?? null);
+
   const pdfBuffer = await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
@@ -942,19 +1262,33 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     showTagline:           Boolean(tplOpts.showTagline),
     businessTagline:       bp?.tagline || null,
     showGstBreakdown:      tplOpts.showGstBreakdown !== undefined ? Boolean(tplOpts.showGstBreakdown) : true,
-    headerText:            tplRow?.headerHtml || (tplOpts.headerText as string | undefined) || null,
-    thankYouMsg:           (tplOpts.thankYouMsg as string | undefined) || null,
-    footerText:            tplRow?.footerHtml || (tplOpts.footerText as string | undefined) || null,
-    paymentTerms:          (tplOpts.paymentTerms as string | undefined) || null,
-    invoiceNotes:          (tplOpts.invoiceNotes as string | undefined) || null,
-    bankDetails:           (tplOpts.bankDetails as string | undefined) || null,
-    paymentSectionHeading: (tplOpts.paymentSectionHeading as string | undefined) || null,
+    headerText:            pdfResolveNullable(tplRow?.headerHtml || (tplOpts.headerText as string | undefined) || null),
+    thankYouMsg:           pdfResolveNullable((tplOpts.thankYouMsg as string | undefined) || null),
+    footerText:            pdfResolveNullable(tplRow?.footerHtml || (tplOpts.footerText as string | undefined) || null),
+    paymentTerms:          pdfResolveNullable((tplOpts.paymentTerms as string | undefined) || null),
+    invoiceNotes:          pdfResolveNullable((tplOpts.invoiceNotes as string | undefined) || null),
+    bankDetails:           pdfResolveNullable((tplOpts.bankDetails as string | undefined) || null),
+    paymentSectionHeading: pdfResolveNullable((tplOpts.paymentSectionHeading as string | undefined) || null),
     showAllCustomerDetails: Boolean(tplOpts.showAllCustomerDetails),
     showSocialLinks:        Boolean(tplOpts.showSocialLinks),
     socialIconBrandColors:  Boolean(tplOpts.socialIconBrandColors),
     socialLinks:            (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
     fontFamily:             tplRow?.fontFamily || null,
     styleVariant:           tplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(tplOpts.showCustomerQr),
+    showCustomQr:           Boolean(tplOpts.showCustomQr),
+    customQrImage:          (tplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (tplOpts.customQrCaption as string | undefined) || null,
+    showLoyaltyEarned:      Boolean(tplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
+    showBarcode:            Boolean(tplOpts.showBarcode),
+    showReferralLink:       Boolean(tplOpts.showReferralLink),
+    customMessage:          pdfResolveNullable((tplOpts.customMessage as string | undefined) || null),
+    referralLinkText:       (tplOpts.referralLinkText as string | undefined) || null,
+    // The customer-profile QR encodes the customer code (a stable scan-to-lookup
+    // identifier). Once persisted per-customer QRs land, swap in that QR's URL.
+    customerCode:           row.invoice.customerId ? `CUS-${row.invoice.customerId}` : null,
+    customerQrValue:        row.invoice.customerId ? `CUS-${row.invoice.customerId}` : null,
   });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -972,6 +1306,120 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   const bodyParsed = SendInvoiceEmailBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { email, template } = bodyParsed.data;
+
+  const result = await sendInvoiceEmailInternal(merchantId, id, {
+    to: email,
+    template,
+    baseUrl: publicOrigin(req),
+    kind: "invoice",
+  });
+  if (result.notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (!result.success) {
+    req.log.warn({ invoiceId: id, email, error: result.error }, "Invoice email failed");
+    res.status(400).json({ error: result.error ?? "Failed to send invoice email" });
+    return;
+  }
+  req.log.info({ invoiceId: id, email }, "Invoice emailed");
+  res.json({ success: true });
+});
+
+// POST /invoices/:id/send-sms — manual SMS send (defaults to the customer's
+// phone on file; an entered number overrides it). Reuses the shared invoice-SMS
+// service so wording matches auto-send and reminders.
+router.post("/invoices/:id/send-sms", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = SendInvoiceSmsParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+  const bodyParsed = SendInvoiceSmsBody.safeParse(req.body ?? {});
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const phone = bodyParsed.data.phone?.trim() || undefined;
+
+  const result = await sendInvoiceSms(merchantId, id, "invoice", phone);
+  if (result.error === "Invoice not found") { res.status(404).json({ error: result.error }); return; }
+  if (!result.success) {
+    req.log.warn({ invoiceId: id, error: result.error }, "Invoice SMS failed");
+    res.status(400).json({ error: result.error ?? "Failed to send invoice SMS" });
+    return;
+  }
+  req.log.info({ invoiceId: id }, "Invoice SMS sent");
+  res.json({ success: true });
+});
+
+/** Template-options type accepted by {@link sendInvoiceEmailInternal}. */
+type SendInvoiceEmailOk = Extract<ReturnType<typeof SendInvoiceEmailBody.safeParse>, { success: true }>["data"];
+type InvoiceEmailTemplate = NonNullable<SendInvoiceEmailOk["template"]>;
+
+/** Fill the merchant's invoice-settings subject/message placeholders. */
+function applyInvoicePlaceholders(s: string, vars: { number: string; business: string; total: string; dueDate: string }): string {
+  return s
+    .replace(/{number}/g, vars.number)
+    .replace(/{business}/g, vars.business)
+    .replace(/{total}/g, vars.total)
+    .replace(/{dueDate}/g, vars.dueDate);
+}
+
+/**
+ * Substitute Sales-Template "quick codes" — the `{{dotted.token}}` placeholders
+ * the template editor inserts (e.g. `{{invoice.number}}`, `{{customer.name}}`).
+ * Uses the same token syntax and empty-on-unknown behaviour as the print path
+ * (koapos `applyTemplateVars`), so a token is either filled from `vars` or
+ * rendered blank — never left as a raw `{{…}}` string in the customer's document.
+ */
+function applyQuickCodes(text: string, vars: Record<string, string>): string {
+  return text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_m, key: string) => vars[key.toLowerCase()] ?? "");
+}
+
+/** Build the quick-code token map for an invoice from its resolved parts. */
+function buildInvoiceQuickCodeVars(p: {
+  invoiceNumber: string;
+  totalStr: string; subtotalStr: string; gstStr: string;
+  invoiceDateStr: string;
+  businessName: string; businessEmail: string; businessWebsite: string;
+  businessAbn: string; businessPhone: string; businessTagline: string; businessAddress: string;
+  customerName: string; customerFirstName: string; customerEmail: string; customerPhone: string;
+}): Record<string, string> {
+  const now = new Date();
+  return {
+    "business.name": p.businessName,
+    "business.email": p.businessEmail,
+    "business.website": p.businessWebsite,
+    "business.abn": p.businessAbn,
+    "business.phone": p.businessPhone,
+    "business.tagline": p.businessTagline,
+    "business.address": p.businessAddress,
+    "customer.name": p.customerName,
+    "customer.first_name": p.customerFirstName,
+    "customer.email": p.customerEmail,
+    "customer.phone": p.customerPhone,
+    // The editor labels the invoice number "Invoice Number" → {{invoice.number}};
+    // {{transaction.number}} is kept as an alias for backwards compatibility.
+    "invoice.number": p.invoiceNumber,
+    "transaction.number": p.invoiceNumber,
+    "transaction.total": p.totalStr,
+    "transaction.subtotal": p.subtotalStr,
+    "transaction.gst": p.gstStr,
+    "transaction.date": p.invoiceDateStr,
+    "date.today": now.toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" }),
+    "time.now": now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
+  };
+}
+
+/**
+ * Build and send an invoice email, applying the merchant's invoice settings
+ * (default subject/message templates, attach-PDF toggle, BCC the business). Shared
+ * by the manual send route, auto-send-on-create, and the reminder/overdue scheduler.
+ *
+ * `kind` tunes the framing: "invoice" (default), "reminder" (before due) or
+ * "overdue" (past due). `baseUrl` enables the open-tracking pixel when present
+ * (omitted for background sends where there is no request origin).
+ */
+export async function sendInvoiceEmailInternal(
+  merchantId: number,
+  id: number,
+  opts: { to: string; template?: InvoiceEmailTemplate | null; baseUrl?: string | null; kind?: "invoice" | "reminder" | "overdue" | "debt_collection" },
+): Promise<{ success: boolean; error?: string; notFound?: boolean }> {
+  const { to: email, template, baseUrl = null, kind = "invoice" } = opts;
 
   const [row] = await db
     .select({
@@ -991,36 +1439,81 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
-  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  if (!row) return { success: false, notFound: true };
 
-  const [merchant, bp, emailTplRow] = await Promise.all([
+  const [merchant, bp, invoiceTplRow, emailTplRow, settings] = await Promise.all([
     db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId)).then((r) => r[0]),
     db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).then((r) => r[0]),
     db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Invoice"))).then((r) => r[0]),
+    db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Email"))).then((r) => r[0]),
+    getInvoiceSettings(merchantId),
   ]);
   const bizName = merchant?.businessName ?? "KoaPOS";
   const inv = row.invoice;
   const cName = customerName(row.customerFirstName, row.customerLastName, row.customerCompany);
   const lines = (inv.items as LineItem[] | null) ?? [];
 
-  /* ── Resolve template options (with sensible defaults) ── */
-  const tpl = template ?? {};
+  /* ── Resolve template options ──────────────────────────────────────────
+   * The body is the Email template's document; the attached PDF keeps its own
+   * (the Invoice row below). See lib/email-template.ts for the merge rules. */
+  const emailTplOpts = (emailTplRow?.options ?? {}) as Record<string, unknown>;
+  const tpl = mergeEmailTemplate(savedEmailTemplate(emailTplRow, bp), template) as InvoiceEmailTemplate;
+
+  const invoiceTplOpts = (invoiceTplRow?.options ?? {}) as Record<string, unknown>;
   const tplId            = tpl.templateId ?? "e-pro";
   const brandColor       = tpl.brandColor ?? "#4f46e5";
   const totalStr         = `$${parseFloat(inv.total).toFixed(2)}`;
-  const resolve = (s: string) => s
-    .replace(/{{business\.name}}/g, bizName)
-    .replace(/{{business\.email}}/g, tpl.contactEmail ?? "")
-    .replace(/{{business\.website}}/g, tpl.website ?? "")
-    .replace(/{{transaction\.total}}/g, totalStr)
-    .replace(/{{transaction\.number}}/g, inv.invoiceNumber)
-    .replace(/{{customer\.name}}/g, cName || "")
-    .replace(/{{[^}]+}}/g, "");
+  const invoiceDateStr = inv.createdAt
+    ? new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const quickCodeVars = buildInvoiceQuickCodeVars({
+    invoiceNumber:     inv.invoiceNumber,
+    totalStr,
+    subtotalStr:       `$${parseFloat(inv.subtotal).toFixed(2)}`,
+    gstStr:            `$${parseFloat(inv.taxTotal).toFixed(2)}`,
+    invoiceDateStr,
+    businessName:      bizName,
+    businessEmail:     tpl.contactEmail ?? bp?.contactEmail ?? merchant?.email ?? "",
+    businessWebsite:   tpl.website ?? bp?.website ?? "",
+    businessAbn:       bp?.abn ?? "",
+    businessPhone:     merchant?.phone ?? "",
+    businessTagline:   bp?.tagline ?? "",
+    businessAddress:   [merchant?.address, merchant?.city].filter(Boolean).join(", "),
+    customerName:      cName || "",
+    customerFirstName: row.customerFirstName ?? "",
+    customerEmail:     row.customerEmail ?? "",
+    customerPhone:     row.customerPhone ?? "",
+  });
+  const resolve = (s: string) => applyQuickCodes(s, quickCodeVars);
+  const resolveNullable = (s: string | null | undefined): string | null =>
+    typeof s === "string" ? resolve(s) : (s ?? null);
 
-  const subject  = resolve(tpl.subjectLine || `Invoice ${inv.invoiceNumber} from ${bizName}`);
+  const dueDateStr = inv.dueDate
+    ? new Date(inv.dueDate).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
+    : "";
+  const phVars = { number: inv.invoiceNumber, business: bizName, total: totalStr, dueDate: dueDateStr || "—" };
+  const settingsSubject = settings.emailSubject.trim()
+    ? applyInvoicePlaceholders(settings.emailSubject, phVars)
+    : `Invoice ${inv.invoiceNumber} from ${bizName}`;
+  const settingsMessage = settings.emailMessage.trim()
+    ? applyInvoicePlaceholders(settings.emailMessage, phVars)
+    : "";
+
+  const baseSubject = resolve(tpl.subjectLine || settingsSubject);
+  const subject = kind === "reminder" ? `Reminder: ${baseSubject}`
+    : kind === "overdue" ? `Overdue: ${baseSubject}`
+    : kind === "debt_collection" ? `Debt Collection Notice: ${baseSubject}`
+    : baseSubject;
   const greeting = resolve(tpl.customGreeting || (cName ? `Hi ${cName.split(" ")[0]},` : "Hi,"));
   const signOff  = resolve(tpl.customSignOff  || `— The team at ${bizName}`);
-  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage) : "";
+  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage)
+    : kind === "reminder"
+      ? `This is a friendly reminder that invoice ${inv.invoiceNumber} for ${totalStr} is due${dueDateStr ? ` on ${dueDateStr}` : " soon"}.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+    : kind === "overdue"
+      ? `Invoice ${inv.invoiceNumber} for ${totalStr} is now overdue${dueDateStr ? ` (was due ${dueDateStr})` : ""}. Please arrange payment at your earliest convenience.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+    : kind === "debt_collection"
+      ? `Our records show one or more of your invoices with ${bizName} remain unpaid and are now significantly overdue. This is a formal notice that your account is being escalated to debt collection. Please arrange payment immediately to avoid further action.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+    : settingsMessage;
   const thankYou = resolve(tpl.thankYouMsg || "Thank you for your business!");
   const footer   = tpl.footerText ? resolve(tpl.footerText) : "";
 
@@ -1081,6 +1574,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
       <p style="margin-top:28px;font-size:13px;color:#444;">${signOff}</p>
       <p style="margin-top:24px;font-size:13px;font-weight:600;text-align:center;color:${brandColor};">${thankYou}</p>
       ${tpl.showWebsite && tpl.website ? `<p style="margin-top:8px;font-size:12px;text-align:center;"><a href="${tpl.website}" style="color:${brandColor};">${tpl.website}</a></p>` : ""}
+      ${customQrEmailBlock(emailTplOpts)}
       ${socialsBlock}
       ${footer ? `<p style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">${footer}</p>` : ""}
     </div>`;
@@ -1089,8 +1583,7 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
   const billingAddrForPdf = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
     || row.customerAddress
     || null;
-  const emailTplOpts = (emailTplRow?.options ?? {}) as Record<string, unknown>;
-  const pdfBuffer = await buildInvoicePdf({
+  const pdfBuffer = settings.attachPdf ? await buildInvoicePdf({
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
     createdAt:     inv.createdAt.toISOString(),
@@ -1120,56 +1613,76 @@ router.post("/invoices/:id/send-email", requireAuth, async (req, res): Promise<v
     brandColor:      tpl.brandColor || (() => { try { return (JSON.parse(bp?.brandColors || "[]") as string[])[0] || null; } catch { return null; } })(),
     logoUrl:         tpl.logo || bp?.logo || null,
     // ── Template settings ────────────────────────────────────────────────
-    showLogo:              emailTplRow ? emailTplRow.showLogo : true,
-    showAbn:               emailTplOpts.showAbn !== undefined ? Boolean(emailTplOpts.showAbn) : true,
-    showWebsite:           emailTplOpts.showWebsite !== undefined ? Boolean(emailTplOpts.showWebsite) : true,
-    showTagline:           Boolean(emailTplOpts.showTagline),
+    showLogo:              invoiceTplRow ? invoiceTplRow.showLogo : true,
+    showAbn:               invoiceTplOpts.showAbn !== undefined ? Boolean(invoiceTplOpts.showAbn) : true,
+    showWebsite:           invoiceTplOpts.showWebsite !== undefined ? Boolean(invoiceTplOpts.showWebsite) : true,
+    showTagline:           Boolean(invoiceTplOpts.showTagline),
     businessTagline:       bp?.tagline || null,
-    showGstBreakdown:      emailTplOpts.showGstBreakdown !== undefined ? Boolean(emailTplOpts.showGstBreakdown) : true,
-    headerText:            emailTplRow?.headerHtml || (emailTplOpts.headerText as string | undefined) || null,
-    thankYouMsg:           (emailTplOpts.thankYouMsg as string | undefined) || null,
-    footerText:            emailTplRow?.footerHtml || (emailTplOpts.footerText as string | undefined) || null,
-    paymentTerms:          (emailTplOpts.paymentTerms as string | undefined) || null,
-    invoiceNotes:          (emailTplOpts.invoiceNotes as string | undefined) || null,
-    bankDetails:           (emailTplOpts.bankDetails as string | undefined) || null,
-    paymentSectionHeading: (emailTplOpts.paymentSectionHeading as string | undefined) || null,
-    showAllCustomerDetails: Boolean(emailTplOpts.showAllCustomerDetails),
-    showSocialLinks:        Boolean(emailTplOpts.showSocialLinks),
-    socialIconBrandColors:  Boolean(emailTplOpts.socialIconBrandColors),
+    showGstBreakdown:      invoiceTplOpts.showGstBreakdown !== undefined ? Boolean(invoiceTplOpts.showGstBreakdown) : true,
+    headerText:            resolveNullable(invoiceTplRow?.headerHtml || (invoiceTplOpts.headerText as string | undefined) || null),
+    thankYouMsg:           resolveNullable((invoiceTplOpts.thankYouMsg as string | undefined) || null),
+    footerText:            resolveNullable(invoiceTplRow?.footerHtml || (invoiceTplOpts.footerText as string | undefined) || null),
+    paymentTerms:          resolveNullable((invoiceTplOpts.paymentTerms as string | undefined) || null),
+    invoiceNotes:          resolveNullable((invoiceTplOpts.invoiceNotes as string | undefined) || null),
+    bankDetails:           resolveNullable((invoiceTplOpts.bankDetails as string | undefined) || null),
+    paymentSectionHeading: resolveNullable((invoiceTplOpts.paymentSectionHeading as string | undefined) || null),
+    showAllCustomerDetails: Boolean(invoiceTplOpts.showAllCustomerDetails),
+    showSocialLinks:        Boolean(invoiceTplOpts.showSocialLinks),
+    socialIconBrandColors:  Boolean(invoiceTplOpts.socialIconBrandColors),
     socialLinks:            tpl.socialLinks ?? (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
-    fontFamily:             emailTplRow?.fontFamily || null,
-    styleVariant:           emailTplRow?.selectedStyle || null,
-  });
+    fontFamily:             invoiceTplRow?.fontFamily || null,
+    styleVariant:           invoiceTplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(invoiceTplOpts.showCustomerQr),
+    showCustomQr:           Boolean(invoiceTplOpts.showCustomQr),
+    customQrImage:          (invoiceTplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (invoiceTplOpts.customQrCaption as string | undefined) || null,
+    showLoyaltyEarned:      Boolean(invoiceTplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(invoiceTplOpts.showPaymentMethods),
+    showBarcode:            Boolean(invoiceTplOpts.showBarcode),
+    showReferralLink:       Boolean(invoiceTplOpts.showReferralLink),
+    customMessage:          resolveNullable((invoiceTplOpts.customMessage as string | undefined) || null),
+    referralLinkText:       (invoiceTplOpts.referralLinkText as string | undefined) || null,
+    // Customer-profile QR encodes the stable scan-to-lookup customer code, mirroring
+    // the download path so the emailed PDF matches the merchant's saved template.
+    customerCode:           inv.customerId ? `CUS-${inv.customerId}` : null,
+    customerQrValue:        inv.customerId ? `CUS-${inv.customerId}` : null,
+  }) : null;
 
-  // Embed a 1×1 tracking pixel so viewedAt is set when the customer opens the email
-  const baseUrl = publicOrigin(req);
-  const pingUrl = `${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}`;
-  const htmlWithPixel = html + `\n<img src="${pingUrl}" width="1" height="1" alt="" style="display:none" />`;
+  // Embed a 1×1 open-tracking pixel when sending in a request context (manual
+  // send). Background sends (auto-send / scheduler) pass no baseUrl, so no pixel.
+  const htmlWithPixel = baseUrl
+    ? html + `\n<img src="${baseUrl}/api/invoices/${id}/ping-view?key=${makeViewKey(id, merchantId)}" width="1" height="1" alt="" style="display:none" />`
+    : html;
+
+  // BCC the business's own contact address when the merchant has opted in.
+  const bcc = settings.bccBusinessEmail ? (bp?.contactEmail || merchant?.email || undefined) : undefined;
 
   const result = await sendEmail(merchantId, {
     to: email,
     subject,
     html: htmlWithPixel,
     text: `${greeting}\n\nInvoice ${inv.invoiceNumber} from ${bizName}\nTotal: ${totalStr}\n\n${cMsg}\n\n${signOff}\n${thankYou}`,
-    attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
+    ...(bcc ? { bcc } : {}),
+    ...(pdfBuffer ? { attachments: [{ filename: `${inv.invoiceNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }] } : {}),
   });
 
   if (!result.success) {
-    req.log.warn({ invoiceId: id, email, error: result.error }, "Invoice email failed");
-    res.status(400).json({ error: result.error ?? "Failed to send invoice email" });
-    return;
+    return { success: false, error: result.error ?? "Failed to send invoice email" };
   }
 
-  // Mark as sent if still draft
+  // Mark as sent if still draft (only a first send promotes the status).
   if (inv.status === "draft") {
     await db.update(invoicesTable).set({ status: "sent" }).where(eq(invoicesTable.id, id));
   }
 
-  await appendInvoiceEvent(id, merchantId, { type: "email", timestamp: new Date().toISOString(), detail: email });
+  const eventType = kind === "reminder" ? "reminder"
+    : kind === "overdue" ? "overdue"
+    : kind === "debt_collection" ? "debt_collection"
+    : "email";
+  await appendInvoiceEvent(id, merchantId, { type: eventType, timestamp: new Date().toISOString(), detail: email });
 
-  req.log.info({ invoiceId: id, email }, "Invoice emailed");
-  res.json({ success: true });
-});
+  return { success: true };
+}
 
 // POST /invoices/:id/event  — record a client-side event (download, print, etc.)
 router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> => {

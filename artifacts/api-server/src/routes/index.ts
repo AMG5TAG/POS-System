@@ -6,7 +6,9 @@ import plansRouter from "./plans";
 import productsRouter from "./products";
 import customersRouter from "./customers";
 import transactionsRouter from "./transactions";
+import paymentsRouter from "./payments";
 import staffRouter from "./staff";
+import staffAuthRouter from "./staff-auth";
 import inventoryRouter from "./inventory";
 import stockTakesRouter from "./stock-takes";
 import dashboardRouter from "./dashboard";
@@ -23,6 +25,7 @@ import serviceJobTimeRouter from "./service-job-time";
 import partCompatibilityRouter from "./part-compatibility";
 import tradeInsRouter from "./trade-ins";
 import publicBookingRouter from "./public-booking";
+import productsPublicRouter from "./products-public";
 import servicePlansRouter from "./service-plans";
 import scheduledReportsRouter from "./scheduled-reports";
 import locationsRouter from "./locations";
@@ -36,9 +39,14 @@ import quotesRouter from "./quotes";
 import salesSettingsRouter from "./sales-settings";
 import integrationsRouter from "./integrations";
 import customerFilesCloudRouter from "./customer-files-cloud";
+import nextcloudRouter from "./nextcloud";
+import autoSyncSettingsRouter from "./auto-sync-settings";
 import storageRouter from "./storage";
 import loyaltyRouter from "./loyalty";
+import serviceSettingsRouter from "./service-settings";
+import invoiceSettingsRouter from "./invoice-settings";
 import portalRouter from "./portal";
+import portalAuthRouter from "./portal-auth";
 import cashDrawerRouter from "./cash-drawer";
 import parkedSalesRouter from "./parked-sales";
 import purchaseOrdersRouter from "./purchase-orders";
@@ -54,18 +62,19 @@ import laybysRouter from "./laybys";
 import xeroRouter from "./xero";
 import payrollRouter from "./payroll";
 import marketingAutomationRouter from "./marketing-automation";
+import followUpsRouter from "./follow-ups";
 import feedbackRouter from "./feedback";
 import camerasRouter from "./cameras";
-import socialFeedRouter from "./social-feed";
-import socialMediaRouter from "./social-media";
 import floorPlanRouter from "./floor-plan";
 import openaiRouter from "./openai";
 import aiSettingsRouter from "./ai-settings";
 import productRecallsRouter from "./product-recalls";
 import productPreOrdersRouter from "./product-pre-orders";
 import productReturnAuthsRouter from "./product-return-auths";
+import timeCardSessionsRouter from "./time-card-sessions";
 import posRegistersRouter from "./pos-registers";
 import posSettingsRouter from "./pos-settings";
+import paymentMethodSurchargesRouter from "./payment-method-surcharges";
 import laybySettingsRouter from "./layby-settings";
 import kpiRouter from "./kpi";
 import qrRouter from "./qr";
@@ -75,7 +84,10 @@ import smsTemplatesRouter from "./sms-templates";
 import smsCampaignsRouter from "./sms-campaigns";
 import landingPagesRouter from "./landing-pages";
 import shortlinksRouter from "./shortlinks";
+import marketingAnalyticsRouter from "./marketing-analytics";
 import onlineStoreRouter from "./online-store";
+import onlineStoreCheckoutRouter from "./online-store-checkout";
+import productReviewsRouter from "./product-reviews";
 import shippingCarriersRouter from "./shipping-carriers";
 import marketplaceConnectionsRouter from "./marketplace-connections";
 import deliveryOrdersRouter from "./delivery-orders";
@@ -102,6 +114,7 @@ import pcCompatRulesRouter from "./pc-compat-rules";
 import staffNotesRouter from "./staff-notes";
 import print3dSettingsRouter from "./print-3d-settings";
 import businessProfileRouter from "./business-profile";
+import addressLookupRouter from "./address-lookup";
 import customerSettingsRouter from "./customer-settings";
 import referralDigestRouter from "./referral-digest";
 import stickerTemplatesRouter from "./sticker-templates";
@@ -111,7 +124,6 @@ import dailyClosesRouter from "./daily-closes";
 import voidAuditRouter from "./void-audit";
 import pricingRulesRouter from "./pricing-rules";
 import modifierGroupsRouter from "./modifier-groups";
-import quickbooksRouter from "./quickbooks";
 import authSecuritySettingsRouter from "./auth-security-settings";
 import backupsRouter from "./backups";
 import partnerReferralsRouter from "./partner-referrals";
@@ -119,10 +131,14 @@ import unsubscribeRouter from "./unsubscribe";
 import staffTimesheetsRouter from "./staff-timesheets";
 import tyroSettingsRouter from "./tyro-settings";
 import demoDataRouter from "./demo-data";
+import pwaRouter from "./pwa";
 import techRouter from "./tech";
 import techAppAdminRouter from "./tech-app-admin";
+import mobilePosRouter from "./mobile-pos";
+import mobilePosAppAdminRouter from "./mobile-pos-app-admin";
 import dashboardAppAdminRouter from "./dashboard-app-admin";
 import dashboardAppPublicRouter from "./dashboard-app-public";
+import warrantiesRouter from "./warranties";
 
 const router: IRouter = Router();
 
@@ -133,7 +149,10 @@ router.use(plansRouter);
 router.use(productsRouter);
 router.use(customersRouter);
 router.use(transactionsRouter);
+router.use(warrantiesRouter);
+router.use(paymentsRouter);
 router.use(staffRouter);
+router.use(staffAuthRouter);
 router.use(inventoryRouter);
 router.use(stockTakesRouter);
 router.use(dashboardRouter);
@@ -150,6 +169,21 @@ router.use(serviceJobTimeRouter);
 router.use(partCompatibilityRouter);
 router.use(tradeInsRouter);
 router.use(publicBookingRouter);
+// Public / PIN-scoped app routers — must be mounted BEFORE any router that
+// applies a blanket `router.use(requireAuth)` (e.g. customerFilesCloudRouter
+// below). A pathless requireAuth in a root-mounted sub-router runs for every
+// later request, so mounting these after it 401s their public endpoints.
+router.use(pwaRouter);
+router.use(portalAuthRouter);
+router.use(portalRouter);
+router.use(productsPublicRouter);
+router.use(techRouter);
+router.use(mobilePosRouter);
+router.use(dashboardAppPublicRouter);
+// landingPagesRouter has public pages (/landing-pages/public/...) AND its own
+// per-route requireAuth on the authenticated endpoints, so it must sit before
+// the blanket guard or the public landing pages 401 for unauthenticated visitors.
+router.use(landingPagesRouter);
 router.use(servicePlansRouter);
 router.use(scheduledReportsRouter);
 router.use(locationsRouter);
@@ -162,14 +196,33 @@ router.use(invoicesRouter);
 router.use(quotesRouter);
 router.use(salesSettingsRouter);
 router.use(integrationsRouter);
+// xeroRouter and payrollRouter must be mounted BEFORE the blanket-requireAuth
+// routers below (e.g. customerFilesCloudRouter). Their OAuth callbacks
+// (/xero/auth/callback, /payroll/auth/callback) have no per-route requireAuth by
+// design — they authenticate via the `state` param, because the browser's return
+// from Xero cannot be relied on to carry the app session cookie. Every other
+// route in both routers carries its own requireAuth, so this placement is safe.
+// Mounting them after the blanket guard 401s the callbacks.
+router.use(xeroRouter);
+router.use(payrollRouter);
+// qrRouter and shortlinksRouter expose PUBLIC unauthenticated resolvers
+// (`/qr/r/:id` redirect for scanned/downloaded tracked QR codes, and
+// `/shortlinks/r/:slug`). Every other route in both routers carries its own
+// per-route requireAuth, so mounting them here — before the blanket-guard
+// routers below — is safe and keeps those public scan endpoints reachable.
+// Mounting them after the blanket guard 401s scans with {"error":"Unauthorized"}.
+router.use(qrRouter);
+router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
+router.use(nextcloudRouter);
+router.use(autoSyncSettingsRouter);
 router.use(storageRouter);
 router.use(loyaltyRouter);
-router.use(portalRouter);
-router.use(techRouter);
+router.use(serviceSettingsRouter);
+router.use(invoiceSettingsRouter);
 router.use(techAppAdminRouter);
+router.use(mobilePosAppAdminRouter);
 router.use(dashboardAppAdminRouter);
-router.use(dashboardAppPublicRouter);
 router.use(cashDrawerRouter);
 router.use(parkedSalesRouter);
 router.use(purchaseOrdersRouter);
@@ -182,31 +235,30 @@ router.use(emailSettingsRouter);
 router.use(formsRouter);
 router.use(formSubmissionsRouter);
 router.use(laybysRouter);
-router.use(xeroRouter);
-router.use(payrollRouter);
 router.use(marketingAutomationRouter);
+router.use(followUpsRouter);
 router.use(feedbackRouter);
-router.use(landingPagesRouter);
 router.use(camerasRouter);
-router.use(socialFeedRouter);
-router.use(socialMediaRouter);
 router.use(floorPlanRouter);
 router.use(openaiRouter);
 router.use(aiSettingsRouter);
 router.use(productRecallsRouter);
 router.use(productPreOrdersRouter);
 router.use(productReturnAuthsRouter);
+router.use(timeCardSessionsRouter);
 router.use(posRegistersRouter);
 router.use(posSettingsRouter);
+router.use(paymentMethodSurchargesRouter);
 router.use(laybySettingsRouter);
 router.use(kpiRouter);
-router.use(qrRouter);
 router.use(emailTemplatesRouter);
 router.use(emailCampaignsRouter);
 router.use(smsTemplatesRouter);
 router.use(smsCampaignsRouter);
-router.use(shortlinksRouter);
+router.use(marketingAnalyticsRouter);
 router.use(onlineStoreRouter);
+router.use(onlineStoreCheckoutRouter);
+router.use(productReviewsRouter);
 router.use(shippingCarriersRouter);
 router.use(marketplaceConnectionsRouter);
 router.use(deliveryOrdersRouter);
@@ -233,6 +285,7 @@ router.use(pcCompatRulesRouter);
 router.use(staffNotesRouter);
 router.use(print3dSettingsRouter);
 router.use(businessProfileRouter);
+router.use(addressLookupRouter);
 router.use(customerSettingsRouter);
 router.use(referralDigestRouter);
 router.use(stickerTemplatesRouter);
@@ -242,7 +295,6 @@ router.use(dailyClosesRouter);
 router.use(voidAuditRouter);
 router.use(pricingRulesRouter);
 router.use(modifierGroupsRouter);
-router.use(quickbooksRouter);
 router.use(authSecuritySettingsRouter);
 router.use(backupsRouter);
 router.use(partnerReferralsRouter);

@@ -29,6 +29,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     loginNotifyEmailNewLocation: m.loginNotifyEmailNewLocation === "true" ? true : false,
     securityAlertEmail: m.securityAlertEmail === "true" ? true : false,
     passwordChangeAlertEmail: m.passwordChangeAlertEmail === "true" ? true : false,
+    requirePortalPassword: m.requirePortalPassword === "true" ? true : false,
     createdAt: m.createdAt.toISOString(),
     emailVerified: m.emailVerifiedAt !== null,
     onboardingCompleted: m.onboardingCompletedAt !== null,
@@ -58,7 +59,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
   }
 
   const body = req.body as Record<string, unknown>;
-  const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, passwordChangeAlertEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean; passwordChangeAlertEmail?: boolean };
+  const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, passwordChangeAlertEmail, requirePortalPassword, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean; passwordChangeAlertEmail?: boolean; requirePortalPassword?: boolean };
   const portalDomain: string | null | undefined = typeof body.portalDomain === "string"
     ? (body.portalDomain.trim() || null)
     : body.portalDomain === null ? null : undefined;
@@ -108,6 +109,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     ...(loginNotifyEmailNewLocation !== undefined && { loginNotifyEmailNewLocation: loginNotifyEmailNewLocation ? "true" : "false" }),
     ...(securityAlertEmail !== undefined && { securityAlertEmail: securityAlertEmail ? "true" : "false" }),
     ...(passwordChangeAlertEmail !== undefined && { passwordChangeAlertEmail: passwordChangeAlertEmail ? "true" : "false" }),
+    ...(requirePortalPassword !== undefined && { requirePortalPassword: requirePortalPassword ? "true" : "false" }),
   };
 
   const [merchant] = await db

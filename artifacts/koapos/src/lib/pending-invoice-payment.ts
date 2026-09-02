@@ -1,7 +1,11 @@
 export type PendingInvoicePayment = {
   invoiceId: number;
   invoiceNumber: string;
+  /* Full outstanding balance on the invoice (for display). */
   balance: number;
+  /* Amount to charge at the terminal — a partial payment when less than the
+     balance. Defaults to the full balance when omitted (backwards compatible). */
+  amount?: number;
   customerId: number | null;
   customerName: string | null;
   /* Contact details carried through so the POS receipt dialog can prefill

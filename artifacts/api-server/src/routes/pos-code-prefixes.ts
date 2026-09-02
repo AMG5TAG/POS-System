@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, posCodePrefixesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { stripManagedFields } from "../lib/settings-body";
 
 const router: IRouter = Router();
 
@@ -17,7 +18,7 @@ router.get("/pos-code-prefixes", requireAuth, async (req, res): Promise<void> =>
 
 router.put("/pos-code-prefixes", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof posCodePrefixesTable.$inferInsert>;
+  const body = stripManagedFields(req.body ?? {}) as Partial<typeof posCodePrefixesTable.$inferInsert>;
   const [existing] = await db.select().from(posCodePrefixesTable).where(eq(posCodePrefixesTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(posCodePrefixesTable).set(body).where(eq(posCodePrefixesTable.merchantId, merchantId)).returning();

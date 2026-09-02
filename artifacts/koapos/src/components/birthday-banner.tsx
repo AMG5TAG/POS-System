@@ -1,18 +1,68 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Gift, X } from "lucide-react";
 import { toast } from "sonner";
+import { useStaffSession } from "@/lib/staff-day-session";
+import { useAuth } from "@/lib/use-auth";
 
 interface BirthdayCustomer {
   id: number; firstName: string; lastName: string;
   email: string | null; loyaltyPoints: number;
 }
 
+/** localStorage key prefix that records the date the banner was last dismissed.
+ *  The key is suffixed per staff member (see dismissKeyFor) so a dismissal only
+ *  hides the banner for the staff member who dismissed it — a different staff
+ *  member who PIN-logs-in on the same device still sees today's birthdays. The
+ *  stored value is the date, so a cleared banner stays cleared for the day but
+ *  new birthdays still surface the next day. */
+const DISMISS_KEY = "birthday-banner-dismissed";
+
+/** Scope the dismissal to the staff member signed in for the day on this
+ *  device, falling back to the merchant account, then to a shared key. */
+function dismissKeyFor(identity: string): string {
+  return `${DISMISS_KEY}:${identity}`;
+}
+
+function todayKey(): string {
+  const d = new Date();
+  const pad = (n: number) => String(n).padStart(2, "0");
+  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
+}
+
 export function BirthdayBanner() {
+  const { dayStaff } = useStaffSession();
+  const { user } = useAuth();
+  const identity =
+    dayStaff?.staffId != null
+      ? `staff-${dayStaff.staffId}`
+      : user?.id != null
+        ? `merchant-${user.id}`
+        : "anon";
+  const dismissKey = dismissKeyFor(identity);
+
+  // Re-evaluate whenever the acting staff member changes (PIN day-login /
+  // sign-out) so the banner reappears for a staff member who hasn't dismissed
+  // it, even on a shared device.
   const [dismissed, setDismissed] = useState(false);
+  useEffect(() => {
+    try {
+      setDismissed(localStorage.getItem(dismissKey) === todayKey());
+    } catch {
+      setDismissed(false);
+    }
+  }, [dismissKey]);
+
   const [awarded, setAwarded] = useState<Set<number>>(new Set());
   const qc = useQueryClient();
+
+  const handleDismiss = () => {
+    try {
+      localStorage.setItem(dismissKey, todayKey());
+    } catch { /* ignore storage failures */ }
+    setDismissed(true);
+  };
 
   const { data } = useQuery<{ customers: BirthdayCustomer[] }>({
     queryKey: ["birthdays-today"],
@@ -22,6 +72,19 @@ export function BirthdayBanner() {
       return r.json();
     },
   });
+
+  // The birthday bonus amount is configured under Management → Loyalty
+  // (birthdayBonusPoints). The server is the source of truth on award; this is
+  // only to show the correct amount on the button. Falls back to 100.
+  const { data: loyaltySettings } = useQuery<{ birthdayBonusPoints?: number }>({
+    queryKey: ["loyalty-settings"],
+    queryFn: async () => {
+      const r = await fetch("/api/loyalty/settings", { credentials: "include" });
+      if (!r.ok) return {};
+      return r.json();
+    },
+  });
+  const bonusPoints = loyaltySettings?.birthdayBonusPoints ?? 100;
 
   const awardMutation = useMutation({
     mutationFn: async ({ id, points }: { id: number; points: number }) => {
@@ -62,17 +125,17 @@ export function BirthdayBanner() {
                 ) : (
                   <Button size="sm" variant="ghost"
                     className="h-5 text-[11px] text-pink-700 dark:text-pink-300 hover:text-pink-800 px-1.5 font-medium"
-                    onClick={() => awardMutation.mutate({ id: c.id, points: 100 })}
+                    onClick={() => awardMutation.mutate({ id: c.id, points: bonusPoints })}
                     disabled={awardMutation.isPending}>
                     <Gift className="w-2.5 h-2.5 mr-1" />
-                    +100 pts
+                    +{bonusPoints} pts
                   </Button>
                 )}
               </div>
             ))}
           </div>
         </div>
-        <Button variant="ghost" size="icon" className="h-7 w-7 text-pink-400 hover:text-pink-600 shrink-0" onClick={() => setDismissed(true)}>
+        <Button variant="ghost" size="icon" className="h-7 w-7 text-pink-400 hover:text-pink-600 shrink-0" onClick={handleDismiss}>
           <X className="w-4 h-4" />
         </Button>
       </div>

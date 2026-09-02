@@ -2,8 +2,9 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
-import { publicOrigin } from "@/lib/public-url";
+import { techAppJobUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
+import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
 
 /**
  * Unified, print-ready Service Job Sheet.
@@ -39,25 +40,6 @@ export interface ServiceSheetFormFile {
   detail?: string;
 }
 
-/** Canonical human-readable labels for service-job status codes. */
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  "in-progress": "In Progress",
-  "awaiting-parts": "Awaiting Parts",
-  "awaiting-stock": "Awaiting Stock",
-  "at-repairer": "At Repairer",
-  "awaiting-partner-approval": "Awaiting Partner Approval",
-  "partner-replacement": "Partner Replacement",
-  "awaiting-customer": "Awaiting Customer",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-function humanizeStatus(s: string): string {
-  if (!s) return "";
-  return STATUS_LABELS[s] ?? s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 export interface ServiceSheetData {
   /** Database id — drives the bottom-left QR code that deep-links into the
       Tech App for this job (/b/:username/t/webapp?job=:id). Omit to print
@@ -72,6 +54,9 @@ export interface ServiceSheetData {
   customerEmail?: string;
   deviceType?: string;
   deviceModel?: string;
+  deviceColour?: string;
+  /** Items booked in under this job (media stacks); omitted for single devices. */
+  deviceQuantity?: number;
   serialNumber?: string;
   condition?: string;
   workDescription?: string;
@@ -137,18 +122,6 @@ function buildQr(text: string): { path: string; size: number } | null {
   }
 }
 
-function mergeCredentials(accounts?: string, logins?: string): string[] {
-  const accts = (accounts ?? "").split("\n").map((s) => s.trim());
-  const pins = (logins ?? "").split("\n").map((s) => s.trim());
-  const max = Math.max(accts.length, pins.length);
-  return Array.from({ length: max }, (_, i) => {
-    const a = accts[i] || "";
-    const p = pins[i] || "";
-    if (a && p) return `${a} — ${p}`;
-    return a || p;
-  }).filter(Boolean);
-}
-
 export function ServiceJobSheet({
   id,
   data,
@@ -171,7 +144,7 @@ export function ServiceJobSheet({
         : "16px";
 
   const dateStr = data.date ? new Date(data.date).toLocaleDateString("en-AU") : "";
-  const credentialLines = mergeCredentials(data.accounts, data.logins);
+  const credentialLines = mergeCredentialLines(data.accounts, data.logins, "\u2014");
   const photos = (data.photos ?? []).filter(Boolean);
   const socialEntries = formatSocialEntries(branding.socialLinks);
 
@@ -183,13 +156,11 @@ export function ServiceJobSheet({
      when no business username is configured (the Tech App can't exist without
      one). The `?job=` deep link is also understood by the Tech App's in-app
      scanner. */
+  const showQr = opts.showServiceQr !== false; // default on; template toggle can hide it
   const qrTarget = useMemo(() => {
-    if (data.jobId == null) return null;
-    if (branding.techAppUsername) {
-      return `${publicOrigin()}/b/${encodeURIComponent(branding.techAppUsername)}/t/webapp?job=${data.jobId}`;
-    }
-    return `${publicOrigin()}/service-jobs/${data.jobId}`;
-  }, [data.jobId, branding.techAppUsername]);
+    if (data.jobId == null || !showQr) return null;
+    return techAppJobUrl(branding.techAppUsername, data.jobId);
+  }, [data.jobId, branding.techAppUsername, showQr]);
   const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   return (
@@ -268,6 +239,8 @@ export function ServiceJobSheet({
               <div style={labelStyle}>Device</div>
               {data.deviceType && <div><strong>Type:</strong> {data.deviceType}</div>}
               {data.deviceModel && <div><strong>Model:</strong> {data.deviceModel}</div>}
+              {data.deviceColour && <div><strong>Colour:</strong> {data.deviceColour}</div>}
+              {data.deviceQuantity != null && <div><strong>Quantity:</strong> {data.deviceQuantity}</div>}
               {data.serialNumber && <div><strong>Serial:</strong> {data.serialNumber}</div>}
               {data.condition && <div><strong>Condition:</strong> {data.condition}</div>}
             </div>

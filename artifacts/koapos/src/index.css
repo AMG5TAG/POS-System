@@ -84,16 +84,18 @@
   --input: 214.3 31.8% 91.4%;
   --ring: 48 97% 47%;
 
-  --sidebar: 222 47% 11%;
-  --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 215 28% 17%;
+  /* Side menu intentionally mirrors the page background (--background) so the
+     navigation reads as part of the canvas rather than a dark rail. */
+  --sidebar: 210 20% 98%;
+  --sidebar-foreground: 222 47% 11%;
+  --sidebar-border: 214.3 31.8% 91.4%;
   --sidebar-primary: 48 97% 47%;
   --sidebar-primary-foreground: 0 0% 8%;
-  --sidebar-accent: 215 28% 17%;
-  --sidebar-accent-foreground: 210 40% 98%;
+  --sidebar-accent: 210 40% 96.1%;
+  --sidebar-accent-foreground: 222 47% 11%;
   --sidebar-ring: 48 97% 47%;
 
-  --app-font-sans: 'Inter', sans-serif;
+  --app-font-sans: 'Atkinson Hyperlegible', 'Inter', sans-serif;
   --app-font-mono: 'Space Mono', monospace;
   --radius: 0.5rem;
 }
@@ -129,12 +131,13 @@
   --input: 217.2 32.6% 17.5%;
   --ring: 48 97% 47%;
 
+  /* Dark side menu mirrors the dark page background. */
   --sidebar: 222 47% 11%;
   --sidebar-foreground: 210 40% 98%;
-  --sidebar-border: 215 28% 17%;
+  --sidebar-border: 217.2 32.6% 17.5%;
   --sidebar-primary: 48 97% 47%;
   --sidebar-primary-foreground: 0 0% 8%;
-  --sidebar-accent: 215 28% 17%;
+  --sidebar-accent: 217.2 32.6% 17.5%;
   --sidebar-accent-foreground: 210 40% 98%;
   --sidebar-ring: 48 97% 47%;
 }
@@ -172,6 +175,21 @@ html.dark.high-contrast {
   --ring: 48 100% 65%;
 }
 
+/* ── High-contrast pill selectors in dark mode ───────────────────────────────
+ * Segmented / filter "pill" selectors render their unselected options with
+ * muted text and a muted border, which washes out against the dark page
+ * background. In dark mode, unselected pills (tagged with `.pill-selector`)
+ * get a clearly visible border and bright foreground text; the selected pill
+ * keeps its solid primary fill, set inline by each selector. */
+.dark .pill-selector {
+  border-color: hsl(var(--foreground) / 0.4);
+  color: hsl(var(--foreground));
+}
+.dark .pill-selector:hover {
+  border-color: hsl(var(--foreground) / 0.7);
+  color: hsl(var(--foreground));
+}
+
 /* ── Accessibility: skip-to-content link ─────────────────────────────────── */
 .skip-link {
   position: absolute;
@@ -202,6 +220,14 @@ html.dark.high-contrast {
     transition-duration: 0.01ms !important;
     scroll-behavior: auto !important;
   }
+}
+
+/* Explicit reduced-motion toggle from the Themes settings. */
+html.reduce-motion *, html.reduce-motion *::before, html.reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
 }
 
 @layer base {

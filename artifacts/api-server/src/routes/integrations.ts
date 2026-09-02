@@ -1,9 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, merchantIntegrationsTable, oauthTokenVaultTable, customersTable, customerNotesTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { db, merchantIntegrationsTable, oauthTokenVaultTable, merchantAutoSyncSettingsTable } from "@workspace/db";
+import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault, readVault } from "../services/tokenVault";
+import { upsertVault, deleteVault, upsertCredentialVault } from "../services/tokenVault";
+import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError, syncProviderLabel } from "../services/accountSync";
+import { verifyAppleCredentials } from "../services/appleDav";
 
 const router: IRouter = Router();
 
@@ -13,53 +15,39 @@ const router: IRouter = Router();
 */
 export const INTEGRATIONS = [
   /* ── ACCOUNTING & FINANCE ──────────────────────────────────────────────── */
-  { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.",               authType: "oauth" as const, oauthProvider: "xero"       as const, useVault: false },
-  { key: "quickbooks",      label: "QuickBooks Online",     section: "accounting", category: "Accounting & Finance", description: "Sync daily sales summaries, invoices, and customer records with QuickBooks Online (Intuit).",              authType: "oauth" as const, oauthProvider: "quickbooks"  as const, useVault: true  },
-  { key: "myob",            label: "MYOB",                  section: "accounting", category: "Accounting & Finance", description: "Sync sales data and end-of-day takings directly to MYOB AccountRight or Essentials.",                     authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-
+  { key: "xero",            label: "Xero",                  section: "accounting", category: "Accounting & Finance", description: "Connect in one click to push sales, invoices, purchase orders, and contacts into Xero with GST mapped automatically.", authType: "oauth" as const, fields: [] as F[], useVault: false },
   /* ── E-COMMERCE & MARKETPLACES ─────────────────────────────────────────── */
-  { key: "shopify",         label: "Shopify",               section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Sync your Shopify online store inventory, orders, and customer data with KoaPOS.",                    authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "ebay",            label: "eBay",                  section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "List products, sync stock, and manage eBay orders directly from KoaPOS.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "amazon",          label: "Amazon",                section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Connect your Amazon Seller account to sync listings, inventory, and fulfilled orders.",               authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "woocommerce",     label: "WooCommerce",           section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Sync products, stock, and orders between your WooCommerce store and KoaPOS.",                        authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "australia_post",  label: "Australia Post",        section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Calculate real-time postage rates, print labels, and book pickups at online checkout.",              authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }, { name: "accountNumber", label: "Account Number", type: "text" }] as F[], useVault: false },
-  { key: "sendle",          label: "Sendle",                section: "ecommerce",  category: "E-Commerce & Marketplaces", description: "Carbon-neutral door-to-door parcel delivery across Australia — no fixed contracts.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
   /* ── PAYMENTS & TERMINALS ──────────────────────────────────────────────── */
-  { key: "stripe_own",      label: "Stripe Connect",        section: "payments",   category: "Payments & Terminals", description: "Connect your Stripe account to accept card payments and manage payouts.",                                  authType: "oauth" as const, oauthProvider: "stripe"     as const, useVault: true  },
+  { key: "stripe_own",      label: "Stripe",                section: "payments",   category: "Payments & Terminals", description: "Connect your own Stripe account with your API keys to accept card payments and manage payouts.",            authType: "credentials" as const, fields: [{ name: "secretKey", label: "Secret Key", type: "password" }, { name: "publishableKey", label: "Publishable Key", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true  },
   { key: "commbank_eftpos", label: "CommBank EFTPOS",       section: "payments",   category: "Payments & Terminals", description: "Integrate with CommBank Smart terminal for card-present payments.",                                       authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "terminalId", label: "Terminal ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
   { key: "square_terminal", label: "Square",                section: "payments",   category: "Payments & Terminals", description: "Accept in-store card payments via Square Terminal or Square Reader.",                                     authType: "credentials" as const, fields: [{ name: "accessToken", label: "Access Token", type: "password" }, { name: "locationId", label: "Location ID", type: "text" }] as F[], useVault: false },
   { key: "tyro_eftpos",     label: "Tyro EFTPOS",           section: "payments",   category: "Payments & Terminals", description: "Australia's most popular independent EFTPOS provider — contactless, Apple Pay & Google Pay.",             authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "terminalId", label: "Terminal ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
   { key: "paypal",          label: "PayPal",                section: "payments",   category: "Payments & Terminals", description: "Accept PayPal in-store via QR code — customer scans with the PayPal app to pay.",                        authType: "credentials" as const, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }, { name: "merchantId", label: "Merchant ID", type: "text" }] as F[], useVault: false },
   { key: "wechat_alipay",   label: "WeChat Pay & Alipay",   section: "payments",   category: "Payments & Terminals", description: "Display merchant QR codes for WeChat Pay and Alipay in-store.",                                          authType: "credentials" as const, fields: [{ name: "wechatMerchantId", label: "WeChat Merchant ID", type: "text" }, { name: "wechatApiKey", label: "WeChat API Key", type: "password" }, { name: "alipayMerchantId", label: "Alipay Merchant ID", type: "text" }, { name: "alipayApiKey", label: "Alipay API Key", type: "password" }] as F[], useVault: false },
-  { key: "afterpay",        label: "Afterpay",              section: "payments",   category: "Payments & Terminals", description: "Let customers split purchases into 4 fortnightly payments.",                                              authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  { key: "afterpay",        label: "Afterpay",              section: "payments",   category: "Payments & Terminals", description: "Let customers split purchases into 4 fortnightly payments.",                                              authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
+  { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }, { name: "locationId", label: "Location ID", type: "text" }, { name: "deviceRefCode", label: "Device Reference", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
+  { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "apple_wallet",    label: "Apple Wallet",          section: "payments",   category: "Payments & Terminals", description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",                  authType: "credentials" as const, fields: [{ name: "passTypeId", label: "Pass Type ID", type: "text" }, { name: "teamId", label: "Apple Team ID", type: "text" }, { name: "certificateBase64", label: "Certificate (Base64)", type: "password" }] as F[], useVault: false },
-  { key: "google_pay",      label: "Google Wallet",         section: "payments",   category: "Payments & Terminals", description: "Issue loyalty cards and offers to Google Wallet.",                                                        authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 
-  /* ── MARKETING & SOCIALS ───────────────────────────────────────────────── */
-  { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing & Socials", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "meta_business",       label: "Meta Business",           section: "marketing", category: "Marketing & Socials", description: "Sync your product catalogue and customer audiences to Facebook & Instagram for targeted ads.",    authType: "oauth" as const, oauthProvider: "meta"      as const, useVault: true  },
-  { key: "twitter_x",           label: "Twitter / X",             section: "marketing", category: "Marketing & Socials", description: "Post promotions, reply to mentions, and track brand sentiment on Twitter / X.",                authType: "oauth" as const, oauthProvider: "twitter"   as const, useVault: true  },
-  { key: "tiktok_business",     label: "TikTok for Business",     section: "marketing", category: "Marketing & Socials", description: "Run ads, track performance, and grow your audience on TikTok Business.",                       authType: "oauth" as const, oauthProvider: "tiktok"    as const, useVault: true  },
-  { key: "linkedin_business",   label: "LinkedIn",                section: "marketing", category: "Marketing & Socials", description: "Share business updates and promotions to your LinkedIn company page.",                         authType: "oauth" as const, oauthProvider: "linkedin"  as const, useVault: true  },
-  { key: "instagram_business",  label: "Instagram Business",      section: "marketing", category: "Marketing & Socials", description: "Schedule posts, manage DMs, and track insights on Instagram Business.",                       authType: "oauth" as const, oauthProvider: "meta"      as const, useVault: true  },
-  { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing & Socials", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "youtube_channel",     label: "YouTube Channel",         section: "marketing", category: "Marketing & Socials", description: "Publish video content, manage community posts, and pull channel analytics.",                  authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "mailchimp",           label: "Mailchimp",               section: "marketing", category: "Marketing & Socials", description: "Add customers to Mailchimp audiences and trigger post-purchase email flows.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
+  /* ── MARKETING ─────────────────────────────────────────────────────────── */
+  { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
+  { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
 
   /* ── CLOUD STORAGE & PRODUCTIVITY ─────────────────────────────────────── */
   { key: "google_drive",        label: "Google Workspace",    section: "cloud", category: "Cloud Storage & Productivity", description: "Back up reports to Google Drive and sync contacts and appointments with Google Workspace.",   authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "onedrive",            label: "Microsoft OneDrive",  section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data to Microsoft OneDrive — ideal for Microsoft 365 businesses.",       authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
   { key: "dropbox",             label: "Dropbox",             section: "cloud", category: "Cloud Storage & Productivity", description: "Send automated backups of reports and exports directly to your Dropbox.",                    authType: "oauth" as const, oauthProvider: "dropbox"   as const, useVault: true  },
-  { key: "proton_drive",        label: "Proton Drive",        section: "cloud", category: "Cloud Storage & Productivity", description: "Store encrypted backups in Proton Drive for maximum privacy and security.",                  authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
   { key: "google_contacts",     label: "Google Account",      section: "cloud", category: "Cloud Storage & Productivity", description: "Sync your customer list with Google Contacts and push appointments to Google Calendar.",    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "microsoft_contacts",  label: "Microsoft Account",   section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar.",          authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
-  { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple to sync customers to iCloud Contacts and push appointments to Apple Calendar.", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
+  { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple — lets staff/customers authenticate with their Apple ID. (Contacts & Calendar sync is the separate Apple iCloud connection.)", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
+  { key: "apple_icloud",        label: "Apple iCloud",        section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to iCloud Contacts and push appointments to Apple Calendar. Connect with your Apple ID and an app-specific password.", authType: "credentials" as const, fields: [{ name: "appleId", label: "Apple ID (email)", type: "text" }, { name: "appPassword", label: "App-specific password", type: "password" }] as F[], useVault: true  },
+  // Nextcloud is self-hosted, so there is no platform-registered app to OAuth
+  // against — the merchant's own server issues the credential via Login Flow v2
+  // (see routes/nextcloud.ts). Hence its own authType.
+  { key: "nextcloud",           label: "Nextcloud",           section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data and mirror customer files to your own Nextcloud server — self-hosted storage you control.", authType: "loginflow" as const, fields: [{ name: "serverUrl", label: "Server address", type: "text" }] as F[], useVault: true  },
   { key: "openai",              label: "OpenAI (Your Key)",   section: "cloud", category: "Cloud Storage & Productivity", description: "Use your own OpenAI API key for AI Insights, demand forecasting, and product descriptions.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
-  { key: "zapier",              label: "Zapier",              section: "cloud", category: "Cloud Storage & Productivity", description: "Connect KoaPOS to 6,000+ apps — automate workflows triggered by sales and inventory.",      authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
-  { key: "deputy",              label: "Deputy",              section: "cloud", category: "Cloud Storage & Productivity", description: "Sync staff rosters, clock-ins, and timesheets with Deputy for seamless Australian payroll.", authType: "credentials" as const, fields: [] as F[], comingSoon: true, useVault: false },
 ] as const;
 
 type F = { name: string; label: string; type: string };
@@ -77,13 +65,7 @@ function isOAuthConfigured(provider: string): boolean {
     case "google":     return !!process.env.GOOGLE_CLIENT_ID;
     case "microsoft":  return !!process.env.MICROSOFT_CLIENT_ID;
     case "dropbox":    return !!process.env.DROPBOX_APP_KEY;
-    case "stripe":     return !!process.env.STRIPE_CONNECT_CLIENT_ID;
     case "xero":       return !!process.env.XERO_CLIENT_ID;
-    case "quickbooks": return !!process.env.QUICKBOOKS_CLIENT_ID;
-    case "meta":       return !!process.env.META_APP_ID;
-    case "twitter":    return !!process.env.TWITTER_CLIENT_ID;
-    case "linkedin":   return !!process.env.LINKEDIN_CLIENT_ID;
-    case "tiktok":     return !!process.env.TIKTOK_CLIENT_KEY;
     case "apple":      return !!(process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY);
     default:           return false;
   }
@@ -124,7 +106,6 @@ const GOOGLE_SCOPES: Record<string, string> = {
   google_business:  "https://www.googleapis.com/auth/business.manage",
   google_drive:     "https://www.googleapis.com/auth/drive.file",
   google_contacts:  "https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/calendar",
-  youtube_channel:  "https://www.googleapis.com/auth/youtube https://www.googleapis.com/auth/youtube.upload https://www.googleapis.com/auth/yt-analytics.readonly",
   google_ads:       "https://www.googleapis.com/auth/adwords",
 };
 
@@ -143,14 +124,14 @@ function cbUrl(key: string, req: import("express").Request): string {
 // everything else on the Integrations page. OAuth redirects land the user back
 // on whichever page the integration lives.
 const SYNC_INTEGRATION_KEYS = new Set([
-  "google_drive", "onedrive", "dropbox", "proton_drive",
+  "google_drive", "onedrive", "dropbox",
   "google_contacts", "microsoft_contacts", "apple_account",
 ]);
 function manageUrl(key: string): string {
   return SYNC_INTEGRATION_KEYS.has(key) ? "/management/sync" : "/management/integrations";
 }
 
-function buildOAuthStartUrl(key: string, req: import("express").Request): string | null {
+async function buildOAuthStartUrl(key: string, req: import("express").Request, merchantId: number): Promise<string | null> {
   const cb = cbUrl(key, req);
   const state = String(req.session.merchantId);
 
@@ -166,33 +147,6 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
     const k = process.env.DROPBOX_APP_KEY; if (!k) return null;
     return `https://www.dropbox.com/oauth2/authorize?${new URLSearchParams({ client_id: k, redirect_uri: cb, response_type: "code", token_access_type: "offline", state })}`;
   }
-  if (key === "stripe_own") {
-    const cid = process.env.STRIPE_CONNECT_CLIENT_ID; if (!cid) return null;
-    return `https://connect.stripe.com/oauth/authorize?${new URLSearchParams({ response_type: "code", client_id: cid, scope: "read_write", redirect_uri: cb, state })}`;
-  }
-  if (key === "quickbooks") {
-    const cid = process.env.QUICKBOOKS_CLIENT_ID; if (!cid) return null;
-    return `https://appcenter.intuit.com/connect/oauth2?${new URLSearchParams({ client_id: cid, redirect_uri: cb, response_type: "code", scope: "com.intuit.quickbooks.accounting", state })}`;
-  }
-  if (key === "meta_business" || key === "instagram_business") {
-    const appId = process.env.META_APP_ID; if (!appId) return null;
-    const scope = key === "instagram_business"
-      ? "instagram_basic,instagram_content_publish,instagram_manage_insights,instagram_manage_comments,pages_show_list,pages_read_engagement"
-      : "pages_manage_ads,pages_manage_posts,pages_read_engagement,pages_show_list,business_management,ads_management,ads_read,read_insights";
-    return `https://www.facebook.com/v19.0/dialog/oauth?${new URLSearchParams({ client_id: appId, redirect_uri: cb, response_type: "code", scope, state })}`;
-  }
-  if (key === "twitter_x") {
-    const cid = process.env.TWITTER_CLIENT_ID; if (!cid) return null;
-    return `https://twitter.com/i/oauth2/authorize?${new URLSearchParams({ response_type: "code", client_id: cid, redirect_uri: cb, scope: "tweet.read tweet.write users.read offline.access media.write list.read", state, code_challenge: "challenge", code_challenge_method: "plain" })}`;
-  }
-  if (key === "linkedin_business") {
-    const cid = process.env.LINKEDIN_CLIENT_ID; if (!cid) return null;
-    return `https://www.linkedin.com/oauth/v2/authorization?${new URLSearchParams({ response_type: "code", client_id: cid, redirect_uri: cb, scope: "r_organization_social w_organization_social r_basicprofile r_ads rw_ads r_organization_admin", state })}`;
-  }
-  if (key === "tiktok_business") {
-    const k = process.env.TIKTOK_CLIENT_KEY; if (!k) return null;
-    return `https://business-api.tiktok.com/portal/auth?${new URLSearchParams({ app_id: k, redirect_uri: cb, state })}`;
-  }
   if (key === "apple_account") {
     const cid = process.env.APPLE_CLIENT_ID;
     if (!cid || !process.env.APPLE_TEAM_ID || !process.env.APPLE_KEY_ID || !process.env.APPLE_PRIVATE_KEY) return null;
@@ -203,20 +157,13 @@ function buildOAuthStartUrl(key: string, req: import("express").Request): string
 
 /* ── Token exchange ──────────────────────────────────────────────────────────── */
 
-async function exchangeToken(key: string, code: string, cb: string, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
-  if (key === "google_drive" || key === "google_business" || key === "google_contacts" || key === "youtube_channel" || key === "google_ads") {
+async function exchangeToken(key: string, code: string, cb: string, merchantId: number, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
+  if (key === "google_drive" || key === "google_business" || key === "google_contacts" || key === "google_ads") {
     const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     const accessToken = d.access_token ?? "";
     let accountId: string | undefined, accountHandle: string | undefined;
     if (accessToken) {
-      if (key === "youtube_channel") {
-        const ch = await fetch("https://www.googleapis.com/youtube/v3/channels?part=snippet,statistics&mine=true", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { items?: Array<{ id?: string; snippet?: { title?: string } }> };
-        accountId = ch.items?.[0]?.id; accountHandle = ch.items?.[0]?.snippet?.title;
-        if (!accountHandle) {
-          const ui = await fetch("https://www.googleapis.com/oauth2/v3/userinfo", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { sub?: string; email?: string };
-          accountId = accountId ?? ui.sub; accountHandle = ui.email;
-        }
-      } else if (key === "google_ads") {
+      if (key === "google_ads") {
         const customers = await fetch("https://googleads.googleapis.com/v16/customers:listAccessibleCustomers", { headers: { Authorization: `Bearer ${accessToken}`, "developer-token": process.env.GOOGLE_ADS_DEVELOPER_TOKEN ?? "" } }).then((r) => r.json()).catch(() => ({})) as { resourceNames?: string[] };
         const firstId = customers.resourceNames?.[0]?.split("/")?.[1];
         if (firstId) { accountId = firstId; accountHandle = `Account #${firstId}`; }
@@ -251,80 +198,6 @@ async function exchangeToken(key: string, code: string, cb: string, extra?: Reco
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id, accountHandle };
   }
-  if (key === "stripe_own") {
-    const d = await fetch("https://connect.stripe.com/oauth/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, client_secret: process.env.STRIPE_SECRET_KEY ?? "" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; stripe_user_id?: string };
-    const accessToken = d.access_token ?? "";
-    let accountHandle: string | undefined;
-    if (d.stripe_user_id) {
-      const account = await fetch(`https://api.stripe.com/v1/accounts/${d.stripe_user_id}`, { headers: { Authorization: `Bearer ${process.env.STRIPE_SECRET_KEY ?? ""}` } }).then((r) => r.json()).catch(() => ({})) as { email?: string; business_profile?: { name?: string } };
-      accountHandle = account.business_profile?.name ?? account.email;
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.stripe_user_id, accountHandle };
-  }
-  if (key === "quickbooks") {
-    const basicCreds = Buffer.from(`${process.env.QUICKBOOKS_CLIENT_ID}:${process.env.QUICKBOOKS_CLIENT_SECRET}`).toString("base64");
-    const d = await fetch("https://oauth.platform.intuit.com/oauth2/v1/tokens/bearer", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${basicCreds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountHandle: string | undefined;
-    if (accessToken) {
-      const profile = await fetch("https://accounts.platform.intuit.com/v1/openid_connect/userinfo", { headers: { Authorization: `Bearer ${accessToken}`, Accept: "application/json" } }).then((r) => r.json()).catch(() => ({})) as { email?: string; givenName?: string; familyName?: string };
-      accountHandle = profile.email ?? (profile.givenName ? `${profile.givenName} ${profile.familyName ?? ""}`.trim() : undefined);
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId: extra?.realmId, accountHandle };
-  }
-  if (key === "meta_business" || key === "instagram_business") {
-    const d = await fetch(`https://graph.facebook.com/v19.0/oauth/access_token?${new URLSearchParams({ client_id: process.env.META_APP_ID ?? "", client_secret: process.env.META_APP_SECRET ?? "", redirect_uri: cb, code })}`).then((r) => r.json()) as { access_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const me = await fetch(`https://graph.facebook.com/v19.0/me?fields=id,name,email&access_token=${accessToken}`).then((r) => r.json()).catch(() => ({})) as { id?: string; name?: string; email?: string };
-      if (key === "instagram_business") {
-        // Resolve the connected IG Business account via linked pages
-        const igAccounts = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=name,id,instagram_business_account{id,username}&access_token=${accessToken}&limit=1`).then((r) => r.json()).catch(() => ({ data: [] })) as { data?: Array<{ name?: string; instagram_business_account?: { id?: string; username?: string } }> };
-        const igBiz = igAccounts.data?.[0]?.instagram_business_account;
-        accountId = igBiz?.id ?? me.id;
-        accountHandle = igBiz?.username ? `@${igBiz.username}` : (igAccounts.data?.[0]?.name ?? me.name ?? me.email);
-      } else {
-        // Return the first managed Facebook Page as the primary account
-        const pages = await fetch(`https://graph.facebook.com/v19.0/me/accounts?fields=name,id&limit=1&access_token=${accessToken}`).then((r) => r.json()).catch(() => ({ data: [] })) as { data?: Array<{ id?: string; name?: string }> };
-        accountId = pages.data?.[0]?.id ?? me.id;
-        accountHandle = pages.data?.[0]?.name ?? me.name ?? me.email;
-      }
-    }
-    return { accessToken, refreshToken: "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "twitter_x") {
-    const creds = Buffer.from(`${process.env.TWITTER_CLIENT_ID}:${process.env.TWITTER_CLIENT_SECRET}`).toString("base64");
-    const d = await fetch("https://api.twitter.com/2/oauth2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded", Authorization: `Basic ${creds}` }, body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb, code_verifier: "challenge" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const me = await fetch("https://api.twitter.com/2/users/me?user.fields=id,name,username,public_metrics", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { data?: { id?: string; name?: string; username?: string } };
-      accountId = me.data?.id; accountHandle = me.data?.username ? `@${me.data.username}` : me.data?.name;
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "linkedin_business") {
-    const d = await fetch("https://www.linkedin.com/oauth/v2/accessToken", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ grant_type: "authorization_code", code, client_id: process.env.LINKEDIN_CLIENT_ID ?? "", client_secret: process.env.LINKEDIN_CLIENT_SECRET ?? "", redirect_uri: cb }) }).then((r) => r.json()) as { access_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const me = await fetch("https://api.linkedin.com/v2/userinfo", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { sub?: string; email?: string; name?: string };
-      // Resolve the first administered LinkedIn Organization (Company Page)
-      const orgs = await fetch("https://api.linkedin.com/v2/organizationAcls?q=roleAssignee&role=ADMINISTRATOR&projection=(elements*(organization~(id,localizedName)))", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({ elements: [] })) as { elements?: Array<{ "organization~"?: { id?: number; localizedName?: string } }> };
-      const org = orgs.elements?.[0]?.["organization~"];
-      accountId = org?.id ? String(org.id) : me.sub;
-      accountHandle = org?.localizedName ?? me.name ?? me.email;
-    }
-    return { accessToken, refreshToken: "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "tiktok_business") {
-    const d = await fetch("https://business-api.tiktok.com/open_api/v1.3/oauth2/access_token/", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ app_id: process.env.TIKTOK_CLIENT_KEY, secret: process.env.TIKTOK_CLIENT_SECRET, auth_code: code }) }).then((r) => r.json()) as { data?: { access_token?: string; advertiser_id?: string; advertiser_name?: string; display_name?: string } };
-    const accessToken = d.data?.access_token ?? "";
-    const accountId = d.data?.advertiser_id;
-    const accountHandle = d.data?.advertiser_name ?? d.data?.display_name;
-    return { accessToken, refreshToken: "", expiresAt: null, accountId, accountHandle };
-  }
   throw new Error(`No token exchange handler for: ${key}`);
 }
 
@@ -340,28 +213,25 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
   const result = INTEGRATIONS.map((intg) => {
     const row        = rowMap.get(intg.key);
     const vaultRow   = vaultMap.get(intg.key);
-    const comingSoon = "comingSoon" in intg ? (intg.comingSoon as boolean) : false;
     const oauthProv  = "oauthProvider" in intg ? intg.oauthProvider : null;
 
     let status = "disconnected", connectedAt: string | null = null, accountHandle: string | null = null, accountId: string | null = null;
     let disconnectedReason: string | null = null;
     let disconnectedAt: string | null = null;
-    if (!comingSoon) {
-      if (intg.useVault && vaultRow?.connectedAt && !vaultRow.disconnectedReason) {
-        status = "connected"; connectedAt = vaultRow.connectedAt.toISOString();
-        accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
-      } else if (intg.useVault && vaultRow?.disconnectedReason) {
-        // Vault row was invalidated (e.g. encryption key rotation) — surface a
-        // notice so the merchant knows their previous connection needs re-auth.
-        disconnectedReason = vaultRow.disconnectedReason;
-        disconnectedAt = vaultRow.disconnectedAt?.toISOString() ?? null;
-        accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
-      } else if (row?.status === "connected") {
-        status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null;
-        // For Xero: surface the tenant name stored in credentials as accountHandle
-        if (intg.key === "xero" && row.credentials) {
-          try { const c = JSON.parse(row.credentials) as { tenantName?: string; tenantId?: string }; accountHandle = c.tenantName ?? null; accountId = c.tenantId ?? null; } catch { /* ignore */ }
-        }
+    if (intg.useVault && vaultRow?.connectedAt && !vaultRow.disconnectedReason) {
+      status = "connected"; connectedAt = vaultRow.connectedAt.toISOString();
+      accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
+    } else if (intg.useVault && vaultRow?.disconnectedReason) {
+      // Vault row was invalidated (e.g. encryption key rotation) — surface a
+      // notice so the merchant knows their previous connection needs re-auth.
+      disconnectedReason = vaultRow.disconnectedReason;
+      disconnectedAt = vaultRow.disconnectedAt?.toISOString() ?? null;
+      accountHandle = vaultRow.accountHandle ?? null; accountId = vaultRow.accountId ?? null;
+    } else if (row?.status === "connected") {
+      status = "connected"; connectedAt = row.connectedAt?.toISOString() ?? null;
+      // For Xero: surface the tenant name stored in credentials as accountHandle
+      if (intg.key === "xero" && row.credentials) {
+        try { const c = JSON.parse(row.credentials) as { tenantName?: string; tenantId?: string }; accountHandle = c.tenantName ?? null; accountId = c.tenantId ?? null; } catch { /* ignore */ }
       }
     }
 
@@ -369,9 +239,14 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
       key: intg.key, label: intg.label, section: intg.section, category: intg.category,
       description: intg.description, authType: intg.authType,
       fields: "fields" in intg ? intg.fields : [],
-      comingSoon, useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
+      useVault: intg.useVault, status, connectedAt, accountHandle, accountId,
       disconnectedReason, disconnectedAt,
-      oauthConfigured: oauthProv ? isOAuthConfigured(oauthProv) : null,
+      // Xero connects via its dedicated /api/xero/* routes using the single
+      // platform-registered app, so "configured" is the platform env-var check.
+      // Other OAuth integrations use the platform env-var check too.
+      oauthConfigured: intg.key === "xero"
+        ? isOAuthConfigured("xero")
+        : (oauthProv ? isOAuthConfigured(oauthProv) : null),
     };
   });
 
@@ -385,14 +260,43 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
   const key = String(req.params.key) as IntegrationKey;
   const intg = INTEGRATIONS.find((i) => i.key === key);
   if (!intg) { res.status(404).json({ error: "Unknown integration" }); return; }
-  if ("comingSoon" in intg && intg.comingSoon) { res.status(400).json({ error: "Coming soon" }); return; }
+  if (intg.authType === "loginflow") { res.status(400).json({ error: "Use the Nextcloud login flow" }); return; }
   if (intg.authType !== "credentials") { res.status(400).json({ error: "Use OAuth flow" }); return; }
-  const credentials = JSON.stringify(req.body ?? {});
+  const body = (req.body ?? {}) as Record<string, unknown>;
+
+  // iCloud: verify the Apple ID + app-specific password against CalDAV/CardDAV
+  // before storing them, so a wrong or expired password fails loudly here.
+  if (key === "apple_icloud") {
+    const appleId = String(body.appleId ?? "").trim();
+    const appPassword = String(body.appPassword ?? "").trim();
+    if (!appleId || !appPassword) { res.status(400).json({ error: "Enter your Apple ID and an app-specific password." }); return; }
+    const check = await verifyAppleCredentials(appleId, appPassword);
+    if (!check.ok) { res.status(400).json({ error: check.error ?? "Apple credentials could not be verified." }); return; }
+    body.appleId = appleId;
+    body.appPassword = appPassword;
+  }
+
+  if (intg.useVault) {
+    // Credential secrets (e.g. Zip's apiKey) are encrypted at rest in the vault.
+    // Surface the first non-secret (text) field as the display handle.
+    const fields = "fields" in intg ? intg.fields : [];
+    const displayField = fields.find((f) => f.type === "text")?.name;
+    await upsertCredentialVault(merchantId, key, body, { accountHandleField: displayField });
+    // Keep a marker row so the rest of the app can detect the connection.
+    const existing = await getRow(merchantId, key);
+    if (existing) { await db.update(merchantIntegrationsTable).set({ status: "connected", credentials: null, connectedAt: new Date() }).where(eq(merchantIntegrationsTable.id, existing.id)); }
+    else { await db.insert(merchantIntegrationsTable).values({ merchantId, integrationKey: key, status: "connected", connectedAt: new Date() }); }
+    res.json({ status: "connected" });
+    return;
+  }
+
+  const credentials = JSON.stringify(body);
   const existing = await getRow(merchantId, key);
   if (existing) { await db.update(merchantIntegrationsTable).set({ status: "connected", credentials, connectedAt: new Date() }).where(eq(merchantIntegrationsTable.id, existing.id)); }
   else { await db.insert(merchantIntegrationsTable).values({ merchantId, integrationKey: key, status: "connected", credentials, connectedAt: new Date() }); }
   res.json({ status: "connected" });
 });
+
 
 /* ── DELETE /integrations/:key ─────────────────────────────────────────────── */
 
@@ -403,13 +307,38 @@ router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void>
   if (intg?.useVault) await deleteVault(merchantId, key);
   const existing = await getRow(merchantId, key);
   if (existing) { await db.update(merchantIntegrationsTable).set({ status: "disconnected", credentials: null, accessToken: null, refreshToken: null, connectedAt: null }).where(eq(merchantIntegrationsTable.id, existing.id)); }
+  await standDownAutoSync(merchantId, key, req.log);
   res.json({ status: "disconnected" });
 });
 
+/* Disconnecting an account must also stand down any automatic sync aimed at it.
+   Otherwise the schedule keeps pointing at the old provider and every run fails
+   with "not connected" — which is what a merchant who switched providers sees.
+   We turn the schedule off rather than silently repointing it: pushing the whole
+   customer list into a different account is the merchant's call, not ours. */
+async function standDownAutoSync(merchantId: number, key: string, log: { info: (o: object, m: string) => void }): Promise<void> {
+  if (!isSyncProvider(key)) return;
+  const [row] = await db.select().from(merchantAutoSyncSettingsTable).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+  if (!row) return;
+
+  const notice = `Automatic sync was turned off because ${syncProviderLabel(key)} was disconnected. Choose a connected account to resume.`;
+  const patch: Partial<typeof merchantAutoSyncSettingsTable.$inferInsert> = {};
+  if (row.contactsProvider === key && row.contactsFrequency !== "disabled") {
+    Object.assign(patch, { contactsProvider: "", contactsFrequency: "disabled", contactsLastError: notice, contactsLastErrorAt: new Date() });
+  }
+  if (row.calendarProvider === key && row.calendarFrequency !== "disabled") {
+    Object.assign(patch, { calendarProvider: "", calendarFrequency: "disabled", calendarLastError: notice, calendarLastErrorAt: new Date() });
+  }
+  if (Object.keys(patch).length === 0) return;
+
+  await db.update(merchantAutoSyncSettingsTable).set(patch).where(eq(merchantAutoSyncSettingsTable.merchantId, merchantId));
+  log.info({ merchantId, provider: key }, "Automatic sync disabled — target account disconnected");
+}
+
 /* ── GET /integrations/oauth/apple/start ───────────────────────────────────── */
 
-router.get("/integrations/oauth/apple/start", requireAuth, (req, res): void => {
-  const url = buildOAuthStartUrl("apple_account", req);
+router.get("/integrations/oauth/apple/start", requireAuth, async (req, res): Promise<void> => {
+  const url = await buildOAuthStartUrl("apple_account", req, req.session.merchantId!);
   if (!url) { res.redirect("/management/sync?error=apple_oauth_not_configured"); return; }
   res.redirect(url);
 });
@@ -518,9 +447,9 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
 
 /* ── GET /integrations/oauth/:key/start ────────────────────────────────────── */
 
-router.get("/integrations/oauth/:key/start", requireAuth, (req, res): void => {
+router.get("/integrations/oauth/:key/start", requireAuth, async (req, res): Promise<void> => {
   const key = String(req.params.key);
-  const url = buildOAuthStartUrl(key, req);
+  const url = await buildOAuthStartUrl(key, req, req.session.merchantId!);
   if (!url) { res.redirect(`${manageUrl(key)}?error=${key}_oauth_not_configured`); return; }
   res.redirect(url);
 });
@@ -539,7 +468,7 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
   try {
     const cb = cbUrl(key, req);
     const extra = realmId ? { realmId } : undefined;
-    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb, extra);
+    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb, merchantId, extra);
     const intg = INTEGRATIONS.find((i) => i.key === key);
 
     if (intg?.useVault) {
@@ -577,149 +506,87 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
     provider,
     includeNotes  = false,
     notesConflict = "append",
+    duplicateStrategy,
   } = req.body as {
     provider?: string;
     includeNotes?: boolean;
     notesConflict?: "append" | "overwrite";
+    // Absent on the first call → if duplicates exist we stop and warn rather
+    // than silently overwriting. The client re-calls with an explicit choice.
+    duplicateStrategy?: "overwrite" | "skip";
   };
 
-  if (provider !== "google_contacts" && provider !== "microsoft_contacts") {
-    res.status(400).json({ error: "provider must be 'google_contacts' or 'microsoft_contacts'" });
+  if (!isSyncProvider(provider)) {
+    res.status(400).json({ error: "provider must be 'google_contacts', 'microsoft_contacts' or 'apple_icloud'" });
     return;
   }
 
-  const vault = await readVault(merchantId, provider);
-  if (!vault?.accessToken) {
-    res.status(401).json({ error: `${provider} is not connected — please authorise via OAuth first` });
+  try {
+    const result = await syncContacts(merchantId, provider, { includeNotes, notesConflict, duplicateStrategy }, req.log);
+    if (result.needsConfirmation) {
+      res.json({
+        ok: true,
+        provider,
+        needsConfirmation: true,
+        duplicates: result.duplicates,
+        total: result.total,
+        message: `${result.duplicates} of ${result.total} customer${result.total !== 1 ? "s" : ""} already exist as contacts. Overwriting replaces their existing details.`,
+      });
+      return;
+    }
+    const parts: string[] = [];
+    if (result.created) parts.push(`${result.created} added`);
+    if (result.updated) parts.push(`${result.updated} overwritten`);
+    if (result.skipped) parts.push(`${result.skipped} skipped`);
+    if (result.notesSynced) parts.push(`${result.notesSynced} with notes`);
+    if (result.failed) parts.push(`${result.failed} failed`);
+    res.json({
+      ok: true,
+      provider,
+      synced: result.created + result.updated,
+      created: result.created,
+      updated: result.updated,
+      skipped: result.skipped,
+      failed: result.failed,
+      notesSynced: result.notesSynced,
+      message: parts.length ? `Contacts sync: ${parts.join(", ")}.` : "Nothing to sync.",
+    });
+  } catch (err) {
+    if (err instanceof AccountNotConnectedError) { res.status(401).json({ error: err.message }); return; }
+    req.log.error({ merchantId, provider, err }, "Contacts sync failed");
+    res.status(502).json({ error: "Contact sync failed — please reconnect the account on the Sync page and try again." });
+  }
+});
+
+/* ── POST /integrations/calendar/sync ─────────────────────────────────────────
+   Pushes the merchant's upcoming KoaPOS appointments to the connected account's
+   calendar — Microsoft (Graph /me/events) or Google (Calendar API). Idempotent
+   via stable event ids (Microsoft transactionId, Google event id).
+   Body: { provider: "microsoft_contacts" | "google_contacts" }
+   ─────────────────────────────────────────────────────────────────────────── */
+router.post("/integrations/calendar/sync", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { provider } = req.body as { provider?: string };
+  if (!isSyncProvider(provider)) {
+    res.status(400).json({ error: "provider must be 'google_contacts', 'microsoft_contacts' or 'apple_icloud'" });
     return;
   }
-
-  const customers = await db
-    .select()
-    .from(customersTable)
-    .where(eq(customersTable.merchantId, merchantId));
-
-  if (customers.length === 0) {
-    res.json({ ok: true, provider, synced: 0, failed: 0, notesSynced: 0, message: "No customers to sync" });
-    return;
+  try {
+    const result = await syncCalendar(merchantId, provider, req.log);
+    res.json({
+      ok: true,
+      provider,
+      synced: result.synced,
+      failed: result.failed,
+      message: result.total === 0
+        ? "No upcoming appointments to sync"
+        : `Synced ${result.synced} appointment${result.synced !== 1 ? "s" : ""}${result.failed > 0 ? ` (${result.failed} failed)` : ""}`,
+    });
+  } catch (err) {
+    if (err instanceof AccountNotConnectedError) { res.status(401).json({ error: err.message }); return; }
+    req.log.error({ merchantId, provider, err }, "Calendar sync failed");
+    res.status(502).json({ error: "Calendar sync failed — please reconnect the account on the Sync page and try again." });
   }
-
-  // ── Build per-customer notes text when requested ─────────────────────────
-  const notesByCustomer = new Map<number, string>();
-  if (includeNotes) {
-    const MAX_NOTE_CHARS = 2000;
-    const allNotes = await db
-      .select()
-      .from(customerNotesTable)
-      .where(eq(customerNotesTable.merchantId, merchantId))
-      .orderBy(desc(customerNotesTable.createdAt)); // newest first
-
-    for (const note of allNotes) {
-      const existing = notesByCustomer.get(note.customerId) ?? "";
-
-      if (notesConflict === "overwrite") {
-        // Keep only the most-recent note (first seen in desc order)
-        if (existing === "") {
-          const date = new Date(note.createdAt).toLocaleDateString("en-AU", {
-            day: "numeric", month: "short", year: "numeric",
-          });
-          notesByCustomer.set(
-            note.customerId,
-            `[KoaPOS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS),
-          );
-        }
-      } else {
-        // Append: collect all notes newest-first
-        const date = new Date(note.createdAt).toLocaleDateString("en-AU", {
-          day: "numeric", month: "short", year: "numeric",
-        });
-        const line = `• ${date}: ${note.note}`;
-        const next = existing === "" ? `[KoaPOS Notes]\n${line}` : `${existing}\n${line}`;
-        notesByCustomer.set(note.customerId, next.slice(0, MAX_NOTE_CHARS));
-      }
-    }
-  }
-
-  // ── Sync contacts one by one ─────────────────────────────────────────────
-  let synced     = 0;
-  let failed     = 0;
-  let notesSynced = 0;
-
-  if (provider === "google_contacts") {
-    // Google People API — POST /v1/people:createContact
-    for (const c of customers) {
-      const notesText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
-      const body: Record<string, unknown> = {
-        names:          [{ givenName: c.firstName ?? "", familyName: c.lastName ?? "" }],
-        emailAddresses: c.email ? [{ value: c.email }] : [],
-        phoneNumbers:   c.phone ? [{ value: c.phone }] : [],
-      };
-      if (includeNotes && notesText) {
-        (body as Record<string, unknown>).biographies = [{ value: notesText, contentType: "TEXT_PLAIN" }];
-      }
-      try {
-        const r = await fetch("https://people.googleapis.com/v1/people:createContact", {
-          method:  "POST",
-          headers: { Authorization: `Bearer ${vault.accessToken}`, "Content-Type": "application/json" },
-          body:    JSON.stringify(body),
-        });
-        if (r.ok) {
-          synced++;
-          if (includeNotes && notesText) notesSynced++;
-        } else {
-          req.log.warn({ merchantId, status: r.status, email: c.email }, "Google Contacts create failed");
-          failed++;
-        }
-      } catch (err) {
-        req.log.warn({ merchantId, err, email: c.email }, "Google Contacts create threw");
-        failed++;
-      }
-    }
-  } else {
-    // Microsoft Graph Contacts API — POST /v1.0/me/contacts
-    for (const c of customers) {
-      const notesText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
-      const fullName  = `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim();
-      const body: Record<string, unknown> = {
-        givenName:      c.firstName ?? "",
-        surname:        c.lastName  ?? "",
-        emailAddresses: c.email ? [{ address: c.email, name: fullName || c.email }] : [],
-        businessPhones: c.phone ? [c.phone] : [],
-      };
-      if (includeNotes && notesText) {
-        body.personalNotes = notesText;
-      }
-      try {
-        const r = await fetch("https://graph.microsoft.com/v1.0/me/contacts", {
-          method:  "POST",
-          headers: { Authorization: `Bearer ${vault.accessToken}`, "Content-Type": "application/json" },
-          body:    JSON.stringify(body),
-        });
-        if (r.ok) {
-          synced++;
-          if (includeNotes && notesText) notesSynced++;
-        } else {
-          req.log.warn({ merchantId, status: r.status, email: c.email }, "Microsoft Contacts create failed");
-          failed++;
-        }
-      } catch (err) {
-        req.log.warn({ merchantId, err, email: c.email }, "Microsoft Contacts create threw");
-        failed++;
-      }
-    }
-  }
-
-  const notesMsg = includeNotes && notesSynced > 0
-    ? `, ${notesSynced} with notes`
-    : "";
-  res.json({
-    ok:         true,
-    provider,
-    synced,
-    failed,
-    notesSynced,
-    message:    `Synced ${synced} contact${synced !== 1 ? "s" : ""}${notesMsg}${failed > 0 ? ` (${failed} failed)` : ""}`,
-  });
 });
 
 export default router;

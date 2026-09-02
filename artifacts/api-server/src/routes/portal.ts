@@ -1,24 +1,18 @@
 import { Router, type IRouter } from "express";
 import { db, customersTable, merchantsTable, loyaltySettingsTable, appointmentsTable, serviceJobsTable, quotesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
+import { formatAddressParts } from "../lib/address";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { deflateSync } from "node:zlib";
 import forge from "node-forge";
 import { publicDomain } from "../lib/publicUrl";
 import { applyEstimateApprovalToJob } from "../services/quoteApproval";
+import { resolvePortalAccess } from "../lib/portalAuth";
 
 const router: IRouter = Router();
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-
-async function findCustomerByToken(token: string) {
-  const [row] = await db
-    .select()
-    .from(customersTable)
-    .where(eq(customersTable.portalToken, token));
-  return row ?? null;
-}
 
 // ── Pure-JS PNG builder (no deps) ────────────────────────────────────────────
 
@@ -260,8 +254,9 @@ router.get("/portal/resolve-domain", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const [merchant] = await db
     .select({ businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
@@ -280,6 +275,10 @@ router.get("/portal/:token", async (req, res): Promise<void> => {
     email: customer.email,
     phone: customer.phone,
     address: customer.address,
+    billingStreet: customer.billingStreet,
+    billingCity: customer.billingCity,
+    billingState: customer.billingState,
+    billingPostcode: customer.billingPostcode,
     dateOfBirth: customer.dateOfBirth,
     loyaltyPoints: customer.loyaltyPoints,
     totalSpent: parseFloat(customer.totalSpent),
@@ -299,20 +298,35 @@ const UpdateProfileBody = z.object({
   lastName:  z.string().optional(),
   email:     z.string().email().optional(),
   phone:     z.string().optional(),
-  address:   z.string().optional(),
+  billingStreet:   z.string().optional(),
+  billingCity:     z.string().optional(),
+  billingState:    z.string().optional(),
+  billingPostcode: z.string().optional(),
   dateOfBirth: z.string().optional(),
 });
 
 router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const parsed = UpdateProfileBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  const data = parsed.data;
+  // Keep the legacy free-text `address` in sync with the structured billing fields.
+  // Merge the submitted fields over the EXISTING row so a partial update (or a
+  // submission with empty structured fields) can't clobber the stored address.
+  const structuredKeys = ["billingStreet", "billingCity", "billingState", "billingPostcode"] as const;
+  const hasStructured = structuredKeys.some((k) => data[k] !== undefined);
+  const merged = formatAddressParts(...structuredKeys.map((k) => data[k] ?? customer[k]));
+  // Only rewrite `address` when the merge yields real content, so an all-empty
+  // submission leaves any existing free-text address untouched.
+  const derivedAddress = hasStructured && merged ? merged : undefined;
+
   const [updated] = await db
     .update(customersTable)
-    .set(parsed.data)
+    .set({ ...data, ...(derivedAddress !== undefined ? { address: derivedAddress } : {}) })
     .where(eq(customersTable.id, customer.id))
     .returning();
 
@@ -322,13 +336,18 @@ router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
     email:     updated.email,
     phone:     updated.phone,
     address:   updated.address,
+    billingStreet: updated.billingStreet,
+    billingCity: updated.billingCity,
+    billingState: updated.billingState,
+    billingPostcode: updated.billingPostcode,
     dateOfBirth: updated.dateOfBirth,
   });
 });
 
 router.get("/portal/:token/appointments", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const rows = await db
     .select()
@@ -356,8 +375,9 @@ const BookAppointmentBody = z.object({
 });
 
 router.post("/portal/:token/appointments", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const parsed = BookAppointmentBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -386,8 +406,9 @@ router.post("/portal/:token/appointments", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token/services", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const rows = await db
     .select()
@@ -413,8 +434,9 @@ router.get("/portal/:token/services", async (req, res): Promise<void> => {
 
 // ── Customer-facing quote approval ──────────────────────────────────────────
 router.get("/portal/:token/quotes", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const rows = await db
     .select()
@@ -441,8 +463,9 @@ router.get("/portal/:token/quotes", async (req, res): Promise<void> => {
 });
 
 router.post("/portal/:token/quotes/:quoteId/respond", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
   const quoteId = Number(req.params.quoteId);
   const decision = String((req.body ?? {}).decision ?? "");
   if (decision !== "accept" && decision !== "decline") { res.status(400).json({ error: "Invalid decision" }); return; }
@@ -473,8 +496,9 @@ router.post("/portal/:token/quotes/:quoteId/respond", async (req, res): Promise<
 });
 
 router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const certPem    = process.env.APPLE_WALLET_CERT_PEM;
   const keyPem     = process.env.APPLE_WALLET_KEY_PEM;
@@ -515,8 +539,9 @@ router.get("/portal/:token/apple-wallet", async (req, res): Promise<void> => {
 });
 
 router.get("/portal/:token/google-wallet", async (req, res): Promise<void> => {
-  const customer = await findCustomerByToken(req.params.token);
-  if (!customer) { res.status(404).json({ error: "Portal not found" }); return; }
+  const access = await resolvePortalAccess(req, String(req.params.token));
+  if (!access.ok) { res.status(access.status).json(access.body); return; }
+  const customer = access.customer;
 
   const issuerId     = process.env.GOOGLE_WALLET_ISSUER_ID;
   const serviceEmail = process.env.GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL;

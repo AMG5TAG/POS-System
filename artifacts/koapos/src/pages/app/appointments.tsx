@@ -1,5 +1,7 @@
 import { useState, useEffect, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useMapUrl } from "@/lib/map-provider";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { AppLayout } from "@/components/layout/app-layout";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
@@ -11,6 +13,7 @@ import {
   useListStaff,
   useComposeEmail,
   useListServiceJobs,
+  useGetPosSettings,
   Appointment,
   AppointmentInputStatus,
   Staff,
@@ -38,6 +41,8 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { parseHardwareConfig, type HardwareCfg } from "@/lib/hardware-config";
+import { printDocument } from "@/lib/print-router";
 
 /* ─── Status config ──────────────────────────────────────────────────────── */
 
@@ -72,6 +77,49 @@ function addOneHour(dt: string): string {
   d.setHours(d.getHours() + 1);
   return toLocalDatetimeValue(d);
 }
+
+function addMinutes(dt: string, mins: number): string {
+  if (!dt) return "";
+  const d = new Date(dt);
+  d.setMinutes(d.getMinutes() + mins);
+  return toLocalDatetimeValue(d);
+}
+
+/* ─── Booking kinds ──────────────────────────────────────────────────────
+   Pickup / Delivery / Appointment. The kind is persisted as the leading word
+   of the appointment title ("Pickup", "Delivery"); anything else is a regular
+   appointment. This keeps the feature frontend-only — no schema change — and
+   the dashboard calendar (which only shows aggregate counts) is unaffected. */
+type BookingKind = "pickup" | "delivery" | "appointment";
+
+const BOOKING_KINDS: { id: BookingKind; label: string }[] = [
+  { id: "pickup",      label: "Pickup" },
+  { id: "delivery",    label: "Delivery" },
+  { id: "appointment", label: "Appointment" },
+];
+
+function kindLabel(kind: BookingKind): string {
+  return kind === "pickup" ? "Pickup" : kind === "delivery" ? "Delivery" : "Appointment";
+}
+
+/** Pickup/Delivery are quick 5-minute slots; a regular appointment is an hour. */
+function kindDurationMinutes(kind: BookingKind): number {
+  return kind === "pickup" || kind === "delivery" ? 5 : 60;
+}
+
+function kindFromTitle(title?: string | null): BookingKind {
+  const t = (title ?? "").trim().toLowerCase();
+  if (t.startsWith("pickup")) return "pickup";
+  if (t.startsWith("delivery")) return "delivery";
+  return "appointment";
+}
+
+/** Calendar-chip colour per kind (appointments-page calendar only). */
+const KIND_CHIP_CLASS: Record<BookingKind, string> = {
+  pickup:      "bg-blue-50 text-blue-700 border-blue-200 hover:bg-blue-100 dark:bg-blue-900/40 dark:text-blue-300 dark:border-blue-700",
+  delivery:    "bg-amber-50 text-amber-700 border-amber-200 hover:bg-amber-100 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-700",
+  appointment: "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700",
+};
 
 function formatDateTime(iso: string) {
   return new Date(iso).toLocaleString("en-AU", {
@@ -165,20 +213,56 @@ function SortableHeader({ label, sortKey, activeSortKey, dir, onSort, className 
   );
 }
 
-/* ─── Print helper ───────────────────────────────────────────────────────── */
+/* ─── Reference code ─────────────────────────────────────────────────────── */
 
 function apptRefCode(id: number): string {
   return `KA${String(id).padStart(5, "0")}`;
 }
 
-function printAppointment(appt: Appointment) {
-  const win = window.open("", "_blank", "width=600,height=700");
-  if (!win) return;
+/* ─── Appointment → service job ──────────────────────────────────────────── */
+
+/** A repair can be raised from any booking that wasn't cancelled or missed. */
+function canRaiseServiceJob(appt: Appointment): boolean {
+  return appt.status !== "cancelled" && appt.status !== "no-show";
+}
+
+/**
+ * Pre-filled "New Service" URL for a booking. The new-service page reads these
+ * params, seeds the form (customer, job title, fault description, book-in date)
+ * and links the appointment to the job once it is saved.
+ */
+function serviceJobUrlFromAppointment(appt: Appointment): string {
+  const params = new URLSearchParams({
+    fromAppointment: String(appt.id),
+    appointmentRef: apptRefCode(appt.id),
+  });
+  if (appt.customerId != null) params.set("customerId", String(appt.customerId));
+  if (appt.title) params.set("title", appt.title);
+
+  // The booking's description and notes are what the customer reported — that is
+  // the fault/work description on the job card.
+  const work = [appt.description, appt.notes].filter(Boolean).join("\n\n");
+  if (work) params.set("workDescription", work);
+
+  // Book-in date is the booking's local calendar day, not the UTC slice of the
+  // ISO timestamp — an evening appointment in AEST is the next day in UTC.
+  const d = new Date(appt.scheduledAt);
+  if (!Number.isNaN(d.getTime())) {
+    const local = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+    params.set("bookInDate", local);
+  }
+
+  return `/services/new-job?${params.toString()}`;
+}
+
+/* ─── Print helper ───────────────────────────────────────────────────────── */
+
+function printAppointment(appt: Appointment, hw?: HardwareCfg) {
   const fmt = (iso: string) => new Date(iso).toLocaleString("en-AU", {
     weekday: "long", day: "numeric", month: "long", year: "numeric",
     hour: "numeric", minute: "2-digit", hour12: true,
   });
-  win.document.write(`
+  const html = `
     <html><head><title>Appointment — ${apptRefCode(appt.id)}</title>
     <style>
       body { font-family: sans-serif; max-width: 480px; margin: 32px auto; color: #111; }
@@ -204,10 +288,32 @@ function printAppointment(appt: Appointment) {
     </div>` : ""}
     ${appt.staffName ? `<div class="block"><div class="label">Staff</div><div class="value">${appt.staffName}</div></div>` : ""}
     ${appt.notes ? `<div class="block"><div class="label">Notes</div><div class="value" style="font-weight:normal">${appt.notes}</div></div>` : ""}
-    <script>window.onload=()=>{window.print();}</script>
     </body></html>
-  `);
-  win.document.close();
+  `;
+
+  // The popup prints itself on load; the bridge renders the same markup
+  // headlessly, where that script would be a no-op, so it only goes on here.
+  const openPopup = () => {
+    const win = window.open("", "_blank", "width=600,height=700");
+    if (!win) { toast.error("Allow pop-ups to print"); return; }
+    win.document.write(
+      html.replace("</body>", "<script>window.onload=()=>{window.print();}<\/script></body>"),
+    );
+    win.document.close();
+  };
+
+  if (!hw) { openPopup(); return; }
+
+  void printDocument({
+    purpose: "appointment",
+    hw,
+    paper: "A4",
+    jobName: `Appointment ${appt.id ?? ""}`.trim(),
+    html: () => html,
+    browserFallback: openPopup,
+  }).catch((err: unknown) => {
+    toast.error(err instanceof Error ? err.message : "Couldn't print this appointment");
+  });
 }
 
 /* ─── Detail dialog ──────────────────────────────────────────────────────── */
@@ -221,32 +327,77 @@ interface DetailDialogProps {
 }
 
 function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: DetailDialogProps) {
+  // Hardware config decides whether the slip goes straight to a printer or opens
+  // the usual print window.
+  const { data: apptPosSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const apptHardware = parseHardwareConfig((apptPosSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
+  const [, navigate] = useLocation();
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [composeOpen, setComposeOpen] = useState(false);
   const [composeSubject, setComposeSubject] = useState("");
   const [composeBody, setComposeBody] = useState("");
   const composeEmailMutation = useComposeEmail();
   const mapUrl = useMapUrl();
+
+  type ApptTab = "details" | "forms";
+  const TABS: { key: ApptTab; label: string }[] = [
+    { key: "details", label: "Details" },
+    { key: "forms",   label: "Forms"   },
+  ];
+  const [tab, setTab] = useState<ApptTab>("details");
+  const tabIndex = TABS.findIndex(t => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!appt, goPrevTab, goNextTab);
+  useEffect(() => { setTab("details"); }, [appt?.id]);
+
   if (!appt) return null;
   const { label, className } = getStatus(appt.status);
 
   return (
     <>
     <Dialog open={!!appt} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
-            <CalendarClock className="w-5 h-5 text-primary shrink-0" />
-            <span className="truncate">{appt.title || "Appointment"}</span>
-            <span className="font-mono text-xs font-normal text-muted-foreground">{apptRefCode(appt.id)}</span>
-            <span className={cn("ml-1 inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
-              {label}
-            </span>
+          <DialogTitle>
+            <div className="flex items-center gap-3">
+              <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary shrink-0">
+                <CalendarClock className="w-6 h-6" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <p className="font-bold text-2xl leading-tight truncate">{appt.title || "Appointment"}</p>
+                <div className="flex items-center gap-2 mt-1 flex-wrap">
+                  <span className="font-mono text-xs font-normal text-muted-foreground">{apptRefCode(appt.id)}</span>
+                  <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
+                    {label}
+                  </span>
+                </div>
+              </div>
+            </div>
           </DialogTitle>
         </DialogHeader>
 
+        {/* Tabs */}
+        <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-0 shrink-0 mt-2">
+          {TABS.map(({ key, label: tabLabel }) => (
+            <button
+              key={key}
+              onClick={() => setTab(key)}
+              className={cn(
+                "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
+                tab === key
+                  ? "bg-primary text-primary-foreground shadow-sm"
+                  : "pill-selector bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+              )}
+            >
+              {tabLabel}
+            </button>
+          ))}
+        </div>
+
         <div className="flex-1 overflow-y-auto px-6 min-h-0">
         <div className="space-y-4 py-4">
+          {tab === "details" && (<>
           {/* Time */}
           <div className="rounded-xl border bg-muted/20 divide-y">
             <div className="flex items-start gap-3 px-4 py-3">
@@ -321,15 +472,38 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
             </div>
           )}
 
-          {/* Linked repair job */}
-          {appt.serviceJobNumber && (
-            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-3">
-              <Wrench className="w-4 h-4 text-muted-foreground shrink-0" />
-              <div className="text-sm">
-                <p className="text-xs text-muted-foreground">Linked repair job</p>
-                <p className="font-medium font-mono">{appt.serviceJobNumber}</p>
-              </div>
-            </div>
+          {/* Linked repair job — or the action that creates one from this booking */}
+          {(appt.serviceJobId || canRaiseServiceJob(appt)) && (
+          <div className="rounded-xl border bg-muted/20 px-4 py-3 flex items-center gap-3">
+            <Wrench className="w-4 h-4 text-muted-foreground shrink-0" />
+            {appt.serviceJobId ? (
+              <>
+                <div className="text-sm flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Linked repair job</p>
+                  <p className="font-medium font-mono truncate">{appt.serviceJobNumber ?? `#${appt.serviceJobId}`}</p>
+                </div>
+                <Button
+                  variant="outline" size="sm" className="gap-1.5 shrink-0"
+                  onClick={() => { onClose(); navigate(`/services/${appt.serviceJobId}`); }}
+                >
+                  <Eye className="w-3.5 h-3.5" /> View job
+                </Button>
+              </>
+            ) : (
+              <>
+                <div className="text-sm flex-1 min-w-0">
+                  <p className="text-xs text-muted-foreground">Repair job</p>
+                  <p className="font-medium">Not created yet</p>
+                </div>
+                <Button
+                  size="sm" className="gap-1.5 shrink-0"
+                  onClick={() => { onClose(); navigate(serviceJobUrlFromAppointment(appt)); }}
+                >
+                  <Wrench className="w-3.5 h-3.5" /> Create service job
+                </Button>
+              </>
+            )}
+          </div>
           )}
 
           {/* Notes */}
@@ -342,31 +516,48 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
               </div>
             </div>
           )}
+          </>)}
 
-          <FormsAttachmentPanel
-            sourceType="appointment"
-            sourceId={appt.id}
-            customerId={appt.customerId ?? undefined}
-            customerName={appt.customerName ?? undefined}
-          />
+          {tab === "forms" && (
+            <FormsAttachmentPanel
+              sourceType="appointment"
+              sourceId={appt.id}
+              customerId={appt.customerId ?? undefined}
+              customerName={appt.customerName ?? undefined}
+            />
+          )}
         </div>
         </div>
 
         <DialogFooter className="gap-2 flex-row justify-between sm:justify-between px-6 pb-5 pt-4 border-t shrink-0">
-          <Button
-            variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => setConfirmDelete(true)}
-            disabled={deleteIsPending}
-          >
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="destructive" size="sm" className="w-8 h-8 p-0"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleteIsPending}
+              title="Delete appointment"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+            {appt.status === "scheduled" && (
+              <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(appt); }} title="Edit appointment">
+                <Pencil className="w-4 h-4" />
+              </Button>
+            )}
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
           <div className="flex flex-wrap gap-2 justify-end">
             {appt.customerPhone && (
-              <a href={`sms:${appt.customerPhone}`}>
-                <Button variant="outline" size="sm" className="gap-1.5">
+              <Button asChild variant="outline" size="sm" className="gap-1.5">
+                <a href={`sms:${appt.customerPhone}`}>
                   <MessageSquare className="w-3.5 h-3.5" /> SMS
-                </Button>
-              </a>
+                </a>
+              </Button>
             )}
             {appt.customerEmail && (
               <Button variant="outline" size="sm" className="gap-1.5"
@@ -374,14 +565,9 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                 <Mail className="w-3.5 h-3.5" /> Email
               </Button>
             )}
-            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt)}>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(appt, apptHardware)}>
               <Printer className="w-3.5 h-3.5" /> Print
             </Button>
-            {appt.status === "scheduled" && (
-              <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(appt); }}>
-                <Pencil className="w-3.5 h-3.5" /> Edit
-              </Button>
-            )}
           </div>
         </DialogFooter>
       </DialogContent>
@@ -454,6 +640,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
 /* ─── Booking dialog ─────────────────────────────────────────────────────── */
 
 type FormState = {
+  kind: BookingKind;
   customerId: string;
   staffId: string;
   serviceJobId: string;
@@ -468,7 +655,7 @@ type FormState = {
 
 function makeDefaultForm(): FormState {
   const start = defaultStartTime();
-  return { customerId: "", staffId: "", serviceJobId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
+  return { kind: "appointment", customerId: "", staffId: "", serviceJobId: "", startTime: start, endTime: addOneHour(start), status: "scheduled", notes: "", selectedFormIds: [], sendSms: false, sendEmail: false };
 }
 
 interface BookingDialogProps {
@@ -479,6 +666,8 @@ interface BookingDialogProps {
 }
 
 function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
+  const { data: bookPosSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const bookHardware = parseHardwareConfig((bookPosSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const [form, setForm]               = useState<FormState>(makeDefaultForm);
   const [bookedAppt, setBookedAppt]   = useState<Appointment | null>(null);
   const [notificationsSent, setNotificationsSent] = useState<{ sms: boolean; email: boolean }>({ sms: false, email: false });
@@ -495,6 +684,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
     if (open) {
       setBookedAppt(null);
       setForm(editing ? {
+        kind:       kindFromTitle(editing.title),
         customerId: editing.customerId ? String(editing.customerId) : "",
         staffId:    editing.staffId    ? String(editing.staffId)    : "",
         serviceJobId: editing.serviceJobId ? String(editing.serviceJobId) : "",
@@ -512,11 +702,27 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
   const setField = (key: keyof FormState, val: string) =>
     setForm((f) => ({ ...f, [key]: val }));
 
+  /* Switching kind re-defaults the end time: 5 min for pickup/delivery,
+     1 hour for a regular appointment. */
+  const setKind = (kind: BookingKind) =>
+    setForm((f) => ({ ...f, kind, endTime: addMinutes(f.startTime, kindDurationMinutes(kind)) }));
+
   const safeStaff = Array.isArray(staff) ? staff : [];
 
   const handleSubmit = () => {
     if (!form.customerId) { toast.error("Please select a customer"); return; }
     if (!form.startTime || !form.endTime) { toast.error("Please set start and end times"); return; }
+    /* The kind is stored as the title. Pickup/Delivery set it explicitly; a
+       regular appointment leaves the title to the server's auto-generated
+       "Appointment — Customer" on create, or preserves the existing title on
+       edit — unless we're switching an existing pickup/delivery back to a
+       regular appointment, in which case we clear it to "Appointment". */
+    let title: string | undefined;
+    if (form.kind === "pickup" || form.kind === "delivery") {
+      title = kindLabel(form.kind);
+    } else if (editing && kindFromTitle(editing.title) !== "appointment") {
+      title = "Appointment";
+    }
     const payload = {
       customerId: form.customerId ? Number(form.customerId) : null,
       staffId:    form.staffId    ? Number(form.staffId)    : null,
@@ -527,6 +733,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
       notes:  form.notes || null,
       sendSms: form.sendSms,
       sendEmail: form.sendEmail,
+      ...(title !== undefined ? { title } : {}),
     };
     const invalidate = () => queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
     if (editing) {
@@ -591,11 +798,11 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
             <p className="text-xs text-muted-foreground">{anySent ? "Also notify via:" : "Notify the customer:"}</p>
             <div className="flex gap-2 flex-wrap">
               {canSendSms && (
-                <a href={`sms:${bookedAppt.customerPhone}`}>
-                  <Button variant="outline" size="sm" className="gap-1.5">
+                <Button asChild variant="outline" size="sm" className="gap-1.5">
+                  <a href={`sms:${bookedAppt.customerPhone}`}>
                     <MessageSquare className="w-3.5 h-3.5" /> SMS
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               )}
               {canSendEmail && (
                 <Button variant="outline" size="sm" className="gap-1.5"
@@ -603,7 +810,7 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
                   <Mail className="w-3.5 h-3.5" /> Email
                 </Button>
               )}
-              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(bookedAppt)}>
+              <Button variant="outline" size="sm" className="gap-1.5" onClick={() => printAppointment(bookedAppt, bookHardware)}>
                 <Printer className="w-3.5 h-3.5" /> Print
               </Button>
             </div>
@@ -652,6 +859,25 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
 
         <div className="flex-1 overflow-y-auto px-6 min-h-0">
         <div className="space-y-5 py-4">
+          {/* Booking kind — Pickup / Delivery / Appointment */}
+          <div className="grid grid-cols-3 gap-2">
+            {BOOKING_KINDS.map((k) => (
+              <button
+                key={k.id}
+                type="button"
+                onClick={() => setKind(k.id)}
+                className={cn(
+                  "py-2 rounded-lg border text-sm font-medium transition-colors",
+                  form.kind === k.id
+                    ? "border-primary bg-primary/10 text-primary"
+                    : "border-border bg-background hover:border-primary/40"
+                )}
+              >
+                {k.label}
+              </button>
+            ))}
+          </div>
+
           {/* Customer */}
           <div className="space-y-1.5">
             <Label>
@@ -690,17 +916,17 @@ function BookingDialog({ open, editing, onClose, staff }: BookingDialogProps) {
 
           {/* Time */}
           <div>
-            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Appointment Time</p>
+            <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">{kindLabel(form.kind)} Time</p>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-sm"><Clock className="w-3.5 h-3.5 text-muted-foreground" /> Start Time</Label>
                 <Input type="datetime-local" value={form.startTime}
-                  onChange={(e) => { setField("startTime", e.target.value); setField("endTime", addOneHour(e.target.value)); }} className="text-sm" />
+                  onChange={(e) => { const v = e.target.value; setForm((f) => ({ ...f, startTime: v, endTime: addMinutes(v, kindDurationMinutes(f.kind)) })); }} className="text-sm" />
               </div>
               <div className="space-y-1.5">
                 <Label className="flex items-center gap-1.5 text-sm">
                   <Clock className="w-3.5 h-3.5 text-muted-foreground" /> End Time
-                  <span className="text-muted-foreground text-xs font-normal">(auto +1hr)</span>
+                  <span className="text-muted-foreground text-xs font-normal">(auto +{kindDurationMinutes(form.kind) === 5 ? "5min" : "1hr"})</span>
                 </Label>
                 <Input type="datetime-local" value={form.endTime} onChange={(e) => setField("endTime", e.target.value)} className="text-sm" />
               </div>
@@ -942,6 +1168,13 @@ function AppointmentsCalendar({
                               })
                             : "";
                           const isCompleted = a.status === "completed";
+                          const kind = kindFromTitle(a.title);
+                          // Mark by kind: show the kind label (with customer when
+                          // present), and colour by kind. Completed keeps its
+                          // distinct emerald colour regardless of kind.
+                          const label = kind === "appointment"
+                            ? (a.customerName || a.title || "Appointment")
+                            : `${kindLabel(kind)}${a.customerName ? ` · ${a.customerName}` : ""}`;
                           return (
                             <button
                               key={a.id}
@@ -950,13 +1183,13 @@ function AppointmentsCalendar({
                                 "text-[11px] px-1.5 py-0.5 rounded border text-left truncate transition-colors",
                                 isCompleted
                                   ? "bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-emerald-100 dark:bg-emerald-900/40 dark:text-emerald-300 dark:border-emerald-700"
-                                  : "bg-violet-50 text-violet-700 border-violet-200 hover:bg-violet-100 dark:bg-violet-900/40 dark:text-violet-300 dark:border-violet-700"
+                                  : KIND_CHIP_CLASS[kind]
                               )}
-                              title={`${time} — ${a.customerName || a.title || "Appointment"}`}
+                              title={`${time} — ${kindLabel(kind)}${a.customerName ? ` — ${a.customerName}` : ""}`}
                             >
                               <span className="font-medium">{time}</span>
                               {" — "}
-                              <span className="truncate">{a.customerName || a.title || "Appointment"}</span>
+                              <span className="truncate">{label}</span>
                             </button>
                           );
                         })}
@@ -987,6 +1220,7 @@ export default function AppointmentsPage() {
   const [editing, setEditing]         = useState<Appointment | null>(null);
 
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
   const { data: appointmentsData, isLoading } = useListAppointments({}, { query: { queryKey: ["listAppointments"] } });
   const { data: staffData } = useListStaff();
   const deleteMutation          = useDeleteAppointment();
@@ -1278,6 +1512,22 @@ export default function AppointmentsPage() {
                                     <CheckCircle className="w-3 h-3" /> Complete
                                   </button>
                                 )}
+                                {appt.serviceJobId ? (
+                                  <button
+                                    onClick={() => navigate(`/services/${appt.serviceJobId}`)}
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                    title={appt.serviceJobNumber ?? undefined}
+                                  >
+                                    <Wrench className="w-3 h-3" /> Job
+                                  </button>
+                                ) : canRaiseServiceJob(appt) ? (
+                                  <button
+                                    onClick={() => navigate(serviceJobUrlFromAppointment(appt))}
+                                    className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground font-medium hover:underline"
+                                  >
+                                    <Wrench className="w-3 h-3" /> Service job
+                                  </button>
+                                ) : null}
                               </div>
                             </td>
                           </tr>

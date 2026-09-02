@@ -1,12 +1,15 @@
 import { useState, useEffect, useRef, useMemo } from "react";
-import { useLocation } from "wouter";
+import { useLocation, useSearch } from "wouter";
 import { FormSelectorField } from "@/components/forms/FormSelectorField";
 import { AppLayout } from "@/components/layout/app-layout";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import {
   useCreateServiceJob,
   useGetMerchant,
+  useGetPosSettings,
   useSendServiceJobEmail,
+  useLinkAppointmentServiceJob,
+  ApiError,
   type ServiceJob,
   type Customer,
 } from "@workspace/api-client-react";
@@ -51,12 +54,20 @@ import {
   AlertTriangle,
   Loader2,
   Send,
+  CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useSalesTemplate } from "@/lib/use-sales-template";
+import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import {
+  printServiceJobDocument, serviceJobPaperFromOpts,
+  serviceDocketDensity, SERVICE_PAPER_LABEL, type ServicePaper,
+} from "@/lib/service-job-print";
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
+import { techAppJobUrl } from "@/lib/public-url";
 
 const DEVICE_TYPES = [
   "AIO",
@@ -77,6 +88,16 @@ const DEVICE_TYPES = [
 
 /** Device types that don't need tech-specific fields (description, serial, damage, logins, photos). */
 const MEDIA_DEVICE_TYPES = new Set(["VHS Tape", "DVD", "Cassette Tape", "Pictures"]);
+
+/* Media that arrives as a stack: one job covers a count of items, not one
+   device, so the booking form asks how many instead of for a serial. */
+const QUANTITY_DEVICE_TYPES = new Set(["VHS Tape", "DVD", "Cassette Tape", "Pictures"]);
+
+/** "VHS Tape" → "vhs tapes", "Pictures" → "pictures" (already plural). */
+function countedLabel(deviceType: string): string {
+  const lower = deviceType.toLowerCase();
+  return lower.endsWith("s") ? lower : `${lower}s`;
+}
 
 function todayISO() {
   return new Date().toISOString().split("T")[0];
@@ -133,6 +154,33 @@ const TOTAL_WARN_BYTES  = 7 * 1024 * 1024;  // 7 MB total — banner warning
 function fmtBytes(b: number) {
   if (b >= 1024 * 1024) return `${(b / 1024 / 1024).toFixed(1)} MB`;
   return `${(b / 1024).toFixed(0)} KB`;
+}
+
+/* A failed book-in used to surface as a bare "Failed to create service job",
+   which is the same toast whether the photos blew the request-size limit, the
+   session had expired, or the server errored — so an operator (and anyone
+   debugging over the phone) had nothing to go on. Name the cause instead, and
+   carry the server's own message through for anything unrecognised. */
+function createFailureMessage(err: unknown): string {
+  if (!(err instanceof ApiError)) {
+    return "Couldn't reach the server — check your connection and try again.";
+  }
+  const detail = (err.data as { error?: string; message?: string } | null);
+  const serverMessage = detail?.error ?? detail?.message;
+  switch (err.status) {
+    case 401:
+      return "Your session has expired — sign in again, then re-save this job.";
+    case 403:
+      return serverMessage ?? "You don't have permission to create service jobs.";
+    case 413:
+      return "Too large to save — the attached photos/video exceed the 10 MB upload limit. Remove or resize them and try again.";
+    case 429:
+      return "Too many requests — wait a moment and try again.";
+    default:
+      return serverMessage
+        ? `Couldn't create the service job: ${serverMessage} (HTTP ${err.status})`
+        : `Couldn't create the service job (HTTP ${err.status} ${err.statusText}).`;
+  }
 }
 
 interface PhotoSlotProps {
@@ -213,16 +261,35 @@ function PhotoSlot({ index, value, onChange, onSizeChange, icon, label, accept =
 
 export default function ServiceJobNewPage() {
   const [, navigate] = useLocation();
+  const search = useSearch();
   const queryClient = useQueryClient();
   const createMutation = useCreateServiceJob();
   const sendJobEmailMutation = useSendServiceJobEmail();
+  const linkAppointmentMutation = useLinkAppointmentServiceJob();
+
+  // Prefill from an appointment ("Create service job" on a booking). Parsed once
+  // on mount — these only seed the initial field values, after which the form is
+  // the source of truth and the staff member can change anything.
+  const prefill = useMemo(() => {
+    const q = new URLSearchParams(search);
+    const apptId = Number(q.get("fromAppointment"));
+    return {
+      appointmentId: Number.isFinite(apptId) && apptId > 0 ? apptId : null,
+      appointmentRef: q.get("appointmentRef") ?? "",
+      customerId: q.get("customerId") ?? "",
+      title: q.get("title") ?? "",
+      workDescription: q.get("workDescription") ?? "",
+      bookInDate: q.get("bookInDate") ?? "",
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const { data: merchant } = useGetMerchant();
   const { templates: stickerTemplates } = useStickerTemplates();
   const { printStickers } = useStickerPrinter();
   const { profile: bizProfile } = useBusinessProfile();
 
-  const [customerId, setCustomerId] = useState("");
+  const [customerId, setCustomerId] = useState(prefill.customerId);
   const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null);
   const [successJob, setSuccessJob] = useState<ServiceJob | null>(null);
   const [showStickerDialog, setShowStickerDialog] = useState(false);
@@ -232,7 +299,15 @@ export default function ServiceJobNewPage() {
   const repairTemplates = stickerTemplates.filter((t) => t.typeId === "repair");
   const activeStickerTpl = repairTemplates.find((t) => t.id === selectedStickerTplId) ?? null;
   const stickerSize = DYMO_SIZES.find((s) => s.id === (activeStickerTpl?.sizeId ?? repairStickerType.defaultSize)) ?? DYMO_SIZES.find((s) => s.id === "30256")!;
-  const stickerBaseFields = activeStickerTpl?.fields ?? Object.fromEntries(repairStickerType.fields.map((f) => [f.key, f.defaultValue]));
+  // Start from the type's field defaults so every toggle key has a value, then
+  // overlay the saved template. This keeps the on-screen preview in sync with the
+  // actual print (printStickers merges the same defaults) — without it, a saved
+  // template missing a newer toggle (e.g. Username/Password) would read as "on"
+  // in the preview but "off" when printed.
+  const stickerBaseFields = {
+    ...Object.fromEntries(repairStickerType.fields.map((f) => [f.key, f.defaultValue])),
+    ...(activeStickerTpl?.fields ?? {}),
+  };
   const stickerFields = {
     ...stickerBaseFields,
     jobNo: successJob?.jobNumber ?? `SVC-${successJob?.id ?? 0}`,
@@ -242,20 +317,39 @@ export default function ServiceJobNewPage() {
     device: successJob?.deviceDescription ?? successJob?.deviceType ?? stickerBaseFields.device ?? "",
     fault: successJob?.workDescription ?? stickerBaseFields.fault ?? "",
     dueDate: new Date().toLocaleDateString("en-AU"),
+    // Device credentials (opt-in via the "Username"/"Password" label toggles).
+    // Stored newline-joined on the job; collapse to one line for the sticker and
+    // drop blanks so an empty credential doesn't render a stray " / ".
+    username: (successJob?.accounts ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
+    password: (successJob?.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
+    // Tech App deep link for the optional service QR (shown when the repair
+    // template enables it).
+    serviceQrUrl: successJob?.id != null ? techAppJobUrl(merchant?.username, successJob.id) : "",
   };
   const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
 
-  const { opts: svcOpts, fontCss: svcFontCss } = useSalesTemplate("Service_Ticket");
+  const { opts: svcOpts, fontCss: svcFontCss, selectedStyle: svcStyle } = useSalesTemplate("Service_Ticket");
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
+  const defaultServicePaper = serviceJobPaperFromOpts(svcOpts, svcStyle);
+  /* Docket layout from the saved style — the compact thermal style prints the
+     same fields on less roll. */
+  const docketDensity = serviceDocketDensity(svcStyle);
+  /* Which paper the *next* print uses — only needed so the matching @page rule
+     is in the document before window.print() fires. */
+  const [printPaper, setPrintPaper] = useState<ServicePaper>("a4");
 
   const [status, setStatus] = useState("pending");
-  const [bookInDate, setBookInDate] = useState(todayISO());
+  const [bookInDate, setBookInDate] = useState(prefill.bookInDate || todayISO());
   const [isPartnerRepair, setIsPartnerRepair] = useState(false);
   const [isCritical, setIsCritical] = useState(false);
   const [isUnderWarranty, setIsUnderWarranty] = useState(false);
 
   const [deviceType, setDeviceType] = useState("");
   const [deviceDescription, setDeviceDescription] = useState("");
+  const [deviceColour, setDeviceColour] = useState("");
+  const [deviceQuantity, setDeviceQuantity] = useState("");
   const [serialNumber, setSerialNumber] = useState("");
   const [condition, setCondition] = useState("");
   const [partnerRepairCode, setPartnerRepairCode] = useState("");
@@ -267,7 +361,7 @@ export default function ServiceJobNewPage() {
   const [photoSizes, setPhotoSizes] = useState<number[]>(Array(9).fill(0));
 
   const [additionalEquipment, setAdditionalEquipment] = useState("");
-  const [workDescription, setWorkDescription] = useState("");
+  const [workDescription, setWorkDescription] = useState(prefill.workDescription);
   const [credentials, setCredentials] = useState<Array<{ passwordOrPin: string; accounts: string }>>([
     { passwordOrPin: "", accounts: "" },
   ]);
@@ -318,13 +412,18 @@ export default function ServiceJobNewPage() {
       {
         data: {
           customerId: customerId ? Number(customerId) : null,
-          status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "completed" | "cancelled",
+          ...(prefill.title ? { title: prefill.title } : {}),
+          status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "awaiting-pickup" | "completed" | "cancelled",
           bookInDate,
           isPartnerRepair,
           isCritical,
           isUnderWarranty,
           deviceType: deviceType || null,
           deviceDescription: deviceDescription || null,
+          deviceColour: deviceColour || null,
+          deviceQuantity: QUANTITY_DEVICE_TYPES.has(deviceType) && deviceQuantity
+            ? Math.max(1, parseInt(deviceQuantity, 10) || 1)
+            : null,
           serialNumber: serialNumber || null,
           condition: condition || null,
           partnerRepairCode: partnerRepairCode || null,
@@ -345,11 +444,114 @@ export default function ServiceJobNewPage() {
         onSuccess: (job) => {
           queryClient.invalidateQueries({ queryKey: ["listServiceJobs"] });
           setSuccessJob(job);
+          // Point the originating booking at the job it produced. Best-effort:
+          // the job is already saved, so a failed link must not read as a failed
+          // create — we surface it as a warning and leave the job intact.
+          if (prefill.appointmentId) {
+            linkAppointmentMutation.mutate(
+              { id: prefill.appointmentId, data: { serviceJobId: job.id } },
+              {
+                onSuccess: () => {
+                  queryClient.invalidateQueries({ queryKey: ["listAppointments"] });
+                },
+                onError: () => toast.warning("Job created, but linking it to the appointment failed"),
+              },
+            );
+          }
         },
-        onError: () => toast.error("Failed to create service job"),
+        onError: (err) => toast.error(createFailureMessage(err)),
       }
     );
   }
+
+  /* Branding + data shared by the A4 sheet and the 80mm docket, so the two
+     outputs can never drift apart. */
+  const sheetBranding = {
+    businessName: merchant?.businessName ?? "Service Centre",
+    abn: bizProfile?.abn,
+    website: bizProfile?.website,
+    email: bizProfile?.contactEmail ?? merchant?.email ?? undefined,
+    address: [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      bizProfile?.state,
+      bizProfile?.postcode,
+    ].filter(Boolean).join(", "),
+    brandColor,
+    logo: bizProfile?.logo,
+    socialLinks: bizProfile?.socialLinks,
+    techAppUsername: merchant?.username ?? undefined,
+  };
+
+  const sheetData = {
+    jobId: successJob?.id ?? null,
+    jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
+    date: bookInDate || Date.now(),
+    status,
+    customerName: selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in"),
+    customerPhone: selectedCustomer?.phone ?? undefined,
+    customerEmail: selectedCustomer?.email ?? undefined,
+    deviceType,
+    deviceModel: deviceDescription,
+    deviceColour,
+    deviceQuantity: QUANTITY_DEVICE_TYPES.has(deviceType) && deviceQuantity
+      ? Math.max(1, parseInt(deviceQuantity, 10) || 1)
+      : undefined,
+    serialNumber,
+    condition,
+    workDescription,
+    additionalEquipment,
+    accounts: credentials.map((c) => c.accounts.trim()).join("\n"),
+    logins: credentials.map((c) => c.passwordOrPin.trim()).join("\n"),
+    photos,
+    signature: signature || undefined,
+    isCritical,
+    isUnderWarranty,
+    isPartnerRepair,
+    partnerRepairCode,
+  };
+
+  /* Print the just-booked job. Goes straight to the routed printer when one is
+     reachable (ESC/POS over USB/serial, or the Print Bridge) and otherwise
+     reveals the hidden print area and uses window.print(). */
+  const printJobSheet = (paper: ServicePaper) => {
+    setPrintPaper(paper);
+    const printMode = paper === "80mm" ? "docket" : "sheet";
+    const browserFallback = () => new Promise<void>((resolve) => {
+      document.body.setAttribute("data-print", printMode);
+      let done = false;
+      let guard = 0;
+      const finish = () => {
+        if (done) return;
+        done = true;
+        window.clearTimeout(guard);
+        document.body.removeAttribute("data-print");
+        resolve();
+      };
+      window.addEventListener("afterprint", finish, { once: true });
+      guard = window.setTimeout(finish, 30_000);
+      window.print();
+    });
+
+    setTimeout(() => {
+      void printServiceJobDocument({
+        paper,
+        copies: 1,
+        hw: hardware,
+        data: sheetData,
+        branding: sheetBranding,
+        opts: svcOpts,
+        fontCss: svcFontCss,
+        density: docketDensity,
+        elementId: paper === "80mm" ? "svc-job-docket-print-area" : "svc-job-sheet-print-area",
+        browserFallback,
+      })
+        .then((method) => {
+          if (method !== "browser") toast.success(`${SERVICE_PAPER_LABEL[paper].title} sent to the printer`);
+        })
+        .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't print this job"));
+    }, 80);
+  };
 
   return (
     <>
@@ -361,14 +563,30 @@ export default function ServiceJobNewPage() {
             variant="ghost"
             size="icon"
             className="h-8 w-8 shrink-0"
-            onClick={() => navigate("/services")}
+            onClick={() => navigate(prefill.appointmentId ? "/appointments" : "/services")}
           >
             <ArrowLeft className="w-4 h-4" />
           </Button>
           <div>
             <h1 className="text-xl font-bold">New Service</h1>
+            {prefill.appointmentId && (
+              <p className="text-xs text-muted-foreground">
+                From appointment{prefill.appointmentRef ? ` ${prefill.appointmentRef}` : ""}
+                {prefill.title ? ` — ${prefill.title}` : ""}
+              </p>
+            )}
           </div>
         </div>
+
+        {prefill.appointmentId && (
+          <div className="rounded-xl border border-primary/30 bg-primary/5 px-4 py-3 flex items-start gap-3">
+            <CalendarClock className="w-4 h-4 text-primary mt-0.5 shrink-0" />
+            <p className="text-sm text-muted-foreground">
+              Details carried over from the booking. Fill in the device information below —
+              the appointment is linked to this job once you save.
+            </p>
+          </div>
+        )}
 
         {/* Customer */}
         <div className="grid grid-cols-1 gap-4">
@@ -454,7 +672,7 @@ export default function ServiceJobNewPage() {
                     "flex items-center gap-2 text-sm px-3 py-1.5 rounded-lg border transition-colors text-left",
                     deviceType === type
                       ? "border-primary bg-primary/10 text-primary font-medium"
-                      : "border-border hover:bg-muted/40 text-foreground"
+                      : "pill-selector border-border hover:bg-muted/40 text-foreground"
                   )}
                 >
                   <div
@@ -471,15 +689,45 @@ export default function ServiceJobNewPage() {
             </div>
           </div>
 
+          {/* Counted media — how many tapes/discs came in under this job */}
+          {QUANTITY_DEVICE_TYPES.has(deviceType) && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-1.5">
+                <Label>Quantity</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  inputMode="numeric"
+                  placeholder="e.g. 12"
+                  value={deviceQuantity}
+                  onChange={(e) => setDeviceQuantity(e.target.value.replace(/[^0-9]/g, ""))}
+                />
+                <p className="text-xs text-muted-foreground">
+                  How many {countedLabel(deviceType)} were booked in
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Device detail fields — hidden for media-only items */}
           {!MEDIA_DEVICE_TYPES.has(deviceType) && (
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {/* Brand and Colour on the first row, Serial beside Known Damage
+                  on the second — the order a device is written up at the counter. */}
               <div className="space-y-1.5">
-                <Label>Device Description (Brand / Colour)</Label>
+                <Label>Brand</Label>
                 <Input
-                  placeholder="e.g. Apple MacBook Pro, Space Grey..."
+                  placeholder="e.g. Apple MacBook Pro..."
                   value={deviceDescription}
                   onChange={(e) => setDeviceDescription(e.target.value)}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label>Colour</Label>
+                <Input
+                  placeholder="e.g. Space Grey..."
+                  value={deviceColour}
+                  onChange={(e) => setDeviceColour(e.target.value)}
                 />
               </div>
               <div className="space-y-1.5">
@@ -520,23 +768,23 @@ export default function ServiceJobNewPage() {
           </div>
 
           <div className="space-y-1.5">
-            <Label>Additional Equipment</Label>
-            <Textarea
-              placeholder="List any additional equipment..."
-              value={additionalEquipment}
-              onChange={(e) => setAdditionalEquipment(e.target.value)}
-              rows={2}
-              className="resize-none"
-            />
-          </div>
-
-          <div className="space-y-1.5">
             <Label>Work Description</Label>
             <Textarea
               placeholder="Describe the service..."
               value={workDescription}
               onChange={(e) => setWorkDescription(e.target.value)}
               rows={3}
+              className="resize-none"
+            />
+          </div>
+
+          <div className="space-y-1.5">
+            <Label>Additional Equipment</Label>
+            <Textarea
+              placeholder="List any additional equipment..."
+              value={additionalEquipment}
+              onChange={(e) => setAdditionalEquipment(e.target.value)}
+              rows={2}
               className="resize-none"
             />
           </div>
@@ -707,22 +955,21 @@ export default function ServiceJobNewPage() {
               </a>
             </Button>
           )}
-          <Button
-            className="w-full gap-2"
-            variant="outline"
-            onClick={() => {
-              setTimeout(() => {
-                document.body.setAttribute("data-print", "sheet");
-                const cleanup = () => document.body.removeAttribute("data-print");
-                window.addEventListener("afterprint", cleanup, { once: true });
-                setTimeout(cleanup, 30_000);
-                window.print();
-              }, 80);
-            }}
-          >
-            <Printer className="w-4 h-4" />
-            Print Job Sheet
-          </Button>
+          {/* Job sheet — A4 or 80mm, defaulting to the saved Service Ticket
+              template's paper. Both carry the same fields. */}
+          <div className="grid grid-cols-2 gap-2">
+            {(["a4", "80mm"] as const).map((paper) => (
+              <Button
+                key={paper}
+                className="w-full gap-2"
+                variant={paper === defaultServicePaper ? "default" : "outline"}
+                onClick={() => printJobSheet(paper)}
+              >
+                <Printer className="w-4 h-4" />
+                {SERVICE_PAPER_LABEL[paper].title}
+              </Button>
+            ))}
+          </div>
           <Button
             className="w-full gap-2"
             variant="outline"
@@ -763,7 +1010,7 @@ export default function ServiceJobNewPage() {
                   onClick={() => setSelectedStickerTplId("")}
                   className={cn(
                     "flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors",
-                    !selectedStickerTplId ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted/50"
+                    !selectedStickerTplId ? "border-primary bg-primary/5 font-medium" : "pill-selector border-border hover:bg-muted/50"
                   )}
                 >
                   <repairStickerType.icon className={cn("w-3.5 h-3.5 shrink-0", repairStickerType.color)} />
@@ -775,7 +1022,7 @@ export default function ServiceJobNewPage() {
                     onClick={() => setSelectedStickerTplId(tpl.id)}
                     className={cn(
                       "flex items-center gap-2 px-3 py-2 rounded-md border text-left text-sm transition-colors",
-                      selectedStickerTplId === tpl.id ? "border-primary bg-primary/5 font-medium" : "border-border hover:bg-muted/50"
+                      selectedStickerTplId === tpl.id ? "border-primary bg-primary/5 font-medium" : "pill-selector border-border hover:bg-muted/50"
                     )}
                   >
                     <repairStickerType.icon className={cn("w-3.5 h-3.5 shrink-0", repairStickerType.color)} />
@@ -795,6 +1042,7 @@ export default function ServiceJobNewPage() {
                 size={stickerSize}
                 businessName={businessName}
                 brandColor={brandColor}
+                businessWebsite={bizProfile?.website}
                 fillWidth={380}
                 fillHeight={140}
               />
@@ -830,65 +1078,54 @@ export default function ServiceJobNewPage() {
     {/* Print-only areas — hidden on screen, shown during window.print() */}
     <style dangerouslySetInnerHTML={{ __html:
       `@media screen {
-        #svc-job-sheet-print-area { display: none !important; }
+        #svc-job-sheet-print-area, #svc-job-docket-print-area { display: none !important; }
       }
       @media print {
         body * { visibility: hidden !important; }
         body[data-print="sheet"] #svc-job-sheet-print-area,
-        body[data-print="sheet"] #svc-job-sheet-print-area * { visibility: visible !important; }
-        body[data-print="sheet"] #svc-job-sheet-print-area {
+        body[data-print="sheet"] #svc-job-sheet-print-area *,
+        body[data-print="docket"] #svc-job-docket-print-area,
+        body[data-print="docket"] #svc-job-docket-print-area * { visibility: visible !important; }
+        /* Collapse the (hidden) app content to zero height so it can't paginate
+           into a second sheet. The print area is position:fixed (viewport-
+           relative), so #root's overflow does NOT clip it — but with #root
+           collapsed only one page is generated, so the fixed sheet, which Chrome
+           would otherwise repeat on every page, now prints exactly once. */
+        body[data-print="sheet"] #root,
+        body[data-print="docket"] #root { height: 0 !important; overflow: hidden !important; }
+        body[data-print="sheet"] #svc-job-sheet-print-area,
+        body[data-print="docket"] #svc-job-docket-print-area {
           display: block !important;
           position: fixed !important; left: 0 !important; top: 0 !important;
-          width: 100% !important; box-sizing: border-box !important;
+          box-sizing: border-box !important;
         }
-        @page { size: A4 portrait; margin: 10mm; }
+        body[data-print="sheet"] #svc-job-sheet-print-area { width: 100% !important; }
+        body[data-print="docket"] #svc-job-docket-print-area { width: 80mm !important; }
       }`
     }} />
+    {/* @page can't be switched by an attribute selector, so the roll size is
+        only declared while the docket is the visible print area. */}
+    <style dangerouslySetInnerHTML={{ __html:
+      printPaper === "80mm"
+        ? "@media print { @page { size: 80mm auto; margin: 0; } }"
+        : "@media print { @page { size: A4 portrait; margin: 10mm; } }"
+    }} />
 
-    {/* ── Job Sheet print area (unified template) ──────────────────── */}
+    {/* ── Job Sheet print areas (unified template, both papers) ─────── */}
     <ServiceJobSheet
       id="svc-job-sheet-print-area"
       opts={svcOpts}
       fontCss={svcFontCss}
-      branding={{
-        businessName: merchant?.businessName ?? "Service Centre",
-        abn: bizProfile?.abn,
-        website: bizProfile?.website,
-        email: bizProfile?.contactEmail ?? merchant?.email ?? undefined,
-        address: [
-          (merchant as { address?: string } | undefined)?.address,
-          (merchant as { city?: string } | undefined)?.city,
-          bizProfile?.state,
-          bizProfile?.postcode,
-        ].filter(Boolean).join(", "),
-        brandColor,
-        logo: bizProfile?.logo,
-        socialLinks: bizProfile?.socialLinks,
-        techAppUsername: merchant?.username ?? undefined,
-      }}
-      data={{
-        jobId: successJob?.id ?? null,
-        jobNumber: successJob?.jobNumber ?? `SVC-${successJob?.id ?? ""}`,
-        date: bookInDate || Date.now(),
-        status,
-        customerName: selectedCustomer ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") : (successJob?.customerName ?? "Walk-in"),
-        customerPhone: selectedCustomer?.phone ?? undefined,
-        customerEmail: selectedCustomer?.email ?? undefined,
-        deviceType,
-        deviceModel: deviceDescription,
-        serialNumber,
-        condition,
-        workDescription,
-        additionalEquipment,
-        accounts: credentials.map((c) => c.accounts.trim()).join("\n"),
-        logins: credentials.map((c) => c.passwordOrPin.trim()).join("\n"),
-        photos,
-        signature: signature || undefined,
-        isCritical,
-        isUnderWarranty,
-        isPartnerRepair,
-        partnerRepairCode,
-      }}
+      branding={sheetBranding}
+      data={sheetData}
+    />
+    <ServiceJobDocket
+      id="svc-job-docket-print-area"
+      opts={svcOpts}
+      fontCss={svcFontCss}
+      density={docketDensity}
+      branding={sheetBranding}
+      data={sheetData}
     />
 
     </>

@@ -19,6 +19,7 @@ const DEFAULT_CONFIG = {
   cashbackRate: 0.01,
   pointsPerDollar: 1,
   dollarPerPoint: 0.01,
+  birthdayBonusPoints: 100,
   tiers: [
     { name: "Bronze", minSpend: 0, rate: 0.01, pointsRequired: 0, discountPct: 0, freeShipping: false, bonusMultiplier: 1, description: "" },
     { name: "Silver", minSpend: 500, rate: 0.02, pointsRequired: 500, discountPct: 2, freeShipping: false, bonusMultiplier: 1.2, description: "Free priority support" },
@@ -43,6 +44,7 @@ function formatSettings(row: typeof loyaltySettingsTable.$inferSelect) {
     cashbackRate:           (cfg.cashbackRate as number)           ?? DEFAULT_CONFIG.cashbackRate,
     pointsPerDollar:        (cfg.pointsPerDollar as number)        ?? DEFAULT_CONFIG.pointsPerDollar,
     dollarPerPoint:         (cfg.dollarPerPoint as number)         ?? DEFAULT_CONFIG.dollarPerPoint,
+    birthdayBonusPoints:    (cfg.birthdayBonusPoints as number)    ?? DEFAULT_CONFIG.birthdayBonusPoints,
     tiers:                  (cfg.tiers as typeof DEFAULT_CONFIG.tiers) ?? DEFAULT_CONFIG.tiers,
     stampsRequired:         (cfg.stampsRequired as number)         ?? DEFAULT_CONFIG.stampsRequired,
     stampRewardValue:       (cfg.stampRewardValue as number)       ?? DEFAULT_CONFIG.stampRewardValue,

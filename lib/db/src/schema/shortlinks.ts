@@ -1,4 +1,4 @@
-import { pgTable, text, serial, integer, timestamp, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, integer, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 export const shortlinksTable = pgTable("shortlinks", {
@@ -16,6 +16,9 @@ export const shortlinksTable = pgTable("shortlinks", {
   // A shortlink ending is unique per merchant — enforced at the DB level so
   // concurrent create/update requests can't race past the application check.
   uniqueIndex("shortlinks_merchant_slug_unique").on(table.merchantId, table.slug),
+  // The public redirect resolver looks up by slug alone (no merchantId), which
+  // the composite unique above can't serve — index slug for the hot path.
+  index("shortlinks_slug_idx").on(table.slug),
 ]);
 
 export type Shortlink = typeof shortlinksTable.$inferSelect;

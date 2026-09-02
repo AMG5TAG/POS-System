@@ -363,6 +363,49 @@ export async function deleteVault(merchantId: number, provider: string): Promise
   ));
 }
 
+/* ── Credential-blob helpers ───────────────────────────────────────────────────
+   Credential-based integrations (e.g. Zip Pay's merchantId + apiKey) have no
+   OAuth tokens, but their secrets still warrant encryption. We reuse the vault
+   by JSON-encoding the whole credential object into the encrypted access-token
+   slot; a designated non-secret field can be surfaced as accountId/accountHandle
+   for display on the integrations page. */
+
+export interface CredentialVaultOptions {
+  /** Field name whose value is non-sensitive and shown as the account id. */
+  accountIdField?: string;
+  /** Field name whose value is shown as the human-readable handle. */
+  accountHandleField?: string;
+}
+
+export async function upsertCredentialVault(
+  merchantId: number,
+  provider: string,
+  credentials: Record<string, unknown>,
+  opts: CredentialVaultOptions = {},
+): Promise<void> {
+  const accountId = opts.accountIdField ? String(credentials[opts.accountIdField] ?? "") || undefined : undefined;
+  const accountHandle = opts.accountHandleField ? String(credentials[opts.accountHandleField] ?? "") || undefined : undefined;
+  await upsertVault(merchantId, {
+    provider,
+    accountId,
+    accountHandle,
+    accessToken: JSON.stringify(credentials),
+  });
+}
+
+export async function readCredentialVault<T = Record<string, unknown>>(
+  merchantId: number,
+  provider: string,
+): Promise<T | null> {
+  const entry = await readVault(merchantId, provider);
+  if (!entry || !entry.accessToken) return null;
+  try {
+    return JSON.parse(entry.accessToken) as T;
+  } catch {
+    return null;
+  }
+}
+
 /* ── Vault health status ───────────────────────────────────────────────────── */
 
 export interface VaultStatus {

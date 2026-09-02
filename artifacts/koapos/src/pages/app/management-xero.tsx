@@ -37,7 +37,6 @@ import {
   RefreshCw,
   Loader2,
   AlertTriangle,
-  BookOpen,
   Building2,
   Map,
   Settings2,
@@ -114,7 +113,6 @@ function XeroLogo({ size = "md" }: { size?: "sm" | "md" | "lg" }) {
 /* ── Steps config ───────────────────────────────────────────────────────── */
 
 const STEPS = [
-  { id: 1, label: "Prerequisites", icon: BookOpen },
   { id: 2, label: "Connect",       icon: ShieldCheck },
   { id: 3, label: "Organisation",  icon: Building2 },
   { id: 4, label: "Map Accounts",  icon: Map },
@@ -209,7 +207,7 @@ function SyncLogRow({ entry }: { entry: XeroSyncLogEntry }) {
 
 export default function ManagementXeroPage() {
   const [, setLocation] = useLocation();
-  const [step, setStep] = useState(1);
+  const [step, setStep] = useState(2);
   const [mappings, setMappings] = useState<XeroMappings>({});
   const [syncSettings, setSyncSettings] = useState<SyncSettings>({
     syncTransactions:   true,
@@ -250,12 +248,18 @@ export default function ManagementXeroPage() {
   const initializedRef = useRef(false);
   useEffect(() => {
     if (initializedRef.current || !status) return;
-    initializedRef.current = true;
     if (status.mappings)     setMappings(status.mappings);
     if (status.syncSettings) setSyncSettings(prev => ({ ...prev, ...status.syncSettings }));
-    if (status.connected && status.tenantId && status.mappings?.revenueAccount) setStep(6);
-    else if (status.connected && status.tenantId) setStep(4);
-    else if (status.connected) setStep(3);
+    // Only consume the one-shot (and jump forward) once we actually see a
+    // CONNECTED status. If the first status load arrives before the connection
+    // registers (e.g. a slow/stale fetch), we must not lock initialisation on a
+    // disconnected snapshot — otherwise a genuinely-connected merchant gets
+    // stranded on the Connect step and the wizard never advances.
+    if (!status.connected) return;
+    initializedRef.current = true;
+    if (status.tenantId && status.mappings?.revenueAccount) setStep(6);
+    else if (status.tenantId) setStep(4);
+    else setStep(3);
   }, [status]);
 
   /* Handle URL params after OAuth redirect */
@@ -351,7 +355,7 @@ export default function ManagementXeroPage() {
       onSuccess: () => {
         toast.success("Xero disconnected.");
         setMappings({});
-        setStep(1);
+        setStep(2);
         initializedRef.current = false;
         void refetchStatus();
       },
@@ -442,69 +446,6 @@ export default function ManagementXeroPage() {
           {/* Main panel */}
           <div className="lg:col-span-2 rounded-xl border bg-background p-6 space-y-6">
 
-            {/* ── Step 1: Prerequisites ──────────────────────────────────── */}
-            {step === 1 && (
-              <div className="space-y-5">
-                <div>
-                  <h2 className="text-lg font-semibold">Before you connect</h2>
-                  <p className="text-sm text-muted-foreground mt-1">
-                    You need a Xero developer app to enable OAuth2. This is free and takes about 5 minutes.
-                  </p>
-                </div>
-
-                {!status?.configured && (
-                  <div className="flex items-start gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
-                    <AlertTriangle className="w-4 h-4 mt-0.5 shrink-0" />
-                    <div>
-                      <p className="font-semibold">OAuth credentials not yet configured</p>
-                      <p className="text-xs mt-0.5">Complete the steps below, then add <code className="bg-amber-100 px-1 rounded">XERO_CLIENT_ID</code> and <code className="bg-amber-100 px-1 rounded">XERO_CLIENT_SECRET</code> as environment secrets.</p>
-                    </div>
-                  </div>
-                )}
-
-                <ol className="space-y-4">
-                  {[
-                    {
-                      n: 1,
-                      title: "Create a Xero Developer App",
-                      body: <>Go to <a href="https://developer.xero.com/app/manage" target="_blank" rel="noreferrer" className="text-[#13B5EA] underline underline-offset-2 inline-flex items-center gap-0.5">developer.xero.com/app/manage <ExternalLink className="w-3 h-3" /></a> and click <strong>New App</strong>. Choose <strong>Web App</strong> as the integration type.</>,
-                    },
-                    {
-                      n: 2,
-                      title: "Set the redirect URI",
-                      body: <>In the app settings, add this redirect URI:<br /><code className="text-xs bg-muted px-2 py-1 rounded block mt-1 break-all">{window.location.origin}/api/xero/auth/callback</code></>,
-                    },
-                    {
-                      n: 3,
-                      title: "Enable required scopes",
-                      body: <>Make sure these scopes are enabled: <code className="text-xs bg-muted px-1 rounded">accounting.transactions</code>, <code className="text-xs bg-muted px-1 rounded">accounting.contacts</code>, <code className="text-xs bg-muted px-1 rounded">accounting.settings</code>, <code className="text-xs bg-muted px-1 rounded">offline_access</code>.</>,
-                    },
-                    {
-                      n: 4,
-                      title: "Copy your credentials and add them as secrets",
-                      body: <>Copy the <strong>Client ID</strong> and <strong>Client Secret</strong> from your Xero app. In Replit, add them as environment secrets: <code className="text-xs bg-muted px-1 rounded">XERO_CLIENT_ID</code> and <code className="text-xs bg-muted px-1 rounded">XERO_CLIENT_SECRET</code>, then restart the API server.</>,
-                    },
-                  ].map((item) => (
-                    <li key={item.n} className="flex gap-4">
-                      <span className="w-7 h-7 rounded-full bg-[#13B5EA]/10 text-[#0d8fb8] text-sm font-bold flex items-center justify-center shrink-0 mt-0.5">
-                        {item.n}
-                      </span>
-                      <div className="flex-1 min-w-0">
-                        <p className="font-medium text-sm">{item.title}</p>
-                        <p className="text-sm text-muted-foreground mt-0.5 leading-relaxed">{item.body}</p>
-                      </div>
-                    </li>
-                  ))}
-                </ol>
-
-                <div className="flex justify-end pt-2">
-                  <Button onClick={() => setStep(2)} className="gap-1.5 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white">
-                    I've done this <ArrowRight className="w-4 h-4" />
-                  </Button>
-                </div>
-              </div>
-            )}
-
             {/* ── Step 2: Connect ────────────────────────────────────────── */}
             {step === 2 && (
               <div className="space-y-5">
@@ -527,8 +468,8 @@ export default function ManagementXeroPage() {
                   <div className="flex items-center gap-3 rounded-lg bg-amber-50 border border-amber-200 px-4 py-3 text-sm text-amber-800">
                     <AlertTriangle className="w-4 h-4 shrink-0" />
                     <div>
-                      <p className="font-semibold">OAuth not configured</p>
-                      <p className="text-xs mt-0.5">Complete Step 1 to add your Xero client credentials before connecting.</p>
+                      <p className="font-semibold">Xero isn't available yet</p>
+                      <p className="text-xs mt-0.5">The Xero connection hasn't been enabled on this platform yet. Please contact support and we'll switch it on for your account.</p>
                     </div>
                   </div>
                 ) : (
@@ -537,19 +478,16 @@ export default function ManagementXeroPage() {
                     <p className="text-sm text-center text-muted-foreground max-w-sm">
                       You'll be redirected to Xero to grant access. KoaPOS will only access accounting data — never bank account details.
                     </p>
-                    <a href="/api/xero/auth/start">
-                      <Button className="gap-2 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white px-6">
+                    <Button asChild className="gap-2 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white px-6">
+                      <a href="/api/xero/auth/start">
                         <ExternalLink className="w-4 h-4" />
                         Connect with Xero
-                      </Button>
-                    </a>
+                      </a>
+                    </Button>
                   </div>
                 )}
 
-                <div className="flex justify-between pt-2">
-                  <Button variant="outline" onClick={() => setStep(1)} className="gap-1.5">
-                    <ArrowLeft className="w-4 h-4" /> Back
-                  </Button>
+                <div className="flex justify-end pt-2">
                   {status?.connected && (
                     <Button onClick={() => setStep(3)} className="gap-1.5 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white">
                       Next <ArrowRight className="w-4 h-4" />
@@ -951,7 +889,6 @@ export default function ManagementXeroPage() {
             {/* Context tip */}
             <div className="rounded-xl border bg-[#13B5EA]/5 border-[#13B5EA]/20 p-4 space-y-3">
               <p className="text-sm font-semibold text-[#0d8fb8]">
-                {step === 1 && "Why use Xero?"}
                 {step === 2 && "OAuth is secure"}
                 {step === 3 && "Multiple orgs?"}
                 {step === 4 && "Account mapping tips"}
@@ -959,7 +896,6 @@ export default function ManagementXeroPage() {
                 {step === 6 && "What syncs?"}
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {step === 1 && "Xero is Australia's most popular accounting platform. Connecting KoaPOS means your daily sales, GST, and purchase orders land in Xero automatically — no manual reconciliation needed."}
                 {step === 2 && "KoaPOS uses OAuth2 — the same technology used by banks. Your Xero password is never seen or stored by KoaPOS. You can revoke access from Xero at any time."}
                 {step === 3 && "If you have multiple Xero organisations (e.g. a holding company and a trading entity), select the one that should receive POS data. You can change this later."}
                 {step === 4 && "Use account codes that already exist in your Xero chart of accounts. For Australian businesses, revenue is typically 200, GST is 820. Ask your accountant if unsure."}
@@ -972,7 +908,7 @@ export default function ManagementXeroPage() {
             <div className="rounded-xl border bg-background p-4 space-y-3">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Status</p>
               {[
-                { label: "API credentials",    done: !!status?.configured },
+                { label: "Xero available",     done: !!status?.configured },
                 { label: "OAuth connected",    done: !!status?.connected },
                 { label: "Organisation set",   done: !!status?.tenantId },
                 { label: "Accounts mapped",    done: !!status?.mappings?.revenueAccount },

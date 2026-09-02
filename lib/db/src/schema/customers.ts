@@ -12,6 +12,8 @@ export const customersTable = pgTable("customers", {
   phone: text("phone"),
   address: text("address"),
   notes: text("notes"),
+  // Profile picture (storage URL); synced to Google/Outlook contact photos.
+  photoUrl: text("photo_url"),
   dateOfBirth: date("date_of_birth"),
   loyaltyPoints: doublePrecision("loyalty_points").notNull().default(0),
   totalSpent: numeric("total_spent", { precision: 10, scale: 2 }).notNull().default("0"),
@@ -37,6 +39,15 @@ export const customersTable = pgTable("customers", {
   warningNote: text("warning_note"),
   agreedToMarketing: text("agreed_to_marketing").default("false"),
   portalToken: text("portal_token"),
+  /* Customer portal login. The portal was originally token-only — the URL's
+     portalToken was the whole credential — which is fine for a link sent to the
+     customer but not for a QR printed on a sticker that lives on their device.
+     A merchant can require a password (merchants.requirePortalPassword); until a
+     customer sets one, portalPasswordHash is null and the token still admits
+     them, which is what lets existing portals keep working untouched. */
+  portalPasswordHash: text("portal_password_hash"),
+  portalPasswordSetAt: timestamp("portal_password_set_at", { withTimezone: true }),
+  portalLastLoginAt: timestamp("portal_last_login_at", { withTimezone: true }),
   referralCode: text("referral_code"),
   heardFrom: text("heard_from"),
   heardFromDetails: text("heard_from_details"),

@@ -39,7 +39,7 @@ const STATUS_LABELS: Record<ReferralStatus, string> = {
   churned: "Churned",
 };
 
-export default function ManagementKoaPOSPage() {
+export function KoaPOSReferralsContent() {
   const [copied, setCopied] = useState(false);
 
   const { data, isLoading } = useListPartnerReferrals({
@@ -61,7 +61,6 @@ export default function ManagementKoaPOSPage() {
   };
 
   return (
-    <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         {/* Header */}
         <div>
@@ -162,11 +161,11 @@ export default function ManagementKoaPOSPage() {
                 >
                   <Mail className="w-3.5 h-3.5" /> Email Invite
                 </Button>
-                <a href="https://koapos.com" target="_blank" rel="noopener noreferrer" className="flex-1">
-                  <Button variant="outline" size="sm" className="w-full gap-1.5 h-8">
+                <Button asChild variant="outline" size="sm" className="flex-1 w-full gap-1.5 h-8">
+                  <a href="https://koapos.com" target="_blank" rel="noopener noreferrer">
                     <ExternalLink className="w-3.5 h-3.5" /> View KoaPOS Site
-                  </Button>
-                </a>
+                  </a>
+                </Button>
               </div>
             </CardContent>
           </Card>
@@ -284,6 +283,13 @@ export default function ManagementKoaPOSPage() {
           Referral program terms and conditions apply. See <a href="https://koapos.com/referrals" target="_blank" rel="noopener noreferrer" className="underline hover:text-foreground">koapos.com/referrals</a> for full details.
         </div>
       </div>
+  );
+}
+
+export default function ManagementKoaPOSPage() {
+  return (
+    <AppLayout>
+      <KoaPOSReferralsContent />
     </AppLayout>
   );
 }

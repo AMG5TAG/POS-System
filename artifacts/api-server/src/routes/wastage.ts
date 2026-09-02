@@ -40,14 +40,23 @@ router.get("/wastage", requireAuth, async (req, res) => {
 router.post("/wastage", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreateWastageEntryBody.parse(req.body);
-  // Reduce stock if productId provided and product tracks inventory
+  // Default the cost impact from the product's cost price when not supplied, so
+  // wastage reporting reflects real cost rather than depending on manual entry.
+  let resolvedCost: string | null = body.cost != null ? String(body.cost) : null;
   if (body.productId) {
     const [product] = await db.select().from(productsTable)
       .where(and(eq(productsTable.id, body.productId), eq(productsTable.merchantId, merchantId)));
-    if (product && product.trackInventory === "true") {
-      const newQty = (product.stockQuantity ?? 0) - Math.floor(body.quantity);
-      await db.update(productsTable).set({ stockQuantity: Math.max(0, newQty) })
-        .where(eq(productsTable.id, body.productId));
+    if (product) {
+      // Reduce stock if the product tracks inventory
+      if (product.trackInventory === "true") {
+        const newQty = (product.stockQuantity ?? 0) - Math.floor(body.quantity);
+        await db.update(productsTable).set({ stockQuantity: Math.max(0, newQty) })
+          .where(eq(productsTable.id, body.productId));
+      }
+      if (resolvedCost == null && product.costPrice != null) {
+        const unitCost = parseFloat(product.costPrice);
+        if (Number.isFinite(unitCost)) resolvedCost = String(Math.round(unitCost * body.quantity * 100) / 100);
+      }
     }
   }
   const [row] = await db.insert(wastageTable).values({
@@ -56,7 +65,7 @@ router.post("/wastage", requireAuth, async (req, res) => {
     productName: body.productName,
     quantity: String(body.quantity),
     reason: body.reason,
-    cost: body.cost ? String(body.cost) : null,
+    cost: resolvedCost,
     notes: body.notes ?? null,
     staffId: body.staffId ?? null,
   }).returning();

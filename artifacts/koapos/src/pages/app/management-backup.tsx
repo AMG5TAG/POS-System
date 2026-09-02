@@ -67,14 +67,15 @@ import {
   Loader2,
   FileText,
   AlertTriangle,
+  Download,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { OneDriveIcon } from "@/components/provider-icons";
+import { OneDriveIcon, NextcloudIcon } from "@/components/provider-icons";
 
-type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive";
+type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
 
 const STORAGE_META: Record<
   StorageType,
@@ -85,7 +86,11 @@ const STORAGE_META: Record<
   gcs: { label: "Google Cloud Storage", icon: Cloud },
   sftp: { label: "SFTP server", icon: Server },
   onedrive: { label: "OneDrive", icon: OneDriveIcon },
+  nextcloud: { label: "Nextcloud", icon: NextcloudIcon },
 };
+
+/** Where Nextcloud archives land when the sub-folder is left blank. */
+const NEXTCLOUD_DEFAULT_FOLDER = "KoaPOS/Backups";
 
 const FREQUENCY_OPTIONS = [
   { value: "disabled", label: "Manual only (no schedule)" },
@@ -185,7 +190,7 @@ function draftToInput(d: DestDraft): BackupStorageDestinationInput {
     if (d.username) base.username = d.username;
     if (d.remotePath) base.remotePath = d.remotePath;
     if (d.password) base.password = d.password;
-  } else if (d.type === "onedrive") {
+  } else if (d.type === "onedrive" || d.type === "nextcloud") {
     if (d.folder) base.folder = d.folder;
   }
   return base;
@@ -229,6 +234,186 @@ function StatusBadge({ status }: { status: string }) {
   );
 }
 
+/* ── Named backup schedules (multiple per merchant) ──────────────────────────── */
+
+interface ScheduleItem {
+  id: number;
+  label: string;
+  frequency: string;
+  destinationIds: string[];
+  enabled: boolean;
+  lastBackupAt: string | null;
+}
+
+const SCHEDULE_FREQ_OPTIONS = [
+  { value: "daily", label: "Daily" },
+  { value: "weekly", label: "Weekly" },
+  { value: "monthly", label: "Monthly" },
+] as const;
+
+function destinationLabel(d: BackupStorageDestination): string {
+  const base = STORAGE_META[d.type as StorageType]?.label ?? d.type;
+  const hint = d.bucket || d.gcsBucket || d.folder || d.directory || d.host || "";
+  return hint ? `${base} · ${hint}` : base;
+}
+
+function BackupSchedulesCard({ destinations, passwordIsSet }: { destinations: BackupStorageDestination[]; passwordIsSet: boolean }) {
+  const [items, setItems] = useState<ScheduleItem[] | null>(null);
+  const [editing, setEditing] = useState<ScheduleItem | null>(null);
+  const [saving, setSaving] = useState(false);
+
+  const load = () =>
+    fetch("/api/backups/schedules", { credentials: "include" })
+      .then((r) => r.json())
+      .then((d: { items?: ScheduleItem[] }) => setItems(d.items ?? []))
+      .catch(() => setItems([]));
+  useEffect(() => { void load(); }, []);
+
+  const freqLabel = (v: string) => SCHEDULE_FREQ_OPTIONS.find((o) => o.value === v)?.label ?? v;
+  const destNameById = (id: string) => {
+    const d = destinations.find((x) => x.id === id);
+    return d ? destinationLabel(d) : id;
+  };
+
+  const openNew = () => setEditing({ id: 0, label: "Backup", frequency: "daily", destinationIds: [], enabled: true, lastBackupAt: null });
+
+  const save = async () => {
+    if (!editing) return;
+    setSaving(true);
+    try {
+      const isNew = editing.id === 0;
+      const r = await fetch(isNew ? "/api/backups/schedules" : `/api/backups/schedules/${editing.id}`, {
+        method: isNew ? "POST" : "PUT",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ label: editing.label, frequency: editing.frequency, destinationIds: editing.destinationIds, enabled: editing.enabled }),
+      });
+      if (r.ok) { toast.success(isNew ? "Schedule added" : "Schedule updated"); setEditing(null); await load(); }
+      else { const d = await r.json().catch(() => ({})); toast.error((d as { error?: string }).error ?? "Failed to save schedule"); }
+    } catch { toast.error("Failed to save schedule"); } finally { setSaving(false); }
+  };
+
+  const toggleEnabled = async (s: ScheduleItem) => {
+    const r = await fetch(`/api/backups/schedules/${s.id}`, {
+      method: "PUT", credentials: "include", headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ ...s, enabled: !s.enabled }),
+    });
+    if (r.ok) void load(); else toast.error("Failed to update schedule");
+  };
+
+  const remove = async (s: ScheduleItem) => {
+    if (!confirm(`Delete schedule "${s.label}"?`)) return;
+    const r = await fetch(`/api/backups/schedules/${s.id}`, { method: "DELETE", credentials: "include" });
+    if (r.ok) { toast.success("Schedule deleted"); void load(); } else toast.error("Failed to delete schedule");
+  };
+
+  return (
+    <Card>
+      <CardHeader>
+        <div className="flex items-center justify-between gap-3">
+          <div>
+            <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" /> Scheduled backups</CardTitle>
+            <CardDescription>
+              Run several backups on different schedules and destinations — e.g. Daily → OneDrive and Monthly → S3.
+            </CardDescription>
+          </div>
+          <Button size="sm" variant="outline" onClick={openNew} disabled={!passwordIsSet}><Plus className="mr-1 h-4 w-4" /> Add schedule</Button>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {!passwordIsSet && (
+          <p className="text-amber-600 dark:text-amber-400 text-xs">Set an encryption password above before adding schedules.</p>
+        )}
+        {items === null ? (
+          <Skeleton className="h-20 w-full" />
+        ) : items.length === 0 ? (
+          <p className="text-muted-foreground text-sm">No additional schedules. The single frequency above still applies.</p>
+        ) : (
+          <div className="divide-y rounded-lg border">
+            {items.map((s) => (
+              <div key={s.id} className="flex flex-wrap items-center gap-3 p-3">
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium truncate">{s.label}</span>
+                    <Badge variant="secondary">{freqLabel(s.frequency)}</Badge>
+                    {!s.enabled && <Badge variant="outline">Paused</Badge>}
+                  </div>
+                  <p className="text-muted-foreground text-xs mt-0.5 truncate">
+                    {s.destinationIds.length > 0 ? s.destinationIds.map(destNameById).join(", ") : "Server copy only"}
+                    {s.lastBackupAt ? ` · last ${formatDate(s.lastBackupAt)}` : ""}
+                  </p>
+                </div>
+                <Button variant="ghost" size="sm" onClick={() => toggleEnabled(s)}>{s.enabled ? "Pause" : "Resume"}</Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditing({ ...s })}>Edit</Button>
+                <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive" onClick={() => remove(s)} aria-label="Delete schedule">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+
+      {/* Add / edit dialog */}
+      <Dialog open={!!editing} onOpenChange={(o) => { if (!o) setEditing(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{editing?.id ? "Edit schedule" : "Add schedule"}</DialogTitle>
+            <DialogDescription>Choose how often this backup runs and which destinations it copies to.</DialogDescription>
+          </DialogHeader>
+          {editing && (
+            <div className="space-y-4">
+              <div className="space-y-2">
+                <Label>Name</Label>
+                <Input value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} placeholder="e.g. Nightly OneDrive" />
+              </div>
+              <div className="space-y-2">
+                <Label>Frequency</Label>
+                <Select value={editing.frequency} onValueChange={(v) => setEditing({ ...editing, frequency: v })}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {SCHEDULE_FREQ_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="space-y-2">
+                <Label>Destinations</Label>
+                {destinations.length === 0 ? (
+                  <p className="text-muted-foreground text-xs">No external destinations configured above. This schedule will keep a server copy only.</p>
+                ) : (
+                  <div className="flex flex-wrap gap-2">
+                    {destinations.map((d) => {
+                      const on = editing.destinationIds.includes(d.id);
+                      return (
+                        <Button
+                          key={d.id} type="button" size="sm" variant={on ? "default" : "outline"}
+                          onClick={() => setEditing({
+                            ...editing,
+                            destinationIds: on ? editing.destinationIds.filter((x) => x !== d.id) : [...editing.destinationIds, d.id],
+                          })}
+                        >
+                          {on && <CheckCircle2 className="mr-1 h-3.5 w-3.5" />}{destinationLabel(d)}
+                        </Button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)} disabled={saving}>Cancel</Button>
+            <Button onClick={save} disabled={saving || !editing?.label.trim()}>
+              {saving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              {editing?.id ? "Save" : "Add"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </Card>
+  );
+}
+
 /**
  * The full Backup & Restore settings UI, without an AppLayout wrapper, so it can
  * be embedded inside the consolidated Sync page (Management → Settings &
@@ -255,22 +440,27 @@ export function BackupSettingsPanel() {
   const triggerBackup = useTriggerBackup();
   const restoreBackup = useRestoreBackup();
 
-  // OneDrive backups reuse the OneDrive integration connected on the Sync page.
+  // OneDrive and Nextcloud backups reuse the accounts connected on the Sync
+  // page rather than holding their own credentials on the destination.
   const { data: integrationsRaw } = useListIntegrations({
     query: { queryKey: ["integrations"] },
   });
-  const oneDrive = ((integrationsRaw ?? []) as unknown as Array<{
+  const integrations = (integrationsRaw ?? []) as unknown as Array<{
     key: string;
     status: string;
     accountHandle: string | null;
-  }>).find((i) => i.key === "onedrive");
+  }>;
+  const oneDrive = integrations.find((i) => i.key === "onedrive");
   const oneDriveConnected = oneDrive?.status === "connected";
+  const nextcloud = integrations.find((i) => i.key === "nextcloud");
+  const nextcloudConnected = nextcloud?.status === "connected";
 
   const [frequency, setFrequency] = useState<string>("disabled");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [drafts, setDrafts] = useState<DestDraft[]>([]);
   const [passwordIsSet, setPasswordIsSet] = useState(false);
+  const [showAllBackups, setShowAllBackups] = useState(false);
 
   const [restoreTarget, setRestoreTarget] = useState<Backup | null>(null);
   const [restorePassword, setRestorePassword] = useState("");
@@ -286,6 +476,7 @@ export function BackupSettingsPanel() {
   }, [config]);
 
   const backups = (backupsQuery.data?.items ?? []) as Backup[];
+  const visibleBackups = showAllBackups ? backups : backups.slice(0, 5);
   const hasPendingBackup = backups.some((b) => b.status === "pending");
 
   const canSave = useMemo(() => {
@@ -413,6 +604,8 @@ export function BackupSettingsPanel() {
         </div>
 
         <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 items-start">
+          {/* Left column: Encryption + scheduled backups stacked in a half box */}
+          <div className="space-y-6">
           {/* Encryption + schedule */}
           <Card>
             <CardHeader>
@@ -481,6 +674,10 @@ export function BackupSettingsPanel() {
               </div>
             </CardContent>
           </Card>
+
+          {/* Scheduled backups sit directly under Encryption in the left half */}
+          <BackupSchedulesCard destinations={config?.destinations ?? []} passwordIsSet={passwordIsSet} />
+          </div>
 
           {/* Destinations */}
           <Card>
@@ -728,6 +925,54 @@ export function BackupSettingsPanel() {
                         </div>
                       </div>
                     )}
+
+                    {d.type === "nextcloud" && (
+                      <div className="space-y-3">
+                        {nextcloudConnected ? (
+                          <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
+                            <CheckCircle2 className="h-4 w-4 shrink-0" />
+                            <span>
+                              Using your connected Nextcloud
+                              {nextcloud?.accountHandle
+                                ? ` (${nextcloud.accountHandle})`
+                                : ""}
+                              .
+                            </span>
+                          </div>
+                        ) : (
+                          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
+                            <span>
+                              Nextcloud isn't connected. Connect your server to
+                              back up here.
+                            </span>
+                            <Link
+                              href="/management/settings-integrations/sync"
+                              className="font-medium underline shrink-0"
+                            >
+                              Connect
+                            </Link>
+                          </div>
+                        )}
+                        <div className="space-y-1">
+                          <Label className="text-xs">Folder (optional)</Label>
+                          <Input
+                            placeholder={NEXTCLOUD_DEFAULT_FOLDER}
+                            value={d.folder}
+                            onChange={(e) =>
+                              updateDraft(d.id, { folder: e.target.value })
+                            }
+                          />
+                          <p className="text-muted-foreground text-[11px]">
+                            A folder in your Nextcloud files, created if it
+                            doesn't exist. Leave blank to use{" "}
+                            <span className="font-mono">
+                              {NEXTCLOUD_DEFAULT_FOLDER}
+                            </span>
+                            .
+                          </p>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 );
               })}
@@ -791,7 +1036,7 @@ export function BackupSettingsPanel() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {backups.map((b) => (
+                  {visibleBackups.map((b) => (
                     <TableRow key={b.id}>
                       <TableCell className="whitespace-nowrap">
                         {formatDate(b.startedAt)}
@@ -835,6 +1080,24 @@ export function BackupSettingsPanel() {
                             )}
                           </Button>
                           <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            disabled={b.status !== "completed"}
+                            title="Download backup to this computer"
+                            aria-label="Download backup"
+                            onClick={() => {
+                              const a = document.createElement("a");
+                              a.href = `/api/backups/${b.id}/download`;
+                              a.rel = "noopener";
+                              document.body.appendChild(a);
+                              a.click();
+                              a.remove();
+                            }}
+                          >
+                            <Download className="h-4 w-4" />
+                          </Button>
+                          <Button
                             variant="outline"
                             size="sm"
                             disabled={b.status !== "completed"}
@@ -851,6 +1114,13 @@ export function BackupSettingsPanel() {
                   ))}
                 </TableBody>
               </Table>
+            )}
+            {backups.length > 5 && (
+              <div className="mt-3 flex justify-center">
+                <Button variant="ghost" size="sm" onClick={() => setShowAllBackups((v) => !v)}>
+                  {showAllBackups ? "Show less" : `Show more (${backups.length - 5})`}
+                </Button>
+              </div>
             )}
           </CardContent>
         </Card>

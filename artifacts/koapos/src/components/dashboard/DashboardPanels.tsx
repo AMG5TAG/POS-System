@@ -29,6 +29,7 @@ const ALL_STATUSES: { value: string; label: string }[] = [
   { value: "awaiting-partner-approval",   label: "Awaiting Partner Approval" },
   { value: "partner-replacement",         label: "Partner Replacement" },
   { value: "awaiting-customer",           label: "Awaiting Customer" },
+  { value: "awaiting-pickup",         label: "Completed - Awaiting Pickup" },
   { value: "completed",                   label: "Completed" },
   { value: "cancelled",                   label: "Cancelled" },
 ];
@@ -48,6 +49,7 @@ function statusColor(status: string): string {
     case "awaiting-partner-approval":   return "bg-indigo-100 text-indigo-700 border-indigo-200";
     case "partner-replacement":         return "bg-teal-100 text-teal-700 border-teal-200";
     case "awaiting-customer":           return "bg-orange-100 text-orange-700 border-orange-200";
+    case "awaiting-pickup":         return "bg-lime-100 text-lime-700 border-lime-200";
     case "completed":                   return "bg-emerald-100 text-emerald-700 border-emerald-200";
     case "cancelled":                   return "bg-gray-100 text-gray-500 border-gray-200";
     default:                            return "bg-muted text-muted-foreground border-border";
@@ -64,6 +66,7 @@ function statusIconColor(status: string): string {
     case "awaiting-partner-approval":   return "text-indigo-500";
     case "partner-replacement":         return "text-teal-500";
     case "awaiting-customer":           return "text-orange-500";
+    case "awaiting-pickup":         return "text-lime-600";
     case "completed":                   return "text-emerald-500";
     case "cancelled":                   return "text-gray-400";
     default:                            return "text-muted-foreground";
@@ -131,10 +134,13 @@ function AllServiceJobsPanel() {
   const { data: jobs = [], isLoading } = useListServiceJobs({ query: { queryKey: ["service-jobs-panel"] } });
   const [selectedJob, setSelectedJob] = useState<ServiceJob | null>(null);
 
+  // Completed and cancelled jobs are closed — they linger on the dashboard only
+  // for the day they were closed (updated) or booked in, then drop off once the
+  // day has ended. Open jobs always stay visible.
+  const todayStr = new Date().toISOString().split("T")[0];
   const visible = jobs.filter((j) => {
     const s = j.status as string;
-    if (s === "completed") {
-      const todayStr = new Date().toISOString().split("T")[0];
+    if (s === "completed" || s === "cancelled") {
       return j.updatedAt.startsWith(todayStr) || j.bookInDate === todayStr;
     }
     return true;
@@ -148,7 +154,7 @@ function AllServiceJobsPanel() {
             <CardTitle className="text-sm font-semibold text-primary">All Service Jobs</CardTitle>
             <span className="text-xs text-muted-foreground font-medium">{jobs.filter((j) => !["completed", "cancelled"].includes(j.status as string)).length} total</span>
           </div>
-          <p className="text-[11px] text-muted-foreground">Completed shown for today only · Click any row to edit</p>
+          <p className="text-[11px] text-muted-foreground">Completed &amp; cancelled shown for today only · Click any row to edit</p>
         </CardHeader>
         <CardContent className="flex-1 overflow-y-auto max-h-[400px]">
           {isLoading ? (

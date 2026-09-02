@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useRef, useDeferredValue } from "react";
+import { Suspense, useEffect, useRef, useDeferredValue } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { AuthProvider } from "@/lib/auth";
 import { AIProvider } from "@/lib/ai-context";
 import { useAuth } from "@/lib/use-auth";
 import { ThemeProvider } from "@/lib/theme";
 import { BrandColorProvider } from "@/lib/brand-color-context";
+import { AppThemeProvider } from "@/lib/app-theme";
 import { ButtonStyleProvider } from "@/lib/button-style";
 import { NavLayoutProvider } from "@/lib/nav-layout";
 import { StaffSessionProvider } from "@/lib/staff-day-session";
@@ -14,167 +15,193 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { Spinner } from "@/components/ui/spinner";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { setOnUnauthorized } from "@workspace/api-client-react";
+import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
+import { publicOrigin } from "@/lib/public-url";
+import { shouldRetryRequest, retryBackoff } from "@/lib/query-retry";
+import { lazyWithRetry } from "@/lib/lazy-retry";
 
-const CustomerDisplayPage = lazy(() => import("@/pages/app/customer-display"));
-const PortalPage = lazy(() => import("@/pages/portal"));
-const BookingPage = lazy(() => import("@/pages/booking"));
-const TechAppPage = lazy(() => import("@/pages/tech"));
-const DashboardAppPage = lazy(() => import("@/pages/dashboard-app"));
-const LandingPage = lazy(() => import("@/pages/marketing/landing"));
-const LoginPage = lazy(() => import("@/pages/marketing/login"));
-const RegisterPage = lazy(() => import("@/pages/marketing/register"));
-const PricingPage = lazy(() => import("@/pages/marketing/pricing"));
-const ForgotPasswordPage = lazy(() => import("@/pages/marketing/forgot-password"));
-const ResetPasswordPage = lazy(() => import("@/pages/marketing/reset-password"));
-const TermsPage = lazy(() => import("@/pages/marketing/terms"));
-const PrivacyPage = lazy(() => import("@/pages/marketing/privacy"));
+const CustomerDisplayPage = lazyWithRetry(() => import("@/pages/app/customer-display"));
+const PortalPage = lazyWithRetry(() => import("@/pages/portal"));
+const PortalSetPasswordPage = lazyWithRetry(() => import("@/pages/portal/set-password"));
+const BookingPage = lazyWithRetry(() => import("@/pages/booking"));
+const TechAppPage = lazyWithRetry(() => import("@/pages/tech"));
+const DashboardAppPage = lazyWithRetry(() => import("@/pages/dashboard-app"));
+const MobilePosAppPage = lazyWithRetry(() => import("@/pages/mobile-pos"));
+const LandingPage = lazyWithRetry(() => import("@/pages/marketing/landing"));
+const LoginPage = lazyWithRetry(() => import("@/pages/marketing/login"));
+const RegisterPage = lazyWithRetry(() => import("@/pages/marketing/register"));
+const PricingPage = lazyWithRetry(() => import("@/pages/marketing/pricing"));
+const ForgotPasswordPage = lazyWithRetry(() => import("@/pages/marketing/forgot-password"));
+const ResetPasswordPage = lazyWithRetry(() => import("@/pages/marketing/reset-password"));
+const StaffResetPasswordPage = lazyWithRetry(() => import("@/pages/marketing/staff-reset-password"));
+const TermsPage = lazyWithRetry(() => import("@/pages/marketing/terms"));
+const PrivacyPage = lazyWithRetry(() => import("@/pages/marketing/privacy"));
 
-const DashboardPage = lazy(() => import("@/pages/app/dashboard"));
+const DashboardPage = lazyWithRetry(() => import("@/pages/app/dashboard"));
 
-const POSPage = lazy(() => import("@/pages/app/pos"));
-const POSHistoryPage = lazy(() => import("@/pages/app/pos-history"));
-const POSInvoicesPage = lazy(() => import("@/pages/app/pos-invoices"));
-const POSQuotesPage = lazy(() => import("@/pages/app/pos-quotes"));
-const SalesSettingsPage = lazy(() => import("@/pages/app/settings-sales"));
-const POSLaybuysPage = lazy(() => import("@/pages/app/pos-laybuys"));
-const POSParkedPage = lazy(() => import("@/pages/app/pos-parked"));
-const POSRefundPage = lazy(() => import("@/pages/app/pos-refund"));
-const POSCashPage = lazy(() => import("@/pages/app/pos-cash"));
+const POSPage = lazyWithRetry(() => import("@/pages/app/pos"));
+const POSHistoryPage = lazyWithRetry(() => import("@/pages/app/pos-history"));
+const POSInvoicesPage = lazyWithRetry(() => import("@/pages/app/pos-invoices"));
+const POSQuotesPage = lazyWithRetry(() => import("@/pages/app/pos-quotes"));
+const SalesSettingsPage = lazyWithRetry(() => import("@/pages/app/settings-sales"));
+const POSLaybuysPage = lazyWithRetry(() => import("@/pages/app/pos-laybuys"));
+const POSParkedPage = lazyWithRetry(() => import("@/pages/app/pos-parked"));
+const POSRefundPage = lazyWithRetry(() => import("@/pages/app/pos-refund"));
+const POSCashPage = lazyWithRetry(() => import("@/pages/app/pos-cash"));
 
-const ProductsPage = lazy(() => import("@/pages/app/products"));
-const ProductsOverviewPage = lazy(() => import("@/pages/app/products-overview"));
-const ProductsBundlesPage = lazy(() => import("@/pages/app/products-bundles"));
-const ProductsStocktakePage = lazy(() => import("@/pages/app/products-stocktake"));
-const ProductsPurchaseOrdersPage = lazy(() => import("@/pages/app/products-purchase-orders"));
-const ProductsPreOrdersPage = lazy(() => import("@/pages/app/products-pre-orders"));
-const ProductsReturnAuthPage = lazy(() => import("@/pages/app/products-return-auth"));
-const ProductsSuppliersPage = lazy(() => import("@/pages/app/products-suppliers"));
-const ProductsBrandsPage = lazy(() => import("@/pages/app/products-brands"));
-const ProductsCategoriesPage = lazy(() => import("@/pages/app/products-categories"));
-const ProductsTagsPage = lazy(() => import("@/pages/app/products-tags"));
-const ProductsRecallsPage = lazy(() => import("@/pages/app/products-recalls"));
-const ProductsWarrantyPage = lazy(() => import("@/pages/app/products-warranty"));
+const ProductsPage = lazyWithRetry(() => import("@/pages/app/products"));
+const ProductsOverviewPage = lazyWithRetry(() => import("@/pages/app/products-overview"));
+const ProductsBundlesPage = lazyWithRetry(() => import("@/pages/app/products-bundles"));
+const ProductsStocktakePage = lazyWithRetry(() => import("@/pages/app/products-stocktake"));
+const ProductsPurchaseOrdersPage = lazyWithRetry(() => import("@/pages/app/products-purchase-orders"));
+const ProductsPreOrdersPage = lazyWithRetry(() => import("@/pages/app/products-pre-orders"));
+const ProductsReturnAuthPage = lazyWithRetry(() => import("@/pages/app/products-return-auth"));
+const POSTimeCardsPage = lazyWithRetry(() => import("@/pages/app/pos-time-cards"));
+const ManagementTimeCardsPage = lazyWithRetry(() => import("@/pages/app/management-time-cards"));
+const ProductsSuppliersPage = lazyWithRetry(() => import("@/pages/app/products-suppliers"));
+const ProductsBrandsPage = lazyWithRetry(() => import("@/pages/app/products-brands"));
+const ProductsCategoriesPage = lazyWithRetry(() => import("@/pages/app/products-categories"));
+const ProductsTagsPage = lazyWithRetry(() => import("@/pages/app/products-tags"));
+const ProductsRecallsPage = lazyWithRetry(() => import("@/pages/app/products-recalls"));
+const ProductsWarrantyPage = lazyWithRetry(() => import("@/pages/app/products-warranty"));
 
-const CustomersPage = lazy(() => import("@/pages/app/customers"));
-const CustomersFormsPage = lazy(() => import("@/pages/app/customers-forms"));
-const TransactionsPage = lazy(() => import("@/pages/app/transactions"));
-const InventoryPage = lazy(() => import("@/pages/app/inventory"));
-const StaffPage = lazy(() => import("@/pages/app/staff"));
-const StaffOverviewPage = lazy(() => import("@/pages/app/staff-overview"));
-const StaffTimesheetPage = lazy(() => import("@/pages/app/staff-timesheet"));
-const StaffRosteringPage = lazy(() => import("@/pages/app/staff-rostering"));
-const StaffLeaveRequestsPage = lazy(() => import("@/pages/app/staff-leave-requests"));
-const StaffCostSummaryPage = lazy(() => import("@/pages/app/staff-cost-summary"));
-const StaffPayrollPage = lazy(() => import("@/pages/app/staff-payroll"));
-const StaffPayrollRunsPage = lazy(() => import("@/pages/app/staff-payroll-runs"));
-const StaffPayrollPayslipsPage = lazy(() => import("@/pages/app/staff-payroll-payslips"));
-const StaffPayrollLeavePage = lazy(() => import("@/pages/app/staff-payroll-leave"));
-const SettingsPayrollPage = lazy(() => import("@/pages/app/settings-payroll"));
-const ModulesPage = lazy(() => import("@/pages/app/modules"));
-const SettingsPage = lazy(() => import("@/pages/app/settings"));
-const SettingsBusinessPage = lazy(() => import("@/pages/app/settings-business"));
-const SettingsRegionalPage = lazy(() => import("@/pages/app/settings-regional"));
-const SettingsAccountPage = lazy(() => import("@/pages/app/settings-account"));
-const SettingsCustomersPage = lazy(() => import("@/pages/app/settings-customers"));
-const SettingsPOSPage = lazy(() => import("@/pages/app/settings-pos"));
-const AppointmentsPage = lazy(() => import("@/pages/app/appointments"));
-const ServiceJobsPage = lazy(() => import("@/pages/app/service-jobs"));
-const ServiceJobNewPage = lazy(() => import("@/pages/app/service-jobs-new"));
-const ManagementOverviewPage = lazy(() => import("@/pages/app/management-overview"));
-const ManagementSalesPage = lazy(() => import("@/pages/app/management-sales"));
-const ManagementRegistersPage = lazy(() => import("@/pages/app/management-registers"));
-const ManagementIntegrationsPage = lazy(() => import("@/pages/app/management-integrations"));
-const ManagementXeroPage = lazy(() => import("@/pages/app/management-xero"));
-const ManagementImportExportPage = lazy(() => import("@/pages/app/management-import-export"));
-const ManagementLoyaltyPage = lazy(() => import("@/pages/app/management-loyalty"));
-const ManagementLoyaltyLeaderboardPage = lazy(() => import("@/pages/app/management-loyalty-leaderboard"));
-const ManagementLaybyPage = lazy(() => import("@/pages/app/management-layby"));
-const ManagementInventoryPage = lazy(() => import("@/pages/app/management-inventory"));
-const ManagementDiscountsPage = lazy(() => import("@/pages/app/management-discounts"));
-const ManagementTemplatesPage = lazy(() => import("@/pages/app/management-templates"));
-const ManagementLoanersPage = lazy(() => import("@/pages/app/management-loaners"));
-const ManagementPartsCompatibilityPage = lazy(() => import("@/pages/app/management-parts-compatibility"));
-const ManagementTradeInsPage = lazy(() => import("@/pages/app/management-trade-ins"));
-const ManagementServicePlansPage = lazy(() => import("@/pages/app/management-service-plans"));
-const ManagementLocationsPage = lazy(() => import("@/pages/app/management-locations"));
+const CustomersPage = lazyWithRetry(() => import("@/pages/app/customers"));
+const CustomersFormsPage = lazyWithRetry(() => import("@/pages/app/customers-forms"));
+const TransactionsPage = lazyWithRetry(() => import("@/pages/app/transactions"));
+const InventoryPage = lazyWithRetry(() => import("@/pages/app/inventory"));
+const StaffPage = lazyWithRetry(() => import("@/pages/app/staff"));
+const StaffOverviewPage = lazyWithRetry(() => import("@/pages/app/staff-overview"));
+const StaffTimesheetPage = lazyWithRetry(() => import("@/pages/app/staff-timesheet"));
+const StaffRosteringPage = lazyWithRetry(() => import("@/pages/app/staff-rostering"));
+const StaffLeaveRequestsPage = lazyWithRetry(() => import("@/pages/app/staff-leave-requests"));
+const StaffCostSummaryPage = lazyWithRetry(() => import("@/pages/app/staff-cost-summary"));
+const StaffPayrollPage = lazyWithRetry(() => import("@/pages/app/staff-payroll"));
+const StaffPayrollRunsPage = lazyWithRetry(() => import("@/pages/app/staff-payroll-runs"));
+const StaffPayrollPayslipsPage = lazyWithRetry(() => import("@/pages/app/staff-payroll-payslips"));
+const StaffPayrollLeavePage = lazyWithRetry(() => import("@/pages/app/staff-payroll-leave"));
+const SettingsPayrollPage = lazyWithRetry(() => import("@/pages/app/settings-payroll"));
+const ModulesPage = lazyWithRetry(() => import("@/pages/app/modules"));
+const SettingsPage = lazyWithRetry(() => import("@/pages/app/settings"));
+const SettingsBusinessPage = lazyWithRetry(() => import("@/pages/app/settings-business"));
+const SettingsRegionalPage = lazyWithRetry(() => import("@/pages/app/settings-regional"));
+const SettingsAccountPage = lazyWithRetry(() => import("@/pages/app/settings-account"));
+const SettingsThemesPage = lazyWithRetry(() => import("@/pages/app/settings-themes"));
+const SettingsCustomersPage = lazyWithRetry(() => import("@/pages/app/settings-customers"));
+const SettingsPOSPage = lazyWithRetry(() => import("@/pages/app/settings-pos"));
+const AppointmentsPage = lazyWithRetry(() => import("@/pages/app/appointments"));
+const ServiceJobsPage = lazyWithRetry(() => import("@/pages/app/service-jobs"));
+const ServiceJobNewPage = lazyWithRetry(() => import("@/pages/app/service-jobs-new"));
+const ManagementOverviewPage = lazyWithRetry(() => import("@/pages/app/management-overview"));
+const ManagementSalesPage = lazyWithRetry(() => import("@/pages/app/management-sales"));
+const ManagementRegistersPage = lazyWithRetry(() => import("@/pages/app/management-registers"));
+const ManagementIntegrationsPage = lazyWithRetry(() => import("@/pages/app/management-integrations"));
+const ManagementIntegrationsHelpPage = lazyWithRetry(() => import("@/pages/app/management-integrations-help"));
+const ManagementServiceOptionsPage = lazyWithRetry(() => import("@/pages/app/management-service-options"));
+const ManagementInvoiceSettingsPage = lazyWithRetry(() => import("@/pages/app/management-invoice-settings"));
+const ManagementXeroPage = lazyWithRetry(() => import("@/pages/app/management-xero"));
+const ManagementImportExportPage = lazyWithRetry(() => import("@/pages/app/management-import-export"));
+const ManagementUploadsPage = lazyWithRetry(() => import("@/pages/app/management-uploads"));
+const ManagementLoyaltyPage = lazyWithRetry(() => import("@/pages/app/management-loyalty"));
+const ManagementLoyaltyLeaderboardPage = lazyWithRetry(() => import("@/pages/app/management-loyalty-leaderboard"));
+const ManagementLaybyPage = lazyWithRetry(() => import("@/pages/app/management-layby"));
+const ManagementInventoryPage = lazyWithRetry(() => import("@/pages/app/management-inventory"));
+const ManagementDiscountsPage = lazyWithRetry(() => import("@/pages/app/management-discounts"));
+const ManagementTemplatesPage = lazyWithRetry(() => import("@/pages/app/management-templates"));
+const ManagementLoanersPage = lazyWithRetry(() => import("@/pages/app/management-loaners"));
+const ManagementPartsCompatibilityPage = lazyWithRetry(() => import("@/pages/app/management-parts-compatibility"));
+const ManagementTradeInsPage = lazyWithRetry(() => import("@/pages/app/management-trade-ins"));
+const ManagementServicePlansPage = lazyWithRetry(() => import("@/pages/app/management-service-plans"));
+const ManagementLocationsPage = lazyWithRetry(() => import("@/pages/app/management-locations"));
 /** Misc templates = the same editor scoped to the "misc" section (Customer PDF, …). */
 const ManagementMiscTemplatesPage = () => <ManagementTemplatesPage section="misc" />;
-const ManagementFormsPage = lazy(() => import("@/pages/app/management-forms"));
-const ManagementStickersPage = lazy(() => import("@/pages/app/management-stickers"));
-const InventoryWastagePage = lazy(() => import("@/pages/app/inventory-wastage"));
-const SettingsTaxPage = lazy(() => import("@/pages/app/settings-tax"));
-const SettingsEmailPage = lazy(() => import("@/pages/app/settings-email"));
-const SettingsSmsPage = lazy(() => import("@/pages/app/settings-sms"));
-const SettingsProductTypesPage = lazy(() => import("@/pages/app/settings-product-types"));
-const POS3DPrintsPage = lazy(() => import("@/pages/app/pos-3d-prints"));
-const ManagementCalculators3DPage = lazy(() => import("@/pages/app/management-calculators-3d"));
-const POSPCBuilderPage = lazy(() => import("@/pages/app/pos-pc-builder"));
-const ManagementCalculatorsPCBuilderPage = lazy(() => import("@/pages/app/management-calculators-pc-builder"));
-const ManagementKpisPage = lazy(() => import("@/pages/app/management-kpis"));
-const StaffNotesPage = lazy(() => import("@/pages/app/staff-notes"));
-const StaffKpisPage = lazy(() => import("@/pages/app/staff-kpis"));
-const StaffLinksPage = lazy(() => import("@/pages/app/staff-links"));
-const StaffSocialFeedPage = lazy(() => import("@/pages/app/staff-social-feed"));
-const ManagementMarketingSocialFeedPage = lazy(() => import("@/pages/app/management-marketing-social-feed"));
-const ManagementFloorPlanPage = lazy(() => import("@/pages/app/management-floor-plan"));
-const ManagementAIPage = lazy(() => import("@/pages/app/management-ai"));
+/** Email templates = the same editor scoped to the "email" section (outgoing emails). */
+const ManagementEmailTemplatesPage = () => <ManagementTemplatesPage section="email" />;
+const ManagementFormsPage = lazyWithRetry(() => import("@/pages/app/management-forms"));
+const ManagementStickersPage = lazyWithRetry(() => import("@/pages/app/management-stickers"));
+const InventoryWastagePage = lazyWithRetry(() => import("@/pages/app/inventory-wastage"));
+const SettingsTaxPage = lazyWithRetry(() => import("@/pages/app/settings-tax"));
+const SettingsSurchargesPage = lazyWithRetry(() => import("@/pages/app/settings-surcharges"));
+const SettingsEmailPage = lazyWithRetry(() => import("@/pages/app/settings-email"));
+const SettingsSmsPage = lazyWithRetry(() => import("@/pages/app/settings-sms"));
+const SettingsProductTypesPage = lazyWithRetry(() => import("@/pages/app/settings-product-types"));
+const POS3DPrintsPage = lazyWithRetry(() => import("@/pages/app/pos-3d-prints"));
+const ManagementCalculators3DPage = lazyWithRetry(() => import("@/pages/app/management-calculators-3d"));
+const POSPCBuilderPage = lazyWithRetry(() => import("@/pages/app/pos-pc-builder"));
+const ManagementCalculatorsPCBuilderPage = lazyWithRetry(() => import("@/pages/app/management-calculators-pc-builder"));
+const ManagementKpisPage = lazyWithRetry(() => import("@/pages/app/management-kpis"));
+const StaffNotesPage = lazyWithRetry(() => import("@/pages/app/staff-notes"));
+const StaffKpisPage = lazyWithRetry(() => import("@/pages/app/staff-kpis"));
+const StaffLinksPage = lazyWithRetry(() => import("@/pages/app/staff-links"));
+const ManagementMarketingAnalyticsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-analytics"));
+const ManagementFloorPlanPage = lazyWithRetry(() => import("@/pages/app/management-floor-plan"));
+const ManagementAIPage = lazyWithRetry(() => import("@/pages/app/management-ai"));
 
-const MarketingPage = lazy(() => import("@/pages/app/marketing"));
-const MarketingQRCodesPage = lazy(() => import("@/pages/app/marketing-qr-codes"));
-const MarketingShortlinksPage = lazy(() => import("@/pages/app/marketing-shortlinks"));
-const MarketingLandingPagesPage = lazy(() => import("@/pages/app/marketing-landing-pages"));
-const MarketingEmailCampaignsPage = lazy(() => import("@/pages/app/marketing-email-campaigns"));
-const MarketingEmailTemplatesPage = lazy(() => import("@/pages/app/marketing-email-templates"));
-const MarketingSmsCampaignsPage = lazy(() => import("@/pages/app/marketing-sms-campaigns"));
-const MarketingSmsTemplatesPage = lazy(() => import("@/pages/app/marketing-sms-templates"));
-const MarketingSocialMediaPage = lazy(() => import("@/pages/app/marketing-social-media"));
-const MarketingLoyaltyPromotionsPage = lazy(() => import("@/pages/app/marketing-loyalty-promotions"));
-const ManagementMarketingReferralsPage = lazy(() => import("@/pages/app/management-marketing-referrals"));
-const ManagementMarketingAutomationPage = lazy(() => import("@/pages/app/management-marketing-automation"));
-const ManagementOnlineStorePage = lazy(() => import("@/pages/app/management-online-store"));
-const OnlineDeliveryOrdersPage = lazy(() => import("@/pages/app/online-delivery-orders"));
-const OnlineShippingPage = lazy(() => import("@/pages/app/online-shipping"));
-const OnlineMarketplacePage = lazy(() => import("@/pages/app/online-marketplace"));
-const ManagementKoaPOSPage = lazy(() => import("@/pages/app/management-koapos"));
-const ManagementMiscPage = lazy(() => import("@/pages/app/management-misc"));
-const ManagementSyncPage = lazy(() => import("@/pages/app/management-sync"));
-const ManagementFeedbackPage = lazy(() => import("@/pages/app/management-feedback"));
-const CamerasPage = lazy(() => import("@/pages/app/cameras"));
-const ManagementCamerasPage = lazy(() => import("@/pages/app/management-cameras"));
-const ManagementTechAppPage = lazy(() => import("@/pages/app/management-tech-app"));
-const ManagementDashboardAppPage = lazy(() => import("@/pages/app/management-dashboard-app"));
-const ManagementLegalPage = lazy(() => import("@/pages/app/management-legal"));
-const ManagementGiftCardsPage = lazy(() => import("@/pages/app/management-gift-cards"));
-const MarketingReferralsPage = lazy(() => import("@/pages/app/marketing-referrals"));
-const LandingPagePublicView = lazy(() => import("@/pages/marketing/landing-page-public"));
-const PosEodPage = lazy(() => import("@/pages/app/pos-eod"));
-const ManagementReportsBasPage = lazy(() => import("@/pages/app/management-reports-bas"));
-const ManagementReportsVoidAuditPage = lazy(() => import("@/pages/app/management-reports-void-audit"));
-const ManagementReportsMarginPage = lazy(() => import("@/pages/app/management-reports-margin"));
-const ManagementDailyReportsPage = lazy(() => import("@/pages/app/management-daily-reports"));
-const ManagementReportsZReportPage = lazy(() => import("@/pages/app/management-reports-z-report"));
-const ManagementReportsStaffLeaderboardPage = lazy(() => import("@/pages/app/management-reports-staff-leaderboard"));
-const ManagementReportsProductPerformancePage = lazy(() => import("@/pages/app/management-reports-product-performance"));
-const ManagementCustomersHeardFromPage = lazy(() => import("@/pages/app/management-customers-heard-from"));
-const ManagementCustomersPortalPage = lazy(() => import("@/pages/app/management-customers-portal"));
-const SettingsPricingRulesPage = lazy(() => import("@/pages/app/settings-pricing-rules"));
-const SettingsModifierGroupsPage = lazy(() => import("@/pages/app/settings-modifier-groups"));
-const SettingsTyroEftposPage = lazy(() => import("@/pages/app/settings-tyro-eftpos"));
+const MarketingPage = lazyWithRetry(() => import("@/pages/app/marketing"));
+const MarketingQRCodesPage = lazyWithRetry(() => import("@/pages/app/marketing-qr-codes"));
+const MarketingStickersPage = lazyWithRetry(() => import("@/pages/app/marketing-stickers"));
+const MarketingShortlinksPage = lazyWithRetry(() => import("@/pages/app/marketing-shortlinks"));
+const MarketingEmailSignaturesPage = lazyWithRetry(() => import("@/pages/app/marketing-email-signatures"));
+const MarketingLandingPagesPage = lazyWithRetry(() => import("@/pages/app/marketing-landing-pages"));
+const MarketingEmailCampaignsPage = lazyWithRetry(() => import("@/pages/app/marketing-email-campaigns"));
+const MarketingEmailTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-email-templates"));
+const MarketingSmsCampaignsPage = lazyWithRetry(() => import("@/pages/app/marketing-sms-campaigns"));
+const MarketingSmsTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-sms-templates"));
+const MarketingFollowUpPage = lazyWithRetry(() => import("@/pages/app/marketing-follow-up"));
+const MarketingFollowUpTemplatesPage = lazyWithRetry(() => import("@/pages/app/marketing-follow-up-templates"));
+const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/marketing-loyalty-promotions"));
+const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
+const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
+const ManagementOnlineStorePage = lazyWithRetry(() => import("@/pages/app/management-online-store"));
+const OnlineDeliveryOrdersPage = lazyWithRetry(() => import("@/pages/app/online-delivery-orders"));
+const OnlineShippingPage = lazyWithRetry(() => import("@/pages/app/online-shipping"));
+const OnlineMarketplacePage = lazyWithRetry(() => import("@/pages/app/online-marketplace"));
+const ManagementMiscPage = lazyWithRetry(() => import("@/pages/app/management-misc"));
+const ManagementSyncPage = lazyWithRetry(() => import("@/pages/app/management-sync"));
+const ManagementFeedbackPage = lazyWithRetry(() => import("@/pages/app/management-feedback"));
+const CamerasPage = lazyWithRetry(() => import("@/pages/app/cameras"));
+const ManagementCamerasPage = lazyWithRetry(() => import("@/pages/app/management-cameras"));
+const ManagementTechAppPage = lazyWithRetry(() => import("@/pages/app/management-tech-app"));
+const ManagementMobilePosPage = lazyWithRetry(() => import("@/pages/app/management-mobile-pos"));
+const ManagementDashboardAppPage = lazyWithRetry(() => import("@/pages/app/management-dashboard-app"));
+const ManagementLegalPage = lazyWithRetry(() => import("@/pages/app/management-legal"));
+const ManagementGiftCardsPage = lazyWithRetry(() => import("@/pages/app/management-gift-cards"));
+const MarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/marketing-referrals"));
+const LandingPagePublicView = lazyWithRetry(() => import("@/pages/marketing/landing-page-public"));
+const OnlineStorePublicView = lazyWithRetry(() => import("@/pages/marketing/online-store-public"));
+const ProductPublicView = lazyWithRetry(() => import("@/pages/marketing/product-public"));
+const PosEodPage = lazyWithRetry(() => import("@/pages/app/pos-eod"));
+const ManagementReportsBasPage = lazyWithRetry(() => import("@/pages/app/management-reports-bas"));
+const ManagementReportsVoidAuditPage = lazyWithRetry(() => import("@/pages/app/management-reports-void-audit"));
+const ManagementReportsMarginPage = lazyWithRetry(() => import("@/pages/app/management-reports-margin"));
+const ManagementDailyReportsPage = lazyWithRetry(() => import("@/pages/app/management-daily-reports"));
+const ManagementReportsZReportPage = lazyWithRetry(() => import("@/pages/app/management-reports-z-report"));
+const ManagementReportsStaffLeaderboardPage = lazyWithRetry(() => import("@/pages/app/management-reports-staff-leaderboard"));
+const ManagementReportsProductPerformancePage = lazyWithRetry(() => import("@/pages/app/management-reports-product-performance"));
+const ManagementCustomersHeardFromPage = lazyWithRetry(() => import("@/pages/app/management-customers-heard-from"));
+const ManagementCustomersPortalPage = lazyWithRetry(() => import("@/pages/app/management-customers-portal"));
+const SettingsPricingRulesPage = lazyWithRetry(() => import("@/pages/app/settings-pricing-rules"));
+const SettingsModifierGroupsPage = lazyWithRetry(() => import("@/pages/app/settings-modifier-groups"));
+const SettingsTyroEftposPage = lazyWithRetry(() => import("@/pages/app/settings-tyro-eftpos"));
 
 
 import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
-const NotFound = lazy(() => import("@/pages/not-found"));
+const NotFound = lazyWithRetry(() => import("@/pages/not-found"));
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      retry: false,
+      // Retry transient network/5xx failures (e.g. the API server still
+      // booting on a cold load) so first-load queries self-heal instead of
+      // surfacing an error that only a manual refresh clears. 4xx (incl. 401)
+      // still fail fast — see shouldRetryRequest.
+      retry: shouldRetryRequest,
+      retryDelay: retryBackoff,
       staleTime: 30_000,
     },
   },
 });
 
-const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password", "/reset-password", "/terms", "/privacy"];
+const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
 
 setOnUnauthorized(() => {
   queryClient.clear();
@@ -272,6 +299,9 @@ function Router() {
       <Route path="/reset-password">
         <PublicRoute component={ResetPasswordPage} />
       </Route>
+      <Route path="/staff-reset-password">
+        <PublicRoute component={StaffResetPasswordPage} />
+      </Route>
       <Route path="/terms">
         <TermsPage />
       </Route>
@@ -281,14 +311,26 @@ function Router() {
       <Route path="/customer-display">
         <PublicRoute component={CustomerDisplayPage} />
       </Route>
+      <Route path="/b/:businessUsername/c/:token/set-password">
+        <PublicRoute component={PortalSetPasswordPage} />
+      </Route>
       <Route path="/b/:businessUsername/c/:token">
         <PublicRoute component={PortalPage} />
+      </Route>
+      <Route path="/b/:businessUsername/t/techapp">
+        <PublicRoute component={TechAppPage} />
       </Route>
       <Route path="/b/:businessUsername/t/webapp">
         <PublicRoute component={TechAppPage} />
       </Route>
-      <Route path="/b/:businessUsername/t/dashboard">
+      <Route path="/d/:token">
         <PublicRoute component={DashboardAppPage} />
+      </Route>
+      <Route path="/b/:businessUsername/t/posapp">
+        <PublicRoute component={MobilePosAppPage} />
+      </Route>
+      <Route path="/c/:token/set-password">
+        <PublicRoute component={PortalSetPasswordPage} />
       </Route>
       <Route path="/c/:token">
         <PublicRoute component={PortalPage} />
@@ -332,6 +374,9 @@ function Router() {
       <Route path="/pos/eod">
         <ProtectedRoute component={PosEodPage} />
       </Route>
+      <Route path="/pos/time-cards">
+        <ProtectedRoute component={POSTimeCardsPage} />
+      </Route>
       <Route path="/pos/sell">
         <ProtectedRoute component={POSPage} />
       </Route>
@@ -349,9 +394,10 @@ function Router() {
       <Route path="/inventory/purchase-orders">
         <ProtectedRoute component={ProductsPurchaseOrdersPage} />
       </Route>
-      <Route path="/inventory/pre-orders">
+      <Route path="/pos/pre-orders">
         <ProtectedRoute component={ProductsPreOrdersPage} />
       </Route>
+      <Route path="/inventory/pre-orders"><Redirect to="/pos/pre-orders" /></Route>
       <Route path="/inventory/return-auth">
         <ProtectedRoute component={ProductsReturnAuthPage} />
       </Route>
@@ -437,9 +483,6 @@ function Router() {
       <Route path="/staff/links">
         <ProtectedRoute component={StaffLinksPage} />
       </Route>
-      <Route path="/staff/social-feed">
-        <ProtectedRoute component={StaffSocialFeedPage} />
-      </Route>
       <Route path="/staff/employees">
         <ProtectedRoute component={StaffPage} />
       </Route>
@@ -471,6 +514,12 @@ function Router() {
       </Route>
       <Route path="/management/customers/loyalty">
         <ManagementProtectedRoute component={ManagementLoyaltyPage} />
+      </Route>
+      <Route path="/management/invoices-services/invoices">
+        <ManagementProtectedRoute component={ManagementInvoiceSettingsPage} />
+      </Route>
+      <Route path="/management/invoices-services/service-options">
+        <ManagementProtectedRoute component={ManagementServiceOptionsPage} />
       </Route>
       <Route path="/management/customers/gift-cards">
         <ManagementProtectedRoute component={ManagementGiftCardsPage} />
@@ -519,11 +568,16 @@ function Router() {
       <Route path="/management/templates/misc">
         <ManagementProtectedRoute component={ManagementMiscTemplatesPage} />
       </Route>
-      <Route path="/management/products-inventory/stickers">
+      <Route path="/management/templates/email">
+        <ManagementProtectedRoute component={ManagementEmailTemplatesPage} />
+      </Route>
+      <Route path="/management/products-inventory/labels">
         <ManagementProtectedRoute component={ManagementStickersPage} />
       </Route>
+      {/* Legacy "stickers" path → unified Labels page */}
+      <Route path="/management/products-inventory/stickers"><Redirect to="/management/products-inventory/labels" /></Route>
       {/* Sticker Templates merged into the unified Labels page */}
-      <Route path="/management/sticker-templates"><Redirect to="/management/products-inventory/stickers" /></Route>
+      <Route path="/management/sticker-templates"><Redirect to="/management/products-inventory/labels" /></Route>
       <Route path="/management/calculators">
         <Redirect to="/management/products-inventory/3d-prints" />
       </Route>
@@ -532,6 +586,9 @@ function Router() {
       </Route>
       <Route path="/management/products-inventory/pc-builder">
         <ManagementProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
+      </Route>
+      <Route path="/management/products-inventory/time-cards">
+        <ManagementProtectedRoute component={ManagementTimeCardsPage} />
       </Route>
 
       {/* Staff & Operations */}
@@ -559,6 +616,9 @@ function Router() {
       <Route path="/management/staff-operations/tech-app">
         <ManagementProtectedRoute component={ManagementTechAppPage} />
       </Route>
+      <Route path="/management/staff-operations/mobile-pos">
+        <ManagementProtectedRoute component={ManagementMobilePosPage} />
+      </Route>
       <Route path="/management/staff-operations/dashboard">
         <ManagementProtectedRoute component={ManagementDashboardAppPage} />
       </Route>
@@ -569,6 +629,9 @@ function Router() {
       {/* Marketing & Reports */}
       <Route path="/management/marketing-reports/sales-overview">
         <ManagementProtectedRoute component={ManagementSalesPage} />
+      </Route>
+      <Route path="/management/marketing-reports/analytics">
+        <ManagementProtectedRoute component={ManagementMarketingAnalyticsPage} />
       </Route>
       <Route path="/management/reports">
         <Redirect to="/management/marketing-reports/reports" />
@@ -594,14 +657,11 @@ function Router() {
       <Route path="/management/marketing-reports/reports/daily">
         <ManagementProtectedRoute component={ManagementDailyReportsPage} />
       </Route>
-      <Route path="/management/marketing-reports/kpis-targets">
+      <Route path="/management/staff-operations/kpis-targets">
         <ManagementProtectedRoute component={ManagementKpisPage} />
       </Route>
       <Route path="/management/marketing-reports/referrals">
         <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
-      </Route>
-      <Route path="/management/marketing-reports/social-feed">
-        <ManagementProtectedRoute component={ManagementMarketingSocialFeedPage} />
       </Route>
       <Route path="/management/marketing-reports/online-store">
         <ManagementProtectedRoute component={ManagementOnlineStorePage} />
@@ -632,8 +692,17 @@ function Router() {
       <Route path="/management/settings-integrations/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
       </Route>
+      <Route path="/management/settings-integrations/surcharges">
+        <ManagementProtectedRoute component={SettingsSurchargesPage} />
+      </Route>
+      <Route path="/management/settings-integrations/themes">
+        <ManagementProtectedRoute component={SettingsThemesPage} />
+      </Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
+      </Route>
+      <Route path="/management/settings-integrations/integrations/help">
+        <ManagementProtectedRoute component={ManagementIntegrationsHelpPage} />
       </Route>
       <Route path="/management/settings-integrations/integrations/xero">
         <ManagementProtectedRoute component={ManagementXeroPage} />
@@ -644,13 +713,16 @@ function Router() {
       <Route path="/management/settings-integrations/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
       </Route>
+      <Route path="/management/settings-integrations/uploads">
+        <ManagementProtectedRoute component={ManagementUploadsPage} />
+      </Route>
       <Route path="/management/settings-integrations/sync">
         <ManagementProtectedRoute component={ManagementSyncPage} />
       </Route>
       {/* Backup now lives inside the consolidated Sync page */}
       <Route path="/management/backup"><Redirect to="/management/settings-integrations/sync" /></Route>
       <Route path="/management/settings-integrations/system">
-        <ManagementProtectedRoute component={ManagementKoaPOSPage} />
+        <Redirect to="/management/settings-integrations/system/misc" />
       </Route>
       <Route path="/management/settings-integrations/system/misc">
         <ManagementProtectedRoute component={ManagementMiscPage} />
@@ -684,13 +756,25 @@ function Router() {
         <ProtectedRoute component={SettingsPage} />
       </Route>
 
-      {/* Public landing pages (no auth required) */}
+      {/* Public landing pages (no auth required). `/l/` is the current segment;
+          `/a/` is kept as a backward-compatible alias for links/QR codes that
+          were already shared before the change. */}
+      <Route path="/b/:businessUsername/l/:customName" component={LandingPagePublicView} />
       <Route path="/b/:businessUsername/a/:customName" component={LandingPagePublicView} />
       <Route path="/p/:slug" component={LandingPagePublicView} />
+
+      {/* Public online store (no auth required) */}
+      <Route path="/b/:businessUsername/o/:storeSlug" component={OnlineStorePublicView} />
+
+      {/* Public product page (no auth required) — target of a product QR code */}
+      <Route path="/b/:businessUsername/p/:productId" component={ProductPublicView} />
 
       {/* Marketing section */}
       <Route path="/marketing/overview">
         <ProtectedRoute component={MarketingPage} />
+      </Route>
+      <Route path="/marketing/stickers">
+        <ProtectedRoute component={MarketingStickersPage} />
       </Route>
       <Route path="/marketing/email">
         <Redirect to="/marketing/email/campaigns" />
@@ -710,8 +794,11 @@ function Router() {
       <Route path="/marketing/sms/templates">
         <ProtectedRoute component={MarketingSmsTemplatesPage} />
       </Route>
-      <Route path="/marketing/social">
-        <ProtectedRoute component={MarketingSocialMediaPage} />
+      <Route path="/marketing/follow-up">
+        <ProtectedRoute component={MarketingFollowUpPage} />
+      </Route>
+      <Route path="/marketing/follow-up/templates">
+        <ProtectedRoute component={MarketingFollowUpTemplatesPage} />
       </Route>
       {/* Moved under Management → Marketing & Reports (owner/manager only) */}
       <Route path="/management/marketing-reports/landing-pages/pages">
@@ -725,6 +812,9 @@ function Router() {
       </Route>
       <Route path="/management/marketing-reports/generators/shortlinks">
         <ManagementProtectedRoute component={MarketingShortlinksPage} />
+      </Route>
+      <Route path="/management/marketing-reports/generators/email-signatures">
+        <ManagementProtectedRoute component={MarketingEmailSignaturesPage} />
       </Route>
       {/* Legacy redirects from the old /marketing/* locations */}
       <Route path="/marketing/landing-pages">        <Redirect to="/management/marketing-reports/landing-pages/pages" />        </Route>
@@ -763,7 +853,7 @@ function Router() {
       <Route path="/products/bundles"><Redirect to="/inventory/bundles" /></Route>
       <Route path="/products/stocktake"><Redirect to="/inventory/stocktake" /></Route>
       <Route path="/products/purchase-orders"><Redirect to="/inventory/purchase-orders" /></Route>
-      <Route path="/products/pre-orders"><Redirect to="/inventory/pre-orders" /></Route>
+      <Route path="/products/pre-orders"><Redirect to="/pos/pre-orders" /></Route>
       <Route path="/products/return-auth"><Redirect to="/inventory/return-auth" /></Route>
       <Route path="/products/suppliers"><Redirect to="/inventory/suppliers" /></Route>
       <Route path="/products/brands"><Redirect to="/inventory/brands" /></Route>
@@ -788,7 +878,7 @@ function Router() {
       <Route path="/management/modifier-groups"><Redirect to="/management/products-inventory/modifier-groups" /></Route>
       <Route path="/management/templates"><Redirect to="/management/products-inventory/sales" /></Route>
       <Route path="/management/misc-templates"><Redirect to="/management/templates/misc" /></Route>
-      <Route path="/management/stickers"><Redirect to="/management/products-inventory/stickers" /></Route>
+      <Route path="/management/stickers"><Redirect to="/management/products-inventory/labels" /></Route>
       <Route path="/management/calculators/3d-printing"><Redirect to="/management/products-inventory/3d-prints" /></Route>
       <Route path="/management/calculators/pc-builder"><Redirect to="/management/products-inventory/pc-builder" /></Route>
       <Route path="/management/staff/timesheet"><Redirect to="/management/staff-operations/timesheets" /></Route>
@@ -808,9 +898,9 @@ function Router() {
       <Route path="/management/reports/staff-leaderboard"><Redirect to="/management/marketing-reports/reports/staff-leaderboard" /></Route>
       <Route path="/management/reports/product-performance"><Redirect to="/management/marketing-reports/reports/product-performance" /></Route>
       <Route path="/management/daily-reports"><Redirect to="/management/marketing-reports/reports/daily" /></Route>
-      <Route path="/management/kpis"><Redirect to="/management/marketing-reports/kpis-targets" /></Route>
+      <Route path="/management/kpis"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
+      <Route path="/management/marketing-reports/kpis-targets"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing/referrals"><Redirect to="/management/marketing-reports/referrals" /></Route>
-      <Route path="/management/marketing/social-feed"><Redirect to="/management/marketing-reports/social-feed" /></Route>
       <Route path="/management/online-store"><Redirect to="/management/marketing-reports/online-store" /></Route>
       <Route path="/management/email"><Redirect to="/management/marketing-reports/email" /></Route>
       <Route path="/management/sms"><Redirect to="/management/settings-integrations/sms" /></Route>
@@ -825,7 +915,7 @@ function Router() {
       <Route path="/management/tyro-eftpos"><Redirect to="/management/settings-integrations/integrations/tyro-eftpos" /></Route>
       <Route path="/management/import-export"><Redirect to="/management/settings-integrations/import-export" /></Route>
       <Route path="/management/sync"><Redirect to="/management/settings-integrations/sync" /></Route>
-      <Route path="/management/koapos"><Redirect to="/management/settings-integrations/system" /></Route>
+      <Route path="/management/koapos"><Redirect to="/management/settings-integrations/system/misc" /></Route>
       <Route path="/management/misc"><Redirect to="/management/settings-integrations/system/misc" /></Route>
       <Route path="/modules"><Redirect to="/management/settings-integrations/account/modules" /></Route>
       <Route path="/marketing"><Redirect to="/marketing/overview" /></Route>
@@ -875,7 +965,50 @@ function RoutePrefetcher() {
   return null;
 }
 
+/** True when this SPA is being served from the branded short-link domain. */
+function isShortDomain(): boolean {
+  const h = window.location.hostname.toLowerCase();
+  return h === SHORT_DOMAIN || h.endsWith(`.${SHORT_DOMAIN}`);
+}
+
+/**
+ * Resolves a koast.al/<slug> short link to its destination and redirects.
+ *
+ * The short domain serves this very SPA, so without this the auth gate would
+ * treat /<slug> as an unknown protected path and bounce it to /login (the
+ * reported bug). Resolution is a same-origin call to the public resolver, so it
+ * works on whichever domain the deployment serves. Unknown slugs (and the bare
+ * domain) fall back to the main site.
+ */
+function ShortlinkRedirect() {
+  useEffect(() => {
+    const slug = window.location.pathname.replace(/^\/+/, "").split(/[/?#]/)[0];
+    const home = `${publicOrigin()}/`;
+    if (!slug) { window.location.replace(home); return; }
+    let cancelled = false;
+    // Resolve against the API's real origin (koapos.com.au) rather than a
+    // relative path — the short domain may not proxy /api to the API server.
+    fetch(`${publicOrigin()}/api/shortlinks/r/${encodeURIComponent(slug)}`, { credentials: "omit" })
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))
+      .then((d: { longUrl?: string }) => {
+        if (cancelled) return;
+        window.location.replace(d?.longUrl || home);
+      })
+      .catch(() => { if (!cancelled) window.location.replace(home); });
+    return () => { cancelled = true; };
+  }, []);
+  return (
+    <div className="h-screen w-screen flex flex-col items-center justify-center gap-3 text-muted-foreground">
+      <Spinner size="lg" />
+      <span className="text-sm">Redirecting…</span>
+    </div>
+  );
+}
+
 function App() {
+  // The branded short-link domain serves this SPA only to resolve a slug and
+  // redirect — bypass the whole app (and its auth gate) when we're on it.
+  if (isShortDomain()) return <ShortlinkRedirect />;
   return (
     <ThemeProvider>
       <AccessibilityProvider>
@@ -886,12 +1019,14 @@ function App() {
                 <StaffSessionProvider>
                   <ButtonStyleProvider>
                     <BrandColorProvider>
-                      <AIProvider>
-                        <a href="#main-content" className="skip-link">Skip to main content</a>
-                        <RoutePrefetcher />
-                        <Router />
-                        <Toaster />
-                      </AIProvider>
+                      <AppThemeProvider>
+                        <AIProvider>
+                          <a href="#main-content" className="skip-link">Skip to main content</a>
+                          <RoutePrefetcher />
+                          <Router />
+                          <Toaster />
+                        </AIProvider>
+                      </AppThemeProvider>
                     </BrandColorProvider>
                   </ButtonStyleProvider>
                 </StaffSessionProvider>

@@ -3,7 +3,10 @@ import { buildInvoiceHtml } from "@workspace/sales-documents";
 import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
-import { publicOrigin } from "@/lib/public-url";
+import { publicOrigin, techAppJobUrl } from "@/lib/public-url";
+import type { HardwareCfg, PrintPurpose } from "@/lib/hardware-config";
+import type { BridgePaper } from "@/lib/print-bridge";
+import { printDocument } from "@/lib/print-router";
 
 export interface ReceiptBusinessInfo {
   businessName?: string;
@@ -16,6 +19,9 @@ export interface ReceiptBusinessInfo {
   phone?: string;
   address?: string;
   partnerReferralCode?: string;
+  /** Business username — forms the Tech App address (/b/:username/t/techapp).
+      When present, the service report QR deep-links into the Tech App for the job. */
+  techAppUsername?: string;
 }
 
 /** Normalized layout family shared by the Management preview and the printers. */
@@ -42,8 +48,19 @@ export interface ReceiptTemplateOpts {
   showWebsite?: boolean;
   showPaymentMethods?: boolean;
   showCustomerQr?: boolean;
+  /** Show a merchant-supplied custom QR code (needs `customQrImage`). */
+  showCustomQr?: boolean;
+  /** Custom QR image — a data: URL (uploaded) or https URL. */
+  customQrImage?: string;
+  /** Caption printed under the custom QR. */
+  customQrCaption?: string;
+  /** What a QR picked from Marketing › QR Codes encodes. Only the ESC/POS path
+   *  uses it — the HTML paths draw `customQrImage`, which carries the design. */
+  customQrData?: string;
   showLoyaltyEarned?: boolean;
   showBarcode?: boolean;
+  /** Print each product's serial number(s) / IMEI under its line on the receipt. */
+  showSerialNumber?: boolean;
   printCustomerCopy?: boolean;
   thankYouMsg?: string;
   footerText?: string;
@@ -78,6 +95,8 @@ export interface ReceiptTemplateOpts {
   showDeviceDetails?: boolean;
   showWorkDescription?: boolean;
   warrantyText?: string;
+  /** Print the Tech App QR (deep-links into the job) on the A4 service report. */
+  showServiceQr?: boolean;
 }
 
 /* ─── shared helpers ────────────────────────────────────────────────────── */
@@ -92,6 +111,34 @@ function fmtAUD(n: number): string {
   return `$${n.toFixed(2)}`;
 }
 
+/**
+ * Build a crisp QR as an inline SVG string. Uses the synchronous `QRCode.create`
+ * (unlike the async `toDataURL`) so the markup is ready before the print window
+ * is written. Returns "" if the value is empty or QR generation fails.
+ */
+function qrSvg(text: string, px = 96): string {
+  if (!text) return "";
+  try {
+    const qr = QRCode.create(text, { errorCorrectionLevel: "M" });
+    const n = qr.modules.size;
+    const cells = qr.modules.data;
+    let path = "";
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        if (cells[y * n + x]) path += `M${x} ${y}h1v1h-1z`;
+      }
+    }
+    return `<svg width="${px}" height="${px}" viewBox="0 0 ${n} ${n}" shape-rendering="crispEdges" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Service job QR code"><rect width="${n}" height="${n}" fill="#ffffff"/><path d="${path}" fill="#000000"/></svg>`;
+  } catch {
+    return "";
+  }
+}
+
+/** Wrap an inline SVG string as a data URL usable in an <img src>. */
+function svgToDataUrl(svg: string): string | null {
+  return svg ? `data:image/svg+xml,${encodeURIComponent(svg)}` : null;
+}
+
 /* ─── Quick-code (merge variable) resolution ──────────────────────────────────
    Every quick code offered in Management → Templates → Sales resolves here, so
    the same codes work across all sales templates (thermal, A4 receipt, invoice,
@@ -102,7 +149,11 @@ function businessTemplateVars(biz?: ReceiptBusinessInfo): Record<string, string>
   const b = biz ?? {};
   const refCode = b.partnerReferralCode ?? "";
   const refUrl = refCode ? `${publicOrigin()}/register?ref=${encodeURIComponent(refCode)}` : "";
+  const now = new Date();
   return {
+    // Always-available date/time tags (resolve on every document type).
+    "date.today": now.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
+    "time.now": now.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
     "business.name": b.businessName ?? "",
     "business.abn": b.abn ?? "",
     "business.email": b.email ?? "",
@@ -136,6 +187,11 @@ export function buildTemplateVars(tx: Transaction, biz?: ReceiptBusinessInfo): R
     "customer.id": c?.id != null ? `CUS-${c.id}` : "",
     "customer.total_spent": c?.totalSpent != null ? fmtAUD(Number(c.totalSpent)) : "",
     "transaction.number": tx.receiptNumber ? `#${tx.receiptNumber}` : `#${tx.id ?? ""}`,
+    // Document numbers — populated on the document that owns them (invoice /
+    // service ticket / appointment); resolve to "" on others.
+    "invoice.number": (tx as { invoiceNumber?: string | null }).invoiceNumber ?? "",
+    "service.number": (tx as { serviceNumber?: string | null }).serviceNumber ?? "",
+    "appointment.number": (tx as { appointmentNumber?: string | null }).appointmentNumber ?? "",
     "transaction.date": created.toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }),
     "transaction.time": created.toLocaleTimeString("en-AU", { hour: "2-digit", minute: "2-digit" }),
     "transaction.total": fmtAUD(Number(tx.total ?? 0)),
@@ -159,7 +215,20 @@ export function applyTemplateVars(text: string | undefined | null, vars: Record<
   return text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_, k: string) => vars[k.toLowerCase()] ?? "");
 }
 
-function openPrintWindow(html: string, title: string): void {
+/**
+ * Where a document should print. When supplied, the print router gets first
+ * refusal — it sends the document straight to the printer the merchant routed
+ * this purpose at (via the Print Bridge) and only falls back to the popup below
+ * when nothing silent is configured or reachable.
+ */
+export interface PrintRoute {
+  purpose: PrintPurpose;
+  hw: HardwareCfg;
+  paper?: BridgePaper;
+  copies?: number;
+}
+
+function popupPrintWindow(html: string, title: string): void {
   const win = window.open("", "_blank", "width=900,height=700");
   if (!win) {
     // eslint-disable-next-line no-console
@@ -170,6 +239,27 @@ function openPrintWindow(html: string, title: string): void {
   win.document.close();
   win.focus();
   setTimeout(() => win.print(), 800);
+}
+
+function openPrintWindow(html: string, title: string, route?: PrintRoute): void {
+  if (!route) {
+    popupPrintWindow(html, title);
+    return;
+  }
+  void printDocument({
+    purpose: route.purpose,
+    hw: route.hw,
+    paper: route.paper ?? "A4",
+    copies: route.copies,
+    jobName: title,
+    html: () => html,
+    browserFallback: () => popupPrintWindow(html, title),
+  }).catch((err: unknown) => {
+    // printDocument only rejects if the fallback itself failed, so there is
+    // nothing left to retry — surfacing it beats printing nothing silently.
+    // eslint-disable-next-line no-console
+    console.error(`Could not print "${title}"`, err);
+  });
 }
 
 /* ─── Thermal / 80mm receipt ────────────────────────────────────────────── */
@@ -198,6 +288,7 @@ export async function printReceipt(
     showCustomerQr: false,
     showLoyaltyEarned: false,
     showBarcode: false,
+    showSerialNumber: true,
     printCustomerCopy: false,
     thankYouMsg: "Thank you for your purchase!",
     footerText: "",
@@ -220,7 +311,7 @@ export async function printReceipt(
     const lineTotal = item.totalPrice ?? (item.unitPrice ?? 0) * qty;
     const warranty = item.warranty && item.warranty.trim()
       ? `<div class="gray" style="font-size:10px">🛡 ${esc(item.warranty.trim())}</div>` : "";
-    const serials = item.serials && item.serials.length
+    const serials = tpl.showSerialNumber !== false && item.serials && item.serials.length
       ? `<div class="gray" style="font-size:10px">S/N: ${esc(item.serials.join(", "))}</div>` : "";
     return `<tr><td>${name}${warranty}${serials}</td><td class="tcenter">${qty}</td><td class="right">${fmtAUD(lineTotal)}</td></tr>`;
   }).join("");
@@ -326,6 +417,22 @@ export async function printReceipt(
     }
   `;
 
+  /* ── Customer details ────────────────────────────────────────────────── */
+  const cust = tx.customer;
+  const custName = cust ? esc(customerDisplayName(cust, "") || cust.email || "") : "";
+  const custEmail = cust ? esc(cust.email ?? "") : "";
+  const custPhone = cust ? esc((cust as { phone?: string }).phone ?? "") : "";
+  const custAddress = cust ? esc((cust as { address?: string | null }).address ?? "") : "";
+  const customerDetailsHtml = (tpl.showAllCustomerDetails && (custName || custEmail || custPhone || custAddress))
+    ? `<div class="receipt"><div class="bdr-t pt mt small">
+        <div class="gray" style="text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">Customer</div>
+        ${custName ? `<div class="bold">${custName}</div>` : ""}
+        ${custEmail ? `<div class="gray">${custEmail}</div>` : ""}
+        ${custPhone ? `<div class="gray">${custPhone}</div>` : ""}
+        ${custAddress ? `<div class="gray">${custAddress}</div>` : ""}
+      </div></div>`
+    : "";
+
   /* ── Customer QR code ────────────────────────────────────────────────── */
   let qrBlock = "";
   if (tpl.showCustomerQr && tx.customer?.id) {
@@ -341,7 +448,18 @@ export async function printReceipt(
     } catch { /* silently skip if QR generation fails */ }
   }
 
-  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}${qrBlock}</body></html>`;
+  /* ── Custom QR code (merchant-supplied image) ────────────────────────── */
+  const customQrSrc = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
+  const customQrBlock = (tpl.showCustomQr && customQrSrc)
+    ? `<div class="center mt bdr-t pt">
+        <div style="display:inline-block;border:1px solid #e5e7eb;padding:4px;border-radius:4px">
+          <img src="${esc(customQrSrc)}" style="width:72px;height:72px;display:block" alt="QR">
+        </div>
+        ${tpl.customQrCaption ? `<p class="gray small" style="margin-top:4px">${esc(tpl.customQrCaption)}</p>` : ""}
+      </div>`
+    : "";
+
+  const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>Receipt ${escReceiptNum}</title><style>${css}</style></head><body>${body}${customerDetailsHtml}${qrBlock}${customQrBlock}</body></html>`;
 
   openPrintWindow(html, `Receipt ${escReceiptNum}`);
 
@@ -373,6 +491,7 @@ function printA4Document(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
   const receiptNum = tx.receiptNumber ? tx.receiptNumber : `${tx.id}`;
   const escReceiptNum = esc(receiptNum);
@@ -382,6 +501,8 @@ function printA4Document(
   const customerName = customer
     ? customerDisplayName(customer, "") || customer.email || ""
     : "";
+  const custId = (customer as { id?: number } | null)?.id;
+  const customerCode = custId != null ? `CUS-${custId}` : null;
 
   const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; warranty?: string | null; serials?: string[] }>;
 
@@ -411,6 +532,11 @@ function printA4Document(
     paymentSectionHeading: r(baseOptions.paymentSectionHeading),
   };
 
+  // Customer-profile QR (synchronous SVG → data URL, ready before the print window).
+  const customerQrDataUrl = (baseOptions.showCustomerQr && customerCode)
+    ? svgToDataUrl(qrSvg(customerCode, 160))
+    : null;
+
   const html = buildInvoiceHtml({
     title,
     documentNumber: receiptNum,
@@ -431,6 +557,8 @@ function printA4Document(
           name: customerName,
           email: customer.email ?? null,
           phone: (customer as { phone?: string }).phone ?? null,
+          address: (customer as { address?: string | null }).address ?? null,
+          code: customerCode,
         }
       : null,
     items: items.map((item) => ({
@@ -450,18 +578,23 @@ function printA4Document(
     discountLabel: (tx as { discountLabel?: string | null }).discountLabel ?? undefined,
     total: tx.total ?? 0,
     amountPaid: (tx as { amountPaid?: number | null }).amountPaid ?? undefined,
+    loyaltyPointsEarned: Number((tx as { loyaltyEarned?: number }).loyaltyEarned ?? 0) || null,
+    paymentMethods: (baseOptions.showPaymentMethods && pmLabel) ? [pmLabel] : null,
+    customerQrDataUrl,
+    customQrDataUrl: baseOptions.customQrImage ?? null,
     options,
   });
 
-  openPrintWindow(html, `${windowLabel} ${escReceiptNum}`);
+  openPrintWindow(html, `${windowLabel} ${escReceiptNum}`, route);
 }
 
 export function printA4Invoice(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
-  printA4Document("Tax Invoice", "completed", "Invoice", tx, businessInfo, opts);
+  printA4Document("Tax Invoice", "completed", "Invoice", tx, businessInfo, opts, route);
 }
 
 /* ─── A4 quote ─────────────────────────────────────────────────────────── */
@@ -471,8 +604,9 @@ export function printA4Quote(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
-  printA4Document("Quote", "quote", "Quote", tx, businessInfo, opts);
+  printA4Document("Quote", "quote", "Quote", tx, businessInfo, opts, route);
 }
 
 /* ─── A4 sales receipt ─────────────────────────────────────────────────── */
@@ -482,6 +616,7 @@ export async function printA4Receipt(
   tx: Transaction,
   businessInfo?: ReceiptBusinessInfo,
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): Promise<void> {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
@@ -573,6 +708,14 @@ export async function printA4Receipt(
     ? `<div class="loyalty"><span>★ Loyalty Earned</span><span>+${loyaltyEarned} pts</span></div>`
     : "";
 
+  const customQrSrcA4 = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
+  const customQrHtmlA4 = (tpl.showCustomQr && customQrSrcA4)
+    ? `<div style="text-align:center;margin-top:14px">
+         <img src="${esc(customQrSrcA4)}" alt="custom qr" style="width:88px;height:88px;object-fit:contain;border:1px solid #e5e7eb;border-radius:6px;padding:4px">
+         ${tpl.customQrCaption ? `<div style="font-size:11px;color:#6b7280;margin-top:6px">${esc(tpl.customQrCaption)}</div>` : ""}
+       </div>`
+    : "";
+
   const paymentTypes = (tpl.paymentTypes && tpl.paymentTypes.length)
     ? tpl.paymentTypes
     : ["EFTPOS", "Cash", "Visa", "Mastercard"];
@@ -597,6 +740,7 @@ export async function printA4Receipt(
   const paidBadge = `<span class="paid">✓ Paid — ${esc(pmLabel) || "Payment received"}</span>`;
 
   const footerBlock = `
+    ${customQrHtmlA4}
     <div class="ftr">
       ${terms ? `<p>${terms}</p>` : ""}
       ${notesHtml}
@@ -870,7 +1014,7 @@ export async function printA4Receipt(
 ${body}
 </body></html>`;
 
-  openPrintWindow(html, `Receipt ${escReceiptNum}`);
+  openPrintWindow(html, `Receipt ${escReceiptNum}`, route);
 }
 
 /* ─── A4 service job report ─────────────────────────────────────────────── */
@@ -882,6 +1026,8 @@ export interface ServiceJobPrintData {
   bookInDate: string;
   deviceType?: string | null;
   deviceDescription?: string | null;
+  deviceColour?: string | null;
+  deviceQuantity?: number | null;
   serialNumber?: string | null;
   condition?: string | null;
   workDescription?: string | null;
@@ -908,6 +1054,7 @@ export function printA4ServiceJob(
   businessInfo?: ReceiptBusinessInfo,
   customerOverride?: { name?: string; email?: string; phone?: string },
   opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
 ): void {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
@@ -927,6 +1074,7 @@ export function printA4ServiceJob(
     showWorkDescription: true,
     showAbn: true,
     showWebsite: true,
+    showServiceQr: true,
     footerText: "",
     headerText: "",
     warrantyText: "",
@@ -939,6 +1087,7 @@ export function printA4ServiceJob(
   // customer; any transaction/promo codes resolve to "".
   const svcVars: Record<string, string> = {
     ...businessTemplateVars(businessInfo),
+    "service.number": job.jobNumber ?? "",
     "customer.name": customerOverride?.name ?? job.customerName ?? "",
     "customer.email": customerOverride?.email ?? job.customerEmail ?? "",
     "customer.phone": customerOverride?.phone ?? job.customerPhone ?? "",
@@ -975,6 +1124,20 @@ export function printA4ServiceJob(
     isCritical  ? `<span class="badge badge-red">Critical</span>` : "",
     isPartner   ? `<span class="badge badge-purple">Partner Repair</span>` : "",
   ].filter(Boolean).join(" ");
+
+  // Tech App QR — scanning opens the job in the Tech App (/b/:username/t/techapp?job=:id).
+  const qrMarkup = tpl.showServiceQr && job.id != null
+    ? qrSvg(techAppJobUrl(businessInfo?.techAppUsername, job.id), 96)
+    : "";
+
+  // Merchant-supplied custom QR image.
+  const customQrSrcSvc = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
+  const customQrMarkupSvc = (tpl.showCustomQr && customQrSrcSvc)
+    ? `<div class="qr-block">
+        <div class="qr-box"><img src="${esc(customQrSrcSvc)}" alt="custom qr" style="width:96px;height:96px;object-fit:contain;display:block"></div>
+        ${tpl.customQrCaption ? `<div class="qr-caption">${esc(tpl.customQrCaption)}</div>` : ""}
+      </div>`
+    : "";
 
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
@@ -1014,6 +1177,10 @@ export function printA4ServiceJob(
     .badge-purple { background: #faf5ff; color: #7c3aed; border: 1px solid #e9d5ff; }
 
     .status-pill { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
+
+    .qr-block { display: flex; align-items: center; gap: 14px; margin: 8px 0 24px; }
+    .qr-box { border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; background: #fff; line-height: 0; }
+    .qr-caption { font-size: 11px; color: #6b7280; line-height: 1.6; }
 
     .footer { margin-top: 48px; padding-top: 16px; border-top: 1px solid #e5e7eb; text-align: center; font-size: 11px; color: #9ca3af; line-height: 1.8; }
 
@@ -1075,12 +1242,14 @@ export function printA4ServiceJob(
     </div>
   </div>
 
-  ${tpl.showDeviceDetails && (job.deviceType || job.deviceDescription || job.serialNumber || job.condition) ? `
+  ${tpl.showDeviceDetails && (job.deviceType || job.deviceDescription || job.deviceColour || job.deviceQuantity != null || job.serialNumber || job.condition) ? `
   <div class="section">
     <div class="section-title">Device Information</div>
     <table class="detail">
       ${row("Device Type", job.deviceType)}
       ${row("Description", job.deviceDescription)}
+      ${row("Colour", job.deviceColour)}
+      ${row("Quantity", job.deviceQuantity != null ? String(job.deviceQuantity) : null)}
       ${row("Serial Number", job.serialNumber)}
       ${row("Condition", job.condition)}
     </table>
@@ -1112,6 +1281,14 @@ export function printA4ServiceJob(
 
   ${warrantyText ? `<div class="warranty-note">${esc(warrantyText)}</div>` : ""}
 
+  ${qrMarkup ? `
+  <div class="qr-block">
+    <div class="qr-box">${qrMarkup}</div>
+    <div class="qr-caption">Scan to open in the <strong>Tech App</strong><br>Job ${escJobNum}</div>
+  </div>` : ""}
+
+  ${customQrMarkupSvc}
+
   <div class="footer">
     ${footerText ? `<p>${esc(footerText)}</p>` : `<p>Thank you for choosing ${businessName}.</p>`}
     ${tpl.showAbn && abn ? `<p>ABN ${abn}</p>` : ""}
@@ -1121,5 +1298,5 @@ export function printA4ServiceJob(
 </div>
 </body></html>`;
 
-  openPrintWindow(html, `Service Report ${escJobNum}`);
+  openPrintWindow(html, `Service Report ${escJobNum}`, route);
 }

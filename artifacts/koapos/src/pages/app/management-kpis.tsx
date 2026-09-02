@@ -5,7 +5,8 @@ import { KpiImportDialog, type KpiImportRow } from "@/components/kpi-import-dial
 import {
   useListStaff,
   useListKpiTargets, useCreateKpiTarget, useUpdateKpiTarget, useDeleteKpiTarget,
-  useGetKpiSettings, useUpsertKpiSettings, useGetKpiProgress,
+  useGetKpiSettings, useUpsertKpiSettings, useGetKpiProgress, useListKpiHistory,
+  type KpiHistoryEntry,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -30,7 +31,7 @@ import {
   Wrench, BarChart3, AlertCircle, CheckCircle2, Clock,
   Award, Gift, Coins, Tag, Zap, Layers, ChevronRight,
   SplitSquareHorizontal, Flame, Store, Banknote, CalendarDays, Calendar,
-  FileSpreadsheet,
+  FileSpreadsheet, RefreshCw,
 } from "lucide-react";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -49,7 +50,7 @@ interface KpiTarget {
   id: string; name: string; metric: KpiMetric; categoryId: string;
   period: KpiPeriod; target: number; staffIds: string[];
   reward: KpiReward | null; notes: string; isActive: boolean;
-  startDate: string; endDate: string;
+  startDate: string; endDate: string; repeats: boolean;
   showOnDashboard?: string;
 }
 
@@ -72,6 +73,7 @@ function apiToTarget(r: Record<string, unknown>): KpiTarget {
     notes: String(r.notes ?? ""),
     startDate: String(r.startDate ?? ""),
     endDate: String(r.endDate ?? ""),
+    repeats: String(r.repeats) === "true",
     isActive: String(r.isActive) !== "false",
     showOnDashboard: String(r.showOnDashboard ?? "false"),
   };
@@ -97,6 +99,11 @@ const METRIC_META: Record<KpiMetric, { label: string; icon: React.ElementType; u
 
 const PERIOD_LABELS: Record<KpiPeriod, string> = {
   daily: "Daily", weekly: "Weekly", monthly: "Monthly", quarterly: "Quarterly", annual: "Annual",
+};
+
+/** Period as a noun, for sentences like "Repeat each month". */
+const PERIOD_NOUNS: Record<KpiPeriod, string> = {
+  daily: "day", weekly: "week", monthly: "month", quarterly: "quarter", annual: "year",
 };
 
 const REWARD_META: Record<RewardType, { label: string; icon: React.ElementType; hasValue: boolean; valueSuffix: string }> = {
@@ -129,7 +136,7 @@ function progressColor(pct: number, isInverse?: boolean) {
 const BLANK: Omit<KpiTarget, "id"> = {
   name: "", metric: "revenue", categoryId: "", period: "monthly",
   target: 0, staffIds: [], reward: null, notes: "", isActive: true,
-  startDate: "", endDate: "",
+  startDate: "", endDate: "", repeats: false,
 };
 const BLANK_REWARD: KpiReward = { type: "cash", value: 0, label: "", note: "" };
 
@@ -176,6 +183,11 @@ function KpiCard({ kpi, onEdit, onDelete, onToggleDashboard, staffList }: {
               <p className="text-xs text-muted-foreground">
                 {kpi.startDate || "—"}{kpi.endDate ? ` → ${kpi.endDate}` : " onwards"}
               </p>
+              {kpi.repeats && (
+                <Badge variant="secondary" className="text-[10px] gap-0.5 px-1.5 py-0">
+                  <RefreshCw className="w-2.5 h-2.5" /> Repeats
+                </Badge>
+              )}
             </div>
           )}
           {kpi.reward && (
@@ -302,6 +314,24 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
             <p className="text-xs text-muted-foreground">
               When set, progress tracks from the start date instead of the current {form.period === "weekly" ? "week" : form.period === "monthly" ? "month" : form.period === "daily" ? "day" : form.period === "quarterly" ? "quarter" : "year"}.
             </p>
+            {form.startDate && (
+              <label className="flex items-start gap-2 cursor-pointer pt-1 border-t border-border/60">
+                <input
+                  type="checkbox"
+                  className="mt-0.5 h-4 w-4 rounded border-input accent-primary shrink-0"
+                  checked={form.repeats}
+                  onChange={(e) => setField("repeats", e.target.checked)}
+                />
+                <span className="text-xs">
+                  <span className="font-medium">Repeat each {PERIOD_NOUNS[form.period]}</span>
+                  <span className="block text-muted-foreground mt-0.5">
+                    When this {PERIOD_NOUNS[form.period]} ends its result is saved to KPI History and a new
+                    one starts automatically, keeping the same target. Leave off for a one-off campaign
+                    window that simply finishes.
+                  </span>
+                </span>
+              </label>
+            )}
           </div>
           {!staffOnly && (
             <div className="space-y-1.5">
@@ -312,7 +342,7 @@ function KpiDialog({ open, onOpenChange, initial, staffList, onSave, staffOnly }
                     const sel = form.staffIds.includes(String(s.id));
                     return (
                       <button key={s.id} onClick={() => toggleStaff(String(s.id))}
-                        className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                        className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                         {s.name}
                       </button>
                     );
@@ -393,6 +423,7 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
       target: perStaffTarget, staffIds: [staffId], reward: selectedKpi.reward,
       notes: `Spread from store target: ${selectedKpi.name}`, isActive: true,
       startDate: selectedKpi.startDate ?? "", endDate: selectedKpi.endDate ?? "",
+      repeats: selectedKpi.repeats,
     }));
     onSpread(newTargets);
     onOpenChange(false);
@@ -425,7 +456,7 @@ function SpreadDialog({ open, onOpenChange, storeTargets, staffList, onSpread }:
                 const sel = selectedStaffIds.includes(String(s.id));
                 return (
                   <button key={s.id} onClick={() => toggleStaff(String(s.id))}
-                    className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "border-border text-muted-foreground hover:border-primary/40")}>
+                    className={cn("px-3 py-1.5 rounded-lg border text-sm font-medium transition-all", sel ? "border-primary bg-primary/10 text-primary" : "pill-selector border-border text-muted-foreground hover:border-primary/40")}>
                     {s.name}
                   </button>
                 );
@@ -495,6 +526,33 @@ function ProgressRow({ kpi, current }: { kpi: KpiTarget; current: number | null 
   );
 }
 
+/* ─── KPI history row ────────────────────────────────────────────────────── */
+
+function HistoryRow({ entry }: { entry: KpiHistoryEntry }) {
+  const metric = entry.metric as KpiMetric;
+  const meta = METRIC_META[metric];
+  const Icon = meta?.icon ?? Target;
+  const actual = entry.actual ?? null;
+  const unavailable = actual === null;
+  const pct = !unavailable && entry.target > 0 ? Math.min(Math.round((actual / entry.target) * 100), 100) : 0;
+  const color = unavailable ? "text-muted-foreground" : progressColor(pct, meta?.isInverse);
+  const hit = !unavailable && pct >= 100;
+  const fmt = (v: number) => (meta ? formatMetricValue(metric, v) : v.toLocaleString());
+
+  return (
+    <div className="flex items-center justify-between gap-2 py-2 border-b last:border-0">
+      <div className="flex items-center gap-2 min-w-0">
+        <Icon className="w-4 h-4 text-muted-foreground shrink-0" />
+        <span className="text-sm font-medium truncate">{entry.name}</span>
+        {hit && <CheckCircle2 className="w-4 h-4 text-green-500 shrink-0" />}
+      </div>
+      <span className={cn("text-sm font-semibold shrink-0 tabular-nums", color)}>
+        {unavailable ? "—" : fmt(actual)} / {fmt(entry.target)}
+      </span>
+    </div>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementKpisPage() {
@@ -526,6 +584,20 @@ export default function ManagementKpisPage() {
   // budget end date and every metric handled consistently) so the Progress
   // Tracker, the Staff KPI page and the dashboard tile always agree.
   const { data: progressData } = useGetKpiProgress({ query: { queryKey: ["kpi-progress"] } });
+
+  // Archived monthly KPI results (one snapshot per KPI per completed month),
+  // returned newest-first by the API.
+  const { data: historyData } = useListKpiHistory(undefined, { query: { queryKey: ["kpi-history"] } });
+  const historyGroups = useMemo(() => {
+    const map = new Map<string, KpiHistoryEntry[]>();
+    for (const e of (historyData?.items ?? [])) {
+      const label = e.periodLabel || "—";
+      if (!map.has(label)) map.set(label, []);
+      map.get(label)!.push(e);
+    }
+    return Array.from(map.entries()).map(([label, entries]) => ({ label, entries }));
+  }, [historyData]);
+  const historyCount = historyData?.items?.length ?? 0;
 
   const staffList = (Array.isArray(staffData) ? staffData : []) as { id: number; name: string; email?: string }[];
 
@@ -569,6 +641,9 @@ export default function ManagementKpisPage() {
       isActive: t.isActive ? "true" : "false",
       startDate: t.startDate || null,
       endDate: t.endDate || null,
+      // Only meaningful alongside a start date — a rolling period already resets
+      // on its own, so never persist a stray repeat flag without a window.
+      repeats: t.startDate && t.repeats ? "true" : "false",
     };
     const invalidateTargets = () => {
       queryClient.invalidateQueries({ queryKey: ["kpi-targets"] });
@@ -644,6 +719,10 @@ export default function ManagementKpisPage() {
         name: t.name, metric: t.metric, categoryId: t.categoryId, period: t.period,
         target: t.target, staffIds: JSON.stringify(t.staffIds),
         reward: t.reward ? JSON.stringify(t.reward) : undefined, notes: t.notes, isActive: "true",
+        // Carry the store target's budget window across, so a spread staff
+        // target tracks (and rolls over) on the same schedule as its parent.
+        startDate: t.startDate || null, endDate: t.endDate || null,
+        repeats: t.startDate && t.repeats ? "true" : "false",
       }})
     )).then(() => {
       refetchTargets();
@@ -738,6 +817,30 @@ export default function ManagementKpisPage() {
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {inactiveTargets.map((kpi) => <KpiCard key={kpi.id} kpi={kpi} staffList={staffList} onEdit={() => openEdit(kpi)} onDelete={() => handleDelete(kpi.id)} onToggleDashboard={() => handleToggleDashboard(kpi)} />)}
                 </div>
+              </section>
+            )}
+
+            {historyCount > 0 && (
+              <section id="kpi-history" className="space-y-3">
+                <div className="flex items-center gap-2">
+                  <CalendarDays className="w-4 h-4 text-primary" />
+                  <h2 className="font-semibold">KPI History</h2>
+                  <Badge variant="secondary">{historyCount}</Badge>
+                </div>
+                <Card>
+                  <CardHeader className="pb-2">
+                    <CardTitle className="text-sm font-medium">Completed Periods</CardTitle>
+                    <CardDescription className="text-xs">Final results captured when each KPI reset at the end of its period.</CardDescription>
+                  </CardHeader>
+                  <CardContent className="pt-0 space-y-4">
+                    {historyGroups.map((g) => (
+                      <div key={g.label}>
+                        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">{g.label}</p>
+                        {g.entries.map((e) => <HistoryRow key={e.id} entry={e} />)}
+                      </div>
+                    ))}
+                  </CardContent>
+                </Card>
               </section>
             )}
 

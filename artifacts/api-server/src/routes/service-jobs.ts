@@ -1,12 +1,16 @@
 import { Router, type IRouter } from "express";
 import { db, serviceJobsTable, customersTable, merchantsTable } from "@workspace/db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
+import { escapeHtml } from "../lib/html-escape";
 import { sendEmail } from "../services/email";
+import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
 import { publicDomain } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
+import { getServiceWarrantyDefaults } from "./service-settings";
 
 const router: IRouter = Router();
 
@@ -26,6 +30,8 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
     bookInDate: job.bookInDate,
     deviceType: job.deviceType ?? null,
     deviceDescription: job.deviceDescription ?? null,
+    deviceColour: job.deviceColour ?? null,
+    deviceQuantity: job.deviceQuantity ?? null,
     serialNumber: job.serialNumber ?? null,
     condition: job.condition ?? null,
     partnerRepairCode: job.partnerRepairCode ?? null,
@@ -35,6 +41,7 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
     repairWarrantyDays: job.repairWarrantyDays ?? 0,
     completedAt: job.completedAt ? job.completedAt.toISOString() : null,
     reworkOfJobId: job.reworkOfJobId ?? null,
+    reopenedFromJobId: job.reopenedFromJobId ?? null,
     estimateApprovedAt: job.estimateApprovedAt ? job.estimateApprovedAt.toISOString() : null,
     estimateApprovedVia: job.estimateApprovedVia ?? null,
     depositRequired: job.depositRequired != null ? parseFloat(job.depositRequired) : null,
@@ -60,13 +67,8 @@ function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: Customer
   };
 }
 
-function nextJobNumber(existing: Array<{ jobNumber: string }>, prefix = "SJ", digits = 4): string {
-  let max = 0;
-  for (const job of existing) {
-    const n = parseInt(job.jobNumber.replace(/\D/g, ""), 10);
-    if (!isNaN(n) && n > max) max = n;
-  }
-  return `${prefix}${String(max + 1).padStart(digits, "0")}`;
+function nextJobNumber(existing: Array<{ jobNumber: string }>, prefix = "SJ", digits = 4, tryIndex = 0): string {
+  return `${prefix}${String(nextSequential(existing.map((j) => j.jobNumber), tryIndex)).padStart(digits, "0")}`;
 }
 
 router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
@@ -80,7 +82,8 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   const customerIds = [...new Set(jobs.filter((j) => j.customerId).map((j) => j.customerId!))];
   const customers =
     customerIds.length > 0
-      ? await db.select().from(customersTable).where(eq(customersTable.merchantId, merchantId))
+      ? await db.select().from(customersTable)
+          .where(and(eq(customersTable.merchantId, merchantId), inArray(customersTable.id, customerIds)))
       : [];
   const customerMap = new Map<number, CustomerInfo>(
     customers.map((c) => [c.id, {
@@ -98,28 +101,42 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 
-  const existing = await db
-    .select({ jobNumber: serviceJobsTable.jobNumber })
-    .from(serviceJobsTable)
-    .where(eq(serviceJobsTable.merchantId, merchantId));
-
   const today = new Date().toISOString().split("T")[0];
 
   const jobPrefix = typeof body.jobNumberPrefix === "string" && body.jobNumberPrefix ? body.jobNumberPrefix : "SJ";
   const jobDigits = typeof body.jobNumberDigits === "number" && body.jobNumberDigits > 0 ? body.jobNumberDigits : 4;
 
-  const [job] = await db
+  // Pre-fill the repair warranty window from the merchant's Service Options
+  // default unless the caller supplied an explicit value.
+  const warrantyDefaults = await getServiceWarrantyDefaults(merchantId);
+  const repairWarrantyDays = body.repairWarrantyDays != null
+    ? Math.max(0, Math.round(Number(body.repairWarrantyDays) || 0))
+    : warrantyDefaults.repairWarrantyDays;
+
+  // Derive the job number from max+1 and retry on the unique-index conflict so a
+  // concurrent create can't produce a duplicate SJ####. `existing` is re-read per
+  // attempt so a committed concurrent job is reflected in the next number.
+  const job = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
+    const existing = await db
+      .select({ jobNumber: serviceJobsTable.jobNumber })
+      .from(serviceJobsTable)
+      .where(eq(serviceJobsTable.merchantId, merchantId));
+    const [created] = await db
     .insert(serviceJobsTable)
     .values({
       merchantId,
+      repairWarrantyDays,
       customerId: body.customerId ? Number(body.customerId) : null,
       staffId: body.staffId ? Number(body.staffId) : null,
-      jobNumber: nextJobNumber(existing, jobPrefix, jobDigits),
+      jobNumber: nextJobNumber(existing, jobPrefix, jobDigits, tryIndex),
       title: body.title ? String(body.title) : "Service Job",
       status: typeof body.status === "string" ? body.status : "pending",
       bookInDate: typeof body.bookInDate === "string" ? body.bookInDate : today,
       deviceType: typeof body.deviceType === "string" ? body.deviceType : null,
       deviceDescription: typeof body.deviceDescription === "string" ? body.deviceDescription : null,
+      deviceColour: typeof body.deviceColour === "string" ? body.deviceColour : null,
+      // A count of items booked in; anything under 1 is a typo, not a quantity.
+      deviceQuantity: body.deviceQuantity != null ? Math.max(1, Math.round(Number(body.deviceQuantity) || 1)) : null,
       serialNumber: typeof body.serialNumber === "string" ? body.serialNumber : null,
       condition: typeof body.condition === "string" ? body.condition : null,
       partnerRepairCode: typeof body.partnerRepairCode === "string" ? body.partnerRepairCode : null,
@@ -139,6 +156,8 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       referredByCustomerId: body.referredByCustomerId != null ? Number(body.referredByCustomerId) : null,
     })
     .returning();
+    return created;
+  });
 
   const customer: CustomerInfo | null = job.customerId
     ? await db
@@ -148,6 +167,7 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
         .then(([c]) => c ? { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null } : null)
     : null;
 
+  registerQrBestEffort(registerServiceQr(merchantId, job.id, customer?.name ?? null));
   res.status(201).json(formatJob(job, customer));
 });
 
@@ -165,6 +185,12 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   if (body.staffId !== undefined) updates.staffId = body.staffId ? Number(body.staffId) : null;
   if (typeof body.deviceType === "string") updates.deviceType = body.deviceType;
   if (typeof body.deviceDescription === "string") updates.deviceDescription = body.deviceDescription;
+  if (typeof body.deviceColour === "string") updates.deviceColour = body.deviceColour;
+  if (body.deviceQuantity !== undefined) {
+    updates.deviceQuantity = body.deviceQuantity == null
+      ? null
+      : Math.max(1, Math.round(Number(body.deviceQuantity) || 1));
+  }
   if (typeof body.serialNumber === "string") updates.serialNumber = body.serialNumber;
   if (typeof body.condition === "string") updates.condition = body.condition;
   if (typeof body.partnerRepairCode === "string") updates.partnerRepairCode = body.partnerRepairCode;
@@ -197,11 +223,17 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
       .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)))
       .limit(1);
 
+    // A completed repair is a finished record — its completion date anchors the
+    // repair-warranty window and it lives in Service History. It cannot be moved
+    // to another status; staff must Reopen it, which spawns a new linked repair.
+    if (current && current.status === "completed" && body.status !== "completed") {
+      res.status(409).json({ error: "Completed repairs can't be changed to another status. Use Reopen to create a new linked repair." });
+      return;
+    }
     // Stamp completion time on the first transition into "completed" (anchors
-    // the repair-warranty window); clear it if reopened.
-    if (current && body.status !== current.status) {
-      if (body.status === "completed" && current.status !== "completed") updates.completedAt = new Date();
-      else if (body.status !== "completed" && current.status === "completed") updates.completedAt = null;
+    // the repair-warranty window).
+    if (current && body.status !== current.status && body.status === "completed") {
+      updates.completedAt = new Date();
     }
     if (current && body.status !== current.status) {
       const STATUS_LABELS: Record<string, string> = {
@@ -213,6 +245,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         "awaiting-partner-approval":   "Awaiting Partner Approval",
         "partner-replacement":         "Partner Replacement",
         "awaiting-customer":           "Awaiting Customer",
+        "awaiting-pickup":             "Completed - Awaiting Pickup",
         "completed":                   "Completed",
         "cancelled":                   "Cancelled",
       };
@@ -247,7 +280,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     : null;
 
   // Auto-send SMS on key status transitions
-  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "completed"]);
+  const SMS_NOTIFY_STATUSES = new Set(["in-progress", "awaiting-customer", "awaiting-pickup", "completed"]);
   if (typeof body.status === "string" && SMS_NOTIFY_STATUSES.has(body.status) && customer?.phone && customer.portalToken) {
     const [merchant] = await db.select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
       .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
@@ -260,10 +293,11 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
         : null;
 
     const statusLabel: Record<string, string> = {
-      "in-progress":      "In Progress",
-      "at-repairer":       "At Repairer",
-      "awaiting-customer": "Ready — awaiting your decision",
-      "completed":         "Completed & ready for pickup",
+      "in-progress":         "In Progress",
+      "at-repairer":         "At Repairer",
+      "awaiting-customer":   "Ready — awaiting your decision",
+      "awaiting-pickup":     "Completed & ready for pickup",
+      "completed":           "Completed",
     };
     const label = statusLabel[body.status] ?? body.status;
     const smsBody = portalUrl
@@ -329,7 +363,8 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
     "awaiting-partner-approval":   "Awaiting Partner Approval",
     "partner-replacement":         "Partner Replacement",
     "awaiting-customer":           "Awaiting Your Decision",
-    "completed":                   "Completed & ready for pickup",
+    "awaiting-pickup":             "Completed & ready for pickup",
+    "completed":                   "Completed",
     "cancelled":                   "Cancelled",
   };
   const label = statusLabel[job.status] ?? job.status;
@@ -384,9 +419,12 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
 
   const { db: dbInstance, merchantsTable } = await import("@workspace/db");
   const [merchant] = await dbInstance.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
-  const bizName = merchant?.businessName ?? "Your Business";
+  const bizName = escapeHtml(merchant?.businessName ?? "Your Business");
 
-  const formatVal = (v: string | null | undefined) => v && v.trim() ? v : "—";
+  // Escape every user-controlled value before it lands in the HTML email — job
+  // notes/device fields/customer details are free text and would otherwise allow
+  // markup injection into the message.
+  const formatVal = (v: string | null | undefined) => v && v.trim() ? escapeHtml(v) : "—";
   const fmtDate = (d: string | null | undefined) => {
     if (!d) return "—";
     const [y, m, day] = d.split("-");
@@ -407,13 +445,15 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Phone</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(customer?.phone)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Email</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(toEmail)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Book-In Date</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${fmtDate(job.bookInDate)}</td></tr>
-    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Status</td><td style="padding:6px 0;border-bottom:1px solid #eee;"><span style="text-transform:capitalize;">${job.status.replace(/-/g, " ")}</span></td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Status</td><td style="padding:6px 0;border-bottom:1px solid #eee;"><span style="text-transform:capitalize;">${escapeHtml(job.status.replace(/-/g, " "))}</span></td></tr>
   </table>
 
   <h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Device</h3>
   <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;width:140px;color:#666;font-size:12px;">Device Type</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceType)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Description</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceDescription)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Colour</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceColour)}</td></tr>
+    <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Quantity</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.deviceQuantity != null ? String(job.deviceQuantity) : null)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Serial Number</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.serialNumber)}</td></tr>
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Condition</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${formatVal(job.condition)}</td></tr>
   </table>
@@ -427,7 +467,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     <tr><td style="padding:6px 0;border-bottom:1px solid #eee;color:#666;font-size:12px;">Critical</td><td style="padding:6px 0;border-bottom:1px solid #eee;">${job.isCritical === "true" ? "Yes" : "No"}</td></tr>
   </table>
 
-  ${job.notes ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Notes</h3><div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:12px;font-size:13px;white-space:pre-wrap;">${job.notes}</div>` : ""}
+  ${job.notes ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Notes</h3><div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:12px;font-size:13px;white-space:pre-wrap;">${escapeHtml(job.notes)}</div>` : ""}
   ${photos.length ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Photos</h3><p style="font-size:12px;color:#666;">${photos.length} photo(s) attached to this job.</p>` : ""}
 
   <p style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">This email was sent automatically from ${bizName} via KoaPOS.</p>
@@ -438,7 +478,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     to: toEmail,
     subject: `Service Job Update — #${job.jobNumber}`,
     html,
-    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
+    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nColour: ${formatVal(job.deviceColour)}\nQuantity: ${formatVal(job.deviceQuantity != null ? String(job.deviceQuantity) : null)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
   });
 
   if (!result.success) {
@@ -461,27 +501,34 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
     .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId))).limit(1);
   if (!orig) { res.status(404).json({ error: "Service job not found" }); return; }
 
-  const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
-    .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
-  const jobNumber = nextJobNumber(existing);
   const today = new Date().toISOString().split("T")[0];
 
-  const [created] = await db.insert(serviceJobsTable).values({
-    merchantId,
-    customerId: orig.customerId ?? null,
-    staffId: orig.staffId ?? null,
-    jobNumber,
-    title: `Rework of ${orig.jobNumber}`,
-    status: "pending",
-    bookInDate: today,
-    deviceType: orig.deviceType ?? null,
-    deviceDescription: orig.deviceDescription ?? null,
-    serialNumber: orig.serialNumber ?? null,
-    condition: orig.condition ?? null,
-    workDescription: orig.workDescription ?? null,
-    isUnderWarranty: "true",
-    reworkOfJobId: orig.id,
-  }).returning();
+  const { reworkWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
+
+  const created = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
+    const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
+      .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
+    const [row] = await db.insert(serviceJobsTable).values({
+      merchantId,
+      customerId: orig.customerId ?? null,
+      staffId: orig.staffId ?? null,
+      jobNumber: nextJobNumber(existing, "SJ", 4, tryIndex),
+      title: `Rework of ${orig.jobNumber}`,
+      status: "pending",
+      bookInDate: today,
+      deviceType: orig.deviceType ?? null,
+      deviceDescription: orig.deviceDescription ?? null,
+      deviceColour: orig.deviceColour ?? null,
+      deviceQuantity: orig.deviceQuantity ?? null,
+      serialNumber: orig.serialNumber ?? null,
+      condition: orig.condition ?? null,
+      workDescription: orig.workDescription ?? null,
+      isUnderWarranty: "true",
+      repairWarrantyDays: reworkWarrantyDays,
+      reworkOfJobId: orig.id,
+    }).returning();
+    return row;
+  });
 
   let customer: CustomerInfo | null = null;
   if (created.customerId) {
@@ -489,6 +536,59 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
       .where(and(eq(customersTable.id, created.customerId), eq(customersTable.merchantId, merchantId))).limit(1);
     if (c) customer = { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null };
   }
+  res.status(201).json(formatJob(created, customer));
+});
+
+// POST /service-jobs/:id/reopen — open a NEW repair continuing from a completed
+// job, linked back to the original via reopenedFromJobId. Unlike /rework this is
+// a fresh, chargeable repair (not forced under-warranty); the original stays
+// completed and untouched in Service History.
+router.post("/service-jobs/:id/reopen", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+
+  const [orig] = await db.select().from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId))).limit(1);
+  if (!orig) { res.status(404).json({ error: "Service job not found" }); return; }
+  if (orig.status !== "completed") { res.status(409).json({ error: "Only completed repairs can be reopened" }); return; }
+
+  const today = new Date().toISOString().split("T")[0];
+
+  const { repairWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
+
+  const created = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
+    const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
+      .from(serviceJobsTable).where(eq(serviceJobsTable.merchantId, merchantId));
+    const [row] = await db.insert(serviceJobsTable).values({
+      merchantId,
+      customerId: orig.customerId ?? null,
+      staffId: orig.staffId ?? null,
+      jobNumber: nextJobNumber(existing, "SJ", 4, tryIndex),
+      title: `Reopen of ${orig.jobNumber}`,
+      status: "pending",
+      bookInDate: today,
+      deviceType: orig.deviceType ?? null,
+      deviceDescription: orig.deviceDescription ?? null,
+      deviceColour: orig.deviceColour ?? null,
+      deviceQuantity: orig.deviceQuantity ?? null,
+      serialNumber: orig.serialNumber ?? null,
+      condition: orig.condition ?? null,
+      workDescription: orig.workDescription ?? null,
+      repairWarrantyDays,
+      reopenedFromJobId: orig.id,
+    }).returning();
+    return row;
+  });
+
+  let customer: CustomerInfo | null = null;
+  if (created.customerId) {
+    const [c] = await db.select().from(customersTable)
+      .where(and(eq(customersTable.id, created.customerId), eq(customersTable.merchantId, merchantId))).limit(1);
+    if (c) customer = { name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null };
+  }
+
+  registerQrBestEffort(registerServiceQr(merchantId, created.id, customer?.name ?? null));
   res.status(201).json(formatJob(created, customer));
 });
 

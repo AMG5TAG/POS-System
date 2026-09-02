@@ -402,8 +402,13 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
   const updateEvent = useUpdateAuthEvent();
   const [pending, setPending] = useState<Record<number, boolean>>({});
 
+  // Only keep a 7-day sign-in history.
+  const HISTORY_DAYS = 7;
+  const cutoff = Date.now() - HISTORY_DAYS * 24 * 60 * 60 * 1000;
+  const recentEvents = (authEvents ?? []).filter((ev) => new Date(ev.createdAt).getTime() >= cutoff);
+
   const handleDownloadCSV = () => {
-    const events = (authEvents ?? []).slice(0, 50);
+    const events = recentEvents;
     const header = ["Date/Time", "Outcome", "Browser", "IP Address", "Status", "Flag Reason"];
     const rows = events.map((ev) => [
       new Date(ev.createdAt).toLocaleString(),
@@ -452,7 +457,7 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
           </CardTitle>
-          {authEvents && authEvents.length > 0 && (
+          {recentEvents.length > 0 && (
             <Button
               variant="outline"
               size="sm"
@@ -465,15 +470,15 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
           )}
         </div>
         <CardDescription>
-          The last 20 login attempts to your account. Flag anything that looks suspicious.
+          Login attempts from the last 7 days. Flag anything that looks suspicious.
         </CardDescription>
       </CardHeader>
       <CardContent>
-        {!authEvents || authEvents.length === 0 ? (
-          <p className="text-sm text-muted-foreground">No sign-in events recorded yet.</p>
+        {recentEvents.length === 0 ? (
+          <p className="text-sm text-muted-foreground">No sign-in events in the last 7 days.</p>
         ) : (
           <ul className="space-y-2">
-            {authEvents.slice(0, 20).map((ev) => {
+            {recentEvents.map((ev) => {
               const isFlagged = ev.status === "flagged";
               const isNewIp = ev.flagReason === "new_ip";
               const isManualFlag = isFlagged && !isNewIp;

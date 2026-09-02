@@ -6,12 +6,13 @@ import {
   useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings,
   useListInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice,
   useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
+  useRecordInvoicePayment, useReverseInvoicePayment,
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
   getInvoicePdf, type Transaction,
   useListServiceJobs, useListAppointments,
+  useGetInvoiceSettings, useGetPosSettings,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { useBusinessProfile } from "@/lib/business-profile";
 import { useStaffSession } from "@/lib/staff-day-session";
 import { invalidateSalesKpiQueries } from "@/lib/kpi-invalidate";
 import { setPendingInvoicePayment } from "@/lib/pending-invoice-payment";
@@ -32,7 +33,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { Separator } from "@/components/ui/separator";
 import { formatCurrency, formatDate, formatDateOnly } from "@/lib/utils";
-import { useSalesTemplate } from "@/lib/use-sales-template";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import {
   Plus, FileText, Search, Trash2, CheckCircle2, Send, RefreshCw, Package,
@@ -40,9 +40,14 @@ import {
   Banknote, Tag, CalendarClock, AlertCircle, ListChecks, History, ClipboardList,
   Copy, GripVertical, Loader2, Link2, CalendarDays, Wrench,
 } from "lucide-react";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
 import { SendDialog, type SendMethodKey } from "@/components/send/send-dialog";
+import {
+  getEnabledPaymentMethods, getEnabledIntegrationPayments, parseCustomPaymentMethods,
+  INTEGRATION_PAYMENT_LABELS, ASYNC_PAYMENT_PROVIDERS,
+} from "@/lib/pos-local-settings";
+import { ALL_PAYMENT_METHODS } from "@/pages/app/management-registers";
 
 /* ── PDF image compression helper ───────────────────────────────────────── */
 
@@ -82,7 +87,8 @@ async function compressForPdf(
 
 type InvStatus = "draft" | "sent" | "paid" | "partial" | "overdue" | "cancelled";
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number; productId?: number | null; costPrice?: number | null };
-type InvoiceEvent = { type: string; timestamp: string; detail?: string; method?: string };
+type InvoiceEvent = { id?: string | null; type: string; timestamp: string; detail?: string; method?: string; amount?: number | null; reverses?: string | null };
+type Instalment = { label?: string | null; amount: number; dueDate?: string | null };
 type DiscountType = "fixed" | "percent";
 type Invoice = {
   id: number;
@@ -103,6 +109,7 @@ type Invoice = {
   discountTotal: number | null;
   items: LineItem[];
   events: InvoiceEvent[];
+  paymentSchedule: Instalment[] | null;
   dueDate: string | null;
   paidAt: string | null;
   viewedAt: string | null;
@@ -128,6 +135,122 @@ const STATUS_LABELS: Record<InvStatus, string> = {
   draft: "Draft", sent: "Sent", paid: "Paid", partial: "Partially Paid", overdue: "Overdue", cancelled: "Cancelled",
 };
 
+/* Today's local calendar date as YYYY-MM-DD (en-CA yields ISO ordering), for
+   seeding / bounding the native date input without a UTC off-by-one. */
+const todayLocalISODate = () => new Date().toLocaleDateString("en-CA");
+/* An ISO timestamp collapsed to a local YYYY-MM-DD (matches the date input). */
+const localISODate = (iso: string) => new Date(iso).toLocaleDateString("en-CA");
+
+/* Derive each instalment's coverage from the invoice's single amountPaid total,
+   filling instalments in order (FIFO). Avoids tracking per-instalment payments —
+   amountPaid stays the one source of truth. */
+type InstalmentCoverage = Instalment & { covered: number; status: "paid" | "partial" | "due" };
+function instalmentCoverage(schedule: Instalment[], amountPaid: number): InstalmentCoverage[] {
+  let remaining = Math.max(0, amountPaid);
+  return schedule.map((inst) => {
+    const covered = Math.min(remaining, inst.amount);
+    remaining = Math.max(0, remaining - inst.amount);
+    const status = covered >= inst.amount - 0.005 ? "paid" : covered > 0 ? "partial" : "due";
+    return { ...inst, covered, status };
+  });
+}
+
+/* Editor for an invoice's planned instalment schedule. Used in both the create
+   and edit forms. The schedule is purely a plan — payments are still recorded
+   against the single amountPaid total. */
+function ScheduleEditor({ schedule, setSchedule, total }: {
+  schedule: Instalment[];
+  setSchedule: (s: Instalment[]) => void;
+  total: number;
+}) {
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const sum = round2(schedule.reduce((s, i) => s + (Number(i.amount) || 0), 0));
+  const diff = round2(total - sum);
+
+  const splitEqually = (n: number) => {
+    if (n < 1 || total <= 0) { setSchedule([]); return; }
+    const each = Math.floor((total / n) * 100) / 100;
+    const rows: Instalment[] = [];
+    let acc = 0;
+    for (let k = 0; k < n; k++) {
+      const amount = k === n - 1 ? round2(total - acc) : each;
+      acc = round2(acc + amount);
+      rows.push({ label: `Instalment ${k + 1}`, amount, dueDate: null });
+    }
+    setSchedule(rows);
+  };
+
+  const updateRow = (i: number, patch: Partial<Instalment>) =>
+    setSchedule(schedule.map((row, idx) => (idx === i ? { ...row, ...patch } : row)));
+
+  return (
+    <div className="rounded-lg border p-3 space-y-3">
+      <div className="flex items-center justify-between gap-3">
+        <div>
+          <Label className="text-sm">Payment schedule</Label>
+          <p className="text-xs text-muted-foreground">Plan instalments (e.g. deposit + balance). Optional.</p>
+        </div>
+        <Switch
+          checked={schedule.length > 0}
+          onCheckedChange={(v) => (v ? splitEqually(2) : setSchedule([]))}
+        />
+      </div>
+
+      {schedule.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-wrap gap-1.5">
+            {[2, 3, 4].map((n) => (
+              <Button key={n} type="button" size="sm" variant="outline" className="h-7 text-xs" onClick={() => splitEqually(n)}>
+                Split in {n}
+              </Button>
+            ))}
+          </div>
+          {schedule.map((inst, i) => (
+            <div key={i} className="flex gap-2 items-center">
+              <Input
+                className="flex-1 h-8"
+                placeholder={`Instalment ${i + 1}`}
+                value={inst.label ?? ""}
+                onChange={(e) => updateRow(i, { label: e.target.value })}
+              />
+              <Input
+                className="w-24 h-8"
+                type="number" inputMode="decimal" min="0" step="0.01" placeholder="0.00"
+                value={String(inst.amount)}
+                onChange={(e) => updateRow(i, { amount: parseFloat(e.target.value) || 0 })}
+              />
+              <Input
+                className="w-36 h-8"
+                type="date"
+                value={inst.dueDate ? inst.dueDate.slice(0, 10) : ""}
+                onChange={(e) => updateRow(i, { dueDate: e.target.value || null })}
+              />
+              <Button type="button" size="icon" variant="ghost" className="h-8 w-8 shrink-0 text-muted-foreground"
+                onClick={() => setSchedule(schedule.filter((_, idx) => idx !== i))}>
+                <X className="w-4 h-4" />
+              </Button>
+            </div>
+          ))}
+          <Button type="button" size="sm" variant="outline" className="h-7 text-xs gap-1"
+            onClick={() => setSchedule([...schedule, { label: "", amount: Math.max(0, diff), dueDate: null }])}>
+            <Plus className="w-3 h-3" /> Add instalment
+          </Button>
+          <p className={`text-xs ${Math.abs(diff) < 0.005 ? "text-muted-foreground" : "text-amber-600"}`}>
+            Scheduled {formatCurrency(sum)} of {formatCurrency(total)}
+            {Math.abs(diff) < 0.005 ? " · matches total"
+              : diff > 0 ? ` · ${formatCurrency(diff)} unscheduled`
+              : ` · ${formatCurrency(-diff)} over total`}
+          </p>
+        </div>
+      )}
+    </div>
+  );
+}
+
+/* The Record Payment dialog mirrors the tenders the current POS register offers
+   (built-in + integration + custom methods), built per-render from the same
+   settings the POS checkout reads — see `payMethods` in the page component. */
+
 const FREQ_LABELS = { weekly: "Weekly", fortnightly: "Fortnightly", monthly: "Monthly", quarterly: "Quarterly", annually: "Annually" };
 
 /* ── Recurring helpers ───────────────────────────────────────────────────── */
@@ -146,6 +269,16 @@ function getInvoicePrefix(): { invoicePrefix: string; invoiceDigits: number } {
   return { invoicePrefix: "KI", invoiceDigits: 5 };
 }
 
+/** ISO yyyy-mm-dd for `days` from today — used to default an invoice's due date
+ *  from the merchant's "default due date" setting. */
+function dueDateFromToday(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + Math.max(0, Math.round(days)));
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
+}
+
 /* ── Main page ───────────────────────────────────────────────────────────── */
 
 export default function POSInvoicesPage() {
@@ -161,6 +294,19 @@ export default function POSInvoicesPage() {
   const [sendInitialMethod, setSendInitialMethod] = useState<SendMethodKey | null>(null);
   const [emailSubject, setEmailSubject] = useState("");
   const [deleteConfirmId, setDeleteConfirmId] = useState<number | null>(null);
+  /* Record-payment dialog — partial or full payment against one invoice. */
+  const [payTarget, setPayTarget] = useState<Invoice | null>(null);
+  const [payAmount, setPayAmount] = useState("");
+  const [payMethod, setPayMethod] = useState("cash");
+  const [payNote, setPayNote] = useState("");
+  /* Accounting date paid — surfaced for direct deposit (bank transfers often land
+     on an earlier day). Defaults to today; drives the invoice's paidAt / reported
+     sale date on full settlement. Held as YYYY-MM-DD for the native date input. */
+  const [payDate, setPayDate] = useState("");
+  const [paySaving, setPaySaving] = useState(false);
+  /* Reverse-payment confirmation — the payment event being un-applied. */
+  const [reverseTarget, setReverseTarget] = useState<{ invoiceId: number; event: InvoiceEvent } | null>(null);
+  const [reverseSaving, setReverseSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [editForm, setEditForm] = useState({ customerId: "", dueDate: "", notes: "" });
@@ -172,6 +318,16 @@ export default function POSInvoicesPage() {
   const [editDragFrom, setEditDragFrom] = useState<number | null>(null);
   const [editDragOver, setEditDragOver] = useState<number | null>(null);
   const [editSaving, setEditSaving] = useState(false);
+  /* Sell-price prompt — opened when a selected product has a $0 sell price so the
+     user can set a one-off sell price (required) and optional cost price for that
+     line without leaving the invoice. `flow` picks which line list to write back to. */
+  const [pricePrompt, setPricePrompt] = useState<{
+    flow: "create" | "edit";
+    index: number;
+    name: string;
+    sellPrice: string;
+    costPrice: string;
+  } | null>(null);
   const [editRecurring, setEditRecurring] = useState({
     enabled: false,
     frequency: "monthly" as "weekly" | "fortnightly" | "monthly" | "quarterly" | "annually",
@@ -186,6 +342,7 @@ export default function POSInvoicesPage() {
     lines: LineItem[];
     discount: typeof editDiscount;
     recurring: typeof editRecurring;
+    schedule: Instalment[];
   } | null>(null);
 
   const [discardConfirmTarget, setDiscardConfirmTarget] = useState<"create" | "edit" | null>(null);
@@ -198,11 +355,14 @@ export default function POSInvoicesPage() {
     startDate: "",
     occurrences: 1,
   });
+  const [schedule, setSchedule] = useState<Instalment[]>([]);
+  const [editSchedule, setEditSchedule] = useState<Instalment[]>([]);
   const [pdfGeneratingId, setPdfGeneratingId] = useState<number | null>(null);
   const [sendNowInvoice, setSendNowInvoice] = useState<Invoice | null>(null);
 
   /* ── Link service/appointment ── */
   const [linkDialogFor, setLinkDialogFor] = useState<"create" | "edit" | null>(null);
+  const [linkSearch, setLinkSearch] = useState("");
   const [createLinkedServiceJob, setCreateLinkedServiceJob] = useState<{ id: number; jobNumber: string; label: string } | null>(null);
   const [createLinkedAppointment, setCreateLinkedAppointment] = useState<{ id: number; title: string; label: string } | null>(null);
   const [editLinkedServiceJob, setEditLinkedServiceJob] = useState<{ id: number; jobNumber: string; label: string } | null>(null);
@@ -222,10 +382,18 @@ export default function POSInvoicesPage() {
   const isServiceJobDone = (s?: string | null) => ["completed", "cancelled"].includes((s ?? "").toLowerCase());
   const isAppointmentDone = (s?: string | null) => ["completed", "cancelled", "no-show"].includes((s ?? "").toLowerCase());
   const byIdDesc = <T extends { id: number }>(a: T, b: T) => b.id - a.id;
-  const sjUnfinished = linkServiceJobs.filter((j) => !isServiceJobDone(j.status)).sort(byIdDesc);
-  const sjDone       = linkServiceJobs.filter((j) =>  isServiceJobDone(j.status)).sort(byIdDesc);
-  const aptUnfinished = linkAppointments.filter((a) => !isAppointmentDone(a.status)).sort(byIdDesc);
-  const aptDone       = linkAppointments.filter((a) =>  isAppointmentDone(a.status)).sort(byIdDesc);
+  // Free-text filter across both open and closed jobs/appointments.
+  const linkQ = linkSearch.trim().toLowerCase();
+  const matchSj = (j: LinkServiceJob) =>
+    !linkQ || [`#${j.jobNumber}`, j.jobNumber, j.deviceType, j.deviceDescription, j.customerName, j.status]
+      .some((v) => (v ?? "").toString().toLowerCase().includes(linkQ));
+  const matchApt = (a: LinkAppointment) =>
+    !linkQ || [`#${a.id}`, a.title, a.customerName, a.status]
+      .some((v) => (v ?? "").toString().toLowerCase().includes(linkQ));
+  const sjUnfinished = linkServiceJobs.filter((j) => !isServiceJobDone(j.status) && matchSj(j)).sort(byIdDesc);
+  const sjDone       = linkServiceJobs.filter((j) =>  isServiceJobDone(j.status) && matchSj(j)).sort(byIdDesc);
+  const aptUnfinished = linkAppointments.filter((a) => !isAppointmentDone(a.status) && matchApt(a)).sort(byIdDesc);
+  const aptDone       = linkAppointments.filter((a) =>  isAppointmentDone(a.status) && matchApt(a)).sort(byIdDesc);
 
   const renderLinkServiceJobRow = (sj: LinkServiceJob) => {
     const isSelected = linkDialogFor === "create" ? createLinkedServiceJob?.id === sj.id : editLinkedServiceJob?.id === sj.id;
@@ -335,6 +503,28 @@ export default function POSInvoicesPage() {
   const deleteInvoiceMutation = useDeleteInvoice();
   const addEventMutation = useAddInvoiceEvent();
   const sendEmailMutation = useSendInvoiceEmail();
+  const recordPaymentMutation = useRecordInvoicePayment();
+  const reversePaymentMutation = useReverseInvoicePayment();
+
+  /* Tenders offered in the Record Payment dialog, mirroring the POS register
+     this terminal is signed in to: the enabled built-in methods (localStorage,
+     same as POS checkout) + enabled integration providers + merchant-defined
+     custom methods (server pos_settings). "split" is omitted — it's a composite
+     of other tenders, not a single payment. */
+  const { data: posSettingsData } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const payMethods = useMemo<{ value: string; label: string }[]>(() => {
+    const enabledIds = getEnabledPaymentMethods();
+    const builtIn = ALL_PAYMENT_METHODS
+      .filter((m) => enabledIds.includes(m.id) && m.id !== "split")
+      .map((m) => ({ value: m.id, label: m.label }));
+    const integrations = getEnabledIntegrationPayments()
+      .map((key) => ({ value: `__intg__${key}`, label: INTEGRATION_PAYMENT_LABELS[key] ?? key }));
+    const custom = parseCustomPaymentMethods(posSettingsData?.customPaymentMethods)
+      .filter((m) => m.enabled)
+      .map((m) => ({ value: `__custom__${m.id}`, label: m.label }));
+    const all = [...builtIn, ...integrations, ...custom];
+    return all.length ? all : [{ value: "cash", label: "Cash" }];
+  }, [posSettingsData]);
 
   const { data: detailInvoiceRaw } = useGetInvoice(
     detailInvoiceId ?? 0,
@@ -362,13 +552,10 @@ export default function POSInvoicesPage() {
     ? _parsedDefaultTaxRate
     : 10;
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
-  const { profile } = useBusinessProfile();
   const { data: loyaltySettings } = useGetLoyaltySettings();
-  // invoiceOpts still drives the email composer defaults below. The printed /
-  // downloaded invoice + quote now render through the centralized document
-  // template controller (shared buildInvoiceHtml layout + backend PDF).
-  const { opts: invoiceOpts } = useSalesTemplate("Invoice");
-  const { printInvoice: printInvoiceTpl } = useDocumentTemplate();
+  // Merchant invoicing defaults (Management → Invoices & Services → Invoices).
+  const { data: invoiceSettings } = useGetInvoiceSettings();
+  const { printInvoice: printInvoiceTpl, invoiceEmailTemplate } = useDocumentTemplate();
 
   /* ── Sync initial line state when default tax rate loads ── */
   useEffect(() => {
@@ -413,8 +600,18 @@ export default function POSInvoicesPage() {
     setLineSearch((p) => [...p, ""]);
     setLineDropOpen((p) => [...p, false]);
   };
-  const updateLine = (i: number, field: keyof LineItem, val: string | number) =>
+  const updateLine = (i: number, field: keyof LineItem, val: string | number | null) =>
     setLines((p) => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  // Turn a line into a custom one-off item: keep the typed text as the description,
+  // clear any product link, and reveal the cost-price input (backend keeps a
+  // client-supplied cost for lines with no productId).
+  const addCustomLine = (i: number, text: string) => {
+    const name = text.trim();
+    if (!name) return;
+    setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: name, productId: null } : l));
+    setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
+    setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+  };
   const removeLine = (i: number) => {
     setLines((p) => p.filter((_, idx) => idx !== i));
     setLineSearch((p) => p.filter((_, idx) => idx !== i));
@@ -429,6 +626,10 @@ export default function POSInvoicesPage() {
     setLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate, productId: product.id ?? null, costPrice: product.costPrice ?? null } : l));
     setLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+    // Product has no sell price on file — prompt for a one-off sell price (and
+    // optional cost price) for this line rather than silently invoicing $0.
+    if ((product.price ?? 0) <= 0)
+      setPricePrompt({ flow: "create", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice ? String(product.costPrice) : "" });
   };
   const moveLineUp = (i: number) => {
     if (i === 0) return;
@@ -482,8 +683,15 @@ export default function POSInvoicesPage() {
     setEditLineSearch((p) => [...p, ""]);
     setEditLineDropOpen((p) => [...p, false]);
   };
-  const updateEditLine = (i: number, field: keyof LineItem, val: string | number) =>
+  const updateEditLine = (i: number, field: keyof LineItem, val: string | number | null) =>
     setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, [field]: val } : l));
+  const addCustomEditLine = (i: number, text: string) => {
+    const name = text.trim();
+    if (!name) return;
+    setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: name, productId: null } : l));
+    setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
+    setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+  };
   const removeEditLine = (i: number) => {
     setEditLines((p) => p.filter((_, idx) => idx !== i));
     setEditLineSearch((p) => p.filter((_, idx) => idx !== i));
@@ -498,6 +706,21 @@ export default function POSInvoicesPage() {
     setEditLines((p) => p.map((l, idx) => idx === i ? { ...l, description: product.name, unitPrice: product.price ?? 0, taxRate: defaultTaxRate, productId: product.id ?? null, costPrice: product.costPrice ?? null } : l));
     setEditLineSearch((p) => { const n = [...p]; n[i] = ""; return n; });
     setEditLineDropOpen((p) => { const n = [...p]; n[i] = false; return n; });
+    // See selectProduct — same $0 sell-price prompt for the edit-invoice flow.
+    if ((product.price ?? 0) <= 0)
+      setPricePrompt({ flow: "edit", index: i, name: product.name, sellPrice: "", costPrice: product.costPrice ? String(product.costPrice) : "" });
+  };
+  /* Apply the sell-price prompt back to the originating line. Sell price is
+     required (> 0); cost price is optional and left untouched when blank. */
+  const pricePromptSell = pricePrompt ? parseFloat(pricePrompt.sellPrice) : NaN;
+  const pricePromptValid = !isNaN(pricePromptSell) && pricePromptSell > 0;
+  const confirmPricePrompt = () => {
+    if (!pricePrompt || !pricePromptValid) return;
+    const cost = pricePrompt.costPrice.trim() === "" ? null : (parseFloat(pricePrompt.costPrice) || 0);
+    const apply = pricePrompt.flow === "create" ? updateLine : updateEditLine;
+    apply(pricePrompt.index, "unitPrice", pricePromptSell);
+    apply(pricePrompt.index, "costPrice", cost);
+    setPricePrompt(null);
   };
   const moveEditLineUp = (i: number) => {
     if (i === 0) return;
@@ -542,14 +765,16 @@ export default function POSInvoicesPage() {
     JSON.stringify(form) !== JSON.stringify(CREATE_PRISTINE_FORM) ||
     JSON.stringify(lines) !== JSON.stringify(CREATE_PRISTINE_LINES) ||
     JSON.stringify(discount) !== JSON.stringify(CREATE_PRISTINE_DISCOUNT) ||
-    JSON.stringify(recurring) !== JSON.stringify(CREATE_PRISTINE_RECURRING)
+    JSON.stringify(recurring) !== JSON.stringify(CREATE_PRISTINE_RECURRING) ||
+    schedule.length > 0
   );
 
   const isEditDirty = editOpen && editInitialRef.current !== null && (
     JSON.stringify(editForm) !== JSON.stringify(editInitialRef.current.form) ||
     JSON.stringify(editLines) !== JSON.stringify(editInitialRef.current.lines) ||
     JSON.stringify(editDiscount) !== JSON.stringify(editInitialRef.current.discount) ||
-    JSON.stringify(editRecurring) !== JSON.stringify(editInitialRef.current.recurring)
+    JSON.stringify(editRecurring) !== JSON.stringify(editInitialRef.current.recurring) ||
+    JSON.stringify(editSchedule) !== JSON.stringify(editInitialRef.current.schedule)
   );
 
   /* ── Open edit dialog ── */
@@ -571,14 +796,16 @@ export default function POSInvoicesPage() {
     const newDiscount = inv.discountType && inv.discountValue
       ? { enabled: true, type: inv.discountType as DiscountType, value: String(inv.discountValue) }
       : { enabled: false, type: "percent" as DiscountType, value: "" };
+    const newSchedule: Instalment[] = (inv.paymentSchedule ?? []).map((s) => ({ ...s }));
     setEditingInvoice(inv);
     setEditForm(newForm);
     setEditRecurring(newRecurring);
+    setEditSchedule(newSchedule);
     setEditLines(items);
     setEditLineSearch(items.map(() => ""));
     setEditLineDropOpen(items.map(() => false));
     setEditDiscount(newDiscount);
-    editInitialRef.current = { form: newForm, lines: items, discount: newDiscount, recurring: newRecurring };
+    editInitialRef.current = { form: newForm, lines: items, discount: newDiscount, recurring: newRecurring, schedule: newSchedule };
     setEditOpen(true);
   };
 
@@ -608,14 +835,20 @@ export default function POSInvoicesPage() {
             startDate: editRecurring.startDate || null,
             occurrences: editRecurring.occurrences,
           },
+          paymentSchedule: editSchedule
+            .filter((s) => (Number(s.amount) || 0) > 0)
+            .map((s) => ({ label: s.label?.trim() || null, amount: Number(s.amount) || 0, dueDate: s.dueDate || null })),
         } as Parameters<typeof updateInvoiceMutation.mutateAsync>[0]["data"],
       }) as unknown as Invoice;
       queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(updated.id) });
       toast.success("Invoice updated");
       setEditOpen(false);
       invalidateInvoices();
-    } catch {
-      toast.error("Failed to update invoice");
+    } catch (err) {
+      // Surface the server's reason — a bare "Failed to update" hides contract
+      // validation errors (400s) that the user has no way to diagnose.
+      const detail = err instanceof Error ? err.message : "";
+      toast.error(detail ? `Failed to update invoice: ${detail}` : "Failed to update invoice");
     } finally {
       setEditSaving(false);
     }
@@ -628,6 +861,7 @@ export default function POSInvoicesPage() {
     setLineSearch([""]);
     setLineDropOpen([false]);
     setRecurring({ enabled: false, frequency: "monthly", startDate: "", occurrences: 1 });
+    setSchedule([]);
     setDiscount({ enabled: false, type: "percent", value: "" });
     setCreateLinkedServiceJob(null);
     setCreateLinkedAppointment(null);
@@ -641,11 +875,16 @@ export default function POSInvoicesPage() {
     setSaving(true);
     try {
       const prefixSettings = getInvoicePrefix();
+      // Fall back to the merchant's invoicing defaults when the cashier leaves
+      // the due date / notes blank on the create form.
+      const defaultedDueDate = form.dueDate
+        || (invoiceSettings ? dueDateFromToday(invoiceSettings.defaultDueDays) : undefined);
+      const defaultedNotes = form.notes || invoiceSettings?.defaultNotes || undefined;
       const body = {
         customerId: form.customerId ? parseInt(form.customerId) : undefined,
         staffId: dayStaff?.staffId ?? null,
-        dueDate: form.dueDate || undefined,
-        notes: form.notes || undefined,
+        dueDate: defaultedDueDate || undefined,
+        notes: defaultedNotes,
         items: validLines,
         invoicePrefix: prefixSettings.invoicePrefix,
         invoiceDigits: prefixSettings.invoiceDigits,
@@ -660,6 +899,11 @@ export default function POSInvoicesPage() {
             startDate: recurring.startDate || null,
             occurrences: recurring.occurrences,
           },
+        }),
+        ...(schedule.length > 0 && {
+          paymentSchedule: schedule
+            .filter((s) => (Number(s.amount) || 0) > 0)
+            .map((s) => ({ label: s.label?.trim() || null, amount: Number(s.amount) || 0, dueDate: s.dueDate || null })),
         }),
       };
       const created = await createInvoiceMutation.mutateAsync({ data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"] }) as unknown as Invoice;
@@ -716,25 +960,126 @@ export default function POSInvoicesPage() {
     }
   };
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+  const balanceDue = (inv: Invoice) => Math.max(0, round2(inv.total - (inv.amountPaid ?? 0)));
+
   /* ── Record a payment at the POS terminal ──
-     Hands the invoice's remaining balance + linked customer to the POS terminal,
-     which enters "Invoice Payment Mode" and processes via any payment method. */
-  const payAtTerminal = (inv: Invoice) => {
-    const balance = Math.max(0, inv.total - (inv.amountPaid ?? 0));
+     Hands a charge amount (defaulting to the full remaining balance, for a
+     partial payment the amount entered in the Record Payment dialog) + linked
+     customer to the POS terminal, which enters "Invoice Payment Mode" and
+     processes it via any payment method. */
+  const payAtTerminal = (inv: Invoice, chargeAmount?: number) => {
+    const balance = balanceDue(inv);
     if (balance <= 0) {
       toast.error("This invoice is already paid in full");
       return;
     }
+    const amount = chargeAmount != null ? Math.min(round2(chargeAmount), balance) : balance;
+    if (!(amount > 0)) { toast.error("Enter an amount greater than zero"); return; }
     setPendingInvoicePayment({
       invoiceId: inv.id,
       invoiceNumber: inv.invoiceNumber,
       balance,
+      amount,
       customerId: inv.customerId ?? null,
       customerName: inv.customerName,
       customerEmail: inv.customerEmail ?? null,
       customerPhone: inv.customerPhone ?? null,
     });
     navigate("/pos/sell");
+  };
+
+  /* ── Record Payment dialog ── */
+  const openPayDialog = (inv: Invoice) => {
+    const balance = balanceDue(inv);
+    if (balance <= 0) { toast.error("This invoice is already paid in full"); return; }
+    setPayTarget(inv);
+    setPayAmount(balance.toFixed(2));
+    setPayMethod(payMethods[0]?.value ?? "cash");
+    setPayNote("");
+    // Direct deposits default to the day of the sale (the invoice's createdAt),
+    // not today — the money is booked to when the sale happened for accounting.
+    // If the sale was made today the sale date already is today. Clamp to today
+    // so a future-dated createdAt can never exceed the input's max.
+    const saleDate = localISODate(inv.createdAt);
+    const today = todayLocalISODate();
+    setPayDate(saleDate > today ? today : saleDate);
+  };
+
+  /* Record a (partial or full) payment directly via the API — used for manual
+     methods (cash, bank transfer, cheque…). Card processing goes via the
+     terminal instead (see "Charge at terminal" in the dialog). */
+  const recordPayment = async () => {
+    if (!payTarget) return;
+    const balance = balanceDue(payTarget);
+    const amount = round2(parseFloat(payAmount) || 0);
+    if (!(amount > 0)) { toast.error("Enter an amount greater than zero"); return; }
+    if (amount > balance + 0.005) { toast.error(`Amount can't exceed the ${formatCurrency(balance)} balance due`); return; }
+    setPaySaving(true);
+    try {
+      // Map the chosen tender to a stored method, mirroring the POS checkout so
+      // the payment-method breakdown reports invoice legs alongside POS sales.
+      // Built-in tenders store their id; async BNPL integrations store their
+      // provider key; other integrations and custom tenders record as a generic
+      // "other" leg with the label captured in an audit note.
+      const selected = payMethods.find((m) => m.value === payMethod);
+      const isIntg = payMethod.startsWith("__intg__");
+      const isCustom = payMethod.startsWith("__custom__");
+      const intgKey = isIntg ? payMethod.slice("__intg__".length) : "";
+      const isAsyncIntg = isIntg && ASYNC_PAYMENT_PROVIDERS.has(intgKey);
+      const apiMethod = isAsyncIntg ? intgKey : (isIntg || isCustom) ? "other" : payMethod;
+      const labelNote = (isCustom || (isIntg && !isAsyncIntg))
+        ? `[Payment via ${selected?.label ?? "Other"}]`
+        : "";
+      const note = [payNote.trim(), labelNote].filter(Boolean).join(" ") || undefined;
+      // Direct deposits frequently clear on an earlier day than they're recorded;
+      // pass the chosen date so the sale is booked to that day for accounting.
+      const paidAt = payMethod === "direct_deposit" && payDate ? payDate : undefined;
+      await recordPaymentMutation.mutateAsync({
+        id: payTarget.id,
+        data: {
+          amount,
+          method: apiMethod,
+          note,
+          idempotencyKey: crypto.randomUUID(),
+          ...(paidAt ? { paidAt } : {}),
+        } as Parameters<typeof recordPaymentMutation.mutateAsync>[0]["data"],
+      });
+      const fully = amount >= balance - 0.005;
+      toast.success(fully ? "Payment recorded — invoice paid in full" : `Payment of ${formatCurrency(amount)} recorded`);
+      setPayTarget(null);
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(payTarget.id) });
+      invalidateInvoices();
+      invalidateSalesKpiQueries(queryClient);
+    } catch {
+      toast.error("Failed to record payment");
+    } finally {
+      setPaySaving(false);
+    }
+  };
+
+  /* Reverse / correct a recorded payment leg. */
+  const reversePayment = async () => {
+    if (!reverseTarget) return;
+    const { invoiceId, event } = reverseTarget;
+    const amount = round2(Math.abs(event.amount ?? 0));
+    if (!(amount > 0)) { toast.error("This payment has no amount to reverse"); return; }
+    setReverseSaving(true);
+    try {
+      await reversePaymentMutation.mutateAsync({
+        id: invoiceId,
+        data: { amount, eventId: event.id ?? undefined } as Parameters<typeof reversePaymentMutation.mutateAsync>[0]["data"],
+      });
+      toast.success(`Payment of ${formatCurrency(amount)} reversed`);
+      setReverseTarget(null);
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(invoiceId) });
+      invalidateInvoices();
+      invalidateSalesKpiQueries(queryClient);
+    } catch {
+      toast.error("Failed to reverse payment");
+    } finally {
+      setReverseSaving(false);
+    }
   };
 
   /* ── Delete ── */
@@ -750,28 +1095,6 @@ export default function POSInvoicesPage() {
   };
 
   /* ── Send email ── */
-  const getEmailTemplatePayload = () => {
-    return {
-      templateId: "e-pro",
-      subjectLine:        emailSubject.trim() || invoiceOpts.subjectLine,
-      customGreeting:     invoiceOpts.customGreeting,
-      customMessage:      invoiceOpts.customMessage,
-      customSignOff:      invoiceOpts.customSignOff,
-      footerText:         invoiceOpts.footerText,
-      thankYouMsg:        invoiceOpts.thankYouMsg,
-      showGstBreakdown:   invoiceOpts.showGstBreakdown,
-      showWebsite:        invoiceOpts.showWebsite,
-      showSocialLinks:    invoiceOpts.showSocialLinks,
-      showLogo:           invoiceOpts.showLogo,
-      brandColor:         profile.brandColors?.[0] ?? "#4f46e5",
-      logo:               profile.logo ?? "",
-      website:            profile.website ?? "",
-      contactEmail:       profile.contactEmail ?? "",
-      tagline:            profile.tagline ?? "",
-      socialLinks:        profile.socialLinks ?? {},
-    };
-  };
-
   /* Open the unified Send dialog for an invoice, optionally pre-selecting a
    * delivery method. Seeds the email subject from the invoice + business name. */
   const openSend = (inv: Invoice, method: SendMethodKey | null = null) => {
@@ -787,7 +1110,7 @@ export default function POSInvoicesPage() {
     try {
       await sendEmailMutation.mutateAsync({
         id: invId,
-        data: { email, template: getEmailTemplatePayload() } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
+        data: { email, template: invoiceEmailTemplate(emailSubject) } as Parameters<typeof sendEmailMutation.mutateAsync>[0]["data"],
       });
     } catch {
       throw new Error("Failed to send email");
@@ -836,6 +1159,7 @@ export default function POSInvoicesPage() {
     createdAt: inv.createdAt,
     // Extras consumed by the print path (not part of the base Transaction type):
     amountPaid: inv.amountPaid,
+    invoiceNumber: inv.invoiceNumber,
     discountLabel: inv.discountTotal
       ? `Discount${inv.discountType === "percent" && inv.discountValue ? ` (${inv.discountValue}%)` : ""}`
       : undefined,
@@ -881,6 +1205,10 @@ export default function POSInvoicesPage() {
 
   const kpiOutstanding = useMemo(() => invoices.filter((i) => !i.isRecurring && (i.status === "sent" || i.status === "overdue" || i.status === "partial")).reduce((s, i) => s + (i.total - (i.amountPaid ?? 0)), 0), [invoices]);
   const kpiOverdue     = useMemo(() => invoices.filter((i) => i.status === "overdue"),                                                         [invoices]);
+
+  /* Total balance still owing across the standard invoices currently listed —
+     shown as a footer totals row under the Total column. */
+  const standardOutstanding = useMemo(() => standardFiltered.reduce((s, inv) => s + balanceDue(inv), 0), [standardFiltered]); // eslint-disable-line react-hooks/exhaustive-deps
 
   /* ── Shared row actions ── */
   const InvoiceRowActions = ({ inv }: { inv: Invoice }) => (
@@ -1094,6 +1422,17 @@ export default function POSInvoicesPage() {
                       </tr>
                     ))}
                   </tbody>
+                  <tfoot className="border-t bg-muted/50 font-medium">
+                    <tr>
+                      <td className="p-3 text-muted-foreground">Outstanding owing</td>
+                      <td className="p-3 hidden sm:table-cell" />
+                      <td className="p-3 hidden md:table-cell" />
+                      <td className="p-3" />
+                      <td className="p-3 hidden lg:table-cell" />
+                      <td className="p-3 text-right font-bold text-amber-600">{formatCurrency(standardOutstanding)}</td>
+                      <td className="p-3" />
+                    </tr>
+                  </tfoot>
                 </table>
               </div>
             )}
@@ -1261,7 +1600,12 @@ export default function POSInvoicesPage() {
                         ? (METHOD_LABELS[rawMethod] ?? rawMethod.replace(/_/g, " ").replace(/\b\w/g, (c) => c.toUpperCase()))
                         : "—";
                       return (
-                        <tr key={inv.id} className="bg-background hover:bg-muted/30 transition-colors">
+                        <tr
+                          key={inv.id}
+                          className="bg-background hover:bg-muted/30 transition-colors cursor-pointer"
+                          onClick={() => openDetail(inv)}
+                          title="View invoice details"
+                        >
                           <td className="p-3">
                             <span className="font-mono font-medium text-xs">{inv.invoiceNumber}</span>
                           </td>
@@ -1297,7 +1641,7 @@ export default function POSInvoicesPage() {
                                 className="h-7 px-2 text-[11px] font-medium gap-1"
                                 title="Download PDF"
                                 disabled={pdfGeneratingId !== null}
-                                onClick={() => { void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}
+                                onClick={(e) => { e.stopPropagation(); void downloadInvoicePDF(inv); void recordEvent(inv.id, "download"); }}
                               >
                                 {pdfGeneratingId === inv.id ? <Loader2 className="w-3 h-3 animate-spin" /> : <Download className="w-3 h-3" />}
                                 <span className="hidden sm:inline">PDF</span>
@@ -1307,7 +1651,7 @@ export default function POSInvoicesPage() {
                                 size="sm"
                                 className="h-7 px-2 text-[11px] font-medium gap-1"
                                 title="View audit log"
-                                onClick={() => openDetail(inv)}
+                                onClick={(e) => { e.stopPropagation(); openDetail(inv); }}
                               >
                                 <ClipboardList className="w-3 h-3" />
                                 <span className="hidden sm:inline">Audit Log</span>
@@ -1498,6 +1842,42 @@ export default function POSInvoicesPage() {
                   </div>
                 </div>
 
+                {/* Payment schedule (instalments) — coverage derived from amountPaid */}
+                {detailInvoice.paymentSchedule && detailInvoice.paymentSchedule.length > 0 && (() => {
+                  const rows = instalmentCoverage(detailInvoice.paymentSchedule, detailInvoice.amountPaid ?? 0);
+                  return (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium flex items-center gap-1.5">
+                        <ListChecks className="w-3.5 h-3.5" /> Payment Schedule
+                      </p>
+                      <div className="space-y-1.5">
+                        {rows.map((inst, i) => (
+                          <div key={i} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                            <div className="flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="font-medium">{inst.label || `Instalment ${i + 1}`}</span>
+                                <Badge
+                                  variant="outline"
+                                  className={`h-4 px-1.5 text-[10px] ${
+                                    inst.status === "paid" ? "text-green-700 border-green-300"
+                                      : inst.status === "partial" ? "text-amber-700 border-amber-300"
+                                      : "text-muted-foreground"
+                                  }`}>
+                                  {inst.status === "paid" ? "Paid" : inst.status === "partial" ? `Part-paid ${formatCurrency(inst.covered)}` : "Due"}
+                                </Badge>
+                              </div>
+                              {inst.dueDate && (
+                                <p className="text-[11px] text-muted-foreground/80">Due {formatDateOnly(inst.dueDate)}</p>
+                              )}
+                            </div>
+                            <span className="font-medium shrink-0">{formatCurrency(inst.amount)}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  );
+                })()}
+
                 {detailInvoice.notes && (
                   <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm text-muted-foreground">
                     <p className="font-medium text-foreground mb-1 text-xs uppercase tracking-wide">Notes</p>
@@ -1505,12 +1885,59 @@ export default function POSInvoicesPage() {
                   </div>
                 )}
 
-                {/* Activity history */}
-                {detailInvoice.events && detailInvoice.events.length > 0 && (
+                {/* Payments — recorded legs + reversals, each reversible */}
+                {(() => {
+                  const payEvents = (detailInvoice.events ?? []).filter((e) => e.type === "payment" || e.type === "payment-reversal");
+                  if (payEvents.length === 0) return null;
+                  const reversedIds = new Set(
+                    (detailInvoice.events ?? [])
+                      .filter((e) => e.type === "payment-reversal" && e.reverses)
+                      .map((e) => e.reverses as string),
+                  );
+                  const canReverse = detailInvoice.status !== "cancelled";
+                  return (
+                    <div className="space-y-2 text-sm">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Payments</p>
+                      <div className="space-y-1.5">
+                        {[...payEvents].reverse().map((ev, i) => {
+                          const isReversal = ev.type === "payment-reversal";
+                          const amt = Math.abs(ev.amount ?? 0);
+                          const alreadyReversed = !!ev.id && reversedIds.has(ev.id);
+                          return (
+                            <div key={ev.id ?? i} className="flex items-center gap-2 rounded-md border px-3 py-2">
+                              <span className={`shrink-0 ${isReversal ? "text-destructive" : "text-green-600"}`}>
+                                {isReversal ? <RefreshCw className="w-3.5 h-3.5" /> : <Banknote className="w-3.5 h-3.5" />}
+                              </span>
+                              <div className="flex-1 min-w-0">
+                                <div className="flex items-center gap-2 flex-wrap">
+                                  <span className={`font-medium ${isReversal ? "text-destructive" : "text-foreground"}`}>
+                                    {isReversal ? "−" : "+"}{formatCurrency(amt)}
+                                  </span>
+                                  {ev.method && <Badge variant="secondary" className="h-4 px-1.5 text-[10px]">{ev.method}</Badge>}
+                                  {alreadyReversed && <Badge variant="outline" className="h-4 px-1.5 text-[10px] text-destructive border-destructive/30">Reversed</Badge>}
+                                </div>
+                                <p className="text-[11px] text-muted-foreground/80 truncate">{formatDate(ev.timestamp)}{ev.detail ? ` · ${ev.detail}` : ""}</p>
+                              </div>
+                              {!isReversal && !alreadyReversed && canReverse && (
+                                <Button size="sm" variant="ghost" className="h-7 text-xs text-destructive hover:text-destructive shrink-0"
+                                  onClick={() => setReverseTarget({ invoiceId: detailInvoice.id, event: ev })}>
+                                  Reverse
+                                </Button>
+                              )}
+                            </div>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  );
+                })()}
+
+                {/* Activity history (non-payment events) */}
+                {detailInvoice.events && detailInvoice.events.some((e) => e.type !== "payment" && e.type !== "payment-reversal") && (
                   <div className="space-y-2 text-sm">
                     <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Activity</p>
                     <div className="space-y-1.5">
-                      {[...detailInvoice.events].reverse().map((ev, i) => (
+                      {[...detailInvoice.events].filter((e) => e.type !== "payment" && e.type !== "payment-reversal").reverse().map((ev, i) => (
                         <div key={i} className="flex items-start gap-2 text-muted-foreground text-xs">
                           <span className="mt-0.5 shrink-0">
                             {ev.type === "email" && <Mail className="w-3.5 h-3.5" />}
@@ -1547,7 +1974,7 @@ export default function POSInvoicesPage() {
                   )}
                   {(detailInvoice.status === "draft" || detailInvoice.status === "sent" || detailInvoice.status === "overdue" || detailInvoice.status === "partial") && (
                     <Button size="sm" variant="outline" className="gap-1.5 text-green-600 border-green-200 hover:bg-green-50"
-                      onClick={() => payAtTerminal(detailInvoice)}>
+                      onClick={() => openPayDialog(detailInvoice)}>
                       <Banknote className="w-4 h-4" /> Record Payment
                     </Button>
                   )}
@@ -1577,6 +2004,127 @@ export default function POSInvoicesPage() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* ─── Record Payment dialog (partial or full) ─── */}
+      <Dialog open={!!payTarget} onOpenChange={(o) => { if (!o && !paySaving) setPayTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Banknote className="w-4 h-4 text-green-600" /> Record Payment
+            </DialogTitle>
+          </DialogHeader>
+          {payTarget && (() => {
+            const balance = balanceDue(payTarget);
+            const entered = round2(parseFloat(payAmount) || 0);
+            const overpay = entered > balance + 0.005;
+            const settles = entered > 0 && !overpay && entered >= balance - 0.005;
+            return (
+              <div className="space-y-4">
+                <div className="rounded-lg bg-muted/40 border px-3 py-2.5 text-sm space-y-1">
+                  <div className="flex justify-between"><span className="text-muted-foreground">Invoice</span><span className="font-medium">{payTarget.invoiceNumber}</span></div>
+                  {(payTarget.amountPaid ?? 0) > 0 && (
+                    <div className="flex justify-between text-green-700"><span>Already paid</span><span>{formatCurrency(payTarget.amountPaid)}</span></div>
+                  )}
+                  <div className="flex justify-between font-semibold text-amber-700"><span>Balance due</span><span>{formatCurrency(balance)}</span></div>
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Amount</Label>
+                  <Input
+                    type="number" inputMode="decimal" min="0" step="0.01"
+                    value={payAmount}
+                    onChange={(e) => setPayAmount(e.target.value)}
+                    className={overpay ? "border-destructive" : ""}
+                  />
+                  <div className="flex flex-wrap gap-1.5 pt-0.5">
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setPayAmount(round2(balance * 0.25).toFixed(2))}>25%</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setPayAmount(round2(balance * 0.5).toFixed(2))}>50%</Button>
+                    <Button type="button" size="sm" variant="outline" className="h-7 text-xs"
+                      onClick={() => setPayAmount(balance.toFixed(2))}>Balance</Button>
+                  </div>
+                  {overpay && <p className="text-xs text-destructive">Amount exceeds the balance due.</p>}
+                  {!overpay && entered > 0 && (
+                    <p className="text-xs text-muted-foreground">
+                      {settles ? "Settles the invoice in full." : `Leaves ${formatCurrency(round2(balance - entered))} outstanding.`}
+                    </p>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Method</Label>
+                  <Select value={payMethod} onValueChange={setPayMethod}>
+                    <SelectTrigger><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {payMethods.map((m) => <SelectItem key={m.value} value={m.value}>{m.label}</SelectItem>)}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                {payMethod === "direct_deposit" && (
+                  <div className="space-y-1.5">
+                    <Label className="text-xs">Date paid</Label>
+                    <Input
+                      type="date"
+                      value={payDate}
+                      max={todayLocalISODate()}
+                      onChange={(e) => setPayDate(e.target.value)}
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Books this sale to the day the deposit landed — for accurate daily
+                      sales &amp; reporting.
+                    </p>
+                  </div>
+                )}
+
+                <div className="space-y-1.5">
+                  <Label className="text-xs">Note <span className="text-muted-foreground">(optional)</span></Label>
+                  <Input value={payNote} onChange={(e) => setPayNote(e.target.value)} placeholder="e.g. deposit, cheque #123" />
+                </div>
+
+                <div className="flex flex-col gap-2 pt-1">
+                  <Button className="w-full gap-1.5" disabled={paySaving || overpay || !(entered > 0)} onClick={recordPayment}>
+                    {paySaving ? <Loader2 className="w-4 h-4 animate-spin" /> : <CheckCircle2 className="w-4 h-4" />}
+                    Record {entered > 0 && !overpay ? formatCurrency(entered) : "payment"}
+                  </Button>
+                  <Button variant="outline" className="w-full gap-1.5" disabled={paySaving || overpay || !(entered > 0)}
+                    onClick={() => { const inv = payTarget; const amt = entered; setPayTarget(null); if (inv) payAtTerminal(inv, amt); }}>
+                    <ExternalLink className="w-4 h-4" /> Charge at terminal instead
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground text-center">
+                  Use the terminal for card payments so surcharges and receipts apply.
+                </p>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Reverse payment confirmation ─── */}
+      <AlertDialog open={!!reverseTarget} onOpenChange={(o) => { if (!o && !reverseSaving) setReverseTarget(null); }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Reverse this payment?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {reverseTarget && (
+                <>This removes <strong>{formatCurrency(Math.abs(reverseTarget.event.amount ?? 0))}</strong> from the amount paid and
+                {" "}re-opens the balance. If the invoice was fully paid, stock, customer spend and loyalty are restored. This is logged in the activity trail.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={reverseSaving}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              disabled={reverseSaving}
+              onClick={(e) => { e.preventDefault(); void reversePayment(); }}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              {reverseSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Reverse payment"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* ─── Send dialog (email / print / print-as-quote) ─── */}
       <SendDialog
@@ -1660,7 +2208,7 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="hidden sm:grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -1672,9 +2220,9 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {lines.map((line, i) => (
+                  <div key={i} className="space-y-1 rounded-lg border bg-muted/20 p-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
                   <div
-                    key={i}
-                    className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${createDragFrom === i ? "opacity-40" : ""} ${createDragFrom !== null && createDragOver === i && createDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
+                    className={`grid grid-cols-[20px_minmax(0,1fr)] gap-x-1.5 gap-y-2 sm:grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] sm:gap-1.5 items-start rounded transition-opacity ${createDragFrom === i ? "opacity-40" : ""} ${createDragFrom !== null && createDragOver === i && createDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); setCreateDragOver(i); }}
                     onDrop={(e) => { e.preventDefault(); if (createDragFrom !== null) reorderLines(createDragFrom, i); setCreateDragFrom(null); setCreateDragOver(null); }}
                   >
@@ -1692,7 +2240,7 @@ export default function POSInvoicesPage() {
                         <Input
                           value={(lineSearch[i] ?? "") !== "" ? lineSearch[i] : line.description}
                           placeholder="Search or type description..."
-                          className={`h-8 text-sm pl-6${lineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
+                          className={`h-9 text-base sm:h-8 sm:text-sm pl-6${lineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
                           onFocus={() => setLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -1704,9 +2252,7 @@ export default function POSInvoicesPage() {
                       </div>
                       {lineDropOpen[i] && (
                         <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
-                          {filteredProducts(lineSearch[i] ?? "").length === 0 ? (
-                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
-                          ) : filteredProducts(lineSearch[i] ?? "").map((p) => (
+                          {filteredProducts(lineSearch[i] ?? "").map((p) => (
                             <button
                               key={p.id}
                               type="button"
@@ -1717,39 +2263,77 @@ export default function POSInvoicesPage() {
                               <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
                             </button>
                           ))}
+                          {(lineSearch[i] ?? "").trim() ? (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); addCustomLine(i, lineSearch[i] ?? ""); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 border-t flex items-center gap-2 text-primary"
+                            >
+                              <Plus className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Add “{lineSearch[i]}” as custom item</span>
+                            </button>
+                          ) : filteredProducts(lineSearch[i] ?? "").length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
+                          )}
                         </div>
                       )}
                       {lineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].description}</p>}
                     </div>
-                    <div>
-                      <Input type="number" value={line.quantity}
-                        onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-center${lineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {lineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].quantity}</p>}
+                    {/* Amounts — second row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)] gap-1.5 sm:contents">
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Qty</span>
+                        <Input type="number" value={line.quantity}
+                          onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-center${lineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {lineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].quantity}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Price</span>
+                        <Input type="number" step="0.01" value={line.unitPrice || ""}
+                          onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                          placeholder="0.00" className={`h-9 text-base sm:h-8 sm:text-sm text-right${lineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {lineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].unitPrice}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Tax %</span>
+                        <Input type="number" min={0} max={100} value={line.taxRate}
+                          onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-right${lineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {lineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].taxRate}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <Input type="number" step="0.01" value={line.unitPrice || ""}
-                        onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                        placeholder="0.00" className={`h-8 text-sm text-right${lineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {lineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].unitPrice}</p>}
+                    {/* Line total + row actions — third row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 flex items-center gap-1.5 sm:contents">
+                      <div className="flex items-center justify-end h-8 mr-auto sm:mr-0">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mr-1.5 sm:hidden">Total</span>
+                        <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                        onClick={() => duplicateLine(i)} title="Duplicate line">
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => removeLine(i)} disabled={lines.length === 1}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
-                    <div>
-                      <Input type="number" min={0} max={100} value={line.taxRate}
-                        onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-right${lineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {lineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{lineErrors[i].taxRate}</p>}
+                  </div>
+                  {line.description.trim() !== "" && line.productId == null && (
+                    <div className="flex flex-wrap items-center gap-2 sm:pl-[26px]">
+                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1"><Package className="w-2.5 h-2.5" /> Custom item</Badge>
+                      <span className="text-[11px] text-muted-foreground shrink-0">Cost price (ex GST)</span>
+                      <div className="relative w-28">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">$</span>
+                        <Input
+                          type="number" step="0.01" min={0}
+                          value={line.costPrice ?? ""}
+                          placeholder="0.00"
+                          onChange={(e) => updateLine(i, "costPrice", e.target.value === "" ? null : (parseFloat(e.target.value) || 0))}
+                          className="h-7 text-xs pl-5"
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center justify-end h-8">
-                      <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
-                      onClick={() => duplicateLine(i)} title="Duplicate line">
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => removeLine(i)} disabled={lines.length === 1}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                  )}
                   </div>
                 ))}
               </div>
@@ -1770,14 +2354,14 @@ export default function POSInvoicesPage() {
                     <button
                       type="button"
                       onClick={() => setDiscount((d) => ({ ...d, type: "fixed" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "fixed" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       $
                     </button>
                     <button
                       type="button"
                       onClick={() => setDiscount((d) => ({ ...d, type: "percent" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${discount.type === "percent" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       %
                     </button>
@@ -1822,17 +2406,17 @@ export default function POSInvoicesPage() {
             </div>
 
             {/* Link to service / appointment */}
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <Label>Linked To</Label>
               {(createLinkedServiceJob || createLinkedAppointment) ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm">
+                <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30 text-sm min-w-0">
                   {createLinkedServiceJob && <><Wrench className="w-3.5 h-3.5 text-cyan-600 shrink-0" /><span className="flex-1 truncate text-cyan-700 font-medium">Service Job #{createLinkedServiceJob.jobNumber || createLinkedServiceJob.id}</span></>}
                   {createLinkedAppointment && <><CalendarDays className="w-3.5 h-3.5 text-violet-600 shrink-0" /><span className="flex-1 truncate text-violet-700 font-medium">{createLinkedAppointment.title || `Appointment #${createLinkedAppointment.id}`}</span></>}
-                  <button onClick={() => { setCreateLinkedServiceJob(null); setCreateLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => { setCreateLinkedServiceJob(null); setCreateLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkDialogFor("create")}>
-                  <Link2 className="w-3.5 h-3.5" /> Link to Service or Appointment
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 px-2.5 text-xs w-fit max-w-full" onClick={() => setLinkDialogFor("create")}>
+                  <Link2 className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Link to Service or Appointment</span>
                 </Button>
               )}
             </div>
@@ -1875,6 +2459,9 @@ export default function POSInvoicesPage() {
                 </div>
               )}
             </div>
+
+            {/* Payment schedule (instalments) */}
+            <ScheduleEditor schedule={schedule} setSchedule={setSchedule} total={invTotal} />
 
             {/* Invoice number preview */}
             <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/30 rounded-lg px-3 py-2">
@@ -1930,7 +2517,7 @@ export default function POSInvoicesPage() {
                   <Plus className="w-3.5 h-3.5 mr-1" /> Add Line
                 </Button>
               </div>
-              <div className="grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
+              <div className="hidden sm:grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 px-1 text-xs font-medium text-muted-foreground">
                 <span />
                 <span>Description</span>
                 <span className="text-center">Qty</span>
@@ -1942,9 +2529,9 @@ export default function POSInvoicesPage() {
               </div>
               <div className="space-y-1.5">
                 {editLines.map((line, i) => (
+                  <div key={i} className="space-y-1 rounded-lg border bg-muted/20 p-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0">
                   <div
-                    key={i}
-                    className={`grid grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] gap-1.5 items-start rounded transition-opacity ${editDragFrom === i ? "opacity-40" : ""} ${editDragFrom !== null && editDragOver === i && editDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
+                    className={`grid grid-cols-[20px_minmax(0,1fr)] gap-x-1.5 gap-y-2 sm:grid-cols-[20px_1fr_56px_88px_60px_72px_32px_32px] sm:gap-1.5 items-start rounded transition-opacity ${editDragFrom === i ? "opacity-40" : ""} ${editDragFrom !== null && editDragOver === i && editDragFrom !== i ? "outline outline-2 outline-primary outline-offset-1" : ""}`}
                     onDragOver={(e) => { e.preventDefault(); setEditDragOver(i); }}
                     onDrop={(e) => { e.preventDefault(); if (editDragFrom !== null) reorderEditLines(editDragFrom, i); setEditDragFrom(null); setEditDragOver(null); }}
                   >
@@ -1962,7 +2549,7 @@ export default function POSInvoicesPage() {
                         <Input
                           value={editLineSearch[i] !== undefined && editLineSearch[i] !== "" ? editLineSearch[i] : line.description}
                           placeholder="Search or type description..."
-                          className={`h-8 text-sm pl-6${editLineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
+                          className={`h-9 text-base sm:h-8 sm:text-sm pl-6${editLineErrors[i]?.description ? " border-destructive focus-visible:ring-destructive" : ""}`}
                           onFocus={() => setEditLineDropOpen((p) => { const n = [...p]; n[i] = true; return n; })}
                           onChange={(e) => {
                             const v = e.target.value;
@@ -1978,9 +2565,7 @@ export default function POSInvoicesPage() {
                       </div>
                       {editLineDropOpen[i] && (
                         <div className="absolute z-50 left-0 right-0 top-full mt-0.5 bg-popover border rounded-lg shadow-lg max-h-[min(220px,50dvh)] overflow-y-auto">
-                          {filteredProducts(editLineSearch[i] ?? "").length === 0 ? (
-                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
-                          ) : filteredProducts(editLineSearch[i] ?? "").map((p) => (
+                          {filteredProducts(editLineSearch[i] ?? "").map((p) => (
                             <button
                               key={p.id}
                               type="button"
@@ -1991,39 +2576,77 @@ export default function POSInvoicesPage() {
                               <span className="text-xs text-muted-foreground shrink-0">{formatCurrency(p.price ?? 0)}</span>
                             </button>
                           ))}
+                          {(editLineSearch[i] ?? "").trim() ? (
+                            <button
+                              type="button"
+                              onMouseDown={(e) => { e.preventDefault(); addCustomEditLine(i, editLineSearch[i] ?? ""); }}
+                              className="w-full text-left px-3 py-2 text-sm hover:bg-muted/50 border-t flex items-center gap-2 text-primary"
+                            >
+                              <Plus className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Add “{editLineSearch[i]}” as custom item</span>
+                            </button>
+                          ) : filteredProducts(editLineSearch[i] ?? "").length === 0 && (
+                            <p className="px-3 py-3 text-xs text-muted-foreground text-center">No products found</p>
+                          )}
                         </div>
                       )}
                       {editLineErrors[i]?.description && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].description}</p>}
                     </div>
-                    <div>
-                      <Input type="number" value={line.quantity}
-                        onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-center${editLineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {editLineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].quantity}</p>}
+                    {/* Amounts — second row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)] gap-1.5 sm:contents">
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Qty</span>
+                        <Input type="number" value={line.quantity}
+                          onChange={(e) => updateEditLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-center${editLineErrors[i]?.quantity ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {editLineErrors[i]?.quantity && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].quantity}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Price</span>
+                        <Input type="number" step="0.01" value={line.unitPrice || ""}
+                          onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                          placeholder="0.00" className={`h-9 text-base sm:h-8 sm:text-sm text-right${editLineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {editLineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].unitPrice}</p>}
+                      </div>
+                      <div>
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Tax %</span>
+                        <Input type="number" min={0} max={100} value={line.taxRate}
+                          onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                          className={`h-9 text-base sm:h-8 sm:text-sm text-right${editLineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
+                        {editLineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].taxRate}</p>}
+                      </div>
                     </div>
-                    <div>
-                      <Input type="number" step="0.01" value={line.unitPrice || ""}
-                        onChange={(e) => updateEditLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                        placeholder="0.00" className={`h-8 text-sm text-right${editLineErrors[i]?.unitPrice ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {editLineErrors[i]?.unitPrice && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].unitPrice}</p>}
+                    {/* Line total + row actions — third row on mobile, inline columns on sm+ */}
+                    <div className="col-span-2 flex items-center gap-1.5 sm:contents">
+                      <div className="flex items-center justify-end h-8 mr-auto sm:mr-0">
+                        <span className="text-[10px] font-medium uppercase tracking-wide text-muted-foreground mr-1.5 sm:hidden">Total</span>
+                        <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
+                      </div>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
+                        onClick={() => duplicateEditLine(i)} title="Duplicate line">
+                        <Copy className="w-3.5 h-3.5" />
+                      </Button>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
+                        onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </Button>
                     </div>
-                    <div>
-                      <Input type="number" min={0} max={100} value={line.taxRate}
-                        onChange={(e) => updateEditLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                        className={`h-8 text-sm text-right${editLineErrors[i]?.taxRate ? " border-destructive focus-visible:ring-destructive" : ""}`} />
-                      {editLineErrors[i]?.taxRate && <p className="text-[10px] text-destructive mt-0.5 leading-tight">{editLineErrors[i].taxRate}</p>}
+                  </div>
+                  {line.description.trim() !== "" && line.productId == null && (
+                    <div className="flex flex-wrap items-center gap-2 sm:pl-[26px]">
+                      <Badge variant="outline" className="text-[10px] shrink-0 gap-1"><Package className="w-2.5 h-2.5" /> Custom item</Badge>
+                      <span className="text-[11px] text-muted-foreground shrink-0">Cost price (ex GST)</span>
+                      <div className="relative w-28">
+                        <span className="absolute left-2 top-1/2 -translate-y-1/2 text-muted-foreground text-xs pointer-events-none">$</span>
+                        <Input
+                          type="number" step="0.01" min={0}
+                          value={line.costPrice ?? ""}
+                          placeholder="0.00"
+                          onChange={(e) => updateEditLine(i, "costPrice", e.target.value === "" ? null : (parseFloat(e.target.value) || 0))}
+                          className="h-7 text-xs pl-5"
+                        />
+                      </div>
                     </div>
-                    <div className="flex items-center justify-end h-8">
-                      <span className="text-sm font-medium tabular-nums">{formatCurrency(line.quantity * line.unitPrice)}</span>
-                    </div>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-muted-foreground hover:text-foreground shrink-0"
-                      onClick={() => duplicateEditLine(i)} title="Duplicate line">
-                      <Copy className="w-3.5 h-3.5" />
-                    </Button>
-                    <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive shrink-0"
-                      onClick={() => removeEditLine(i)} disabled={editLines.length === 1}>
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </Button>
+                  )}
                   </div>
                 ))}
               </div>
@@ -2044,14 +2667,14 @@ export default function POSInvoicesPage() {
                     <button
                       type="button"
                       onClick={() => setEditDiscount((d) => ({ ...d, type: "fixed" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "fixed" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       $
                     </button>
                     <button
                       type="button"
                       onClick={() => setEditDiscount((d) => ({ ...d, type: "percent" }))}
-                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "hover:bg-muted"}`}
+                      className={`px-2.5 py-1.5 flex items-center justify-center transition-colors ${editDiscount.type === "percent" ? "bg-primary text-primary-foreground" : "pill-selector hover:bg-muted"}`}
                     >
                       %
                     </button>
@@ -2096,17 +2719,17 @@ export default function POSInvoicesPage() {
             </div>
 
             {/* Link to service / appointment */}
-            <div className="space-y-1.5">
+            <div className="flex flex-col gap-1.5 min-w-0">
               <Label>Linked To</Label>
               {(editLinkedServiceJob || editLinkedAppointment) ? (
-                <div className="flex items-center gap-2 p-2.5 rounded-lg border bg-muted/30 text-sm">
+                <div className="flex items-center gap-2 p-2 rounded-lg border bg-muted/30 text-sm min-w-0">
                   {editLinkedServiceJob && <><Wrench className="w-3.5 h-3.5 text-cyan-600 shrink-0" /><span className="flex-1 truncate text-cyan-700 font-medium">Service Job #{editLinkedServiceJob.jobNumber || editLinkedServiceJob.id}</span></>}
                   {editLinkedAppointment && <><CalendarDays className="w-3.5 h-3.5 text-violet-600 shrink-0" /><span className="flex-1 truncate text-violet-700 font-medium">{editLinkedAppointment.title || `Appointment #${editLinkedAppointment.id}`}</span></>}
-                  <button onClick={() => { setEditLinkedServiceJob(null); setEditLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors"><X className="w-3.5 h-3.5" /></button>
+                  <button onClick={() => { setEditLinkedServiceJob(null); setEditLinkedAppointment(null); }} className="text-muted-foreground hover:text-destructive transition-colors shrink-0"><X className="w-3.5 h-3.5" /></button>
                 </div>
               ) : (
-                <Button type="button" variant="outline" size="sm" className="gap-1.5" onClick={() => setLinkDialogFor("edit")}>
-                  <Link2 className="w-3.5 h-3.5" /> Link to Service or Appointment
+                <Button type="button" variant="outline" size="sm" className="gap-1.5 h-8 px-2.5 text-xs w-fit max-w-full" onClick={() => setLinkDialogFor("edit")}>
+                  <Link2 className="w-3.5 h-3.5 shrink-0" /> <span className="truncate">Link to Service or Appointment</span>
                 </Button>
               )}
             </div>
@@ -2149,6 +2772,9 @@ export default function POSInvoicesPage() {
                 </div>
               )}
             </div>
+
+            {/* Payment schedule (instalments) */}
+            <ScheduleEditor schedule={editSchedule} setSchedule={setEditSchedule} total={editInvTotal} />
 
           </div>
 
@@ -2194,7 +2820,7 @@ export default function POSInvoicesPage() {
       </AlertDialog>
 
       {/* ─── Link to Service / Appointment ─── */}
-      <Dialog open={!!linkDialogFor} onOpenChange={(o) => { if (!o) setLinkDialogFor(null); }}>
+      <Dialog open={!!linkDialogFor} onOpenChange={(o) => { if (!o) { setLinkDialogFor(null); setLinkSearch(""); } }}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
@@ -2202,12 +2828,22 @@ export default function POSInvoicesPage() {
             </DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
+            <div className="relative">
+              <Search className="w-4 h-4 text-muted-foreground absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
+              <Input
+                autoFocus
+                value={linkSearch}
+                onChange={(e) => setLinkSearch(e.target.value)}
+                placeholder="Search all jobs & appointments (open or closed)…"
+                className="pl-9"
+              />
+            </div>
             <p className="text-xs text-muted-foreground -mb-1">Unfinished jobs and appointments are listed first; completed ones appear below.</p>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
-              <ScrollArea className="max-h-56 border rounded-lg">
-                {linkServiceJobs.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">No service jobs found.</div>
+              <ScrollArea className={`max-h-56 border rounded-lg ${SCROLL_AREA_TRUNCATE_FIX}`}>
+                {sjUnfinished.length + sjDone.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">{linkQ ? "No matching service jobs." : "No service jobs found."}</div>
                 ) : (
                   <div>
                     {sjUnfinished.length > 0 && (
@@ -2228,9 +2864,9 @@ export default function POSInvoicesPage() {
             </div>
             <div>
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
-              <ScrollArea className="max-h-56 border rounded-lg">
-                {linkAppointments.length === 0 ? (
-                  <div className="text-center py-6 text-muted-foreground text-sm">No appointments found.</div>
+              <ScrollArea className={`max-h-56 border rounded-lg ${SCROLL_AREA_TRUNCATE_FIX}`}>
+                {aptUnfinished.length + aptDone.length === 0 ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">{linkQ ? "No matching appointments." : "No appointments found."}</div>
                 ) : (
                   <div>
                     {aptUnfinished.length > 0 && (
@@ -2272,6 +2908,55 @@ export default function POSInvoicesPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Sell-price prompt for products with no ($0) sell price on file */}
+      <Dialog open={!!pricePrompt} onOpenChange={(o) => { if (!o) setPricePrompt(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Set sell price</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{pricePrompt?.name}</span> has no sell price set.
+              Enter a price for this invoice line.
+            </p>
+            <div className="space-y-1.5">
+              <Label htmlFor="prompt-sell-price">Sell price (inc GST)</Label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                <Input
+                  id="prompt-sell-price"
+                  type="number" step="0.01" min={0} autoFocus
+                  value={pricePrompt?.sellPrice ?? ""}
+                  placeholder="0.00"
+                  onChange={(e) => setPricePrompt((p) => p ? { ...p, sellPrice: e.target.value } : p)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && pricePromptValid) confirmPricePrompt(); }}
+                  className="pl-6"
+                />
+              </div>
+            </div>
+            <div className="space-y-1.5">
+              <Label htmlFor="prompt-cost-price">Cost price (ex GST) <span className="text-muted-foreground font-normal">— optional</span></Label>
+              <div className="relative">
+                <span className="absolute left-2.5 top-1/2 -translate-y-1/2 text-muted-foreground text-sm pointer-events-none">$</span>
+                <Input
+                  id="prompt-cost-price"
+                  type="number" step="0.01" min={0}
+                  value={pricePrompt?.costPrice ?? ""}
+                  placeholder="0.00"
+                  onChange={(e) => setPricePrompt((p) => p ? { ...p, costPrice: e.target.value } : p)}
+                  onKeyDown={(e) => { if (e.key === "Enter" && pricePromptValid) confirmPricePrompt(); }}
+                  className="pl-6"
+                />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-1">
+              <Button variant="outline" onClick={() => setPricePrompt(null)}>Cancel</Button>
+              <Button onClick={confirmPricePrompt} disabled={!pricePromptValid}>Apply price</Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
     </AppLayout>
   );

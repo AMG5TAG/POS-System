@@ -144,9 +144,13 @@ export default function StaffCostSummaryPage() {
     });
   }, [activeStaff, salesReport]);
 
+  // Total revenue for the period must come from EVERY report row, not just the
+  // active-staff rows shown in the table. Otherwise it silently omits
+  // unassigned transactions (staffId === null) and sales by inactive/removed
+  // staff, undercounting "This Month Revenue".
   const totalRevenue = useMemo(
-    () => rows.reduce((acc, r) => acc + r.revenue, 0),
-    [rows],
+    () => (salesReport?.items ?? []).reduce((acc, r) => acc + (r.netRevenue ?? 0), 0),
+    [salesReport],
   );
 
   const avgPayRate = useMemo(() => {

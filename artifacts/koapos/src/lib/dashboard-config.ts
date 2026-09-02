@@ -6,6 +6,11 @@ import {
   getGetDashboardConfigQueryKey,
   type DashboardConfigResponse,
 } from "@workspace/api-client-react";
+import {
+  sanitizeSectionOrder,
+  DEFAULT_SECTION_ORDER,
+  type DashboardSectionId,
+} from "./dashboard-section-order";
 
 export type DashboardConfig = {
   showStatusTiles: boolean;
@@ -15,6 +20,9 @@ export type DashboardConfig = {
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
   showReferralRevenue: boolean;
+  showBirthdayNotifications: boolean;
+  showFollowUpNotifications: boolean;
+  sectionOrder: DashboardSectionId[];
 };
 
 const DEFAULTS: DashboardConfig = {
@@ -25,6 +33,9 @@ const DEFAULTS: DashboardConfig = {
   showServiceJobsPanel: true,
   showCalendar: true,
   showReferralRevenue: true,
+  showBirthdayNotifications: true,
+  showFollowUpNotifications: true,
+  sectionOrder: DEFAULT_SECTION_ORDER,
 };
 
 function toConfig(data: DashboardConfigResponse | undefined): DashboardConfig {
@@ -37,6 +48,9 @@ function toConfig(data: DashboardConfigResponse | undefined): DashboardConfig {
     showServiceJobsPanel: data.showServiceJobsPanel,
     showCalendar: data.showCalendar,
     showReferralRevenue: data.showReferralRevenue,
+    showBirthdayNotifications: data.showBirthdayNotifications,
+    showFollowUpNotifications: data.showFollowUpNotifications,
+    sectionOrder: sanitizeSectionOrder(data.sectionOrder),
   };
 }
 
@@ -48,7 +62,7 @@ export function useDashboardConfig() {
   const config = toConfig(data);
 
   const toggle = useCallback(
-    (key: keyof DashboardConfig) => {
+    (key: Exclude<keyof DashboardConfig, "sectionOrder">) => {
       const current = toConfig(data);
       const next = { ...current, [key]: !current[key] };
 
@@ -58,6 +72,27 @@ export function useDashboardConfig() {
 
       mutate(
         { data: next },
+        {
+          onError: () => {
+            queryClient.setQueryData(getGetDashboardConfigQueryKey(), data);
+          },
+        }
+      );
+    },
+    [data, mutate, queryClient]
+  );
+
+  const setOrder = useCallback(
+    (next: DashboardSectionId[]) => {
+      const clean = sanitizeSectionOrder(next);
+
+      queryClient.setQueryData(getGetDashboardConfigQueryKey(), (old: DashboardConfigResponse | undefined) =>
+        old ? { ...old, sectionOrder: clean } : old
+      );
+
+      // Only patch the order — the PUT route merges partial updates.
+      mutate(
+        { data: { sectionOrder: clean } },
         {
           onError: () => {
             queryClient.setQueryData(getGetDashboardConfigQueryKey(), data);
@@ -83,5 +118,5 @@ export function useDashboardConfig() {
     );
   }, [data, mutate, queryClient]);
 
-  return { config, toggle, reset, isLoading };
+  return { config, toggle, setOrder, reset, isLoading };
 }

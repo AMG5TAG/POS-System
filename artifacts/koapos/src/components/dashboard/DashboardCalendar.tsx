@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User, MessageCircleReply } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -20,6 +20,8 @@ const EVENT_COLORS = {
   invoices:      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-700",
   appointments:  "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700",
   birthdays:     "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-700",
+  // Tailwind ships no brown ramp, so this one is spelled out in hex.
+  followUps:     "bg-[#f0e2d3] text-[#7a4a1d] border-[#ddc7ae] dark:bg-[#432a15] dark:text-[#e3c3a0] dark:border-[#7a5333]",
 };
 
 interface SelectedDay {
@@ -193,9 +195,9 @@ function BirthdayDialog({ birthday, onClose }: { birthday: CalendarBirthday; onC
               </Button>
             )}
             {birthday.phone && (
-              <a href={`sms:${birthday.phone}`}>
-                <Button variant="outline" className="w-full">Send SMS</Button>
-              </a>
+              <Button asChild variant="outline" className="w-full">
+                <a href={`sms:${birthday.phone}`}>Send SMS</a>
+              </Button>
             )}
             {!birthday.email && !birthday.phone && (
               <p className="text-sm text-muted-foreground">No contact info available for this customer.</p>
@@ -226,12 +228,13 @@ function DayCell({
   onBirthdayClick: (b: CalendarBirthday) => void;
 }) {
   if (!day) {
-    return <div className="min-h-[160px] bg-muted/20 dark:bg-muted/40 rounded-lg border border-border/40 dark:border-border/70" />;
+    return <div className="min-h-[120px] bg-muted/20 dark:bg-muted/40 rounded-lg border border-border/40 dark:border-border/70" />;
   }
 
   const dayNum = parseInt(day.date.split("-")[2], 10);
   const hasEvents = day.publicHoliday || day.sales > 0 || day.serviceJobs > 0 ||
-    day.invoices > 0 || day.appointments.length > 0 || day.customerBirthdays.length > 0;
+    day.invoices > 0 || day.followUpsCompleted > 0 ||
+    day.appointments.length > 0 || day.customerBirthdays.length > 0;
 
   const apptCount = day.appointments.length;
   const bdayCount = day.customerBirthdays.length;
@@ -271,6 +274,13 @@ function DayCell({
       <CalendarDays className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{apptCount}</span>
     </button>
   );
+  if (day.followUpsCompleted > 0) rightItems.push(
+    <div key="followups" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.followUps)}
+      title={`${day.followUpsCompleted} follow-up${day.followUpsCompleted === 1 ? "" : "s"} completed`}
+    >
+      <MessageCircleReply className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{day.followUpsCompleted}</span>
+    </div>
+  );
 
   const maxRows = 3;
   const leftSlots  = leftItems.slice(0, maxRows);
@@ -278,10 +288,17 @@ function DayCell({
 
   return (
     <div className={cn(
-      "min-h-[120px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
+      "relative overflow-hidden min-h-[120px] rounded-lg border p-1.5 flex flex-col gap-1 transition-colors",
       isCurrentMonth && !isPast ? "bg-card" : "bg-muted/30 dark:bg-muted/20 opacity-60",
       isToday ? "border-primary ring-1 ring-primary/30 opacity-100" : "border-border/60 dark:border-border",
     )}>
+      {isPast && isCurrentMonth && !isToday && (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10"
+          style={{ backgroundImage: "repeating-linear-gradient(135deg, transparent 0, transparent 12px, hsl(var(--foreground) / 0.10) 12px, hsl(var(--foreground) / 0.10) 13px)" }}
+        />
+      )}
       <div className={cn(
         "text-xs font-semibold w-6 h-6 flex items-center justify-center rounded-full shrink-0 self-start",
         isToday ? "bg-primary text-primary-foreground" :
@@ -367,14 +384,32 @@ export function DashboardCalendar() {
     }
   }
 
+  /*
+   * Legend totals for the month on screen.
+   *
+   * When that month is the current one we stop at today — a running "so far"
+   * figure, so Sales/Invoices read as what has actually happened rather than
+   * being padded by appointments and birthdays still to come. Any other month
+   * is wholly behind or ahead of us, so the whole month is summed.
+   *
+   * `days` covers exactly the requested month (the API pre-fills every date),
+   * so these are plain sums with no date filtering beyond the cut-off.
+   */
+  const viewingCurrentMonth = year === today.getFullYear() && month === today.getMonth() + 1;
+  const countedDays = (data?.days ?? []).filter((d) => !viewingCurrentMonth || d.date <= todayStr);
+
+  const sumBy = (pick: (d: CalendarDay) => number) =>
+    countedDays.reduce((n, d) => n + pick(d), 0);
+
   // Legend
   const legend = [
-    { color: EVENT_COLORS.publicHoliday, label: "Public Holiday" },
-    { color: EVENT_COLORS.sales,         label: "Sales" },
-    { color: EVENT_COLORS.serviceJobs,   label: "Service Jobs" },
-    { color: EVENT_COLORS.invoices,      label: "Invoices" },
-    { color: EVENT_COLORS.appointments,  label: "Appointments" },
-    { color: EVENT_COLORS.birthdays,     label: "Birthdays" },
+    { color: EVENT_COLORS.publicHoliday, label: "Public Holiday", total: countedDays.filter((d) => d.publicHoliday).length },
+    { color: EVENT_COLORS.sales,         label: "Sales",          total: sumBy((d) => d.sales) },
+    { color: EVENT_COLORS.serviceJobs,   label: "Service Jobs",   total: sumBy((d) => d.serviceJobs) },
+    { color: EVENT_COLORS.invoices,      label: "Invoices",       total: sumBy((d) => d.invoices) },
+    { color: EVENT_COLORS.appointments,  label: "Appointments",   total: sumBy((d) => d.appointments.length) },
+    { color: EVENT_COLORS.birthdays,     label: "Birthdays",      total: sumBy((d) => d.customerBirthdays.length) },
+    { color: EVENT_COLORS.followUps,     label: "Follow Ups",     total: sumBy((d) => d.followUpsCompleted) },
   ];
 
   return (
@@ -394,12 +429,25 @@ export function DashboardCalendar() {
               </Button>
             </div>
           </div>
-          <div className="flex flex-wrap gap-2 pt-1">
-            {legend.map((l) => (
-              <div key={l.label} className={cn("text-[10px] px-2 py-0.5 rounded border font-medium", l.color)}>
-                {l.label}
-              </div>
-            ))}
+          <div className="space-y-1.5 pt-1">
+            <div className="flex flex-wrap gap-2">
+              {legend.map((l) => (
+                <div
+                  key={l.label}
+                  className={cn("text-[10px] px-2 py-0.5 rounded border font-medium flex items-center gap-1.5", l.color)}
+                >
+                  {l.label}
+                  <span className="text-xs font-semibold tabular-nums">
+                    {isLoading ? "—" : l.total}
+                  </span>
+                </div>
+              ))}
+            </div>
+            <p className="text-[10px] text-muted-foreground">
+              {viewingCurrentMonth
+                ? `${monthName} so far — 1–${today.getDate()}`
+                : `${monthName} — full month`}
+            </p>
           </div>
         </CardHeader>
         <CardContent>

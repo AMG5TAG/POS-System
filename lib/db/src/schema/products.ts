@@ -44,6 +44,9 @@ export const productsTable = pgTable("products", {
   isEpay:             text("is_epay").notNull().default("false"),
   // Second-hand / refurbished stock (e.g. created from a trade-in).
   isRefurbished:      text("is_refurbished").notNull().default("false"),
+  // When "true", each unit carries a Serial Number / IMEI captured at PO
+  // receiving and consumed at the point of sale (see productSerialsTable).
+  tracksSerial:       text("tracks_serial").notNull().default("false"),
   tags:               jsonb("tags_json").$type<string[]>(),
   stockLocation:      text("stock_location"),
   overflowLocation:   text("overflow_location"),
@@ -51,6 +54,8 @@ export const productsTable = pgTable("products", {
   // Warranty offered from the sale date. 0 = no warranty. Unit is "months" or "years".
   warrantyDuration:   integer("warranty_duration").notNull().default(0),
   warrantyUnit:       text("warranty_unit").notNull().default("months"),
+  // For "time_card" products: prepaid duration in minutes that the card grants.
+  timeCardMinutes:    integer("time_card_minutes").notNull().default(0),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
@@ -61,9 +66,9 @@ export const productsTable = pgTable("products", {
   index("products_tags_gin_idx").using("gin", t.tags),
 ]);
 
-// Per-unit serial numbers for warranty products. Captured at purchase-order
-// receiving and consumed (status → "sold") at the point of sale, mirroring the
-// digital-codes pool pattern.
+// Per-unit serial numbers for serial-tracked products (products.tracksSerial).
+// Captured at purchase-order receiving and consumed (status → "sold") at the
+// point of sale, mirroring the digital-codes pool pattern.
 export const productSerialsTable = pgTable("product_serials", {
   id:            serial("id").primaryKey(),
   merchantId:    integer("merchant_id").notNull().references(() => merchantsTable.id),

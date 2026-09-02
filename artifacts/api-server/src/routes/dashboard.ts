@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable, followUpLogTable } from "@workspace/db";
 import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
@@ -42,8 +42,34 @@ function toLocalDateKey(date: Date, tz: string): string {
 const router: IRouter = Router();
 
 type MonthMode = "rolling30" | "calendar_mtd";
+type YearMode = "financial" | "rolling365";
+type WeekMode = "rolling7" | "calendar_week";
 
-function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Date {
+/**
+ * Start of the current Australian financial year (1 July). If today is in
+ * July–December the FY started this July; in January–June it started last July.
+ */
+function financialYearStart(now: Date): Date {
+  const fyYear = now.getMonth() >= 6 ? now.getFullYear() : now.getFullYear() - 1;
+  return new Date(fyYear, 6, 1, 0, 0, 0, 0); // month index 6 = July
+}
+
+/** Monday 00:00 of the calendar week that `now` falls in. */
+function calendarWeekStart(now: Date): Date {
+  const d = new Date(now);
+  const dow = d.getDay(); // 0 = Sun … 6 = Sat
+  const daysSinceMonday = (dow + 6) % 7; // Mon→0, Sun→6
+  d.setDate(d.getDate() - daysSinceMonday);
+  d.setHours(0, 0, 0, 0);
+  return d;
+}
+
+function getPeriodStart(
+  period: string,
+  monthMode: MonthMode = "rolling30",
+  yearMode: YearMode = "rolling365",
+  weekMode: WeekMode = "rolling7",
+): Date {
   const now = new Date();
   switch (period) {
     case "today": {
@@ -58,6 +84,9 @@ function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Dat
       return d;
     }
     case "week": {
+      // calendar_week: from Monday of the current week to now.
+      // rolling7 (default): the trailing 7 days.
+      if (weekMode === "calendar_week") return calendarWeekStart(now);
       const d = new Date(now);
       d.setDate(d.getDate() - 7);
       return d;
@@ -76,6 +105,9 @@ function getPeriodStart(period: string, monthMode: MonthMode = "rolling30"): Dat
       return d;
     }
     case "year": {
+      // financial: from 1 July of the current AU financial year to now.
+      // rolling365 (default): the trailing 365 days.
+      if (yearMode === "financial") return financialYearStart(now);
       const d = new Date(now);
       d.setFullYear(d.getFullYear() - 1);
       return d;
@@ -152,7 +184,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
 
   const period = queryParams.data.period ?? "today";
   const monthMode: MonthMode = queryParams.data.monthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
-  const periodStart = getPeriodStart(period, monthMode);
+  const yearMode: YearMode = queryParams.data.yearMode === "rolling365" ? "rolling365" : "financial";
+  const compare = queryParams.data.compare === true;
+  // The Sales Overview always treats "week" as the current Mon–Sun calendar week.
+  const periodStart = getPeriodStart(period, monthMode, yearMode, "calendar_week");
   const periodEnd = getPeriodEnd(period);
   const merchantId = req.session.merchantId!;
 
@@ -164,7 +199,7 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     ? and(gte(invoicesTable.paidAt, periodStart), lt(invoicesTable.paidAt, periodEnd))
     : gte(invoicesTable.paidAt, periodStart);
 
-  const [txnAgg, invoiceAgg, cogsResult, topPaymentRows, newCustomersResult, lowStockResult, pendingInvoiceResult, laybyAgg, laybyCogsResult, taxRate] = await Promise.all([
+  const [txnAgg, invoiceAgg, cogsResult, invoiceCogsResult, topPaymentRows, newCustomersResult, lowStockResult, pendingInvoiceResult, laybyAgg, laybyCogsResult, taxRate] = await Promise.all([
     // Transaction aggregations: completed revenue, refund total, discount total, completed count
     db.select({
       posSales:      sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
@@ -181,11 +216,14 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
       invoiceTax:    sql<string>`COALESCE(SUM(${invoicesTable.taxTotal}::numeric), 0)`,
     }).from(invoicesTable).where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), periodCondInv)),
 
-    // Items sold + COGS via LATERAL JSONB unnest + JOIN to products (single scan)
+    // Items sold + COGS via LATERAL JSONB unnest + JOIN to products (single scan).
+    // COGS uses only the at-sale cost snapshot on the line item (no current-cost
+    // fallback, so historical profit doesn't shift) — matching the report views
+    // and kpi-calc. Lines with no snapshot contribute $0 COGS.
     db.execute(sql`
       SELECT
-        COALESCE(SUM((item->>'quantity')::int), 0)::float                                       AS items_sold,
-        COALESCE(SUM((item->>'quantity')::int * COALESCE(p.cost_price::numeric, 0)), 0)::float  AS cost_total
+        COALESCE(SUM((item->>'quantity')::int), 0)::float                                                                       AS items_sold,
+        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, 0)), 0)::float    AS cost_total
       FROM transactions t
       CROSS JOIN LATERAL jsonb_array_elements(t.items) AS item
       LEFT JOIN products p
@@ -198,6 +236,19 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         AND jsonb_typeof(t.items) = 'array'
         AND (item->>'productId') IS NOT NULL
         AND (item->>'productId') <> '0'
+    `),
+
+    // Paid-invoice COGS in the period (was previously omitted from costTotal,
+    // even though invoice revenue is counted in totalSales).
+    db.execute(sql`
+      SELECT
+        COALESCE(SUM((item->>'quantity')::numeric * COALESCE((item->>'costPrice')::numeric, 0)), 0)::float AS cost_total
+      FROM invoices i
+      CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(i.items::jsonb) = 'array' THEN i.items::jsonb ELSE '[]'::jsonb END) AS item
+      LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = i.merchant_id
+      WHERE i.merchant_id = ${merchantId} AND i.status = 'paid' AND i.paid_at IS NOT NULL
+        AND i.paid_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND i.paid_at < ${periodEnd}` : sql``}
     `),
 
     // Top payment method by count
@@ -239,11 +290,12 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
         ${period === "yesterday" ? sql`AND COALESCE(l.completed_at, l.updated_at) < ${periodEnd}` : sql``}
     `),
 
-    // Completed laybys: items sold + COGS (layby lines carry no cost snapshot)
+    // Completed laybys: items sold + COGS (prefers the at-sale snapshot, falls
+    // back to the product's current cost)
     db.execute(sql`
       SELECT
-        COALESCE(SUM((item->>'quantity')::int), 0)::float                                       AS items_sold,
-        COALESCE(SUM((item->>'quantity')::int * COALESCE(p.cost_price::numeric, 0)), 0)::float  AS cost_total
+        COALESCE(SUM((item->>'quantity')::int), 0)::float                                                                       AS items_sold,
+        COALESCE(SUM((item->>'quantity')::int * COALESCE((item->>'costPrice')::numeric, 0)), 0)::float    AS cost_total
       FROM laybys l
       CROSS JOIN LATERAL jsonb_array_elements(CASE WHEN jsonb_typeof(l.items) = 'array' THEN l.items ELSE '[]'::jsonb END) AS item
       LEFT JOIN products p ON p.id = NULLIF(item->>'productId', '')::int AND p.merchant_id = l.merchant_id
@@ -269,9 +321,10 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const transactionCount = posCount + invoiceCount + laybyCount;
   const averageOrderValue = transactionCount > 0 ? totalSales / transactionCount : 0;
   const cogsRow         = cogsResult.rows[0] as { items_sold: number; cost_total: number } | undefined;
+  const invoiceCogsRow  = invoiceCogsResult.rows[0] as { cost_total: number } | undefined;
   const laybyCogsRow    = laybyCogsResult.rows[0] as { items_sold: number; cost_total: number } | undefined;
   const itemsSold       = Number(cogsRow?.items_sold ?? 0) + Number(laybyCogsRow?.items_sold ?? 0);
-  const costTotal       = Number(cogsRow?.cost_total ?? 0) + Number(laybyCogsRow?.cost_total ?? 0);
+  const costTotal       = Number(cogsRow?.cost_total ?? 0) + Number(invoiceCogsRow?.cost_total ?? 0) + Number(laybyCogsRow?.cost_total ?? 0);
   // GST collected across all three sale types (POS + invoices carry their split;
   // laybys are GST-inclusive so their GST is derived from the default rate).
   const taxCollected    = parseFloat((txnAgg[0] as { taxCollected?: string })?.taxCollected ?? "0")
@@ -281,6 +334,82 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
   const newCustomers    = Number(newCustomersResult[0]?.count ?? 0);
   const lowStockCount   = Number(lowStockResult[0]?.count ?? 0);
   const pendingInvoiceCount = Number(pendingInvoiceResult[0]?.count ?? 0);
+
+  // Absorbed payment surcharges (pass_on = false) are a cost of business across
+  // POS sales, paid invoices and completed laybys. Each "leg" is one payment, so
+  // the fixed fee applies once per leg. Filtered by the same period bounds as
+  // COGS so the overview's profit stays consistent with the P&L report.
+  const surchargeRows = await db.execute<{ surcharge_cost: string }>(sql`
+    WITH legs AS (
+      SELECT t.payment_method AS method, t.total::numeric AS amount
+      FROM transactions t
+      WHERE t.merchant_id = ${merchantId} AND t.status = 'completed'
+        AND t.created_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND t.created_at < ${periodEnd}` : sql``}
+      UNION ALL
+      SELECT method, amount FROM view_invoice_payment_legs
+      WHERE merchant_id = ${merchantId} AND paid_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND paid_at < ${periodEnd}` : sql``}
+      UNION ALL
+      SELECT method, amount FROM view_layby_payment_legs
+      WHERE merchant_id = ${merchantId} AND completed_at >= ${periodStart}
+        ${period === "yesterday" ? sql`AND completed_at < ${periodEnd}` : sql``}
+    )
+    SELECT COALESCE(SUM((s.percent / 100.0) * legs.amount + s.fixed), 0)::numeric AS surcharge_cost
+    FROM legs
+    JOIN payment_method_surcharges s
+      ON s.merchant_id = ${merchantId} AND s.payment_method = legs.method
+     AND s.enabled = 'true' AND s.pass_on = 'false'
+  `);
+  const surchargeCost = Number(surchargeRows.rows[0]?.surcharge_cost ?? 0);
+
+  // Compare-to-previous: re-run just the headline revenue/count aggregations over
+  // the previous equivalent window (previous month-to-date, prior 7 days, etc.),
+  // so the Sales Overview can show a delta against the same metrics as the tiles.
+  let previous: {
+    totalSales: number; transactionCount: number;
+    posSales: number; posCount: number; invoiceSales: number; invoiceCount: number;
+    averageOrderValue: number;
+  } | null = null;
+  if (compare) {
+    const activityPeriod = period === "today" || period === "yesterday" ? "day" : period;
+    const [, , prevStart, prevEnd] = getActivityWindows(activityPeriod, monthMode);
+    const [pTxn, pInv, pLay] = await Promise.all([
+      db.select({
+        posSales: sql<string>`COALESCE(SUM(CASE WHEN ${transactionsTable.status} = 'completed' THEN ${transactionsTable.total}::numeric ELSE 0 END), 0)`,
+        posCount: sql<string>`COUNT(CASE WHEN ${transactionsTable.status} = 'completed' THEN 1 END)`,
+      }).from(transactionsTable).where(and(eq(transactionsTable.merchantId, merchantId), gte(transactionsTable.createdAt, prevStart), lt(transactionsTable.createdAt, prevEnd))),
+      db.select({
+        invoiceSales: sql<string>`COALESCE(SUM(${invoicesTable.total}::numeric), 0)`,
+        invoiceCount: sql<string>`COUNT(*)`,
+      }).from(invoicesTable).where(and(eq(invoicesTable.merchantId, merchantId), eq(invoicesTable.status, "paid"), gte(invoicesTable.paidAt, prevStart), lt(invoicesTable.paidAt, prevEnd))),
+      db.execute<{ sales: number; cnt: number }>(sql`
+        SELECT COALESCE(SUM(total_amount::numeric), 0)::float AS sales, COUNT(*)::int AS cnt
+        FROM laybys l
+        WHERE l.merchant_id = ${merchantId} AND l.status = 'completed'
+          AND COALESCE(l.completed_at, l.updated_at) >= ${prevStart}
+          AND COALESCE(l.completed_at, l.updated_at) < ${prevEnd}
+      `),
+    ]);
+    const pPosSales = parseFloat(pTxn[0]?.posSales ?? "0");
+    const pPosCount = Number(pTxn[0]?.posCount ?? 0);
+    const pInvoiceSales = parseFloat(pInv[0]?.invoiceSales ?? "0");
+    const pInvoiceCount = Number(pInv[0]?.invoiceCount ?? 0);
+    const pLayRow = pLay.rows[0];
+    const pLaybySales = Number(pLayRow?.sales ?? 0);
+    const pLaybyCount = Number(pLayRow?.cnt ?? 0);
+    const pTotalSales = pPosSales + pInvoiceSales + pLaybySales;
+    const pTxCount = pPosCount + pInvoiceCount + pLaybyCount;
+    previous = {
+      totalSales:        Math.round(pTotalSales * 100) / 100,
+      transactionCount:  pTxCount,
+      posSales:          Math.round(pPosSales * 100) / 100,
+      posCount:          pPosCount,
+      invoiceSales:      Math.round(pInvoiceSales * 100) / 100,
+      invoiceCount:      pInvoiceCount,
+      averageOrderValue: pTxCount > 0 ? Math.round((pTotalSales / pTxCount) * 100) / 100 : 0,
+    };
+  }
 
   res.json({
     totalSales:         Math.round(totalSales * 100) / 100,
@@ -301,7 +430,9 @@ router.get("/dashboard/summary", requireAuth, async (req, res): Promise<void> =>
     taxCollected:       Math.round(taxCollected * 100) / 100,
     itemsSold,
     costTotal:          Math.round(costTotal * 100) / 100,
+    surchargeCost:      Math.round(surchargeCost * 100) / 100,
     topPaymentMethod,
+    previous,
   });
 });
 
@@ -398,7 +529,8 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
   }
 
   const period = queryParams.data.period ?? "week";
-  const periodStart = getPeriodStart(period);
+  const monthMode: MonthMode = queryParams.data.monthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
+  const periodStart = getPeriodStart(period, monthMode);
   const merchantId = req.session.merchantId!;
 
   type AggRow = { bucket: string; sales: string; transactions: string };
@@ -476,9 +608,12 @@ router.get("/dashboard/sales-chart", requireAuth, async (req, res): Promise<void
     groups[r.bucket].transactions += Number(r.transactions);
   }
 
-  // Fill in all periods and apply labels
+  // Fill in all periods and apply labels. For calendar month-to-date, only show
+  // days elapsed this month (1st → today) instead of a fixed 30-day window.
   const result = [];
-  const slots = period === "week" ? 7 : period === "month" ? 30 : 12;
+  const slots = period === "week" ? 7
+    : period === "month" ? (monthMode === "calendar_mtd" ? new Date().getDate() : 30)
+    : 12;
   for (let i = slots - 1; i >= 0; i--) {
     const d = new Date();
     if (period === "year") {
@@ -632,6 +767,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     sales: number;
     serviceJobs: number;
     invoices: number;
+    followUpsCompleted: Set<string>;
     appointments: { id: number; title: string; scheduledAt: string; durationMinutes: number; status: string; customerName: string | null; customerPhone: string | null; customerAddress: string | null; notes: string | null }[];
     customerBirthdays: { id: number; firstName: string; lastName: string | null; phone: string | null; email: string | null }[];
   }> = {};
@@ -645,6 +781,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
       sales: 0,
       serviceJobs: 0,
       invoices: 0,
+      followUpsCompleted: new Set<string>(),
       appointments: [],
       customerBirthdays: [],
     };
@@ -754,11 +891,52 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     if (dayMap[key]) dayMap[key].invoices += 1;
   }
 
-  // Customer birthdays (match by month/day — dateOfBirth is stored as "YYYY-MM-DD" local date)
+  // Follow-ups completed — a record counts as chased on the day it was either
+  // successfully messaged ("sent") or cleared by hand ("done"). "failed" and
+  // "skipped" rows are attempts, not completions, so they are excluded.
+  //
+  // A single follow-up can write one log row per channel (email *and* SMS on the
+  // same job), so dedupe on the source record: the day count answers "how many
+  // customers did we get back to", not "how many messages left the building".
+  const followUps = await db
+    .select({
+      sourceType: followUpLogTable.sourceType,
+      sourceId: followUpLogTable.sourceId,
+      sentAt: followUpLogTable.sentAt,
+    })
+    .from(followUpLogTable)
+    .where(and(
+      eq(followUpLogTable.merchantId, merchantId),
+      inArray(followUpLogTable.status, ["sent", "done"]),
+      gte(followUpLogTable.sentAt, queryStart),
+      lt(followUpLogTable.sentAt, queryEnd),
+    ));
+
+  for (const f of followUps) {
+    const key = toLocalDateKey(f.sentAt, timezone);
+    if (dayMap[key]) dayMap[key].followUpsCompleted.add(`${f.sourceType}-${f.sourceId}`);
+  }
+
+  // Customer birthdays (match by month/day). `dateOfBirth` is a Postgres `date`
+  // column, so match the month with extract() — comparing on the date's own
+  // month is timezone-independent and index-friendly, and (unlike substring)
+  // is valid for the date type. Project only the columns used, instead of
+  // pulling the whole customer table each load.
   const customers = await db
-    .select()
+    .select({
+      id: customersTable.id,
+      firstName: customersTable.firstName,
+      lastName: customersTable.lastName,
+      phone: customersTable.phone,
+      email: customersTable.email,
+      dateOfBirth: customersTable.dateOfBirth,
+    })
     .from(customersTable)
-    .where(eq(customersTable.merchantId, merchantId));
+    .where(and(
+      eq(customersTable.merchantId, merchantId),
+      isNotNull(customersTable.dateOfBirth),
+      sql`extract(month from ${customersTable.dateOfBirth}) = ${month}`,
+    ));
 
   for (const c of customers) {
     if (!c.dateOfBirth) continue;
@@ -781,7 +959,11 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
 
   const days = Object.entries(dayMap)
     .sort(([a], [b]) => a.localeCompare(b))
-    .map(([date, data]) => ({ date, ...data }));
+    .map(([date, data]) => ({
+      ...data,
+      date,
+      followUpsCompleted: data.followUpsCompleted.size,
+    }));
 
   res.json({ year, month, days });
 });
@@ -883,6 +1065,9 @@ router.put("/dashboard/config", requireAuth, async (req, res): Promise<void> => 
     ...(body.showServiceJobsPanel !== undefined && { showServiceJobsPanel: body.showServiceJobsPanel }),
     ...(body.showCalendar !== undefined && { showCalendar: body.showCalendar }),
     ...(body.showReferralRevenue !== undefined && { showReferralRevenue: body.showReferralRevenue }),
+    ...(body.showBirthdayNotifications !== undefined && { showBirthdayNotifications: body.showBirthdayNotifications }),
+    ...(body.showFollowUpNotifications !== undefined && { showFollowUpNotifications: body.showFollowUpNotifications }),
+    ...(body.sectionOrder !== undefined && { sectionOrder: body.sectionOrder }),
   };
 
   const [existing] = await db

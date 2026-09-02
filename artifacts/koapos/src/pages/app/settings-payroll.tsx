@@ -19,7 +19,6 @@ import { Wallet, Plug, Link2Off, Building2 } from "lucide-react";
 /** Supported payroll providers. The selected provider drives the OAuth flow. */
 const PROVIDERS: Array<{ key: string; label: string }> = [
   { key: "xero_payroll", label: "Xero Payroll" },
-  { key: "myob_payroll", label: "MYOB" },
 ];
 const providerLabel = (key: string) => PROVIDERS.find((p) => p.key === key)?.label ?? key;
 

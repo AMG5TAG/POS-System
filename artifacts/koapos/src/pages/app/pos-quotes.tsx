@@ -171,7 +171,17 @@ export default function POSQuotesPage() {
   const addProductLine = (productId: string) => {
     const prod = allProducts.find((p) => String(p.id) === productId);
     if (!prod) return;
-    const line: LineItem = { description: prod.name, quantity: 1, unitPrice: Number(prod.price ?? 0), taxRate: defaultTaxRate };
+    const line: LineItem = {
+      description: prod.name,
+      quantity: 1,
+      unitPrice: Number(prod.price ?? 0),
+      taxRate: defaultTaxRate,
+      // Carry the product linkage so a converted quote rings up as a real
+      // product sale (cost price gets snapshotted at checkout).
+      productId: prod.id,
+      productName: prod.name,
+      costPrice: prod.costPrice ?? null,
+    };
     setLines((p) => {
       const first = p[0];
       // Replace a pristine first blank line, otherwise append.
@@ -195,6 +205,7 @@ export default function POSQuotesPage() {
         quantity: Number(l.quantity),
         unitPrice: Number(l.unitPrice),
         taxRate: Number(l.taxRate),
+        ...(l.productId != null ? { productId: l.productId, productName: l.productName ?? l.description.trim(), costPrice: l.costPrice ?? null } : {}),
       }));
       const common = {
         customerId: custId ? Number(custId) : undefined,
@@ -297,8 +308,10 @@ export default function POSQuotesPage() {
         note: q.notes ?? null,
         customerId: q.customerId ?? null,
         items: (q.items ?? []).map((l) => ({
-          productId: 0,
-          name: l.description,
+          // Use the real productId when the quote line carries one, so the sale
+          // rings up against the product and snapshots its cost price.
+          productId: l.productId ?? 0,
+          name: l.productName ?? l.description,
           quantity: l.quantity,
           price: l.unitPrice,
         })),
@@ -328,7 +341,7 @@ export default function POSQuotesPage() {
 
   return (
     <AppLayout>
-      <div className="max-w-5xl mx-auto p-4 sm:p-6 space-y-5">
+      <div className="p-6 md:p-8 space-y-6">
 
         {/* Header */}
         <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -450,7 +463,7 @@ export default function POSQuotesPage() {
             <div className="space-y-2">
               <div className="flex items-center justify-between">
                 <Label className="text-xs">Line items</Label>
-                <div className="w-56">
+                <div className="w-44 sm:w-56">
                   <Select value={productPick} onValueChange={addProductLine}>
                     <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="+ Add from products" /></SelectTrigger>
                     <SelectContent>
@@ -463,35 +476,52 @@ export default function POSQuotesPage() {
               </div>
               <div className="space-y-1.5">
                 {lines.map((l, i) => (
-                  <div key={i} className="flex items-start gap-1.5">
+                  <div
+                    key={i}
+                    className="rounded-lg border bg-muted/20 p-2 space-y-2 sm:rounded-none sm:border-0 sm:bg-transparent sm:p-0 sm:space-y-0 sm:flex sm:items-start sm:gap-1.5"
+                  >
+                    {/* Description takes the full line on mobile — the fixed-width
+                        amount fields below used to squeeze it down to a sliver. */}
                     <Input
                       value={l.description}
                       onChange={(e) => updateLine(i, "description", e.target.value)}
                       placeholder="Description"
-                      className="h-8 text-sm flex-1"
+                      className="h-9 text-base w-full sm:h-8 sm:text-sm sm:flex-1"
                     />
-                    <Input
-                      type="number" min="0" step="0.01" value={l.quantity}
-                      onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
-                      className="h-8 text-sm w-16 text-center" title="Qty"
-                    />
-                    <div className="relative w-24">
-                      <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">$</span>
-                      <Input
-                        type="number" min="0" step="0.01" value={l.unitPrice}
-                        onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
-                        className="h-8 text-sm pl-5 text-right" title="Unit price (incl. GST)"
-                      />
+                    {/* Amounts — second row on mobile, inline columns on sm+ */}
+                    <div className="grid grid-cols-[minmax(0,0.8fr)_minmax(0,1.3fr)_minmax(0,0.9fr)_auto] items-end gap-1.5 sm:contents">
+                      <div className="sm:w-16">
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Qty</span>
+                        <Input
+                          type="number" min="0" step="0.01" value={l.quantity}
+                          onChange={(e) => updateLine(i, "quantity", parseFloat(e.target.value) || 0)}
+                          className="h-9 text-base w-full text-center sm:h-8 sm:text-sm" title="Qty"
+                        />
+                      </div>
+                      <div className="sm:w-24">
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Price</span>
+                        <div className="relative">
+                          <span className="absolute left-2 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">$</span>
+                          <Input
+                            type="number" min="0" step="0.01" value={l.unitPrice}
+                            onChange={(e) => updateLine(i, "unitPrice", parseFloat(e.target.value) || 0)}
+                            className="h-9 text-base w-full pl-5 text-right sm:h-8 sm:text-sm" title="Unit price (incl. GST)"
+                          />
+                        </div>
+                      </div>
+                      <div className="sm:w-16">
+                        <span className="mb-0.5 block text-[10px] font-medium uppercase tracking-wide text-muted-foreground sm:hidden">Tax %</span>
+                        <div className="relative">
+                          <Input
+                            type="number" min="0" max="100" step="1" value={l.taxRate}
+                            onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
+                            className="h-9 text-base w-full pr-4 text-right sm:h-8 sm:text-sm" title="Tax %"
+                          />
+                          <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
+                        </div>
+                      </div>
+                      <Button variant="ghost" size="sm" className="h-9 w-9 p-0 shrink-0 text-muted-foreground sm:h-8 sm:w-8" onClick={() => removeLine(i)} title="Remove line"><X className="w-3.5 h-3.5" /></Button>
                     </div>
-                    <div className="relative w-16">
-                      <Input
-                        type="number" min="0" max="100" step="1" value={l.taxRate}
-                        onChange={(e) => updateLine(i, "taxRate", parseFloat(e.target.value) || 0)}
-                        className="h-8 text-sm pr-4 text-right" title="Tax %"
-                      />
-                      <span className="absolute right-1.5 top-1/2 -translate-y-1/2 text-xs text-muted-foreground pointer-events-none">%</span>
-                    </div>
-                    <Button variant="ghost" size="sm" className="h-8 w-8 p-0 text-muted-foreground" onClick={() => removeLine(i)}><X className="w-3.5 h-3.5" /></Button>
                   </div>
                 ))}
               </div>

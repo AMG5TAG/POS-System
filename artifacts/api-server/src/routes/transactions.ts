@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, paymentMethodSurchargesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -10,9 +10,13 @@ import {
   RefundTransactionBody,
   DeleteTransactionParams,
   SendTransactionReceiptParams,
+  ModifyCompletedSaleParams,
+  ModifyCompletedSaleBody,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
 import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
+import { isUniqueViolation } from "../lib/document-numbers";
+import { reconcileOversellLedger } from "../lib/oversellLedger";
 
 const router: IRouter = Router();
 
@@ -68,6 +72,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     changeDue: t.changeDue ? parseFloat(t.changeDue) : null,
     notes: t.notes ?? null,
     loyaltyEarned: t.loyaltyEarned ? parseFloat(t.loyaltyEarned) : null,
+    surchargeAmount: t.surchargeAmount != null ? parseFloat(t.surchargeAmount) : 0,
     discountCapped: t.discountCapped === "true" ? true : t.discountCapped === "false" ? false : null,
     discountPct: t.discountPct != null ? parseFloat(t.discountPct) : null,
     items: rawItems,
@@ -134,13 +139,31 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
-router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
-  const parsed = CreateTransactionBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
+/* ── Reusable sale finalisation ────────────────────────────────────────────────
+   The core of POST /transactions, extracted so it can be driven both by a live
+   cashier request AND by an asynchronous payment confirmation (e.g. the Zip Pay
+   webhook captures a charge and replays the parked sale through here). It is
+   I/O-agnostic: instead of writing to an Express `res`, it returns a result the
+   caller maps to a response (cashier) or a payment_attempts update (webhook).
 
+   Behaviour is identical to the original handler — only the request/response
+   boundary moved out. */
+export interface FinalizeSaleSyncContext { host: string; cookie: string; }
+export interface FinalizeSaleOptions {
+  /** Present → fire Xero live sync (needs a session cookie). Omit to skip. */
+  syncContext?: FinalizeSaleSyncContext;
+}
+type CreateTransactionInput = Extract<ReturnType<typeof CreateTransactionBody.safeParse>, { success: true }>["data"];
+export type FinalizeSaleResult =
+  | { ok: true; transaction: typeof transactionsTable.$inferSelect; customer: typeof customersTable.$inferSelect | null }
+  | { ok: false; status: number; error: string; expected?: unknown };
+
+export async function finalizeSale(
+  merchantId: number,
+  body: CreateTransactionInput,
+  rawItems: Array<{ serials?: unknown }>,
+  opts: FinalizeSaleOptions = {},
+): Promise<FinalizeSaleResult> {
   const {
     subtotal: clientSubtotal,
     taxTotal: clientTaxTotal,
@@ -152,16 +175,35 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     idempotencyKey: rawIdempotencyKey, giftCardPayment,
     requestedDiscountTotal: clientRequestedDiscountTotal,
     discountPct: clientDiscountPct,
-  } = parsed.data;
+    paidAt: rawPaidAt,
+  } = body;
 
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
       ? rawIdempotencyKey.trim()
       : null;
 
+  // Optional accounting date: book the sale to the day the money actually landed
+  // (e.g. a direct deposit that cleared earlier) rather than "now", so every
+  // revenue report reads off the correct calendar day. A bare YYYY-MM-DD is
+  // anchored at noon UTC so `(created_at)::date` lands on the chosen day in every
+  // real (±12h) timezone. Mirrors the invoice payment paidAt handling. Future
+  // dates are rejected.
+  let saleCreatedAt: Date | undefined;
+  if (typeof rawPaidAt === "string" && rawPaidAt.trim() !== "") {
+    const raw = rawPaidAt.trim();
+    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw);
+    if (Number.isNaN(d.getTime())) {
+      return { ok: false, status: 400, error: "Invalid paidAt date" };
+    }
+    if (d.getTime() > Date.now() + 86_400_000) {
+      return { ok: false, status: 400, error: "paidAt cannot be in the future" };
+    }
+    saleCreatedAt = d;
+  }
+
   if (clientItems.length === 0) {
-    res.status(400).json({ error: "Transaction must include at least one item" });
-    return;
+    return { ok: false, status: 400, error: "Transaction must include at least one item" };
   }
 
   // Idempotency: if this exact request was already recorded (e.g. the client
@@ -172,17 +214,16 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       .select()
       .from(transactionsTable)
       .where(and(
-        eq(transactionsTable.merchantId, req.session.merchantId!),
+        eq(transactionsTable.merchantId, merchantId),
         eq(transactionsTable.idempotencyKey, idempotencyKey),
       ));
     if (existing) {
       let cust: typeof customersTable.$inferSelect | null = null;
       if (existing.customerId) {
-        const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+        const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, merchantId)));
         cust = c ?? null;
       }
-      res.status(201).json(formatTransaction(existing, cust));
-      return;
+      return { ok: true, transaction: existing, customer: cust };
     }
   }
 
@@ -192,10 +233,9 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     const [c] = await db
       .select()
       .from(customersTable)
-      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
     if (!c) {
-      res.status(404).json({ error: "Customer not found" });
-      return;
+      return { ok: false, status: 404, error: "Customer not found" };
     }
     scopedCustomer = c;
   }
@@ -212,19 +252,18 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     ? await db
         .select()
         .from(productsTable)
-        .where(and(inArray(productsTable.id, regularProductIds), eq(productsTable.merchantId, req.session.merchantId!)))
+        .where(and(inArray(productsTable.id, regularProductIds), eq(productsTable.merchantId, merchantId)))
     : [];
   const productMap = new Map(dbProducts.map((p) => [p.id, p]));
   const missing = regularProductIds.filter((id) => !productMap.has(id));
   if (missing.length > 0) {
-    res.status(400).json({ error: `Unknown product id(s): ${missing.join(", ")}` });
-    return;
+    return { ok: false, status: 400, error: `Unknown product id(s): ${missing.join(", ")}` };
   }
 
   // Product type lookup for digital code validation
   const productTypeIds = [...new Set(dbProducts.map((p) => p.productTypeId).filter((id): id is number => id != null))];
   const dbProductTypes = productTypeIds.length > 0
-    ? await db.select().from(productTypesTable).where(and(inArray(productTypesTable.id, productTypeIds as number[]), eq(productTypesTable.merchantId, req.session.merchantId!)))
+    ? await db.select().from(productTypesTable).where(and(inArray(productTypesTable.id, productTypeIds as number[]), eq(productTypesTable.merchantId, merchantId)))
     : [];
   const productTypeMap = new Map(dbProductTypes.map((pt) => [pt.id, pt]));
 
@@ -239,22 +278,18 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     serials?: string[];
   }[] = [];
   // Per-item serial numbers aren't in the generated body schema (which strips
-  // unknown keys), so read them from the raw body, matched to clientItems by index.
-  const rawItems: Array<{ serials?: unknown }> = Array.isArray((req.body as { items?: unknown }).items)
-    ? (req.body as { items: Array<{ serials?: unknown }> }).items
-    : [];
+  // unknown keys), so they are supplied separately via `rawItems`, matched to
+  // clientItems by index.
   for (let idx = 0; idx < clientItems.length; idx++) {
     const i = clientItems[idx];
     if (!Number.isFinite(i.quantity) || i.quantity <= 0 || !Number.isInteger(i.quantity)) {
-      res.status(400).json({ error: `Invalid quantity for product ${i.productId}` });
-      return;
+      return { ok: false, status: 400, error: `Invalid quantity for product ${i.productId}` };
     }
     // A gift card issue line must always have quantity 1 — each unit is a unique card
     // with its own generated number, so selling qty>1 would require multiple distinct
     // numbers, which the current dialog doesn't support.
     if (i.giftCardIssue && i.quantity !== 1) {
-      res.status(400).json({ error: "Gift card issue items must have quantity 1. Add each card as a separate line." });
-      return;
+      return { ok: false, status: 400, error: "Gift card issue items must have quantity 1. Add each card as a separate line." };
     }
     let unitPrice: number;
     let taxRatePct: number;
@@ -277,19 +312,22 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     // and indicates either a UI bug or a forged request. Use 0.005 as the
     // tolerance so sub-cent floating-point noise doesn't trigger a false 422.
     if (rawDiscount > lineGross + 0.005) {
-      res.status(422).json({
-        error: `Discount on "${itemName}" ($${rawDiscount.toFixed(2)}) exceeds the line total ($${lineGross.toFixed(2)}). Reduce or remove the discount before completing the sale.`,
-      });
-      return;
+      return { ok: false, status: 422, error: `Discount on "${itemName}" ($${rawDiscount.toFixed(2)}) exceeds the line total ($${lineGross.toFixed(2)}). Reduce or remove the discount before completing the sale.` };
     }
     const discount = round2(Math.min(rawDiscount, lineGross)); // clamp for sub-cent rounding
     const totalPrice = round2(lineGross - discount);
     const taxAmount = round2(totalPrice * (taxRatePct / (100 + taxRatePct)));
     const product = i.productId !== 0 ? productMap.get(i.productId) : undefined;
-    const costPrice = product?.costPrice != null ? parseFloat(product.costPrice) : undefined;
-    // Serials only apply to warranty products.
+    // Snapshot the product's cost at sale time. Stored whenever the product has
+    // a finite recorded cost — INCLUDING 0 — so a genuine zero-cost item is
+    // distinguished from "cost unknown" and reports don't fall back to the
+    // product's (possibly later-changed) current cost. Custom items (no product)
+    // have no cost to snapshot.
+    const parsedCost = product?.costPrice != null ? parseFloat(product.costPrice) : NaN;
+    const costPrice = product && Number.isFinite(parsedCost) ? parsedCost : undefined;
+    // Serials only apply to serial-tracked products.
     const rawSerials = rawItems[idx]?.serials;
-    const serials = (product && product.warrantyDuration > 0 && Array.isArray(rawSerials))
+    const serials = (product && product.tracksSerial === "true" && Array.isArray(rawSerials))
       ? [...new Set((rawSerials as unknown[]).map((s) => String(s).trim()).filter(Boolean))]
       : [];
     computedItems.push({
@@ -299,7 +337,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       unitPrice,
       totalPrice,
       taxAmount,
-      ...(costPrice != null && costPrice > 0 ? { costPrice } : {}),
+      ...(costPrice != null ? { costPrice } : {}),
       discount: discount > 0 ? discount : undefined,
       giftCardIssue: i.giftCardIssue || undefined,
       // Preserve client-provided number; server will fill in blanks before the DB write
@@ -332,23 +370,42 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // or unexpected floating-point edge case before a negative-total record
   // can be persisted. Returns 422 so the POS surfaces it to the cashier.
   if (total < 0) {
-    res.status(422).json({
-      error: "Discounts exceed the cart subtotal — the sale total cannot be negative.",
-    });
-    return;
+    return { ok: false, status: 422, error: "Discounts exceed the cart subtotal — the sale total cannot be negative." };
   }
 
   // Reject obvious tampering on the only authoritative number: the charged
   // total. The breakdown fields can drift by sub-cent rounding when the
   // client sums tax pre-rounding, so we don't gate on them.
   if (Math.abs(clientTotal - total) > 0.01) {
-    res.status(409).json({
+    return {
+      ok: false, status: 409,
       error: "Sale total does not match current product pricing. Please refresh the cart and try again.",
       expected: { subtotal, taxTotal, discountTotal, total },
-    });
-    return;
+    };
   }
   void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
+
+  // Per-payment-method surcharge. When the chosen method is configured to pass
+  // its acceptance cost on to the customer, record the surcharge that was added
+  // to the bill at checkout. Computed server-side from the merchant's config so
+  // a forged client value can't inflate it. `subtotal`/`total` deliberately stay
+  // the sale value (the surcharge is collected on top and is revenue-neutral —
+  // it offsets the processor fee); absorbed surcharges (passOn=false) are 0 here
+  // and surface only as a cost of business in reports.
+  let surchargeAmount = 0;
+  {
+    const [sc] = await db
+      .select()
+      .from(paymentMethodSurchargesTable)
+      .where(and(
+        eq(paymentMethodSurchargesTable.merchantId, merchantId),
+        eq(paymentMethodSurchargesTable.paymentMethod, paymentMethod),
+      ))
+      .limit(1);
+    if (sc && sc.enabled === "true" && sc.passOn === "true") {
+      surchargeAmount = round2((parseFloat(sc.percent) / 100) * total + parseFloat(sc.fixed));
+    }
+  }
 
   // Loyalty redemption — enforced server-side, not just in the UI.
   // The conversion from "balance units" to "dollars covered" depends on the
@@ -364,7 +421,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       config:      loyaltySettingsTable.config,
     })
     .from(loyaltySettingsTable)
-    .where(eq(loyaltySettingsTable.merchantId, req.session.merchantId!));
+    .where(eq(loyaltySettingsTable.merchantId, merchantId));
   const programType = loyaltyRow?.programType ?? "cashback";
   const loyaltyConfig = (loyaltyRow?.config ?? {}) as Record<string, unknown>;
   // No row → default to enabled (matches GET /loyalty/settings default behaviour)
@@ -383,20 +440,16 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
 
   if (paymentMethod === "loyalty") {
     if (!programOn) {
-      res.status(400).json({ error: "Loyalty program is disabled" });
-      return;
+      return { ok: false, status: 400, error: "Loyalty program is disabled" };
     }
     if (programType === "stamp") {
-      res.status(400).json({ error: "Stamp programs cannot be redeemed at checkout" });
-      return;
+      return { ok: false, status: 400, error: "Stamp programs cannot be redeemed at checkout" };
     }
     if (!scopedCustomer) {
-      res.status(400).json({ error: "Loyalty payments require a customer" });
-      return;
+      return { ok: false, status: 400, error: "Loyalty payments require a customer" };
     }
     if (requiredLoyaltyPoints > scopedCustomer.loyaltyPoints) {
-      res.status(400).json({ error: "Insufficient loyalty balance" });
-      return;
+      return { ok: false, status: 400, error: "Insufficient loyalty balance" };
     }
   }
 
@@ -520,28 +573,31 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   }
   void loyaltyEarned; // client value is purely informational — server is authoritative
 
-  const receiptNumber = providedReceiptNumber || generateReceiptNumber();
+  // `let` so the sale transaction can be retried with a fresh receipt number if
+  // the random one collides with an existing sale (unique index enforces it).
+  let receiptNumber = providedReceiptNumber || generateReceiptNumber();
 
   // Persist sanitized monetary fields, never raw client input.
   //   - Cash: cashier hands over >= total; we accept the actual tendered
   //     amount (no upper cap) and derive change ourselves. Reject under-tender.
   //   - Loyalty: tender equals the required points (in dollars), change = 0.
   //   - All other methods: force tendered = total, change = 0.
+  // What the customer actually pays = sale total plus any passed-on surcharge.
+  const payable = round2(total + surchargeAmount);
   let persistedTendered: number;
   let persistedChange: number;
   if (paymentMethod === "cash") {
-    const cashTendered = Math.max(0, amountTendered ?? total);
-    if (cashTendered < total - 0.009) {
-      res.status(400).json({ error: "Cash tendered is less than the sale total" });
-      return;
+    const cashTendered = Math.max(0, amountTendered ?? payable);
+    if (cashTendered < payable - 0.009) {
+      return { ok: false, status: 400, error: "Cash tendered is less than the sale total" };
     }
     persistedTendered = cashTendered;
-    persistedChange = Math.max(0, cashTendered - total);
+    persistedChange = Math.max(0, cashTendered - payable);
   } else if (paymentMethod === "loyalty") {
     persistedTendered = requiredLoyaltyPoints;
     persistedChange = 0;
   } else {
-    persistedTendered = total;
+    persistedTendered = payable;
     persistedChange = 0;
   }
   void changeDue; // client-supplied changeDue is intentionally ignored
@@ -557,14 +613,22 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   // All side-effects (transaction row + inventory + customer stats + linked
   // entity completion) commit together or roll back together. Prevents
   // partial commits where a sale is recorded but stock/customer state drift.
-  let transaction: typeof transactionsTable.$inferSelect;
+  // Definite-assignment: the retry loop below either assigns this and breaks, or
+  // throws — so it is always set by the time it is read after the loop.
+  let transaction!: typeof transactionsTable.$inferSelect;
   const updatedStockItems: Array<{ id: number; name: string; sku: string | null; stockQuantity: number; previousStockQuantity: number; lowStockThreshold: number | null; trackInventory: string }> = [];
   try {
-    transaction = await db.transaction(async (tx) => {
+    // Retry the whole sale transaction if the (random) receipt number collides
+    // with an existing sale. The transaction fully rolls back on the unique
+    // violation, so regenerating the number and re-running is safe. Only retried
+    // for auto-generated numbers; a caller-provided receiptNumber is not.
+    for (let receiptAttempt = 0; ; receiptAttempt++) {
+      try {
+        transaction = await db.transaction(async (tx) => {
     const [row] = await tx
       .insert(transactionsTable)
       .values({
-        merchantId: req.session.merchantId!,
+        merchantId,
         customerId: customerId ?? null,
         staffId: staffId ?? null,
         receiptNumber,
@@ -574,6 +638,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         discountTotal: discountTotal.toString(),
         total: total.toString(),
         paymentMethod,
+        surchargeAmount: surchargeAmount.toString(),
         amountTendered: persistedTendered.toString(),
         changeDue: persistedChange.toString(),
         notes: notes ?? null,
@@ -588,6 +653,10 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           clientRequestedDiscountTotal > discountTotal + 0.01
         ) ? "true" : null,
         discountPct: (clientDiscountPct != null && clientDiscountPct > 0) ? clientDiscountPct.toString() : null,
+        // Back-date the sale when an accounting date was supplied (e.g. a direct
+        // deposit that cleared on an earlier day); otherwise the column defaults
+        // to now().
+        ...(saleCreatedAt ? { createdAt: saleCreatedAt } : {}),
       })
       .returning();
 
@@ -601,7 +670,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         .from(giftCardsTable)
         .where(and(
           eq(giftCardsTable.id, giftCardPayment.cardId),
-          eq(giftCardsTable.merchantId, req.session.merchantId!),
+          eq(giftCardsTable.merchantId, merchantId),
         ))
         .for("update");
       if (!card) throw new HttpError(404, "Gift card not found");
@@ -621,7 +690,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         })
         .where(eq(giftCardsTable.id, card.id));
       await tx.insert(giftCardLedgerTable).values({
-        merchantId: req.session.merchantId!,
+        merchantId,
         giftCardId: card.id,
         type: "redemption",
         amount: (-applied).toString(),
@@ -645,7 +714,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
       const [issuedCard] = await tx
         .insert(giftCardsTable)
         .values({
-          merchantId: req.session.merchantId!,
+          merchantId,
           cardNumber: item.giftCardNumber,
           initialValue:   cardValue.toString(),
           currentBalance: cardValue.toString(),
@@ -653,7 +722,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         })
         .returning();
       await tx.insert(giftCardLedgerTable).values({
-        merchantId:   req.session.merchantId!,
+        merchantId,
         giftCardId:  issuedCard.id,
         type:        "issue",
         amount:      cardValue.toString(),
@@ -682,7 +751,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         .from(digitalCodesTable)
         .where(and(
           eq(digitalCodesTable.productId, product.id),
-          eq(digitalCodesTable.merchantId, req.session.merchantId!),
+          eq(digitalCodesTable.merchantId, merchantId),
           eq(digitalCodesTable.isUsed, "false"),
         ))
         .orderBy(digitalCodesTable.id)
@@ -718,13 +787,13 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     for (const item of computedItems) {
       if (!item.serials || item.serials.length === 0) continue;
       const product = productMap.get(item.productId);
-      if (!product || !(product.warrantyDuration > 0)) continue;
+      if (!product || product.tracksSerial !== "true") continue;
       for (const serial of item.serials) {
         const updated = await tx
           .update(productSerialsTable)
           .set({ status: "sold", soldAt: new Date(), transactionId: row.id })
           .where(and(
-            eq(productSerialsTable.merchantId, req.session.merchantId!),
+            eq(productSerialsTable.merchantId, merchantId),
             eq(productSerialsTable.productId, item.productId),
             eq(productSerialsTable.serial, serial),
             eq(productSerialsTable.status, "available"),
@@ -733,7 +802,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         if (updated.length === 0) {
           await tx
             .insert(productSerialsTable)
-            .values({ merchantId: req.session.merchantId!, productId: item.productId, serial, status: "sold", soldAt: new Date(), transactionId: row.id })
+            .values({ merchantId, productId: item.productId, serial, status: "sold", soldAt: new Date(), transactionId: row.id })
             .onConflictDoNothing();
         }
         serialsTouched = true;
@@ -749,11 +818,22 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     for (const [productId, qty] of qtyByProduct) {
       const product = productMap.get(productId);
       if (product?.trackInventory === "true") {
-        const newQty = Math.max(0, product.stockQuantity - qty);
+        // Allow stock to go negative: selling more than on-hand records a true
+        // backorder rather than silently flooring at zero, so the shortfall stays
+        // visible (and drives the "short" warning when a PO is later received).
+        const newQty = product.stockQuantity - qty;
         await tx
           .update(productsTable)
           .set({ stockQuantity: newQty })
           .where(eq(productsTable.id, productId));
+        // If this sale pushed stock further below zero, record the oversold units
+        // against this sale's receipt so the backorder is traceable.
+        await reconcileOversellLedger(tx, {
+          merchantId, productId,
+          prevStock: product.stockQuantity, newStock: newQty,
+          receiptNumber, transactionId: row.id,
+          saleAt: row.createdAt,
+        });
         // product.stockQuantity is the pre-sale value; newQty is post-sale.
         updatedStockItems.push({ id: product.id, name: product.name, sku: product.sku ?? null, stockQuantity: newQty, previousStockQuantity: product.stockQuantity, lowStockThreshold: product.lowStockThreshold ?? null, trackInventory: product.trackInventory });
       }
@@ -771,7 +851,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           visitCount:    sql`${customersTable.visitCount} + 1`,
           loyaltyPoints: loyaltyDelta,
         })
-        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, merchantId)));
 
       // Tier auto-upgrade: compute new tier based on updated loyaltyPoints + totalSpent
       const tiers = (loyaltyConfig.tiers ?? []) as Array<{
@@ -793,7 +873,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         await tx
           .update(customersTable)
           .set({ tierName: tier.name, tierUpdatedAt: new Date() })
-          .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, req.session.merchantId!)));
+          .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, merchantId)));
       }
     }
 
@@ -806,7 +886,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           .set({ status: "completed" })
           .where(and(
             eq(serviceJobsTable.jobNumber, jobNumber),
-            eq(serviceJobsTable.merchantId, req.session.merchantId!),
+            eq(serviceJobsTable.merchantId, merchantId),
           ));
       }
       const apptMatch = notes.match(/\[Appt #(\d+):/);
@@ -817,17 +897,25 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
           .set({ status: "completed" })
           .where(and(
             eq(appointmentsTable.id, apptId),
-            eq(appointmentsTable.merchantId, req.session.merchantId!),
+            eq(appointmentsTable.merchantId, merchantId),
           ));
       }
     }
 
     return row;
-    });
+        });
+        break;
+      } catch (err) {
+        if (!providedReceiptNumber && receiptAttempt < 5 && isUniqueViolation(err, "transactions_merchant_receipt_unique")) {
+          receiptNumber = generateReceiptNumber();
+          continue;
+        }
+        throw err;
+      }
+    }
   } catch (err) {
     if (err instanceof HttpError) {
-      res.status(err.status).json({ error: err.message });
-      return;
+      return { ok: false, status: err.status, error: err.message };
     }
     // Idempotency race: a concurrent request with the same key won the unique
     // index. Return the transaction it created instead of surfacing a 500.
@@ -836,61 +924,77 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
         .select()
         .from(transactionsTable)
         .where(and(
-          eq(transactionsTable.merchantId, req.session.merchantId!),
+          eq(transactionsTable.merchantId, merchantId),
           eq(transactionsTable.idempotencyKey, idempotencyKey),
         ));
       if (existing) {
         let cust: typeof customersTable.$inferSelect | null = null;
         if (existing.customerId) {
-          const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
+          const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, existing.customerId), eq(customersTable.merchantId, merchantId)));
           cust = c ?? null;
         }
-        res.status(201).json(formatTransaction(existing, cust));
-        return;
+        return { ok: true, transaction: existing, customer: cust };
       }
     }
     throw err;
   }
 
   if (updatedStockItems.length) {
-    const merchantId = req.session.merchantId!;
     Promise.all(updatedStockItems.map((p) => maybeQueueImmediateAlert(merchantId, p, p.previousStockQuantity)))
       .catch(() => { /* non-blocking */ });
   }
 
-  /* Fire-and-forget Xero / QuickBooks live sync if the merchant has enabled it.
-     The response is already sent; sync failures are logged silently. */
-  const mId = req.session.merchantId!;
-  (async () => {
-    try {
-      const [xeroRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
-        .from(merchantIntegrationsTable)
-        .where(and(eq(merchantIntegrationsTable.merchantId, mId), eq(merchantIntegrationsTable.integrationKey, "xero")));
-      const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
-      if (xeroCreds.syncSettings?.syncOnSale) {
-        await fetch(`https://${req.headers.host}/api/xero/sync-sale`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: String(req.headers.cookie ?? "") },
-          body: JSON.stringify({ transactionId: transaction.id }),
-        });
-      }
-    } catch { /* silent */ }
-    try {
-      const [qbRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
-        .from(merchantIntegrationsTable)
-        .where(and(eq(merchantIntegrationsTable.merchantId, mId), eq(merchantIntegrationsTable.integrationKey, "quickbooks")));
-      const qbCreds = qbRow?.credentials ? JSON.parse(qbRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
-      if (qbCreds.syncSettings?.syncOnSale) {
-        await fetch(`https://${req.headers.host}/api/quickbooks/sync-sale`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", Cookie: String(req.headers.cookie ?? "") },
-          body: JSON.stringify({ transactionId: transaction.id }),
-        });
-      }
-    } catch { /* silent */ }
-  })();
+  /* Fire-and-forget Xero live sync if the merchant has enabled it and a session
+     context was supplied (the internal sync endpoint requires the cashier's auth
+     cookie). Async/webhook callers omit syncContext, so this is skipped for sales
+     finalised out-of-band. */
+  const syncContext = opts.syncContext;
+  if (syncContext) {
+    void (async () => {
+      try {
+        const [xeroRow] = await db.select({ credentials: merchantIntegrationsTable.credentials })
+          .from(merchantIntegrationsTable)
+          .where(and(eq(merchantIntegrationsTable.merchantId, merchantId), eq(merchantIntegrationsTable.integrationKey, "xero")));
+        const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
+        if (xeroCreds.syncSettings?.syncOnSale) {
+          await fetch(`https://${syncContext.host}/api/xero/sync-sale`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Cookie: syncContext.cookie },
+            body: JSON.stringify({ transactionId: transaction.id }),
+          });
+        }
+      } catch { /* silent */ }
+    })();
+  }
 
-  res.status(201).json(formatTransaction(transaction, scopedCustomer));
+  return { ok: true, transaction, customer: scopedCustomer };
+}
+
+router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
+  const parsed = CreateTransactionBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  // Per-item serial numbers are stripped by the generated body schema, so read
+  // them from the raw request body and hand them to finalizeSale separately.
+  const rawItems: Array<{ serials?: unknown }> = Array.isArray((req.body as { items?: unknown }).items)
+    ? (req.body as { items: Array<{ serials?: unknown }> }).items
+    : [];
+
+  const result = await finalizeSale(req.session.merchantId!, parsed.data, rawItems, {
+    syncContext: { host: String(req.headers.host ?? ""), cookie: String(req.headers.cookie ?? "") },
+  });
+
+  if (!result.ok) {
+    if (result.expected !== undefined) {
+      res.status(result.status).json({ error: result.error, expected: result.expected });
+    } else {
+      res.status(result.status).json({ error: result.error });
+    }
+    return;
+  }
+  res.status(201).json(formatTransaction(result.transaction, result.customer));
 });
 
 router.get("/transactions/:id", requireAuth, async (req, res): Promise<void> => {
@@ -915,6 +1019,90 @@ router.get("/transactions/:id", requireAuth, async (req, res): Promise<void> => 
   res.json(formatTransaction(transaction, customer));
 });
 
+/** Reverse the stock, loyalty and lifetime-spend side effects that finalizeSale
+ *  applied to a completed sale, when that sale is refunded or voided. Mirrors the
+ *  invoice "left paid" reversal (applyInvoiceStock / applyInvoiceCustomerSpend):
+ *    • restock every inventory-tracked line item;
+ *    • subtract the sale total and one visit from the customer's lifetime figures;
+ *    • undo loyalty movement — restore points *redeemed* on a loyalty-tendered
+ *      sale, or claw back points *earned* on any other sale.
+ *  Gift-card redemption/issuance, serials and digital codes are deliberately NOT
+ *  reversed here (matching prior behaviour). Callers must guard against calling
+ *  this twice on the same sale (status transition to refunded/voided) so effects
+ *  are reversed exactly once. Runs inside the caller's db.transaction. */
+async function reverseSaleEffects(
+  tx: Parameters<Parameters<typeof db.transaction>[0]>[0],
+  merchantId: number,
+  transaction: typeof transactionsTable.$inferSelect,
+): Promise<void> {
+  // Restock inventory-tracked lines, aggregating repeated products so the
+  // pre-read stock value is only adjusted once (avoids lost updates).
+  const qtyByProduct = new Map<number, number>();
+  const items = Array.isArray(transaction.items)
+    ? transaction.items as Array<{ productId?: unknown; quantity?: unknown }>
+    : [];
+  for (const it of items) {
+    const pid = typeof it.productId === "number" ? it.productId : Number(it.productId);
+    const qty = Number(it.quantity) || 0;
+    if (Number.isInteger(pid) && pid > 0 && qty > 0) {
+      qtyByProduct.set(pid, (qtyByProduct.get(pid) ?? 0) + qty);
+    }
+  }
+  for (const [productId, qty] of qtyByProduct) {
+    const [product] = await tx
+      .select({ stockQuantity: productsTable.stockQuantity, trackInventory: productsTable.trackInventory })
+      .from(productsTable)
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)))
+      .for("update");
+    if (product?.trackInventory !== "true") continue;
+    const newQty = product.stockQuantity + qty;
+    await tx
+      .update(productsTable)
+      .set({ stockQuantity: newQty })
+      .where(eq(productsTable.id, productId));
+    // Restocking may cover outstanding backorders — resolve them FIFO.
+    await reconcileOversellLedger(tx, {
+      merchantId, productId,
+      prevStock: product.stockQuantity, newStock: newQty,
+    });
+  }
+
+  if (!transaction.customerId) return;
+
+  // Reverse lifetime spend + visit count (clamped at 0, matching invoices).
+  const total = parseFloat(transaction.total) || 0;
+  if (total > 0) {
+    await tx
+      .update(customersTable)
+      .set({
+        totalSpent: sql`GREATEST(0, ${customersTable.totalSpent} - ${total})`,
+        visitCount: sql`GREATEST(0, ${customersTable.visitCount} - 1)`,
+      })
+      .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+  }
+
+  // Undo the loyalty movement finalizeSale made. A loyalty-tendered sale spent
+  // points (persistedTendered == requiredLoyaltyPoints, stored in amountTendered)
+  // — give them back. Any other sale earned points (loyaltyEarned) — claw back.
+  if (transaction.paymentMethod === "loyalty") {
+    const redeemed = parseFloat(transaction.amountTendered ?? "0") || 0;
+    if (redeemed > 0) {
+      await tx
+        .update(customersTable)
+        .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${redeemed}` })
+        .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+    }
+  } else {
+    const earned = parseFloat(transaction.loyaltyEarned ?? "0") || 0;
+    if (earned > 0) {
+      await tx
+        .update(customersTable)
+        .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${earned})` })
+        .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+    }
+  }
+}
+
 router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<void> => {
   const params = RefundTransactionParams.safeParse(req.params);
   if (!params.success) {
@@ -926,29 +1114,43 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const merchantId = req.session.merchantId!;
+  const id = params.data.id;
 
-  const [transaction] = await db
-    .select()
-    .from(transactionsTable)
-    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)));
+  try {
+    const updated = await db.transaction(async (tx) => {
+      // Lock the sale row so a concurrent refund/void/modify can't race the
+      // reversal and double-apply (or skip) the stock/loyalty/spend changes.
+      const [transaction] = await tx
+        .select()
+        .from(transactionsTable)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .for("update");
+      if (!transaction) throw new HttpError(404, "Transaction not found");
+      // Only a completed sale can be refunded: this blocks re-refunding (which
+      // would reverse effects twice) and refunding an already-voided sale.
+      if (transaction.status !== "completed") {
+        throw new HttpError(409, `Only completed sales can be refunded (this sale is ${transaction.status}).`);
+      }
+      await reverseSaleEffects(tx, merchantId, transaction);
+      const [row] = await tx
+        .update(transactionsTable)
+        .set({ status: "refunded", notes: parsed.data.reason })
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .returning();
+      return row;
+    });
 
-  if (!transaction) {
-    res.status(404).json({ error: "Transaction not found" });
-    return;
+    let cust: typeof customersTable.$inferSelect | null = null;
+    if (updated.customerId) {
+      const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
+      cust = c ?? null;
+    }
+    res.json(formatTransaction(updated, cust));
+  } catch (err) {
+    if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+    throw err;
   }
-
-  const [updated] = await db
-    .update(transactionsTable)
-    .set({ status: "refunded", notes: parsed.data.reason })
-    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)))
-    .returning();
-
-  let cust: typeof customersTable.$inferSelect | null = null;
-  if (updated.customerId) {
-    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, req.session.merchantId!)));
-    cust = c ?? null;
-  }
-  res.json(formatTransaction(updated, cust));
 });
 
 // POST /transactions/:id/void — cancel a completed sale (e.g. mistaken entry).
@@ -976,6 +1178,157 @@ router.post("/transactions/:id/void", requireAuth, async (req, res): Promise<voi
     cust = c ?? null;
   }
   res.json(formatTransaction(updated, cust));
+});
+
+// POST /transactions/:id/modify — limited post-sale amendments to a COMPLETED
+// sale: add free ($0) products, link/detach a customer, and/or link an
+// appointment or service job. Deliberately narrow so a finalised sale can be
+// annotated (comp an item, attach a customer, connect it to the job it settled)
+// without ever changing the money collected — added items are forced to $0, so
+// subtotal/tax/total are untouched. Refunded/voided sales cannot be modified.
+router.post("/transactions/:id/modify", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const params = ModifyCompletedSaleParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const parsed = ModifyCompletedSaleBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const id = params.data.id;
+  const { customerId, addItems, serviceJobNumber, appointmentId } = parsed.data;
+
+  try {
+    const result = await db.transaction(async (tx) => {
+      // Lock the row so a concurrent modify/void can't race the items/notes edit.
+      const [transaction] = await tx
+        .select()
+        .from(transactionsTable)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .for("update");
+      if (!transaction) throw new HttpError(404, "Transaction not found");
+      if (transaction.status !== "completed") {
+        throw new HttpError(409, "Only completed sales can be modified.");
+      }
+
+      const updates: Partial<typeof transactionsTable.$inferInsert> = {};
+
+      // ── Add free ($0) products ──────────────────────────────────────────────
+      // Catalog products are resolved for their name (and stock deduction); the
+      // price is forced to 0 regardless of the catalog price. productId 0 is a
+      // custom free line carrying a client-supplied name.
+      if (addItems && addItems.length > 0) {
+        const existingItems = Array.isArray(transaction.items)
+          ? [...(transaction.items as Array<Record<string, unknown>>)]
+          : [];
+        const catalogIds = [...new Set(addItems.filter((i) => i.productId !== 0).map((i) => i.productId))];
+        const products = catalogIds.length > 0
+          ? await tx.select().from(productsTable).where(and(inArray(productsTable.id, catalogIds), eq(productsTable.merchantId, merchantId)))
+          : [];
+        const productMap = new Map(products.map((p) => [p.id, p]));
+        const missing = catalogIds.filter((pid) => !productMap.has(pid));
+        if (missing.length > 0) throw new HttpError(400, `Unknown product id(s): ${missing.join(", ")}`);
+
+        // Aggregate per product so multiple lines of the same product deduct once
+        // from the pre-read stock value (avoids lost updates).
+        const qtyByProduct = new Map<number, number>();
+        for (const item of addItems) {
+          if (!Number.isInteger(item.quantity) || item.quantity <= 0) {
+            throw new HttpError(400, "Item quantity must be a positive integer.");
+          }
+          let name: string;
+          if (item.productId === 0) {
+            name = (item.productName?.trim() || "Free item").slice(0, 200);
+          } else {
+            name = productMap.get(item.productId)!.name;
+            qtyByProduct.set(item.productId, (qtyByProduct.get(item.productId) ?? 0) + item.quantity);
+          }
+          existingItems.push({
+            productId: item.productId,
+            productName: name,
+            quantity: item.quantity,
+            unitPrice: 0,
+            totalPrice: 0,
+            taxAmount: 0,
+            // Marks the line as a post-sale complimentary add so reports/receipts
+            // can distinguish it from an item that was actually paid for.
+            comp: true,
+          });
+        }
+        for (const [pid, qty] of qtyByProduct) {
+          const product = productMap.get(pid)!;
+          if (product.trackInventory === "true") {
+            // Complimentary items still draw down stock, and may push it negative.
+            const newQty = product.stockQuantity - qty;
+            await tx.update(productsTable).set({ stockQuantity: newQty }).where(eq(productsTable.id, pid));
+            await reconcileOversellLedger(tx, {
+              merchantId, productId: pid,
+              prevStock: product.stockQuantity, newStock: newQty,
+              receiptNumber: transaction.receiptNumber, transactionId: transaction.id,
+            });
+          }
+        }
+        updates.items = existingItems;
+      }
+
+      // ── Link / detach customer ──────────────────────────────────────────────
+      // undefined → leave unchanged; null → detach; number → link (tenant-scoped).
+      if (customerId !== undefined) {
+        if (customerId === null) {
+          updates.customerId = null;
+        } else {
+          const [c] = await tx
+            .select({ id: customersTable.id })
+            .from(customersTable)
+            .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+          if (!c) throw new HttpError(404, "Customer not found");
+          updates.customerId = customerId;
+        }
+      }
+
+      // ── Link appointment / service job ──────────────────────────────────────
+      // Uses the same notes-marker convention as a live sale (see finalizeSale),
+      // and marks the linked entity completed. Markers are de-duplicated so
+      // re-linking the same job/appointment doesn't append twice.
+      let notes = transaction.notes ?? "";
+      const appendMarker = (marker: string) => {
+        if (!notes.includes(marker)) notes = notes ? `${notes} ${marker}` : marker;
+      };
+      if (serviceJobNumber) {
+        const jobNum = serviceJobNumber.trim();
+        const [job] = await tx.select().from(serviceJobsTable)
+          .where(and(eq(serviceJobsTable.jobNumber, jobNum), eq(serviceJobsTable.merchantId, merchantId)));
+        if (!job) throw new HttpError(404, "Service job not found");
+        await tx.update(serviceJobsTable).set({ status: "completed" })
+          .where(and(eq(serviceJobsTable.id, job.id), eq(serviceJobsTable.merchantId, merchantId)));
+        appendMarker(`[Service #${job.jobNumber}: ${job.deviceType || job.deviceDescription || "service"}]`);
+      }
+      if (appointmentId != null) {
+        const [appt] = await tx.select().from(appointmentsTable)
+          .where(and(eq(appointmentsTable.id, appointmentId), eq(appointmentsTable.merchantId, merchantId)));
+        if (!appt) throw new HttpError(404, "Appointment not found");
+        await tx.update(appointmentsTable).set({ status: "completed" })
+          .where(and(eq(appointmentsTable.id, appt.id), eq(appointmentsTable.merchantId, merchantId)));
+        appendMarker(`[Appt #${appt.id}: ${appt.title}]`);
+      }
+      if (notes !== (transaction.notes ?? "")) updates.notes = notes;
+
+      if (Object.keys(updates).length === 0) return transaction;
+
+      const [updated] = await tx.update(transactionsTable).set(updates)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .returning();
+      return updated;
+    });
+
+    let customer: typeof customersTable.$inferSelect | null = null;
+    if (result.customerId) {
+      const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, result.customerId), eq(customersTable.merchantId, merchantId)));
+      customer = c ?? null;
+    }
+    res.json(formatTransaction(result, customer));
+  } catch (err) {
+    if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+    req.log.error({ err, transactionId: id }, "Failed to modify completed sale");
+    res.status(500).json({ error: "Failed to modify sale" });
+  }
 });
 
 router.delete("/transactions/:id", requireAuth, async (req, res): Promise<void> => {

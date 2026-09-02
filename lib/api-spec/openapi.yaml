@@ -36,6 +36,10 @@ tags:
     description: Loyalty program settings
   - name: service-jobs
     description: Service job management
+  - name: service-settings
+    description: Per-merchant service job menu options
+  - name: invoice-settings
+    description: Per-merchant invoicing defaults, reminders and sending options
   - name: Storage
     description: Object storage upload and serving endpoints.
   - name: cameras
@@ -481,6 +485,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+        "409":
+          description: A product with the same SKU already exists for this merchant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
 
   /products/import:
     post:
@@ -571,6 +581,12 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/Product"
+        "409":
+          description: Another product already uses the same SKU for this merchant
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
     delete:
       operationId: deleteProduct
       tags: [products]
@@ -759,6 +775,27 @@ paths:
                 items:
                   $ref: "#/components/schemas/ProductPriceHistoryEntry"
 
+  /products/{id}/sales-history:
+    get:
+      operationId: getProductSalesHistory
+      summary: Get every sale and invoice that includes this product
+      tags: [products]
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Sales and invoices containing the product, newest first
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductSalesHistoryEntry"
+
   # ── Digital Codes ─────────────────────────────────────────────────────────
   /products/{productId}/digital-codes:
     get:
@@ -820,6 +857,34 @@ paths:
           description: Deleted
 
   # ── Customers ─────────────────────────────────────────────────────────────
+  /customers/lookup-phone:
+    get:
+      operationId: lookupCustomersByPhone
+      tags: [customers]
+      summary: Find existing customers with the same phone number
+      description: >-
+        Matches on the last 9 digits, so "0400 000 000" and "+61400000000" are
+        the same customer. Returns an empty list when the number is too short to
+        identify anyone. Used to warn before a duplicate is created.
+      parameters:
+        - name: phone
+          in: query
+          required: true
+          schema:
+            type: string
+        - name: excludeId
+          in: query
+          description: Customer to leave out — the one being edited.
+          schema:
+            type: integer
+      responses:
+        "200":
+          description: Customers already holding this number
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerList"
+
   /customers:
     get:
       operationId: listCustomers
@@ -1352,6 +1417,239 @@ paths:
               schema:
                 $ref: '#/components/schemas/ErrorEnvelope'
 
+  # ── Media library ─────────────────────────────────────────────────────────
+
+  /storage/assets:
+    get:
+      tags: [Storage]
+      operationId: listMerchantAssets
+      summary: List the authenticated merchant's uploaded media
+      description: >
+        Returns the merchant's media library — one entry per distinct uploaded
+        file. Assets are scoped to the merchant by both the asset row and the
+        merchant-prefixed storage path, so a merchant only ever sees its own
+        uploads.
+      parameters:
+        - name: search
+          in: query
+          required: false
+          schema: { type: string }
+        - name: limit
+          in: query
+          required: false
+          schema: { type: integer, minimum: 1, maximum: 200, default: 60 }
+        - name: offset
+          in: query
+          required: false
+          schema: { type: integer, minimum: 0, default: 0 }
+        - name: withUsage
+          in: query
+          required: false
+          description: Include a reference count per asset. Costs a scan; off by default.
+          schema: { type: boolean, default: false }
+        - name: withReferences
+          in: query
+          required: false
+          description: >
+            Include what each asset is attached to (entity, row id and label).
+            Implies withUsage. Used by the Uploads management page.
+          schema: { type: boolean, default: false }
+        - name: kind
+          in: query
+          required: false
+          description: Filter by media kind, derived from the stored content type.
+          schema:
+            type: string
+            enum: [all, image, video, document]
+            default: all
+      responses:
+        '200':
+          description: The merchant's media library.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantAssetListResponse'
+
+  /storage/assets/{id}/usage:
+    get:
+      tags: [Storage]
+      operationId: getMerchantAssetUsage
+      summary: List what still references an asset
+      description: >
+        Scans every column that can hold a media reference and reports where
+        this asset is still in use. A total of 0 means the asset can be deleted.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Reference report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantAssetUsageResponse'
+        '404':
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/assets/{id}:
+    delete:
+      tags: [Storage]
+      operationId: deleteMerchantAsset
+      summary: Delete an unreferenced asset and reclaim its storage
+      description: >
+        Permanently removes the stored object and its library entry. Refuses
+        with 409 when anything still references the asset, so deleting can
+        never break a product image.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        '200':
+          description: Asset deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/DeleteMerchantAssetResponse'
+        '404':
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '409':
+          description: Asset is still referenced and was not deleted.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/MerchantAssetUsageResponse'
+
+  /storage/assets/bulk-delete:
+    post:
+      tags: [Storage]
+      operationId: bulkDeleteMerchantAssets
+      summary: Delete many unreferenced assets in one pass
+      description: >
+        Permanently removes the stored objects and library entries for every
+        listed asset that nothing references. Assets still in use are skipped,
+        never deleted, and come back in `skipped` with their reference count —
+        one in-use file does not block the rest of the batch.
+
+
+        The usage check is a single scan for the whole batch rather than one per
+        asset, but uses the same substring matching as the per-asset delete, so
+        the "never delete something still referenced" guarantee is unchanged.
+        Ids the caller does not own are reported in `notFound`, not deleted.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/BulkDeleteMerchantAssetsBody'
+      responses:
+        '200':
+          description: Per-asset outcome for the batch.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/BulkDeleteMerchantAssetsResponse'
+        '400':
+          description: Invalid or empty asset id list.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/assets/{id}/replace:
+    post:
+      tags: [Storage]
+      operationId: replaceMerchantAsset
+      summary: Point everything using one asset at another
+      description: >
+        Repoints every reference to this asset at the replacement asset, in a
+        single transaction. Storage is content-addressed, so a file cannot be
+        overwritten in place — replacing means rewriting the references. The
+        old asset stays in the library, now unused, and can be deleted
+        separately.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/ReplaceMerchantAssetBody'
+      responses:
+        '200':
+          description: References rewritten.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ReplaceMerchantAssetResponse'
+        '400':
+          description: Invalid replacement asset.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '404':
+          description: Asset not found.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /storage/assets/import:
+    post:
+      tags: [Storage]
+      operationId: importMerchantAssets
+      summary: Register pre-existing uploads into the media library
+      description: >
+        One-shot backfill. Lists the merchant's stored objects, hashes any that
+        are not yet in the library, and registers them so historical uploads
+        are pickable. Read-only with respect to stored objects — nothing is
+        moved or deleted. Idempotent.
+      responses:
+        '200':
+          description: Import summary.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ImportMerchantAssetsResponse'
+
+  /storage/assets/orphans:
+    post:
+      tags: [Storage]
+      operationId: sweepMerchantAssetOrphans
+      summary: Find (and optionally delete) unreferenced stored objects
+      description: >
+        Reports stored objects that nothing references — typically images left
+        behind by a "remove image" click, which previously orphaned the object
+        forever. Defaults to a dry run; pass apply=true to actually delete.
+      parameters:
+        - name: apply
+          in: query
+          required: false
+          description: When true, delete the listed orphans. Destructive.
+          schema: { type: boolean, default: false }
+      responses:
+        '200':
+          description: Orphan report.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/SweepOrphansResponse'
+
   # ── Invoices (PDF) ────────────────────────────────────────────────────────
   /invoices/{id}/pdf:
     get:
@@ -1528,6 +1826,40 @@ paths:
               schema:
                 $ref: "#/components/schemas/Transaction"
 
+  /transactions/{id}/modify:
+    post:
+      operationId: modifyCompletedSale
+      tags: [transactions]
+      summary: >-
+        Amend a completed sale in limited ways — add free ($0) products, link a
+        customer, and/or link an appointment or service job. Never changes the
+        money collected.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ModifyCompletedSaleInput"
+      responses:
+        "200":
+          description: Modified
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Transaction"
+        "409":
+          description: Sale is not in a state that can be modified (only completed sales)
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   # ── Staff ─────────────────────────────────────────────────────────────────
   /staff:
     get:
@@ -1700,6 +2032,66 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoyaltySettings"
+
+  /service-settings:
+    get:
+      operationId: getServiceSettings
+      tags: [service-settings]
+      summary: Get merchant service job menu options
+      responses:
+        "200":
+          description: Service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
+    put:
+      operationId: updateServiceSettings
+      tags: [service-settings]
+      summary: Update merchant service job menu options
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceSettingsInput"
+      responses:
+        "200":
+          description: Updated service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
+
+  /invoice-settings:
+    get:
+      operationId: getInvoiceSettings
+      tags: [invoice-settings]
+      summary: Get merchant invoicing settings
+      responses:
+        "200":
+          description: Invoice settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSettings"
+    put:
+      operationId: updateInvoiceSettings
+      tags: [invoice-settings]
+      summary: Update merchant invoicing settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoiceSettingsInput"
+      responses:
+        "200":
+          description: Updated invoice settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/InvoiceSettings"
 
   /loyalty/leaderboard:
     get:
@@ -1901,6 +2293,17 @@ paths:
           schema:
             type: string
             enum: [rolling30, calendar_mtd]
+        - name: yearMode
+          in: query
+          description: How the "year" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.
+          schema:
+            type: string
+            enum: [financial, rolling365]
+        - name: compare
+          in: query
+          description: When true, also return the previous equivalent period's headline totals under `previous`.
+          schema:
+            type: boolean
       responses:
         "200":
           description: Dashboard summary
@@ -1965,6 +2368,12 @@ paths:
           schema:
             type: string
             enum: [week, month, year]
+        - name: monthMode
+          in: query
+          description: How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+          schema:
+            type: string
+            enum: [rolling30, calendar_mtd]
       responses:
         "200":
           description: Sales chart data
@@ -2080,6 +2489,36 @@ paths:
               schema:
                 $ref: "#/components/schemas/Appointment"
 
+  /appointments/{id}/service-job:
+    post:
+      operationId: linkAppointmentServiceJob
+      tags: [appointments]
+      summary: Link an appointment to a service job created from it
+      description: >
+        Records the service job that was raised from this appointment. Used by the
+        "Create service job" action, which pre-fills the new-service form from the
+        booking and links the two records once the job is saved.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/LinkAppointmentServiceJobInput"
+      responses:
+        "200":
+          description: Updated appointment
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Appointment"
+        "404":
+          description: Appointment or service job not found
   # ── Service Jobs ──────────────────────────────────────────────────────────
   /service-jobs:
     get:
@@ -2198,6 +2637,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceJob"
+
+  /service-jobs/{id}/reopen:
+    post:
+      operationId: reopenServiceJob
+      tags: [service-jobs]
+      summary: Reopen a completed job as a new repair linked to the original
+      security: [{ session: [] }]
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "201":
+          description: New repair created, linked to the original
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceJob"
+        "404":
+          description: Service job not found
+        "409":
+          description: Job is not completed
 
   /service-jobs/{id}/deposit:
     post:
@@ -4564,53 +5026,6 @@ paths:
                 items:
                   $ref: "#/components/schemas/FloorZone"
 
-  /social-feed/settings:
-    get:
-      operationId: getSocialFeedSettings
-      tags: [social-feed]
-      summary: Get social feed display settings
-      responses:
-        "200":
-          description: Social feed settings
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SocialFeedSettings"
-    put:
-      operationId: updateSocialFeedSettings
-      tags: [social-feed]
-      summary: Update social feed display settings
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/SocialFeedSettingsInput"
-      responses:
-        "200":
-          description: Updated settings
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SocialFeedSettings"
-
-  /social-feed/posts:
-    get:
-      operationId: listSocialFeedPosts
-      tags: [social-feed]
-      summary: Fetch posts from connected social platforms
-      parameters:
-        - in: query
-          name: platform
-          schema: { type: string }
-      responses:
-        "200":
-          description: Social feed posts
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/SocialFeedResponse"
-
   /brands:
     get:
       operationId: listBrands
@@ -5036,6 +5451,76 @@ paths:
         "204":
           description: Deleted
 
+  /time-card-sessions:
+    get:
+      operationId: listTimeCardSessions
+      tags: [time-card-sessions]
+      summary: List time card sessions
+      parameters:
+        - in: query
+          name: active
+          schema: { type: string }
+          description: "When 'true', only sessions that are not stopped"
+      responses:
+        "200":
+          description: List
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeCardSessionListResponse"
+    post:
+      operationId: createTimeCardSession
+      tags: [time-card-sessions]
+      summary: Create a time card session (from a sale)
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeCardSessionInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeCardSession"
+  /time-card-sessions/{id}:
+    patch:
+      operationId: updateTimeCardSession
+      tags: [time-card-sessions]
+      summary: Start, pause or stop a time card session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TimeCardSessionAction"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TimeCardSession"
+    delete:
+      operationId: deleteTimeCardSession
+      tags: [time-card-sessions]
+      summary: Delete a time card session
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
   /pos-registers:
     get:
       operationId: listPosRegisters
@@ -5123,6 +5608,35 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/PosSettings" }
+
+  /payment-surcharges:
+    get:
+      operationId: getPaymentSurcharges
+      summary: Get per-payment-method surcharge config
+      tags: [POS]
+      security: [{ session: [] }]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSurchargeListResponse" }
+    put:
+      operationId: updatePaymentSurcharges
+      summary: Bulk upsert per-payment-method surcharge config
+      tags: [POS]
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/PaymentSurchargesInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/PaymentSurchargeListResponse" }
 
   /layby-settings:
     get:
@@ -5265,6 +5779,23 @@ paths:
       responses:
         "204":
           description: Deleted
+
+  /kpi-history:
+    get:
+      operationId: listKpiHistory
+      summary: List archived KPI period snapshots (e.g. completed months), newest first
+      tags: [KPIs]
+      parameters:
+        - in: query
+          name: limit
+          required: false
+          schema: { type: integer }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/KpiHistoryListResponse" }
 
   /qr-codes:
     get:
@@ -6896,7 +7427,7 @@ paths:
           required: true
           schema:
             type: string
-            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket, A4_Receipt, Customer_PDF]
+            enum: [Invoice, Thermal_Receipt, Quote, Service_Ticket, A4_Receipt, Customer_PDF, Email]
       requestBody:
         required: true
         content:
@@ -7030,6 +7561,34 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ProductPerformanceReport" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /reports/cost-of-goods:
+    get:
+      operationId: getCostOfGoods
+      tags: [reports]
+      summary: Cost of goods report — monthly COGS (sales/invoices/laybys), supplier spend and purchase-order shipping for a date range
+      security: [{ session: [] }]
+      parameters:
+        - name: startDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+          description: Start date (YYYY-MM-DD, inclusive)
+        - name: endDate
+          in: query
+          required: true
+          schema: { type: string, format: date }
+          description: End date (YYYY-MM-DD, inclusive)
+      responses:
+        "200":
+          description: Cost of goods report
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/CostOfGoodsReport" }
         "400":
           description: Validation error
         "401":
@@ -7923,6 +8482,35 @@ paths:
         "404":
           description: Invoice not found
 
+  /invoices/{id}/payment/reverse:
+    post:
+      operationId: reverseInvoicePayment
+      tags: [invoices]
+      summary: Reverse or correct a recorded payment against an invoice
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoicePaymentReverseInput"
+      responses:
+        "200":
+          description: Updated invoice after the payment was reversed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          description: Validation error
+        "404":
+          description: Invoice not found
+
   /invoices/{id}/send-email:
     post:
       operationId: sendInvoiceEmail
@@ -7943,6 +8531,33 @@ paths:
       responses:
         "200":
           description: Email sent
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/OkResult"
+        "404":
+          description: Invoice not found
+
+  /invoices/{id}/send-sms:
+    post:
+      operationId: sendInvoiceSms
+      tags: [invoices]
+      summary: Send the invoice by SMS to the customer
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SendInvoiceSmsInput"
+      responses:
+        "200":
+          description: SMS sent
           content:
             application/json:
               schema:
@@ -8599,6 +9214,70 @@ paths:
         "400":
           description: Invalid storageKey or missing folder when enabled
 
+  /integrations/nextcloud/login-flow/start:
+    post:
+      operationId: startNextcloudLoginFlow
+      tags: [integrations]
+      summary: Begin connecting a Nextcloud server (Login Flow v2)
+      description: |
+        Opens a login session on the merchant's own Nextcloud server and returns
+        the URL to send them to for approval. Nextcloud is self-hosted, so there
+        is no platform OAuth app: the merchant's server issues an app password
+        once they approve, which `poll` then collects.
+
+        The poll token stays server-side in the session and is never returned.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/NextcloudLoginFlowStartInput"
+      responses:
+        "200":
+          description: Login session opened
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextcloudLoginFlowStart"
+        "400":
+          description: Address unreachable, not a Nextcloud server, or rejected
+
+  /integrations/nextcloud/login-flow/poll:
+    post:
+      operationId: pollNextcloudLoginFlow
+      tags: [integrations]
+      summary: Poll a pending Nextcloud login for approval
+      description: |
+        Returns `pending` until the merchant approves the login on their server,
+        then `connected` — the call that returns `connected` is also the one that
+        stores the issued app password in the encrypted vault. Nextcloud expires
+        an unapproved flow after 20 minutes, reported as `expired`.
+      responses:
+        "200":
+          description: Current state of the pending login
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/NextcloudLoginFlowPoll"
+        "400":
+          description: No login in progress, or the credentials failed verification
+
+  /integrations/nextcloud/login-flow/cancel:
+    post:
+      operationId: cancelNextcloudLoginFlow
+      tags: [integrations]
+      summary: Abandon a pending Nextcloud login
+      responses:
+        "200":
+          description: Pending login discarded
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok: { type: boolean }
+
   /xero/sync/contacts:
     post:
       operationId: syncXeroContacts
@@ -9053,8 +9732,484 @@ paths:
                   - $ref: "#/components/schemas/DashboardKpiResult"
                   - type: "null"
 
+  # ── Marketing · Follow Up ───────────────────────────────────────────────────
+  /follow-ups:
+    get:
+      operationId: listFollowUps
+      tags: [follow-ups]
+      summary: Completed service jobs and appointments due for a follow-up
+      parameters:
+        - { name: windowValue, in: query, required: false, schema: { type: integer, minimum: 0, maximum: 3650 } }
+        - { name: windowUnit, in: query, required: false, schema: { type: string, enum: [days, weeks, months] } }
+        - { name: includeServices, in: query, required: false, schema: { type: string, enum: ["true", "false"] } }
+        - { name: includeAppointments, in: query, required: false, schema: { type: string, enum: ["true", "false"] } }
+        - { name: hideAlreadySent, in: query, required: false, schema: { type: string, enum: ["true", "false"] } }
+      responses:
+        "200":
+          description: Follow-ups due
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpListResponse" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /follow-ups/summary:
+    get:
+      operationId: getFollowUpSummary
+      tags: [follow-ups]
+      summary: Headline counts of overdue follow-ups, for the dashboard banner
+      responses:
+        "200":
+          description: Follow-up summary
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSummary" }
+        "401":
+          description: Unauthorized
+
+  /follow-ups/shortcodes:
+    get:
+      operationId: listFollowUpShortcodes
+      tags: [follow-ups]
+      summary: Shortcodes available to follow-up templates
+      responses:
+        "200":
+          description: Shortcodes
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpShortcodeListResponse" }
+
+  /follow-ups/log:
+    get:
+      operationId: listFollowUpLog
+      tags: [follow-ups]
+      summary: Follow-up messages already dispatched
+      parameters:
+        - { name: limit, in: query, required: false, schema: { type: integer, minimum: 1, maximum: 500 } }
+      responses:
+        "200":
+          description: Send history
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpLogListResponse" }
+
+  /follow-ups/preview:
+    post:
+      operationId: previewFollowUp
+      tags: [follow-ups]
+      summary: Render a follow-up message against one record without sending it
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpSendInput" }
+      responses:
+        "200":
+          description: Rendered message
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpPreviewResponse" }
+        "400":
+          description: Validation error
+        "404":
+          description: Record not found
+
+  /follow-ups/send:
+    post:
+      operationId: sendFollowUps
+      tags: [follow-ups]
+      summary: Send follow-up emails and/or SMS for the selected records
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpSendInput" }
+      responses:
+        "200":
+          description: Dispatch outcome
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSendResponse" }
+        "400":
+          description: Validation error
+
+  /follow-ups/mark-done:
+    post:
+      operationId: markFollowUpsDone
+      tags: [follow-ups]
+      summary: Mark records as followed up without sending a message
+      description: >-
+        Clears records off the due list when the merchant chased the customer by
+        another means (phone call, in person). Records a log entry with status
+        "done" so the action is auditable and reversible.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpMarkDoneInput" }
+      responses:
+        "200":
+          description: Records marked
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpMarkDoneResponse" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /follow-ups/unmark-done:
+    post:
+      operationId: unmarkFollowUpsDone
+      tags: [follow-ups]
+      summary: Undo a manual "mark as done" and return records to the due list
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpMarkDoneInput" }
+      responses:
+        "200":
+          description: Records returned to the due list
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpMarkDoneResponse" }
+        "400":
+          description: Validation error
+        "401":
+          description: Unauthorized
+
+  /follow-up-settings:
+    get:
+      operationId: getFollowUpSettings
+      tags: [follow-ups]
+      summary: Follow Up defaults for the current merchant
+      responses:
+        "200":
+          description: Settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSettings" }
+    put:
+      operationId: updateFollowUpSettings
+      tags: [follow-ups]
+      summary: Update Follow Up defaults
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpSettingsInput" }
+      responses:
+        "200":
+          description: Updated settings
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpSettings" }
+        "400":
+          description: Validation error
+
+  /follow-up-templates:
+    get:
+      operationId: listFollowUpTemplates
+      tags: [follow-ups]
+      summary: List follow-up message templates
+      responses:
+        "200":
+          description: Templates
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpTemplateListResponse" }
+    post:
+      operationId: createFollowUpTemplate
+      tags: [follow-ups]
+      summary: Create a follow-up message template
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpTemplateInput" }
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpTemplate" }
+        "400":
+          description: Validation error
+
+  /follow-up-templates/{id}:
+    put:
+      operationId: updateFollowUpTemplate
+      tags: [follow-ups]
+      summary: Update a follow-up message template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/FollowUpTemplateInput" }
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/FollowUpTemplate" }
+        "404":
+          description: Not found
+    delete:
+      operationId: deleteFollowUpTemplate
+      tags: [follow-ups]
+      summary: Delete a follow-up message template
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "204":
+          description: Deleted
+        "404":
+          description: Not found
+
 components:
   schemas:
+    # ── Marketing · Follow Up ─────────────────────────────────────────────────
+    FollowUpItem:
+      type: object
+      required: [id, sourceType, sourceId, reference, title, device, staffName, completedAt, daysSince, customerId, customerName, email, phone, agreedToMarketing, lastFollowUpAt, followUpCount, markedDoneAt]
+      properties:
+        id: { type: string, description: "Composite key, e.g. service_job-42" }
+        sourceType: { type: string, enum: [service_job, appointment] }
+        sourceId: { type: integer }
+        reference: { type: string, description: "Job number, or APT-<id> for an appointment" }
+        title: { type: string }
+        device: { type: string }
+        staffName: { type: string }
+        completedAt: { type: string, format: date-time }
+        daysSince: { type: integer }
+        customerId: { type: integer, nullable: true }
+        customerName: { type: string }
+        email: { type: string }
+        phone: { type: string }
+        agreedToMarketing: { type: boolean }
+        lastFollowUpAt: { type: string, nullable: true }
+        followUpCount: { type: integer }
+        markedDoneAt:
+          type: string
+          nullable: true
+          description: >-
+            When the merchant manually marked this record as followed up without
+            sending a message. Non-null records drop out of the due list on the
+            same rule as ones that were actually sent.
+
+    FollowUpListResponse:
+      type: object
+      required: [items, total, windowValue, windowUnit, cutoff]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpItem" }
+        total: { type: integer }
+        windowValue: { type: integer }
+        windowUnit: { type: string }
+        cutoff: { type: string, format: date-time }
+
+    FollowUpSummary:
+      type: object
+      required: [dueCount, contactableCount, servicesDue, appointmentsDue, oldestDaysSince, windowValue, windowUnit]
+      properties:
+        dueCount: { type: integer }
+        contactableCount: { type: integer, description: "Due records reachable on the merchant's default channel" }
+        servicesDue: { type: integer }
+        appointmentsDue: { type: integer }
+        oldestDaysSince: { type: integer }
+        windowValue: { type: integer }
+        windowUnit: { type: string, enum: [days, weeks, months] }
+
+    FollowUpShortcode:
+      type: object
+      required: [code, label, example]
+      properties:
+        code: { type: string }
+        label: { type: string }
+        example: { type: string }
+
+    FollowUpShortcodeListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpShortcode" }
+        total: { type: integer }
+
+    FollowUpMarkDoneInput:
+      type: object
+      required: [targets]
+      properties:
+        targets:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [sourceType, sourceId]
+            properties:
+              sourceType: { type: string, enum: [service_job, appointment] }
+              sourceId: { type: integer }
+
+    FollowUpMarkDoneResponse:
+      type: object
+      required: [changed, skipped]
+      properties:
+        changed: { type: integer, description: "Records whose done marker was added or removed" }
+        skipped: { type: integer, description: "Targets that were already in the requested state, or not this merchant's" }
+
+    FollowUpLogEntry:
+      type: object
+      required: [id, sourceType, sourceId, customerId, templateId, channel, status, recipient, subject, body, error, sentAt]
+      properties:
+        id: { type: integer }
+        sourceType: { type: string }
+        sourceId: { type: integer }
+        customerId: { type: integer, nullable: true }
+        templateId: { type: integer, nullable: true }
+        channel: { type: string }
+        status: { type: string }
+        recipient: { type: string }
+        subject: { type: string }
+        body: { type: string }
+        error: { type: string, nullable: true }
+        sentAt: { type: string, format: date-time }
+
+    FollowUpLogListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpLogEntry" }
+        total: { type: integer }
+
+    FollowUpTarget:
+      type: object
+      required: [sourceType, sourceId]
+      properties:
+        sourceType: { type: string, enum: [service_job, appointment] }
+        sourceId: { type: integer }
+
+    FollowUpSendInput:
+      type: object
+      required: [targets, channel]
+      properties:
+        targets:
+          type: array
+          minItems: 1
+          items: { $ref: "#/components/schemas/FollowUpTarget" }
+        channel: { type: string, enum: [email, sms, both] }
+        templateId: { type: integer, nullable: true }
+        subject: { type: string }
+        body: { type: string }
+        smsBody: { type: string }
+
+    FollowUpSendResult:
+      type: object
+      required: [sourceType, sourceId, channel, status]
+      properties:
+        sourceType: { type: string }
+        sourceId: { type: integer }
+        channel: { type: string }
+        status: { type: string, enum: [sent, failed, skipped] }
+        error: { type: string }
+
+    FollowUpSendResponse:
+      type: object
+      required: [success, sent, failed, skipped, results]
+      properties:
+        success: { type: boolean }
+        sent: { type: integer }
+        failed: { type: integer }
+        skipped: { type: integer }
+        results:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpSendResult" }
+
+    FollowUpPreviewResponse:
+      type: object
+      required: [subject, html, text, sms, recipientEmail, recipientPhone]
+      properties:
+        subject: { type: string }
+        html: { type: string }
+        text: { type: string }
+        sms: { type: string }
+        recipientEmail: { type: string }
+        recipientPhone: { type: string }
+
+    FollowUpSettings:
+      type: object
+      required: [id, merchantId, windowValue, windowUnit, includeServices, includeAppointments, hideAlreadySent, requireOptIn, defaultChannel, defaultTemplateId, reviewUrl, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        windowValue: { type: integer }
+        windowUnit: { type: string, enum: [days, weeks, months] }
+        includeServices: { type: boolean }
+        includeAppointments: { type: boolean }
+        hideAlreadySent: { type: boolean }
+        requireOptIn: { type: boolean }
+        defaultChannel: { type: string, enum: [email, sms, both] }
+        defaultTemplateId: { type: integer, nullable: true }
+        reviewUrl: { type: string }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FollowUpSettingsInput:
+      type: object
+      properties:
+        windowValue: { type: integer, minimum: 0, maximum: 3650 }
+        windowUnit: { type: string, enum: [days, weeks, months] }
+        includeServices: { type: boolean }
+        includeAppointments: { type: boolean }
+        hideAlreadySent: { type: boolean }
+        requireOptIn: { type: boolean }
+        defaultChannel: { type: string, enum: [email, sms, both] }
+        defaultTemplateId: { type: integer, nullable: true }
+        reviewUrl: { type: string }
+
+    FollowUpTemplate:
+      type: object
+      required: [id, merchantId, name, channel, subject, body, smsBody, isDefault, createdAt, updatedAt]
+      properties:
+        id: { type: integer }
+        merchantId: { type: integer }
+        name: { type: string }
+        channel: { type: string, enum: [email, sms, both] }
+        subject: { type: string }
+        body: { type: string }
+        smsBody: { type: string }
+        isDefault: { type: boolean }
+        createdAt: { type: string, format: date-time }
+        updatedAt: { type: string, format: date-time }
+
+    FollowUpTemplateListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/FollowUpTemplate" }
+        total: { type: integer }
+
+    FollowUpTemplateInput:
+      type: object
+      properties:
+        name: { type: string }
+        channel: { type: string, enum: [email, sms, both] }
+        subject: { type: string }
+        body: { type: string }
+        smsBody: { type: string }
+        isDefault: { type: boolean }
+
     # ── SMS templates & campaigns ─────────────────────────────────────────────
     SmsTemplate:
       type: object
@@ -9265,7 +10420,7 @@ components:
       required: [id, type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive, nextcloud] }
         directory: { type: string, nullable: true }
         bucket: { type: string, nullable: true }
         region: { type: string, nullable: true }
@@ -9298,7 +10453,7 @@ components:
       required: [type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp, onedrive] }
+        type: { type: string, enum: [local, s3, gcs, sftp, onedrive, nextcloud] }
         directory: { type: string }
         bucket: { type: string }
         region: { type: string }
@@ -9467,6 +10622,13 @@ components:
           type: boolean
         passwordChangeAlertEmail:
           type: boolean
+        requirePortalPassword:
+          type: boolean
+          description: >-
+            When true, a customer who has set a portal password must enter it;
+            the portalToken in the URL then identifies the account rather than
+            granting access to it. Customers who have not set one yet are still
+            admitted by the token and are prompted to set a password.
         createdAt:
           type: string
           format: date-time
@@ -9515,6 +10677,8 @@ components:
         securityAlertEmail:
           type: boolean
         passwordChangeAlertEmail:
+          type: boolean
+        requirePortalPassword:
           type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────
@@ -9604,6 +10768,20 @@ components:
         poNumber: { type: string, nullable: true }
         poId: { type: integer, nullable: true }
         changedAt: { type: string }
+    ProductSalesHistoryEntry:
+      type: object
+      required: [type, id, reference, date, quantity, unitPrice, lineTotal, documentTotal]
+      properties:
+        type: { type: string, enum: [sale, invoice] }
+        id: { type: integer }                                   # transaction or invoice id
+        reference: { type: string }                             # receipt number or invoice number
+        date: { type: string }                                  # createdAt (ISO)
+        status: { type: string, nullable: true }
+        customerName: { type: string, nullable: true }
+        quantity: { type: number }                              # units of this product on the document
+        unitPrice: { type: number }
+        lineTotal: { type: number }                             # quantity × unitPrice for this product
+        documentTotal: { type: number }                         # total of the whole sale/invoice
     # ── Product Types ─────────────────────────────────────────────────────────
     ProductType:
       type: object
@@ -9751,6 +10929,8 @@ components:
           type: boolean
         isRefurbished:
           type: boolean
+        tracksSerial:
+          type: boolean
         tags:
           type: array
           items:
@@ -9762,6 +10942,8 @@ components:
           type: ["string", "null"]
         notification:
           type: ["string", "null"]
+        timeCardMinutes:
+          type: ["integer", "null"]
         digitalCodesCount:
           type: ["integer", "null"]
         createdAt:
@@ -9851,6 +11033,8 @@ components:
           type: string
         isEpay:
           type: boolean
+        tracksSerial:
+          type: boolean
         tags:
           type: array
           items:
@@ -9858,6 +11042,8 @@ components:
           maxItems: 5
         notification:
           type: string
+        timeCardMinutes:
+          type: integer
 
     ProductUpdate:
       type: object
@@ -9904,6 +11090,8 @@ components:
           type: ["string", "null"]
         isEpay:
           type: boolean
+        tracksSerial:
+          type: boolean
         tags:
           type: array
           items:
@@ -9915,6 +11103,8 @@ components:
           type: string
         notification:
           type: ["string", "null"]
+        timeCardMinutes:
+          type: integer
 
     ProductList:
       type: object
@@ -10030,6 +11220,8 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        photoUrl:
+          type: ["string", "null"]
         dateOfBirth:
           type: ["string", "null"]
         loyaltyPoints:
@@ -10107,6 +11299,8 @@ components:
           type: string
         notes:
           type: string
+        photoUrl:
+          type: string
         dateOfBirth:
           type: string
         company:
@@ -10166,6 +11360,8 @@ components:
         address:
           type: string
         notes:
+          type: string
+        photoUrl:
           type: string
         dateOfBirth:
           type: string
@@ -10301,7 +11497,13 @@ components:
           type: number
         paymentMethod:
           type: string
-          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty]
+          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip, afterpay, klarna]
+        surchargeAmount:
+          type: number
+          description: >-
+            Customer-facing surcharge added to the total at checkout when the
+            chosen payment method passes its acceptance cost on to the customer.
+            0 when the method has no surcharge or the merchant absorbs the cost.
         amountTendered:
           type: ["number", "null"]
         changeDue:
@@ -10358,7 +11560,7 @@ components:
             $ref: "#/components/schemas/TransactionItem"
         paymentMethod:
           type: string
-          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty]
+          enum: [cash, card, eftpos, split, voucher, other, direct_deposit, store_credit, laybuy, loyalty, zip, afterpay, klarna]
         subtotal:
           type: number
         taxTotal:
@@ -10407,6 +11609,61 @@ components:
               type: integer
             amount:
               type: number
+        paidAt:
+          type: string
+          description: >-
+            Optional accounting date for the sale. The transaction's createdAt —
+            and therefore the sale date used by every revenue report
+            (view_daily_sales_summary, payment-method breakdown) — is set to this
+            date instead of "now". Used for tenders that actually landed on an
+            earlier day, e.g. a direct deposit / bank transfer recorded at the
+            register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO
+            date-time; must not be in the future.
+
+    ModifyCompletedSaleItem:
+      type: object
+      required: [productId, quantity]
+      properties:
+        productId:
+          type: integer
+          description: >-
+            Catalog product id to add as a free line. Use 0 for a custom
+            free line (supply productName). The line is always recorded at $0
+            regardless of the product's catalog price.
+        productName:
+          type: string
+          description: Name for a custom free line (productId 0). Ignored for catalog products.
+        quantity:
+          type: integer
+          minimum: 1
+
+    ModifyCompletedSaleInput:
+      type: object
+      description: >-
+        Limited post-sale amendments to a completed sale. Every field is
+        optional; only the fields present are applied. Added items are always
+        recorded at $0 (complimentary) so the sale total never changes.
+      properties:
+        customerId:
+          type: ["integer", "null"]
+          description: >-
+            Link (or change) the customer on the sale. Pass null to detach the
+            current customer. Omit to leave the customer unchanged.
+        addItems:
+          type: array
+          description: Free products to add to the sale; each is forced to $0.
+          items:
+            $ref: "#/components/schemas/ModifyCompletedSaleItem"
+        serviceJobNumber:
+          type: string
+          description: >-
+            Link the sale to a service job by its job number. The job is marked
+            completed and a reference is appended to the sale notes.
+        appointmentId:
+          type: integer
+          description: >-
+            Link the sale to an appointment by id. The appointment is marked
+            completed and a reference is appended to the sale notes.
 
     RefundInput:
       type: object
@@ -10813,7 +12070,7 @@ components:
 
     CalendarDay:
       type: object
-      required: [date, sales, serviceJobs, invoices, appointments, customerBirthdays]
+      required: [date, sales, serviceJobs, invoices, followUpsCompleted, appointments, customerBirthdays]
       properties:
         date:
           type: string
@@ -10825,6 +12082,12 @@ components:
           type: integer
         invoices:
           type: integer
+        followUpsCompleted:
+          type: integer
+          description: >-
+            Distinct service jobs / appointments that were followed up on this
+            date — a message successfully sent, or the record marked done by
+            hand. Email + SMS on the same record counts once.
         appointments:
           type: array
           items:
@@ -10870,13 +12133,18 @@ components:
           type: ["string", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, awaiting-pickup, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
           type: ["string", "null"]
         deviceDescription:
           type: ["string", "null"]
+        deviceColour:
+          type: ["string", "null"]
+        deviceQuantity:
+          description: How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.
+          type: ["integer", "null"]
         serialNumber:
           type: ["string", "null"]
         condition:
@@ -10911,6 +12179,8 @@ components:
           type: ["string", "null"]
           format: date-time
         reworkOfJobId:
+          type: ["integer", "null"]
+        reopenedFromJobId:
           type: ["integer", "null"]
         estimateApprovedAt:
           type: ["string", "null"]
@@ -10964,13 +12234,18 @@ components:
           type: ["integer", "null"]
         status:
           type: string
-          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, completed, cancelled]
+          enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, awaiting-pickup, completed, cancelled]
         bookInDate:
           type: string
         deviceType:
           type: ["string", "null"]
         deviceDescription:
           type: ["string", "null"]
+        deviceColour:
+          type: ["string", "null"]
+        deviceQuantity:
+          description: How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.
+          type: ["integer", "null"]
         serialNumber:
           type: ["string", "null"]
         condition:
@@ -11554,6 +12829,14 @@ components:
           type: string
           format: date-time
 
+    LinkAppointmentServiceJobInput:
+      type: object
+      required: [serviceJobId]
+      properties:
+        serviceJobId:
+          type: ["integer", "null"]
+          description: Service job to link, or null to unlink.
+
     AppointmentInput:
       type: object
       required: [scheduledAt, endAt, status]
@@ -11584,7 +12867,7 @@ components:
 
     DashboardConfigResponse:
       type: object
-      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, updatedAt]
+      required: [id, merchantId, showStatusTiles, showMetricTiles, showOverdueBanner, showNotifications, showServiceJobsPanel, showCalendar, showReferralRevenue, showBirthdayNotifications, showFollowUpNotifications, updatedAt]
       properties:
         id:
           type: integer
@@ -11604,6 +12887,16 @@ components:
           type: boolean
         showReferralRevenue:
           type: boolean
+        showBirthdayNotifications:
+          type: boolean
+        showFollowUpNotifications:
+          type: boolean
+        sectionOrder:
+          type: array
+          nullable: true
+          description: Custom vertical order of dashboard content sections; null = default order
+          items:
+            type: string
         updatedAt:
           type: string
 
@@ -11624,6 +12917,15 @@ components:
           type: boolean
         showReferralRevenue:
           type: boolean
+        showBirthdayNotifications:
+          type: boolean
+        showFollowUpNotifications:
+          type: boolean
+        sectionOrder:
+          type: array
+          description: Custom vertical order of dashboard content sections
+          items:
+            type: string
 
     DailyCloseCurrent:
       type: object
@@ -11733,8 +13035,22 @@ components:
           type: integer
         costTotal:
           type: number
+        surchargeCost:
+          type: number
+          description: Absorbed payment surcharges (pass-on disabled) for the period — a cost of business.
         topPaymentMethod:
           type: ["string", "null"]
+        previous:
+          type: ["object", "null"]
+          description: Previous equivalent period's headline totals (present only when compare=true).
+          properties:
+            totalSales:       { type: number }
+            transactionCount: { type: integer }
+            posSales:         { type: number }
+            posCount:         { type: integer }
+            invoiceSales:     { type: number }
+            invoiceCount:     { type: integer }
+            averageOrderValue: { type: number }
 
     DashboardActivity:
       type: object
@@ -11893,16 +13209,34 @@ components:
         contentType:
           type: string
           minLength: 1
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: >
+            Lowercase hex SHA-256 of the file contents, computed by the client
+            before uploading. When supplied, the server de-duplicates: if this
+            merchant has already stored a file with this hash, the response
+            omits uploadURL and returns the existing objectPath, and the client
+            skips the upload entirely.
 
     UploadUrlResponse:
       type: object
-      required: [uploadURL, objectPath]
+      required: [objectPath, deduped]
       properties:
         uploadURL:
           type: string
           format: uri
+          description: >
+            Presigned PUT URL. Absent when deduped is true — the bytes are
+            already stored and must not be re-uploaded.
         objectPath:
           type: string
+        deduped:
+          type: boolean
+          description: True when an existing asset with the same hash was reused.
+        assetId:
+          type: integer
+          description: Media library id, present when deduped is true.
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
 
@@ -11914,6 +13248,25 @@ components:
           type: string
           minLength: 1
           description: The normalized objectPath returned by POST /storage/uploads/request-url.
+        sha256:
+          type: string
+          pattern: '^[a-f0-9]{64}$'
+          description: >
+            The same hash sent to request-url. When supplied, the upload is
+            registered in the merchant's media library so it can be reused.
+        name:
+          type: string
+        size:
+          type: integer
+          minimum: 0
+        contentType:
+          type: string
+        width:
+          type: integer
+          minimum: 0
+        height:
+          type: integer
+          minimum: 0
 
     ConfirmUploadResponse:
       type: object
@@ -11922,6 +13275,241 @@ components:
         objectPath:
           type: string
           description: The confirmed, normalized object path with ACL policy applied.
+        assetId:
+          type: integer
+          description: Media library id, present when the upload was registered as an asset.
+
+    MerchantAsset:
+      type: object
+      required: [id, objectPath, url, contentType, sizeBytes, createdAt]
+      properties:
+        id:
+          type: integer
+        objectPath:
+          type: string
+          description: Normalized storage path, e.g. /objects/merchants/4/assets/<sha256>.
+        url:
+          type: string
+          description: Ready-to-use src for an img tag, i.e. /api/storage + objectPath.
+        sha256:
+          type: string
+          nullable: true
+        contentType:
+          type: string
+        sizeBytes:
+          type: integer
+        filename:
+          type: string
+          nullable: true
+        width:
+          type: integer
+          nullable: true
+        height:
+          type: integer
+          nullable: true
+        kind:
+          type: string
+          enum: [image, video, document]
+          description: Media kind derived from contentType.
+        usageCount:
+          type: integer
+          description: Present only when the listing was requested withUsage=true.
+        references:
+          type: array
+          description: What the asset is attached to. Present only with withReferences=true.
+          items:
+            $ref: '#/components/schemas/MerchantAssetReference'
+        createdAt:
+          type: string
+          format: date-time
+
+    MerchantAssetReference:
+      type: object
+      required: [entity, column]
+      properties:
+        entity:
+          type: string
+          description: Table holding the reference, e.g. "products".
+        column:
+          type: string
+        id:
+          type: string
+          nullable: true
+          description: Row id, when the table has one.
+        label:
+          type: string
+          nullable: true
+          description: Human-readable row label, e.g. the product name.
+
+    MerchantAssetListResponse:
+      type: object
+      required: [assets, total]
+      properties:
+        assets:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantAsset'
+        total:
+          type: integer
+        totalBytes:
+          type: integer
+
+    MerchantAssetUsageEntry:
+      type: object
+      required: [entity, column, count]
+      properties:
+        entity:
+          type: string
+          description: Table holding the reference, e.g. "products".
+        column:
+          type: string
+        count:
+          type: integer
+
+    MerchantAssetUsageResponse:
+      type: object
+      required: [total, usage]
+      properties:
+        total:
+          type: integer
+          description: Total references. 0 means the asset is safe to delete.
+        usage:
+          type: array
+          items:
+            $ref: '#/components/schemas/MerchantAssetUsageEntry'
+        error:
+          type: string
+
+    DeleteMerchantAssetResponse:
+      type: object
+      required: [deleted]
+      properties:
+        deleted:
+          type: boolean
+        reclaimedBytes:
+          type: integer
+
+    BulkDeleteMerchantAssetsBody:
+      type: object
+      required: [assetIds]
+      properties:
+        assetIds:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items:
+            type: integer
+          description: >
+            Ids of the assets to delete. Capped so one request cannot hold a
+            storage-delete loop open indefinitely.
+
+    BulkDeleteSkippedAsset:
+      type: object
+      required: [id, usageCount]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+          nullable: true
+        usageCount:
+          type: integer
+          description: Why it was skipped — how many rows still point at it.
+
+    BulkDeleteFailedAsset:
+      type: object
+      required: [id, error]
+      properties:
+        id:
+          type: integer
+        filename:
+          type: string
+          nullable: true
+        error:
+          type: string
+
+    BulkDeleteMerchantAssetsResponse:
+      type: object
+      required: [deleted, deletedIds, skipped, failed, notFound, reclaimedBytes]
+      properties:
+        deleted:
+          type: integer
+          description: How many assets were actually removed.
+        deletedIds:
+          type: array
+          items:
+            type: integer
+        skipped:
+          type: array
+          description: Still referenced, so deliberately left alone.
+          items:
+            $ref: '#/components/schemas/BulkDeleteSkippedAsset'
+        failed:
+          type: array
+          description: Storage delete errored; the library row was kept.
+          items:
+            $ref: '#/components/schemas/BulkDeleteFailedAsset'
+        notFound:
+          type: array
+          description: Ids that do not belong to this merchant, or no longer exist.
+          items:
+            type: integer
+        reclaimedBytes:
+          type: integer
+
+    ReplaceMerchantAssetBody:
+      type: object
+      required: [replacementAssetId]
+      properties:
+        replacementAssetId:
+          type: integer
+          description: >
+            Id of the asset to point everything at. Upload the new file through
+            the normal flow first; that registers it and returns its id.
+
+    ReplaceMerchantAssetResponse:
+      type: object
+      required: [replaced]
+      properties:
+        replaced:
+          type: integer
+          description: Number of rows repointed at the replacement.
+
+    ImportMerchantAssetsResponse:
+      type: object
+      required: [imported, skipped, scanned]
+      properties:
+        imported:
+          type: integer
+        skipped:
+          type: integer
+          description: Objects already present in the library.
+        scanned:
+          type: integer
+
+    OrphanObject:
+      type: object
+      required: [objectPath, sizeBytes]
+      properties:
+        objectPath:
+          type: string
+        sizeBytes:
+          type: integer
+
+    SweepOrphansResponse:
+      type: object
+      required: [dryRun, orphans, reclaimableBytes]
+      properties:
+        dryRun:
+          type: boolean
+        orphans:
+          type: array
+          items:
+            $ref: '#/components/schemas/OrphanObject'
+        reclaimableBytes:
+          type: integer
+        deletedCount:
+          type: integer
 
     LoyaltyLeaderboardEntry:
       type: object
@@ -12024,6 +13612,9 @@ components:
           type: number
         dollarPerPoint:
           type: number
+        birthdayBonusPoints:
+          type: integer
+          description: Loyalty points awarded from the dashboard birthday prompt.
         tiers:
           type: array
           items:
@@ -12081,6 +13672,9 @@ components:
           type: number
         dollarPerPoint:
           type: number
+        birthdayBonusPoints:
+          type: integer
+          description: Loyalty points awarded from the dashboard birthday prompt.
         tiers:
           type: array
           items:
@@ -12111,6 +13705,106 @@ components:
           description: Active loyalty promotions (Double Points, Category Bonuses, etc.).
         naming:
           $ref: "#/components/schemas/LoyaltyNaming"
+
+    # ── Service Settings ──────────────────────────────────────────────────────
+    # Booleans toggling each section of the service job menu. All optional;
+    # an omitted key defaults to true (section visible).
+    ServiceSettings:
+      type: object
+      required:
+        [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
+         showTechnicianTime, showSignOff, showShipping, showNotes,
+         repairWarrantyDays, reworkWarrantyDays]
+      properties:
+        showPartsLabour:    { type: boolean }
+        showApprovalDeposit: { type: boolean }
+        showDiagnostics:    { type: boolean }
+        showWarranty:       { type: boolean }
+        showTechnicianTime: { type: boolean }
+        showSignOff:        { type: boolean }
+        showShipping:       { type: boolean }
+        showNotes:          { type: boolean }
+        repairWarrantyDays: { type: integer, minimum: 0, description: "Default repair warranty period (days) pre-filled on new service jobs." }
+        reworkWarrantyDays: { type: integer, minimum: 0, description: "Default warranty period (days) applied to no-charge rework jobs." }
+    ServiceSettingsInput:
+      type: object
+      required:
+        [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
+         showTechnicianTime, showSignOff, showShipping, showNotes]
+      properties:
+        showPartsLabour:    { type: boolean }
+        showApprovalDeposit: { type: boolean }
+        showDiagnostics:    { type: boolean }
+        showWarranty:       { type: boolean }
+        showTechnicianTime: { type: boolean }
+        showSignOff:        { type: boolean }
+        showShipping:       { type: boolean }
+        showNotes:          { type: boolean }
+        repairWarrantyDays: { type: integer, minimum: 0 }
+        reworkWarrantyDays: { type: integer, minimum: 0 }
+
+    InvoiceSettings:
+      type: object
+      required:
+        [defaultDueDays, numberPrefix, defaultNotes, defaultTerms,
+         reminderEnabled, reminderDaysBefore,
+         overdueEnabled, overdueDaysAfter, overdueRepeatDays, lateFeeEnabled, lateFeePercent,
+         surchargeEnabled, surchargePercent, surchargeAfterReminders,
+         debtCollectionEnabled, debtCollectionThreshold,
+         autoSendOnCreate, defaultSendMethod, attachPdf, bccBusinessEmail, emailSubject, emailMessage]
+      properties:
+        # ── Defaults ──
+        defaultDueDays:     { type: integer, minimum: 0, description: "Days from issue date used to pre-fill a new invoice's due date. 0 = due on receipt." }
+        numberPrefix:       { type: string, description: "Prefix shown before invoice numbers (e.g. INV-)." }
+        defaultNotes:       { type: string, description: "Notes pre-filled on every new invoice and printed on the PDF." }
+        defaultTerms:       { type: string, description: "Payment terms / conditions printed in the invoice footer." }
+        # ── Payment reminders ──
+        reminderEnabled:    { type: boolean, description: "Email the customer a reminder before the invoice falls due." }
+        reminderDaysBefore: { type: integer, minimum: 0, description: "How many days before the due date the reminder is sent." }
+        # ── Overdue notifications ──
+        overdueEnabled:     { type: boolean, description: "Email the customer when an invoice becomes overdue." }
+        overdueDaysAfter:   { type: integer, minimum: 0, description: "Days after the due date before the first overdue notice is sent." }
+        overdueRepeatDays:  { type: integer, minimum: 0, description: "Repeat the overdue notice every N days. 0 = send once only." }
+        lateFeeEnabled:     { type: boolean, description: "Apply a one-time late fee to an invoice as soon as it becomes overdue." }
+        lateFeePercent:     { type: number, minimum: 0, description: "Late fee as a percentage of the invoice total." }
+        surchargeEnabled:   { type: boolean, description: "Apply an additional one-time surcharge once an invoice has had a set number of overdue reminders." }
+        surchargePercent:   { type: number, minimum: 0, description: "Surcharge as a percentage of the invoice total, added after the overdue-reminder threshold is reached." }
+        surchargeAfterReminders: { type: integer, minimum: 0, description: "Number of overdue reminders that must be sent before the surcharge is applied. 0 = apply as soon as overdue." }
+        debtCollectionEnabled:   { type: boolean, description: "Email a debt-collection escalation notice to a customer once they accumulate too many overdue invoices." }
+        debtCollectionThreshold: { type: integer, minimum: 1, description: "Number of overdue invoices a single customer must reach before the debt-collection email is sent." }
+        # ── Sending ──
+        autoSendOnCreate:   { type: boolean, description: "Automatically send the invoice to the customer as soon as it is created." }
+        defaultSendMethod:  { type: string, enum: [email, sms, both], description: "Default delivery channel pre-selected when sending an invoice." }
+        attachPdf:          { type: boolean, description: "Attach a PDF copy of the invoice to outgoing emails." }
+        bccBusinessEmail:   { type: boolean, description: "Send a blind copy of every invoice email to the business email address." }
+        emailSubject:       { type: string, description: "Default email subject. Supports {number} and {business} placeholders." }
+        emailMessage:       { type: string, description: "Default email body. Supports {number}, {business}, {total} and {dueDate} placeholders." }
+
+    InvoiceSettingsInput:
+      type: object
+      properties:
+        defaultDueDays:     { type: integer, minimum: 0 }
+        numberPrefix:       { type: string }
+        defaultNotes:       { type: string }
+        defaultTerms:       { type: string }
+        reminderEnabled:    { type: boolean }
+        reminderDaysBefore: { type: integer, minimum: 0 }
+        overdueEnabled:     { type: boolean }
+        overdueDaysAfter:   { type: integer, minimum: 0 }
+        overdueRepeatDays:  { type: integer, minimum: 0 }
+        lateFeeEnabled:     { type: boolean }
+        lateFeePercent:     { type: number, minimum: 0 }
+        surchargeEnabled:   { type: boolean }
+        surchargePercent:   { type: number, minimum: 0 }
+        surchargeAfterReminders: { type: integer, minimum: 0 }
+        debtCollectionEnabled:   { type: boolean }
+        debtCollectionThreshold: { type: integer, minimum: 1 }
+        autoSendOnCreate:   { type: boolean }
+        defaultSendMethod:  { type: string, enum: [email, sms, both] }
+        attachPdf:          { type: boolean }
+        bccBusinessEmail:   { type: boolean }
+        emailSubject:       { type: string }
+        emailMessage:       { type: string }
 
     # ── Cash Drawer ──────────────────────────────────────────────────────────
     CashDrawerEntry:
@@ -12201,6 +13895,18 @@ components:
         received: { type: integer }
         unitCost: { type: number }
         notes: { type: string, nullable: true }
+        tracksSerial: { type: boolean }
+        currentStock: { type: integer, nullable: true, description: "Current on-hand stock for this line's product (negative = oversold). Null for non-catalogued lines." }
+        oversoldUnits: { type: integer, description: "Total units this product is currently oversold by (0 if none)." }
+        oversellSales:
+          type: array
+          description: "Sales that oversold this product and remain uncovered, oldest first."
+          items:
+            type: object
+            properties:
+              receiptNumber: { type: string, nullable: true }
+              quantity: { type: integer }
+              saleAt: { type: string }
     PurchaseOrder:
       type: object
       required: [id, poNumber, status, orderDate, totalCost, createdAt]
@@ -12218,6 +13924,10 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        amountPaid: { type: number }
+        paymentStatus: { type: string }
+        paymentMethod: { type: string, nullable: true }
+        paidAt: { type: string, nullable: true }
         invoiceUrls:
           type: array
           items: { type: string }
@@ -12247,6 +13957,13 @@ components:
         totalCost: { type: number }
         deliveryCharge: { type: number }
         deliveryTaxMode: { type: string }
+        # Optional supplier payment recorded at creation. Set payFull to settle
+        # the order at the server-computed total (avoids client/server GST rounding
+        # drift); otherwise paymentAmount records a partial payment. paymentMethod
+        # labels how the supplier was paid (bank_transfer, card, cash, …).
+        payFull: { type: boolean }
+        paymentAmount: { type: number }
+        paymentMethod: { type: string }
         invoiceUrls:
           type: array
           items: { type: string }
@@ -12589,6 +14306,10 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PaymentLeg" }
         note:          { type: string }
+        # Dedupes a retried/double-clicked payment: the same key applied twice
+        # records the installment only once. Generated once per payment attempt
+        # by the client and reused across manual retries.
+        idempotencyKey: { type: string }
 
     Camera:
       type: object
@@ -12660,73 +14381,6 @@ components:
         takenBy:     { type: string }
         storedLocally: { type: boolean }
 
-    SocialFeedSettings:
-      type: object
-      required: [showFacebook, showInstagram, showTwitter, showLinkedin, facebookEnabled, instagramEnabled, twitterEnabled, tiktokEnabled, linkedinEnabled, refreshIntervalMinutes]
-      properties:
-        id:                     { type: integer, nullable: true }
-        showFacebook:           { type: boolean }
-        showInstagram:          { type: boolean }
-        showTwitter:            { type: boolean }
-        showLinkedin:           { type: boolean }
-        facebookEnabled:        { type: boolean }
-        instagramEnabled:       { type: boolean }
-        twitterEnabled:         { type: boolean }
-        tiktokEnabled:          { type: boolean }
-        linkedinEnabled:        { type: boolean }
-        refreshIntervalMinutes: { type: integer }
-
-    SocialFeedSettingsInput:
-      type: object
-      properties:
-        showFacebook:           { type: boolean }
-        showInstagram:          { type: boolean }
-        showTwitter:            { type: boolean }
-        showLinkedin:           { type: boolean }
-        facebookEnabled:        { type: boolean }
-        instagramEnabled:       { type: boolean }
-        twitterEnabled:         { type: boolean }
-        tiktokEnabled:          { type: boolean }
-        linkedinEnabled:        { type: boolean }
-        refreshIntervalMinutes: { type: integer }
-
-    SocialPost:
-      type: object
-      required: [id, platform, accountName, accountHandle, text, postedAt, likes, comments, shares]
-      properties:
-        id:            { type: string }
-        platform:      { type: string }
-        accountName:   { type: string }
-        accountHandle: { type: string }
-        text:          { type: string }
-        imageUrl:      { type: string, nullable: true }
-        videoUrl:      { type: string, nullable: true }
-        permalink:     { type: string, nullable: true }
-        likes:         { type: integer }
-        comments:      { type: integer }
-        shares:        { type: integer }
-        postedAt:      { type: string }
-
-    SocialPlatformResult:
-      type: object
-      required: [platform, status, posts]
-      properties:
-        platform: { type: string }
-        status:   { type: string }
-        posts:
-          type: array
-          items:
-            $ref: "#/components/schemas/SocialPost"
-        error: { type: string, nullable: true }
-
-    SocialFeedResponse:
-      type: object
-      required: [results]
-      properties:
-        results:
-          type: array
-          items:
-            $ref: "#/components/schemas/SocialPlatformResult"
 
     CameraSnapshot:
       type: object
@@ -13008,18 +14662,33 @@ components:
             $ref: "#/components/schemas/ProductRecall"
         total: { type: integer }
 
+    ProductPreOrderItem:
+      type: object
+      required: [productName, quantity]
+      properties:
+        id:          { type: integer, nullable: true }
+        productId:   { type: integer, nullable: true }
+        productName: { type: string }
+        quantity:    { type: integer }
+        unitPrice:   { type: number }
+
     ProductPreOrder:
       type: object
-      required: [id, merchantId, poNumber, customerName, productName, quantity, depositAmount, status, createdAt]
+      required: [id, merchantId, poNumber, customerName, productName, quantity, depositAmount, status, items, createdAt]
       properties:
         id:            { type: integer }
         merchantId:    { type: integer }
         poNumber:      { type: string }
         customerId:    { type: integer, nullable: true }
         customerName:  { type: string }
+        # Legacy single-product fields, mirrored from the first line item.
         productId:     { type: integer, nullable: true }
         productName:   { type: string }
         quantity:      { type: integer }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPreOrderItem"
         depositAmount: { type: number }
         status:        { type: string }
         expectedDate:  { type: string, nullable: true }
@@ -13028,13 +14697,14 @@ components:
 
     ProductPreOrderInput:
       type: object
-      required: [customerName, productName, quantity]
+      required: [customerName, items]
       properties:
         customerId:    { type: integer }
         customerName:  { type: string }
-        productId:     { type: integer }
-        productName:   { type: string }
-        quantity:      { type: integer }
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/ProductPreOrderItem"
         depositAmount: { type: number }
         status:        { type: string }
         expectedDate:  { type: string }
@@ -13050,33 +14720,62 @@ components:
             $ref: "#/components/schemas/ProductPreOrder"
         total: { type: integer }
 
+    ReturnAuthItem:
+      type: object
+      required: [name, quantity]
+      properties:
+        productId: { type: integer, nullable: true }
+        name:      { type: string }
+        quantity:  { type: integer }
+
+    ReturnAuthAttachment:
+      type: object
+      required: [fileKey, filename]
+      properties:
+        fileKey:     { type: string }
+        filename:    { type: string }
+        contentType: { type: string }
+        sizeBytes:   { type: integer }
+
     ProductReturnAuth:
       type: object
-      required: [id, merchantId, raNumber, customerName, items, refundAmount, status, createdAt]
+      required: [id, merchantId, raNumber, supplierName, items, quantity, status, createdAt]
       properties:
-        id:           { type: integer }
-        merchantId:   { type: integer }
-        raNumber:     { type: string }
-        customerId:   { type: integer, nullable: true }
-        customerName: { type: string }
-        reason:       { type: string, nullable: true }
-        items:        { type: string }
-        refundAmount: { type: number }
-        status:       { type: string }
-        notes:        { type: string, nullable: true }
-        createdAt:    { type: string, format: date-time }
+        id:                { type: integer }
+        merchantId:        { type: integer }
+        raNumber:          { type: string }
+        supplierId:        { type: integer, nullable: true }
+        supplierName:      { type: string }
+        purchaseOrderId:   { type: integer, nullable: true }
+        items:             { type: string }
+        quantity:          { type: integer }
+        returnItems:       { type: ["array", "null"], items: { $ref: "#/components/schemas/ReturnAuthItem" } }
+        attachments:       { type: ["array", "null"], items: { $ref: "#/components/schemas/ReturnAuthAttachment" } }
+        reason:            { type: string, nullable: true }
+        returnType:        { type: string, nullable: true }
+        supplierRmaNumber: { type: string, nullable: true }
+        trackingNumber:    { type: string, nullable: true }
+        status:            { type: string }
+        notes:             { type: string, nullable: true }
+        createdAt:         { type: string, format: date-time }
 
     ProductReturnAuthInput:
       type: object
-      required: [customerName, items]
+      required: [supplierName, items]
       properties:
-        customerId:   { type: integer }
-        customerName: { type: string }
-        reason:       { type: string }
-        items:        { type: string }
-        refundAmount: { type: number }
-        status:       { type: string }
-        notes:        { type: string }
+        supplierId:        { type: integer }
+        supplierName:      { type: string }
+        purchaseOrderId:   { type: integer, nullable: true }
+        items:             { type: string }
+        quantity:          { type: integer }
+        returnItems:       { type: array, items: { $ref: "#/components/schemas/ReturnAuthItem" } }
+        attachments:       { type: array, items: { $ref: "#/components/schemas/ReturnAuthAttachment" } }
+        reason:            { type: string }
+        returnType:        { type: string }
+        supplierRmaNumber: { type: string }
+        trackingNumber:    { type: string }
+        status:            { type: string }
+        notes:             { type: string }
 
     ProductReturnAuthListResponse:
       type: object
@@ -13086,6 +14785,53 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ProductReturnAuth"
+        total: { type: integer }
+
+    TimeCardSession:
+      type: object
+      required: [id, merchantId, customerName, label, purchasedSeconds, status, elapsedSeconds, createdAt]
+      properties:
+        id:               { type: integer }
+        merchantId:       { type: integer }
+        transactionId:    { type: ["integer", "null"] }
+        productId:        { type: ["integer", "null"] }
+        customerId:       { type: ["integer", "null"] }
+        customerName:     { type: string }
+        label:            { type: string }
+        purchasedSeconds: { type: integer }
+        status:           { type: string }
+        elapsedSeconds:   { type: integer }
+        runningSince:     { type: ["string", "null"], format: date-time }
+        createdAt:        { type: string, format: date-time }
+        updatedAt:        { type: string, format: date-time }
+
+    TimeCardSessionInput:
+      type: object
+      required: [label, purchasedSeconds]
+      properties:
+        transactionId:    { type: integer }
+        productId:        { type: integer }
+        customerId:       { type: integer }
+        customerName:     { type: string }
+        label:            { type: string }
+        purchasedSeconds: { type: integer }
+
+    TimeCardSessionAction:
+      type: object
+      required: [action]
+      properties:
+        action:
+          type: string
+          enum: [start, pause, stop]
+
+    TimeCardSessionListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items:
+            $ref: "#/components/schemas/TimeCardSession"
         total: { type: integer }
 
     PosRegister:
@@ -13125,18 +14871,21 @@ components:
 
     PosSettings:
       type: object
-      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, forceStaffLogin, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
+      required: [id, merchantId, enabledPaymentMethods, enabledIntegrationPayments, customPaymentMethods, gridColumns, gridTileSize, gridShowPrices, gridShowStockBadges, gridCartPosition, quickViewShowSupplier, forceStaffLogin, promptCloseAllRegisters, staffLoginMessage, activeRegisterId, hardwareConfig, enabledShortcuts, defaultSkuPrefix, mapProvider, roleDiscountLimits, buttonStyle, updatedAt]
       properties:
         id:                          { type: integer }
         merchantId:                  { type: integer }
         enabledPaymentMethods:       { type: string }
         enabledIntegrationPayments:  { type: string }
+        customPaymentMethods:        { type: string }
         gridColumns:                 { type: integer }
         gridTileSize:                { type: string }
         gridShowPrices:              { type: string }
         gridShowStockBadges:         { type: string }
         gridCartPosition:            { type: string }
+        quickViewShowSupplier:       { type: string }
         forceStaffLogin:             { type: string }
+        promptCloseAllRegisters:     { type: string }
         staffLoginMessage:           { type: string }
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }
@@ -13152,12 +14901,15 @@ components:
       properties:
         enabledPaymentMethods:       { type: string }
         enabledIntegrationPayments:  { type: string }
+        customPaymentMethods:        { type: string }
         gridColumns:                 { type: integer }
         gridTileSize:                { type: string }
         gridShowPrices:              { type: string }
         gridShowStockBadges:         { type: string }
         gridCartPosition:            { type: string }
+        quickViewShowSupplier:       { type: string }
         forceStaffLogin:             { type: string }
+        promptCloseAllRegisters:     { type: string }
         staffLoginMessage:           { type: string }
         activeRegisterId:            { type: string }
         hardwareConfig:              { type: string }
@@ -13166,6 +14918,32 @@ components:
         mapProvider:                 { type: string }
         roleDiscountLimits:          { type: string }
         buttonStyle:                 { type: string }
+
+    PaymentSurcharge:
+      type: object
+      required: [paymentMethod, percent, fixed, passOn, enabled]
+      properties:
+        paymentMethod: { type: string }
+        percent:       { type: number, description: "Surcharge as a percentage of the sale total (0–100)." }
+        fixed:         { type: number, description: "Fixed surcharge amount added per transaction." }
+        passOn:        { type: boolean, description: "When true the cost is added to the customer's bill; when false the merchant absorbs it as a cost of business in reports." }
+        enabled:       { type: boolean, description: "Whether this method's surcharge is active." }
+
+    PaymentSurchargeListResponse:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentSurcharge" }
+
+    PaymentSurchargesInput:
+      type: object
+      required: [items]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/PaymentSurcharge" }
 
     LaybySettings:
       type: object
@@ -13199,7 +14977,7 @@ components:
 
     SalesSettings:
       type: object
-      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, overviewDefaultSalesPeriod, overviewDefaultActivityPeriod, overviewMonthMode, updatedAt]
+      required: [id, merchantId, saleRequireCustomer, saleReceiptDelivery, saleRoundCashTo5c, saleRequireDiscountReason, saleAllowOutOfStock, saleDefaultNote, invoiceDueDays, invoiceDefaultTaxRate, invoiceAutoEmail, invoiceTerms, refundWindowDays, refundRequireReason, refundRequireApproval, refundRestockingFeePct, refundOriginalMethodOnly, refundDefaultNote, quoteExpiryDays, quoteDefaultTaxRate, quoteAutoEmail, quoteTerms, quotePrefix, quoteDigits, overviewDefaultSalesPeriod, overviewDefaultActivityPeriod, overviewMonthMode, overviewYearMode, updatedAt]
       properties:
         id:                        { type: integer }
         merchantId:                { type: integer }
@@ -13226,9 +15004,10 @@ components:
         quotePrefix:               { type: string }
         quoteDigits:               { type: integer }
         quoteDepositPercent:       { type: number }
-        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, week, month, year] }
         overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
         overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
+        overviewYearMode:              { type: string, enum: [financial, rolling365] }
         createdAt:                 { type: string, format: date-time }
         updatedAt:                 { type: string, format: date-time }
 
@@ -13258,9 +15037,10 @@ components:
         quotePrefix:               { type: string }
         quoteDigits:               { type: integer }
         quoteDepositPercent:       { type: number }
-        overviewDefaultSalesPeriod:    { type: string, enum: [today, month, year] }
+        overviewDefaultSalesPeriod:    { type: string, enum: [today, week, month, year] }
         overviewDefaultActivityPeriod: { type: string, enum: [day, week, month, year] }
         overviewMonthMode:             { type: string, enum: [rolling30, calendar_mtd] }
+        overviewYearMode:              { type: string, enum: [financial, rolling365] }
 
     KpiSettings:
       type: object
@@ -13303,6 +15083,7 @@ components:
         notes:       { type: string }
         startDate:   { type: string, nullable: true }
         endDate:     { type: string, nullable: true }
+        repeats:     { type: string, description: '"true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.' }
         isActive:    { type: string }
         showOnDashboard: { type: string }
         createdAt:   { type: string, format: date-time }
@@ -13323,6 +15104,7 @@ components:
         notes:       { type: string }
         startDate:   { type: string, nullable: true }
         endDate:     { type: string, nullable: true }
+        repeats:     { type: string, description: '"true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over.' }
         isActive:    { type: string }
         showOnDashboard: { type: string }
 
@@ -13333,6 +15115,36 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/KpiTarget" }
+        total: { type: integer }
+
+    KpiHistoryEntry:
+      type: object
+      required: [id, merchantId, targetId, name, metric, period, target, periodStart, periodEnd, periodLabel, createdAt]
+      properties:
+        id:          { type: integer }
+        merchantId:  { type: integer }
+        targetId:    { type: string }
+        kpiTargetId: { type: integer, nullable: true }
+        name:        { type: string }
+        metric:      { type: string }
+        categoryId:  { type: string }
+        period:      { type: string }
+        target:      { type: number }
+        actual:      { type: number, nullable: true }
+        staffIds:    { type: string }
+        reward:      { type: string }
+        periodStart: { type: string, format: date-time }
+        periodEnd:   { type: string, format: date-time }
+        periodLabel: { type: string }
+        createdAt:   { type: string, format: date-time }
+
+    KpiHistoryListResponse:
+      type: object
+      required: [items, total]
+      properties:
+        items:
+          type: array
+          items: { $ref: "#/components/schemas/KpiHistoryEntry" }
         total: { type: integer }
 
     QrCode:
@@ -13910,6 +15722,7 @@ components:
         merchantId: { type: integer }
         registerId: { type: string }
         openedAt: { type: string }
+        staffId: { type: integer, nullable: true }
         openedBy: { type: string }
         openingFloat: { type: string }
         openingNotes: { type: string }
@@ -13924,6 +15737,7 @@ components:
       type: object
       properties:
         registerId: { type: string }
+        staffId: { type: integer, nullable: true }
         openedBy: { type: string }
         openingFloat: { type: string }
         openingNotes: { type: string }
@@ -14118,13 +15932,14 @@ components:
 
     InventorySettings:
       type: object
-      required: [id, merchantId, skuPrefix, showCosts, groupPricing]
+      required: [id, merchantId, skuPrefix, showCosts, groupPricing, stockColors]
       properties:
         id: { type: integer }
         merchantId: { type: integer }
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        stockColors: { type: string }
         defaultImageUrl: { type: string, nullable: true }
 
     InventorySettingsInput:
@@ -14133,6 +15948,7 @@ components:
         skuPrefix: { type: string }
         showCosts: { type: string }
         groupPricing: { type: string }
+        stockColors: { type: string }
         defaultImageUrl: { type: string, nullable: true }
 
     RegionalExtSettings:
@@ -14339,6 +16155,7 @@ components:
         totalCogs:        { type: number }
         netProfit:        { type: number }
         refundTotal:      { type: number }
+        surchargeCost:    { type: number }
         transactionCount: { type: integer }
 
     ProfitLossReport:
@@ -14355,6 +16172,7 @@ components:
         netProfit:        { type: number }
         grossMarginPct:   { type: number }
         refundTotal:      { type: number }
+        surchargeCost:    { type: number }
         transactionCount: { type: integer }
         dailyBreakdown:
           type: array
@@ -14551,6 +16369,61 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ProductPerformanceItem" }
+
+    CostOfGoodsTotals:
+      type: object
+      required: [cogsSold, cogsPos, cogsInvoice, cogsLayby, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount, soldCogs]
+      properties:
+        soldCogs:           { type: number, description: "Sold COGS attributed to suppliers (equals cogsSold; rolls unmatched lines into Unassigned)" }
+        cogsSold:           { type: number, description: "Cost of goods sold across POS sales, paid invoices and completed laybys" }
+        cogsPos:            { type: number }
+        cogsInvoice:        { type: number }
+        cogsLayby:          { type: number }
+        purchaseSpend:      { type: number, description: "Total purchase-order spend (goods + shipping), incl. GST" }
+        goodsSpend:         { type: number, description: "Purchase-order goods cost (qty × unit cost), excl. shipping" }
+        shippingCost:       { type: number, description: "Total purchase-order delivery/shipping cost" }
+        purchaseOrderCount: { type: integer }
+
+    CostOfGoodsMonth:
+      type: object
+      required: [month, cogsSold, cogsPos, cogsInvoice, cogsLayby, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount]
+      properties:
+        month:              { type: string, description: "YYYY-MM" }
+        cogsSold:           { type: number }
+        cogsPos:            { type: number }
+        cogsInvoice:        { type: number }
+        cogsLayby:          { type: number }
+        purchaseSpend:      { type: number }
+        goodsSpend:         { type: number }
+        shippingCost:       { type: number }
+        purchaseOrderCount: { type: integer }
+
+    CostOfGoodsSupplier:
+      type: object
+      required: [supplierName, purchaseSpend, goodsSpend, shippingCost, purchaseOrderCount, itemsOrdered, soldCogs]
+      properties:
+        supplierId:         { type: integer, nullable: true }
+        supplierName:       { type: string }
+        purchaseSpend:      { type: number, description: "Bought from this supplier (purchase orders, incl. shipping)" }
+        goodsSpend:         { type: number }
+        shippingCost:       { type: number }
+        purchaseOrderCount: { type: integer }
+        itemsOrdered:       { type: integer }
+        soldCogs:           { type: number, description: "Cost of goods SOLD for products attributed to this supplier" }
+
+    CostOfGoodsReport:
+      type: object
+      required: [startDate, endDate, totals, monthly, suppliers]
+      properties:
+        startDate: { type: string, format: date }
+        endDate:   { type: string, format: date }
+        totals:    { $ref: "#/components/schemas/CostOfGoodsTotals" }
+        monthly:
+          type: array
+          items: { $ref: "#/components/schemas/CostOfGoodsMonth" }
+        suppliers:
+          type: array
+          items: { $ref: "#/components/schemas/CostOfGoodsSupplier" }
 
     PcSavedBuild:
       type: object
@@ -14782,6 +16655,15 @@ components:
         enableLoyalty:           { type: boolean }
         weeklyDigestOptIn:       { type: boolean }
         weeklyDigestSendDay:     { type: integer, minimum: 0, maximum: 6, description: "Day of week to send digest (0=Sunday … 6=Saturday)" }
+        groupPricing:
+          type: array
+          items: { type: object }
+          description: >-
+            Automatic default pricing per customer group (GroupPricingRule[]):
+            a basis (cost inc GST / cost ex GST / RRP), markup or discount,
+            percentage, an optional cap at RRP, and per-category overrides.
+            Resolved when a product is saved and by the POS.
+        defaultCustomerImageUrl: { type: string, description: "Fallback avatar shown for customers without their own photo. Uploaded image or external URL." }
         updatedAt:               { type: string, format: date-time }
 
     CustomerSettingsInput:
@@ -14794,6 +16676,15 @@ components:
         enableLoyalty:           { type: boolean }
         weeklyDigestOptIn:       { type: boolean }
         weeklyDigestSendDay:     { type: integer, minimum: 0, maximum: 6, description: "Day of week to send digest (0=Sunday … 6=Saturday)" }
+        groupPricing:
+          type: array
+          items: { type: object }
+          description: >-
+            Automatic default pricing per customer group (GroupPricingRule[]):
+            a basis (cost inc GST / cost ex GST / RRP), markup or discount,
+            percentage, an optional cap at RRP, and per-category overrides.
+            Resolved when a product is saved and by the POS.
+        defaultCustomerImageUrl: { type: string }
 
     StickerTemplate:
       type: object
@@ -15096,7 +16987,7 @@ components:
     # ── Integrations ─────────────────────────────────────────────────────────
     IntegrationStatus:
       type: object
-      required: [key, label, section, category, description, authType, connected, enabled, comingSoon]
+      required: [key, label, section, category, description, authType, connected, enabled]
       properties:
         key:             { type: string }
         label:           { type: string }
@@ -15106,7 +16997,6 @@ components:
         authType:        { type: string, enum: [oauth, credentials] }
         connected:       { type: boolean }
         enabled:         { type: boolean }
-        comingSoon:      { type: boolean }
         connectedAt:     { type: string, format: date-time, nullable: true }
         oauthConfigured: { type: boolean }
 
@@ -15143,14 +17033,31 @@ components:
       type: object
       required: [type, timestamp]
       properties:
+        # Stable id stamped on payment events so a payment can be targeted for
+        # reversal/correction. Older events may not carry one.
+        id:             { type: string, nullable: true }
         type:           { type: string }
         timestamp:      { type: string, format: date-time }
         detail:         { type: string, nullable: true }
         method:         { type: string, nullable: true }
         # Per-leg payment amount. One payment event is recorded per method, so a
         # split payment produces several events whose amounts sum to the payment.
+        # Reversal events carry a negative amount.
         amount:         { type: number, nullable: true }
+        # For a payment-reversal event: the id of the payment event it reverses.
+        reverses:       { type: string, nullable: true }
         idempotencyKey: { type: string, nullable: true }
+
+    # A single planned instalment on an invoice's payment schedule. Coverage
+    # (paid / partial / due) is derived from the invoice's amountPaid, not stored
+    # per instalment.
+    InvoiceInstalment:
+      type: object
+      required: [amount]
+      properties:
+        label:   { type: string, nullable: true }
+        amount:  { type: number, minimum: 0 }
+        dueDate: { type: string, format: date-time, nullable: true }
 
     # A single payment leg — one method and the amount tendered on it. Used to
     # express split payments (multiple methods settling one payment) on both
@@ -15184,6 +17091,10 @@ components:
         events:
           type: array
           items: { $ref: "#/components/schemas/InvoiceEvent" }
+        paymentSchedule:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InvoiceInstalment" }
         notes:                { type: string, nullable: true }
         dueDate:              { type: string, format: date-time, nullable: true }
         paidAt:               { type: string, format: date-time, nullable: true }
@@ -15234,6 +17145,10 @@ components:
         invoicePrefix: { type: string }
         invoiceDigits: { type: integer }
         recurring:     { $ref: "#/components/schemas/InvoiceRecurringInput" }
+        paymentSchedule:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InvoiceInstalment" }
         serviceJobId:  { type: integer, nullable: true }
         appointmentId: { type: integer, nullable: true }
 
@@ -15250,7 +17165,11 @@ components:
       type: object
       properties:
         status:    { type: string, enum: [draft, sent, partial, paid, overdue, cancelled] }
-        notes:     { type: string }
+        # Nullable: the edit form sends null to clear the notes field. A
+        # non-nullable string here 400s every edit of an invoice with no notes.
+        notes:
+          type: string
+          nullable: true
         dueDate:
           type: string
           format: date-time
@@ -15266,6 +17185,10 @@ components:
           nullable: true
           allOf:
             - $ref: "#/components/schemas/InvoiceRecurringUpdate"
+        paymentSchedule:
+          type: array
+          nullable: true
+          items: { $ref: "#/components/schemas/InvoiceInstalment" }
         serviceJobId:  { type: integer, nullable: true }
         appointmentId: { type: integer, nullable: true }
 
@@ -15288,12 +17211,41 @@ components:
           type: array
           items: { $ref: "#/components/schemas/PaymentLeg" }
         giftCardPayment: { $ref: "#/components/schemas/GiftCardPaymentRef" }
+        # Optional free-text note recorded against the payment (e.g. "deposit",
+        # "cheque #123"). Appended to the recorded payment event's detail.
+        note:            { type: string }
         idempotencyKey:  { type: string }
+        # Optional accounting date for the settlement. When this payment pays the
+        # invoice in full, the invoice's paidAt — and therefore the sale date used
+        # by every revenue report (view_daily_sales_summary, payment-method
+        # breakdown) — is set to this date instead of "now". Used for payments that
+        # actually landed on an earlier day, e.g. a direct deposit / bank transfer.
+        # Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the
+        # future. Ignored for partial payments (paidAt is only stamped on full
+        # settlement).
+        paidAt:          { type: string }
 
     InvoicePaymentResult:
       allOf:
         - $ref: "#/components/schemas/Invoice"
 
+    # Reverse (or correct) a previously recorded payment. `amount` is the value to
+    # un-apply from the invoice's amountPaid; `eventId` optionally targets the
+    # specific payment event being reversed (for the activity trail).
+    InvoicePaymentReverseInput:
+      type: object
+      required: [amount]
+      properties:
+        amount:  { type: number, minimum: 0 }
+        eventId: { type: string }
+        reason:  { type: string }
+
+    SendInvoiceSmsInput:
+      type: object
+      properties:
+        phone:
+          type: string
+          description: Optional override number; defaults to the customer's phone on file.
     SendInvoiceEmailInput:
       type: object
       required: [email]
@@ -15352,6 +17304,11 @@ components:
         quantity:    { type: number, minimum: 0.0001 }
         unitPrice:   { type: number, minimum: 0 }
         taxRate:     { type: number, minimum: 0, maximum: 100 }
+        # Optional product linkage so a quote converted to a sale carries the
+        # productId — letting the POS snapshot cost price like any other sale.
+        productId:   { type: integer, nullable: true }
+        productName: { type: string, nullable: true }
+        costPrice:   { type: number, nullable: true }
 
     QuoteDiscountInput:
       type: object
@@ -15677,11 +17634,46 @@ components:
           description: When true, customer file uploads are mirrored to the cloud
         storageKey:
           type: string
-          enum: [onedrive, google_drive, dropbox]
+          enum: [onedrive, google_drive, dropbox, nextcloud]
           description: Connected cloud storage provider to mirror files to
         folder:
           type: string
           description: Destination folder path on that provider (set by the platform user)
+
+    NextcloudLoginFlowStartInput:
+      type: object
+      required: [serverUrl]
+      properties:
+        serverUrl:
+          type: string
+          description: >-
+            The merchant's Nextcloud address. Accepts a bare host or a full URL;
+            the server normalises it to an origin.
+
+    NextcloudLoginFlowStart:
+      type: object
+      required: [loginUrl, serverUrl]
+      properties:
+        loginUrl:
+          type: string
+          description: Open this in a new tab for the merchant to approve.
+        serverUrl:
+          type: string
+          description: The normalised server address the flow was started against.
+
+    NextcloudLoginFlowPoll:
+      type: object
+      required: [status]
+      properties:
+        status:
+          type: string
+          enum: [pending, connected, expired]
+        accountHandle:
+          type: string
+          description: '"user @ host" label for the connected account (status=connected).'
+        serverUrl:
+          type: string
+          description: The server the app password was issued by (status=connected).
 
     CustomerFilesCloudSettings:
       allOf:

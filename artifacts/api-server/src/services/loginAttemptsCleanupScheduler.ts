@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { sql } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
 import type { Logger } from "pino";
 
 /**
@@ -68,7 +69,7 @@ export function scheduleLoginAttemptsCleanup(logger: Logger): void {
   cleanupLoginAttempts(logger).catch((err) =>
     logger.error({ err }, "Login attempts cleanup startup run error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       cleanupLoginAttempts(logger).catch((err) =>
         logger.error({ err }, "Login attempts cleanup scheduled run error"),

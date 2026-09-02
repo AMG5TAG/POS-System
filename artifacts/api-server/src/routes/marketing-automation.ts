@@ -21,6 +21,8 @@ function formatRule(r: typeof marketingAutomationRulesTable.$inferSelect) {
     templateBody: r.templateBody ?? null,
     delayDays: r.delayDays ?? null,
     scheduledAt: r.scheduledAt?.toISOString() ?? null,
+    birthdayDiscount: r.birthdayDiscount ?? null,
+    birthdayDaysBefore: r.birthdayDaysBefore ?? null,
     lastRunAt: r.lastRunAt?.toISOString() ?? null,
     createdAt: r.createdAt.toISOString(),
     updatedAt: r.updatedAt.toISOString(),
@@ -41,13 +43,14 @@ router.get("/marketing-automation", requireAuth, async (req, res): Promise<void>
 // POST /marketing-automation
 router.post("/marketing-automation", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt } = req.body;
+  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt, birthdayDiscount, birthdayDaysBefore } = req.body;
   if (!name || !triggerEvent || !channel) {
     res.status(400).json({ error: "name, triggerEvent, and channel are required" });
     return;
   }
   const parsedDelay = Number.isFinite(Number(delayDays)) && Number(delayDays) > 0 ? Math.floor(Number(delayDays)) : null;
   const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+  const parsedDaysBefore = Number.isFinite(Number(birthdayDaysBefore)) && Number(birthdayDaysBefore) >= 0 ? Math.floor(Number(birthdayDaysBefore)) : null;
   const [rule] = await db
     .insert(marketingAutomationRulesTable)
     .values({
@@ -62,6 +65,8 @@ router.post("/marketing-automation", requireAuth, async (req, res): Promise<void
       templateBody: templateBody ?? null,
       delayDays: parsedDelay,
       scheduledAt: parsedScheduledAt && !isNaN(parsedScheduledAt.getTime()) ? parsedScheduledAt : null,
+      birthdayDiscount: birthdayDiscount ? String(birthdayDiscount) : null,
+      birthdayDaysBefore: parsedDaysBefore,
     })
     .returning();
   res.status(201).json(formatRule(rule));
@@ -72,9 +77,10 @@ router.put("/marketing-automation/:id", requireAuth, async (req, res): Promise<v
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt } = req.body;
+  const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt, birthdayDiscount, birthdayDaysBefore } = req.body;
   const parsedDelay = Number.isFinite(Number(delayDays)) && Number(delayDays) > 0 ? Math.floor(Number(delayDays)) : null;
   const parsedScheduledAt = scheduledAt ? new Date(scheduledAt) : null;
+  const parsedDaysBefore = Number.isFinite(Number(birthdayDaysBefore)) && Number(birthdayDaysBefore) >= 0 ? Math.floor(Number(birthdayDaysBefore)) : null;
   const [rule] = await db
     .update(marketingAutomationRulesTable)
     .set({
@@ -88,6 +94,10 @@ router.put("/marketing-automation/:id", requireAuth, async (req, res): Promise<v
       templateBody:    templateBody ?? null,
       delayDays:       parsedDelay,
       scheduledAt:     parsedScheduledAt && !isNaN(parsedScheduledAt.getTime()) ? parsedScheduledAt : null,
+      // Only touch birthday-specific fields when the caller actually sent them,
+      // so the generic automation editor doesn't wipe settings it doesn't know about.
+      ...("birthdayDiscount" in req.body ? { birthdayDiscount: birthdayDiscount ? String(birthdayDiscount) : null } : {}),
+      ...("birthdayDaysBefore" in req.body ? { birthdayDaysBefore: parsedDaysBefore } : {}),
     })
     .where(and(eq(marketingAutomationRulesTable.id, id), eq(marketingAutomationRulesTable.merchantId, merchantId)))
     .returning();

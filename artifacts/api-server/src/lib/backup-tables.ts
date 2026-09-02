@@ -21,6 +21,18 @@ export interface ScopedTable {
   hasId: boolean;
   /** Drizzle column property key that owns each row's merchant (e.g. "merchantId"). */
   merchantColKey: string;
+  /**
+   * Column property keys holding numeric foreign keys into ANOTHER scoped table
+   * (or this table itself). These are the columns an id-offset transfer must
+   * shift in lockstep with `id` to preserve referential integrity. FKs into
+   * unscoped parents (merchants/plans/modules) are excluded — their ids are
+   * stable across the transfer and must not be shifted.
+   */
+  fkColKeys: string[];
+  /** Column property keys whose Drizzle dataType is "date" (need ISO-string → Date revival on insert). */
+  dateColKeys: string[];
+  /** True if the table has a foreign key referencing itself (must be inserted in one statement so intra-table RI resolves at statement end). */
+  selfReferential: boolean;
 }
 
 const EXCLUDED_TABLE_NAMES = new Set([
@@ -54,16 +66,64 @@ function merchantColumnKey(table: PgTable): string | null {
 }
 
 function discoverScopedTables(): ScopedTable[] {
-  const out: ScopedTable[] = [];
+  // First pass: find every merchant-scoped table and its columns. We need the
+  // full set of scoped table names before we can tell which FK columns point at
+  // another scoped table (and therefore must be offset during a transfer).
+  type Base = {
+    name: string;
+    table: PgTable;
+    columns: Record<string, { name?: string; dataType?: string }>;
+    merchantColKey: string;
+  };
+  const base: Base[] = [];
   for (const value of Object.values(schema)) {
     if (!is(value, PgTable)) continue;
     const table = value as PgTable;
     const name = getTableName(table);
     if (EXCLUDED_TABLE_NAMES.has(name)) continue;
-    const columns = getTableColumns(table);
     const merchantColKey = merchantColumnKey(table);
     if (!merchantColKey) continue;
-    out.push({ name, table, hasId: "id" in columns, merchantColKey });
+    const columns = getTableColumns(table) as Base["columns"];
+    base.push({ name, table, columns, merchantColKey });
+  }
+
+  // Second pass: compute the FK columns into other scoped tables, date columns,
+  // and self-reference flag for each table.
+  const scopedNames = new Set(base.map((b) => b.name));
+  const out: ScopedTable[] = [];
+  for (const b of base) {
+    const fkColKeys: string[] = [];
+    let selfReferential = false;
+    for (const fk of getTableConfig(b.table).foreignKeys) {
+      try {
+        const ref = fk.reference();
+        if (ref.columns.length !== 1) continue; // composite FK — leave untouched
+        const parent = getTableName(ref.foreignTable);
+        if (parent === b.name) selfReferential = true;
+        // Only shift FKs into scoped tables (which are themselves being offset).
+        // FKs into unscoped parents (merchants/plans/modules) keep stable ids.
+        if (!scopedNames.has(parent)) continue;
+        const localName = (ref.columns[0] as { name?: string }).name;
+        const key = Object.keys(b.columns).find((k) => b.columns[k]?.name === localName);
+        if (key && key !== b.merchantColKey && !fkColKeys.includes(key)) {
+          fkColKeys.push(key);
+        }
+      } catch {
+        /* ignore malformed FK metadata */
+      }
+    }
+    const dateColKeys = Object.keys(b.columns).filter(
+      (k) => b.columns[k]?.dataType === "date",
+    );
+    out.push({
+      name: b.name,
+      table: b.table,
+      hasId: "id" in b.columns,
+      merchantColKey: b.merchantColKey,
+      fkColKeys,
+      dateColKeys,
+      selfReferential,
+    });
   }
   return out;
 }

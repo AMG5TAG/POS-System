@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import {
-  useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier, useRequestUploadUrl, useConfirmUpload,
+  useListSuppliers, useCreateSupplier, useUpdateSupplier, useDeleteSupplier,
+  customFetch,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
@@ -16,10 +17,12 @@ import {
   Plus, Truck, Pencil, Trash2, Search, Globe, Mail, Phone,
   Check, ChevronRight, ChevronLeft, Building2, MapPin, Users,
   FileText, CreditCard, ImageIcon, X, LayoutGrid, Table2, BarChart3,
-  ChevronUp, ChevronDown, ChevronsUpDown, Upload,
+  ChevronUp, ChevronDown, ChevronsUpDown, Upload, Smartphone,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -152,25 +155,19 @@ function LogoUploaderInline({ value, onChange }: { value: string; onChange: (url
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
 
-  const requestUploadUrlMutation = useRequestUploadUrl();
-  const confirmUploadMutation = useConfirmUpload();
-
   const upload = useCallback(async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
-      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUploadMutation.mutateAsync({ data: { objectPath: result.objectPath } });
-      onChange(`/api/storage${result.objectPath}`);
-      toast.success("Logo uploaded");
+      const { url, deduped } = await uploadFile(file);
+      onChange(url);
+      toast.success(deduped ? "Reused an image already in your library" : "Logo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
       setUploading(false);
     }
-  }, [onChange, requestUploadUrlMutation, confirmUploadMutation]);
+  }, [onChange]);
 
   return (
     <div className="space-y-1.5">
@@ -259,7 +256,7 @@ function Step1({ form, set }: { form: SupplierForm; set: <K extends keyof Suppli
 function Step2({ form, set }: { form: SupplierForm; set: <K extends keyof SupplierForm>(k: K, v: SupplierForm[K]) => void }) {
   return (
     <div className="space-y-4">
-      <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} placeholder="123 Main St" />
+      <PillInput label="Street Address" value={form.street} onChange={(e) => set("street", e.target.value)} onBlur={(e) => set("street", expandStreetType(e.target.value))} placeholder="123 Main St" />
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="City"  value={form.city}  onChange={(e) => set("city",  e.target.value)} placeholder="Sydney" />
         <div className="space-y-1.5">
@@ -269,7 +266,7 @@ function Step2({ form, set }: { form: SupplierForm; set: <K extends keyof Suppli
       </div>
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="Postcode" value={form.postcode} onChange={(e) => set("postcode", e.target.value)} placeholder="2000" />
-        <PillInput label="Country"  value={form.country}  onChange={(e) => set("country",  e.target.value)} placeholder="Australia" />
+        <PillInput label="Country"  value={form.country}  onChange={(e) => set("country",  e.target.value)} onBlur={(e) => set("country", expandState(e.target.value))} placeholder="Australia" />
       </div>
     </div>
   );
@@ -526,6 +523,23 @@ export default function ProductsSuppliersPage() {
     refetchSuppliers();
   };
 
+  // Flag every product carrying this supplier's name as an ePay (digital
+  // pass-through) product, which excludes them from Cost of Goods.
+  const flagSupplierEpay = async (s: Supplier) => {
+    if (!window.confirm(`Mark all products from "${s.name}" as ePay products?\n\nThey'll be treated as digital pass-through and excluded from Cost of Goods.`)) return;
+    try {
+      const r = await customFetch<{ updated: number }>("/api/products/epay-by-supplier", {
+        method: "PATCH",
+        body: JSON.stringify({ supplier: s.name, isEpay: true }),
+      });
+      if (r.updated === 0) toast.info(`No products are assigned to "${s.name}"`);
+      else toast.success(`Flagged ${r.updated} product${r.updated === 1 ? "" : "s"} from ${s.name} as ePay`);
+      queryClient.invalidateQueries({ queryKey: ["products"] });
+    } catch {
+      toast.error("Failed to flag products as ePay");
+    }
+  };
+
   const getContacts = (s: Supplier): Contact[] => {
     try { return s.contacts ? JSON.parse(s.contacts) : []; } catch { return []; }
   };
@@ -591,19 +605,19 @@ export default function ProductsSuppliersPage() {
             <div className="flex items-center border rounded-lg overflow-hidden">
               <button
                 onClick={() => setView("cards")}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "cards" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "cards" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
                 <LayoutGrid className="w-3.5 h-3.5" /> Cards
               </button>
               <button
                 onClick={() => setView("table")}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-r", view === "table" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors border-l border-r", view === "table" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
                 <Table2 className="w-3.5 h-3.5" /> Table
               </button>
               <button
                 onClick={() => setView("performance")}
-                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "performance" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground hover:bg-muted/50")}
+                className={cn("flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium transition-colors", view === "performance" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:text-foreground hover:bg-muted/50")}
               >
                 <BarChart3 className="w-3.5 h-3.5" /> Performance
               </button>
@@ -708,6 +722,9 @@ export default function ProductsSuppliersPage() {
                         {/* Actions */}
                         <td className="px-4 py-3">
                           <div className="flex items-center gap-0.5 justify-end">
+                            <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark all products as ePay" onClick={(e) => { e.stopPropagation(); flagSupplierEpay(s); }}>
+                              <Smartphone className="w-3.5 h-3.5" />
+                            </Button>
                             <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}>
                               <Pencil className="w-3.5 h-3.5" />
                             </Button>
@@ -752,6 +769,7 @@ export default function ProductsSuppliersPage() {
                         </div>
                       </div>
                       <div className="flex gap-1 shrink-0">
+                        <Button variant="ghost" size="icon" className="h-7 w-7" title="Mark all products as ePay" onClick={(e) => { e.stopPropagation(); flagSupplierEpay(s); }}><Smartphone className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); openEdit(s); }}><Pencil className="w-3.5 h-3.5" /></Button>
                         <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}><Trash2 className="w-3.5 h-3.5" /></Button>
                       </div>

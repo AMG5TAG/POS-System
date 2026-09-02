@@ -26,12 +26,16 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { customerDisplayName } from "@/lib/customer-name";
 import {
   History, Eye, CreditCard, Banknote, Search,
-  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Tag,
+  RotateCcw, Trash2, ChevronUp, ChevronDown, ChevronsUpDown, Tag, PencilLine,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { SendButton } from "@/components/send/send-dialog";
+import { ModifyCompletedSaleDialog } from "@/components/modify-completed-sale-dialog";
+
+/** How many records to load per page; "Load more" fetches another page. */
+const PAGE_SIZE = 200;
 
 const STATUS_COLORS: Record<string, "default" | "secondary" | "destructive" | "outline"> = {
   completed: "default",
@@ -82,9 +86,17 @@ function ReceiptDialog({ tx, txDetail, onClose }: ReceiptDialogProps) {
                 <span>Total</span><span>{formatCurrency(txDetail.total ?? 0)}</span>
               </div>
             </div>
-            <Badge variant={STATUS_COLORS[txDetail.status ?? "completed"]} className="capitalize">
-              {txDetail.status}
-            </Badge>
+            <div className="flex items-center justify-between border-t pt-2">
+              <span className="flex items-center gap-1.5 text-sm font-medium capitalize">
+                {txDetail.paymentMethod === "card" || (txDetail.paymentMethod ?? "").includes("eftpos")
+                  ? <CreditCard className="w-4 h-4 text-muted-foreground" />
+                  : <Banknote className="w-4 h-4 text-muted-foreground" />}
+                {txDetail.paymentMethod || "—"}
+              </span>
+              <Badge variant={STATUS_COLORS[txDetail.status ?? "completed"] ?? "outline"} className="capitalize">
+                {txDetail.status}
+              </Badge>
+            </div>
           </div>
         )}
       </DialogContent>
@@ -217,13 +229,19 @@ export default function POSHistoryPage() {
   const [sort, setSort] = useState<SortState>(null);
   const [viewingTx, setViewingTx] = useState<Transaction | null>(null);
   const [refundTx, setRefundTx] = useState<Transaction | null>(null);
+  const [modifyTx, setModifyTx] = useState<Transaction | null>(null);
   const [deleteTx, setDeleteTx] = useState<Transaction | null>(null);
+  const [limit, setLimit] = useState(PAGE_SIZE);
   const { printReceipt, isLoading: tplLoading } = useDocumentTemplate();
 
   const { data: txData, isLoading } = useListTransactions(
-    { status: statusFilter && statusFilter !== "all" ? statusFilter : undefined, limit: 100 },
-    { query: { queryKey: ["transactions", statusFilter] } }
+    { status: statusFilter && statusFilter !== "all" ? statusFilter : undefined, limit },
+    { query: { queryKey: ["transactions", statusFilter, limit] } }
   );
+
+  const totalCount = txData?.total ?? 0;
+  const loadedCount = txData?.items?.length ?? 0;
+  const hasMore = loadedCount < totalCount;
 
   const { data: viewDetail } = useGetTransaction(
     viewingTx?.id ?? 0,
@@ -317,7 +335,7 @@ export default function POSHistoryPage() {
               onChange={(e) => setSearch(e.target.value)}
             />
           </div>
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select value={statusFilter} onValueChange={(v) => { setStatusFilter(v); setLimit(PAGE_SIZE); }}>
             <SelectTrigger className="w-full sm:w-40">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -339,6 +357,7 @@ export default function POSHistoryPage() {
             </CardContent>
           </Card>
         ) : (
+          <>
           <div className="rounded-lg border overflow-hidden">
             <table className="w-full text-sm">
               <thead className="bg-muted/50 border-b">
@@ -357,7 +376,7 @@ export default function POSHistoryPage() {
                   <th className="text-right p-3 font-medium">
                     <SortHeaderButton label="Total" sortKey="total" sort={sort} onClick={handleSort} className="ml-auto" />
                   </th>
-                  <th className="p-3 w-36" />
+                  <th className="p-3 w-44" />
                 </tr>
               </thead>
               <tbody className="divide-y">
@@ -447,6 +466,16 @@ export default function POSHistoryPage() {
                         <Button
                           variant="ghost"
                           size="icon"
+                          className="h-7 w-7 text-primary hover:text-primary"
+                          title="Modify sale"
+                          disabled={tx.status !== "completed"}
+                          onClick={() => setModifyTx(tx)}
+                        >
+                          <PencilLine className="w-3.5 h-3.5" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="icon"
                           className="h-7 w-7 text-amber-600 hover:text-amber-700"
                           title="Refund"
                           disabled={tx.status !== "completed"}
@@ -470,6 +499,15 @@ export default function POSHistoryPage() {
               </tbody>
             </table>
           </div>
+          <div className="flex items-center justify-between text-xs text-muted-foreground px-1 pt-1">
+            <span>Showing {loadedCount} of {totalCount}{search && ` · ${transactions.length} match this search`}</span>
+            {hasMore && (
+              <Button variant="outline" size="sm" onClick={() => setLimit((l) => l + PAGE_SIZE)}>
+                Load more
+              </Button>
+            )}
+          </div>
+          </>
         )}
       </div>
 
@@ -477,6 +515,11 @@ export default function POSHistoryPage() {
         tx={viewingTx}
         txDetail={viewDetail}
         onClose={() => setViewingTx(null)}
+      />
+
+      <ModifyCompletedSaleDialog
+        tx={modifyTx}
+        onClose={() => setModifyTx(null)}
       />
 
       <RefundDialog

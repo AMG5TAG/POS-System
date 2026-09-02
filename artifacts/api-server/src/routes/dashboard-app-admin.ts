@@ -1,4 +1,5 @@
 import { Router, type IRouter, type Request } from "express";
+import crypto from "node:crypto";
 import { db, dashboardAppSettingsTable, merchantsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -20,14 +21,33 @@ import { publicDomain } from "../lib/publicUrl";
 
 const router: IRouter = Router();
 
+/** 48-char hex token that addresses the public dashboard link. */
+function newPublicToken(): string {
+  return crypto.randomBytes(24).toString("hex");
+}
+
 async function getOrCreateSettings(merchantId: number) {
   const [row] = await db
     .select()
     .from(dashboardAppSettingsTable)
     .where(eq(dashboardAppSettingsTable.merchantId, merchantId))
     .limit(1);
-  if (row) return row;
-  const [created] = await db.insert(dashboardAppSettingsTable).values({ merchantId }).returning();
+  if (row) {
+    // Lazily backfill a token for rows created before token-based links existed.
+    if (!row.publicToken) {
+      const [updated] = await db
+        .update(dashboardAppSettingsTable)
+        .set({ publicToken: newPublicToken() })
+        .where(eq(dashboardAppSettingsTable.merchantId, merchantId))
+        .returning();
+      return updated;
+    }
+    return row;
+  }
+  const [created] = await db
+    .insert(dashboardAppSettingsTable)
+    .values({ merchantId, publicToken: newPublicToken() })
+    .returning();
   return created;
 }
 
@@ -45,10 +65,11 @@ function formatSettings(s: typeof dashboardAppSettingsTable.$inferSelect) {
   };
 }
 
-/** The public Dashboard app URL for a merchant, or null when no username is set. */
-export function buildDashboardUrl(req: Request, username: string | null): string | null {
-  if (!username) return null;
-  return `https://${publicDomain(req)}/b/${username}/t/dashboard`;
+/** The public Dashboard app URL, addressed by an unguessable token (not the
+ *  guessable business username). Null when no token has been generated. */
+export function buildDashboardUrl(req: Request, token: string | null): string | null {
+  if (!token) return null;
+  return `https://${publicDomain(req)}/d/${token}`;
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */
@@ -92,13 +113,14 @@ router.put("/dashboard-app/settings", requireAuth, requireManagerOrOwner, async 
 /* ── Link info ───────────────────────────────────────────────────────── */
 
 router.get("/dashboard-app/link", requireAuth, async (req, res): Promise<void> => {
+  const settings = await getOrCreateSettings(req.session.merchantId!);
   const [merchant] = await db
     .select({ username: merchantsTable.username })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, req.session.merchantId!));
   res.json({
     username: merchant?.username ?? null,
-    url: buildDashboardUrl(req, merchant?.username ?? null),
+    url: buildDashboardUrl(req, settings.publicToken),
   });
 });
 
@@ -116,13 +138,14 @@ router.post("/dashboard-app/send-link", requireAuth, requireManagerOrOwner, asyn
     return;
   }
   const merchantId = req.session.merchantId!;
+  const settings = await getOrCreateSettings(merchantId);
   const [merchant] = await db
-    .select({ username: merchantsTable.username, businessName: merchantsTable.businessName })
+    .select({ businessName: merchantsTable.businessName })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, merchantId));
-  const url = buildDashboardUrl(req, merchant?.username ?? null);
+  const url = buildDashboardUrl(req, settings.publicToken);
   if (!url) {
-    res.status(400).json({ error: "Set a business username first (Settings > Account) — it forms the Dashboard address" });
+    res.status(400).json({ error: "Could not generate a Dashboard link — please try again" });
     return;
   }
   const businessName = merchant?.businessName ?? "your business";

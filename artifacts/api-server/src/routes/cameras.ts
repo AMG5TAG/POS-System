@@ -70,6 +70,13 @@ router.put("/cameras/settings", async (req, res) => {
     pipEnabled?: string; pipCameraId?: number | null; allowedRoles?: string;
     posWebcamEnabled?: string; posWebcamDeviceId?: string | null;
   };
+  // A picture-in-picture camera must be one of this merchant's own cameras.
+  if (pipCameraId !== undefined && pipCameraId !== null) {
+    const [ownCamera] = await db.select({ id: ipCamerasTable.id })
+      .from(ipCamerasTable)
+      .where(and(eq(ipCamerasTable.id, pipCameraId), eq(ipCamerasTable.merchantId, merchantId)));
+    if (!ownCamera) { return res.status(404).json({ error: "Camera not found" }); }
+  }
   const existing = await db
     .select()
     .from(cameraSettingsTable)
@@ -178,6 +185,15 @@ router.post("/camera-snapshots", async (req, res) => {
   const { cameraId, imageData, takenBy, source } = req.body as {
     cameraId: number; imageData: string; takenBy?: string; source?: string;
   };
+  if (typeof cameraId !== "number" || !Number.isInteger(cameraId)) {
+    return res.status(400).json({ error: "Invalid cameraId" });
+  }
+  // Verify the camera belongs to this merchant before recording a snapshot
+  // against it — don't trust a client-supplied cameraId across the tenant boundary.
+  const [ownCamera] = await db.select({ id: ipCamerasTable.id })
+    .from(ipCamerasTable)
+    .where(and(eq(ipCamerasTable.id, cameraId), eq(ipCamerasTable.merchantId, merchantId)));
+  if (!ownCamera) { return res.status(404).json({ error: "Camera not found" }); }
   const [snap] = await db.insert(cameraSnapshotsTable).values({
     cameraId,
     merchantId,

@@ -8,8 +8,9 @@ import {
   useDeleteProductPreOrder,
   getListProductPreOrdersQueryKey,
 } from "@workspace/api-client-react";
-import { useListProducts } from "@workspace/api-client-react";
+import { useGetLaybySettings, getGetLaybySettingsQueryKey, type Product } from "@workspace/api-client-react";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
+import { ProductSearchInput } from "@/components/products/ProductSearchInput";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -19,7 +20,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, Clock, Search, Pencil, Trash2 } from "lucide-react";
+import { Plus, Clock, Search, Pencil, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 
 type PreOrderStatus = "Pending" | "Confirmed" | "Ready" | "Collected" | "Cancelled";
@@ -32,11 +33,13 @@ const STATUS_COLORS: Record<PreOrderStatus, string> = {
   Cancelled: "destructive",
 };
 
+// A product line in the form. unitPrice is a snapshot of the product's sell
+// price at the time it was added, used for the total / deposit suggestion.
+type FormItem = { productId: string; productName: string; quantity: number; unitPrice: number };
+
 const emptyForm = () => ({
   customerId: "",
   customerName: "",
-  productId: "",
-  quantity: "1",
   depositAmount: "",
   expectedDate: "",
   notes: "",
@@ -49,6 +52,9 @@ export default function ProductsPreOrdersPage() {
   const [editingId, setEditingId] = useState<number | null>(null);
   const [search, setSearch] = useState("");
   const [form, setForm] = useState(emptyForm());
+  const [items, setItems] = useState<FormItem[]>([]);
+  // Bumped after each add so the "add product" search input remounts and clears.
+  const [addKey, setAddKey] = useState(0);
 
   const { data, isLoading } = useListProductPreOrders({ search: search || undefined });
   const orders = data?.items ?? [];
@@ -59,37 +65,69 @@ export default function ProductsPreOrdersPage() {
   const updateMutation = useUpdateProductPreOrder({ mutation: { onSuccess: () => { invalidate(); } } });
   const deleteMutation = useDeleteProductPreOrder({ mutation: { onSuccess: () => { invalidate(); } } });
 
-  const { data: productsData } = useListProducts({ limit: 500 });
-  const products = productsData?.items ?? [];
+  const { data: laybySettings } = useGetLaybySettings({ query: { queryKey: getGetLaybySettingsQueryKey() } });
 
-  const openCreate = () => { setEditingId(null); setForm(emptyForm()); setDialogOpen(true); };
+  /* Order total across all line items */
+  const totalPrice = items.reduce((sum, it) => sum + it.unitPrice * it.quantity, 0);
+
+  /* Default deposit from the Laybys settings (Management → Staff & Operations → Sales Settings → Laybys) */
+  const depositIsPercent = (laybySettings?.minimumDepositType ?? "percentage") === "percentage";
+  const depositValue = laybySettings?.minimumDepositValue ?? 0;
+  const suggestedDeposit = depositIsPercent ? (totalPrice * depositValue) / 100 : depositValue;
+
+  const applySuggestedDeposit = () => {
+    setForm((f) => ({ ...f, depositAmount: suggestedDeposit.toFixed(2) }));
+  };
+
+  const addProduct = (id: string, p: Product | null) => {
+    if (!id || !p) return;
+    setItems((prev) => {
+      const existing = prev.find((it) => it.productId === id);
+      if (existing) return prev.map((it) => (it.productId === id ? { ...it, quantity: it.quantity + 1 } : it));
+      return [...prev, { productId: id, productName: p.name, quantity: 1, unitPrice: p.price ?? 0 }];
+    });
+    setAddKey((k) => k + 1);
+  };
+
+  const setItemQty = (idx: number, qty: number) => {
+    setItems((prev) => prev.map((it, i) => (i === idx ? { ...it, quantity: Math.max(1, qty || 1) } : it)));
+  };
+
+  const removeItem = (idx: number) => setItems((prev) => prev.filter((_, i) => i !== idx));
+
+  const openCreate = () => { setEditingId(null); setForm(emptyForm()); setItems([]); setDialogOpen(true); };
   const openEdit = (o: (typeof orders)[0]) => {
     setEditingId(o.id);
     setForm({
       customerId: o.customerId ? String(o.customerId) : "",
       customerName: o.customerName,
-      productId: o.productId ? String(o.productId) : "",
-      quantity: String(o.quantity),
       depositAmount: o.depositAmount ? String(o.depositAmount) : "",
       expectedDate: o.expectedDate ?? "",
       notes: o.notes ?? "",
       status: o.status as PreOrderStatus,
     });
+    setItems((o.items ?? []).map((it) => ({
+      productId: it.productId ? String(it.productId) : "",
+      productName: it.productName,
+      quantity: it.quantity,
+      unitPrice: it.unitPrice ?? 0,
+    })));
     setDialogOpen(true);
   };
 
   const handleSave = () => {
     if (!form.customerId && !form.customerName) { toast.error("Customer is required"); return; }
-    const product = products.find((p) => String(p.id) === form.productId);
-    const productName = product?.name ?? "";
-    if (!productName && !form.productId) { toast.error("Product is required"); return; }
+    if (items.length === 0) { toast.error("Add at least one product"); return; }
 
     const payload = {
       customerId: form.customerId ? parseInt(form.customerId) : undefined,
       customerName: form.customerName,
-      productId: form.productId ? parseInt(form.productId) : undefined,
-      productName,
-      quantity: parseInt(form.quantity) || 1,
+      items: items.map((it) => ({
+        productId: it.productId ? parseInt(it.productId) : undefined,
+        productName: it.productName,
+        quantity: it.quantity,
+        unitPrice: it.unitPrice,
+      })),
       depositAmount: parseFloat(form.depositAmount) || 0,
       status: form.status,
       expectedDate: form.expectedDate || undefined,
@@ -108,7 +146,7 @@ export default function ProductsPreOrdersPage() {
       createMutation.mutate(
         { data: payload },
         {
-          onSuccess: (o) => { toast.success(`${o.poNumber} created`); setDialogOpen(false); setForm(emptyForm()); },
+          onSuccess: (o) => { toast.success(`${o.poNumber} created`); setDialogOpen(false); setForm(emptyForm()); setItems([]); },
           onError: () => toast.error("Failed to create pre-order"),
         },
       );
@@ -163,7 +201,7 @@ export default function ProductsPreOrdersPage() {
                 <tr>
                   <th className="text-left p-3 font-medium">Reference</th>
                   <th className="text-left p-3 font-medium">Customer</th>
-                  <th className="text-left p-3 font-medium hidden sm:table-cell">Product</th>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">Products</th>
                   <th className="text-right p-3 font-medium hidden md:table-cell">Qty</th>
                   <th className="text-right p-3 font-medium hidden lg:table-cell">Deposit</th>
                   <th className="text-left p-3 font-medium">Status</th>
@@ -172,25 +210,32 @@ export default function ProductsPreOrdersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {orders.map((o) => (
-                  <tr key={o.id} className="bg-background hover:bg-muted/20">
-                    <td className="p-3 font-mono font-medium text-xs">{o.poNumber}</td>
-                    <td className="p-3 font-medium">{o.customerName}</td>
-                    <td className="p-3 hidden sm:table-cell text-muted-foreground">{o.productName}</td>
-                    <td className="p-3 text-right hidden md:table-cell">{o.quantity}</td>
-                    <td className="p-3 text-right hidden lg:table-cell">{formatCurrency(o.depositAmount)}</td>
-                    <td className="p-3">
-                      <Badge variant={STATUS_COLORS[o.status as PreOrderStatus] as "default" | "secondary" | "outline" | "destructive"}>{o.status}</Badge>
-                    </td>
-                    <td className="p-3 hidden lg:table-cell text-muted-foreground text-xs">{formatDate(o.createdAt)}</td>
-                    <td className="p-3">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(o)}><Pencil className="w-3.5 h-3.5" /></Button>
-                        <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(o.id, o.poNumber)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                {orders.map((o) => {
+                  const orderItems = o.items ?? [];
+                  const count = orderItems.length;
+                  const firstName = orderItems[0]?.productName ?? o.productName;
+                  const productLabel = count > 1 ? `${firstName} +${count - 1} more` : firstName;
+                  const totalQty = orderItems.length > 0 ? orderItems.reduce((s, it) => s + it.quantity, 0) : o.quantity;
+                  return (
+                    <tr key={o.id} className="bg-background hover:bg-muted/20">
+                      <td className="p-3 font-mono font-medium text-xs">{o.poNumber}</td>
+                      <td className="p-3 font-medium">{o.customerName}</td>
+                      <td className="p-3 hidden sm:table-cell text-muted-foreground" title={orderItems.map((it) => `${it.quantity}× ${it.productName}`).join(", ")}>{productLabel}</td>
+                      <td className="p-3 text-right hidden md:table-cell">{totalQty}</td>
+                      <td className="p-3 text-right hidden lg:table-cell">{formatCurrency(o.depositAmount)}</td>
+                      <td className="p-3">
+                        <Badge variant={STATUS_COLORS[o.status as PreOrderStatus] as "default" | "secondary" | "outline" | "destructive"}>{o.status}</Badge>
+                      </td>
+                      <td className="p-3 hidden lg:table-cell text-muted-foreground text-xs">{formatDate(o.createdAt)}</td>
+                      <td className="p-3">
+                        <div className="flex justify-end gap-1">
+                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(o)}><Pencil className="w-3.5 h-3.5" /></Button>
+                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(o.id, o.poNumber)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -213,23 +258,71 @@ export default function ProductsPreOrdersPage() {
                 placeholder="Select customer"
               />
             </div>
+
             <div className="space-y-1.5">
-              <Label>Product</Label>
-              <Select value={form.productId} onValueChange={(v) => setForm({ ...form, productId: v })}>
-                <SelectTrigger><SelectValue placeholder="Select product" /></SelectTrigger>
-                <SelectContent>{products.map((p) => <SelectItem key={p.id} value={String(p.id)}>{p.name}</SelectItem>)}</SelectContent>
-              </Select>
+              <Label>Products</Label>
+              <ProductSearchInput
+                key={addKey}
+                value=""
+                onChange={(id, p) => addProduct(id, p)}
+                placeholder="Search product by name or SKU to add"
+              />
+              {items.length > 0 ? (
+                <div className="rounded-lg border divide-y mt-2">
+                  {items.map((it, idx) => (
+                    <div key={`${it.productId}-${idx}`} className="flex items-center gap-3 p-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium text-sm truncate" title={it.productName}>{it.productName}</p>
+                        {it.unitPrice > 0 && (
+                          <p className="text-xs text-muted-foreground">{formatCurrency(it.unitPrice)} each · {formatCurrency(it.unitPrice * it.quantity)}</p>
+                        )}
+                      </div>
+                      <Input
+                        type="number"
+                        min={1}
+                        value={it.quantity}
+                        onChange={(e) => setItemQty(idx, parseInt(e.target.value))}
+                        className="w-20 h-8"
+                        aria-label={`Quantity for ${it.productName}`}
+                      />
+                      <Button type="button" variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground hover:text-destructive shrink-0" onClick={() => removeItem(idx)} aria-label={`Remove ${it.productName}`}>
+                        <X className="w-3.5 h-3.5" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">No products added yet.</p>
+              )}
             </div>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-1.5">
-                <Label>Quantity</Label>
-                <Input type="number" min={1} value={form.quantity} onChange={(e) => setForm({ ...form, quantity: e.target.value })} />
-              </div>
-              <div className="space-y-1.5">
-                <Label>Deposit ($)</Label>
-                <Input type="number" step="0.01" value={form.depositAmount} onChange={(e) => setForm({ ...form, depositAmount: e.target.value })} placeholder="0.00" />
-              </div>
+
+            <div className="space-y-1.5">
+              <Label>Deposit ($)</Label>
+              <Input type="number" step="0.01" value={form.depositAmount} onChange={(e) => setForm({ ...form, depositAmount: e.target.value })} placeholder="0.00" />
             </div>
+
+            {totalPrice > 0 && (
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-2 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="text-muted-foreground">Total price</span>
+                  <span className="font-medium">{formatCurrency(totalPrice)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <span className="text-muted-foreground">
+                    Suggested deposit
+                    {depositIsPercent
+                      ? <span className="text-xs"> ({depositValue}% of total)</span>
+                      : <span className="text-xs"> (fixed default)</span>}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="font-medium">{formatCurrency(suggestedDeposit)}</span>
+                    <Button type="button" size="sm" variant="outline" className="h-7" onClick={applySuggestedDeposit}>
+                      Apply
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            )}
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <Label>Status</Label>

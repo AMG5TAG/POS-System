@@ -1,6 +1,9 @@
 import { db, invoicesTable, customersTable, merchantsTable, posCodePrefixesTable } from "@workspace/db";
-import { eq, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
+import { eq, ne, and, lte, or, isNotNull, isNull, sql } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
 import { sendEmail } from "./email";
+import { getInvoiceSettings } from "../routes/invoice-settings";
 import type { Logger } from "pino";
 
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
@@ -122,6 +125,9 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
     .where(
       and(
         eq(invoicesTable.isRecurring, "true"),
+        // A cancelled template must never send again, even though isRecurring
+        // may still be "true" (cancelling only sets status = "cancelled").
+        ne(invoicesTable.status, "cancelled"),
         isNull(invoicesTable.parentInvoiceId),
         isNotNull(invoicesTable.recurringStartDate),
         lte(invoicesTable.recurringStartDate, endOfDay),
@@ -141,7 +147,17 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
     try {
       const total = parseFloat(String(inv.total));
       const items = (inv.items as LineItem[] | null) ?? [];
-      const dueDate = inv.dueDate?.toISOString() ?? null;
+
+      // ── Fresh due date per instance ──
+      // Each generated invoice gets its OWN due date, derived from the merchant's
+      // default invoice settings (Management → Invoices) relative to this
+      // instance's issue date (today) — never the template's original, now-stale
+      // due date. defaultDueDays = 0 means due on receipt.
+      const settings = await getInvoiceSettings(inv.merchantId);
+      const childDueDate = new Date();
+      childDueDate.setHours(0, 0, 0, 0);
+      childDueDate.setDate(childDueDate.getDate() + settings.defaultDueDays);
+      const dueDate = childDueDate.toISOString();
 
       // ── 1. Generate a unique sequential invoice number for this instance ──
       const childNumber = await getNextInvoiceNumber(inv.merchantId);
@@ -162,7 +178,7 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
           discountValue: inv.discountValue ?? null,
           discountTotal: inv.discountTotal ?? null,
           items: inv.items ?? null,
-          dueDate: inv.dueDate ?? null,
+          dueDate: childDueDate,
           notes: inv.notes ?? null,
           isRecurring: "false",
           parentInvoiceId: inv.id,
@@ -246,54 +262,11 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
   }
 }
 
-/**
- * One-time data correction for the Koastal Komputers merchant: reset ALL of
- * their recurring invoices back to unviewed and unpaid (status "sent", clearing
- * viewedAt / paidAt and zeroing amountPaid) so the ledger reflects reality.
- */
-const RECURRING_RESET_CUTOFF = new Date("2026-05-30T00:00:00.000Z");
-
-export async function patchFutureRecurringInvoiceStates(logger: Logger): Promise<void> {
-  const targetEmail = "admin@koastalkomputers.com.au";
-
-  const [merchant] = await db
-    .select({ id: merchantsTable.id })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.email, targetEmail));
-  if (!merchant) return;
-
-  const result = await db
-    .update(invoicesTable)
-    .set({ status: "sent", viewedAt: null, paidAt: null, amountPaid: "0", updatedAt: new Date() })
-    .where(
-      and(
-        eq(invoicesTable.merchantId, merchant.id),
-        eq(invoicesTable.isRecurring, "true"),
-        isNull(invoicesTable.parentInvoiceId),
-        lte(invoicesTable.updatedAt, RECURRING_RESET_CUTOFF),
-        or(
-          eq(invoicesTable.status, "paid"),
-          eq(invoicesTable.status, "partial"),
-          isNotNull(invoicesTable.viewedAt),
-          isNotNull(invoicesTable.paidAt),
-        ),
-      ),
-    )
-    .returning({ id: invoicesTable.id });
-
-  if (result.length > 0) {
-    logger.info({ merchantId: merchant.id, count: result.length }, "Reset recurring invoices to unviewed and unpaid");
-  }
-}
-
 export function scheduleRecurringInvoices(logger: Logger): void {
-  patchFutureRecurringInvoiceStates(logger).catch((err) =>
-    logger.error({ err }, "Failed to reset recurring invoice states"),
-  );
-  processRecurringInvoices(logger).catch((err) =>
+  jitteredStart(() => processRecurringInvoices(logger).catch((err) =>
     logger.error({ err }, "Recurring invoice scheduler startup error"),
-  );
-  setInterval(
+  ));
+  trackedInterval(
     () =>
       processRecurringInvoices(logger).catch((err) =>
         logger.error({ err }, "Recurring invoice scheduler error"),

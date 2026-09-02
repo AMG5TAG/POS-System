@@ -13,9 +13,43 @@
     <meta name="twitter:title" content="KoaPOS" />
     <meta name="twitter:description" content="KoaPOS — built on Replit. Update this description to reflect the app." />
     <link rel="icon" type="image/png" href="/favicon.png" />
+    <!-- Add to Home Screen (PWA) -->
+    <!--
+      Browsers read the manifest ONCE, at document load, from the href in this
+      HTML. The standalone apps (Tech, Mobile POS, Dashboard, Portal) each live
+      on their own route inside this single SPA shell, so a fixed
+      /manifest.webmanifest (start_url "/") would install every one of them as a
+      shortcut back to the marketing homepage. Point the link at the per-app
+      manifest here, while the parser is still in <head>, so the browser only
+      ever sees the right one. Normal pages keep the static manifest.
+    -->
+    <script>
+      (function () {
+        var p = window.location.pathname;
+        var isApp =
+          /^\/b\/[^/]+\/t\/(?:techapp|webapp|posapp)$/.test(p) ||
+          /^\/b\/[^/]+\/c\/[^/]+$/.test(p) ||
+          /^\/[cd]\/[^/]+$/.test(p);
+        var link = document.createElement("link");
+        link.setAttribute("rel", "manifest");
+        link.setAttribute(
+          "href",
+          isApp
+            ? "/api/pwa/manifest.webmanifest?path=" + encodeURIComponent(p)
+            : "/manifest.webmanifest"
+        );
+        document.head.appendChild(link);
+      })();
+    </script>
+    <meta name="theme-color" content="#ecbe04" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+    <meta name="apple-mobile-web-app-title" content="KoaPOS" />
+    <link rel="apple-touch-icon" href="/apple-touch-icon.png" />
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   </head>
   <body>
     <div id="root"></div>

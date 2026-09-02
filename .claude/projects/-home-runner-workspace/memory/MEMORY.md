@@ -1,1 +1,3 @@
 - [Tenant isolation: child mutations](tenant-isolation-child-mutations.md) — verify parent ownership by (id, merchantId) before touching child tables keyed on parentId
+- [DB schema build gotchas](db-schema-build-gotchas.md) — new table/column: rebuild lib/db .d.ts (project refs), add migration to db:push chain, or boot drift-check fails
+- [Prod uses a separate database](prod-separate-database.md) — the deployed app's DB ≠ the dev workspace `heliumdb`; workspace DB queries don't reflect production

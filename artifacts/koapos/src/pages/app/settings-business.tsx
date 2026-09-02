@@ -8,6 +8,8 @@ import {
 import { useAuth } from "@/lib/use-auth";
 import { useBusinessProfile, DAYS, type BusinessProfile, type CustomLink } from "@/lib/business-profile";
 import { validateABN } from "@/lib/abn";
+import { resizeImageFile } from "@/lib/image-resize";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -27,6 +29,7 @@ import {
 } from "lucide-react";
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { FontPicker } from "@/components/ui/font-picker";
+import { BlueSkyIcon, RedditIcon, ThreadsIcon } from "@/components/social-icons";
 
 const BUSINESS_TABS = [
   { href: "#business-info",  label: "Business Info",  icon: Building2   },
@@ -47,7 +50,7 @@ function stripSocialHandle(value: string): string {
     .trim()
     .replace(/^https?:\/\//i, "")
     .replace(/^(?:www\.)?/, "")
-    .replace(/^[a-z0-9-]+\.[a-z]{2,}\/(?:in\/|@)?/i, "")
+    .replace(/^[a-z0-9-]+\.[a-z]{2,}\/(?:in\/|user\/|profile\/|@)?/i, "")
     .replace(/\/$/, "");
 }
 
@@ -176,7 +179,7 @@ function RegSegmentToggle<T extends string>({ options, value, onChange }: {
       {options.map(opt => (
         <button key={opt.value} type="button" onClick={() => onChange(opt.value)}
           className={`flex-1 px-3 py-1.5 text-sm font-medium transition-colors ${
-            value === opt.value ? "bg-primary/10 text-primary" : "text-muted-foreground hover:bg-muted/50"
+            value === opt.value ? "bg-primary/10 text-primary" : "pill-selector text-muted-foreground hover:bg-muted/50"
           }`}>{opt.label}</button>
       ))}
     </div>
@@ -357,19 +360,34 @@ export default function SettingsBusinessPage() {
     }
   }, [merchant]);
 
+  /* Hydrate the extended-fields form once the profile loads (and re-sync after a
+   * save). `ext` is only the initial value at mount, so without this the form
+   * keeps the loading-time defaults and a Save would overwrite real data. Skip
+   * while the user has unsaved edits so we never clobber them. */
+  const profileKey = JSON.stringify(profile);
+  useEffect(() => {
+    if (!dirtyBusiness) setExt(profile);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [profileKey, dirtyBusiness]);
+
   /* Helpers */
   const setExtField = <K extends keyof BusinessProfile>(key: K, val: BusinessProfile[K]) => {
     setExt((p) => ({ ...p, [key]: val }));
     setDirtyBusiness(true);
   };
 
-  const handleLogoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleLogoUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
+    e.target.value = ""; // allow re-selecting the same file
     if (!file) return;
-    const reader = new FileReader();
-    reader.onload = () => setExtField("logo", reader.result as string);
-    reader.onerror = () => toast.error("Failed to read image file");
-    reader.readAsDataURL(file);
+    if (!file.type.startsWith("image/")) { toast.error("Please choose an image file"); return; }
+    try {
+      const { dataUrl, resized, width, height } = await resizeImageFile(file, { maxDim: 512 });
+      setExtField("logo", dataUrl);
+      toast.success(resized ? `Logo uploaded and resized to ${width}×${height}` : "Logo uploaded");
+    } catch {
+      toast.error("Failed to read image file");
+    }
   };
 
   const addCategory = () => {
@@ -504,7 +522,7 @@ export default function SettingsBusinessPage() {
             <h1 className="text-2xl font-bold">Business Info</h1>
             <p className="text-sm text-muted-foreground mt-0.5">Update your business name, logo, contact details, and branding.</p>
           </div>
-          <Button onClick={handleSave} disabled={updateMutation.isPending} size="sm" className="shrink-0 bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold">
+          <Button onClick={handleSave} disabled={updateMutation.isPending} size="sm" className="shrink-0 font-semibold">
             {updateMutation.isPending ? "Saving…" : "Save Business Info"}
           </Button>
         </div>
@@ -568,7 +586,7 @@ export default function SettingsBusinessPage() {
             {(ext.categories ?? []).length > 0 && (
               <div className="flex flex-wrap gap-2">
                 {(ext.categories ?? []).map((cat) => (
-                  <Badge key={cat} variant="secondary" className="flex items-center gap-1 pr-1">
+                  <Badge key={cat} className="flex items-center gap-1 pr-1 bg-primary text-primary-foreground hover:bg-primary/90">
                     {cat}
                     <button onClick={() => removeCategory(cat)} className="ml-1 hover:text-destructive"><X className="h-3 w-3" /></button>
                   </Badge>
@@ -668,7 +686,7 @@ export default function SettingsBusinessPage() {
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="sm:col-span-2">
                 <Label>Street Address</Label>
-                <Input value={apiForm.address} onChange={(e) => patchApiForm({ address: e.target.value })} placeholder="123 Main St" />
+                <Input value={apiForm.address} onChange={(e) => patchApiForm({ address: e.target.value })} onBlur={(e) => patchApiForm({ address: expandStreetType(e.target.value) })} placeholder="123 Main St" />
               </div>
               <div>
                 <Label>Suburb / City</Label>
@@ -676,7 +694,7 @@ export default function SettingsBusinessPage() {
               </div>
               <div>
                 <Label>State</Label>
-                <Input value={ext.state} onChange={(e) => setExtField("state", e.target.value)} placeholder="NSW" />
+                <Input value={ext.state} onChange={(e) => setExtField("state", e.target.value)} onBlur={(e) => setExtField("state", expandState(e.target.value))} placeholder="NSW" />
               </div>
               <div>
                 <Label>Postcode</Label>
@@ -684,7 +702,7 @@ export default function SettingsBusinessPage() {
               </div>
               <div>
                 <Label>Country</Label>
-                <Input value={apiForm.country} onChange={(e) => patchApiForm({ country: e.target.value })} placeholder="Australia" />
+                <Input value={apiForm.country} onChange={(e) => patchApiForm({ country: e.target.value })} onBlur={(e) => patchApiForm({ country: expandState(e.target.value) })} placeholder="Australia" />
               </div>
               <div className="sm:col-span-2 flex flex-wrap gap-x-6 gap-y-2 pt-0.5">
                 <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer select-none">
@@ -805,6 +823,9 @@ export default function SettingsBusinessPage() {
                 { key: "linkedin",  label: "LinkedIn",   icon: Linkedin,  baseUrl: "linkedin.com/in/", placeholder: "yourhandle"   },
                 { key: "youtube",   label: "YouTube",    icon: Youtube,   baseUrl: "youtube.com/@",    placeholder: "yourchannel"  },
                 { key: "tiktok",    label: "TikTok",     icon: Globe,     baseUrl: "tiktok.com/@",     placeholder: "yourhandle"   },
+                { key: "bluesky",   label: "Bluesky",    icon: BlueSkyIcon, baseUrl: "bsky.app/profile/", placeholder: "yourhandle"  },
+                { key: "reddit",    label: "Reddit",     icon: RedditIcon,  baseUrl: "reddit.com/user/",  placeholder: "yourusername" },
+                { key: "threads",   label: "Threads",    icon: ThreadsIcon, baseUrl: "threads.net/@",     placeholder: "yourhandle"   },
               ] as { key: keyof typeof ext.socialLinks; label: string; icon: React.ElementType; baseUrl: string; placeholder: string }[]
             ).map(({ key, label, icon: Icon, baseUrl, placeholder }) => (
               <div key={key} className="flex items-center gap-3">
@@ -817,6 +838,10 @@ export default function SettingsBusinessPage() {
                     value={stripSocialHandle(ext.socialLinks[key])}
                     onChange={(e) => setSocial(key, stripSocialHandle(e.target.value))}
                     placeholder={placeholder}
+                    noAutoCapitalize
+                    autoCapitalize="none"
+                    autoCorrect="off"
+                    spellCheck={false}
                     className="border-0 shadow-none focus-visible:ring-0 focus-visible:ring-offset-0 text-sm rounded-none"
                     aria-label={label}
                   />
@@ -864,7 +889,7 @@ export default function SettingsBusinessPage() {
 
         {/* Save */}
         <div className="pb-8 flex justify-end">
-          <Button onClick={handleSave} disabled={updateMutation.isPending} className="bg-[#efbf04] hover:bg-[#d4aa03] text-black font-semibold px-8">
+          <Button onClick={handleSave} disabled={updateMutation.isPending} className="font-semibold px-8">
             {updateMutation.isPending ? "Saving…" : "Save Business Info"}
           </Button>
         </div>
@@ -933,7 +958,7 @@ function LogoSection({
               <Globe className="w-3 h-3" /> Use URL instead
             </button>
           )}
-          <p className="text-xs text-muted-foreground">PNG or SVG recommended. Max 2 MB.</p>
+          <p className="text-xs text-muted-foreground">PNG or SVG recommended. Large images are resized automatically.</p>
         </div>
       </div>
       {urlMode && (

@@ -44,7 +44,7 @@ function formatSettings(s: typeof techAppSettingsTable.$inferSelect) {
 /** The public tech app URL for a merchant, or null when no username is set. */
 export function buildTechAppUrl(req: Request, username: string | null): string | null {
   if (!username) return null;
-  return `https://${publicDomain(req)}/b/${username}/t/webapp`;
+  return `https://${publicDomain(req)}/b/${username}/t/techapp`;
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */

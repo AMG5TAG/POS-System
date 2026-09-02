@@ -4,9 +4,11 @@ import {
   useUpdateCustomer,
   useGetMerchant,
   useListCustomers,
+  useLookupCustomersByPhone,
   getListCustomersQueryKey,
   Customer,
 } from "@workspace/api-client-react";
+import { useDebounce } from "@/hooks/use-debounce";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { validateABN } from "@/lib/abn";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
@@ -24,13 +26,16 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch } from "lucide-react";
+import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch, Phone } from "lucide-react";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { COUNTRY_CODE_TO_NAME } from "@/lib/localisation";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
+import { AddressAutocomplete } from "@/components/customers/AddressAutocomplete";
+import { ImageUploader } from "@/components/ui/image-uploader";
 
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
@@ -46,6 +51,7 @@ type CustomerForm = {
   shippingPostcode: string; shippingCountry: string;
   customerGroup: string; warningNote: string; agreedToMarketing: boolean; notes: string;
   heardFrom: string; heardFromDetails: string; referredByCustomerId: string;
+  photoUrl: string;
 };
 
 const defaultForm: CustomerForm = {
@@ -59,6 +65,7 @@ const defaultForm: CustomerForm = {
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: true, notes: "",
   heardFrom: "", heardFromDetails: "", referredByCustomerId: "",
+  photoUrl: "",
 };
 
 const WIZARD_STEPS: StepperStep[] = [
@@ -117,6 +124,33 @@ export function AddCustomerWizard({
   const createMutation = useCreateCustomer();
   const updateMutation = useUpdateCustomer();
 
+  /* ── Duplicate phone check ───────────────────────────────────────────────
+   * Runs in the background as the number is typed and matches on digits, so the
+   * regular who is already on file as "+61 400 000 000" is found when the
+   * counter types "0400000000". Advisory only: a household can legitimately
+   * share a number, so it names who has it and lets the operator decide. */
+  const debouncedPhone = useDebounce(form.phone.trim(), 400);
+  const phoneDigits = debouncedPhone.replace(/\D/g, "");
+  const { data: phoneMatchData, isFetching: phoneChecking } = useLookupCustomersByPhone(
+    { phone: debouncedPhone, ...(editingCustomer ? { excludeId: editingCustomer.id } : {}) },
+    {
+      query: {
+        // Below six digits nothing can be identified, so don't ask.
+        enabled: open && phoneDigits.length >= 6,
+        queryKey: ["customer-phone-lookup", debouncedPhone, editingCustomer?.id ?? 0],
+        staleTime: 30_000,
+      },
+    },
+  );
+  const phoneMatches = useMemo(
+    () => (phoneMatchData?.items ?? []) as Customer[],
+    [phoneMatchData],
+  );
+  const [pendingDuplicate, setPendingDuplicate] = useState(false);
+
+  const customerLabel = (c: Customer) =>
+    [c.firstName, c.lastName].filter(Boolean).join(" ").trim() || c.company || c.email || `Customer #${c.id}`;
+
   useEffect(() => {
     if (!open) return;
     let initialForm: CustomerForm;
@@ -139,6 +173,7 @@ export function AddCustomerWizard({
         agreedToMarketing: c.agreedToMarketing === "true", notes: c.notes || "",
         heardFrom: c.heardFrom || "", heardFromDetails: c.heardFromDetails || "",
         referredByCustomerId: c.referredByCustomerId ? String(c.referredByCustomerId) : "",
+        photoUrl: (c as Customer & { photoUrl?: string | null }).photoUrl || "",
       };
     } else {
       const parts = (prefillName ?? "").trim().split(/\s+/).filter(Boolean);
@@ -181,11 +216,20 @@ export function AddCustomerWizard({
     heardFrom: form.heardFrom || undefined,
     heardFromDetails: form.heardFromDetails || undefined,
     referredByCustomerId: form.referredByCustomerId ? Number(form.referredByCustomerId) : undefined,
+    photoUrl: form.photoUrl || undefined,
   });
 
   const inv = () => queryClient.invalidateQueries({ queryKey: getListCustomersQueryKey() });
 
-  const handleSave = () => {
+  const handleSave = (force = false) => {
+    // Adding a customer whose number is already on file is usually a mistake, so
+    // it takes a deliberate second click. Editing is exempt: the match list
+    // already excludes the record being edited. The check is debounced, but the
+    // phone is two steps back in the wizard, so it has always settled by here.
+    if (!force && !editingCustomer && phoneMatches.length > 0) {
+      setPendingDuplicate(true);
+      return;
+    }
     const payload = buildPayload();
     if (editingCustomer) {
       updateMutation.mutate({ id: editingCustomer.id, data: payload }, {
@@ -240,12 +284,25 @@ export function AddCustomerWizard({
         <div className="space-y-4 pb-2">
           {step === "personal" && (
             <>
+              <div className="flex items-start gap-4">
+                <div className="w-24 shrink-0">
+                  <ImageUploader
+                    value={form.photoUrl}
+                    onChange={(url) => setField("photoUrl", url)}
+                    aspectRatio="square"
+                    label="Profile picture"
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground pt-6">
+                  Optional. Synced to the customer's photo on Google &amp; Outlook contacts when contact sync is connected.
+                </p>
+              </div>
               <FieldRow>
                 <Field label="First Name">
-                  <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" />
+                  <Input value={form.firstName} onChange={(e) => setField("firstName", e.target.value)} placeholder="Jane" autoCapitalize="words" />
                 </Field>
                 <Field label="Last Name">
-                  <Input value={form.lastName} onChange={(e) => setField("lastName", e.target.value)} placeholder="Doe" />
+                  <Input value={form.lastName} onChange={(e) => setField("lastName", e.target.value)} placeholder="Doe" autoCapitalize="words" />
                 </Field>
               </FieldRow>
               <FieldRow>
@@ -254,6 +311,40 @@ export function AddCustomerWizard({
                 </Field>
                 <Field label="Phone">
                   <Input value={form.phone} onChange={(e) => setField("phone", e.target.value)} placeholder="0400 000 000" />
+                  {phoneChecking && phoneMatches.length === 0 && (
+                    <p className="text-xs text-muted-foreground pl-1">Checking for existing customers…</p>
+                  )}
+                  {phoneMatches.length > 0 && (
+                    <div className="rounded-lg border border-amber-300 bg-amber-50 px-3 py-2 space-y-1.5">
+                      <p className="flex items-center gap-1.5 text-xs font-semibold text-amber-900">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                        {phoneMatches.length === 1
+                          ? "This number is already on file"
+                          : `This number is already on ${phoneMatches.length} customers`}
+                      </p>
+                      {phoneMatches.map((c) => (
+                        <div key={c.id} className="flex items-center justify-between gap-2 text-xs text-amber-900">
+                          <span className="min-w-0 truncate">
+                            <strong>{customerLabel(c)}</strong>
+                            {c.phone && <span className="ml-1.5 opacity-80">{c.phone}</span>}
+                          </span>
+                          {onCreated && (
+                            <Button
+                              type="button" size="sm" variant="outline"
+                              className="h-6 shrink-0 gap-1 px-2 text-[11px] border-amber-400 bg-white hover:bg-amber-100"
+                              onClick={() => {
+                                onCreated(c);
+                                onOpenChange(false);
+                                toast.success(`Using ${customerLabel(c)}`);
+                              }}
+                            >
+                              <Phone className="w-3 h-3" /> Use this customer
+                            </Button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                   <label className="flex items-center gap-2 text-sm text-muted-foreground cursor-pointer mt-1 pl-1">
                     <Checkbox checked={form.whatsappSameAsPhone} onCheckedChange={(v) => setField("whatsappSameAsPhone", !!v)} />
                     <span className="flex items-center gap-1">
@@ -436,7 +527,19 @@ export function AddCustomerWizard({
             <>
               <p className="text-xs font-bold tracking-widest text-foreground uppercase">Billing Address</p>
               <Field label="Street Address" full>
-                <Input value={form.billingStreet} onChange={(e) => setField("billingStreet", e.target.value)} placeholder="123 Main St" />
+                <AddressAutocomplete
+                  value={form.billingStreet}
+                  onChange={(v) => setField("billingStreet", v)}
+                  onBlur={(v) => setField("billingStreet", expandStreetType(v))}
+                  onPick={(a) => setForm((prev) => ({
+                    ...prev,
+                    billingStreet:   a.street   || prev.billingStreet,
+                    billingCity:     a.city     || prev.billingCity,
+                    billingState:    a.state    || prev.billingState,
+                    billingPostcode: a.postcode || prev.billingPostcode,
+                  }))}
+                  placeholder="123 Main St"
+                />
               </Field>
               <FieldRow>
                 <Field label="City">
@@ -451,7 +554,7 @@ export function AddCustomerWizard({
                   <Input value={form.billingPostcode} onChange={(e) => setField("billingPostcode", e.target.value)} placeholder="2000" />
                 </Field>
                 <Field label="Country">
-                  <Input value={form.billingCountry} onChange={(e) => setField("billingCountry", e.target.value)} placeholder="Australia" />
+                  <Input value={form.billingCountry} onChange={(e) => setField("billingCountry", e.target.value)} onBlur={(e) => setField("billingCountry", expandState(e.target.value))} placeholder="Australia" />
                 </Field>
               </FieldRow>
               <label className="flex items-center gap-2 text-sm cursor-pointer font-medium">
@@ -471,7 +574,7 @@ export function AddCustomerWizard({
                   {!form.shippingSameAsBilling && (
                     <>
                       <Field label="Street / PO Box" full>
-                        <Input value={form.shippingStreet} onChange={(e) => setField("shippingStreet", e.target.value)} placeholder="PO Box 123" />
+                        <Input value={form.shippingStreet} onChange={(e) => setField("shippingStreet", e.target.value)} onBlur={(e) => setField("shippingStreet", expandStreetType(e.target.value))} placeholder="PO Box 123" />
                       </Field>
                       <FieldRow>
                         <Field label="City">
@@ -486,7 +589,7 @@ export function AddCustomerWizard({
                           <Input value={form.shippingPostcode} onChange={(e) => setField("shippingPostcode", e.target.value)} placeholder="2000" />
                         </Field>
                         <Field label="Country">
-                          <Input value={form.shippingCountry} onChange={(e) => setField("shippingCountry", e.target.value)} placeholder="Australia" />
+                          <Input value={form.shippingCountry} onChange={(e) => setField("shippingCountry", e.target.value)} onBlur={(e) => setField("shippingCountry", expandState(e.target.value))} placeholder="Australia" />
                         </Field>
                       </FieldRow>
                     </>
@@ -565,6 +668,26 @@ export function AddCustomerWizard({
     <CustomerNavGuard />
 
     {/* Unsaved changes guard — dialog close (Escape / click outside) */}
+    <AlertDialog open={pendingDuplicate} onOpenChange={setPendingDuplicate}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>This phone number is already on file</AlertDialogTitle>
+          <AlertDialogDescription>
+            {phoneMatches.length === 1
+              ? `${customerLabel(phoneMatches[0])} already has ${form.phone.trim()}.`
+              : `${phoneMatches.map(customerLabel).join(", ")} already have ${form.phone.trim()}.`}
+            {" "}Adding this customer creates a second record for the same number.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={() => setPendingDuplicate(false)}>Go back</AlertDialogCancel>
+          <AlertDialogAction onClick={() => { setPendingDuplicate(false); handleSave(true); }}>
+            Add anyway
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+
     <AlertDialog open={pendingClose} onOpenChange={setPendingClose}>
       <AlertDialogContent>
         <AlertDialogHeader>

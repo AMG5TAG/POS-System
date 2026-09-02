@@ -1,7 +1,9 @@
 import { Router, type IRouter } from "express";
-import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable } from "@workspace/db";
-import { eq, and, desc, sql } from "drizzle-orm";
+import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable, productOversellLedgerTable } from "@workspace/db";
+import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { reconcileOversellLedger } from "../lib/oversellLedger";
+import { withUniqueRetry, nextSequential, isUniqueViolation } from "../lib/document-numbers";
 import {
   ListPurchaseOrdersQueryParams,
   CreatePurchaseOrderBody,
@@ -20,7 +22,15 @@ type PORow = typeof purchaseOrdersTable.$inferSelect;
 type POItemRow = typeof purchaseOrderItemsTable.$inferSelect;
 type ReceiptRow = typeof purchaseOrderReceiptsTable.$inferSelect;
 
-function fmtItem(i: POItemRow) {
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+// Per-product backorder context, joined onto a PO line for the receive warning.
+type OversellSale = { receiptNumber: string | null; quantity: number; saleAt: string };
+type OversellInfo = { currentStock: number | null; oversellSales: OversellSale[] };
+
+function fmtItem(i: POItemRow, oversell?: OversellInfo) {
+  const oversellSales = oversell?.oversellSales ?? [];
+  const oversoldUnits = oversellSales.reduce((s, o) => s + o.quantity, 0);
   return {
     id: i.id,
     productId: i.productId ?? null,
@@ -29,7 +39,30 @@ function fmtItem(i: POItemRow) {
     received: i.received,
     unitCost: parseFloat(i.unitCost),
     notes: i.notes ?? null,
+    // Current on-hand for this line's product (negative = oversold). Null for
+    // non-catalogued lines. `oversellSales` names the sales that oversold it.
+    currentStock: oversell?.currentStock ?? null,
+    oversoldUnits,
+    oversellSales,
   };
+}
+
+// Propagate each PO line's "has serial number" checkbox onto its product, so
+// receiving (and later selling) knows whether to capture/consume serials. Only
+// catalogued lines (with a productId) that explicitly set the flag are touched.
+async function applyTracksSerialFromItems(
+  merchantId: number,
+  items: Array<{ productId?: number | null; tracksSerial?: boolean }>,
+) {
+  const byProduct = new Map<number, boolean>();
+  for (const i of items) {
+    if (i.productId != null && i.tracksSerial !== undefined) byProduct.set(i.productId, i.tracksSerial);
+  }
+  for (const [productId, flag] of byProduct) {
+    await db.update(productsTable)
+      .set({ tracksSerial: flag ? "true" : "false" })
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+  }
 }
 
 function fmtReceipt(r: ReceiptRow) {
@@ -41,7 +74,7 @@ function fmtReceipt(r: ReceiptRow) {
   };
 }
 
-function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = []) {
+function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = [], oversellByProduct?: Map<number, OversellInfo>) {
   let invoiceUrls: string[] = [];
   try { if (po.invoiceUrls) invoiceUrls = JSON.parse(po.invoiceUrls); } catch {}
   return {
@@ -59,7 +92,12 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null,
     totalCost: parseFloat(po.totalCost),
     deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
     deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
-    items: items.map(fmtItem),
+    distributeDelivery: (po as { distributeDelivery?: string }).distributeDelivery === "true",
+    amountPaid: parseFloat(po.amountPaid ?? "0"),
+    paymentStatus: po.paymentStatus ?? "unpaid",
+    paymentMethod: po.paymentMethod ?? null,
+    paidAt: po.paidAt ? po.paidAt.toISOString() : null,
+    items: items.map((i) => fmtItem(i, i.productId ? oversellByProduct?.get(i.productId) : undefined)),
     receipts: receipts.map(fmtReceipt),
     createdAt: po.createdAt.toISOString(),
   };
@@ -69,12 +107,30 @@ async function syncCostPricesFromPO(
   merchantId: number,
   poId: number,
   poNumber: string,
-  items: Array<{ productId?: number | null; unitCost?: number | null }>,
+  items: Array<{ productId?: number | null; unitCost?: number | null; quantity?: number | null }>,
   supplierName: string | null,
+  // Total delivery/shipping charge to spread across the line items (by value),
+  // folding it into each product's landed cost. 0 = don't distribute.
+  deliveryToDistribute = 0,
 ) {
+  // Allocation basis: each line's extended value (qty × unitCost) as a share of
+  // the order's goods subtotal, so pricier lines absorb proportionally more.
+  const goodsSubtotal = items.reduce(
+    (s, i) => (i.productId && i.unitCost != null ? s + (i.quantity ?? 1) * i.unitCost : s),
+    0,
+  );
+  const distribute = deliveryToDistribute > 0 && goodsSubtotal > 0;
+
   for (const item of items) {
     if (!item.productId || item.unitCost == null) continue;
-    const cost = item.unitCost;
+    const qty = item.quantity ?? 1;
+    let cost = item.unitCost;
+    if (distribute && qty > 0) {
+      const lineShare = (qty * item.unitCost) / goodsSubtotal;
+      const allocatedPerUnit = (deliveryToDistribute * lineShare) / qty;
+      cost = item.unitCost + allocatedPerUnit;
+    }
+    cost = Math.round(cost * 100) / 100;
     await db.update(productsTable)
       .set({ costPrice: String(cost) })
       .where(and(eq(productsTable.id, item.productId), eq(productsTable.merchantId, merchantId)));
@@ -89,13 +145,44 @@ async function syncCostPricesFromPO(
   }
 }
 
-function nextPoNumber(existing: Array<{ poNumber: string }>, prefix = "KP", digits = 5): string {
-  let max = 0;
-  for (const po of existing) {
-    const n = parseInt(po.poNumber.replace(/\D/g, ""), 10);
-    if (!isNaN(n) && n > max) max = n;
+function nextPoNumber(existing: Array<{ poNumber: string }>, prefix = "KP", digits = 5, tryIndex = 0): string {
+  return `${prefix}${String(nextSequential(existing.map((p) => p.poNumber), tryIndex)).padStart(digits, "0")}`;
+}
+
+// For each catalogued product on a PO, gather its current on-hand stock and any
+// still-outstanding backorders (oldest sale first) so the receive worksheet can
+// warn that incoming units are already spoken for.
+async function getOversellByProduct(merchantId: number, productIds: number[]): Promise<Map<number, OversellInfo>> {
+  const map = new Map<number, OversellInfo>();
+  const unique = [...new Set(productIds)];
+  if (!unique.length) return map;
+
+  const products = await db
+    .select({ id: productsTable.id, stockQuantity: productsTable.stockQuantity })
+    .from(productsTable)
+    .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, unique)));
+  for (const p of products) map.set(p.id, { currentStock: p.stockQuantity, oversellSales: [] });
+
+  const openRows = await db
+    .select({
+      productId: productOversellLedgerTable.productId,
+      receiptNumber: productOversellLedgerTable.receiptNumber,
+      remaining: productOversellLedgerTable.remaining,
+      saleAt: productOversellLedgerTable.saleAt,
+    })
+    .from(productOversellLedgerTable)
+    .where(and(
+      eq(productOversellLedgerTable.merchantId, merchantId),
+      inArray(productOversellLedgerTable.productId, unique),
+      sql`${productOversellLedgerTable.remaining} > 0`,
+    ))
+    .orderBy(asc(productOversellLedgerTable.createdAt), asc(productOversellLedgerTable.id));
+  for (const r of openRows) {
+    const info = map.get(r.productId) ?? { currentStock: null, oversellSales: [] };
+    info.oversellSales.push({ receiptNumber: r.receiptNumber, quantity: r.remaining, saleAt: r.saleAt.toISOString() });
+    map.set(r.productId, info);
   }
-  return `${prefix}${String(max + 1).padStart(digits, "0")}`;
+  return map;
 }
 
 async function getPOWithItems(id: number, merchantId: number) {
@@ -113,7 +200,11 @@ async function getPOWithItems(id: number, merchantId: number) {
     const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, po.supplierId));
     supplierName = s?.name ?? null;
   }
-  return fmtPO(po, items, supplierName, receipts);
+  const oversellByProduct = await getOversellByProduct(
+    merchantId,
+    items.map((i) => i.productId).filter((p): p is number => p != null),
+  );
+  return fmtPO(po, items, supplierName, receipts, oversellByProduct);
 }
 
 // GET /purchase-orders
@@ -142,37 +233,76 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreatePurchaseOrderBody.parse(req.body);
 
-  let poNumber = body.poNumber;
-  if (!poNumber) {
-    const existing = await db
-      .select({ poNumber: purchaseOrdersTable.poNumber })
-      .from(purchaseOrdersTable)
-      .where(eq(purchaseOrdersTable.merchantId, merchantId));
-    const prefix = (body as { poNumberPrefix?: string }).poNumberPrefix ?? "KP";
-    const digits = (body as { poNumberDigits?: number }).poNumberDigits ?? 5;
-    poNumber = nextPoNumber(existing, prefix, digits);
-  }
+  // A client-supplied PO number is used verbatim (no retry — a duplicate is a
+  // client error surfaced as 409); an auto number is max+1 and retried on the
+  // unique-index conflict so concurrent creates land on distinct numbers.
+  const autoNumber = !body.poNumber;
+  const poPrefix = (body as { poNumberPrefix?: string }).poNumberPrefix ?? "KP";
+  const poDigits = (body as { poNumberDigits?: number }).poNumberDigits ?? 5;
+  let poNumber = body.poNumber ?? "";
 
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
+  const distributeDelivery = req.body?.distributeDelivery === true;
   const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
-  const totalCost = itemsSubtotal + deliveryGross;
-  const [po] = await db.insert(purchaseOrdersTable).values({
-    merchantId,
-    supplierId: body.supplierId ?? null,
-    poNumber,
-    orderNumber: body.orderNumber ?? null,
-    status: body.status ?? "Draft",
-    orderDate: body.orderDate,
-    expectedDate: body.expectedDate ?? null,
-    receivedDate: body.receivedDate ?? null,
-    notes: body.notes ?? null,
-    invoiceUrls: body.invoiceUrls?.length ? JSON.stringify(body.invoiceUrls) : null,
-    totalCost: String(totalCost),
-    deliveryCharge: String(deliveryCharge),
-    deliveryTaxMode,
-  }).returning();
+  const totalCost = round2(itemsSubtotal + deliveryGross);
+
+  // Optional supplier payment recorded at creation. `payFull` settles the order
+  // at the exact server-computed total (so client/server GST rounding can't leave
+  // a stray cent unpaid); otherwise `paymentAmount` records a partial payment,
+  // clamped to the total. paidAt is stamped only once the order is settled in full.
+  const payFull = (body as { payFull?: boolean }).payFull === true;
+  const requestedPay = payFull
+    ? totalCost
+    : round2(Math.max(0, Number((body as { paymentAmount?: number }).paymentAmount ?? 0)));
+  const amountPaid = round2(Math.min(requestedPay, totalCost));
+  const fullyPaid = totalCost > 0 && amountPaid >= totalCost - 0.005;
+  const paymentStatus = fullyPaid ? "paid" : amountPaid > 0 ? "partial" : "unpaid";
+  const paymentMethod = amountPaid > 0
+    ? ((body as { paymentMethod?: string }).paymentMethod?.trim() || null)
+    : null;
+  const paidAt = fullyPaid ? new Date() : null;
+
+  let po: typeof purchaseOrdersTable.$inferSelect;
+  try {
+    po = await withUniqueRetry("purchase_orders_merchant_po_number_unique", async (tryIndex) => {
+      if (autoNumber) {
+        const existing = await db
+          .select({ poNumber: purchaseOrdersTable.poNumber })
+          .from(purchaseOrdersTable)
+          .where(eq(purchaseOrdersTable.merchantId, merchantId));
+        poNumber = nextPoNumber(existing, poPrefix, poDigits, tryIndex);
+      }
+      const [row] = await db.insert(purchaseOrdersTable).values({
+        merchantId,
+        supplierId: body.supplierId ?? null,
+        poNumber,
+        orderNumber: body.orderNumber ?? null,
+        status: body.status ?? "Draft",
+        orderDate: body.orderDate,
+        expectedDate: body.expectedDate ?? null,
+        receivedDate: body.receivedDate ?? null,
+        notes: body.notes ?? null,
+        invoiceUrls: body.invoiceUrls?.length ? JSON.stringify(body.invoiceUrls) : null,
+        totalCost: String(totalCost),
+        deliveryCharge: String(deliveryCharge),
+        deliveryTaxMode,
+        distributeDelivery: distributeDelivery ? "true" : "false",
+        amountPaid: String(amountPaid),
+        paymentStatus,
+        paymentMethod,
+        paidAt,
+      }).returning();
+      return row;
+    }, autoNumber ? 6 : 1);
+  } catch (err) {
+    if (isUniqueViolation(err, "purchase_orders_merchant_po_number_unique")) {
+      res.status(409).json({ error: `Purchase order number "${poNumber}" already exists` });
+      return;
+    }
+    throw err;
+  }
   if (body.items?.length) {
     await db.insert(purchaseOrderItemsTable).values(
       body.items.map((i) => ({
@@ -185,6 +315,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
         notes: i.notes ?? null,
       }))
     );
+    await applyTracksSerialFromItems(merchantId, body.items);
   }
   // Sync product cost prices and log pricing history
   if (body.items?.length) {
@@ -194,7 +325,7 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
         .where(and(eq(suppliersTable.id, body.supplierId), eq(suppliersTable.merchantId, merchantId)));
       supplierName = sup?.name ?? null;
     }
-    await syncCostPricesFromPO(merchantId, po.id, poNumber, body.items, supplierName);
+    await syncCostPricesFromPO(merchantId, po.id, poNumber, body.items, supplierName, distributeDelivery ? deliveryCharge : 0);
   }
   const result = await getPOWithItems(po.id, merchantId);
   res.status(201).json(result);
@@ -219,9 +350,24 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!owned) { res.status(404).json({ error: "Not found" }); return; }
+  // A PO can only be marked complete once goods have actually been received.
+  // Receiving flows through POST /:id/receive (which raises `received`); guard the
+  // generic status edit so a PO can't be flipped to received with nothing received.
+  const completeStatuses = ["Fully Received", "Received"];
+  if (body.status && completeStatuses.includes(body.status)) {
+    const itemsToCheck = body.items !== undefined
+      ? body.items
+      : await db.select({ received: purchaseOrderItemsTable.received })
+          .from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+    if (!itemsToCheck.some((i) => (i.received ?? 0) > 0)) {
+      res.status(400).json({ error: "Cannot mark a purchase order as received before at least one item has been received." });
+      return;
+    }
+  }
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
   const deliveryCharge = body.deliveryCharge ?? 0;
   const deliveryTaxMode = body.deliveryTaxMode ?? "exclusive";
+  const distributeDelivery = req.body?.distributeDelivery === true;
   const deliveryGross = deliveryTaxMode === "exclusive" ? deliveryCharge * 1.1 : deliveryCharge;
   const totalCost = itemsSubtotal + deliveryGross;
   await db.update(purchaseOrdersTable).set({
@@ -239,22 +385,60 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     totalCost: String(totalCost),
     deliveryCharge: String(deliveryCharge),
     deliveryTaxMode,
+    distributeDelivery: distributeDelivery ? "true" : "false",
   }).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (body.items !== undefined) {
-    await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
-    if (body.items.length) {
-      await db.insert(purchaseOrderItemsTable).values(
-        body.items.map((i) => ({
-          poId: id,
-          productId: i.productId ?? null,
-          productName: i.productName ?? "",
-          quantity: i.quantity ?? 1,
-          received: i.received ?? 0,
-          unitCost: String(i.unitCost ?? 0),
-          notes: i.notes ?? null,
-        }))
-      );
-    }
+    // Editing a PO's received quantities must move inventory the same way the
+    // Receive worksheet does. Aggregate received-per-product before and after the
+    // edit, then shift each tracked product's stock by the delta — all inside one
+    // transaction so the item rewrite and the stock adjustments can't split apart.
+    await db.transaction(async (tx) => {
+      const oldItems = await tx.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+      const receivedByProduct = (rows: Array<{ productId?: number | null; received?: number | null }>) => {
+        const m = new Map<number, number>();
+        for (const r of rows) {
+          if (r.productId) m.set(r.productId, (m.get(r.productId) ?? 0) + (r.received ?? 0));
+        }
+        return m;
+      };
+      const oldReceived = receivedByProduct(oldItems);
+      const newReceived = receivedByProduct(body.items ?? []);
+
+      await tx.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+      if (body.items!.length) {
+        await tx.insert(purchaseOrderItemsTable).values(
+          body.items!.map((i) => ({
+            poId: id,
+            productId: i.productId ?? null,
+            productName: i.productName ?? "",
+            quantity: i.quantity ?? 1,
+            received: i.received ?? 0,
+            unitCost: String(i.unitCost ?? 0),
+            notes: i.notes ?? null,
+          }))
+        );
+      }
+
+      const affected = new Set<number>([...oldReceived.keys(), ...newReceived.keys()]);
+      for (const productId of affected) {
+        const delta = (newReceived.get(productId) ?? 0) - (oldReceived.get(productId) ?? 0);
+        if (delta === 0) continue;
+        const [product] = await tx.select({ trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity })
+          .from(productsTable)
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+        if (product?.trackInventory === "true") {
+          const newStock = product.stockQuantity + delta;
+          await tx.update(productsTable)
+            .set({ stockQuantity: newStock })
+            .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+          // Keep the backorder ledger in step whichever way the edit moves stock.
+          await reconcileOversellLedger(tx, {
+            merchantId, productId,
+            prevStock: product.stockQuantity, newStock,
+          });
+        }
+      }
+    });
     // Sync product cost prices and log pricing history
     const [updatedPO] = await db.select().from(purchaseOrdersTable)
       .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
@@ -265,14 +449,20 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
       supplierName = sup?.name ?? null;
     }
     if (body.items.length) {
-      await syncCostPricesFromPO(merchantId, id, updatedPO?.poNumber ?? "", body.items, supplierName);
+      await syncCostPricesFromPO(merchantId, id, updatedPO?.poNumber ?? "", body.items, supplierName, distributeDelivery ? deliveryCharge : 0);
     }
+    await applyTracksSerialFromItems(merchantId, body.items);
   }
   const result = await getPOWithItems(id, merchantId);
   res.json(result);
 });
 
 // DELETE /purchase-orders/:id
+// Deletes the PO *and reverses every change it made*: stock added at receipt is
+// backed out, unsold serial numbers it created are removed, and the cost-price
+// history it wrote is dropped (with each affected product's cost restored to its
+// prior history entry). All of it runs in one transaction so a partial reversal
+// can never be left behind.
 router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeletePurchaseOrderParams.parse({ id: Number(req.params.id) });
@@ -280,9 +470,77 @@ router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!owned) { res.status(404).json({ error: "Not found" }); return; }
-  await db.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
-  await db.delete(purchaseOrdersTable)
-    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+
+  await db.transaction(async (tx) => {
+    const items = await tx.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+
+    // 1) Reverse stock — back out the units this PO added to on-hand (the
+    //    received quantity, tracked products only). Aggregate per product so
+    //    repeated lines for the same product net correctly.
+    const receivedByProduct = new Map<number, number>();
+    for (const it of items) {
+      if (it.productId && it.received > 0) {
+        receivedByProduct.set(it.productId, (receivedByProduct.get(it.productId) ?? 0) + it.received);
+      }
+    }
+    for (const [productId, qty] of receivedByProduct) {
+      const [product] = await tx.select({ trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity })
+        .from(productsTable)
+        .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+      if (product?.trackInventory === "true") {
+        const newStock = product.stockQuantity - qty;
+        await tx.update(productsTable)
+          .set({ stockQuantity: newStock })
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+        // Backing out received units can re-open backorders these units had covered.
+        await reconcileOversellLedger(tx, {
+          merchantId, productId,
+          prevStock: product.stockQuantity, newStock,
+        });
+      }
+    }
+
+    // 2) Remove serial numbers this PO received that are still on hand. Serials
+    //    already sold belong to completed sales and are left untouched.
+    const itemIds = items.map((i) => i.id);
+    if (itemIds.length) {
+      await tx.delete(productSerialsTable).where(and(
+        eq(productSerialsTable.merchantId, merchantId),
+        eq(productSerialsTable.status, "available"),
+        inArray(productSerialsTable.poItemId, itemIds),
+      ));
+    }
+
+    // 3) Reverse cost-price changes — drop the price-history rows this PO wrote,
+    //    then restore each affected product's cost price to its most recent
+    //    remaining history entry (left unchanged if no prior history remains).
+    const affectedProducts = [...new Set((await tx
+      .select({ productId: productPriceHistoryTable.productId })
+      .from(productPriceHistoryTable)
+      .where(and(eq(productPriceHistoryTable.merchantId, merchantId), eq(productPriceHistoryTable.poId, id))))
+      .map((r) => r.productId))];
+    await tx.delete(productPriceHistoryTable)
+      .where(and(eq(productPriceHistoryTable.merchantId, merchantId), eq(productPriceHistoryTable.poId, id)));
+    for (const productId of affectedProducts) {
+      const [prior] = await tx.select({ costPrice: productPriceHistoryTable.costPrice })
+        .from(productPriceHistoryTable)
+        .where(and(eq(productPriceHistoryTable.merchantId, merchantId), eq(productPriceHistoryTable.productId, productId)))
+        .orderBy(desc(productPriceHistoryTable.changedAt))
+        .limit(1);
+      if (prior) {
+        await tx.update(productsTable)
+          .set({ costPrice: prior.costPrice })
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+      }
+    }
+
+    // 4) Delete the PO's receipts, items, then the PO itself (FK order).
+    await tx.delete(purchaseOrderReceiptsTable).where(eq(purchaseOrderReceiptsTable.poId, id));
+    await tx.delete(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
+    await tx.delete(purchaseOrdersTable)
+      .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  });
+
   res.json({ success: true });
 });
 
@@ -337,12 +595,12 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
           .where(eq(purchaseOrderItemsTable.id, poItemId));
 
         if (poItem.productId) {
-          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, warrantyDuration: productsTable.warrantyDuration })
+          const [product] = await tx.select({ trackInventory: productsTable.trackInventory, tracksSerial: productsTable.tracksSerial, costPrice: productsTable.costPrice, stockQuantity: productsTable.stockQuantity })
             .from(productsTable)
             .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
 
-          // Warranty products: record any serial numbers captured at receiving.
-          if (product && product.warrantyDuration > 0 && serialNumbers && serialNumbers.length) {
+          // Serial-tracked products: record any serial numbers captured at receiving.
+          if (product && product.tracksSerial === "true" && serialNumbers && serialNumbers.length) {
             const cleaned = [...new Set(serialNumbers.map((s) => s.trim()).filter(Boolean))];
             if (cleaned.length) {
               await tx.insert(productSerialsTable)
@@ -354,16 +612,40 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
           }
 
           if (product?.trackInventory === "true") {
+            const prevStock = product.stockQuantity ?? 0;
+            const newStock = prevStock + qty;
             await tx.update(productsTable)
-              .set({ stockQuantity: sql`${productsTable.stockQuantity} + ${qty}` })
+              .set({ stockQuantity: newStock })
               .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
+            // Received units cover any outstanding backorders first (FIFO).
+            await reconcileOversellLedger(tx, {
+              merchantId, productId: poItem.productId,
+              prevStock, newStock,
+            });
+          }
+
+          // Update cost via a moving (weighted) average: blend the existing
+          // on-hand value with the newly received value. Falls back to the PO
+          // unit cost when there's no prior on-hand stock/cost or the product
+          // doesn't track inventory (last-cost). Applies to ALL received items,
+          // tracked or not, and records a "po"-sourced price-history row.
+          const poUnit = Number(poItem.unitCost);
+          if (product && Number.isFinite(poUnit)) {
+            const onHand  = product.stockQuantity ?? 0;
+            const oldCost = product.costPrice != null ? parseFloat(product.costPrice) : NaN;
+            let newCost = poUnit;
+            if (product.trackInventory === "true" && onHand > 0 && Number.isFinite(oldCost) && (onHand + qty) > 0) {
+              newCost = (onHand * oldCost + qty * poUnit) / (onHand + qty);
+            }
+            newCost = Math.round(newCost * 100) / 100;
             await tx.update(productsTable)
-              .set({ costPrice: String(poItem.unitCost) })
+              .set({ costPrice: String(newCost) })
               .where(and(eq(productsTable.id, poItem.productId), eq(productsTable.merchantId, merchantId)));
             await tx.insert(productPriceHistoryTable).values({
               merchantId,
               productId: poItem.productId,
-              costPrice: String(poItem.unitCost),
+              costPrice: String(newCost),
+              source: "po",
               supplierName: po.supplierName ?? null,
               poNumber: po.poNumber,
               poId: id,

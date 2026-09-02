@@ -1,16 +1,28 @@
 import { Router, type IRouter } from "express";
-import { db, posRegisterSessionsTable } from "@workspace/db";
+import { db, posRegisterSessionsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, isNull } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const PostPosRegisterSession = z.object({
   registerId: z.string().default("default"),
+  staffId: z.number().int().nullable().optional(),
   openedBy: z.string().default(""),
   openingFloat: z.string().default("0"),
   openingNotes: z.string().default(""),
   deviceId: z.string().optional(),
 });
+
+/** Confirm a client-supplied staffId belongs to this merchant; null otherwise,
+ *  so a stale id attributes the till to nobody rather than tripping the FK. */
+async function resolveMerchantStaff(merchantId: number, staffId: number | null | undefined): Promise<number | null> {
+  if (staffId == null) return null;
+  const [row] = await db
+    .select({ id: staffTable.id })
+    .from(staffTable)
+    .where(and(eq(staffTable.id, staffId), eq(staffTable.merchantId, merchantId)));
+  return row ? staffId : null;
+}
 
 const PatchPosRegisterSession = z.object({
   openedBy: z.string(), openingFloat: z.string(),
@@ -62,9 +74,10 @@ router.post("/pos-register-sessions", requireAuth, async (req, res): Promise<voi
   const merchantId = req.session.merchantId!;
   const parsed = PostPosRegisterSession.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { registerId, openedBy, openingFloat, openingNotes, deviceId } = parsed.data;
+  const { registerId, staffId, openedBy, openingFloat, openingNotes, deviceId } = parsed.data;
+  const safeStaffId = await resolveMerchantStaff(merchantId, staffId);
   const [row] = await db.insert(posRegisterSessionsTable).values({
-    merchantId, registerId, openedBy, openingFloat, openingNotes,
+    merchantId, registerId, staffId: safeStaffId, openedBy, openingFloat, openingNotes,
     ...(deviceId ? { deviceId } : {}),
   }).returning();
   res.status(201).json(row);

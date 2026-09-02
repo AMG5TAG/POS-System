@@ -13,7 +13,7 @@ import { Label } from "@/components/ui/label";
 import { Stepper } from "@/components/ui/stepper";
 import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -21,11 +21,13 @@ import {
   UserSquare2, Plus, Pencil, Trash2, User, MapPin, Settings2, DollarSign,
   Check, ChevronRight, ChevronLeft, Lock, Monitor, ShieldCheck, Upload,
   ArrowUpDown, ArrowUp, ArrowDown, BarChart2, Download, Calendar, Receipt,
-  RefreshCw, Mail,
+  RefreshCw, Mail, Phone, Building2,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
+import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 import { parseStaffPosPrefs, type StaffPosPrefs } from "@/lib/pos-local-settings";
 import { format, subDays, startOfMonth, endOfMonth, startOfDay, endOfDay } from "date-fns";
@@ -210,7 +212,7 @@ function AddressBlock({
   return (
     <div className="space-y-3">
       <p className="text-xs font-bold uppercase tracking-widest text-foreground/70">{title}</p>
-      <PillInput label="Street Address" value={addr.street} onChange={set("street")} />
+      <PillInput label="Street Address" value={addr.street} onChange={set("street")} onBlur={(e) => onChange({ ...addr, street: expandStreetType(e.target.value) })} />
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="City"  value={addr.city}  onChange={set("city")} />
         <div className="space-y-1.5">
@@ -220,7 +222,7 @@ function AddressBlock({
       </div>
       <div className="grid grid-cols-2 gap-3">
         <PillInput label="Postcode" value={addr.postcode} onChange={set("postcode")} />
-        <PillInput label="Country"  value={addr.country}  onChange={set("country")} />
+        <PillInput label="Country"  value={addr.country}  onChange={set("country")} onBlur={(e) => onChange({ ...addr, country: expandState(e.target.value) })} />
       </div>
     </div>
   );
@@ -239,6 +241,32 @@ interface WizardDialogProps {
 
 function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }: WizardDialogProps) {
   const [step, setStep] = useState(0);
+  const [invitingLogin, setInvitingLogin] = useState(false);
+
+  // Invite an existing staff member to enable email sign-in (sends a set-password
+  // link). The register PIN is unaffected.
+  const sendLoginInvite = async () => {
+    if (!editingStaff?.id) return;
+    setInvitingLogin(true);
+    try {
+      const r = await fetch("/api/staff-auth/enable", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ staffId: editingStaff.id }),
+      });
+      if (r.ok) {
+        toast.success("Invite sent — they'll get an email to set a password.");
+      } else {
+        const d = await r.json().catch(() => null);
+        toast.error(d && typeof d.error === "string" ? d.error : "Failed to send invite");
+      }
+    } catch {
+      toast.error("Failed to send invite");
+    } finally {
+      setInvitingLogin(false);
+    }
+  };
   const [form, setForm] = useState<WizardForm>(defaultForm);
 
   useEffect(() => {
@@ -307,8 +335,8 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <PillInput label="First Name" value={form.firstName} onChange={setField("firstName")} />
-                <PillInput label="Last Name"  value={form.lastName}  onChange={setField("lastName")} />
+                <PillInput label="First Name" value={form.firstName} onChange={setField("firstName")} autoCapitalize="words" />
+                <PillInput label="Last Name"  value={form.lastName}  onChange={setField("lastName")} autoCapitalize="words" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <PillInput label="Email" required type="email" value={form.email} onChange={setField("email")} />
@@ -401,6 +429,30 @@ function WizardDialog({ open, onClose, editingStaff, onSave, saving, onTouched }
                   <div className="flex items-start gap-2 rounded-lg bg-blue-50 border border-blue-200 px-3 py-2 text-xs text-blue-700">
                     <Mail className="w-3.5 h-3.5 mt-0.5 shrink-0" />
                     <span>A welcome email containing this PIN will be sent to <strong>{form.email}</strong> when saved.</span>
+                  </div>
+                )}
+                {editingStaff && (
+                  <div className="rounded-xl border px-3 py-2.5 space-y-2">
+                    <div className="flex items-center gap-2">
+                      <Mail className="w-3.5 h-3.5 text-muted-foreground" />
+                      <p className="text-sm font-medium">Email sign-in</p>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Let this employee sign in remotely with their email and password — their role controls what they can access, and their register PIN stays the same. We'll email them a link to set a password.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      className="rounded-full"
+                      disabled={!editingStaff.email || invitingLogin}
+                      onClick={() => void sendLoginInvite()}
+                    >
+                      {invitingLogin ? "Sending…" : "Send email login invite"}
+                    </Button>
+                    {!editingStaff.email && (
+                      <p className="text-xs text-amber-600">Add an email address and save before sending an invite.</p>
+                    )}
                   </div>
                 )}
               </div>
@@ -721,7 +773,7 @@ function SalesReportView() {
                 "px-3 py-1 rounded-md text-sm font-medium transition-all capitalize",
                 preset === p
                   ? "bg-background shadow-sm text-foreground"
-                  : "text-muted-foreground hover:text-foreground",
+                  : "pill-selector text-muted-foreground hover:text-foreground",
               )}
             >
               {p === "week" ? "Last 7d" : p === "month" ? "This month" : p.charAt(0).toUpperCase() + p.slice(1)}
@@ -872,6 +924,162 @@ function SalesReportView() {
   );
 }
 
+/* ─── Staff detail dialog ────────────────────────────────────────────────── */
+
+function formatAddress(json: string | null | undefined): string {
+  if (!json) return "";
+  try {
+    const a = JSON.parse(json) as Partial<AddressFields>;
+    return [a.street, a.city, a.state, a.postcode, a.country].filter(Boolean).join(", ");
+  } catch { return ""; }
+}
+
+function DetailRow({ icon: Icon, label, value }: { icon: React.ComponentType<{ className?: string }>; label: string; value: React.ReactNode }) {
+  return (
+    <div className="flex items-start gap-3 py-2.5">
+      <Icon className="w-4 h-4 mt-0.5 text-muted-foreground shrink-0" />
+      <div className="min-w-0 flex-1">
+        <p className="text-xs text-muted-foreground">{label}</p>
+        <div className="text-sm font-medium break-words">{value || <span className="text-muted-foreground font-normal">—</span>}</div>
+      </div>
+    </div>
+  );
+}
+
+function StaffDetailDialog({
+  staff, onClose, onEdit, onDelete, registerName,
+}: {
+  staff: Staff | null;
+  onClose: () => void;
+  onEdit: (s: Staff) => void;
+  onDelete?: (s: Staff) => void;
+  registerName: string;
+}) {
+  const billing = formatAddress(staff?.billingAddress);
+  const postal  = formatAddress(staff?.postalAddress);
+
+  const STAFF_TABS = [
+    { key: "details",    label: "Details" },
+    { key: "address",    label: "Address" },
+    { key: "access",     label: "Access" },
+    { key: "employment", label: "Employment" },
+  ] as const;
+  type StaffTab = typeof STAFF_TABS[number]["key"];
+
+  const [tab, setTab] = useState<StaffTab>("details");
+  const tabIndex = STAFF_TABS.findIndex((t) => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(STAFF_TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < STAFF_TABS.length - 1) setTab(STAFF_TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!staff, goPrevTab, goNextTab);
+  useEffect(() => { setTab("details"); }, [staff?.id]);
+
+  return (
+    <Dialog open={!!staff} onOpenChange={(o) => { if (!o) onClose(); }}>
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
+        {staff && (
+          <>
+            <DialogHeader className="p-6 pb-4 border-b space-y-0">
+              <div className="flex items-center gap-4">
+                <div className="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center text-lg font-bold text-primary shrink-0">
+                  {staff.name.charAt(0).toUpperCase()}
+                </div>
+                <div className="min-w-0 flex-1">
+                  <DialogTitle className="truncate">{staff.name}</DialogTitle>
+                  <div className="flex items-center gap-2 mt-1.5">
+                    <Badge variant="secondary" className="capitalize">{staff.role.replace("_", " ")}</Badge>
+                    <Badge variant={staff.isActive ? "default" : "secondary"}>{staff.isActive ? "Active" : "Inactive"}</Badge>
+                  </div>
+                </div>
+              </div>
+            </DialogHeader>
+
+            <div className="flex border-b px-6 gap-0 shrink-0">
+              {STAFF_TABS.map(({ key, label }) => (
+                <button key={key} onClick={() => setTab(key)} className={cn(
+                  "px-4 py-2 text-sm font-medium border-b-2 -mb-px transition-colors",
+                  tab === key ? "border-primary text-primary" : "border-transparent text-muted-foreground hover:text-foreground",
+                )}>
+                  {label}
+                </button>
+              ))}
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-6 py-3">
+              {tab === "details" && (
+                <div className="divide-y">
+                  <section className="py-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Contact</h3>
+                    <DetailRow icon={Mail} label="Email" value={staff.email} />
+                    <DetailRow icon={Phone} label="Phone" value={staff.phone} />
+                    <DetailRow icon={Calendar} label="Date of birth" value={staff.dateOfBirth} />
+                  </section>
+                  <section className="py-2">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Company</h3>
+                    <DetailRow icon={Building2} label="Company" value={staff.company} />
+                    <DetailRow icon={Receipt} label="ABN" value={staff.abn} />
+                  </section>
+                </div>
+              )}
+
+              {tab === "address" && (
+                <section className="py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Addresses</h3>
+                  <DetailRow icon={MapPin} label="Billing address" value={billing} />
+                  <DetailRow icon={MapPin} label="Postal address" value={postal} />
+                </section>
+              )}
+
+              {tab === "access" && (
+                <section className="py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Access</h3>
+                  <DetailRow icon={ShieldCheck} label="Role" value={<span className="capitalize">{staff.role.replace("_", " ")}</span>} />
+                  <DetailRow icon={Lock} label="PIN" value={staff.pin ? "Set" : "Not set"} />
+                  <DetailRow icon={Monitor} label="Default register" value={registerName} />
+                </section>
+              )}
+
+              {tab === "employment" && (
+                <section className="py-2">
+                  <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Employment</h3>
+                  <DetailRow icon={DollarSign} label="Pay rate" value={staff.payRate ? `$${staff.payRate}/hr` : ""} />
+                  <DetailRow icon={DollarSign} label="Loading" value={staff.loadingRate ? `${staff.loadingRate}%` : ""} />
+                  <DetailRow icon={DollarSign} label="Super" value={staff.superRate ? `${staff.superRate}%` : ""} />
+                </section>
+              )}
+            </div>
+
+            <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
+              <div className="flex gap-2 items-center">
+                {onDelete && (
+                  <Button
+                    variant="destructive" size="sm" className="w-8 h-8 p-0"
+                    onClick={() => onDelete(staff)}
+                    title="Remove staff member"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </Button>
+                )}
+                <Button size="sm" className="w-8 h-8 p-0" onClick={() => onEdit(staff)} title="Edit staff member">
+                  <Pencil className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+                  <ChevronLeft className="w-4 h-4" />
+                </Button>
+                <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === STAFF_TABS.length - 1} title="Next tab">
+                  <ChevronRight className="w-4 h-4" />
+                </Button>
+              </div>
+              <div className="flex gap-2 items-center">
+                <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+              </div>
+            </DialogFooter>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function StaffPage() {
@@ -881,6 +1089,7 @@ export default function StaffPage() {
   const [delDialogOpen, setDelDialog]   = useState(false);
   const [editingStaff, setEditingStaff] = useState<Staff | null>(null);
   const [deletingStaff, setDeleting]    = useState<Staff | null>(null);
+  const [viewingStaff, setViewing]      = useState<Staff | null>(null);
 
   const { data: staffList, isLoading } = useListStaff({ query: { queryKey: ["staff"] } });
   const createMutation = useCreateStaff();
@@ -1019,7 +1228,7 @@ export default function StaffPage() {
                 onClick={() => setView("staff")}
                 className={cn(
                   "px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5",
-                  view === "staff" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  view === "staff" ? "bg-background shadow-sm" : "pill-selector text-muted-foreground hover:text-foreground",
                 )}
               >
                 <UserSquare2 className="w-4 h-4" /> Employees
@@ -1028,7 +1237,7 @@ export default function StaffPage() {
                 onClick={() => setView("report")}
                 className={cn(
                   "px-3 py-1.5 rounded-md text-sm font-medium transition-all flex items-center gap-1.5",
-                  view === "report" ? "bg-background shadow-sm" : "text-muted-foreground hover:text-foreground",
+                  view === "report" ? "bg-background shadow-sm" : "pill-selector text-muted-foreground hover:text-foreground",
                 )}
               >
                 <BarChart2 className="w-4 h-4" /> Sales Report
@@ -1099,7 +1308,11 @@ export default function StaffPage() {
                 </thead>
                 <tbody className="divide-y">
                   {sorted.map((member) => (
-                    <tr key={member.id} className="bg-background hover:bg-muted/30 transition-colors">
+                    <tr
+                      key={member.id}
+                      onClick={() => setViewing(member)}
+                      className="bg-background hover:bg-muted/30 transition-colors cursor-pointer"
+                    >
                       <td className="p-4">
                         <div className="flex items-center gap-3">
                           <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center text-sm font-bold text-primary">
@@ -1125,13 +1338,13 @@ export default function StaffPage() {
                       </td>
                       <td className="p-4">
                         <div className="flex items-center justify-end gap-2">
-                          <Button variant="ghost" size="icon" onClick={() => openEdit(member)}>
+                          <Button variant="ghost" size="icon" onClick={(e) => { e.stopPropagation(); openEdit(member); }}>
                             <Pencil className="w-4 h-4" />
                           </Button>
                           <Button
                             variant="ghost" size="icon"
                             className="text-destructive hover:text-destructive"
-                            onClick={() => { setDeleting(member); setDelDialog(true); }}
+                            onClick={(e) => { e.stopPropagation(); setDeleting(member); setDelDialog(true); }}
                           >
                             <Trash2 className="w-4 h-4" />
                           </Button>
@@ -1148,6 +1361,15 @@ export default function StaffPage() {
         {/* Sales report view */}
         {view === "report" && <SalesReportView />}
       </div>
+
+      {/* Staff detail view */}
+      <StaffDetailDialog
+        staff={viewingStaff}
+        onClose={() => setViewing(null)}
+        onEdit={(s) => { setViewing(null); openEdit(s); }}
+        onDelete={(s) => { setViewing(null); setDeleting(s); setDelDialog(true); }}
+        registerName={registerMap[String(viewingStaff?.defaultRegisterType ?? "")] || "—"}
+      />
 
       {/* 4-step wizard */}
       <WizardDialog

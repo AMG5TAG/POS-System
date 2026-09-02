@@ -1,6 +1,7 @@
 import PDFDocument from "pdfkit";
 import { buildInvoiceHtml, type InvoiceDocInput } from "@workspace/sales-documents";
 import { htmlToPdf } from "./htmlToPdf";
+import { logger } from "../lib/logger";
 
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
 
@@ -78,6 +79,36 @@ export interface InvoicePdfData {
   fontFamily?: string | null;
   /** Stored `selectedStyle` from the template. */
   styleVariant?: string | null;
+  /** Show the customer-profile QR (needs `customerQrValue`). */
+  showCustomerQr?: boolean;
+  /** Show a merchant-supplied custom QR image (needs `customQrImage`). */
+  showCustomQr?: boolean;
+  /** Custom QR image — a data:/https URL stored on the template. */
+  customQrImage?: string | null;
+  /** Caption shown under the custom QR. */
+  customQrCaption?: string | null;
+  /** Show the loyalty-earned banner (needs `loyaltyPointsEarned`). */
+  showLoyaltyEarned?: boolean;
+  /** Show accepted payment-method chips. */
+  showPaymentMethods?: boolean;
+  /** Show the bottom barcode. */
+  showBarcode?: boolean;
+  /** Show the referral footer. */
+  showReferralLink?: boolean;
+  /** Custom message block rendered in the footer. */
+  customMessage?: string | null;
+  /** Intro text for the referral footer. */
+  referralLinkText?: string | null;
+  /** Short code shown under the customer-profile QR, e.g. "CUS-42". */
+  customerCode?: string | null;
+  /** Value/URL encoded into the customer-profile QR (rendered server-side). */
+  customerQrValue?: string | null;
+  /** Loyalty points earned on this sale, for the banner. */
+  loyaltyPointsEarned?: number | null;
+  /** Accepted payment methods, e.g. ["EFTPOS","Cash"]. */
+  paymentMethods?: string[] | null;
+  referralCode?: string | null;
+  referralUrl?: string | null;
 }
 
 const FALLBACK_BRAND = "#4f46e5";
@@ -184,6 +215,7 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
       phone: data.customerPhone,
       address: data.customerAddress,
       company: data.customerCompany,
+      code: data.customerCode ?? null,
     },
     items: data.items.map((it) => ({
       description: it.description,
@@ -198,6 +230,10 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
     total: data.total,
     amountPaid: data.amountPaid,
     notes: data.notes,
+    loyaltyPointsEarned: data.loyaltyPointsEarned ?? null,
+    paymentMethods: data.paymentMethods ?? null,
+    referralCode: data.referralCode ?? null,
+    referralUrl: data.referralUrl ?? null,
     options: {
       showLogo: data.showLogo,
       showAbn: data.showAbn,
@@ -207,13 +243,22 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
       showSocialLinks: data.showSocialLinks,
       socialIconBrandColors: data.socialIconBrandColors,
       showAllCustomerDetails: data.showAllCustomerDetails,
+      showCustomerQr: data.showCustomerQr,
+      showCustomQr: data.showCustomQr,
+      customQrCaption: data.customQrCaption,
+      showLoyaltyEarned: data.showLoyaltyEarned,
+      showPaymentMethods: data.showPaymentMethods,
+      showBarcode: data.showBarcode,
+      showReferralLink: data.showReferralLink,
       headerText: data.headerText,
       thankYouMsg: data.thankYouMsg,
+      customMessage: data.customMessage,
       footerText: data.footerText,
       paymentTerms: data.paymentTerms,
       invoiceNotes: data.invoiceNotes,
       bankDetails: data.bankDetails,
       paymentSectionHeading: data.paymentSectionHeading,
+      referralLinkText: data.referralLinkText,
       fontFamily: data.fontFamily,
       styleVariant: data.styleVariant,
       socialLinks: data.socialLinks ?? null,
@@ -221,8 +266,32 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
   };
 }
 
+type QrFn = (text: string, opts?: Record<string, unknown>) => Promise<string>;
+
+/** Render a QR code to a PNG data URL (best-effort; null on failure). */
+async function genQrDataUrl(value: string): Promise<string | null> {
+  try {
+    const mod = await import("qrcode") as unknown as { toDataURL?: QrFn; default?: { toDataURL: QrFn } };
+    const toDataURL = mod.toDataURL ?? mod.default?.toDataURL;
+    if (!toDataURL) return null;
+    return await toDataURL(value, { margin: 0, width: 220 });
+  } catch (err) {
+    logger.warn({ err: err instanceof Error ? err.message : err }, "[invoicePdf] customer QR generation failed");
+    return null;
+  }
+}
+
 export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
-  const html = buildInvoiceHtml(mapToDoc(data));
+  const doc = mapToDoc(data);
+  // Encode the customer-profile QR server-side (the renderer is pure HTML).
+  if (data.showCustomerQr && data.customerQrValue) {
+    doc.customerQrDataUrl = await genQrDataUrl(data.customerQrValue);
+  }
+  // Custom QR is already an image (uploaded data URL / https URL) — pass through.
+  if (data.showCustomQr && data.customQrImage) {
+    doc.customQrDataUrl = data.customQrImage;
+  }
+  const html = buildInvoiceHtml(doc);
   try {
     return await htmlToPdf(html);
   } catch (err) {
@@ -230,7 +299,7 @@ export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
     // than failing the invoice send/print, fall back to the legacy pdfkit
     // layout. The output is less faithful to the template but still valid.
     // eslint-disable-next-line no-console
-    console.warn("[invoicePdf] HTML→PDF render failed, falling back to pdfkit:", err instanceof Error ? err.message : err);
+    logger.warn({ err: err instanceof Error ? err.message : err }, "[invoicePdf] HTML→PDF render failed, falling back to pdfkit");
     return buildInvoicePdfLegacy(data);
   }
 }

@@ -6,37 +6,77 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ImageUploader } from "@/components/ui/image-uploader";
-import { Boxes, ImageIcon } from "lucide-react";
+import { Boxes, ImageIcon, AlertTriangle } from "lucide-react";
 import { toast } from "sonner";
+import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetInventorySettings,
   useUpdateInventorySettings,
+  useGetLowStockAlertSettings,
+  useUpdateLowStockAlertSettings,
+  getGetLowStockAlertSettingsQueryKey,
 } from "@workspace/api-client-react";
+import { useShowBrandCostValue } from "@/lib/brand-view-settings";
 
 const INVENTORY_TABS = [
   { href: "#display",        label: "Display",        icon: Boxes },
+  { href: "#low-stock",      label: "Low Stock",      icon: AlertTriangle },
   { href: "#default-image",  label: "Default Image" },
   { href: "#group-pricing",  label: "Group Pricing" },
 ];
 
+/** Used when a merchant hasn't set their own default low-stock amount. */
+const FALLBACK_LOW_STOCK = 5;
+
 
 export default function ManagementInventoryPage() {
+  const queryClient = useQueryClient();
   const { data: settings, isLoading } = useGetInventorySettings();
   const update = useUpdateInventorySettings();
 
+  const { data: lowStockSettings } = useGetLowStockAlertSettings({ query: { queryKey: getGetLowStockAlertSettingsQueryKey() } });
+  const updateLowStock = useUpdateLowStockAlertSettings();
+
   const [showHideCostsBtn, setShowHideCostsBtnState] = useState(true);
   const [enableGroupPricing, setEnableGroupPricingState] = useState(true);
+  const [enableStockColors, setEnableStockColorsState] = useState(false);
   const [defaultImageUrl, setDefaultImageUrl] = useState("");
+  const [lowStockDefault, setLowStockDefault] = useState("");
+  const [showBrandCostValue, setShowBrandCostValue] = useShowBrandCostValue();
 
   useEffect(() => {
     if (settings) {
       setShowHideCostsBtnState(settings.showCosts !== "false");
       setEnableGroupPricingState(settings.groupPricing !== "false");
+      setEnableStockColorsState(settings.stockColors === "true");
       setDefaultImageUrl(settings.defaultImageUrl ?? "");
     }
   }, [settings]);
 
-  function persist(patch: { showCosts?: string; groupPricing?: string; skuPrefix?: string; defaultImageUrl?: string | null }) {
+  useEffect(() => {
+    if (lowStockSettings) {
+      setLowStockDefault(lowStockSettings.globalThreshold != null ? String(lowStockSettings.globalThreshold) : "");
+    }
+  }, [lowStockSettings]);
+
+  // Save the default low-stock amount only when it actually changed.
+  function saveLowStockDefault() {
+    const raw = lowStockDefault.trim();
+    const parsed = raw === "" ? null : Math.max(0, parseInt(raw, 10) || 0);
+    if (parsed === (lowStockSettings?.globalThreshold ?? null)) return;
+    updateLowStock.mutate(
+      { data: { globalThreshold: parsed } },
+      {
+        onSuccess: () => {
+          queryClient.invalidateQueries({ queryKey: getGetLowStockAlertSettingsQueryKey() });
+          toast.success(parsed == null ? `Default low-stock amount cleared (using ${FALLBACK_LOW_STOCK})` : `Default low-stock amount set to ${parsed}`);
+        },
+        onError: () => toast.error("Failed to save the default low-stock amount"),
+      },
+    );
+  }
+
+  function persist(patch: { showCosts?: string; groupPricing?: string; stockColors?: string; skuPrefix?: string; defaultImageUrl?: string | null }) {
     update.mutate(
       { data: patch },
       {
@@ -56,6 +96,12 @@ export default function ManagementInventoryPage() {
     setEnableGroupPricingState(v);
     persist({ groupPricing: v ? "true" : "false" });
     toast.success(v ? "Customer Group Pricing enabled" : "Customer Group Pricing disabled");
+  }
+
+  function toggleStockColors(v: boolean) {
+    setEnableStockColorsState(v);
+    persist({ stockColors: v ? "true" : "false" });
+    toast.success(v ? "Stock level colours enabled in Products" : "Stock level colours disabled");
   }
 
   function handleDefaultImageChange(url: string) {
@@ -109,6 +155,58 @@ export default function ManagementInventoryPage() {
                 </p>
               </div>
               <Switch checked={showHideCostsBtn} onCheckedChange={toggleShowHideCosts} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">Colour-code stock levels</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Colour the Stock column in the Products table by level — red when out of stock,
+                  yellow when low (1–5), green when 5+.
+                </p>
+              </div>
+              <Switch checked={enableStockColors} onCheckedChange={toggleStockColors} />
+            </div>
+            <div className="flex items-center justify-between gap-4">
+              <div>
+                <p className="text-sm font-medium">Show 'Cost Value' column on Brands</p>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Adds a Cost Value column to the Brands list (Products › Brands) showing each brand's
+                  total inventory cost — the sum of cost price × stock on hand across its products.
+                </p>
+              </div>
+              <Switch checked={showBrandCostValue} onCheckedChange={setShowBrandCostValue} />
+            </div>
+          </div>
+        </div>
+
+        <div id="low-stock" className="rounded-lg border">
+          <div className="px-5 py-4 border-b">
+            <p className="font-semibold flex items-center gap-2"><AlertTriangle className="w-4 h-4 text-muted-foreground" /> Low Stock</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              The default stock level at which a product is treated as low.
+            </p>
+          </div>
+          <div className="p-5 space-y-3">
+            <div>
+              <Label htmlFor="low-stock-default" className="text-sm font-medium">Default low stock amount</Label>
+              <p className="text-xs text-muted-foreground mt-0.5 mb-2">
+                Applied to any product that doesn't have its own low-stock amount set — used for low-stock alerts and pre-filled on new products.
+                Leave blank to use {FALLBACK_LOW_STOCK}.
+              </p>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="low-stock-default"
+                  type="number"
+                  min={0}
+                  className="w-28"
+                  placeholder={String(FALLBACK_LOW_STOCK)}
+                  value={lowStockDefault}
+                  onChange={(e) => setLowStockDefault(e.target.value.replace(/[^0-9]/g, ""))}
+                  onBlur={saveLowStockDefault}
+                  onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }}
+                />
+                <span className="text-sm text-muted-foreground">unit(s) or fewer in stock</span>
+              </div>
             </div>
           </div>
         </div>

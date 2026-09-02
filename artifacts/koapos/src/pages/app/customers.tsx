@@ -1,8 +1,10 @@
 import { useState, useCallback, useRef, useEffect, useMemo, useLayoutEffect } from "react";
 import { useAuth } from "@/lib/use-auth";
 import { useCustomerSettings } from "@/lib/customer-settings";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import { customerDisplayName } from "@/lib/customer-name";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useDebounce } from "@/hooks/use-debounce";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useGetMerchant,
@@ -17,8 +19,6 @@ import {
   useListCustomerFiles,
   useCreateCustomerFile,
   useDeleteCustomerFile,
-  useRequestUploadUrl,
-  useConfirmUpload,
   useGetLoyaltySettings,
   useSendTransactionReceipt,
   useSendServiceJobEmail,
@@ -34,7 +34,9 @@ import {
 import { useMapUrl } from "@/lib/map-provider";
 import { loadCustomerFilesCloudSettings } from "@/lib/cloud-files-settings";
 import { AddCustomerWizard } from "@/components/customers/AddCustomerWizard";
+import { CustomerAvatar } from "@/components/customers/CustomerAvatar";
 import { CustomerStoreCreditPanel } from "@/components/customers/CustomerStoreCreditPanel";
+import { AppleLogoIcon, GoogleWalletLogo } from "@/components/provider-icons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -43,11 +45,12 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { ScrollArea } from "@/components/ui/scroll-area";
+import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
 import { formatCurrency } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { useStickerPrinter } from "@/lib/sticker-config";
+import { useEntityQrLookup } from "@/hooks/use-entity-qr";
 import {
   Search, Plus, Pencil, Trash2, Users, Star, CheckCircle2, User, MapPin,
   Settings2, AlertTriangle, ChevronUp, ChevronDown, ChevronsUpDown,
@@ -61,6 +64,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { QRCodeSVG } from "qrcode.react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import {
@@ -75,7 +79,7 @@ import {
 
 type SortKey = "name" | "email" | "company" | "loyaltyPoints" | "visitCount";
 type SortDir  = "asc" | "desc";
-type DetailTab = "overview" | "address" | "account" | "credit" | "history" | "notes" | "files" | "qr";
+type DetailTab = "details" | "account" | "history" | "notes" | "files" | "qr";
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
 
@@ -89,6 +93,7 @@ type CustomerForm = {
   shippingStreet: string; shippingCity: string; shippingState: string;
   shippingPostcode: string; shippingCountry: string;
   customerGroup: string; warningNote: string; agreedToMarketing: boolean; notes: string;
+  photoUrl: string;
 };
 
 /* ─── Merge note helpers ─────────────────────────────────────────────────── */
@@ -133,6 +138,7 @@ const defaultForm: CustomerForm = {
   shippingStreet: "", shippingCity: "", shippingState: "",
   shippingPostcode: "", shippingCountry: "Australia",
   customerGroup: "Standard", warningNote: "", agreedToMarketing: false, notes: "",
+  photoUrl: "",
 };
 
 /* ─── Duplicate detection engine ─────────────────────────────────────────── */
@@ -759,7 +765,7 @@ function ManualMergePickerDialog({
             autoFocus
           />
         </div>
-        <ScrollArea className="flex-1 min-h-0 mt-1">
+        <ScrollArea className={cn("flex-1 min-h-0 mt-1", SCROLL_AREA_TRUNCATE_FIX)}>
           <div className="divide-y">
             {results.length === 0 ? (
               <div className="py-10 text-center text-sm text-muted-foreground">
@@ -768,7 +774,6 @@ function ManualMergePickerDialog({
             ) : (
               results.map((c) => {
                 const name = customerDisplayName(c);
-                const initials = ([c.firstName?.[0], c.lastName?.[0]].filter(Boolean).join("") || c.company?.[0] || "?").toUpperCase();
                 return (
                   <button
                     key={c.id}
@@ -776,9 +781,14 @@ function ManualMergePickerDialog({
                     onClick={() => onSelect(c)}
                     className="w-full flex items-center gap-3 px-2 py-3 text-left hover:bg-muted/50 transition-colors rounded-md"
                   >
-                    <div className="w-9 h-9 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-xs shrink-0">
-                      {initials}
-                    </div>
+                    <CustomerAvatar
+                      firstName={c.firstName}
+                      lastName={c.lastName}
+                      company={c.company}
+                      photoUrl={c.photoUrl}
+                      className="w-9 h-9"
+                      textClassName="text-xs"
+                    />
                     <div className="min-w-0 flex-1">
                       <p className="font-medium text-sm truncate">{name}</p>
                       <p className="text-xs text-muted-foreground truncate">
@@ -1019,9 +1029,10 @@ function CustomerDetailInner({
 }) {
   const queryClient = useQueryClient();
   const mapUrl = useMapUrl();
-  const { printReceipt, printA4Receipt, printServiceJob, isLoading: tplLoading } = useDocumentTemplate();
+  const { printReceipt, printA4Receipt, printServiceJob, customerPdfTemplate, isLoading: tplLoading } = useDocumentTemplate();
   const { printStickers } = useStickerPrinter();
-  const [tab, setTab] = useState<DetailTab>("overview");
+  const qrLookup = useEntityQrLookup();
+  const [tab, setTab] = useState<DetailTab>("details");
 
   /* Print a customer label using the saved "customer" sticker template. Real
    * values are passed as overrides; toggles for missing data are turned off so
@@ -1034,6 +1045,8 @@ function CustomerDetailInner({
       context: { customer: { name, id: `CUS-${customer.id}`, phone: customer.phone ?? "", email: customer.email ?? "", group }, merchant: {} },
       fieldsOverride: {
         customerName: name,
+        // Persisted (tracked) customer QR; falls back to the CUS-<id> code.
+        customerQrValue: qrLookup(`customer-${customer.id}`, `CUS-${customer.id}`),
         customerId: `CUS-${customer.id}`,
         loyaltyNo: customer.loyaltyPoints != null ? `${customer.loyaltyPoints} pts` : "",
         phone: customer.phone ?? "",
@@ -1041,6 +1054,37 @@ function CustomerDetailInner({
         ...(customer.phone ? {} : { showPhone: "false" }),
         ...(group ? {} : { showGroup: "false" }),
         ...(customer.loyaltyPoints != null ? {} : { showLoyaltyNo: "false" }),
+      },
+    });
+    if (!ok) toast.error("Couldn't open the print dialog — please try again");
+  };
+
+  /* Print an address label using the saved "address" sticker template. Prefers
+   * the shipping address, falling back to billing then the generic address
+   * field. Toggles for missing data are turned off so the label never shows
+   * sample placeholder text. */
+  const printAddressLabel = () => {
+    const name = customerDisplayName(customer, "") || customer.email || "";
+    const company = customer.company ?? "";
+    const street = customer.shippingStreet || customer.billingStreet || customer.address || "";
+    const suburb = customer.shippingCity || customer.billingCity || "";
+    const state = customer.shippingState || customer.billingState || "";
+    const postcode = customer.shippingPostcode || customer.billingPostcode || "";
+    const hasSuburbLine = !!(suburb || state || postcode);
+    const ok = printStickers({
+      typeId: "address",
+      context: { customer: { name }, merchant: {} },
+      fieldsOverride: {
+        name,
+        company,
+        street,
+        suburb,
+        state,
+        postcode,
+        ...(name ? {} : { showName: "false" }),
+        ...(company ? {} : { showCompany: "false" }),
+        ...(street ? {} : { showStreet: "false" }),
+        ...(hasSuburbLine ? {} : { showSuburb: "false" }),
       },
     });
     if (!ok) toast.error("Couldn't open the print dialog — please try again");
@@ -1056,6 +1100,7 @@ function CustomerDetailInner({
   const sendJobEmailMutation = useSendServiceJobEmail();
   const composeEmailMutation = useComposeEmail();
   const [mergePickerOpen, setMergePickerOpen] = useState(false);
+  const [printOpen, setPrintOpen] = useState(false);
   const [newNote, setNewNote] = useState("");
   const [notePopupOnSale, setNotePopupOnSale] = useState(false);
   const [notePopupOnBooking, setNotePopupOnBooking] = useState(false);
@@ -1159,8 +1204,6 @@ function CustomerDetailInner({
   const deleteNoteMutation = useDeleteCustomerNote();
   const createFileMutation = useCreateCustomerFile();
   const deleteFileMutation = useDeleteCustomerFile();
-  const requestUploadMutation = useRequestUploadUrl();
-  const confirmUploadMutation = useConfirmUpload();
   const loyaltyUpdateMutation = useUpdateCustomer();
 
   const programType     = loyaltySettings?.programType ?? "cashback";
@@ -1200,7 +1243,6 @@ function CustomerDetailInner({
   };
 
   const fullName = customerDisplayName(customer);
-  const initials = ((customer.firstName?.[0] ?? "") + (customer.lastName?.[0] ?? "")).toUpperCase() || "?";
   const mergeNoteCount = notes.filter((n: CustomerNote) => isMergeNote(n.note)).length;
   const displayedNotes = showMergeOnly
     ? notes.filter((n: CustomerNote) => isMergeNote(n.note))
@@ -1217,14 +1259,12 @@ function CustomerDetailInner({
   ].filter(Boolean).join(", ") || null;
 
   const TABS: { key: DetailTab; label: string }[] = [
-    { key: "overview", label: "Overview" },
-    { key: "address",  label: "Address"  },
-    { key: "account",  label: "Account"  },
-    { key: "credit",   label: "Credit"   },
-    { key: "history",  label: "History"  },
-    { key: "notes",    label: "Notes"    },
-    { key: "files",    label: "Files"    },
-    { key: "qr",       label: "QR Code"  },
+    { key: "details", label: "Details" },
+    { key: "account", label: "Account" },
+    { key: "history", label: "History" },
+    { key: "notes",   label: "Notes"   },
+    { key: "files",   label: "Files"   },
+    { key: "qr",      label: "QR Code" },
   ];
 
   const invalidateNotes = () => queryClient.invalidateQueries({ queryKey: [`/customers/${customer.id}/notes`] });
@@ -1260,22 +1300,10 @@ function CustomerDetailInner({
     if (!file) return;
     setUploadingFile(true);
     try {
-      const urlResp = await new Promise<{ uploadURL: string; objectPath: string }>((resolve, reject) => {
-        requestUploadMutation.mutate(
-          { data: { name: file.name, size: file.size, contentType: file.type || "application/octet-stream" } },
-          { onSuccess: (d) => resolve(d as { uploadURL: string; objectPath: string }), onError: reject }
-        );
-      });
-      const putRes = await fetch(urlResp.uploadURL, {
-        method: "PUT",
-        body: file,
-        headers: { "Content-Type": file.type || "application/octet-stream" },
-      });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUploadMutation.mutateAsync({ data: { objectPath: urlResp.objectPath } });
+      const { objectPath } = await uploadFile(file);
       await new Promise<void>((resolve, reject) => {
         createFileMutation.mutate(
-          { id: customer.id, data: { filename: file.name, fileKey: urlResp.objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },
+          { id: customer.id, data: { filename: file.name, fileKey: objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },
           { onSuccess: () => resolve(), onError: reject }
         );
       });
@@ -1311,21 +1339,31 @@ function CustomerDetailInner({
   }
 
   const tabIndex = TABS.findIndex(t => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(true, goPrevTab, goNextTab);
 
   return (
     <>
       <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
         <DialogTitle>
           <div className="flex items-center gap-3">
-            <div className="w-11 h-11 rounded-full bg-primary/15 flex items-center justify-center font-bold text-primary text-sm shrink-0">
-              {initials}
-            </div>
+            <CustomerAvatar
+              firstName={customer.firstName}
+              lastName={customer.lastName}
+              company={customer.company}
+              photoUrl={customer.photoUrl}
+              className="w-12 h-12"
+              textClassName="text-base"
+            />
             <div className="min-w-0">
-              <p className="font-bold text-base leading-tight truncate">{fullName}</p>
-              <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+              <div className="flex items-center gap-2 flex-wrap min-w-0">
+                <p className="font-bold text-3xl leading-tight truncate">{fullName}</p>
                 {customer.customerGroup && (
-                  <Badge variant="outline" className="text-xs px-2 py-0 h-5">{customer.customerGroup}</Badge>
+                  <Badge variant="outline" className="text-xs px-2 py-0 h-5 shrink-0">{customer.customerGroup}</Badge>
                 )}
+              </div>
+              <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                 {customer.loyaltyPoints != null && customer.loyaltyPoints > 0 && (
                   <span className="flex items-center gap-0.5 text-xs text-amber-600 font-medium">
                     <Star className="w-3 h-3 fill-amber-400 text-amber-400" />
@@ -1350,7 +1388,7 @@ function CustomerDetailInner({
       </DialogHeader>
 
       {/* Tabs */}
-      <div className="flex flex-wrap gap-1.5 px-6 py-2 shrink-0 mt-3">
+      <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-0 shrink-0 mt-2">
         {TABS.map(({ key, label }) => (
           <button
             key={key}
@@ -1359,7 +1397,7 @@ function CustomerDetailInner({
               "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
               tab === key
                 ? "bg-primary text-primary-foreground shadow-sm"
-                : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+                : "pill-selector bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
             )}
           >
             {label}
@@ -1367,9 +1405,9 @@ function CustomerDetailInner({
         ))}
       </div>
 
-      <div className="flex-1 overflow-y-auto px-6 py-4 min-h-0">
-      {/* ── Overview ── */}
-      {tab === "overview" && (
+      <div className="flex-1 overflow-y-auto px-6 pt-2 pb-4 min-h-0">
+      {/* ── Details ── */}
+      {tab === "details" && (
         <div className="space-y-3">
           {customer.warningNote && (
             <div className="flex items-start gap-2 bg-destructive/10 text-destructive border border-destructive/20 rounded-lg px-3 py-2.5 text-sm">
@@ -1389,21 +1427,7 @@ function CustomerDetailInner({
               <InfoRow icon={Hash} label="Total Spent" value={formatCurrency(customer.totalSpent)} />
             )}
           </div>
-          {customer.notes && (
-            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex gap-3">
-              <StickyNote className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
-              <div className="text-sm">
-                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
-                <p className="whitespace-pre-wrap">{customer.notes}</p>
-              </div>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* ── Address ── */}
-      {tab === "address" && (
-        <div className="space-y-3">
+          {/* Addresses (merged from the former Address tab) */}
           <div className="rounded-xl border bg-muted/20">
             <p className="px-4 pt-3 pb-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Billing Address</p>
             {billingAddr
@@ -1416,6 +1440,15 @@ function CustomerDetailInner({
               ? <InfoRow icon={MapPin} label="" value={shippingAddr} href={mapUrl(shippingAddr)} />
               : <p className="px-4 pb-3 text-sm text-muted-foreground">Same as billing / not set.</p>}
           </div>
+          {customer.notes && (
+            <div className="rounded-xl border bg-muted/20 px-4 py-3 flex gap-3">
+              <StickyNote className="w-4 h-4 text-muted-foreground shrink-0 mt-0.5" />
+              <div className="text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Notes</p>
+                <p className="whitespace-pre-wrap">{customer.notes}</p>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -1460,7 +1493,7 @@ function CustomerDetailInner({
                     "flex-1 py-1.5 font-medium transition-colors capitalize",
                     loyaltyMode === m
                       ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:bg-muted",
+                      : "pill-selector bg-background text-muted-foreground hover:bg-muted",
                   )}
                 >
                   {m === "set" ? "Set to" : m.charAt(0).toUpperCase() + m.slice(1)}
@@ -1507,12 +1540,13 @@ function CustomerDetailInner({
               </p>
             )}
           </div>
-        </div>
-      )}
 
-      {/* ── Store Credit ── */}
-      {tab === "credit" && (
-        <CustomerStoreCreditPanel customerId={customer.id} />
+          {/* ── Store Credit (merged from the former Credit tab) ── */}
+          <div className="rounded-xl border bg-muted/20 p-4">
+            <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-3">Store Credit</p>
+            <CustomerStoreCreditPanel customerId={customer.id} />
+          </div>
+        </div>
       )}
 
       {/* ── History ── */}
@@ -1525,14 +1559,14 @@ function CustomerDetailInner({
           ) : (
             <>
               {/* Transactions */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Receipt className="w-3.5 h-3.5" /> Sales ({history?.transactions?.length ?? 0})
                 </p>
                 {!history?.transactions?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No sales recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.transactions.map((tx) => (
                       <div key={tx.id} className="flex items-center px-4 py-2.5 text-sm hover:bg-muted/40 transition-colors group">
                         <button
@@ -1583,14 +1617,14 @@ function CustomerDetailInner({
               </div>
 
               {/* Invoices */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <FileText className="w-3.5 h-3.5" /> Invoices ({history?.invoices?.length ?? 0})
                 </p>
                 {!history?.invoices?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No invoices recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.invoices.map((inv) => {
                       const outstanding = inv.total - (inv.amountPaid ?? 0);
                       return (
@@ -1617,14 +1651,14 @@ function CustomerDetailInner({
               </div>
 
               {/* Appointments */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Clock className="w-3.5 h-3.5" /> Appointments ({history?.appointments?.length ?? 0})
                 </p>
                 {!history?.appointments?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No appointments recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.appointments.map((a) => (
                       <button key={a.id} type="button" onClick={() => setSelectedAppt(a)} className="flex items-center justify-between px-4 py-2.5 text-sm w-full text-left hover:bg-muted/40 transition-colors">
                         <div>
@@ -1639,14 +1673,14 @@ function CustomerDetailInner({
               </div>
 
               {/* Service Jobs */}
-              <div>
-                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground mb-2 flex items-center gap-1.5">
+              <div className="rounded-xl border bg-muted/20 p-3 space-y-2">
+                <p className="text-xs font-bold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
                   <Wrench className="w-3.5 h-3.5" /> Service Jobs ({history?.serviceJobs?.length ?? 0})
                 </p>
                 {!history?.serviceJobs?.length ? (
                   <p className="text-sm text-muted-foreground pl-1">No service jobs recorded.</p>
                 ) : (
-                  <div className="rounded-xl border divide-y bg-muted/20">
+                  <div className="rounded-lg border divide-y bg-background">
                     {history.serviceJobs.map((j) => {
                       const jobPhotos = Array.isArray(j.photos) ? (j.photos as string[]).filter(Boolean) : [];
                       const custOverride = { name: customerDisplayName(customer, "") || customer.email || "", email: customer.email ?? "", phone: customer.phone ?? "" };
@@ -1865,7 +1899,7 @@ function CustomerDetailInner({
               type="file"
               className="hidden"
               onChange={handleFileChange}
-              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt"
+              accept="image/*,application/pdf,.doc,.docx,.xls,.xlsx,.txt,.zip,application/zip,application/x-zip-compressed"
             />
           </div>
 
@@ -1877,7 +1911,7 @@ function CustomerDetailInner({
           ) : !files.length ? (
             <p className="text-sm text-muted-foreground text-center py-4">No files attached yet.</p>
           ) : (
-            <div className="rounded-xl border divide-y bg-muted/20">
+            <div className="rounded-lg border divide-y bg-background">
               {files.map((f: CustomerFile) => (
                 <div key={f.id} className="flex items-center gap-3 px-4 py-3">
                   <span className="text-xl shrink-0">{fileIcon(f.contentType)}</span>
@@ -1910,7 +1944,7 @@ function CustomerDetailInner({
             {!(formSubmissions as FormSubmission[]).length ? (
               <p className="text-sm text-muted-foreground text-center py-4">No form submissions yet.</p>
             ) : (
-              <div className="rounded-xl border divide-y bg-muted/20">
+              <div className="rounded-lg border divide-y bg-background">
                 {(formSubmissions as FormSubmission[]).map(sub => {
                   const form = (allForms as Array<{ id: number; name: string }>)
                     .find(f => f.id === sub.formId);
@@ -1985,28 +2019,36 @@ function CustomerDetailInner({
             )}
           </div>
 
-          {/* Wallet buttons */}
+          {/* Wallet buttons — official "Add to Apple/Google Wallet" badges */}
           {localPortalToken && (
             <div className="rounded-xl border bg-muted/20 p-4 space-y-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-1">Save to Wallet</p>
               <button
                 onClick={handleAppleWallet}
                 disabled={qrWalletLoading !== null}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-black text-white py-2.5 text-sm font-semibold hover:opacity-80 disabled:opacity-50 transition-opacity"
+                aria-label="Add to Apple Wallet"
+                className="w-full flex items-center justify-center gap-2.5 rounded-lg bg-black text-white py-2.5 px-4 hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {qrWalletLoading === "apple" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4" />}
-                Add to Apple Wallet
+                {qrWalletLoading === "apple" ? <Loader2 className="w-5 h-5 animate-spin" /> : <AppleLogoIcon className="w-5 h-5" />}
+                <span className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] font-medium opacity-80">Add to</span>
+                  <span className="text-base font-semibold tracking-tight">Apple Wallet</span>
+                </span>
               </button>
               <button
                 onClick={handleGoogleWallet}
                 disabled={qrWalletLoading !== null}
-                className="w-full flex items-center justify-center gap-2 rounded-lg bg-white text-gray-800 border py-2.5 text-sm font-semibold hover:bg-gray-50 disabled:opacity-50 transition-colors"
+                aria-label="Add to Google Wallet"
+                className="w-full flex items-center justify-center gap-2.5 rounded-lg bg-black text-white py-2.5 px-4 hover:opacity-90 disabled:opacity-50 transition-opacity"
               >
-                {qrWalletLoading === "google" ? <Loader2 className="w-4 h-4 animate-spin" /> : <Wallet className="w-4 h-4 text-blue-500" />}
-                Save to Google Wallet
+                {qrWalletLoading === "google" ? <Loader2 className="w-5 h-5 animate-spin" /> : <GoogleWalletLogo className="w-5 h-5" />}
+                <span className="flex flex-col items-start leading-none">
+                  <span className="text-[10px] font-medium opacity-80">Add to</span>
+                  <span className="text-base font-semibold tracking-tight">Google Wallet</span>
+                </span>
               </button>
               <p className="text-xs text-muted-foreground text-center pt-1">
-                Wallet integration requires Apple/Google credentials in your environment secrets.
+                Requires Apple/Google Wallet credentials in your environment secrets.
               </p>
             </div>
           )}
@@ -2015,50 +2057,58 @@ function CustomerDetailInner({
 
       </div>
       <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
-        <Button
-          variant="destructive" size="sm" className="w-8 h-8 p-0"
-          onClick={() => { onDelete(customer.id); onClose(); }}
-          disabled={deleteIsPending}
-          title="Delete customer"
-        >
-          <Trash2 className="w-4 h-4" />
-        </Button>
+        <div className="flex gap-2 items-center">
+          <Button
+            variant="destructive" size="sm" className="w-8 h-8 p-0"
+            onClick={() => { onDelete(customer.id); onClose(); }}
+            disabled={deleteIsPending}
+            title="Delete customer"
+          >
+            <Trash2 className="w-4 h-4" />
+          </Button>
+          <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(customer); }} title="Edit customer">
+            <Pencil className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+            <ChevronLeft className="w-4 h-4" />
+          </Button>
+          <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+            <ChevronRight className="w-4 h-4" />
+          </Button>
+        </div>
         <div className="flex gap-2 items-center">
           {onMerge && (
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setMergePickerOpen(true)}>
-              <Users className="w-3.5 h-3.5" /> Merge with...
+              <Users className="w-3.5 h-3.5" /> Merge
             </Button>
           )}
-          <Button
-            variant="outline"
-            size="sm"
-            className="gap-1.5"
-            onClick={() => {
-              exportCustomerPDF({
-                customer,
-                transactions: (history?.transactions ?? []) as Transaction[],
-                appointments: (history?.appointments ?? []) as Appointment[],
-                serviceJobs:  (history?.serviceJobs  ?? []) as ServiceJob[],
-                notes:        notes as CustomerNote[],
-                formSubmissions: (formSubmissions as FormSubmission[]),
-                allForms:      (allForms as FormTemplate[]),
-                merchantName: merchantUsername ?? undefined,
-              });
-            }}
-          >
-            <FileDown className="w-3.5 h-3.5" /> PDF
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={printCustomerLabel}>
-            <Printer className="w-3.5 h-3.5" /> Label
-          </Button>
-          <Button variant="outline" size="sm" className="gap-1.5" onClick={onClose}>
-            <X className="w-3.5 h-3.5" /> Close
-          </Button>
-          <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(customer); }}>
-            <Pencil className="w-3.5 h-3.5" /> Edit
+          <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintOpen(true)}>
+            <Printer className="w-3.5 h-3.5" /> Print
           </Button>
         </div>
       </DialogFooter>
+
+      <CustomerPrintDialog
+        open={printOpen}
+        onOpenChange={setPrintOpen}
+        onPdf={() => {
+          exportCustomerPDF({
+            customer,
+            transactions: (history?.transactions ?? []) as Transaction[],
+            appointments: (history?.appointments ?? []) as Appointment[],
+            serviceJobs:  (history?.serviceJobs  ?? []) as ServiceJob[],
+            notes:        notes as CustomerNote[],
+            formSubmissions: (formSubmissions as FormSubmission[]),
+            allForms:      (allForms as FormTemplate[]),
+            merchantName: merchantUsername ?? undefined,
+            // Management → Templates → Misc → Customer PDF: branding, font,
+            // header/footer, section toggles and the custom QR.
+            template: customerPdfTemplate,
+          });
+        }}
+        onLabel={printCustomerLabel}
+        onAddress={printAddressLabel}
+      />
 
       {onMerge && (
         <ManualMergePickerDialog
@@ -2504,6 +2554,91 @@ function CustomerDetailInner({
   );
 }
 
+/* Print pop-up — mirrors the Invoices "Send" dialog, but offers PDF and Label
+   (instead of Email). Combines the former PDF + Label footer buttons. */
+function CustomerPrintDialog({
+  open, onOpenChange, onPdf, onLabel, onAddress,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onPdf: () => void;
+  onLabel: () => void;
+  onAddress: () => void;
+}) {
+  const [mode, setMode] = useState<"pdf" | "label" | "address" | null>(null);
+  useEffect(() => { if (open) setMode(null); }, [open]);
+
+  const OPTIONS = [
+    { key: "pdf" as const,     icon: FileDown, label: "PDF",     sub: "Download a PDF summary" },
+    { key: "label" as const,   icon: Printer,  label: "Label",   sub: "Print to label printer" },
+    { key: "address" as const, icon: MapPin,   label: "Address", sub: "Print an address label" },
+  ];
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base font-semibold">
+            <Printer className="w-4 h-4 text-primary" /> Print
+          </DialogTitle>
+        </DialogHeader>
+        <div className="space-y-4 py-1">
+          <div className="grid grid-cols-3 gap-2">
+            {OPTIONS.map(({ key, icon: Icon, label, sub }) => (
+              <button
+                key={key}
+                type="button"
+                onClick={() => setMode(key)}
+                className={cn(
+                  "flex flex-col items-center gap-1.5 px-3 py-4 rounded-xl border text-center transition-colors",
+                  mode === key
+                    ? "border-primary bg-primary/5 text-primary"
+                    : "border-border hover:bg-muted/40 text-muted-foreground hover:text-foreground",
+                )}
+              >
+                <Icon className="w-5 h-5 shrink-0" />
+                <span className="text-sm font-medium leading-tight">{label}</span>
+                <span className="text-[10px] leading-tight opacity-70">{sub}</span>
+              </button>
+            ))}
+          </div>
+
+          {mode === "pdf" && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Download a PDF summary of this customer — profile, history and notes.</p>
+              <Button className="w-full gap-2" onClick={() => { onPdf(); onOpenChange(false); }}>
+                <FileDown className="w-4 h-4" /> Download PDF
+              </Button>
+            </div>
+          )}
+
+          {mode === "label" && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Print a customer label to your sticker/label printer.</p>
+              <Button className="w-full gap-2" onClick={() => { onLabel(); onOpenChange(false); }}>
+                <Printer className="w-4 h-4" /> Print Label
+              </Button>
+            </div>
+          )}
+
+          {mode === "address" && (
+            <div className="rounded-xl border bg-muted/20 p-4 space-y-3">
+              <p className="text-sm text-muted-foreground">Print a shipping/postal address label to your sticker/label printer.</p>
+              <Button className="w-full gap-2" onClick={() => { onAddress(); onOpenChange(false); }}>
+                <MapPin className="w-4 h-4" /> Print Address Label
+              </Button>
+            </div>
+          )}
+
+          {!mode && (
+            <p className="text-xs text-muted-foreground text-center py-2">Select a print option above</p>
+          )}
+        </div>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function CustomerDetailDialog({
   customer, onClose, onEdit, onDelete, deleteIsPending, merchantUsername, onMerge,
 }: {
@@ -2517,7 +2652,7 @@ function CustomerDetailDialog({
 }) {
   return (
     <Dialog open={!!customer} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
         {customer && (
           <CustomerDetailInner
             customer={customer}
@@ -2543,6 +2678,8 @@ export default function CustomersPage() {
   const { settings: customerSettings } = useCustomerSettings();
   const customerGroups = customerSettings.groups.map(g => g.name);
   const [search, setSearch]             = useState("");
+  // Debounced so the (limit:1000) customer query fires on pause, not per keystroke.
+  const debouncedSearch = useDebounce(search);
   const [heardFromFilter, setHeardFromFilter] = useState<string>("all");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -2577,7 +2714,7 @@ export default function CustomersPage() {
   const merchantUsername = (merchantData as any)?.username as string | null ?? null;
 
   const { data: customersData, isLoading } = useListCustomers(
-    { search: search || undefined, heardFrom: heardFromFilter === "all" ? undefined : heardFromFilter, limit: 1000 },
+    { search: debouncedSearch || undefined, heardFrom: heardFromFilter === "all" ? undefined : heardFromFilter, limit: 1000 },
   );
 
   const deleteMutation = useDeleteCustomer();
@@ -2618,12 +2755,17 @@ export default function CustomersPage() {
   const sorted = [...customers].sort((a, b) => {
     let av: string | number = "", bv: string | number = "";
     switch (sortKey) {
-      case "name":          av = `${a.firstName ?? ""} ${a.lastName ?? ""}`.toLowerCase(); bv = `${b.firstName ?? ""} ${b.lastName ?? ""}`.toLowerCase(); break;
+      case "name":          av = `${a.firstName ?? ""} ${a.lastName ?? ""}`.trim().toLowerCase(); bv = `${b.firstName ?? ""} ${b.lastName ?? ""}`.trim().toLowerCase(); break;
       case "email":         av = (a.email ?? "").toLowerCase();   bv = (b.email ?? "").toLowerCase();   break;
       case "company":       av = (a.company ?? "").toLowerCase(); bv = (b.company ?? "").toLowerCase(); break;
       case "loyaltyPoints": av = a.loyaltyPoints ?? 0;            bv = b.loyaltyPoints ?? 0;            break;
       case "visitCount":    av = a.visitCount ?? 0;               bv = b.visitCount ?? 0;               break;
     }
+    // Blank text values always sink to the bottom, regardless of sort
+    // direction — an empty name/email/company shouldn't lead an A→Z sort.
+    // Numeric columns default to 0, so `=== ""` never matches them.
+    if (av === "" && bv !== "") return 1;
+    if (bv === "" && av !== "") return -1;
     const r = av < bv ? -1 : av > bv ? 1 : 0;
     return sortDir === "asc" ? r : -r;
   });
@@ -2734,7 +2876,7 @@ export default function CustomersPage() {
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search by name, email, or phone..."
+              placeholder="Search by name, email, phone, or address..."
               className="pl-9"
               value={search}
               onChange={(e) => setSearch(e.target.value)}

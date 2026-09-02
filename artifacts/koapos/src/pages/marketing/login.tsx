@@ -98,6 +98,31 @@ export default function LoginPage() {
     },
   });
 
+  // Hybrid auth: the same form also accepts a staff member's email + password.
+  // If the merchant login is rejected, try a staff login with the same creds.
+  const attemptStaffLogin = async (email: string, password: string): Promise<boolean> => {
+    try {
+      const r = await fetch("/api/staff-auth/login", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
+      });
+      if (!r.ok) return false;
+      const data = await r.json();
+      setLockMessage(null);
+      setLockSecondsLeft(0);
+      setAttemptsRemaining(null);
+      localStorage.removeItem(LOCKOUT_STORAGE_KEY);
+      login(data);
+      toast.success("Successfully logged in");
+      setLocation("/dashboard");
+      return true;
+    } catch {
+      return false;
+    }
+  };
+
   const onSubmit = (values: LoginValues) => {
     loginMutation.mutate(
       { data: values },
@@ -137,15 +162,19 @@ export default function LoginPage() {
             setLockMessage(bodyMessage);
             startCountdown(retryAfterSecs, retryAfterIso);
           } else if (err instanceof ApiError && err.status === 401) {
-            const remaining =
-              typeof err.data === "object" &&
-              err.data !== null &&
-              "attemptsRemaining" in err.data &&
-              typeof (err.data as Record<string, unknown>).attemptsRemaining === "number"
-                ? (err.data as Record<string, unknown>).attemptsRemaining as number
-                : null;
-            setAttemptsRemaining(remaining);
-            toast.error("Invalid email or password");
+            // Not a merchant — maybe it's a staff member with email login enabled.
+            void attemptStaffLogin(values.email, values.password).then((ok) => {
+              if (ok) return;
+              const remaining =
+                typeof err.data === "object" &&
+                err.data !== null &&
+                "attemptsRemaining" in err.data &&
+                typeof (err.data as Record<string, unknown>).attemptsRemaining === "number"
+                  ? (err.data as Record<string, unknown>).attemptsRemaining as number
+                  : null;
+              setAttemptsRemaining(remaining);
+              toast.error("Invalid email or password");
+            });
           } else {
             setAttemptsRemaining(null);
             toast.error("Invalid email or password");

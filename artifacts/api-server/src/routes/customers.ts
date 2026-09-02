@@ -5,15 +5,18 @@ import {
   transactionsTable, appointmentsTable, serviceJobsTable,
   laybysTable, invoicesTable, parkedSalesTable,
   formSubmissionsTable, marketingAutomationLogTable,
-  emailCampaignsTable, productPreOrdersTable, productReturnAuthsTable,
-  merchantsTable, staffTable,
+  emailCampaignsTable, productPreOrdersTable,
+  merchantsTable, staffTable, loyaltySettingsTable,
 } from "@workspace/db";
 import { eq, and, ilike, or, sql, desc, isNull, inArray } from "drizzle-orm";
+import { formatAddressParts } from "../lib/address";
+import { phoneMatchKey } from "../lib/phone-match";
 import crypto from "node:crypto";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { publicOrigin } from "../lib/publicUrl";
+import { registerCustomerQr, registerCustomerQrsBatch, registerQrBestEffort } from "../services/entityQr";
 import {
   ListCustomersQueryParams,
   CreateCustomerBody,
@@ -34,6 +37,7 @@ import {
 import { ObjectStorageService } from "../lib/objectStorage";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
 import { mirrorCustomerFileToCloud, getCustomerFilesCloudConfig } from "../services/cloudFileMirror";
+import { triggerInstantSync } from "../services/autoSyncScheduler";
 
 const router: IRouter = Router();
 const storage = new ObjectStorageService();
@@ -113,6 +117,7 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     phone: c.phone ?? null,
     address: c.address ?? null,
     notes: c.notes ?? null,
+    photoUrl: c.photoUrl ?? null,
     dateOfBirth: c.dateOfBirth ?? null,
     loyaltyPoints: c.loyaltyPoints,
     totalSpent: parseFloat(c.totalSpent),
@@ -147,16 +152,62 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
 
 /* ── CRUD ──────────────────────────────────────────────────────────────────── */
 
+/**
+ * Existing customers holding a phone number. The booking/add-customer forms call
+ * this as the number is typed, so a second record for a regular is caught before
+ * it is created rather than merged later.
+ *
+ * Matching is on the digits, not the string: the same number reaches us as
+ * "0400 000 000", "0400000000" and "+61400000000" depending on who typed it.
+ * `right(digits, n)` compares the tail so the trunk prefix and country code both
+ * fall away — see lib/phone-match.ts, which is the same rule in TypeScript.
+ */
+router.get("/customers/lookup-phone", requireAuth, async (req, res): Promise<void> => {
+  const key = phoneMatchKey(typeof req.query.phone === "string" ? req.query.phone : "");
+  if (!key) { res.json({ items: [], total: 0 }); return; }
+
+  const digits = sql`regexp_replace(coalesce(${customersTable.phone}, ''), '[^0-9]', '', 'g')`;
+  const conditions = [
+    eq(customersTable.merchantId, req.session.merchantId!),
+    sql`length(${digits}) >= ${key.length}`,
+    sql`right(${digits}, ${key.length}) = ${key}`,
+  ];
+  const excludeId = Number(req.query.excludeId);
+  if (Number.isFinite(excludeId) && excludeId > 0) {
+    conditions.push(sql`${customersTable.id} <> ${excludeId}`);
+  }
+
+  // A handful is all a "did you mean this customer?" prompt can show.
+  const matches = await db.select().from(customersTable).where(and(...conditions)).limit(5);
+  res.json({ items: matches.map(formatCustomer), total: matches.length });
+});
+
 router.get("/customers", requireAuth, async (req, res): Promise<void> => {
   const queryParams = ListCustomersQueryParams.safeParse(req.query);
   if (!queryParams.success) { res.status(400).json({ error: queryParams.error.message }); return; }
   const { search, heardFrom, limit = 50, offset = 0 } = queryParams.data;
   const conditions = [eq(customersTable.merchantId, req.session.merchantId!)];
   if (search) {
+    // Match each whitespace-separated token against the full name independently
+    // so word order doesn't matter ("John Smith" and "Smith John" both match).
+    // concat_ws skips null name parts; a single token also covers first/last
+    // name on its own. Falls back to the raw term for email/phone lookups.
+    const fullName = sql`concat_ws(' ', ${customersTable.firstName}, ${customersTable.lastName})`;
+    // Full address spanning legacy free-text + billing + shipping parts, so a
+    // search can span columns ("smith sydney 2000" matches street + city +
+    // postcode). Token-matched like the name so word order doesn't matter.
+    const fullAddress = sql`concat_ws(' ', ${customersTable.address}, ${customersTable.billingStreet}, ${customersTable.billingCity}, ${customersTable.billingState}, ${customersTable.billingPostcode}, ${customersTable.billingCountry}, ${customersTable.shippingStreet}, ${customersTable.shippingCity}, ${customersTable.shippingState}, ${customersTable.shippingPostcode}, ${customersTable.shippingCountry})`;
+    const tokens = search.split(/\s+/).filter(Boolean);
+    const nameMatch = tokens.length
+      ? and(...tokens.map((t) => sql`${fullName} ILIKE ${`%${t}%`}`))
+      : undefined;
+    const addressMatch = tokens.length
+      ? and(...tokens.map((t) => sql`${fullAddress} ILIKE ${`%${t}%`}`))
+      : undefined;
     conditions.push(
       or(
-        ilike(customersTable.firstName, `%${search}%`),
-        ilike(customersTable.lastName, `%${search}%`),
+        nameMatch,
+        addressMatch,
         ilike(customersTable.email, `%${search}%`),
         ilike(customersTable.phone, `%${search}%`)
       )!
@@ -185,6 +236,8 @@ router.post("/customers", requireAuth, async (req, res): Promise<void> => {
       heardFromDetails: parsed.data.heardFromDetails ?? null,
       referredByCustomerId: parsed.data.referredByCustomerId ?? null,
     }).returning();
+    triggerInstantSync(merchantId, "contacts");
+    registerQrBestEffort(registerCustomerQr(merchantId, customer.id, [customer.firstName, customer.lastName].filter(Boolean).join(" ")));
     res.status(201).json(formatCustomer(customer));
   } catch (err) {
     req.log.error({ err }, "Customer create failed");
@@ -219,7 +272,11 @@ const CUSTOMER_HEADER_MAP: Record<string, string> = {
   last_name:  "lastName",   lastname:  "lastName",
   email: "email",           email_address: "email",
   phone: "phone",           phone_number: "phone",  mobile: "phone",
-  address: "address",       billing_address: "address",
+  address: "billingStreet", billing_address: "billingStreet", street: "billingStreet", street_address: "billingStreet",
+  city: "billingCity",      suburb: "billingCity",   town: "billingCity",
+  state: "billingState",
+  postcode: "billingPostcode", postal_code: "billingPostcode", zip: "billingPostcode", zipcode: "billingPostcode",
+  country: "billingCountry",
   loyalty_points: "loyaltyPoints", loyaltypoints: "loyaltyPoints", points: "loyaltyPoints",
   group: "customerGroup",   customer_group: "customerGroup",  customergroup: "customerGroup",
   notes: "notes",           note: "notes",  comments: "notes",
@@ -274,7 +331,9 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
   type CustomerRow = {
     rowNum: number;
     firstName: string | null; lastName: string | null; email: string | null;
-    phone: string | null; address: string | null; notes: string | null;
+    phone: string | null; notes: string | null;
+    billingStreet: string | null; billingCity: string | null; billingState: string | null;
+    billingPostcode: string | null; billingCountry: string | null; address: string | null;
     customerGroup: string; loyaltyPoints: number; agreedToMarketing: string | null;
   };
   const toInsert: CustomerRow[] = [];
@@ -287,7 +346,13 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
     const lastName  = (row.lastName  ?? "").trim();
     const email     = (row.email     ?? "").trim().toLowerCase();
     const phone     = (row.phone     ?? "").trim();
-    const address   = (row.address   ?? "").trim();
+    const billingStreet   = (row.billingStreet   ?? "").trim();
+    const billingCity     = (row.billingCity     ?? "").trim();
+    const billingState    = (row.billingState    ?? "").trim();
+    const billingPostcode = (row.billingPostcode ?? "").trim();
+    const billingCountry  = (row.billingCountry  ?? "").trim();
+    // Derived free-text address kept for backward-compatible reads.
+    const address   = formatAddressParts(billingStreet, billingCity, billingState, billingPostcode);
     const notes     = (row.notes     ?? "").trim();
     const customerGroup = (row.customerGroup ?? "Standard").trim() || "Standard";
     const loyaltyPoints = Math.max(0, parseInt(row.loyaltyPoints ?? "0") || 0);
@@ -307,7 +372,10 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
 
     const baseRow: CustomerRow = {
       rowNum, firstName: firstName || null, lastName: lastName || null,
-      email: email || null, phone: phone || null, address: address || null,
+      email: email || null, phone: phone || null,
+      billingStreet: billingStreet || null, billingCity: billingCity || null,
+      billingState: billingState || null, billingPostcode: billingPostcode || null,
+      billingCountry: billingCountry || null, address: address || null,
       notes: notes || null, customerGroup, loyaltyPoints, agreedToMarketing,
     };
 
@@ -329,7 +397,12 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
           firstName:         r.firstName ?? undefined,
           lastName:          r.lastName  ?? undefined,
           phone:             r.phone     ?? undefined,
-          address:           r.address   ?? undefined,
+          address:           r.address        ?? undefined,
+          billingStreet:     r.billingStreet  ?? undefined,
+          billingCity:       r.billingCity    ?? undefined,
+          billingState:      r.billingState   ?? undefined,
+          billingPostcode:   r.billingPostcode ?? undefined,
+          ...(r.billingCountry ? { billingCountry: r.billingCountry } : {}),
           notes:             r.notes     ?? undefined,
           customerGroup:     r.customerGroup,
           loyaltyPoints:     r.loyaltyPoints,
@@ -369,6 +442,11 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
       email:             r.email,
       phone:             r.phone,
       address:           r.address,
+      billingStreet:     r.billingStreet,
+      billingCity:       r.billingCity,
+      billingState:      r.billingState,
+      billingPostcode:   r.billingPostcode,
+      ...(r.billingCountry ? { billingCountry: r.billingCountry } : {}),
       notes:             r.notes,
       customerGroup:     r.customerGroup,
       loyaltyPoints:     r.loyaltyPoints,
@@ -382,13 +460,16 @@ router.post("/customers/import", requireAuth, uploadMemory.single("file"), async
   const skipped = rawRows.length - toInsert.length - toUpdate.length;
 
   try {
-    await db.insert(customersTable).values(insertValues);
-    imported = insertValues.length;
+    const inserted = await db.insert(customersTable).values(insertValues)
+      .returning({ id: customersTable.id, firstName: customersTable.firstName, lastName: customersTable.lastName });
+    imported = inserted.length;
+    registerQrBestEffort(registerCustomerQrsBatch(merchantId, inserted.map((c) => ({ id: c.id, name: [c.firstName, c.lastName].filter(Boolean).join(" ") }))));
   } catch (err) {
     req.log.error({ err }, "Customer CSV bulk insert failed");
     res.status(500).json({ error: "Database error during bulk insert" }); return;
   }
 
+  if (imported > 0 || updated > 0) triggerInstantSync(merchantId, "contacts");
   res.json({ imported, updated, skipped, errors });
 });
 
@@ -476,6 +557,7 @@ router.patch("/customers/:id", requireAuth, async (req, res): Promise<void> => {
     }
     const [customer] = await db.update(customersTable).set(patch).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, merchantId))).returning();
     if (!customer) { res.status(404).json({ error: "Customer not found" }); return; }
+    triggerInstantSync(merchantId, "contacts");
     res.json(formatCustomer(customer));
   } catch (err) {
     req.log.error({ err }, "Customer update failed");
@@ -771,8 +853,6 @@ async function executeMergePair(
       .where(and(eq(parkedSalesTable.customerId, secondaryId), eq(parkedSalesTable.merchantId, merchantId)));
     await tx.update(productPreOrdersTable).set({ customerId: primaryId })
       .where(eq(productPreOrdersTable.customerId, secondaryId));
-    await tx.update(productReturnAuthsTable).set({ customerId: primaryId })
-      .where(eq(productReturnAuthsTable.customerId, secondaryId));
 
     // Step B: Service / intake / attachments / forms
     await tx.update(serviceJobsTable).set({ customerId: primaryId })
@@ -1003,7 +1083,17 @@ router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Pro
   const merchantId = req.session.merchantId!;
   const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const points = parseInt(String(req.body?.points ?? 100), 10);
+
+  // The birthday bonus is configured under Loyalty settings (config.birthdayBonusPoints,
+  // default 100). The server is the source of truth so the awarded amount can't drift
+  // from what the merchant configured; the client-sent points are ignored.
+  const [settingsRow] = await db
+    .select({ config: loyaltySettingsTable.config })
+    .from(loyaltySettingsTable)
+    .where(eq(loyaltySettingsTable.merchantId, merchantId));
+  const configured = Number((settingsRow?.config as Record<string, unknown> | undefined)?.birthdayBonusPoints);
+  const points = Number.isFinite(configured) ? Math.round(configured) : 100;
+  if (points < 0) { res.status(400).json({ error: "Invalid points" }); return; }
 
   const [customer] = await db
     .select({ id: customersTable.id, loyaltyPoints: customersTable.loyaltyPoints })
@@ -1014,7 +1104,7 @@ router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Pro
   const newPoints = (customer.loyaltyPoints ?? 0) + points;
   await db.update(customersTable)
     .set({ loyaltyPoints: newPoints, updatedAt: new Date() })
-    .where(eq(customersTable.id, customerId));
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
 
   res.json({ success: true, pointsAwarded: points, newTotal: newPoints });
 });

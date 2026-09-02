@@ -1,9 +1,11 @@
-import { useState, useCallback, useEffect, useRef, useMemo } from "react";
+import { useState, useCallback, useEffect, useLayoutEffect, useRef, useMemo } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useLocation } from "wouter";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { useDebounce } from "@/hooks/use-debounce";
 import {
   useListProducts,
+  useGetProduct,
   useListCategories,
   useCreateProduct,
   useUpdateProduct,
@@ -11,6 +13,7 @@ import {
   useCreateCategory,
   useGetMerchant,
   useGetProductPricingHistory,
+  useGetProductSalesHistory,
   useListFloorPlanZones,
   useGetFloorPlan,
   useGetPosSettings,
@@ -36,16 +39,18 @@ import {
   useListSuppliers,
   useBulkUpdateProducts,
   useGetInventorySettings,
+  useGetLowStockAlertSettings,
 } from "@workspace/api-client-react";
 import {
   useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { InvoiceSendDialog } from "@/components/invoices/InvoiceSendDialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
@@ -60,14 +65,19 @@ import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
 import { computeAllGroupPrices } from "@/lib/group-pricing";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import {
   Search, Plus, Pencil, Trash2, Package, Check,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
   Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
-  Archive, X as XIcon, Upload,
+  Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink, Truck, Send,
+  AlertTriangle, LayoutGrid, List,
 } from "lucide-react";
+import { QRCodeSVG } from "qrcode.react";
+import { publicProductUrl } from "@/lib/public-url";
+import { useEntityQrLookup } from "@/hooks/use-entity-qr";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
@@ -79,7 +89,7 @@ import {
 
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
-type DetailTab = "details" | "inventory" | "settings";
+type DetailTab = "details" | "price" | "media" | "inventory" | "serials" | "sales" | "settings";
 type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
 
 type BulkActionPending =
@@ -87,6 +97,7 @@ type BulkActionPending =
   | { type: "price_flat"; value: number }
   | { type: "set_category"; categoryId: number | null; categoryName: string }
   | { type: "set_track_inventory"; value: boolean }
+  | { type: "set_product_type"; productTypeId: number; typeName: string }
   | { type: "delete" };
 
 type ProductForm = {
@@ -105,6 +116,8 @@ type ProductForm = {
   productTypeId: string;
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
+  /* when true, each unit carries a serial number / IMEI captured at PO receiving and at sale */
+  tracksSerial: boolean;
   tags: string[];
   /* notes */
   internalNotes: string;
@@ -113,6 +126,8 @@ type ProductForm = {
   /* warranty offered from sale date — duration is a number, unit is months/years */
   warrantyDuration: string;
   warrantyUnit: string;
+  /* time card — prepaid minutes the card grants (time_card type only) */
+  timeCardMinutes: string;
   /* group pricing */
   groupPrices: Record<string, string>;
   /* digital code */
@@ -123,7 +138,7 @@ type ProductForm = {
 };
 
 const defaultForm: ProductForm = {
-  name: "", description: "", price: "", costPrice: "", sku: "", barcode: "",
+  name: "", description: "", price: "", costPrice: "0", sku: "", barcode: "",
   categoryId: "", brandId: "",
   imageUrl: "", imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
   supplier: "", supplierCode: "",
@@ -133,23 +148,25 @@ const defaultForm: ProductForm = {
   productTypeId: "",
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
+  tracksSerial: false,
   tags: [],
   internalNotes: "",
   notification: "",
   warrantyDuration: "",
   warrantyUnit: "months",
+  timeCardMinutes: "",
   groupPrices: {},
   isEpay: false,
   stockLocationDisplay: "",
   stockLocationOverflow: "",
 };
 
-const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean }[] = [
+const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean; hideForTimeCard?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "media",         label: "Media"         },
   { key: "pricing",       label: "Pricing"       },
-  { key: "stock",         label: "Stock",         hideForDigitalCode: true },
-  { key: "compatibility", label: "Compatibility", hideForService: true },
+  { key: "stock",         label: "Stock",         hideForDigitalCode: true, hideForTimeCard: true },
+  { key: "compatibility", label: "Compatibility", hideForService: true, hideForTimeCard: true },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
   { key: "variants",      label: "Variants",     variantOnly: true },
@@ -173,6 +190,40 @@ const NO_STOCK_TYPES = new Set(["service", "digital", "digital_code"]);
 function generateSKU(prefix: string) {
   const n = Math.floor(Math.random() * 90000) + 10000;
   return `${prefix.toUpperCase().replace(/[^A-Z0-9]/g, "")}-${n}`;
+}
+
+/* Colour a margin percentage by health band:
+ *   negative → red, 0–10% → orange, 11–20% → yellow, 21%+ → green. */
+function marginColorClass(pct: number): string {
+  if (pct < 0)  return "text-red-500";
+  if (pct <= 10) return "text-orange-500";
+  if (pct <= 20) return "text-yellow-500";
+  return "text-green-600";
+}
+
+// Tax-aware profit/margin. Sell prices are entered GST-INCLUSIVE while cost
+// prices are GST-EXCLUSIVE, so the GST collected on a sale — which is remitted
+// to the ATO, not kept — must be stripped from the sell price before comparing
+// to cost. A raw (sell − cost) overstates profit by the GST component.
+// `taxRatePct` is a percentage (e.g. 10 = 10% GST; 0 = GST-free). Returns null
+// when there's no cost to compare against or no positive sell price.
+function computeMargin(
+  sellIncGst: number,
+  cost: number | null,
+  taxRatePct: number,
+): { profit: number; marginPct: number } | null {
+  if (cost == null || !(sellIncGst > 0)) return null;
+  const sellExGst = sellIncGst / (1 + (taxRatePct || 0) / 100);
+  const profit = sellExGst - cost;
+  const marginPct = Math.round((profit / sellExGst) * 100);
+  return { profit, marginPct };
+}
+
+/* Colour a stock quantity by level: 0 → red, 1–5 → yellow, 5+ → green. */
+function stockColorClass(qty: number): string {
+  if (qty <= 0) return "text-red-500";
+  if (qty <= 5) return "text-yellow-500";
+  return "text-green-600";
 }
 
 /* Derive a scannable EAN-13 barcode deterministically from a SKU, so the same
@@ -479,6 +530,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   const previewRef                = useRef<HTMLDivElement>(null);
   const previewSize               = useContainerSize(previewRef);
   const [, navigate]              = useLocation();
+  const qrLookup                  = useEntityQrLookup();
 
   if (!product) return null;
 
@@ -496,11 +548,13 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
   // must be supplied per-print — otherwise the label falls back to the sample
   // placeholder text baked into the renderer ("Product Name", "Beverages", "$5.50").
   const productFields: Record<string, string> = {
-    productName: product.name,
-    sku:         product.sku     ?? "",
-    price:       product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
-    barcode:     product.barcode ?? "",
-    category:    product.category?.name ?? "",
+    productName:  product.name,
+    sku:          product.sku     ?? "",
+    price:        product.price != null ? `$${Number(product.price).toFixed(2)}` : "",
+    barcode:      product.barcode ?? "",
+    category:     product.category?.name ?? "",
+    // Persisted (tracked) product QR; falls back to the computed public URL.
+    productQrUrl: qrLookup(`product-${product.id}`, publicProductUrl((merchant as { username?: string | null } | undefined)?.username, product.id)),
   };
 
   const resolvedFields = defaultTpl
@@ -525,7 +579,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
               <Star className="w-3 h-3 text-amber-500 inline mb-0.5 mx-1" />
               to enable one-click printing here.
             </p>
-            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/products-inventory/stickers"); }}>
+            <Button size="sm" variant="outline" onClick={() => { onOpenChange(false); navigate("/management/products-inventory/labels"); }}>
               Open Labels
             </Button>
           </div>
@@ -578,7 +632,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
               </Button>
 
               <Button variant="outline" size="sm" className="w-full gap-1.5"
-                onClick={() => { onOpenChange(false); navigate("/management/products-inventory/stickers"); }}>
+                onClick={() => { onOpenChange(false); navigate("/management/products-inventory/labels"); }}>
                 <LayoutTemplate className="w-3.5 h-3.5" /> Manage Templates
               </Button>
 
@@ -609,6 +663,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
                 size={size}
                 businessName={businessName}
                 brandColor={brandColor}
+                businessWebsite={profile.website}
                 fillWidth={previewSize.w}
                 fillHeight={previewSize.h}
               />
@@ -617,6 +672,101 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
         )}
       </DialogContent>
     </Dialog>
+  );
+}
+
+/* ─── Product QR code panel ──────────────────────────────────────────────────
+ * Inline panel (rendered in the product detail Settings tab) showing a QR code
+ * that opens the public, customer-facing product page when scanned. The
+ * merchant's public username forms the URL namespace; without one there's no
+ * public page, so we prompt the user to set a store address. */
+
+function ProductQrPanel({ product, onClose }: {
+  product: Product;
+  onClose: () => void;
+}) {
+  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const [, navigate]       = useLocation();
+  const [copied, setCopied] = useState(false);
+  const qrRef = useRef<SVGSVGElement>(null);
+
+  const username = (merchant as { username?: string | null } | undefined)?.username ?? "";
+  const url = publicProductUrl(username, product.id);
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(url);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Rasterise the inline SVG to a PNG for download (mirrors the loyalty-QR
+  // pattern) so the code can be dropped into print artwork or shared.
+  const handleDownload = () => {
+    const svg = qrRef.current;
+    if (!svg) return;
+    const canvas = document.createElement("canvas");
+    const size = 600;
+    canvas.width = size; canvas.height = size;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    const img = new Image();
+    const svgBlob = new Blob([svg.outerHTML], { type: "image/svg+xml" });
+    const objUrl = URL.createObjectURL(svgBlob);
+    img.onload = () => {
+      ctx.fillStyle = "#fff";
+      ctx.fillRect(0, 0, size, size);
+      ctx.drawImage(img, 0, 0, size, size);
+      URL.revokeObjectURL(objUrl);
+      const a = document.createElement("a");
+      a.href = canvas.toDataURL("image/png");
+      a.download = `${product.name.replace(/[^a-z0-9]+/gi, "-").toLowerCase()}-qr.png`;
+      a.click();
+    };
+    img.src = objUrl;
+  };
+
+  return (
+    <div className="rounded-xl border bg-muted/20 p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <QrCode className="w-4 h-4 text-muted-foreground shrink-0" />
+        <p className="text-sm font-medium">Product QR Code</p>
+      </div>
+
+      {!username ? (
+        <div className="text-center py-2 space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Product QR codes link to your public store address. Add a business
+            username in Business settings to enable customer-facing product pages.
+          </p>
+          <Button size="sm" variant="outline"
+            onClick={() => { onClose(); navigate("/management/settings-integrations/business-details"); }}>
+            Open Business settings
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col items-center gap-4 py-1">
+          <p className="text-sm text-muted-foreground text-center">
+            Scan to open the customer-facing page for <span className="font-medium text-foreground">{product.name}</span>.
+          </p>
+          <div className="p-3 bg-white rounded-xl border-2 border-gray-100">
+            <QRCodeSVG ref={qrRef} value={url} size={180} level="M" />
+          </div>
+          <p className="text-xs text-muted-foreground text-center break-all max-w-[18rem]">{url}</p>
+          <div className="grid grid-cols-2 gap-2 w-full max-w-xs">
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleCopy}>
+              {copied ? <><Check className="w-3.5 h-3.5" /> Copied!</> : <><Copy className="w-3.5 h-3.5" /> Copy link</>}
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5" onClick={handleDownload}>
+              <Download className="w-3.5 h-3.5" /> Download
+            </Button>
+            <Button variant="outline" size="sm" className="gap-1.5 col-span-2"
+              onClick={() => window.open(url, "_blank", "noopener")}>
+              <ExternalLink className="w-3.5 h-3.5" /> Open page
+            </Button>
+          </div>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -635,26 +785,54 @@ function ProductDetailDialog({
   const [printStickerOpen, setPrintStickerOpen] = useState(false);
   const [confirmDelete, setConfirmDelete]       = useState(false);
   const { data: floorPlanData }                 = useGetFloorPlan();
-  if (!product) return null;
-  const productStockLocation = (product as Product & { stockLocation?: string | null }).stockLocation ?? null;
 
-  const margin = product.costPrice && product.price > 0
-    ? Math.round(((product.price - product.costPrice) / product.price) * 100)
-    : null;
-
-  const isLowStock = product.trackInventory &&
-    (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+  // Serial numbers captured when warranty units are received against a
+  // purchase order. Surfaced in their own tab when any exist.
+  const [serials, setSerials] = useState<string[]>([]);
+  useEffect(() => {
+    if (!product) { setSerials([]); return; }
+    let cancelled = false;
+    fetch(`/api/products/${product.id}/serials`, { credentials: "include" })
+      .then((r) => (r.ok ? r.json() : Promise.reject()))
+      .then((d: { items?: { serial: string }[] }) => {
+        if (!cancelled) setSerials((d.items ?? []).map((x) => x.serial).filter(Boolean));
+      })
+      .catch(() => { if (!cancelled) setSerials([]); });
+    return () => { cancelled = true; };
+  }, [product?.id]);
 
   const TABS: { key: DetailTab; label: string }[] = [
     { key: "details",   label: "Details"   },
+    { key: "price",     label: "Price"     },
+    { key: "media",     label: "Media"     },
     { key: "inventory", label: "Inventory" },
+    ...(serials.length > 0 ? [{ key: "serials" as DetailTab, label: "Serial Numbers" }] : []),
+    { key: "sales",     label: "Sales History" },
     { key: "settings",  label: "Settings"  },
   ];
+  const tabIndex = TABS.findIndex((t) => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!product, goPrevTab, goNextTab);
+
+  if (!product) return null;
+  const productStockLocation = (product as Product & { stockLocation?: string | null }).stockLocation ?? null;
+
+  // GST-aware margin: sell inc-GST vs cost ex-GST (see computeMargin).
+  const margin = computeMargin(product.price, product.costPrice || null, product.taxRate ?? 10)?.marginPct ?? null;
+
+  // Non-stocked product types (services, downloads, digital codes) never carry
+  // inventory, so the low-stock warning must never apply to them.
+  const detailProductType = (product as Product & { productType?: string }).productType ?? "standard";
+  const isLowStock = !NO_STOCK_TYPES.has(detailProductType) && product.trackInventory &&
+    (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+
+  const productImage = (product as Product & { imageUrl?: string | null }).imageUrl || "";
 
   return (
     <>
     <Dialog open={!!product} onOpenChange={onClose}>
-      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+      <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
         <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
           <DialogTitle>
             <div className="flex items-center gap-3">
@@ -691,17 +869,13 @@ function ProductDetailDialog({
 
         {tab === "details" && (
           <div className="space-y-3 py-4">
-            {/* Pricing */}
-            <div className="rounded-xl border bg-muted/20 divide-y">
-              <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
-              {product.costPrice != null && (
-                <InfoRow icon={DollarSign} label="Cost Price" value={formatCurrency(product.costPrice)} />
-              )}
-              {margin !== null && (
-                <InfoRow icon={DollarSign} label="Margin" value={`${margin}%`} valueClass={margin < 20 ? "text-destructive" : "text-emerald-600"} />
-              )}
-              <InfoRow icon={Settings2} label="Tax Rate (GST)" value={`${product.taxRate ?? 10}%`} />
-            </div>
+            {/* Description */}
+            {product.description && (
+              <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
+                <p className="text-xs text-muted-foreground mb-0.5">Description</p>
+                <p className="whitespace-pre-line">{product.description}</p>
+              </div>
+            )}
             {/* Identifiers */}
             {(product.sku || (product as Product & { barcode?: string }).barcode) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
@@ -716,11 +890,47 @@ function ProductDetailDialog({
                   .replace(/-/g, " ")
                   .replace(/\b\w/g, (c) => c.toUpperCase())} />
             </div>
-            {/* Description */}
-            {product.description && (
-              <div className="rounded-xl border bg-muted/20 px-4 py-3 text-sm">
-                <p className="text-xs text-muted-foreground mb-0.5">Description</p>
-                <p className="whitespace-pre-line">{product.description}</p>
+          </div>
+        )}
+
+        {tab === "price" && (
+          <div className="space-y-3 py-4">
+            {/* Pricing */}
+            <div className="rounded-xl border bg-muted/20 divide-y">
+              <InfoRow icon={DollarSign} label="Sell Price"  value={formatCurrency(product.price)} />
+              {product.costPrice != null && (
+                <InfoRow icon={DollarSign} label="Cost Price" value={formatCurrency(product.costPrice)} />
+              )}
+              {margin !== null && (
+                <InfoRow icon={DollarSign} label="Margin" value={`${margin}%`} valueClass={margin < 20 ? "text-destructive" : "text-emerald-600"} />
+              )}
+              <InfoRow icon={Settings2} label="Tax Rate (GST)" value={`${product.taxRate ?? 10}%`} />
+            </div>
+            {/* Supplier — who this product is bought from and at what code */}
+            {((product as Product & { supplier?: string | null }).supplier ||
+              (product as Product & { supplierCode?: string | null }).supplierCode) && (
+              <div className="rounded-xl border bg-muted/20 divide-y">
+                <InfoRow icon={Truck} label="Supplier" value={(product as Product & { supplier?: string | null }).supplier} />
+                <InfoRow icon={Hash} label="Supplier Code" value={(product as Product & { supplierCode?: string | null }).supplierCode} />
+              </div>
+            )}
+          </div>
+        )}
+
+        {tab === "media" && (
+          <div className="py-4">
+            {productImage ? (
+              <div className="rounded-xl border bg-muted/20 p-3 flex items-center justify-center">
+                <img
+                  src={productImage}
+                  alt={product.name}
+                  className="max-h-[50vh] w-auto max-w-full rounded-lg object-contain"
+                />
+              </div>
+            ) : (
+              <div className="rounded-xl border bg-muted/20 py-16 flex flex-col items-center justify-center gap-2 text-muted-foreground">
+                <ImageIcon className="w-10 h-10 opacity-40" />
+                <p className="text-sm">No image for this product</p>
               </div>
             )}
           </div>
@@ -782,6 +992,29 @@ function ProductDetailDialog({
           </div>
         )}
 
+        {tab === "serials" && (
+          <div className="space-y-3 py-4">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">Serial numbers recorded when warranty units were received against a purchase order.</p>
+              <Badge variant="outline" className="text-xs shrink-0">{serials.length}</Badge>
+            </div>
+            <div className="rounded-xl border bg-muted/20 divide-y">
+              {serials.map((s, i) => (
+                <div key={i} className="flex items-center gap-3 px-4 py-2.5 text-sm">
+                  <Hash className="w-4 h-4 text-muted-foreground shrink-0" />
+                  <span className="font-mono break-all">{s}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+
+        {tab === "sales" && (
+          <div className="py-4">
+            <SalesHistoryTable productId={product.id} />
+          </div>
+        )}
+
         {tab === "settings" && (
           <div className="space-y-3 py-4">
             <div className="rounded-xl border bg-muted/20 divide-y">
@@ -800,26 +1033,38 @@ function ProductDetailDialog({
                 </div>
               </div>
             </div>
+            <ProductQrPanel product={product} onClose={onClose} />
           </div>
         )}
 
         </div>
 
-        <div className="flex items-center justify-between px-6 pb-5 pt-4 border-t shrink-0">
-          <Button variant="destructive" size="sm" className="gap-1.5"
-            onClick={() => setConfirmDelete(true)} disabled={deleteIsPending}>
-            <Trash2 className="w-3.5 h-3.5" /> Delete
-          </Button>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
+        <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
+          <div className="flex gap-2 items-center">
+            <Button
+              variant="destructive" size="sm" className="w-8 h-8 p-0"
+              onClick={() => setConfirmDelete(true)}
+              disabled={deleteIsPending}
+              title="Delete product"
+            >
+              <Trash2 className="w-4 h-4" />
+            </Button>
+            <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(product); }} title="Edit product">
+              <Pencil className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+              <ChevronLeft className="w-4 h-4" />
+            </Button>
+            <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+              <ChevronRight className="w-4 h-4" />
+            </Button>
+          </div>
+          <div className="flex gap-2 items-center">
             <Button variant="outline" size="sm" className="gap-1.5" onClick={() => setPrintStickerOpen(true)}>
               <Printer className="w-3.5 h-3.5" /> Print Sticker
             </Button>
-            <Button size="sm" className="gap-1.5" onClick={() => { onClose(); onEdit(product); }}>
-              <Pencil className="w-3.5 h-3.5" /> Edit
-            </Button>
           </div>
-        </div>
+        </DialogFooter>
       </DialogContent>
       <PrintStickerDialog open={printStickerOpen} onOpenChange={setPrintStickerOpen} product={product} />
     </Dialog>
@@ -896,6 +1141,93 @@ function PricingHistoryTable({ productId }: { productId: number }) {
   );
 }
 
+/* Every sale (transaction) and invoice whose line items include this product.
+   Invoice rows are clickable and open the Send window (email / SMS / print). */
+function SalesHistoryTable({ productId }: { productId: number }) {
+  const { data, isLoading } = useGetProductSalesHistory(productId);
+  const [sendInvoiceId, setSendInvoiceId] = useState<number | null>(null);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-2">
+        {[1, 2, 3].map((i) => <div key={i} className="h-9 rounded-lg bg-muted/40 animate-pulse" />)}
+      </div>
+    );
+  }
+
+  if (!data || data.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No sales yet. Completed sales and invoices that include this product will appear here.
+      </p>
+    );
+  }
+
+  const soldUnits = data.reduce((s, e) => s + (e.quantity ?? 0), 0);
+  const soldValue = data.reduce((s, e) => s + (e.lineTotal ?? 0), 0);
+
+  return (
+    <div className="space-y-3">
+      <div className="flex flex-wrap gap-2 text-xs">
+        <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{data.length} document{data.length === 1 ? "" : "s"}</span>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{soldUnits} unit{soldUnits === 1 ? "" : "s"} sold</span>
+        <span className="rounded-full bg-muted px-2.5 py-1 text-muted-foreground">{formatCurrency(soldValue)} total</span>
+      </div>
+      <div className="rounded-lg border overflow-hidden">
+        <table className="w-full text-sm">
+          <thead className="bg-muted/50">
+            <tr>
+              <th className="text-left p-2.5 font-medium text-muted-foreground">Reference</th>
+              <th className="text-left p-2.5 font-medium text-muted-foreground">Date</th>
+              <th className="text-left p-2.5 font-medium text-muted-foreground hidden sm:table-cell">Customer</th>
+              <th className="text-right p-2.5 font-medium text-muted-foreground">Qty</th>
+              <th className="text-right p-2.5 font-medium text-muted-foreground">Amount</th>
+            </tr>
+          </thead>
+          <tbody className="divide-y">
+            {data.map((entry) => {
+              const isInvoice = entry.type === "invoice";
+              return (
+              <tr
+                key={`${entry.type}-${entry.id}`}
+                className={cn("hover:bg-muted/20", isInvoice && "cursor-pointer")}
+                onClick={isInvoice ? () => setSendInvoiceId(entry.id) : undefined}
+                title={isInvoice ? "Send this invoice (email / SMS / print)" : undefined}
+              >
+                <td className="p-2.5">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className={cn(
+                      "text-[10px] shrink-0 capitalize",
+                      isInvoice ? "border-blue-400 text-blue-600 dark:text-blue-400" : "border-emerald-400 text-emerald-600 dark:text-emerald-400",
+                    )}>
+                      {entry.type}
+                    </Badge>
+                    <span className="font-mono text-xs truncate">{entry.reference}</span>
+                    {isInvoice && <Send className="w-3 h-3 text-muted-foreground shrink-0" />}
+                  </div>
+                  {entry.status && <span className="text-[10px] text-muted-foreground capitalize">{entry.status.replace(/-/g, " ")}</span>}
+                </td>
+                <td className="p-2.5 text-muted-foreground whitespace-nowrap">
+                  {new Date(entry.date).toLocaleDateString("en-AU", { day: "2-digit", month: "short", year: "numeric" })}
+                </td>
+                <td className="p-2.5 text-muted-foreground hidden sm:table-cell truncate">{entry.customerName ?? "—"}</td>
+                <td className="p-2.5 text-right tabular-nums">{entry.quantity}</td>
+                <td className="p-2.5 text-right font-medium tabular-nums">{formatCurrency(entry.lineTotal)}</td>
+              </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
+      <InvoiceSendDialog
+        invoiceId={sendInvoiceId}
+        open={sendInvoiceId != null}
+        onOpenChange={(o) => { if (!o) setSendInvoiceId(null); }}
+      />
+    </div>
+  );
+}
+
 /* ─── Category → suggested tags ─────────────────────────────────────────── */
 
 const TAG_SUGGESTIONS: [string[], string[]][] = [
@@ -934,6 +1266,9 @@ export default function ProductsPage() {
   // (or the sell price when no rule applies).
   const manualGroupsRef = useRef<Set<string>>(new Set());
   const [search, setSearch]             = useState("");
+  // Debounced so the (limit:1000) product query fires when typing pauses, not on
+  // every keystroke. The input stays bound to `search` for instant feedback.
+  const debouncedSearch = useDebounce(search);
   const [categoryFilter, setCategoryFilter] = useState<string>("");
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [pendingProductClose, setPendingProductClose] = useState(false);
@@ -962,14 +1297,22 @@ export default function ProductsPage() {
   const [sortKey, setSortKey]           = useState<SortKey>("name");
   const [sortDir, setSortDir]           = useState<SortDir>("asc");
   const [checked, setChecked]           = useState<Set<number>>(new Set());
-  const [groupExportOpen, setGroupExportOpen] = useState(false);
   const [typeFilter, setTypeFilter]     = useState("all");
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter]       = useState("");
+  const [inStockOnly, setInStockOnly]   = useState(false);
+  // Surfaces oversold products — tracked stock that has dropped below zero.
+  const [negativeStockOnly, setNegativeStockOnly] = useState(false);
+  // "list" = the detail table, "photo" = responsive image tiles.
+  const [viewMode, setViewMode] = useState<"list" | "photo">("list");
   const [hideCosts, setHideCosts]       = useState(true);
   const { data: inventorySettings } = useGetInventorySettings();
+  const { data: lowStockSettings } = useGetLowStockAlertSettings({ query: { queryKey: ["low-stock-alert-settings"] } });
+  // Merchant-wide default low-stock amount; falls back to 5 when unset.
+  const defaultLowStock = lowStockSettings?.globalThreshold ?? 5;
   const showHideCostsBtn  = inventorySettings?.showCosts  !== "false";
   const enableGroupPricing = inventorySettings?.groupPricing !== "false";
+  const stockColorsEnabled = inventorySettings?.stockColors === "true";
 
   /* ── Digital codes state ── */
   type DigitalCodeEntry = { id: number; code: string; isUsed: boolean; usedAt: string | null; createdAt: string };
@@ -983,6 +1326,7 @@ export default function ProductsPage() {
   const [bulkCatPopover, setBulkCatPopover]       = useState(false);
   const [bulkCatInput, setBulkCatInput]           = useState("");
   const [bulkInvPopover, setBulkInvPopover]       = useState(false);
+  const [bulkTypePopover, setBulkTypePopover]     = useState(false);
 
   /* ── Brands state ── */
   const [tagInput, setTagInput] = useState("");
@@ -1159,8 +1503,8 @@ export default function ProductsPage() {
   }, [dialogOpen, editingProduct, productTypesList, form.productTypeId]);
 
   const { data: productsData, isLoading } = useListProducts(
-    { search: search || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
-    { query: { queryKey: ["products", search, categoryFilter] } }
+    { search: debouncedSearch || undefined, categoryId: categoryFilter && categoryFilter !== "all" ? parseInt(categoryFilter) : undefined, limit: 1000 },
+    { query: { queryKey: ["products", debouncedSearch, categoryFilter] } }
   );
   const { data: categoriesData } = useListCategories({ query: { queryKey: ["categories"] } });
   const { data: floorPlanZones } = useListFloorPlanZones();
@@ -1184,6 +1528,34 @@ export default function ProductsPage() {
   const products   = productsData?.items || [];
   const allTags    = [...new Set(products.flatMap((p) => (p as typeof p & { tags?: string[] }).tags ?? []))].sort();
   const categories = (categoriesData as unknown as { id: number; name: string; parentId?: number | null }[]) || [];
+
+  /* ── Open a product straight from the universal search bar ──
+     The search hands the product id over and navigates here; we open that
+     product's detail view instead of leaving the user on the list. Fetched by
+     id rather than looked up in `products`, so it still opens when the row sits
+     behind an active search/category filter or past the list's fetch limit. */
+  const [openFromSearchId, setOpenFromSearchId] = useState<number | null>(null);
+  useLayoutEffect(() => {
+    const take = () => {
+      const raw = sessionStorage.getItem("koapos_open_product");
+      if (!raw) return;
+      sessionStorage.removeItem("koapos_open_product");
+      const id = parseInt(raw, 10);
+      if (!isNaN(id)) setOpenFromSearchId(id);
+    };
+    take(); // navigated in from another page
+    window.addEventListener("koapos:open-product", take); // already on this page
+    return () => window.removeEventListener("koapos:open-product", take);
+  }, []);
+
+  const { data: productFromSearch } = useGetProduct(openFromSearchId as number, {
+    query: { enabled: openFromSearchId != null, queryKey: ["product", openFromSearchId] },
+  });
+  useEffect(() => {
+    if (!productFromSearch) return;
+    setSelectedProduct(productFromSearch as Product);
+    setOpenFromSearchId(null);
+  }, [productFromSearch]);
 
   /* Sort */
   const sorted = [...products].sort((a, b) => {
@@ -1218,16 +1590,28 @@ export default function ProductsPage() {
     if (!tagFilter) return true;
     const ep = p as Product & { tags?: string[] };
     return (ep.tags ?? []).includes(tagFilter);
+  }).filter((p) => {
+    if (!inStockOnly) return true;
+    // Untracked items (services/digital) have unlimited stock, so they always count as in stock.
+    return !p.trackInventory || (p.stockQuantity ?? 0) > 0;
+  }).filter((p) => {
+    if (!negativeStockOnly) return true;
+    // Only tracked items can go negative; untracked stock is unlimited.
+    return p.trackInventory && (p.stockQuantity ?? 0) < 0;
   });
+
+  const negativeStockCount = products.filter((p) => p.trackInventory && (p.stockQuantity ?? 0) < 0).length;
 
   const allChecked = filtered.length > 0 && filtered.every((p) => checked.has(p.id));
   const toggleAll  = () => setChecked(allChecked ? new Set() : new Set(filtered.map((p) => p.id)));
   const toggleOne  = (id: number) => setChecked((prev) => { const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n; });
 
   const openCreate = () => {
-    initialProductFormRef.current = defaultForm;
+    // Pre-fill the low-stock amount from the merchant default (Management → Inventory).
+    const startForm = { ...defaultForm, lowStockThreshold: String(defaultLowStock) };
+    initialProductFormRef.current = startForm;
     manualGroupsRef.current = new Set();
-    setEditingProduct(null); setForm(defaultForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
+    setEditingProduct(null); setForm(startForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
   const openEdit = (p: Product) => {
@@ -1252,6 +1636,7 @@ export default function ProductsPage() {
       trackInventory: p.trackInventory ?? true,
       isActive: p.isActive ?? true,
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
+      tracksSerial: (ep as Product & { tracksSerial?: boolean }).tracksSerial ?? false,
       tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
       notification: (ep as Product & { notification?: string | null }).notification ?? "",
@@ -1260,6 +1645,10 @@ export default function ProductsPage() {
         return d ? String(d) : "";
       })(),
       warrantyUnit: (ep as Product & { warrantyUnit?: string | null }).warrantyUnit ?? "months",
+      timeCardMinutes: (() => {
+        const m = (ep as Product & { timeCardMinutes?: number | null }).timeCardMinutes;
+        return m ? String(m) : "";
+      })(),
       groupPrices: Object.fromEntries(
         Object.entries(ep.groupPrices ?? {}).map(([k, v]) => [k, v.toString()])
       ),
@@ -1300,6 +1689,7 @@ export default function ProductsPage() {
       taxRate: parseFloat(form.taxRate) || 10,
       trackInventory: form.trackInventory, isActive: form.isActive,
       excludeFromLoyalty: form.excludeFromLoyalty,
+      tracksSerial: form.tracksSerial,
       supplier: form.supplier || undefined,
       supplierCode: form.supplierCode || undefined,
       isEpay: form.isEpay,
@@ -1309,6 +1699,7 @@ export default function ProductsPage() {
       notification: form.notification,
       warrantyDuration: form.warrantyDuration ? parseInt(form.warrantyDuration) || 0 : 0,
       warrantyUnit: form.warrantyUnit === "years" ? "years" : "months",
+      timeCardMinutes: form.timeCardMinutes ? parseInt(form.timeCardMinutes) || 0 : 0,
       // Every customer group always gets a price so downstream features never
       // see a blank: a manually-typed value wins, otherwise the group's rule
       // price, otherwise the standard sell price.
@@ -1343,7 +1734,15 @@ export default function ProductsPage() {
           }
           toast.success("Product updated"); setDialogOpen(false); setFormTouched(false); inv();
         },
-        onError: () => toast.error("Failed to update product"),
+        onError: (err) => {
+          const status = (err as { status?: number })?.status;
+          const serverMsg = (err as { data?: { error?: string } })?.data?.error;
+          if (status === 409) {
+            toast.error(serverMsg || `SKU already exists${form.sku ? `: ${form.sku}` : ""}`);
+          } else {
+            toast.error("Failed to update product");
+          }
+        },
       });
     } else {
       createMutation.mutate({ data: payload }, {
@@ -1357,7 +1756,15 @@ export default function ProductsPage() {
           }
           toast.success("Product created"); setDialogOpen(false); setFormTouched(false); inv();
         },
-        onError: () => toast.error("Failed to create product"),
+        onError: (err) => {
+          const status = (err as { status?: number })?.status;
+          const serverMsg = (err as { data?: { error?: string } })?.data?.error;
+          if (status === 409) {
+            toast.error(serverMsg || `SKU already exists${form.sku ? `: ${form.sku}` : ""}`);
+          } else {
+            toast.error("Failed to create product");
+          }
+        },
       });
     }
   };
@@ -1403,6 +1810,8 @@ export default function ProductsPage() {
         body.categoryId = bulkActionPending.categoryId;
       } else if (bulkActionPending.type === "set_track_inventory") {
         body.trackInventory = bulkActionPending.value;
+      } else if (bulkActionPending.type === "set_product_type") {
+        body.productTypeId = bulkActionPending.productTypeId;
       }
       const result = await bulkUpdateMutation.mutateAsync({ data: body as unknown as Parameters<typeof bulkUpdateMutation.mutateAsync>[0]["data"] }) as { updated: number; deleted: number };
       const n = result.deleted > 0 ? result.deleted : result.updated;
@@ -1450,6 +1859,12 @@ export default function ProductsPage() {
     setBulkConfirmOpen(true);
   };
 
+  const applyBulkType = (productTypeId: number, typeName: string) => {
+    setBulkActionPending({ type: "set_product_type", productTypeId, typeName });
+    setBulkTypePopover(false);
+    setBulkConfirmOpen(true);
+  };
+
   const openBulkDelete = () => {
     setBulkActionPending({ type: "delete" });
     setBulkConfirmOpen(true);
@@ -1478,11 +1893,12 @@ export default function ProductsPage() {
   /* The tabs applicable to the current product type — the single source of
      truth for both the tab bar and Next/Previous navigation, so navigation can
      never land on a tab that isn't shown. */
-  const visibleFormTabs = FORM_TABS.filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode }) =>
+  const visibleFormTabs = FORM_TABS.filter(({ digitalCodeOnly, variantOnly, hideForService, hideForDigitalCode, hideForTimeCard }) =>
     (!digitalCodeOnly   || form.productType === "digital_code") &&
     (!variantOnly       || form.productType === "variant") &&
     (!hideForService    || form.productType !== "service") &&
-    (!hideForDigitalCode || form.productType !== "digital_code")
+    (!hideForDigitalCode || form.productType !== "digital_code") &&
+    (!hideForTimeCard   || form.productType !== "time_card")
   );
 
   /* If the active tab stops being applicable (e.g. after changing the product
@@ -1528,64 +1944,12 @@ export default function ProductsPage() {
     });
   };
 
-  const marginPct = form.costPrice && form.price && parseFloat(form.price) > 0
-    ? Math.round(((parseFloat(form.price) - parseFloat(form.costPrice)) / parseFloat(form.price)) * 100)
+  // GST-aware: sell price is inc-GST, cost is ex-GST — strip the remitted GST
+  // before working out real profit/margin. See computeMargin above.
+  const marginInfo = form.costPrice && form.price && parseFloat(form.price) > 0
+    ? computeMargin(parseFloat(form.price), parseFloat(form.costPrice) || 0, parseFloat(form.taxRate) || 0)
     : null;
-
-  const exportGroupPriceSheet = (groupId: string, groupName: string) => {
-    setGroupExportOpen(false);
-
-    const hdrCell = "background:#1e293b;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #334155;font-size:13px;";
-    const cell    = "padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;";
-    const hiCell  = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;";
-    const hiPriceCell = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;font-weight:bold;color:#92400e;";
-
-    const headerRow = `<tr>
-      <th style="${hdrCell}">Product Name</th>
-      <th style="${hdrCell}">SKU</th>
-      <th style="${hdrCell}">Description</th>
-      <th style="${hdrCell}">RRP (inc GST)</th>
-      <th style="${hdrCell}">${groupName} Price</th>
-    </tr>`;
-
-    const dataRows = products.map((p) => {
-      const ep = p as Product & { groupPrices?: Record<string, number>; description?: string };
-      const gp = ep.groupPrices?.[groupId];
-      const hasPrice = gp != null && Number(gp) > 0;
-      const rowBg = hasPrice ? "background:#fefce8;" : "";
-      return `<tr style="${rowBg}">
-        <td style="${hasPrice ? hiCell : cell}">${(p.name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
-        <td style="${hasPrice ? hiCell : cell}">${(p.sku ?? "").replace(/&/g, "&amp;")}</td>
-        <td style="${hasPrice ? hiCell : cell}">${(ep.description ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
-        <td style="${hasPrice ? hiCell : cell}">${p.price != null ? "$" + Number(p.price).toFixed(2) : ""}</td>
-        <td style="${hasPrice ? hiPriceCell : cell}">${hasPrice ? "$" + Number(gp).toFixed(2) : ""}</td>
-      </tr>`;
-    }).join("");
-
-    const legend = `<p style="font-family:sans-serif;font-size:12px;color:#92400e;background:#fefce8;border:1px solid #fcd34d;padding:6px 10px;display:inline-block;border-radius:4px;margin-bottom:8px;">
-      ★ Highlighted rows have a custom <strong>${groupName}</strong> price set
-    </p>`;
-
-    const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
-      xmlns:x="urn:schemas-microsoft-com:office:excel"
-      xmlns="http://www.w3.org/TR/REC-html40">
-      <head><meta charset="utf-8">
-        <style>table{border-collapse:collapse;font-family:sans-serif;}</style>
-      </head>
-      <body>
-        <h2 style="font-family:sans-serif;margin-bottom:4px;">${groupName} Group Pricing</h2>
-        ${legend}
-        <table>${headerRow}${dataRows}</table>
-      </body></html>`;
-
-    const blob = new Blob(["\ufeff" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
-    const url  = URL.createObjectURL(blob);
-    const a    = document.createElement("a");
-    a.href     = url;
-    a.download = `Group_Pricing_${groupName.replace(/\s+/g, "_")}.xls`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const marginPct = marginInfo?.marginPct ?? null;
 
   return (
     <AppLayout>
@@ -1657,6 +2021,60 @@ export default function ProductsPage() {
             </Select>
           )}
 
+          {/* In stock only — toggle to hide out-of-stock products */}
+          <Button
+            variant={inStockOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => { setInStockOnly((v) => !v); setNegativeStockOnly(false); }}
+            className="gap-1.5"
+            aria-pressed={inStockOnly}
+          >
+            <Boxes className="w-4 h-4" /> In Stock
+          </Button>
+
+          {/* Negative stock — oversold items whose tracked quantity is below zero */}
+          <Button
+            variant={negativeStockOnly ? "destructive" : "outline"}
+            size="sm"
+            onClick={() => { setNegativeStockOnly((v) => !v); setInStockOnly(false); }}
+            className="gap-1.5"
+            aria-pressed={negativeStockOnly}
+            title="Show only products with negative stock"
+          >
+            <AlertTriangle className="w-4 h-4" /> Negative Stock
+            {negativeStockCount > 0 && (
+              <span className={`ml-0.5 rounded-full px-1.5 text-[11px] font-semibold leading-4 ${
+                negativeStockOnly ? "bg-white/25" : "bg-destructive/10 text-destructive"
+              }`}>
+                {negativeStockCount}
+              </span>
+            )}
+          </Button>
+
+          {/* List / Photo view switch */}
+          <div className="inline-flex rounded-md border p-0.5">
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 px-2"
+              onClick={() => setViewMode("list")}
+              aria-pressed={viewMode === "list"}
+              title="List view"
+            >
+              <List className="w-4 h-4" /> List
+            </Button>
+            <Button
+              variant={viewMode === "photo" ? "secondary" : "ghost"}
+              size="sm"
+              className="h-7 gap-1.5 px-2"
+              onClick={() => setViewMode("photo")}
+              aria-pressed={viewMode === "photo"}
+              title="Photo view"
+            >
+              <LayoutGrid className="w-4 h-4" /> Photo
+            </Button>
+          </div>
+
           {/* Hide / Show Costs — only visible when enabled in Management > Inventory */}
           {showHideCostsBtn && (
             <Button variant="outline" size="sm" onClick={() => setHideCosts((v) => !v)} className="gap-1.5">
@@ -1664,31 +2082,6 @@ export default function ProductsPage() {
               {hideCosts ? "Show Costs" : "Hide Costs"}
             </Button>
           )}
-
-
-          {/* Group Export */}
-          <Popover open={groupExportOpen} onOpenChange={setGroupExportOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <Download className="w-4 h-4" />
-                Group Export
-                <ChevronDown className="w-3 h-3 text-muted-foreground" />
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent align="end" className="w-52 p-1">
-              <p className="text-[11px] text-muted-foreground px-2 py-1.5 font-medium">Export pricing for group</p>
-              {customerGroups.map((group) => (
-                <button
-                  key={group.id}
-                  onClick={() => exportGroupPriceSheet(group.id, group.name)}
-                  className="w-full text-left px-3 py-2 text-sm rounded hover:bg-muted transition-colors flex items-center gap-2"
-                >
-                  <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: group.color }} />
-                  {group.name}
-                </button>
-              ))}
-            </PopoverContent>
-          </Popover>
 
           {/* Add Product */}
           <Button onClick={openCreate} className="ml-auto gap-1.5">
@@ -1783,6 +2176,34 @@ export default function ProductsPage() {
               </PopoverContent>
             </Popover>
 
+            {/* Product type change */}
+            <Popover open={bulkTypePopover} onOpenChange={setBulkTypePopover}>
+              <PopoverTrigger asChild>
+                <Button size="sm" variant="outline" className="gap-1 h-7 text-xs">
+                  <Package className="w-3 h-3" /> Type
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-52 p-1.5" align="start">
+                <p className="text-xs font-medium px-1.5 py-1 text-muted-foreground">Change product type</p>
+                {productTypesList.filter((t) => t.isActive).length === 0 ? (
+                  <p className="px-1.5 py-2 text-xs text-muted-foreground">No product types defined.</p>
+                ) : (
+                  <div className="max-h-[240px] overflow-y-auto">
+                    {productTypesList.filter((t) => t.isActive).map((t) => (
+                      <button
+                        key={t.id}
+                        type="button"
+                        onClick={() => applyBulkType(t.id, t.name)}
+                        className="w-full text-left px-2 py-1.5 text-sm rounded hover:bg-muted transition-colors"
+                      >
+                        {t.name}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+
             <div className="w-px h-4 bg-border shrink-0" />
 
             <Button size="sm" variant="outline" className="h-7 text-xs" onClick={() => handleBulkSetActive(true)} disabled={updateMutation.isPending}>
@@ -1816,6 +2237,7 @@ export default function ProductsPage() {
           </div>
         ) : (
           <>
+            {viewMode === "list" ? (
             <div className="rounded-lg border overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-background border-b">
@@ -1824,6 +2246,7 @@ export default function ProductsPage() {
                       <input type="checkbox" checked={allChecked} onChange={toggleAll}
                         className="rounded border-muted-foreground/40 accent-primary" />
                     </th>
+                    <th className="p-3 w-14 text-left font-medium">Image</th>
                     <SortTh {...sh("Product / SKU", "name")} />
                     <th className="p-3 text-left font-medium whitespace-nowrap">Type</th>
                     <SortTh {...sh("Category", "category")} />
@@ -1832,9 +2255,9 @@ export default function ProductsPage() {
                     <SortTh {...sh("Sell (inc. GST)", "price")} />
                     {!hideCosts && (
                       <>
-                        <th className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">Margin</th>
+                        <th className="p-3 text-right font-medium whitespace-nowrap">Margin</th>
                         {customerGroups.map((group) => (
-                          <th key={group.id} className="p-3 text-right font-medium whitespace-nowrap text-[#16a34a]">
+                          <th key={group.id} className="p-3 text-right font-medium whitespace-nowrap">
                             {group.name} Margin
                           </th>
                         ))}
@@ -1849,10 +2272,11 @@ export default function ProductsPage() {
                     const isChecked   = checked.has(product.id);
                     const productType = (product as Product & { productType?: string }).productType ?? "standard";
                     const isService   = productType === "service";
-                    const isLowStock  = !isService && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+                    const isLowStock  = !NO_STOCK_TYPES.has(productType) && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
                     const cost = product.costPrice ?? null;
                     const sell = product.price;
-                    const marginPct = cost !== null && sell > 0 ? Math.round(((sell - cost) / sell) * 100) : null;
+                    // GST-aware margin: sell inc-GST vs cost ex-GST (see computeMargin).
+                    const marginPct = computeMargin(sell, cost, product.taxRate ?? 10)?.marginPct ?? null;
                     // Effective group prices for the margin columns: a value stored
                     // on the product wins, otherwise the price its group rule would
                     // produce, otherwise the standard sell price — so the columns
@@ -1870,9 +2294,19 @@ export default function ProductsPage() {
                           <input type="checkbox" checked={isChecked} onChange={() => toggleOne(product.id)}
                             className="rounded border-muted-foreground/40 accent-primary" />
                         </td>
-                        <td className="p-3 min-w-[160px]">
-                          <p className="font-medium leading-tight">{product.name}</p>
-                          {product.sku && <p className="text-xs text-muted-foreground mt-0.5">SKU: {product.sku}</p>}
+                        <td className="p-3">
+                          {(() => {
+                            const img = (product as Product & { imageUrl?: string | null }).imageUrl;
+                            return img
+                              ? <img src={img} alt={product.name} className="w-10 h-10 rounded-md object-cover border" />
+                              : <div className="w-10 h-10 rounded-md border bg-muted/40 flex items-center justify-center">
+                                  <Package className="w-4 h-4 text-muted-foreground/50" />
+                                </div>;
+                          })()}
+                        </td>
+                        <td className="p-3 min-w-[160px] max-w-[240px]">
+                          <p className="font-medium leading-tight truncate" title={product.name}>{product.name}</p>
+                          {product.sku && <p className="text-xs text-muted-foreground mt-0.5 truncate" title={product.sku}>SKU: {product.sku}</p>}
                         </td>
                         <td className="p-3 text-muted-foreground text-sm">
                           {(product as Product & { productTypeName?: string | null }).productTypeName
@@ -1881,7 +2315,7 @@ export default function ProductsPage() {
                         </td>
                         <td className="p-3">
                           {product.category
-                            ? <Badge variant="outline" className="text-xs font-normal">{product.category.name}</Badge>
+                            ? <Badge variant="outline" className="text-xs font-normal border-0 px-0">{product.category.name}</Badge>
                             : <span className="text-muted-foreground">—</span>}
                         </td>
                         <td className="p-3 text-muted-foreground text-sm">
@@ -1897,19 +2331,18 @@ export default function ProductsPage() {
                           <>
                             <td className="p-3 text-right">
                               {marginPct != null
-                                ? <span className="text-[#16a34a] font-medium">{marginPct}%</span>
+                                ? <span className={cn("font-medium", marginColorClass(marginPct))}>{marginPct}%</span>
                                 : <span className="text-muted-foreground/50">—</span>}
                             </td>
                             {customerGroups.map((group) => {
                               const stored = (product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[group.id];
                               const groupPrice = stored ?? ruleGroupPrices[group.id] ?? sell;
-                              const groupMarginPct = cost !== null && groupPrice > 0
-                                ? Math.round(((groupPrice - cost) / groupPrice) * 100)
-                                : null;
+                              // Group prices are inc-GST too, so strip GST the same way.
+                              const groupMarginPct = computeMargin(groupPrice, cost, product.taxRate ?? 10)?.marginPct ?? null;
                               return (
                                 <td key={group.id} className="p-3 text-right">
                                   {groupMarginPct != null
-                                    ? <span className={cn("font-medium", groupMarginPct < 0 ? "text-red-500" : "text-[#16a34a]")}>{groupMarginPct}%</span>
+                                    ? <span className={cn("font-medium", marginColorClass(groupMarginPct))}>{groupMarginPct}%</span>
                                     : <span className="text-muted-foreground/50">—</span>}
                                 </td>
                               );
@@ -1918,7 +2351,9 @@ export default function ProductsPage() {
                         )}
                         <td className="p-3">
                           {!isService && product.trackInventory
-                            ? <span className={cn("font-medium", isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]")}>{product.stockQuantity}</span>
+                            ? <span className={cn("font-medium", stockColorsEnabled
+                                ? stockColorClass(product.stockQuantity ?? 0)
+                                : (isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]"))}>{product.stockQuantity}</span>
                             : <span className="text-[#16a34a] font-medium">∞</span>}
                         </td>
                         <td className="p-3">
@@ -1932,6 +2367,68 @@ export default function ProductsPage() {
                 </tbody>
               </table>
             </div>
+            ) : (
+              /* Photo view — tiles reflow to fit the window, so the number per
+                 row grows with the available width rather than being fixed. */
+              <div className="grid gap-4 grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
+                {filtered.map((product) => {
+                  const isChecked   = checked.has(product.id);
+                  const productType = (product as Product & { productType?: string }).productType ?? "standard";
+                  const isService   = productType === "service";
+                  const isLowStock  = !NO_STOCK_TYPES.has(productType) && product.trackInventory && (product.stockQuantity ?? 0) <= (product.lowStockThreshold ?? 5);
+                  const img  = (product as Product & { imageUrl?: string | null }).imageUrl;
+                  const cost = product.costPrice ?? null;
+                  return (
+                    <div
+                      key={product.id}
+                      className={cn(
+                        "group relative rounded-lg border bg-background overflow-hidden cursor-pointer transition-colors hover:bg-muted/30",
+                        isChecked && "border-primary bg-primary/5",
+                      )}
+                      onClick={() => setSelectedProduct(product)}
+                    >
+                      {/* Select checkbox overlays the image so bulk actions work here too */}
+                      <div className="absolute top-2 left-2 z-10" onClick={(e) => e.stopPropagation()}>
+                        <input type="checkbox" checked={isChecked} onChange={() => toggleOne(product.id)}
+                          className="rounded border-muted-foreground/40 accent-primary bg-background/90" />
+                      </div>
+                      {product.isActive === false && (
+                        <Badge variant="secondary" className="absolute top-2 right-2 z-10 text-[10px]">Inactive</Badge>
+                      )}
+
+                      <div className="aspect-square bg-muted/30 flex items-center justify-center overflow-hidden">
+                        {img
+                          ? <img src={img} alt={product.name} loading="lazy" className="w-full h-full object-cover" />
+                          : <Package className="w-10 h-10 text-muted-foreground/30" />}
+                      </div>
+
+                      {/* Description and cost sit below the image */}
+                      <div className="p-3 space-y-1">
+                        <p className="font-medium text-sm leading-tight line-clamp-2" title={product.name}>{product.name}</p>
+                        {product.description
+                          ? <p className="text-xs text-muted-foreground line-clamp-2" title={product.description}>{product.description}</p>
+                          : product.sku && <p className="text-xs text-muted-foreground truncate">SKU: {product.sku}</p>}
+                        <div className="flex items-baseline justify-between gap-2 pt-1">
+                          <span className="font-semibold text-sm">{formatCurrency(product.price)}</span>
+                          {!isService && product.trackInventory
+                            ? <span className={cn("text-xs font-medium", stockColorsEnabled
+                                ? stockColorClass(product.stockQuantity ?? 0)
+                                : (isLowStock ? "text-amber-600" : (product.stockQuantity ?? 0) <= 0 ? "text-red-500" : "text-[#16a34a]"))}>
+                                {product.stockQuantity} in stock
+                              </span>
+                            : <span className="text-xs text-[#16a34a] font-medium">∞</span>}
+                        </div>
+                        {!hideCosts && (
+                          <p className="text-xs text-muted-foreground">
+                            Cost: {cost != null ? formatCurrency(cost) : "—"}
+                          </p>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
 
             <p className="text-xs text-muted-foreground text-right">
               {filtered.length} product{filtered.length !== 1 ? "s" : ""}
@@ -2024,6 +2521,13 @@ export default function ProductsPage() {
                     </p>
                   )}
 
+                  {bulkActionPending.type === "set_product_type" && (
+                    <p className="text-sm text-muted-foreground">
+                      New product type:{" "}
+                      <span className="font-medium text-foreground">{bulkActionPending.typeName}</span>
+                    </p>
+                  )}
+
                   {bulkActionPending.type === "delete" && (
                     <p className="text-sm text-destructive font-medium">This cannot be undone.</p>
                   )}
@@ -2060,7 +2564,7 @@ export default function ProductsPage() {
         if (!open && isDirtyProduct) { setPendingProductClose(true); return; }
         setDialogOpen(open);
       }}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle>
@@ -2131,6 +2635,7 @@ export default function ProductsPage() {
                       autoFocus
                     />
                   </div>
+                  {form.productType !== "time_card" && (
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Description</Label>
                     <Textarea
@@ -2141,6 +2646,7 @@ export default function ProductsPage() {
                       className="mt-1.5 resize-none"
                     />
                   </div>
+                  )}
                   <div className="col-span-2">
                     <Label className="text-xs text-muted-foreground">Product Type</Label>
                     {productTypesList.length > 0 ? (
@@ -2158,7 +2664,7 @@ export default function ProductsPage() {
                                 "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
                                 active
                                   ? "border-primary bg-primary/5 text-primary"
-                                  : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                                  : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
                               )}
                             >
                               <Icon className="w-4 h-4" />
@@ -2178,7 +2684,7 @@ export default function ProductsPage() {
                               "flex flex-col items-center gap-1 py-2.5 px-2 rounded-lg border-2 text-center transition-all",
                               form.productType === value
                                 ? "border-primary bg-primary/5 text-primary"
-                                : "border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
+                                : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground hover:text-foreground"
                             )}
                           >
                             <Icon className="w-4 h-4" />
@@ -2188,6 +2694,34 @@ export default function ProductsPage() {
                       </div>
                     )}
                   </div>
+                  {form.productType === "time_card" && (
+                    <div className="col-span-2">
+                      <Label className="text-xs text-muted-foreground">Time Granted</Label>
+                      <div className="flex items-center gap-2 mt-1.5">
+                        <Input
+                          type="number" min="0" className="w-24"
+                          value={Math.floor((parseInt(form.timeCardMinutes) || 0) / 60) || ""}
+                          onChange={(e) => {
+                            const h = parseInt(e.target.value) || 0;
+                            const m = (parseInt(form.timeCardMinutes) || 0) % 60;
+                            setField("timeCardMinutes", String(h * 60 + m));
+                          }}
+                        />
+                        <span className="text-sm text-muted-foreground">hours</span>
+                        <Input
+                          type="number" min="0" max="59" className="w-24"
+                          value={(parseInt(form.timeCardMinutes) || 0) % 60 || ""}
+                          onChange={(e) => {
+                            const m = parseInt(e.target.value) || 0;
+                            const h = Math.floor((parseInt(form.timeCardMinutes) || 0) / 60);
+                            setField("timeCardMinutes", String(h * 60 + m));
+                          }}
+                        />
+                        <span className="text-sm text-muted-foreground">minutes</span>
+                      </div>
+                      <p className="text-[11px] text-muted-foreground mt-1">Prepaid time this card grants. Sold at the POS, it starts a timer on the dashboard.</p>
+                    </div>
+                  )}
                   <div>
                     <Label className="text-xs text-muted-foreground">SKU Code</Label>
                     <div className="flex gap-1.5 mt-1.5">
@@ -2335,6 +2869,7 @@ export default function ProductsPage() {
                 )}
 
                 {/* Warranty — printed on receipts/invoices and tracked under Products > Warranty */}
+                {form.productType !== "time_card" && (
                 <div className="border-t pt-4">
                   <SectionHeader label="Warranty" />
                   <p className="text-xs text-muted-foreground mt-1">
@@ -2358,6 +2893,25 @@ export default function ProductsPage() {
                     </Select>
                   </div>
                 </div>
+                )}
+
+                {/* Serial number / IMEI tracking */}
+                {form.productType !== "time_card" && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center justify-between gap-4">
+                    <div>
+                      <SectionHeader label="Serial Number / IMEI" />
+                      <p className="text-xs text-muted-foreground mt-1">
+                        When on, each unit carries a unique Serial Number / IMEI. You'll be prompted to enter one per unit when receiving stock on a purchase order, and to pick one when selling.
+                      </p>
+                    </div>
+                    <Switch
+                      checked={form.tracksSerial}
+                      onCheckedChange={(v) => setField("tracksSerial", v)}
+                    />
+                  </div>
+                </div>
+                )}
 
                 {/* Physical details — only for standard products */}
                 {form.productType === "standard" && (
@@ -2407,6 +2961,7 @@ export default function ProductsPage() {
             {formTab === "pricing" && (
               <div className="py-5 space-y-6">
                 {/* Supplier */}
+                {form.productType !== "time_card" && (
                 <div>
                   <SectionHeader label="Supplier" />
                   <div className="mt-3 grid grid-cols-2 gap-4">
@@ -2429,6 +2984,7 @@ export default function ProductsPage() {
                     </div>
                   </div>
                 </div>
+                )}
 
                 {/* Standard pricing */}
                 <div className="border-t pt-5">
@@ -2476,7 +3032,8 @@ export default function ProductsPage() {
                       <DollarSign className="w-3.5 h-3.5 shrink-0" />
                       <span>
                         Margin: <span className={cn("font-semibold", marginPct < 20 ? "text-destructive" : "text-emerald-600")}>{marginPct}%</span>
-                        {" · "}Profit: <span className="font-semibold text-foreground">${(parseFloat(form.price) - parseFloat(form.costPrice)).toFixed(2)}</span>
+                        {" · "}Profit: <span className="font-semibold text-foreground">${(marginInfo?.profit ?? 0).toFixed(2)}</span>
+                        {" · "}<span className="text-xs">ex-GST</span>
                       </span>
                     </div>
                   )}
@@ -2745,10 +3302,10 @@ export default function ProductsPage() {
 
                 {/* ePay switch */}
                 <div>
-                  <SectionHeader label="ePay Mode" />
+                  <SectionHeader label="Physical/Printed Mode" />
                   <div className="mt-3 flex items-center justify-between p-3.5 border rounded-xl hover:bg-muted/20 transition-colors">
                     <div>
-                      <p className="text-sm font-medium">ePay / Physical Card</p>
+                      <p className="text-sm font-medium">Physical or Printed Card</p>
                       <p className="text-xs text-muted-foreground mt-0.5">
                         When enabled, no digital code is printed on the receipt — the card processes its own code at the terminal.
                       </p>
@@ -2889,7 +3446,7 @@ export default function ProductsPage() {
                         "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
                         !pcPartType
                           ? "border-primary bg-primary/5 text-primary font-medium"
-                          : "border-border hover:border-muted-foreground/40 text-muted-foreground"
+                          : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground"
                       )}
                     >
                       <Package className="w-3.5 h-3.5 shrink-0" />
@@ -2904,7 +3461,7 @@ export default function ProductsPage() {
                           "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
                           pcPartType === id
                             ? "border-primary bg-primary/5 text-primary font-medium"
-                            : "border-border hover:border-muted-foreground/40 text-muted-foreground"
+                            : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground"
                         )}
                       >
                         <Icon className="w-3.5 h-3.5 shrink-0" />
@@ -3118,32 +3675,29 @@ export default function ProductsPage() {
           </div>
 
           {/* Footer */}
-          <div className="flex items-center justify-between px-6 py-4 border-t bg-muted/10 shrink-0">
-            <div className="flex gap-2">
-              {!isFirstTab && (
-                <Button variant="outline" onClick={goPrevTab} className="gap-1.5">
-                  <ChevronLeft className="w-4 h-4" /> Previous
-                </Button>
-              )}
-              {!isLastTab && (
-                <Button variant="outline" onClick={goNextTab} className="gap-1.5">
-                  Next Tab <ChevronRight className="w-4 h-4" />
-                </Button>
-              )}
+          <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
+            <div className="flex gap-2 items-center">
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={isFirstTab} title="Previous tab">
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={isLastTab} title="Next tab">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
             </div>
-            <div className="flex gap-2">
-              <Button variant="outline" onClick={() => {
+            <div className="flex gap-2 items-center">
+              <Button variant="outline" size="sm" onClick={() => {
                 if (isDirtyProduct) { setPendingProductClose(true); return; }
                 setDialogOpen(false);
               }}>Cancel</Button>
               <Button
+                size="sm"
                 onClick={handleSave}
                 disabled={createMutation.isPending || updateMutation.isPending}
               >
                 {editingProduct ? "Save Changes" : "Create Product"}
               </Button>
             </div>
-          </div>
+          </DialogFooter>
         </DialogContent>
       </Dialog>
 

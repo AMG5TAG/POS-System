@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, kpiSettingsTable, kpiTargetsTable, merchantsTable } from "@workspace/db";
-import { eq, and, ne } from "drizzle-orm";
+import { db, kpiSettingsTable, kpiTargetsTable, kpiHistoryTable, merchantsTable } from "@workspace/db";
+import { eq, and, ne, desc } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { computeActual } from "./kpi-calc";
@@ -51,9 +51,9 @@ router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
 
 router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true", startDate = null, endDate = null } = req.body;
+  const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true", startDate = null, endDate = null, repeats = "false" } = req.body;
   if (!targetId || !name || !metric) { res.status(400).json({ error: "targetId, name, and metric are required" }); return; }
-  const [row] = await db.insert(kpiTargetsTable).values({ merchantId, targetId, name, metric, categoryId, period, target, staffIds, reward, notes, isActive, startDate, endDate }).returning();
+  const [row] = await db.insert(kpiTargetsTable).values({ merchantId, targetId, name, metric, categoryId, period, target, staffIds, reward, notes, isActive, startDate, endDate, repeats }).returning();
   res.status(201).json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
@@ -61,7 +61,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
-  const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive, showOnDashboard, startDate, endDate } = req.body;
+  const { name, metric, categoryId, period, target, staffIds, reward, notes, isActive, showOnDashboard, startDate, endDate, repeats } = req.body;
 
   // When marking this KPI for dashboard display, unset all others first
   if (showOnDashboard === "true") {
@@ -83,6 +83,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   if (showOnDashboard  !== undefined) updates.showOnDashboard = showOnDashboard;
   if (startDate        !== undefined) updates.startDate       = startDate;
   if (endDate          !== undefined) updates.endDate         = endDate;
+  if (repeats          !== undefined) updates.repeats         = repeats;
 
   const [row] = await db.update(kpiTargetsTable)
     .set(updates)
@@ -97,6 +98,32 @@ router.delete("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   await db.delete(kpiTargetsTable).where(and(eq(kpiTargetsTable.id, id), eq(kpiTargetsTable.merchantId, merchantId)));
   res.status(204).end();
+});
+
+/* ── History (archived completed periods) ──────────────────────────────────── */
+
+router.get("/kpi-history", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  // No default cap — the scheduler prunes old snapshots to a per-period
+  // retention limit, so the table is already bounded. An explicit ?limit is
+  // still honoured for callers that only want the most recent few.
+  const limitRaw = parseInt(String(req.query.limit ?? ""), 10);
+  const limit = Number.isFinite(limitRaw) && limitRaw > 0 ? limitRaw : null;
+
+  const base = db.select().from(kpiHistoryTable)
+    .where(eq(kpiHistoryTable.merchantId, merchantId))
+    .orderBy(desc(kpiHistoryTable.periodStart), desc(kpiHistoryTable.id));
+  const rows = limit != null ? await base.limit(limit) : await base;
+
+  const items = rows.map((r) => ({
+    ...r,
+    target: parseFloat(r.target as unknown as string),
+    actual: r.actual != null ? parseFloat(r.actual as unknown as string) : null,
+    periodStart: r.periodStart.toISOString(),
+    periodEnd: r.periodEnd.toISOString(),
+    createdAt: r.createdAt.toISOString(),
+  }));
+  res.json({ items, total: items.length });
 });
 
 /* ── Progress (all active targets) ─────────────────────────────────────────── */

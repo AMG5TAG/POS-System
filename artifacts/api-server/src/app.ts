@@ -1,17 +1,32 @@
 import express, { type Express } from "express";
 import cors from "cors";
+import helmet from "helmet";
 import session from "express-session";
 import connectPgSimple from "connect-pg-simple";
 import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
+import { errorHandler } from "./middlewares/errorHandler";
 import { publicOrigin } from "./lib/publicUrl";
+import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
 const PgSession = connectPgSimple(session);
 
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+// Security headers. CSP is disabled here because this is a JSON/redirect API —
+// the SPA is served (and sets its own CSP) elsewhere, and a restrictive default
+// CSP would risk breaking HTML/redirect responses. CORP is set to cross-origin
+// so the SPA (a different origin, behind the proxy) can load API-served
+// resources like generated PDFs and QR images.
+app.use(
+  helmet({
+    contentSecurityPolicy: false,
+    crossOriginResourcePolicy: { policy: "cross-origin" },
+  }),
+);
 
 app.use(
   pinoHttp({
@@ -51,6 +66,9 @@ const allowedOrigins: Set<string> = new Set();
 if (isProduction) {
   // The app's public origin (koapos.com.au, or APP_BASE_URL/PUBLIC_DOMAIN override).
   allowedOrigins.add(publicOrigin());
+  // The branded short-link domain serves the SPA, which calls the API
+  // cross-origin to resolve a slug → destination before redirecting.
+  allowedOrigins.add(`https://${SHORT_DOMAIN}`);
   // The internal hosting domain, so same-host requests keep working post-deploy.
   if (process.env.REPLIT_DOMAINS) {
     for (const domain of process.env.REPLIT_DOMAINS.split(",")) {
@@ -93,9 +111,16 @@ app.use(
   })
 );
 
-app.use(express.json({ limit: "10mb" }));
+// Capture the raw request body so webhook handlers (e.g. Zip Pay) can verify
+// provider HMAC signatures over the exact bytes received.
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, _res, buf) => { (req as express.Request & { rawBody?: string }).rawBody = buf.toString("utf8"); },
+}));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
+
+app.use(errorHandler);
 
 export default app;

@@ -1,5 +1,6 @@
 import { useGetMerchant } from "@workspace/api-client-react";
 import { COUNTRY_STATES } from "@/lib/localisation";
+import { expandState } from "@/lib/address-format";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
@@ -38,6 +39,7 @@ export function StateSelectInput({ value, onChange, placeholder = "State / Provi
     <Input
       value={value}
       onChange={(e) => onChange(e.target.value)}
+      onBlur={(e) => onChange(expandState(e.target.value))}
       placeholder={placeholder}
       className={cn("rounded-full", className)}
     />
