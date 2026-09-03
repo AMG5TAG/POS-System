@@ -528,7 +528,7 @@ export function ServiceJobDetailDialog({
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parts &amp; Labour</span>
               </div>
               <div className="p-4">
-                <ServiceJobLinesPanel jobId={job.id} customerId={job.customerId} />
+                <ServiceJobLinesPanel jobId={job.id} jobNumber={job.jobNumber} customerId={job.customerId} />
               </div>
             </div>
             )}

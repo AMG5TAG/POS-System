@@ -70,10 +70,10 @@ import { LocationSwitcher } from "@/components/layout/location-switcher";
 
 const POS_SUBNAV = [
   { name: "Sell",      href: "/pos/sell",            icon: ShoppingCart },
+  { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
   { name: "3D Prints", href: "/pos/3d-prints",  icon: Cpu },
   { name: "PC Builder", href: "/pos/pc-builder", icon: HardDrive },
   { name: "History",   href: "/pos/history",    icon: History },
-  { name: "Invoices",  href: "/pos/invoices",   icon: FileText },
   { name: "Quotes",    href: "/pos/quotes",     icon: ClipboardList },
   { name: "Laybys",    href: "/pos/laybys",    icon: Package2 },
   { name: "Pre-Orders", href: "/pos/pre-orders", icon: Clock },

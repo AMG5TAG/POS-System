@@ -12,7 +12,7 @@ import { useListIntegrations } from "@workspace/api-client-react";
 import { cn } from "@/lib/utils";
 import { CLOUD_META, CloudFallbackImg } from "./shared";
 
-const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox"]);
+const CLOUD_KEYS = new Set(["google_drive", "onedrive", "dropbox", "nextcloud"]);
 
 export default function CloudStoragePage() {
   const { data: integrationsData = [] } = useListIntegrations();
@@ -26,7 +26,7 @@ export default function CloudStoragePage() {
           <div>
             <h1 className="text-2xl font-bold">Cloud Storage</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Google Drive, OneDrive and Dropbox connections, and the folders KoaPOS keeps in sync.
+              Google Drive, OneDrive, Dropbox and Nextcloud connections, and the folders KoaPOS keeps in sync.
             </p>
           </div>
           <Button variant="outline" onClick={() => {

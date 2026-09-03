@@ -28,6 +28,7 @@ export const CLOUD_META: Record<string, { label: string; bg: string; text: strin
   google_drive: { label: "Google Drive", bg: "bg-[#4285F4]", text: "G", src: _SI("googledrive", "ffffff") },
   onedrive:     { label: "OneDrive",     bg: "bg-[#0078D4]", text: "O", src: _SI("onedrive",    "ffffff") },
   dropbox:      { label: "Dropbox",      bg: "bg-[#0061FF]", text: "D", src: _SI("dropbox",     "ffffff") },
+  nextcloud:    { label: "Nextcloud",    bg: "bg-[#0082C9]", text: "N", src: _SI("nextcloud",   "ffffff") },
 };
 
 export function CloudFallbackImg({ src, alt, size, fallback }: { src: string; alt: string; size: string; fallback: string }) {
