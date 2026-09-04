@@ -704,9 +704,9 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Contact",     "customerName")} />
                         <SortableHeader {...sh("Date",        "bookInDate")} />
                         <SortableHeader {...sh("Status",      "status")} />
-                        <th className="px-3 py-3 text-left font-medium select-none">Called</th>
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
+                        <th className="px-3 py-3 text-left font-medium select-none">Called</th>
                         <th className="px-3 py-3" />
                       </tr>
                     </thead>
@@ -760,6 +760,18 @@ export default function ServiceJobsPage() {
                               </span>
                             </td>
 
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              {job.deviceType
+                                ? <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border border-border">{job.deviceType}</span>
+                                : <span className="text-muted-foreground">—</span>}
+                            </td>
+
+                            <td className="px-3 py-3 max-w-[220px]">
+                              <span className="text-xs text-foreground line-clamp-1">
+                                {job.workDescription || job.deviceDescription || "—"}
+                              </span>
+                            </td>
+
                             {/* Blank unless the job is awaiting pickup: elsewhere
                                 "not called" is not outstanding work, and a dash on
                                 every other row would read as one. An empty box on a
@@ -781,18 +793,6 @@ export default function ServiceJobsPage() {
                                   className="inline-block h-4 w-4 rounded-sm border border-muted-foreground/40"
                                 />
                               )}
-                            </td>
-
-                            <td className="px-3 py-3 whitespace-nowrap">
-                              {job.deviceType
-                                ? <span className="inline-flex items-center px-2 py-0.5 rounded text-[11px] bg-muted text-muted-foreground border border-border">{job.deviceType}</span>
-                                : <span className="text-muted-foreground">—</span>}
-                            </td>
-
-                            <td className="px-3 py-3 max-w-[220px]">
-                              <span className="text-xs text-foreground line-clamp-1">
-                                {job.workDescription || job.deviceDescription || "—"}
-                              </span>
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
