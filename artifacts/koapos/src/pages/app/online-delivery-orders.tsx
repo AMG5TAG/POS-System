@@ -20,7 +20,7 @@ import { expandStreetType } from "@/lib/address-format";
 import {
   Truck, Package, Clock, CheckCircle2, XCircle, ChefHat, Bike,
   Plus, Eye, RefreshCw, Phone, MapPin, StickyNote, ChevronRight,
-  Receipt, Printer,
+  Receipt, Printer, Check,
 } from "lucide-react";
 import {
   useListDeliveryOrders,
@@ -52,6 +52,8 @@ interface DeliveryOrder {
   estimatedAt?: string;
   total: number;
   note?: string;
+  /** Whether the money is in. Only a paid order counts towards takings. */
+  paymentStatus: "pending" | "paid" | "refunded";
 }
 
 type ApiOrder = Record<string, unknown>;
@@ -76,6 +78,7 @@ function apiToLocal(o: ApiOrder): DeliveryOrder {
     estimatedAt: o.placedAt ? String(o.placedAt) : undefined,
     total: parseFloat(String(o.total ?? 0)),
     note: o.notes ? String(o.notes) : undefined,
+    paymentStatus: (o.paymentStatus as DeliveryOrder["paymentStatus"]) ?? "pending",
   };
 }
 
@@ -225,6 +228,19 @@ export default function OnlineDeliveryOrdersPage() {
 
   const rawOrders = (response?.items ?? []) as unknown as ApiOrder[];
   const orders: DeliveryOrder[] = rawOrders.map(apiToLocal);
+  /* Marking an order paid is what books it as a sale — an online order is a
+     claim on revenue until the money is actually in. Stock and the customer's
+     totals moved when the order was placed, so this only records the takings. */
+  const markPaid = (order: DeliveryOrder) => {
+    updateOrder.mutate(
+      { id: Number(order.id), data: { paymentStatus: "paid" } as never },
+      {
+        onSuccess: () => { refetch(); toast.success(`Order ${order.orderId} marked paid — recorded in takings`); },
+        onError: () => toast.error("Couldn't mark this order paid"),
+      },
+    );
+  };
+
   const activeOrders = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
   const completedOrders = orders.filter((o) => o.status === "delivered" || o.status === "cancelled");
 
@@ -431,6 +447,19 @@ export default function OnlineDeliveryOrdersPage() {
                   </div>
                 </div>
                 <DialogFooter className="gap-2">
+                  {viewOrder.paymentStatus === "paid" ? (
+                    <span className="flex-1 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                      <Check className="w-4 h-4" /> Paid — recorded in takings
+                    </span>
+                  ) : (
+                    <Button
+                      variant="outline" className="flex-1"
+                      onClick={() => { markPaid(viewOrder); setViewOrder(null); }}
+                      disabled={updateOrder.isPending}
+                    >
+                      <Check className="w-4 h-4 mr-1" /> Mark Paid
+                    </Button>
+                  )}
                   {STATUS_FLOW[viewOrder.status] && (
                     <Button className="flex-1" onClick={() => { advanceStatus(viewOrder); setViewOrder(null); }}>
                       <ChevronRight className="w-4 h-4 mr-1" /> {STATUS_CONFIG[STATUS_FLOW[viewOrder.status]!].label}

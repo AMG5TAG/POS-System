@@ -8993,6 +8993,11 @@ export const ListDeliveryOrdersResponse = zod.object({
   "total": zod.number(),
   "items": zod.string(),
   "notes": zod.string(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'refunded']).describe('Whether the money has actually been received. An order counts towards revenue only once this is \"paid\" — moving it there records the sale.'),
+  "paymentProvider": zod.string().optional(),
+  "subtotal": zod.number().optional(),
+  "taxTotal": zod.number().optional(),
+  "discountTotal": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })),
   "total": zod.number()
@@ -9018,7 +9023,10 @@ export const CreateDeliveryOrderBody = zod.object({
   "placedAt": zod.string().optional(),
   "total": zod.number().optional(),
   "items": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'refunded']).optional().describe('Setting this to \"paid\" records the order as a sale, so it appears in the merchant\'s takings. Stock and customer spend were already applied when the order was placed, so neither moves again.'),
+  "paymentProvider": zod.string().optional(),
+  "paymentRef": zod.string().optional()
 })
 
 
@@ -9048,6 +9056,11 @@ export const GetDeliveryOrderResponse = zod.object({
   "total": zod.number(),
   "items": zod.string(),
   "notes": zod.string(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'refunded']).describe('Whether the money has actually been received. An order counts towards revenue only once this is \"paid\" — moving it there records the sale.'),
+  "paymentProvider": zod.string().optional(),
+  "subtotal": zod.number().optional(),
+  "taxTotal": zod.number().optional(),
+  "discountTotal": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
 
@@ -9075,7 +9088,10 @@ export const UpdateDeliveryOrderBody = zod.object({
   "placedAt": zod.string().optional(),
   "total": zod.number().optional(),
   "items": zod.string().optional(),
-  "notes": zod.string().optional()
+  "notes": zod.string().optional(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'refunded']).optional().describe('Setting this to \"paid\" records the order as a sale, so it appears in the merchant\'s takings. Stock and customer spend were already applied when the order was placed, so neither moves again.'),
+  "paymentProvider": zod.string().optional(),
+  "paymentRef": zod.string().optional()
 })
 
 export const UpdateDeliveryOrderResponse = zod.object({
@@ -9097,6 +9113,11 @@ export const UpdateDeliveryOrderResponse = zod.object({
   "total": zod.number(),
   "items": zod.string(),
   "notes": zod.string(),
+  "paymentStatus": zod.enum(['pending', 'paid', 'refunded']).describe('Whether the money has actually been received. An order counts towards revenue only once this is \"paid\" — moving it there records the sale.'),
+  "paymentProvider": zod.string().optional(),
+  "subtotal": zod.number().optional(),
+  "taxTotal": zod.number().optional(),
+  "discountTotal": zod.number().optional(),
   "createdAt": zod.coerce.date()
 })
 

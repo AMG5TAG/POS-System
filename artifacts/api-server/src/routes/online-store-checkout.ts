@@ -378,7 +378,13 @@ router.post("/online-store/public/b/:username/o/:slug/checkout", async (req, res
         status: "pending",
         placedAt: new Date().toISOString(),
         total: String(total),
-        items: JSON.stringify(lines.map((l) => ({ name: l.name, qty: l.qty, price: l.price }))),
+        /* productId/taxRate/lineTotal are carried so the order can later be
+           booked as a sale attributed to real products; older rows predate them
+           and convert on name alone. */
+        items: JSON.stringify(lines.map((l) => ({
+          productId: l.productId, name: l.name, qty: l.qty,
+          price: l.price, taxRate: l.taxRate, lineTotal: l.lineTotal,
+        }))),
         notes: body.notes,
         subtotal: String(subtotal),
         discountCode: appliedCode,

@@ -4980,6 +4980,18 @@ export interface MarketplaceConnectionListResponse {
   total: number;
 }
 
+/**
+ * Whether the money has actually been received. An order counts towards revenue only once this is "paid" — moving it there records the sale.
+ */
+export type DeliveryOrderPaymentStatus = typeof DeliveryOrderPaymentStatus[keyof typeof DeliveryOrderPaymentStatus];
+
+
+export const DeliveryOrderPaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  refunded: 'refunded',
+} as const;
+
 export interface DeliveryOrder {
   id: number;
   merchantId: number;
@@ -4999,8 +5011,26 @@ export interface DeliveryOrder {
   total: number;
   items: string;
   notes: string;
+  /** Whether the money has actually been received. An order counts towards revenue only once this is "paid" — moving it there records the sale. */
+  paymentStatus: DeliveryOrderPaymentStatus;
+  paymentProvider?: string;
+  subtotal?: number;
+  taxTotal?: number;
+  discountTotal?: number;
   createdAt: string;
 }
+
+/**
+ * Setting this to "paid" records the order as a sale, so it appears in the merchant's takings. Stock and customer spend were already applied when the order was placed, so neither moves again.
+ */
+export type DeliveryOrderInputPaymentStatus = typeof DeliveryOrderInputPaymentStatus[keyof typeof DeliveryOrderInputPaymentStatus];
+
+
+export const DeliveryOrderInputPaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  refunded: 'refunded',
+} as const;
 
 export interface DeliveryOrderInput {
   orderId: string;
@@ -5019,6 +5049,10 @@ export interface DeliveryOrderInput {
   total?: number;
   items?: string;
   notes?: string;
+  /** Setting this to "paid" records the order as a sale, so it appears in the merchant's takings. Stock and customer spend were already applied when the order was placed, so neither moves again. */
+  paymentStatus?: DeliveryOrderInputPaymentStatus;
+  paymentProvider?: string;
+  paymentRef?: string;
 }
 
 export interface DeliveryOrderListResponse {
