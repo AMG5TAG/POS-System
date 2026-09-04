@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
@@ -90,12 +90,6 @@ function DetailRow({ icon: Icon, label, value, href }: {
       </div>
     </div>
   );
-}
-
-/* A tel: link has to be digits (and a leading +) — a number stored as
-   "0412 345 678" dials as nothing on a phone or softphone otherwise. */
-function telHref(phone: string): string {
-  return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
 /* ─── Exported dialog ─────────────────────────────────────────────────── */

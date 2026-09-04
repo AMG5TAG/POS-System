@@ -6,7 +6,7 @@ import {
   StickyNote, Upload, FileText, Play, X, ChevronDown,
   CalendarClock, Plus, Clock, User, Check,
 } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 import { setHomeScreenApp } from "@/lib/home-screen";
 
 /**
@@ -495,7 +495,7 @@ function JobDetailView({ jobId, onBack }: { jobId: number; onBack: () => void })
             <p className="text-sm font-semibold">{job.customerName ?? "Walk-in"}</p>
             <div className="flex gap-2 flex-wrap">
               {job.customerPhone && (
-                <a href={`tel:${job.customerPhone}`} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs font-medium">
+                <a href={telHref(job.customerPhone)} className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-muted text-xs font-medium">
                   <Phone className="w-3.5 h-3.5" /> {job.customerPhone}
                 </a>
               )}
