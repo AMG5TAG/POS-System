@@ -8,6 +8,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -17,7 +18,7 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
-  Trash2, Eye, ChevronLeft, ChevronRight, FileText,
+  Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -66,6 +67,10 @@ function buildNoteTimestamp(): string {
   const pad = (n: number) => n.toString().padStart(2, "0");
   return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
 }
+
+/* The one note a repair shop writes over and over. Kept as a constant so the
+   tick box that writes it and the lookup that detects it cannot drift. */
+const CALL_NOTE_TEXT = "Called customer";
 
 function appendNote(existing: string | null | undefined, text: string): string {
   const ts = buildNoteTimestamp();
@@ -191,10 +196,15 @@ export function ServiceJobDetailDialog({
   const [showAll,     setShowAll]     = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
 
-  type SvcTab = "details" | "service" | "notes" | "files";
+  type SvcTab = "details" | "service" | "quote" | "notes" | "files";
+  /* Quote is a tab in its own right rather than a section buried under Service:
+     it is the document the customer agrees to, and the one the till offers to
+     import when this job is linked to a sale. A merchant who has switched the
+     section off gets no tab at all rather than an empty one. */
   const TABS: { key: SvcTab; label: string }[] = [
     { key: "details", label: "Details" },
     { key: "service", label: "Service" },
+    ...(show("showQuote") ? [{ key: "quote" as const, label: "Quote" }] : []),
     { key: "notes",   label: "Notes"   },
     { key: "files",   label: "Files"   },
   ];
@@ -213,6 +223,12 @@ export function ServiceJobDetailDialog({
     setShowAll(false);
     setTab("details");
   }, [job?.id]);
+
+  /* Service Options can switch a section off while the dialog is open, taking
+     its tab with it — don't strand the user on a tab that no longer exists. */
+  useEffect(() => {
+    if (tabIndex === -1) setTab("details");
+  }, [tabIndex]);
 
   if (!job) return null;
 
@@ -250,6 +266,25 @@ export function ServiceJobDetailDialog({
       {
         onSuccess: () => { invalidate(); setNewNoteText(""); toast.success("Note appended"); },
         onError: () => toast.error("Failed to save note"),
+      }
+    );
+  };
+
+  /* Timestamp of the most recent call note, or null if the customer has never
+     been rung. Read back out of the notes themselves so the box reflects what
+     is actually on the job rather than any separate flag that could drift. */
+  const lastCalledAt = [...parseNotes(job.notes)].reverse().reduce<string | null>((found, n) => {
+    if (found) return found;
+    const m = n.match(/^\[([^\]]+)\]\s*(.+)$/);
+    return m && m[2].trim() === CALL_NOTE_TEXT ? m[1] : null;
+  }, null);
+
+  const handleLogCall = () => {
+    updateMutation.mutate(
+      { id: job.id, data: { notes: appendNote(job.notes, CALL_NOTE_TEXT) } as never },
+      {
+        onSuccess: () => { invalidate(); toast.success("Call logged"); },
+        onError: () => toast.error("Failed to log call"),
       }
     );
   };
@@ -521,21 +556,6 @@ export function ServiceJobDetailDialog({
               </div>
             )}
 
-            {/* Quote — what the customer is being offered. Sits above Parts &
-                Labour because it is agreed first, and it is the document the
-                POS offers to import when this job is linked to a sale. */}
-            {show("showQuote") && (
-            <div className="rounded-xl border bg-muted/20">
-              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
-                <FileText className="w-3.5 h-3.5 text-primary" />
-                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote</span>
-              </div>
-              <div className="p-4">
-                <ServiceJobQuotePanel jobId={job.id} customerId={job.customerId} />
-              </div>
-            </div>
-            )}
-
             {/* Parts & Labour */}
             {show("showPartsLabour") && (
             <div className="rounded-xl border bg-muted/20">
@@ -628,6 +648,23 @@ export function ServiceJobDetailDialog({
             )}
             </>)}
 
+            {tab === "quote" && (<>
+            {/* What the customer is being offered — distinct from Parts & Labour
+                on the Service tab, which is what was actually consumed. This is
+                the document the POS imports when the job is linked to a sale. */}
+            {show("showQuote") && (
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <FileText className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobQuotePanel jobId={job.id} customerId={job.customerId} />
+              </div>
+            </div>
+            )}
+            </>)}
+
             {tab === "notes" && (<>
             {/* Notes */}
             {show("showNotes") && (
@@ -637,6 +674,28 @@ export function ServiceJobDetailDialog({
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</span>
               </div>
               <div className="p-4 space-y-3">
+                {/* One-click log for the note a repair shop writes most: ringing
+                    the customer. Notes are an append-only log, so this only ever
+                    ticks on — unticking could not unsay the call, and the box
+                    goes read-only once it has happened. Repeat calls go through
+                    the free-text box below. */}
+                <label
+                  className={cn(
+                    "flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5",
+                    lastCalledAt ? "text-muted-foreground" : "cursor-pointer hover:bg-muted/40",
+                  )}
+                >
+                  <Checkbox
+                    checked={!!lastCalledAt}
+                    disabled={!!lastCalledAt || updateMutation.isPending}
+                    onCheckedChange={(checked) => { if (checked) handleLogCall(); }}
+                  />
+                  <PhoneCall className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="text-sm">
+                    {lastCalledAt ? `Called customer — ${lastCalledAt}` : "Customer called"}
+                  </span>
+                </label>
+
                 {/* Append note input */}
                 <div className="flex gap-2 items-start">
                   <Textarea
