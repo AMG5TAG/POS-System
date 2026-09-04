@@ -69,10 +69,12 @@ function formatDate(d: string) {
 
 /* ─── Detail row ────────────────────────────────────────────────────────── */
 
-function DetailRow({ icon: Icon, label, value }: {
+function DetailRow({ icon: Icon, label, value, href }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value?: string | null;
+  /** When set, the value becomes a link — a `mailto:`/`tel:` for contact rows. */
+  href?: string;
 }) {
   if (!value) return null;
   return (
@@ -80,10 +82,20 @@ function DetailRow({ icon: Icon, label, value }: {
       <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
       <div className="text-sm min-w-0">
         <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-        <p className="font-medium break-words">{value}</p>
+        {href ? (
+          <a href={href} className="font-medium break-words text-primary hover:underline">{value}</a>
+        ) : (
+          <p className="font-medium break-words">{value}</p>
+        )}
       </div>
     </div>
   );
+}
+
+/* A tel: link has to be digits (and a leading +) — a number stored as
+   "0412 345 678" dials as nothing on a phone or softphone otherwise. */
+function telHref(phone: string): string {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
 }
 
 /* ─── Exported dialog ─────────────────────────────────────────────────── */
@@ -426,10 +438,18 @@ export function ServiceJobDetailDialog({
                 </div>
                 <div className="divide-y">
                   {(job.customerPhone || showAll) && (
-                    <DetailRow icon={User} label="Phone" value={job.customerPhone ?? (showAll ? "—" : null)} />
+                    <DetailRow
+                      icon={User} label="Phone"
+                      value={job.customerPhone ?? (showAll ? "—" : null)}
+                      href={job.customerPhone ? telHref(job.customerPhone) : undefined}
+                    />
                   )}
                   {(job.customerEmail || showAll) && (
-                    <DetailRow icon={User} label="Email" value={job.customerEmail ?? (showAll ? "—" : null)} />
+                    <DetailRow
+                      icon={User} label="Email"
+                      value={job.customerEmail ?? (showAll ? "—" : null)}
+                      href={job.customerEmail ? `mailto:${job.customerEmail.trim()}` : undefined}
+                    />
                   )}
                   {job.estimatedCost != null && (
                     <DetailRow icon={ClipboardList} label="Estimated Cost" value={`$${job.estimatedCost.toFixed(2)}`} />
