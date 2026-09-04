@@ -33,6 +33,7 @@ import {
   Wrench,
   History,
   Search,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -40,6 +41,7 @@ import { cn } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
+import { callTimes } from "@/lib/service-job-notes";
 import { SendButton } from "@/components/send/send-dialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { ServiceJobSheet, type ServiceSheetBranding, type ServiceSheetData } from "@/components/printing/ServiceJobSheet";
@@ -51,6 +53,10 @@ import {
 } from "@/lib/service-job-print";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
+
+/* The Called column only means anything once the job is waiting to be picked
+   up — that is the point at which someone has to ring the customer. */
+const AWAITING_PICKUP = "awaiting-pickup";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending:                     { label: "Pending",                     className: "bg-amber-50 text-amber-700 border-amber-300" },
@@ -65,28 +71,6 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   completed:                   { label: "Completed",                   className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
   cancelled:                   { label: "Cancelled",                   className: "bg-red-50 text-red-700 border-red-300" },
 };
-
-/* ─── Note helpers ──────────────────────────────────────────────────────── */
-
-const NOTE_SEP = "\n\n---\n\n";
-
-function parseNotes(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw.split("---").map((s) => s.trim()).filter(Boolean);
-}
-
-function buildNoteTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
-}
-
-function appendNote(existing: string | null | undefined, text: string): string {
-  const ts = buildNoteTimestamp();
-  const entry = `${ts} ${text.trim()}`;
-  const parts = parseNotes(existing);
-  return [...parts, entry].join(NOTE_SEP);
-}
 
 function getStatus(s: string) {
   return STATUS_CONFIG[s] ?? { label: s, className: "bg-muted text-muted-foreground border-border" };
@@ -720,6 +704,7 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Contact",     "customerName")} />
                         <SortableHeader {...sh("Date",        "bookInDate")} />
                         <SortableHeader {...sh("Status",      "status")} />
+                        <th className="px-3 py-3 text-left font-medium select-none">Called</th>
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
                         <th className="px-3 py-3" />
@@ -728,6 +713,7 @@ export default function ServiceJobsPage() {
                     <tbody className="divide-y divide-border bg-background">
                       {sorted.map((job) => {
                         const { label, className } = getStatus(job.status);
+                        const calls = callTimes(job.notes);
                         const isChecked = selected.has(job.id);
                         const isCompleted = job.status === "completed";
                         return (
@@ -772,6 +758,29 @@ export default function ServiceJobsPage() {
                               <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
                                 {label}
                               </span>
+                            </td>
+
+                            {/* Blank unless the job is awaiting pickup: elsewhere
+                                "not called" is not outstanding work, and a dash on
+                                every other row would read as one. An empty box on a
+                                waiting job is the whole point — it is the customer
+                                nobody has rung yet. */}
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              {job.status !== AWAITING_PICKUP ? null : calls.length ? (
+                                <span
+                                  title={`Called ${calls[calls.length - 1]}${calls.length > 1 ? ` (${calls.length} calls)` : ""}`}
+                                  aria-label="Customer called"
+                                  className="inline-flex"
+                                >
+                                  <Check className="w-4 h-4 text-emerald-600" />
+                                </span>
+                              ) : (
+                                <span
+                                  title="Customer not called yet"
+                                  aria-label="Customer not called yet"
+                                  className="inline-block h-4 w-4 rounded-sm border border-muted-foreground/40"
+                                />
+                              )}
                             </td>
 
                             <td className="px-3 py-3 whitespace-nowrap">

@@ -8,7 +8,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog";
 import {
@@ -18,7 +17,7 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
-  Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall,
+  Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -26,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
+import { parseNotes, appendNote, callTimes, CALL_NOTE_TEXT } from "@/lib/service-job-notes";
 import { ServiceJobQuotePanel } from "@/components/service-jobs/ServiceJobQuotePanel";
 import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
 import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
@@ -54,30 +54,6 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
 };
 
 /* ─── Note helpers ──────────────────────────────────────────────────────── */
-
-const NOTE_SEP = "\n\n---\n\n";
-
-function parseNotes(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw.split("---").map((s) => s.trim()).filter(Boolean);
-}
-
-function buildNoteTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
-}
-
-/* The one note a repair shop writes over and over. Kept as a constant so the
-   tick box that writes it and the lookup that detects it cannot drift. */
-const CALL_NOTE_TEXT = "Called customer";
-
-function appendNote(existing: string | null | undefined, text: string): string {
-  const ts = buildNoteTimestamp();
-  const entry = `${ts} ${text.trim()}`;
-  const parts = parseNotes(existing);
-  return [...parts, entry].join(NOTE_SEP);
-}
 
 function getStatus(s: string) {
   return STATUS_CONFIG[s] ?? { label: s, className: "bg-muted text-muted-foreground border-border" };
@@ -270,14 +246,8 @@ export function ServiceJobDetailDialog({
     );
   };
 
-  /* Timestamp of the most recent call note, or null if the customer has never
-     been rung. Read back out of the notes themselves so the box reflects what
-     is actually on the job rather than any separate flag that could drift. */
-  const lastCalledAt = [...parseNotes(job.notes)].reverse().reduce<string | null>((found, n) => {
-    if (found) return found;
-    const m = n.match(/^\[([^\]]+)\]\s*(.+)$/);
-    return m && m[2].trim() === CALL_NOTE_TEXT ? m[1] : null;
-  }, null);
+  const calls = callTimes(job.notes);
+  const lastCalledAt = calls.length ? calls[calls.length - 1] : null;
 
   const handleLogCall = () => {
     updateMutation.mutate(
@@ -675,26 +645,40 @@ export function ServiceJobDetailDialog({
               </div>
               <div className="p-4 space-y-3">
                 {/* One-click log for the note a repair shop writes most: ringing
-                    the customer. Notes are an append-only log, so this only ever
-                    ticks on — unticking could not unsay the call, and the box
-                    goes read-only once it has happened. Repeat calls go through
-                    the free-text box below. */}
-                <label
-                  className={cn(
-                    "flex items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5",
-                    lastCalledAt ? "text-muted-foreground" : "cursor-pointer hover:bg-muted/40",
-                  )}
+                    the customer. Chasing a customer takes more than one call, so
+                    every press logs another — the tick is an indicator that the
+                    customer has been rung at least once, not a control, which is
+                    why this is a button rather than a real checkbox. Notes are
+                    append-only, so a call can be logged but never unsaid. */}
+                <button
+                  type="button"
+                  onClick={handleLogCall}
+                  disabled={updateMutation.isPending}
+                  title={lastCalledAt ? "Log another call" : "Log a call to the customer"}
+                  className="flex w-full items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:opacity-60"
                 >
-                  <Checkbox
-                    checked={!!lastCalledAt}
-                    disabled={!!lastCalledAt || updateMutation.isPending}
-                    onCheckedChange={(checked) => { if (checked) handleLogCall(); }}
-                  />
-                  <PhoneCall className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span className="text-sm">
-                    {lastCalledAt ? `Called customer — ${lastCalledAt}` : "Customer called"}
+                  {/* Drawn rather than a real Checkbox: Radix renders one as a
+                      <button>, which cannot legally nest inside this one. */}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "grid h-4 w-4 shrink-0 place-content-center rounded-sm border border-primary shadow",
+                      lastCalledAt && "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    {lastCalledAt && <Check className="h-3.5 w-3.5" />}
                   </span>
-                </label>
+                  <PhoneCall className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="text-sm min-w-0 flex-1">
+                    {lastCalledAt ? "Called customer" : "Customer called"}
+                    {lastCalledAt && (
+                      <span className="text-muted-foreground">
+                        {` — ${lastCalledAt}`}
+                        {calls.length > 1 && ` (${calls.length} calls)`}
+                      </span>
+                    )}
+                  </span>
+                </button>
 
                 {/* Append note input */}
                 <div className="flex gap-2 items-start">
