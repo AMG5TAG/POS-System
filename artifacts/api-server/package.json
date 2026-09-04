@@ -10,7 +10,8 @@
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run --config vitest.config.ts",
     "transfer-merchant": "tsx scripts/transfer-merchant.ts",
-    "db-fingerprint": "tsx scripts/db-fingerprint.ts"
+    "db-fingerprint": "tsx scripts/db-fingerprint.ts",
+    "migrate-ai-keys-to-vault": "tsx scripts/migrate-ai-keys-to-vault.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",
@@ -20,7 +21,9 @@
     "@types/nodemailer": "^8.0.0",
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
+    "@workspace/integrations-anthropic-ai-server": "workspace:*",
     "@workspace/integrations-openai-ai-server": "workspace:*",
+    "@workspace/online-store-blocks": "workspace:*",
     "@workspace/sales-documents": "workspace:*",
     "@workspace/shortlinks-shared": "workspace:*",
     "bcryptjs": "^3.0.3",

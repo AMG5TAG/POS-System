@@ -2912,6 +2912,7 @@ export const getServiceSettingsResponseReworkWarrantyDaysMin = 0;
 
 
 export const GetServiceSettingsResponse = zod.object({
+  "showQuote": zod.boolean(),
   "showPartsLabour": zod.boolean(),
   "showApprovalDeposit": zod.boolean(),
   "showDiagnostics": zod.boolean(),
@@ -2935,6 +2936,7 @@ export const updateServiceSettingsBodyReworkWarrantyDaysMin = 0;
 
 
 export const UpdateServiceSettingsBody = zod.object({
+  "showQuote": zod.boolean().optional(),
   "showPartsLabour": zod.boolean(),
   "showApprovalDeposit": zod.boolean(),
   "showDiagnostics": zod.boolean(),
@@ -2954,6 +2956,7 @@ export const updateServiceSettingsResponseReworkWarrantyDaysMin = 0;
 
 
 export const UpdateServiceSettingsResponse = zod.object({
+  "showQuote": zod.boolean(),
   "showPartsLabour": zod.boolean(),
   "showApprovalDeposit": zod.boolean(),
   "showDiagnostics": zod.boolean(),
@@ -8659,6 +8662,53 @@ export const UpsertOnlineStoreSettingsResponse = zod.object({
 
 
 /**
+ * @summary Whether AI store generation is available, and which provider serves it
+ */
+export const GetOnlineStoreAiStatusResponse = zod.object({
+  "available": zod.boolean(),
+  "provider": zod.enum(['claude', 'openai']).nullish().describe('The provider that would serve a generation right now.')
+})
+
+
+/**
+ * Returns a draft only — theme and pages the editor previews. Nothing is saved; the merchant applies the draft through the normal settings upsert.
+ * @summary Generate a storefront design from the merchant's business details and catalogue
+ */
+export const generateOnlineStoreDesignBodyBriefMax = 2000;
+
+
+
+export const GenerateOnlineStoreDesignBody = zod.object({
+  "brief": zod.string().max(generateOnlineStoreDesignBodyBriefMax).optional().describe('What the merchant wants from the store. Optional — their business details and product catalogue are used either way.')
+})
+
+export const GenerateOnlineStoreDesignResponse = zod.object({
+  "provider": zod.enum(['claude', 'openai']),
+  "theme": zod.object({
+  "primary": zod.string(),
+  "accent": zod.string(),
+  "bg": zod.string(),
+  "text": zod.string(),
+  "font": zod.enum(['sans', 'serif', 'mono']),
+  "radius": zod.enum(['none', 'sm', 'md', 'lg'])
+}),
+  "pages": zod.array(zod.object({
+  "id": zod.string(),
+  "name": zod.string(),
+  "slug": zod.string(),
+  "visible": zod.boolean(),
+  "seoTitle": zod.string().optional(),
+  "seoDescription": zod.string().optional(),
+  "blocks": zod.array(zod.object({
+  "id": zod.string(),
+  "type": zod.string(),
+  "data": zod.record(zod.string(), zod.unknown())
+}))
+}))
+})
+
+
+/**
  * @summary Get third-party store connection
  */
 export const GetOnlineStoreThirdpartyResponse = zod.object({
@@ -11791,6 +11841,7 @@ export const listQuotesQueryOffsetDefault = 0;
 export const ListQuotesQueryParams = zod.object({
   "status": zod.enum(['draft', 'sent', 'accepted', 'expired', 'converted']).optional(),
   "customerId": zod.coerce.number().optional(),
+  "serviceJobId": zod.coerce.number().optional().describe('Only quotes raised against this service job. Used by the POS to offer a job\'s saved quote when the job is linked to a sale.'),
   "search": zod.coerce.string().optional(),
   "limit": zod.coerce.number().default(listQuotesQueryLimitDefault),
   "offset": zod.coerce.number().default(listQuotesQueryOffsetDefault)

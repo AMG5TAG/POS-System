@@ -184,12 +184,15 @@ async function appendQuoteEvent(id: number, merchantId: number, event: QuoteEven
 router.get("/quotes", requireAuth, async (req, res): Promise<void> => {
   const qParsed = ListQuotesQueryParams.safeParse(req.query);
   if (!qParsed.success) { res.status(400).json({ error: qParsed.error.message }); return; }
-  const { status, customerId, search, limit, offset } = qParsed.data;
+  const { status, customerId, serviceJobId, search, limit, offset } = qParsed.data;
   const merchantId = req.session.merchantId!;
 
   const conditions = [eq(quotesTable.merchantId, merchantId)];
   if (status) conditions.push(eq(quotesTable.status, status));
   if (customerId) conditions.push(eq(quotesTable.customerId, customerId));
+  // Quotes raised against one repair job — what the POS asks for when a cashier
+  // links that job to a sale.
+  if (serviceJobId) conditions.push(eq(quotesTable.serviceJobId, serviceJobId));
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })

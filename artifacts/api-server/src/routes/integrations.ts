@@ -47,7 +47,19 @@ export const INTEGRATIONS = [
   // against — the merchant's own server issues the credential via Login Flow v2
   // (see routes/nextcloud.ts). Hence its own authType.
   { key: "nextcloud",           label: "Nextcloud",           section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data and mirror customer files to your own Nextcloud server — self-hosted storage you control.", authType: "loginflow" as const, fields: [{ name: "serverUrl", label: "Server address", type: "text" }] as F[], useVault: true  },
-  { key: "openai",              label: "OpenAI (Your Key)",   section: "cloud", category: "Cloud Storage & Productivity", description: "Use your own OpenAI API key for AI Insights, demand forecasting, and product descriptions.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
+
+  /* ── AI PROVIDERS ──────────────────────────────────────────────────────────
+     Bring-your-own-key: the merchant connects their own AI account and their
+     own key pays for their own usage. KoaPOS holds no platform key, so an
+     unconnected merchant simply has no AI features rather than quietly
+     spending someone else's budget.
+
+     Claude is tried first; OpenAI is a per-merchant fallback for merchants who
+     connect both. Both are `useVault: true` — an API key is a bearer credential
+     with a live billing account behind it and belongs encrypted at rest, not in
+     the plaintext `credentials` column. */
+  { key: "anthropic",           label: "Claude (Anthropic)",  section: "ai",    category: "AI Providers", description: "Connect your own Anthropic account to power the AI store designer, business advisor and upsell coach. Usage is billed to your Anthropic account.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: true },
+  { key: "openai",              label: "OpenAI",              section: "ai",    category: "AI Providers", description: "Optional fallback for the AI features, used only when Claude is unavailable. Usage is billed to your OpenAI account.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: true },
 ] as const;
 
 type F = { name: string; label: string; type: string };

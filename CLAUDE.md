@@ -198,6 +198,51 @@ Which template owns which document: the email **body** is the Email template's;
 the **attached PDF** is the Invoice (or Quote) template's. They are separate
 documents with separate custom QRs — the seed above starts them identical.
 
+### Service job quotes → the till
+
+A repair job carries two different money documents, and confusing them is the
+main hazard in this area:
+
+- **Parts & Labour** (`service_job_lines`, `ServiceJobLinesPanel`) is what was
+  actually *consumed*. Adding a part moves stock; the rows drive job cost and
+  profit.
+- **Quote** (`ServiceJobQuotePanel`) is what the customer was *offered*. It
+  touches no stock and may be a fixed price unrelated to what the parts cost —
+  a shop quotes "$370 screen repair" while Parts & Labour tracks the $180 panel.
+
+The Quote section needed **no new table**: it writes an ordinary `quotes` row
+carrying `serviceJobId`, so a job's quote prints, emails, expires, approves and
+converts exactly like one raised from the Quotes page. Lines may come from the
+product catalogue (carrying `productId`, so a converted line snapshots cost
+price) or be free-text charges.
+
+**The till is the point.** Linking a service job in the POS looks up that job's
+quotes (`GET /quotes?serviceJobId=`) and offers to import one into the cart, so
+the cashier rings up what was agreed instead of re-keying it. Four rules hold
+that safe:
+
+- Only `draft`/`sent`/`accepted` quotes are offered (`IMPORTABLE_QUOTE_STATUSES`
+  in `pos.tsx`). A **converted** quote has already been paid — offering it again
+  is a double charge — and a declined/expired one was never agreed.
+- An imported line sets `customPrice` to the quoted unit price. That override
+  beats catalogue price *and* customer group pricing, which is the point: a price
+  rise after quoting is not the customer's problem.
+- **Importing is not committing.** The quote is marked converted in
+  `completeSaleUi`, once the sale is actually paid, with the transaction id — so
+  a cashier who abandons the sale leaves the quote open for the next attempt.
+  This is deliberately unlike the Quotes page's "convert", which marks the quote
+  before the sale exists.
+- The prompt never silently discards a cart: when the cart is non-empty, "Add to
+  cart" is the default and the replace button spells out what it destroys.
+
+The `serviceJobId` filter is load-bearing, not cosmetic — if it were ignored the
+list would return every quote the merchant has and the POS would offer a
+different customer's quote against this job. `quotes-by-service-job.test.ts`
+pins that.
+
+The section is gated by `showQuote` in `service_settings`, like every other
+service job section (Management › Invoices & Services › Service Options).
+
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.
 - Boolean fields are stored as text `"true"`/`"false"` (a Drizzle text-column limitation) — compare/serialize accordingly.
@@ -208,6 +253,44 @@ documents with separate custom QRs — the seed above starts them identical.
 
 Required env: `DATABASE_URL`, `SESSION_SECRET`, `VAULT_ENCRYPTION_KEY` (the last required in production). Template in `.env.example`.
 
+### Deployment (Replit autoscale)
+
+`[deployment]` in `.replit` carries **`build`** and **`run`**. They belong in the
+repo, not only in the Replit UI: when they went missing there, publishing failed
+with `Could not find run command` and nothing in git said what they should be.
+
+    build = pnpm run build     # typecheck, then every package
+    run   = pnpm --filter @workspace/api-server run start
+
+**One process serves both halves of the app.** `app.ts` mounts the API at `/api`
+and, when `artifacts/koapos/dist/public/index.html` exists, serves the built SPA
+at every other path with a history fallback for client-side routes. That is a
+requirement, not a convenience — the frontend calls the API on *relative* paths
+(`custom-fetch.ts` sets no base URL), so splitting the two across origins makes
+every request cross-origin and the session cookie stops flowing.
+
+Details worth keeping:
+
+- The static block is **skipped when there is no frontend build on disk**, which
+  is why `pnpm dev` (Vite on its own port) and the test suite are unaffected.
+  `SPA_DIST_DIR` overrides the location.
+- It is mounted **after** the API router so `/api/*` still 404s as JSON instead
+  of being answered with `index.html`, and **before** `errorHandler` so that
+  stays last. The fallback is GET-only: a stray POST to an SPA path is a bug, so
+  it 404s rather than returning HTML.
+- Caching is split three ways because only `/assets` is content-hashed by Vite:
+  `assets/*` is `immutable, 1y`; the rest of the build root (icons, manifest,
+  logo, robots.txt) keeps its filename across deploys and gets 1h; `index.html`
+  is always `no-cache`, since caching it is what would pin a till to the previous
+  deploy.
+
+**`NODE_ENV` must be `production` in the deployment.** The `start` script does
+not set it, and a great deal hangs off it — the fail-fast guards for
+`SESSION_SECRET` and `VAULT_ENCRYPTION_KEY`, the CORS allowlist (otherwise
+`origin: true`), and whether the dev fallbacks for the vault key and
+`ANTHROPIC_API_KEY` are honoured. Running the deployment without it would fall
+back to the hardcoded session secret, which is public in this repo.
+
 ### Required production environment variables
 These MUST be set when the API server is started with `NODE_ENV=production`. Missing any causes the process to fail fast on boot.
 
@@ -217,6 +300,14 @@ These MUST be set when the API server is started with `NODE_ENV=production`. Mis
 | `SESSION_SECRET` | `express-session` cookie signing secret. |
 | `VAULT_ENCRYPTION_KEY` | Key used to encrypt OAuth access/refresh tokens in `oauth_token_vault`. GCM verifies an auth tag, so a wrong/tampered value fails loudly instead of returning garbage. The server throws `"Fatal: VAULT_ENCRYPTION_KEY environment variable is required in production mode."` on startup if missing under `NODE_ENV=production`. The insecure hardcoded dev fallback is only honoured when `NODE_ENV` is `development` or blank — never in production/staging/test. Generate with e.g. `openssl rand -hex 32`. On startup the server re-encrypts any tokens under `VAULT_ENCRYPTION_KEY_PREVIOUS`, then invalidates rows still undecryptable with the current key (affected merchants must reconnect). |
 | `VAULT_ENCRYPTION_KEY_PREVIOUS` | Optional. Set to the **old** key value when rotating. See below. |
+
+#### AI provider keys (none required — merchants bring their own)
+AI is **bring-your-own-key**: each merchant connects their own Anthropic account
+under Management › Integrations › AI Providers and is billed for their own
+usage. There is no platform AI key in production. `ANTHROPIC_MODEL` optionally
+pins the model (default `claude-opus-5`); `ANTHROPIC_API_KEY` is a **development
+convenience only**, ignored when `NODE_ENV` is production/staging/test. See
+"AI providers" below.
 
 #### Rotating `VAULT_ENCRYPTION_KEY`
 To rotate without forcing every merchant to reconnect:
@@ -355,6 +446,94 @@ third-party grid, and managed at Management › Online Store › Data API.
 - The router is mounted before the blanket-`requireAuth` routers in
   `routes/index.ts`, for the same reason `qrRouter` is: its callers have no
   session cookie and never will.
+
+### AI providers (bring-your-own-key, Claude preferred)
+
+KoaPOS runs AI on the **merchant's own** API key. A merchant connects their
+Anthropic account under Management › Integrations › AI Providers, the key is
+encrypted at rest in the OAuth token vault, and their usage is billed to them.
+**The platform holds no production AI key**, so a merchant who has connected
+nothing has no AI features rather than a bill on someone else's account.
+
+Every AI feature goes through `artifacts/api-server/src/services/ai.ts` — no
+route talks to a vendor SDK directly, and nothing but that module names a model.
+
+- `aiText` / `aiStream` / `aiJson` are the three shapes, and **each takes a
+  `merchantId` first**. There is no such thing here as an AI request that is not
+  on behalf of a merchant; that signature is what makes tenancy impossible to
+  forget.
+- `providersFor(merchantId)` resolves the merchant's connected accounts, Claude
+  first, their own OpenAI key as a fallback. Credentials are read per request:
+  the HTTP clients are pooled by key inside the integration libs, but the
+  *merchant → key* mapping is not, so disconnecting takes effect immediately.
+- **Both AI integrations are `useVault: true`.** An API key is a bearer
+  credential with a live billing account behind it. The `openai` entry shipped
+  as `useVault: false` (plaintext in `merchant_integrations.credentials`);
+  `artifacts/api-server/scripts/migrate-ai-keys-to-vault.ts` moves any such rows
+  across — dry-run by default, `--commit` to write.
+- **`ANTHROPIC_API_KEY` is a dev convenience only.** It stands in for a
+  merchant's key when `NODE_ENV` is `development` or blank, and is ignored in
+  production/staging/test — same rule as the token vault's dev fallback, for the
+  same reason: a platform key quietly serving production is a bill nobody agreed
+  to. It never displaces a key a merchant actually connected.
+- **Streams fall back only before the first byte.** Once a delta has reached the
+  client the provider is committed; retrying on the other one would splice two
+  completions together. `routes/openai.ts` therefore opens the stream *before*
+  writing SSE headers.
+- **`aiJson` returns `unknown` on purpose.** Claude enforces the JSON Schema
+  server-side; the OpenAI fallback only has it described. Every caller validates
+  with Zod before the value goes anywhere — the schema is guidance, Zod is the
+  guarantee.
+- Claude uses `thinking: {type: "adaptive"}` and `output_config.effort`. Effort
+  is the cost/latency dial (`"low"` for the in-checkout upsell coach), *not* a
+  cheaper model. `budget_tokens` is removed on current models — do not add it.
+- `routes/openai.ts` keeps its `/openai/...` paths for compatibility with the
+  frontend and the OpenAPI spec. The name is historical; the provider is not.
+
+### AI store designer (Online Store › Design)
+
+Claude designs a storefront from the merchant's own business details, categories
+and live product catalogue. It generates **no code and no markup**: the output is
+a `theme` + `pages` JSON document of exactly the shape the Design editor already
+saves and the public storefront already renders, so a generated store goes
+through the same `BlockPreview` as a hand-built one.
+
+The block catalogue lives in **`lib/online-store-blocks`** so the editor and the
+API server cannot drift: `shared.tsx` builds `BLOCK_LIBRARY` from
+`BLOCK_DEFAULTS`, and `lib/ai-store.ts` builds the JSON Schema and the prompt's
+catalogue brief from the same constant. **Add a block there, not in the editor.**
+
+Three layers stand between the model and the database, in order:
+
+1. `storeOutputSchema()` — enum-constrains block `type` to `AI_BLOCK_TYPES` and
+   the theme to hex colours and known enums. Enforced by Claude's structured
+   outputs.
+2. `generatedSiteSchema` (Zod) — re-checks the parsed value, because the OpenAI
+   fallback is only *told* the schema, and because a schema-valid document can
+   still be unreviewable (30 pages, 500 blocks).
+3. `coerceBlockData` — reduces each block's `data` to the exact fields that block
+   declares, coercing each to the type its default has. This is why `data` can be
+   a permissive object in the schema: invented keys are dropped, not trusted.
+
+`AI_FORBIDDEN_BLOCKS` (`html`, `iframe`) are raw-markup escape hatches. A
+merchant may still add them by hand; generation cannot, and they are absent from
+the catalogue brief so the model is never invited to try.
+
+Generation runs on the merchant's own Claude key, so a merchant who has not
+connected an account gets a 503 and the dialog explains the one step rather than
+failing on submit. The "Design with AI" button is shown regardless — hiding it
+would make the feature undiscoverable for exactly the merchants who need to be
+told about it.
+
+**`POST /online-store/ai/generate` never writes.** It returns a draft; the
+merchant applies it in the editor through the normal settings upsert. So the
+data-loss surface is a UI decision, not a server one — and the dialog makes
+"Add as new pages" the default while spelling out exactly which pages a
+"Replace everything" would destroy. Keep it that way.
+
+Images are the known gap: the model cannot produce artwork, so every image URL
+field is generated empty and product blocks (which pull real catalogue photos)
+are preferred over image blocks.
 
 ## Product surface
 

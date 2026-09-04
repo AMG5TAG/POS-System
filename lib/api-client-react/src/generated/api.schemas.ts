@@ -3168,6 +3168,7 @@ export interface LoyaltySettingsInput {
 }
 
 export interface ServiceSettings {
+  showQuote: boolean;
   showPartsLabour: boolean;
   showApprovalDeposit: boolean;
   showDiagnostics: boolean;
@@ -3189,6 +3190,7 @@ export interface ServiceSettings {
 }
 
 export interface ServiceSettingsInput {
+  showQuote?: boolean;
   showPartsLabour: boolean;
   showApprovalDeposit: boolean;
   showDiagnostics: boolean;
@@ -4750,6 +4752,91 @@ export interface OnlineStoreSettingsInput {
   features?: string;
   pages?: string;
   quickCodes?: string;
+}
+
+/**
+ * The provider that would serve a generation right now.
+ */
+export type OnlineStoreAiStatusProvider = typeof OnlineStoreAiStatusProvider[keyof typeof OnlineStoreAiStatusProvider] | null;
+
+
+export const OnlineStoreAiStatusProvider = {
+  claude: 'claude',
+  openai: 'openai',
+} as const;
+
+export interface OnlineStoreAiStatus {
+  available: boolean;
+  /** The provider that would serve a generation right now. */
+  provider?: OnlineStoreAiStatusProvider;
+}
+
+export interface OnlineStoreAiGenerateInput {
+  /**
+     * What the merchant wants from the store. Optional — their business details and product catalogue are used either way.
+     * @maxLength 2000
+     */
+  brief?: string;
+}
+
+export type OnlineStoreAiBlockData = { [key: string]: unknown };
+
+export interface OnlineStoreAiBlock {
+  id: string;
+  type: string;
+  data: OnlineStoreAiBlockData;
+}
+
+export interface OnlineStoreAiPage {
+  id: string;
+  name: string;
+  slug: string;
+  visible: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  blocks: OnlineStoreAiBlock[];
+}
+
+export type OnlineStoreAiThemeFont = typeof OnlineStoreAiThemeFont[keyof typeof OnlineStoreAiThemeFont];
+
+
+export const OnlineStoreAiThemeFont = {
+  sans: 'sans',
+  serif: 'serif',
+  mono: 'mono',
+} as const;
+
+export type OnlineStoreAiThemeRadius = typeof OnlineStoreAiThemeRadius[keyof typeof OnlineStoreAiThemeRadius];
+
+
+export const OnlineStoreAiThemeRadius = {
+  none: 'none',
+  sm: 'sm',
+  md: 'md',
+  lg: 'lg',
+} as const;
+
+export interface OnlineStoreAiTheme {
+  primary: string;
+  accent: string;
+  bg: string;
+  text: string;
+  font: OnlineStoreAiThemeFont;
+  radius: OnlineStoreAiThemeRadius;
+}
+
+export type OnlineStoreAiDraftProvider = typeof OnlineStoreAiDraftProvider[keyof typeof OnlineStoreAiDraftProvider];
+
+
+export const OnlineStoreAiDraftProvider = {
+  claude: 'claude',
+  openai: 'openai',
+} as const;
+
+export interface OnlineStoreAiDraft {
+  provider: OnlineStoreAiDraftProvider;
+  theme: OnlineStoreAiTheme;
+  pages: OnlineStoreAiPage[];
 }
 
 export interface OnlineStoreThirdparty {
@@ -7329,6 +7416,10 @@ export const ListInvoicesStatus = {
 export type ListQuotesParams = {
 status?: ListQuotesStatus;
 customerId?: number;
+/**
+ * Only quotes raised against this service job. Used by the POS to offer a job's saved quote when the job is linked to a sale.
+ */
+serviceJobId?: number;
 search?: string;
 limit?: number;
 offset?: number;

@@ -27,7 +27,7 @@ import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
   ShieldCheck, ChevronDown, ChevronRight, Zap,
   CreditCard, KeyRound, RefreshCw,
-  Landmark, ShoppingBag, Megaphone, Cloud,
+  Landmark, ShoppingBag, Megaphone, Cloud, Sparkles,
   Settings, Users, HelpCircle,
 } from "lucide-react";
 
@@ -537,6 +537,17 @@ const ALL_SECTIONS = [
     accent: "bg-pink-50/60 border-pink-200 dark:bg-pink-950/20 dark:border-pink-900",
     iconBg: "bg-pink-100 dark:bg-pink-900/40",
     iconColor: "text-pink-600 dark:text-pink-400",
+  },
+  {
+    id: "ai",
+    title: "AI Providers",
+    icon: Sparkles,
+    // Bring-your-own-key, so this section is where AI features are switched on:
+    // without a connected account there is no AI, by design.
+    description: "Connect your own Claude or OpenAI account — AI usage is billed to you, not KoaPOS",
+    accent: "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900",
+    iconBg: "bg-indigo-100 dark:bg-indigo-900/40",
+    iconColor: "text-indigo-600 dark:text-indigo-400",
   },
   {
     id: "cloud",

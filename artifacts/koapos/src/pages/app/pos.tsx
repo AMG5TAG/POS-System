@@ -20,6 +20,7 @@ import {
   useListProducts, useListCategories, useCreateTransaction,
   useListCustomers, useGetCustomer, useGetLoyaltySettings, useListStaff,
   useListServiceJobs, useListAppointments,
+  listQuotes, useConvertQuote, getListQuotesQueryKey, type Quote,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useUpsertPosSettings, useVerifyStaffPin,
@@ -79,7 +80,7 @@ import {
   CheckCircle2, Printer, Mail, MessageSquare, Loader2,
   Banknote, Clock, FileText, TrendingUp, Star, PauseCircle, History, Trash,
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
-  WifiOff, ShieldCheck, ArrowBigUp, MonitorX,
+  WifiOff, ShieldCheck, ArrowBigUp, MonitorX, RefreshCw,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
@@ -154,6 +155,11 @@ type PricingRule = {
 
 type Modifier = { id: number; groupId: number; name: string; priceAdjustment: number; isDefault: boolean; isActive: boolean; sortOrder: number };
 type ModifierGroup = { id: number; name: string; isRequired: boolean; minSelections: number; maxSelections: number; isActive: string; modifiers: Modifier[] };
+
+/* Quote statuses the till will offer to import. A converted quote has already
+   been paid and a declined/expired one was never agreed, so offering either
+   invites double-billing or ringing up a price the customer refused. */
+const IMPORTABLE_QUOTE_STATUSES = new Set(["draft", "sent", "accepted"]);
 
 type CartItem = {
   product: Product;
@@ -586,6 +592,15 @@ export default function POSPage() {
   /* A converted quote hands over the service job it was raised against; the job
      itself has to be fetched before it can be shown as a link chip. */
   const [pendingLinkServiceJobId, setPendingLinkServiceJobId] = useState<number | null>(null);
+  /* Linking a service job offers that job's saved quote (the Quote section on
+     the job) so the cashier rings up what the customer actually agreed to
+     rather than re-keying it. Held until the cashier answers the prompt. */
+  const [quoteImport, setQuoteImport] = useState<{ quote: Quote; jobNumber: string } | null>(null);
+  /* The quote whose lines are in the cart. Marked converted only once the sale
+     is paid — importing is not committing, and a cashier who abandons the sale
+     must leave the quote open for the next attempt. */
+  const [importedQuoteId, setImportedQuoteId] = useState<number | null>(null);
+  const convertQuoteMutation = useConvertQuote();
 
   /* AI upsell coach */
   const [upsellSugs, setUpsellSugs] = useState<Array<{ productId: number; name: string; price: number; reason: string }>>([]);
@@ -2206,6 +2221,7 @@ export default function POSPage() {
     hasAutoParkedRef.current = false;
     setCart([]); setOverallDiscount(""); setSaleNotes("");
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
+    setImportedQuoteId(null); setQuoteImport(null);
     idempotencyKeyRef.current = null;
     setDiscountExcessAmount(0);
     /* Sale is over — clear any payment-entry state so the navigation guard
@@ -2473,6 +2489,55 @@ export default function POSPage() {
   const linkService = (sj: ServiceJob) => {
     setLinkedService(sj); setLinkedAppointment(null); setServiceLinkOpen(false);
     adoptLinkedCustomer(sj.customerId);
+    void offerJobQuote(sj);
+  };
+
+  /* A job's Quote section is where the agreed price lives, so linking the job is
+     the moment to offer it. Only quotes that could still be rung up are offered
+     — a converted one has already been paid, and re-importing it would bill the
+     customer twice. Failure here is silent on purpose: the cashier can always
+     key the sale by hand, and a lookup error must never block a sale. */
+  const offerJobQuote = async (sj: ServiceJob) => {
+    if (importedQuoteId != null) return;
+    try {
+      const res = await listQuotes({ serviceJobId: sj.id, limit: 20 });
+      const quote = (res.items ?? []).find((q) => IMPORTABLE_QUOTE_STATUSES.has(q.status));
+      if (!quote || (quote.items ?? []).length === 0) return;
+      setQuoteImport({ quote, jobNumber: sj.jobNumber ?? String(sj.id) });
+    } catch { /* no prompt — the cashier rings the sale up as usual */ }
+  };
+
+  /* Turn the quote's lines into cart lines. A line that names a real product is
+     rung up against it so the sale snapshots cost price like any other; a custom
+     charge becomes a stub product the way a restored parked sale does.
+
+     `replace` is the destructive answer and is never the default when the cart
+     already holds something — see the prompt below. */
+  const importQuoteToCart = (quote: Quote, replace: boolean) => {
+    const imported: CartItem[] = (quote.items ?? []).map((l) => {
+      const product = (l.productId != null
+        ? allProducts.find((p) => p.id === l.productId)
+        : undefined) ?? ({
+          id: l.productId ?? 0,
+          name: l.productName ?? l.description,
+          price: l.unitPrice,
+        } as Product);
+      return {
+        product,
+        quantity: l.quantity,
+        itemDiscount: 0,
+        /* The quote's price is what the customer agreed to, so it overrides the
+           product's current price — a catalogue rise after quoting is not the
+           customer's problem. */
+        customPrice: l.unitPrice,
+        itemNote: l.description !== product.name ? l.description : undefined,
+      };
+    });
+
+    setCart((prev) => (replace ? imported : [...prev, ...imported]));
+    setImportedQuoteId(quote.id);
+    setQuoteImport(null);
+    toast.success(`Quote ${quote.quoteNumber} imported`);
   };
 
   const linkAppointment = (apt: Appointment) => {
@@ -2601,6 +2666,19 @@ export default function POSPage() {
   const completeSaleUi = (data: Transaction, snap: SaleCompletionSnapshot) => {
     idempotencyKeyRef.current = null;
     invalidateSalesKpiQueries(queryClient);
+    /* The imported quote is settled by THIS transaction, so it is marked
+       converted here rather than at import time: a cashier who abandoned the
+       sale left it open, which is the whole point of waiting. Recording the
+       transaction id is what ties the quote to the sale that paid it.
+       Best-effort — the sale is already banked, so a failure here must not
+       surface as a failed sale. */
+    if (importedQuoteId != null) {
+      convertQuoteMutation.mutate(
+        { id: importedQuoteId, data: { transactionId: data.id } as never },
+        { onSettled: () => queryClient.invalidateQueries({ queryKey: getListQuotesQueryKey() }) },
+      );
+      setImportedQuoteId(null);
+    }
     try {
       if (sessionSnap) {
         const s = { ...sessionSnap };
@@ -5096,6 +5174,75 @@ export default function POSPage() {
               </Button>
             )}
           </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Import a linked job's quote ───
+           Offered when a service job is linked and that job has a saved quote
+           that could still be rung up. Importing is not committing: the quote is
+           only marked converted once the sale is actually paid. */}
+      <Dialog open={quoteImport !== null} onOpenChange={(open) => { if (!open) setQuoteImport(null); }}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="w-4 h-4" /> Import quote from this job?
+            </DialogTitle>
+          </DialogHeader>
+          {quoteImport && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-muted/30 p-3 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-medium text-sm">Quote {quoteImport.quote.quoteNumber}</span>
+                  <span className="font-semibold tabular-nums">{formatCurrency(quoteImport.quote.total)}</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Service {quoteImport.jobNumber} · {(quoteImport.quote.items ?? []).length} line
+                  {(quoteImport.quote.items ?? []).length === 1 ? "" : "s"} · {quoteImport.quote.status}
+                </p>
+                <div className="pt-1.5 border-t space-y-0.5">
+                  {(quoteImport.quote.items ?? []).slice(0, 5).map((l, i) => (
+                    <div key={i} className="flex justify-between gap-2 text-xs">
+                      <span className="truncate text-muted-foreground">{l.quantity} × {l.description}</span>
+                      <span className="tabular-nums shrink-0">{formatCurrency(l.quantity * l.unitPrice)}</span>
+                    </div>
+                  ))}
+                  {(quoteImport.quote.items ?? []).length > 5 && (
+                    <p className="text-xs text-muted-foreground">
+                      +{(quoteImport.quote.items ?? []).length - 5} more
+                    </p>
+                  )}
+                </div>
+              </div>
+
+              {cart.length > 0 ? (
+                <>
+                  {/* The cart already holds something, so "replace" would throw
+                      work away. Adding is the default; replacing says what it
+                      destroys. */}
+                  <p className="text-xs text-muted-foreground">
+                    This sale already has {cart.length} item{cart.length === 1 ? "" : "s"} in the cart.
+                  </p>
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={() => importQuoteToCart(quoteImport.quote, false)}>
+                      <Plus className="w-4 h-4 mr-1.5" /> Add quote to cart
+                    </Button>
+                    <Button variant="outline" onClick={() => importQuoteToCart(quoteImport.quote, true)}>
+                      <RefreshCw className="w-4 h-4 mr-1.5" />
+                      Replace cart — discards the {cart.length} item{cart.length === 1 ? "" : "s"} already in it
+                    </Button>
+                    <Button variant="ghost" onClick={() => setQuoteImport(null)}>Not now</Button>
+                  </div>
+                </>
+              ) : (
+                <div className="flex flex-col gap-2">
+                  <Button onClick={() => importQuoteToCart(quoteImport.quote, true)}>
+                    <ShoppingCart className="w-4 h-4 mr-1.5" /> Import into this sale
+                  </Button>
+                  <Button variant="ghost" onClick={() => setQuoteImport(null)}>Not now</Button>
+                </div>
+              )}
+            </div>
+          )}
         </DialogContent>
       </Dialog>
 

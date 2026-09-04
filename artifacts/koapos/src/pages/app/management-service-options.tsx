@@ -10,7 +10,7 @@ import {
   useGetServiceSettings, useUpdateServiceSettings, type ServiceSettings,
 } from "@workspace/api-client-react";
 import {
-  Wrench, Wallet, ListChecks, Shield, Clock, PenLine, Truck, StickyNote, Loader2,
+  Wrench, Wallet, ListChecks, Shield, Clock, PenLine, Truck, StickyNote, Loader2, FileText,
 } from "lucide-react";
 
 /* Only the boolean section-visibility keys (excludes the numeric warranty defaults). */
@@ -26,6 +26,7 @@ const SECTIONS: {
   description: string;
   icon: React.ComponentType<{ className?: string }>;
 }[] = [
+  { key: "showQuote",          label: "Quote",                   description: "Quote the customer for this job; offered at the till when linked to a sale.", icon: FileText },
   { key: "showPartsLabour",    label: "Parts & Labour",          description: "Parts and labour line items on a service job.",        icon: Wrench },
   { key: "showApprovalDeposit", label: "Approval & Deposit",      description: "Estimate approval and deposit collection.",            icon: Wallet },
   { key: "showDiagnostics",    label: "Diagnostics / QC Checklist", description: "Diagnostic and quality-control checklist.",          icon: ListChecks },

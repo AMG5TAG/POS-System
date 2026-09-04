@@ -17,7 +17,7 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
-  Trash2, Eye, ChevronLeft, ChevronRight,
+  Trash2, Eye, ChevronLeft, ChevronRight, FileText,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -25,6 +25,7 @@ import { cn } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
+import { ServiceJobQuotePanel } from "@/components/service-jobs/ServiceJobQuotePanel";
 import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
 import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
 import { ServiceJobWarrantyPanel } from "@/components/service-jobs/ServiceJobWarrantyPanel";
@@ -518,6 +519,21 @@ export function ServiceJobDetailDialog({
                 )}
                 {(job.additionalEquipment || showAll) && <DetailRow icon={Package} label="Additional Equipment" value={job.additionalEquipment ?? (showAll ? "—" : null)} />}
               </div>
+            )}
+
+            {/* Quote — what the customer is being offered. Sits above Parts &
+                Labour because it is agreed first, and it is the document the
+                POS offers to import when this job is linked to a sale. */}
+            {show("showQuote") && (
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <FileText className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobQuotePanel jobId={job.id} customerId={job.customerId} />
+              </div>
+            </div>
             )}
 
             {/* Parts & Labour */}

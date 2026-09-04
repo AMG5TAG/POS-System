@@ -271,6 +271,9 @@ import type {
   NextcloudLoginFlowStart,
   NextcloudLoginFlowStartInput,
   OkResult,
+  OnlineStoreAiDraft,
+  OnlineStoreAiGenerateInput,
+  OnlineStoreAiStatus,
   OnlineStoreSettings,
   OnlineStoreSettingsInput,
   OnlineStoreThirdparty,
@@ -24285,6 +24288,155 @@ export const useUpsertOnlineStoreSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpsertOnlineStoreSettingsMutationOptions(options));
+    }
+
+export const getGetOnlineStoreAiStatusUrl = () => {
+
+
+
+
+  return `/api/online-store/ai/status`
+}
+
+/**
+ * @summary Whether AI store generation is available, and which provider serves it
+ */
+export const getOnlineStoreAiStatus = async ( options?: RequestInit): Promise<OnlineStoreAiStatus> => {
+
+  return customFetch<OnlineStoreAiStatus>(getGetOnlineStoreAiStatusUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetOnlineStoreAiStatusQueryKey = () => {
+    return [
+    `/api/online-store/ai/status`
+    ] as const;
+    }
+
+
+export const getGetOnlineStoreAiStatusQueryOptions = <TData = Awaited<ReturnType<typeof getOnlineStoreAiStatus>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOnlineStoreAiStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetOnlineStoreAiStatusQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOnlineStoreAiStatus>>> = ({ signal }) => getOnlineStoreAiStatus({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOnlineStoreAiStatus>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetOnlineStoreAiStatusQueryResult = NonNullable<Awaited<ReturnType<typeof getOnlineStoreAiStatus>>>
+export type GetOnlineStoreAiStatusQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Whether AI store generation is available, and which provider serves it
+ */
+
+export function useGetOnlineStoreAiStatus<TData = Awaited<ReturnType<typeof getOnlineStoreAiStatus>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOnlineStoreAiStatus>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetOnlineStoreAiStatusQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getGenerateOnlineStoreDesignUrl = () => {
+
+
+
+
+  return `/api/online-store/ai/generate`
+}
+
+/**
+ * Returns a draft only — theme and pages the editor previews. Nothing is saved; the merchant applies the draft through the normal settings upsert.
+ * @summary Generate a storefront design from the merchant's business details and catalogue
+ */
+export const generateOnlineStoreDesign = async (onlineStoreAiGenerateInput?: OnlineStoreAiGenerateInput, options?: RequestInit): Promise<OnlineStoreAiDraft> => {
+
+  return customFetch<OnlineStoreAiDraft>(getGenerateOnlineStoreDesignUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      onlineStoreAiGenerateInput,)
+  }
+);}
+
+
+
+
+export const getGenerateOnlineStoreDesignMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateOnlineStoreDesign>>, TError,{data?: BodyType<OnlineStoreAiGenerateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateOnlineStoreDesign>>, TError,{data?: BodyType<OnlineStoreAiGenerateInput>}, TContext> => {
+
+const mutationKey = ['generateOnlineStoreDesign'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateOnlineStoreDesign>>, {data?: BodyType<OnlineStoreAiGenerateInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  generateOnlineStoreDesign(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateOnlineStoreDesignMutationResult = NonNullable<Awaited<ReturnType<typeof generateOnlineStoreDesign>>>
+    export type GenerateOnlineStoreDesignMutationBody = BodyType<OnlineStoreAiGenerateInput> | undefined
+    export type GenerateOnlineStoreDesignMutationError = ErrorType<void>
+
+    /**
+ * @summary Generate a storefront design from the merchant's business details and catalogue
+ */
+export const useGenerateOnlineStoreDesign = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateOnlineStoreDesign>>, TError,{data?: BodyType<OnlineStoreAiGenerateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateOnlineStoreDesign>>,
+        TError,
+        {data?: BodyType<OnlineStoreAiGenerateInput>},
+        TContext
+      > => {
+      return useMutation(getGenerateOnlineStoreDesignMutationOptions(options));
     }
 
 export const getGetOnlineStoreThirdpartyUrl = () => {

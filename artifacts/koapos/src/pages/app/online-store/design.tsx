@@ -23,7 +23,8 @@ import {
   Palette, Wand2, Layout, Layers, FileText, Plus, Trash2, Eye, EyeOff, Clock,
   Settings2, Sparkles, Copy, CopyPlus, ArrowUp, ArrowDown, Maximize2, Minimize2, Check,
 } from "lucide-react";
-import { useGetMerchant, useListProducts } from "@workspace/api-client-react";
+import { useGetMerchant, useListProducts, useGetOnlineStoreAiStatus } from "@workspace/api-client-react";
+import { AiDesignerDialog, type ApplyMode } from "./ai-designer";
 import { isProductBlock } from "@/pages/marketing/storefront-commerce";
 import { useStoreSlug } from "@/lib/online-store-slug";
 import {
@@ -43,6 +44,9 @@ export default function OnlineStoreDesignPage() {
     .map((p) => ({ id: p.id, name: p.name, price: typeof p.price === "number" ? p.price : parseFloat(String(p.price ?? "0")) || 0, imageUrl: p.imageUrl ?? "", categoryId: p.categoryId ?? null }));
 
   const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  /* Asked up front so the button is simply absent on a server with no AI
+   * provider configured, rather than failing after the merchant writes a brief. */
+  const { data: aiStatus } = useGetOnlineStoreAiStatus({ query: { queryKey: ["online-store-ai-status"], staleTime: 5 * 60 * 1000 } });
   const merchantUsername = (merchant?.username ?? "").toLowerCase();
   const [storeSlug] = useStoreSlug();
 
@@ -55,6 +59,7 @@ export default function OnlineStoreDesignPage() {
   const [fullScreen, setFullScreen] = useState(false);
   const [clipboardBlock, setClipboardBlock] = useState<Block | null>(null);
   const [templatesOpen, setTemplatesOpen] = useState(false);
+  const [aiOpen, setAiOpen] = useState(false);
   const [savedSections, setSavedSections] = useState<SavedSection[]>([]);
   const [dragBlockId, setDragBlockId] = useState<string | null>(null);
   const [pageSettingsOpen, setPageSettingsOpen] = useState(false);
@@ -196,6 +201,25 @@ export default function OnlineStoreDesignPage() {
     setActiveBlockId(null);
     setTemplatesOpen(false);
     toast.success(`Applied "${tpl.name}" template`);
+  };
+
+  /* ─── AI-designed pages ──────────────────────────────────────────── */
+  /* The dialog has already confirmed a replace and spelled out what it costs,
+   * so this only has to carry out the choice. Appending is the safe path: the
+   * generated pages land after the merchant's own, which keep their ids. */
+  const applyAiDesign = (pages: Page[], theme: ThemeSettings | null, mode: ApplyMode) => {
+    mutateSite((s) => ({
+      ...s,
+      ...(theme ? { theme: { ...s.theme, ...theme } } : {}),
+      pages: mode === "replace" ? pages : [...s.pages, ...pages],
+    }));
+    const first = pages[0];
+    if (first) { setActivePageId(first.id); setActiveBlockId(null); }
+    toast.success(
+      mode === "replace"
+        ? "Store replaced with the AI design"
+        : `Added ${pages.length} AI-designed page${pages.length === 1 ? "" : "s"}`,
+    );
   };
 
   /* ─── Reusable saved sections (localStorage, per merchant) ────────── */
@@ -353,6 +377,12 @@ export default function OnlineStoreDesignPage() {
                       ))}
                     </div>
                     <Separator className="my-3" />
+                    {/* Shown even when no AI account is connected: the dialog
+                        explains how to connect one, which is the only way a
+                        merchant would find out the feature exists. */}
+                    <Button size="sm" className="w-full gap-1.5 mb-2 h-7 text-xs" onClick={() => setAiOpen(true)} title="Let AI design a storefront from your business details and catalogue">
+                      <Wand2 className="w-3 h-3" /> Design with AI
+                    </Button>
                     <Button size="sm" variant="outline" className="w-full gap-1.5 mb-2 h-7 text-xs" onClick={() => setTemplatesOpen(true)} title="Start this page from a ready-made layout">
                       <Sparkles className="w-3 h-3" /> Templates
                     </Button>
@@ -496,6 +526,14 @@ export default function OnlineStoreDesignPage() {
           </>
         )}
       </div>
+
+      <AiDesignerDialog
+        open={aiOpen}
+        onOpenChange={setAiOpen}
+        existingPages={site.pages}
+        available={aiStatus?.available ?? false}
+        onApply={applyAiDesign}
+      />
 
       <Dialog open={templatesOpen} onOpenChange={setTemplatesOpen}>
         <DialogContent className="max-w-lg">

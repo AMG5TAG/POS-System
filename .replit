@@ -3,6 +3,13 @@ modules = ["nodejs-24", "python-3.11", "postgresql-16"]
 [deployment]
 router = "application"
 deploymentTarget = "autoscale"
+# Typechecks, then builds every package: the API bundle (dist/index.mjs) and the
+# React app (artifacts/koapos/dist/public), which the API server serves.
+build = ["pnpm", "run", "build"]
+# One process serves both halves on one origin — /api from the router and every
+# other path from the built SPA. The frontend calls the API on relative paths, so
+# splitting them across origins would break the session cookie.
+run = ["pnpm", "--filter", "@workspace/api-server", "run", "start"]
 
 [deployment.postBuild]
 args = ["pnpm", "store", "prune"]
@@ -130,6 +137,14 @@ channel = "stable-25_05"
 
 [userenv.production]
 SKIP_SCHEMA_DRIFT_CHECK = "true"
+# The api-server `start` script does not set NODE_ENV, and a great deal hangs off
+# it: the fail-fast guards for SESSION_SECRET and VAULT_ENCRYPTION_KEY, the CORS
+# allowlist (otherwise `origin: true`), and whether the dev fallbacks for the
+# vault key and ANTHROPIC_API_KEY are honoured. Unset, the deployment would fall
+# back to the hardcoded session secret, which is public in this repo — anyone
+# could forge a merchant session. Set here rather than in [userenv.shared] so the
+# dev workspace stays in development mode.
+NODE_ENV = "production"
 
 [userenv.shared]
 SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"

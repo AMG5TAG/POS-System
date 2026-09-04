@@ -45,7 +45,7 @@ tags:
   - name: cameras
     description: IP camera management and snapshots
   - name: openai
-    description: AI assistant powered by OpenAI
+    description: AI assistant. Served by Claude where configured, OpenAI as fallback.
   - name: ai
     description: AI feature settings and kill-switch
   - name: brands
@@ -6320,6 +6320,44 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/OnlineStoreSettings" }
 
+  /online-store/ai/status:
+    get:
+      operationId: getOnlineStoreAiStatus
+      summary: Whether AI store generation is available, and which provider serves it
+      tags: [OnlineStore]
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnlineStoreAiStatus" }
+
+  /online-store/ai/generate:
+    post:
+      operationId: generateOnlineStoreDesign
+      summary: Generate a storefront design from the merchant's business details and catalogue
+      description: >-
+        Returns a draft only — theme and pages the editor previews. Nothing is
+        saved; the merchant applies the draft through the normal settings upsert.
+      tags: [OnlineStore]
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: { $ref: "#/components/schemas/OnlineStoreAiGenerateInput" }
+      responses:
+        "200":
+          description: OK
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/OnlineStoreAiDraft" }
+        "429":
+          description: Too many generations
+        "502":
+          description: The AI service failed or returned an unusable design
+        "503":
+          description: No AI provider is configured
+
   /online-store-thirdparty:
     get:
       operationId: getOnlineStoreThirdparty
@@ -8668,6 +8706,13 @@ paths:
             enum: [draft, sent, accepted, expired, converted]
         - name: customerId
           in: query
+          schema:
+            type: integer
+        - name: serviceJobId
+          in: query
+          description: >-
+            Only quotes raised against this service job. Used by the POS to
+            offer a job's saved quote when the job is linked to a sale.
           schema:
             type: integer
         - name: search
@@ -13787,10 +13832,11 @@ components:
     ServiceSettings:
       type: object
       required:
-        [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
+        [showQuote, showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
          showTechnicianTime, showSignOff, showShipping, showNotes,
          repairWarrantyDays, reworkWarrantyDays]
       properties:
+        showQuote:          { type: boolean }
         showPartsLabour:    { type: boolean }
         showApprovalDeposit: { type: boolean }
         showDiagnostics:    { type: boolean }
@@ -13807,6 +13853,7 @@ components:
         [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
          showTechnicianTime, showSignOff, showShipping, showNotes]
       properties:
+        showQuote:          { type: boolean }
         showPartsLabour:    { type: boolean }
         showApprovalDeposit: { type: boolean }
         showDiagnostics:    { type: boolean }
@@ -15556,6 +15603,72 @@ components:
         features:    { type: string }
         pages:       { type: string }
         quickCodes:  { type: string }
+
+    OnlineStoreAiStatus:
+      type: object
+      required: [available]
+      properties:
+        available: { type: boolean }
+        provider:
+          type: string
+          nullable: true
+          enum: [claude, openai]
+          description: The provider that would serve a generation right now.
+
+    OnlineStoreAiGenerateInput:
+      type: object
+      properties:
+        brief:
+          type: string
+          maxLength: 2000
+          description: >-
+            What the merchant wants from the store. Optional — their business
+            details and product catalogue are used either way.
+
+    OnlineStoreAiBlock:
+      type: object
+      required: [id, type, data]
+      properties:
+        id: { type: string }
+        type: { type: string }
+        data:
+          type: object
+          additionalProperties: true
+
+    OnlineStoreAiPage:
+      type: object
+      required: [id, name, slug, visible, blocks]
+      properties:
+        id: { type: string }
+        name: { type: string }
+        slug: { type: string }
+        visible: { type: boolean }
+        seoTitle: { type: string }
+        seoDescription: { type: string }
+        blocks:
+          type: array
+          items: { $ref: "#/components/schemas/OnlineStoreAiBlock" }
+
+    OnlineStoreAiTheme:
+      type: object
+      required: [primary, accent, bg, text, font, radius]
+      properties:
+        primary: { type: string }
+        accent: { type: string }
+        bg: { type: string }
+        text: { type: string }
+        font: { type: string, enum: [sans, serif, mono] }
+        radius: { type: string, enum: [none, sm, md, lg] }
+
+    OnlineStoreAiDraft:
+      type: object
+      required: [provider, theme, pages]
+      properties:
+        provider: { type: string, enum: [claude, openai] }
+        theme: { $ref: "#/components/schemas/OnlineStoreAiTheme" }
+        pages:
+          type: array
+          items: { $ref: "#/components/schemas/OnlineStoreAiPage" }
 
     OnlineStoreThirdparty:
       type: object

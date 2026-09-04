@@ -8,6 +8,7 @@ const router: IRouter = Router();
 
 /** Every service job menu section is visible unless a merchant turns it off. */
 const DEFAULT_CONFIG = {
+  showQuote: true,
   showPartsLabour: true,
   showApprovalDeposit: true,
   showDiagnostics: true,
@@ -29,6 +30,7 @@ const clampDays = (v: unknown, fallback: number): number => {
 function formatSettings(row: typeof serviceSettingsTable.$inferSelect | undefined) {
   const cfg = (row?.config ?? {}) as Partial<typeof DEFAULT_CONFIG>;
   return {
+    showQuote:          cfg.showQuote          ?? DEFAULT_CONFIG.showQuote,
     showPartsLabour:    cfg.showPartsLabour    ?? DEFAULT_CONFIG.showPartsLabour,
     showApprovalDeposit: cfg.showApprovalDeposit ?? DEFAULT_CONFIG.showApprovalDeposit,
     showDiagnostics:    cfg.showDiagnostics    ?? DEFAULT_CONFIG.showDiagnostics,

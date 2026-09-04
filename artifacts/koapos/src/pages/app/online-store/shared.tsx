@@ -35,6 +35,12 @@ import {
   useGetOnlineStoreSettings,
   useUpsertOnlineStoreSettings,
 } from "@workspace/api-client-react";
+import {
+  BLOCK_DEFAULTS,
+  BLOCK_TYPES,
+  type BlockType,
+  type BlockData,
+} from "@workspace/online-store-blocks";
 import DOMPurify from "dompurify";
 import { useQueryClient } from "@tanstack/react-query";
 
@@ -87,20 +93,20 @@ export interface Page {
 }
 
 export interface Block {
-  id: string; type: BlockType; data: Record<string, string | number | boolean>;
+  id: string; type: BlockType; data: BlockData;
 }
 
-export type BlockType =
-  | "hero" | "heading" | "text" | "image" | "product-grid" | "featured-product"
-  | "gallery" | "cta" | "newsletter" | "contact" | "spacer" | "loyalty-banner" | "quick-code"
-  | "video" | "testimonials" | "faq" | "columns" | "countdown" | "social" | "map" | "pricing"
-  | "html" | "iframe" | "similar-products" | "menu" | "product-category";
+/* The block catalogue lives in @workspace/online-store-blocks so the API
+ * server's AI generator and this editor cannot drift apart. Re-exported here
+ * because every consumer of this module already imports BlockType from it. */
+export type { BlockType, BlockData };
+export { BLOCK_TYPES };
 
 export interface QuickCode { id: string; code: string; label: string; url: string; }
 
 export interface BlockMeta {
   type: BlockType; label: string; icon: React.ComponentType<{ className?: string }>;
-  description: string; defaultData: Record<string, string | number | boolean>;
+  description: string; defaultData: BlockData;
 }
 
 export interface ThirdParty {
@@ -110,32 +116,32 @@ export interface ThirdParty {
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 
 export const BLOCK_LIBRARY: BlockMeta[] = [
-  { type: "hero",             label: "Hero Banner",       icon: Layout,       description: "Full-width header with image, headline and CTA",          defaultData: { headline: "Welcome to our store", subhead: "Discover what we have to offer", cta: "Shop now", ctaLink: "/shop", imageUrl: "" } },
-  { type: "heading",          label: "Heading",           icon: TypeIcon,     description: "Section title",                                            defaultData: { text: "Section Heading", size: "lg", align: "left" } },
-  { type: "text",             label: "Text Block",        icon: FileText,     description: "Paragraph copy",                                           defaultData: { text: "Add your content here. Tell your customers what makes your store special." } },
-  { type: "image",            label: "Image",             icon: ImageIcon,    description: "Single image",                                              defaultData: { url: "", alt: "Image", caption: "" } },
-  { type: "product-grid",     label: "Product Grid",      icon: Package,      description: "Grid of products from your catalogue",                     defaultData: { columns: 4, count: 8, category: "all" } },
-  { type: "featured-product", label: "Featured Product",  icon: Star,         description: "Highlight a single product",                               defaultData: { productSku: "", layout: "right" } },
-  { type: "gallery",          label: "Image Gallery",     icon: Layers,       description: "Grid of images",                                            defaultData: { columns: 3 } },
-  { type: "cta",              label: "Call to Action",    icon: ChevronRight, description: "Banner with button",                                       defaultData: { headline: "Ready to start?", text: "Take the next step", buttonText: "Get started", buttonLink: "/contact" } },
-  { type: "newsletter",       label: "Newsletter",        icon: Mail,         description: "Email signup form",                                         defaultData: { headline: "Stay in the loop", text: "Sign up for new arrivals and special offers" } },
-  { type: "contact",          label: "Contact Info",      icon: Phone,        description: "Business contact details",                                  defaultData: { phone: "", email: "", address: "", hours: "" } },
-  { type: "spacer",           label: "Spacer",            icon: GripVertical, description: "Vertical spacing",                                          defaultData: { height: 48 } },
-  { type: "loyalty-banner",   label: "Loyalty Promo",     icon: Gift,         description: "Promote your loyalty program",                              defaultData: { headline: "Join our rewards program", text: "Earn points on every purchase", points: 100 } },
-  { type: "quick-code",       label: "Quick Code",        icon: QrCode,       description: "Embed a QR code or short URL",                              defaultData: { code: "" } },
-  { type: "video",            label: "Video",             icon: Play,         description: "Embed a YouTube or Vimeo video",                           defaultData: { url: "", caption: "" } },
-  { type: "testimonials",     label: "Testimonials",      icon: MessageSquare,description: "Customer quotes / reviews",                                defaultData: { quote1: "Fantastic service and quality!", author1: "Happy Customer", quote2: "I'll definitely be back.", author2: "Local Regular", quote3: "", author3: "" } },
-  { type: "faq",              label: "FAQ / Accordion",   icon: HelpCircle,   description: "Expandable question & answer list",                        defaultData: { q1: "What are your hours?", a1: "We're open 9–5, Mon–Sat.", q2: "Do you offer delivery?", a2: "Yes, within the local area.", q3: "", a3: "" } },
-  { type: "columns",          label: "Columns",           icon: Columns3,     description: "Multi-column text layout",                                 defaultData: { columns: 3, col1: "Quality first", col2: "Fast service", col3: "Local & trusted", col4: "" } },
-  { type: "countdown",        label: "Countdown Timer",   icon: Timer,        description: "Count down to a date (e.g. a sale)",                        defaultData: { headline: "Sale ends in", target: "" } },
-  { type: "social",           label: "Social Icons",      icon: Share2,       description: "Links to your social profiles",                            defaultData: { facebook: "", instagram: "", twitter: "", tiktok: "", youtube: "" } },
-  { type: "map",              label: "Map",               icon: MapIcon,      description: "Embedded map of your location",                            defaultData: { address: "", zoom: 14 } },
-  { type: "pricing",          label: "Pricing Table",     icon: DollarSign,   description: "Compare plans or packages",                                defaultData: { name1: "Basic", price1: "$9", features1: "Feature A, Feature B", name2: "Pro", price2: "$29", features2: "Everything in Basic, Feature C, Feature D", name3: "", price3: "", features3: "" } },
-  { type: "html",             label: "Custom HTML",       icon: Code2,        description: "Paste your own raw HTML",                                  defaultData: { html: "<div style=\"padding:24px;text-align:center;font-weight:600\">Your custom HTML here</div>" } },
-  { type: "iframe",           label: "iFrame Embed",      icon: AppWindow,    description: "Embed an external page or widget by URL",                  defaultData: { url: "", height: 400, title: "Embedded content" } },
-  { type: "similar-products", label: "Similar Products",  icon: ShoppingBag,  description: "Show products related to one item",                        defaultData: { headline: "You may also like", productSku: "", count: 4 } },
-  { type: "menu",             label: "Menu",              icon: MenuIcon,     description: "A food / service menu list with prices",                   defaultData: { headline: "Menu", items: "Flat White | $4.50\nMuffin | $5.00\nToasted Sandwich | $9.00" } },
-  { type: "product-category", label: "Product Category",  icon: Layers,       description: "Grid of products from a chosen category",                  defaultData: { headline: "Shop the range", category: "all", columns: 4, count: 8 } },
+  { type: "hero",             label: "Hero Banner",       icon: Layout,       description: "Full-width header with image, headline and CTA",          defaultData: BLOCK_DEFAULTS["hero"] },
+  { type: "heading",          label: "Heading",           icon: TypeIcon,     description: "Section title",                                            defaultData: BLOCK_DEFAULTS["heading"] },
+  { type: "text",             label: "Text Block",        icon: FileText,     description: "Paragraph copy",                                           defaultData: BLOCK_DEFAULTS["text"] },
+  { type: "image",            label: "Image",             icon: ImageIcon,    description: "Single image",                                              defaultData: BLOCK_DEFAULTS["image"] },
+  { type: "product-grid",     label: "Product Grid",      icon: Package,      description: "Grid of products from your catalogue",                     defaultData: BLOCK_DEFAULTS["product-grid"] },
+  { type: "featured-product", label: "Featured Product",  icon: Star,         description: "Highlight a single product",                               defaultData: BLOCK_DEFAULTS["featured-product"] },
+  { type: "gallery",          label: "Image Gallery",     icon: Layers,       description: "Grid of images",                                            defaultData: BLOCK_DEFAULTS["gallery"] },
+  { type: "cta",              label: "Call to Action",    icon: ChevronRight, description: "Banner with button",                                       defaultData: BLOCK_DEFAULTS["cta"] },
+  { type: "newsletter",       label: "Newsletter",        icon: Mail,         description: "Email signup form",                                         defaultData: BLOCK_DEFAULTS["newsletter"] },
+  { type: "contact",          label: "Contact Info",      icon: Phone,        description: "Business contact details",                                  defaultData: BLOCK_DEFAULTS["contact"] },
+  { type: "spacer",           label: "Spacer",            icon: GripVertical, description: "Vertical spacing",                                          defaultData: BLOCK_DEFAULTS["spacer"] },
+  { type: "loyalty-banner",   label: "Loyalty Promo",     icon: Gift,         description: "Promote your loyalty program",                              defaultData: BLOCK_DEFAULTS["loyalty-banner"] },
+  { type: "quick-code",       label: "Quick Code",        icon: QrCode,       description: "Embed a QR code or short URL",                              defaultData: BLOCK_DEFAULTS["quick-code"] },
+  { type: "video",            label: "Video",             icon: Play,         description: "Embed a YouTube or Vimeo video",                           defaultData: BLOCK_DEFAULTS["video"] },
+  { type: "testimonials",     label: "Testimonials",      icon: MessageSquare,description: "Customer quotes / reviews",                                defaultData: BLOCK_DEFAULTS["testimonials"] },
+  { type: "faq",              label: "FAQ / Accordion",   icon: HelpCircle,   description: "Expandable question & answer list",                        defaultData: BLOCK_DEFAULTS["faq"] },
+  { type: "columns",          label: "Columns",           icon: Columns3,     description: "Multi-column text layout",                                 defaultData: BLOCK_DEFAULTS["columns"] },
+  { type: "countdown",        label: "Countdown Timer",   icon: Timer,        description: "Count down to a date (e.g. a sale)",                        defaultData: BLOCK_DEFAULTS["countdown"] },
+  { type: "social",           label: "Social Icons",      icon: Share2,       description: "Links to your social profiles",                            defaultData: BLOCK_DEFAULTS["social"] },
+  { type: "map",              label: "Map",               icon: MapIcon,      description: "Embedded map of your location",                            defaultData: BLOCK_DEFAULTS["map"] },
+  { type: "pricing",          label: "Pricing Table",     icon: DollarSign,   description: "Compare plans or packages",                                defaultData: BLOCK_DEFAULTS["pricing"] },
+  { type: "html",             label: "Custom HTML",       icon: Code2,        description: "Paste your own raw HTML",                                  defaultData: BLOCK_DEFAULTS["html"] },
+  { type: "iframe",           label: "iFrame Embed",      icon: AppWindow,    description: "Embed an external page or widget by URL",                  defaultData: BLOCK_DEFAULTS["iframe"] },
+  { type: "similar-products", label: "Similar Products",  icon: ShoppingBag,  description: "Show products related to one item",                        defaultData: BLOCK_DEFAULTS["similar-products"] },
+  { type: "menu",             label: "Menu",              icon: MenuIcon,     description: "A food / service menu list with prices",                   defaultData: BLOCK_DEFAULTS["menu"] },
+  { type: "product-category", label: "Product Category",  icon: Layers,       description: "Grid of products from a chosen category",                  defaultData: BLOCK_DEFAULTS["product-category"] },
 ];
 
 export const FONT_OPTIONS = [

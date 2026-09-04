@@ -1,4 +1,7 @@
 import express, { type Express } from "express";
+import path from "node:path";
+import { existsSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import cors from "cors";
 import helmet from "helmet";
 import session from "express-session";
@@ -120,6 +123,65 @@ app.use(express.json({
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 
 app.use("/api", router);
+
+/* ── The built SPA ────────────────────────────────────────────────────────────
+ *
+ * In production this one process serves both halves of the app: the API under
+ * `/api` and the React bundle at everything else. That is not a convenience —
+ * the frontend calls the API on *relative* paths (`custom-fetch.ts` sets no base
+ * URL), so the two have to answer on the same origin or every request is
+ * cross-origin and the session cookie stops flowing.
+ *
+ * Mounted after the API router so `/api/whatever` can still 404 as JSON rather
+ * than being answered with index.html, and before the error handler so that
+ * stays last.
+ *
+ * Registered only when a build is actually present. In development the SPA is
+ * served by Vite on its own port, and the test suite imports this module with no
+ * frontend build on disk — in both cases the block is skipped and the server
+ * behaves exactly as it did before.
+ */
+const spaDir =
+  process.env.SPA_DIST_DIR?.trim() ||
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../koapos/dist/public");
+const spaIndex = path.join(spaDir, "index.html");
+
+if (existsSync(spaIndex)) {
+  logger.info({ spaDir }, "Serving built frontend");
+
+  /* Vite fingerprints everything under /assets, so those filenames change
+     whenever their content does and can be cached permanently. The rest of the
+     build root (icons, manifest, robots.txt, logo) keeps its name across
+     deploys, so it only gets a short cache — a year-long one would strand a
+     merchant's replaced logo in every till's browser. */
+  app.use("/assets", express.static(path.join(spaDir, "assets"), {
+    immutable: true,
+    maxAge: "1y",
+  }));
+
+  app.use(express.static(spaDir, {
+    index: false,
+    maxAge: "1h",
+    setHeaders: (res, filePath) => {
+      // index.html names the hashed bundles, so caching it is what would pin a
+      // till to the previous deploy.
+      if (filePath === spaIndex) res.setHeader("Cache-Control", "no-cache");
+    },
+  }));
+
+  // Client-side routing: any GET the static handlers didn't answer is a deep
+  // link into the SPA (/pos/sell, /app/customers …) and gets index.html. Non-GET
+  // verbs fall through to the 404/error handler — a stray POST is a bug, not a
+  // route.
+  app.get(/.*/, (req, res, next) => {
+    if (req.path.startsWith("/api")) return next();
+    res.sendFile(spaIndex, { headers: { "Cache-Control": "no-cache" } }, (err) => {
+      if (err) next(err);
+    });
+  });
+} else {
+  logger.info({ spaDir }, "No frontend build found — serving API only");
+}
 
 app.use(errorHandler);
 
