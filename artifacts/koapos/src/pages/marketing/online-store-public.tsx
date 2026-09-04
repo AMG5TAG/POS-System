@@ -8,7 +8,7 @@ import {
   CartProvider, CartButton, CartDrawer, ShoppableProducts, ProductDetailProvider, OrderTracker, isProductBlock, type Catalog,
 } from "@/pages/marketing/storefront-commerce";
 import { useStorefrontSeo } from "@/pages/marketing/storefront-seo";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 
 /*
  * Public, unauthenticated storefront for the KoaPOS website builder.
@@ -146,7 +146,7 @@ export default function OnlineStorePublicView() {
               {(footer.email || footer.phone || footer.facebook || footer.instagram || footer.twitter) && (
                 <div className="flex flex-wrap items-center gap-x-5 gap-y-2 text-xs opacity-80">
                   {footer.email && <a href={`mailto:${footer.email}`} className="inline-flex items-center gap-1"><Mail className="w-3.5 h-3.5" />{footer.email}</a>}
-                  {footer.phone && <a href={`tel:${footer.phone}`} className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{footer.phone}</a>}
+                  {footer.phone && <a href={telHref(footer.phone)} className="inline-flex items-center gap-1"><Phone className="w-3.5 h-3.5" />{footer.phone}</a>}
                   <span className="flex items-center gap-3">
                     {footer.facebook && <a href={footer.facebook} target="_blank" rel="noreferrer" aria-label="Facebook"><Facebook className="w-4 h-4" /></a>}
                     {footer.instagram && <a href={footer.instagram} target="_blank" rel="noreferrer" aria-label="Instagram"><Instagram className="w-4 h-4" /></a>}

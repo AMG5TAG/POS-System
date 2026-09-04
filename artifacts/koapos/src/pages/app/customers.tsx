@@ -46,7 +46,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { ScrollArea, SCROLL_AREA_TRUNCATE_FIX } from "@/components/ui/scroll-area";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, telHref } from "@/lib/utils";
 import { exportCustomerPDF } from "@/lib/customer-pdf";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { useStickerPrinter } from "@/lib/sticker-config";
@@ -1417,7 +1417,7 @@ function CustomerDetailInner({
           )}
           <div className="rounded-xl border bg-muted/20 divide-y">
             <InfoRow icon={Mail}      label="Email"   value={customer.email} onClick={customer.email ? () => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); } : undefined} />
-            <InfoRow icon={Phone}     label="Phone"   value={customer.phone} href={customer.phone ? `tel:${customer.phone.replace(/\s/g, "")}` : undefined} />
+            <InfoRow icon={Phone}     label="Phone"   value={customer.phone} href={customer.phone ? telHref(customer.phone) : undefined} />
             <InfoRow icon={Building2} label="Company" value={customer.company} />
           </div>
           <div className="rounded-xl border bg-muted/20 divide-y">

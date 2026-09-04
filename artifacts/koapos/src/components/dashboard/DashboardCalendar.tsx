@@ -8,7 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
 import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User, MessageCircleReply } from "lucide-react";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 import { toast } from "sonner";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
@@ -119,7 +119,7 @@ function AppointmentDialog({ appt, timezone, onClose }: { appt: CalendarAppointm
             <div className="flex items-center gap-2 text-sm">
               <Phone className="w-4 h-4 text-muted-foreground shrink-0" />
               <a
-                href={`tel:${appt.customerPhone}`}
+                href={telHref(appt.customerPhone)}
                 className="text-primary underline underline-offset-2 hover:text-primary/80 transition-colors"
               >
                 {appt.customerPhone}

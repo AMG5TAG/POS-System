@@ -2,6 +2,7 @@ import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Package, Phone, MapPin, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
 import { useStorefrontSeo } from "@/pages/marketing/storefront-seo";
+import { telHref } from "@/lib/utils";
 
 /*
  * Public, unauthenticated product page.
@@ -154,7 +155,7 @@ export default function ProductPublicView() {
         {(data.business.phone || data.business.city) && (
           <div className="mt-8 rounded-2xl border bg-white p-4 text-sm flex flex-wrap items-center gap-x-6 gap-y-2 text-muted-foreground">
             {data.business.phone && (
-              <a href={`tel:${data.business.phone}`} className="inline-flex items-center gap-1.5 hover:text-foreground">
+              <a href={telHref(data.business.phone)} className="inline-flex items-center gap-1.5 hover:text-foreground">
                 <Phone className="w-4 h-4" /> {data.business.phone}
               </a>
             )}

@@ -40,7 +40,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 import { parseHardwareConfig, type HardwareCfg } from "@/lib/hardware-config";
 import { printDocument } from "@/lib/print-router";
 
@@ -429,7 +429,7 @@ function DetailDialog({ appt, onClose, onEdit, onDelete, deleteIsPending }: Deta
                     <p className="font-medium">{appt.customerName}</p>
                     {appt.customerPhone && (
                       <a
-                        href={`tel:${appt.customerPhone}`}
+                        href={telHref(appt.customerPhone)}
                         className="flex items-center gap-1.5 mt-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <Phone className="w-3 h-3 shrink-0" />
