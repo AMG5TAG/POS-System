@@ -20,7 +20,18 @@ const DEFAULT_CONFIG = {
   // Default warranty windows (days) pre-filled on new service jobs / reworks.
   repairWarrantyDays: 14,
   reworkWarrantyDays: 14,
+  /* What the Print button produces. "ask" is the behaviour every merchant has
+     today — the chooser — so an existing row with no key set is unchanged. */
+  defaultPrint: "ask" as DefaultPrint,
 };
+
+const DEFAULT_PRINT_VALUES = ["ask", "a4", "80mm", "sticker"] as const;
+type DefaultPrint = (typeof DEFAULT_PRINT_VALUES)[number];
+
+/* Stored config is merchant-supplied JSON, so an unrecognised value falls back
+   to the chooser rather than a paper nothing knows how to print. */
+const asDefaultPrint = (v: unknown): DefaultPrint =>
+  DEFAULT_PRINT_VALUES.includes(v as DefaultPrint) ? (v as DefaultPrint) : "ask";
 
 const clampDays = (v: unknown, fallback: number): number => {
   const n = Math.round(Number(v));
@@ -41,6 +52,7 @@ function formatSettings(row: typeof serviceSettingsTable.$inferSelect | undefine
     showNotes:          cfg.showNotes          ?? DEFAULT_CONFIG.showNotes,
     repairWarrantyDays: clampDays(cfg.repairWarrantyDays, DEFAULT_CONFIG.repairWarrantyDays),
     reworkWarrantyDays: clampDays(cfg.reworkWarrantyDays, DEFAULT_CONFIG.reworkWarrantyDays),
+    defaultPrint:       asDefaultPrint(cfg.defaultPrint),
   };
 }
 

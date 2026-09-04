@@ -13834,7 +13834,7 @@ components:
       required:
         [showQuote, showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
          showTechnicianTime, showSignOff, showShipping, showNotes,
-         repairWarrantyDays, reworkWarrantyDays]
+         repairWarrantyDays, reworkWarrantyDays, defaultPrint]
       properties:
         showQuote:          { type: boolean }
         showPartsLabour:    { type: boolean }
@@ -13847,6 +13847,12 @@ components:
         showNotes:          { type: boolean }
         repairWarrantyDays: { type: integer, minimum: 0, description: "Default repair warranty period (days) pre-filled on new service jobs." }
         reworkWarrantyDays: { type: integer, minimum: 0, description: "Default warranty period (days) applied to no-charge rework jobs." }
+        defaultPrint:
+          type: string
+          enum: [ask, a4, "80mm", sticker]
+          description: >-
+            What the Print button on a service job produces. "ask" (the default)
+            keeps the chooser; the others print that document straight away.
     ServiceSettingsInput:
       type: object
       required:
@@ -13864,6 +13870,12 @@ components:
         showNotes:          { type: boolean }
         repairWarrantyDays: { type: integer, minimum: 0 }
         reworkWarrantyDays: { type: integer, minimum: 0 }
+        defaultPrint:
+          type: string
+          enum: [ask, a4, "80mm", sticker]
+          description: >-
+            What the Print button on a service job produces. "ask" (the default)
+            keeps the chooser; the others print that document straight away.
 
     InvoiceSettings:
       type: object

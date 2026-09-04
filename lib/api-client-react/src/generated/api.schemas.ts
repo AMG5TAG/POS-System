@@ -3167,6 +3167,19 @@ export interface LoyaltySettingsInput {
   naming?: LoyaltyNaming;
 }
 
+/**
+ * What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away.
+ */
+export type ServiceSettingsDefaultPrint = typeof ServiceSettingsDefaultPrint[keyof typeof ServiceSettingsDefaultPrint];
+
+
+export const ServiceSettingsDefaultPrint = {
+  ask: 'ask',
+  a4: 'a4',
+  '80mm': '80mm',
+  sticker: 'sticker',
+} as const;
+
 export interface ServiceSettings {
   showQuote: boolean;
   showPartsLabour: boolean;
@@ -3187,7 +3200,22 @@ export interface ServiceSettings {
      * @minimum 0
      */
   reworkWarrantyDays: number;
+  /** What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away. */
+  defaultPrint: ServiceSettingsDefaultPrint;
 }
+
+/**
+ * What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away.
+ */
+export type ServiceSettingsInputDefaultPrint = typeof ServiceSettingsInputDefaultPrint[keyof typeof ServiceSettingsInputDefaultPrint];
+
+
+export const ServiceSettingsInputDefaultPrint = {
+  ask: 'ask',
+  a4: 'a4',
+  '80mm': '80mm',
+  sticker: 'sticker',
+} as const;
 
 export interface ServiceSettingsInput {
   showQuote?: boolean;
@@ -3203,6 +3231,8 @@ export interface ServiceSettingsInput {
   repairWarrantyDays?: number;
   /** @minimum 0 */
   reworkWarrantyDays?: number;
+  /** What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away. */
+  defaultPrint?: ServiceSettingsInputDefaultPrint;
 }
 
 /**

@@ -2922,7 +2922,8 @@ export const GetServiceSettingsResponse = zod.object({
   "showShipping": zod.boolean(),
   "showNotes": zod.boolean(),
   "repairWarrantyDays": zod.number().min(getServiceSettingsResponseRepairWarrantyDaysMin).describe('Default repair warranty period (days) pre-filled on new service jobs.'),
-  "reworkWarrantyDays": zod.number().min(getServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.')
+  "reworkWarrantyDays": zod.number().min(getServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.'),
+  "defaultPrint": zod.enum(['ask', 'a4', '80mm', 'sticker']).describe('What the Print button on a service job produces. \"ask\" (the default) keeps the chooser; the others print that document straight away.')
 })
 
 
@@ -2946,7 +2947,8 @@ export const UpdateServiceSettingsBody = zod.object({
   "showShipping": zod.boolean(),
   "showNotes": zod.boolean(),
   "repairWarrantyDays": zod.number().min(updateServiceSettingsBodyRepairWarrantyDaysMin).optional(),
-  "reworkWarrantyDays": zod.number().min(updateServiceSettingsBodyReworkWarrantyDaysMin).optional()
+  "reworkWarrantyDays": zod.number().min(updateServiceSettingsBodyReworkWarrantyDaysMin).optional(),
+  "defaultPrint": zod.enum(['ask', 'a4', '80mm', 'sticker']).optional().describe('What the Print button on a service job produces. \"ask\" (the default) keeps the chooser; the others print that document straight away.')
 })
 
 export const updateServiceSettingsResponseRepairWarrantyDaysMin = 0;
@@ -2966,7 +2968,8 @@ export const UpdateServiceSettingsResponse = zod.object({
   "showShipping": zod.boolean(),
   "showNotes": zod.boolean(),
   "repairWarrantyDays": zod.number().min(updateServiceSettingsResponseRepairWarrantyDaysMin).describe('Default repair warranty period (days) pre-filled on new service jobs.'),
-  "reworkWarrantyDays": zod.number().min(updateServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.')
+  "reworkWarrantyDays": zod.number().min(updateServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.'),
+  "defaultPrint": zod.enum(['ask', 'a4', '80mm', 'sticker']).describe('What the Print button on a service job produces. \"ask\" (the default) keeps the chooser; the others print that document straight away.')
 })
 
 

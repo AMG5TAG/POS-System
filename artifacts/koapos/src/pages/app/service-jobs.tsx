@@ -6,6 +6,7 @@ import {
   useDeleteServiceJob,
   useGetMerchant,
   useGetPosSettings,
+  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -301,6 +302,8 @@ export default function ServiceJobsPage() {
 
   const queryClient = useQueryClient();
   const { data: jobsData, isLoading } = useListServiceJobs();
+  /* Management › Service Options › Printing — what pressing Print produces. */
+  const { data: serviceSettings } = useGetServiceSettings();
   const deleteMutation = useDeleteServiceJob();
 
   const { data: merchant }   = useGetMerchant({ query: { queryKey: ["merchant"] } });
@@ -441,6 +444,18 @@ export default function ServiceJobsPage() {
   const startPrint = (job: ServiceJob, mode: "sheet" | "sticker", copies = 1, paper: ServicePaper = "a4") => {
     if (mode === "sticker") { printRepairSticker(job); return; }
     setPrintState({ job, copies, paper });
+  };
+
+  /* Pressing Print. With a default nominated in Service Options it prints that
+     document outright; otherwise it opens the chooser, which is what every
+     merchant gets until they set one. */
+  const pressPrint = (job: ServiceJob) => {
+    switch (serviceSettings?.defaultPrint ?? "ask") {
+      case "a4":      startPrint(job, "sheet", 1, "a4");   return;
+      case "80mm":    startPrint(job, "sheet", 1, "80mm"); return;
+      case "sticker": startPrint(job, "sticker");          return;
+      default:        setPrintChoiceJob(job);
+    }
   };
 
   const jobs = Array.isArray(jobsData) ? jobsData : [];
@@ -833,7 +848,7 @@ export default function ServiceJobsPage() {
                                   Send
                                 </SendButton>
                                 <button
-                                  onClick={() => setPrintChoiceJob(job)}
+                                  onClick={() => pressPrint(job)}
                                   className="flex items-center gap-1 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors"
                                 >
                                   <Printer className="w-3 h-3" />
@@ -868,7 +883,7 @@ export default function ServiceJobsPage() {
         onPrint={(job, mode) => {
           setViewing(null);
           if (mode === "sticker") { startPrint(job, "sticker"); return; }
-          setPrintChoiceJob(job);
+          pressPrint(job);
         }}
       />
 

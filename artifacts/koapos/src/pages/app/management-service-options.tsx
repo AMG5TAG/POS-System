@@ -4,13 +4,14 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/com
 import { Switch } from "@/components/ui/switch";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import {
   useGetServiceSettings, useUpdateServiceSettings, type ServiceSettings,
 } from "@workspace/api-client-react";
 import {
-  Wrench, Wallet, ListChecks, Shield, Clock, PenLine, Truck, StickyNote, Loader2, FileText,
+  Wrench, Wallet, ListChecks, Shield, Clock, PenLine, Truck, StickyNote, Loader2, FileText, Printer,
 } from "lucide-react";
 
 /* Only the boolean section-visibility keys (excludes the numeric warranty defaults). */
@@ -35,6 +36,15 @@ const SECTIONS: {
   { key: "showSignOff",        label: "Customer Sign-Off",       description: "On-screen customer signature capture.",                icon: PenLine },
   { key: "showShipping",       label: "Mail-In Shipping",        description: "Mail-in / shipping details and tracking.",             icon: Truck },
   { key: "showNotes",          label: "Notes",                   description: "Free-text notes appended to the job.",                 icon: StickyNote },
+];
+
+/* What the Print button on a service job produces. "Ask" is what every merchant
+   has today, so it stays the default and nothing changes until one is chosen. */
+const PRINT_DEFAULTS: { value: ServiceSettings["defaultPrint"]; label: string; hint: string }[] = [
+  { value: "ask",     label: "Ask each time",   hint: "Show the chooser — job sheet or sticker, paper and copies." },
+  { value: "a4",      label: "A4 job sheet",    hint: "Print the full-page sheet straight away." },
+  { value: "80mm",    label: "80mm docket",     hint: "Print the thermal docket straight away." },
+  { value: "sticker", label: "Repair sticker",  hint: "Print the label sticker straight away." },
 ];
 
 export default function ManagementServiceOptionsPage() {
@@ -105,6 +115,42 @@ export default function ManagementServiceOptionsPage() {
                   />
                 </div>
               ))
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2"><Printer className="w-5 h-5 text-primary" /> Printing</CardTitle>
+            <CardDescription>
+              What the Print button produces on a new service job and in the job list. Choosing a
+              document skips the chooser and prints it straight away; the other documents are still
+              available from the job itself.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isLoading || !settings ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : (
+              <div className="max-w-md space-y-2">
+                <Label className="text-sm">Default print</Label>
+                <Select
+                  value={settings.defaultPrint}
+                  onValueChange={(v) => savePatch({ defaultPrint: v as ServiceSettings["defaultPrint"] })}
+                >
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent>
+                    {PRINT_DEFAULTS.map((o) => (
+                      <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  {PRINT_DEFAULTS.find((o) => o.value === settings.defaultPrint)?.hint}
+                </p>
+              </div>
             )}
           </CardContent>
         </Card>
