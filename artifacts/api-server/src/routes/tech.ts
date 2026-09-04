@@ -7,6 +7,7 @@ import { matchStaffByPin } from "../lib/staff-pin";
 import { sendSms } from "../services/sms";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { customerPortalUrl } from "../lib/publicUrl";
+import { NOTE_SEP, parseNotes, buildNoteTimestamp } from "../lib/service-job-notes";
 
 /**
  * Technician web app ("Tech App") API.
@@ -136,22 +137,10 @@ function formatJobDetail(
   };
 }
 
-/* Notes are stored as a single text field; entries are separated the same
-   way the admin Service Job dialog does so both apps parse each other's
-   notes: "[dd/mm/yyyy hh:mm] text" joined by NOTE_SEP. */
-const NOTE_SEP = "\n\n---\n\n";
+/* The tech app lets the caller supply the stamp (a note written offline keeps
+   the time it was actually taken), so it validates the shape it will accept.
+   The format itself lives in lib/service-job-notes. */
 const NOTE_TS_RE = /^\[\d{2}\/\d{2}\/\d{4} \d{2}:\d{2}\]$/;
-
-function parseNotes(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw.split("---").map((s) => s.trim()).filter(Boolean);
-}
-
-function buildNoteTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
-}
 
 /** Auth gate for tech endpoints — verifies the session technician still
     exists and is active. */

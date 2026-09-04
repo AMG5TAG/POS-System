@@ -8,6 +8,7 @@ import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { customQrEmailBlock } from "../lib/custom-qr-email";
 import { applyEstimateApprovalToJob, markJobAwaitingApproval } from "../services/quoteApproval";
+import { appendJobNote } from "../lib/service-job-notes";
 import {
   ListQuotesQueryParams,
   CreateQuoteBody,
@@ -279,6 +280,18 @@ router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
     }).returning();
     return row;
   });
+
+  /* Record the quote in the job's own note log, so the job history shows what
+     the customer was offered and when without cross-referencing the Quotes page.
+     Best-effort: the quote row is already committed and is what the caller asked
+     for, so failing to annotate the job must not fail the request. */
+  if (serviceJobId != null) {
+    try {
+      await appendJobNote(merchantId, serviceJobId, `Quote ${created.quoteNumber} added — $${total.toFixed(2)}`);
+    } catch (err) {
+      console.error("Failed to note quote on service job", err);
+    }
+  }
 
   const row = await loadQuoteRow(created.id, merchantId);
   const body = row ? fmtRow(row) : fmt(created);

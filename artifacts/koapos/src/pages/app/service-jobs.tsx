@@ -475,6 +475,17 @@ export default function ServiceJobsPage() {
     }
   }, [routeParams?.id, jobs]);
 
+  /* `viewing` is a snapshot taken when the row was clicked, but the dialog writes
+     back to the job — notes, a logged call, a quote raised against it — and then
+     invalidates this list. Without re-syncing from the refetched row those writes
+     are invisible until the dialog is closed and reopened. Compares by identity,
+     so this settles after the one refetch rather than looping. */
+  useEffect(() => {
+    if (!viewing) return;
+    const fresh = jobs.find((j) => j.id === viewing.id);
+    if (fresh && fresh !== viewing) setViewing(fresh);
+  }, [jobs, viewing]);
+
   /* Filter — priority + status dropdowns plus a free-text search across the
      job number, customer, device and fault fields. */
   const q = search.trim().toLowerCase();
