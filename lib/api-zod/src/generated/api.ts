@@ -8768,7 +8768,8 @@ export const ListStorefrontApiKeysResponse = zod.object({
   "id": zod.string(),
   "label": zod.string(),
   "description": zod.string(),
-  "sensitive": zod.boolean()
+  "sensitive": zod.boolean(),
+  "write": zod.boolean().optional().describe('True when the scope lets a key change the merchant\'s data rather than only read it, so the UI can warn before it is granted.')
 })),
   "baseUrl": zod.string()
 })

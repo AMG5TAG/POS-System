@@ -139,6 +139,7 @@ export default function OnlineStoreDataApiPage() {
   };
 
   const sensitiveChosen = scopeCatalogue.filter((s) => s.sensitive && form.scopes.includes(s.id));
+  const writeChosen = scopeCatalogue.filter((s) => s.write && form.scopes.includes(s.id));
 
   return (
     <AppLayout>
@@ -317,6 +318,17 @@ export default function OnlineStoreDataApiPage() {
                   {sensitiveChosen.map((s) => s.label.toLowerCase()).join(" and ")} belong to real people. Never publish them on a
                   public page, and don't paste exports into third-party tools. You remain responsible for this data under the
                   Privacy Act.
+                </p>
+              </div>
+            )}
+
+            {writeChosen.length > 0 && (
+              <div className="rounded-md border border-orange-300 bg-orange-50 dark:bg-orange-950/20 dark:border-orange-800 p-3 text-xs text-orange-800 dark:text-orange-300 space-y-1">
+                <p className="font-semibold flex items-center gap-1.5"><ShieldAlert className="w-3.5 h-3.5" /> This key can change your data</p>
+                <p>
+                  It can place orders, which reserves stock and creates customer records. Keep it on your website's
+                  <strong> server</strong>, never in page or app code a visitor could read. It can't set its own prices —
+                  every total is recalculated from your catalogue — and an order only counts as a sale once you mark it paid.
                 </p>
               </div>
             )}

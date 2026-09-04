@@ -4893,6 +4893,8 @@ export interface StorefrontApiScope {
   label: string;
   description: string;
   sensitive: boolean;
+  /** True when the scope lets a key change the merchant's data rather than only read it, so the UI can warn before it is granted. */
+  write?: boolean;
 }
 
 export interface StorefrontApiKey {

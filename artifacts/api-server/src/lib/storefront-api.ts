@@ -21,6 +21,10 @@ export interface ApiScope {
   description: string;
   /** True when the scope exposes personal information about real people. */
   sensitive: boolean;
+  /** True when the scope lets a key change the merchant's data rather than read
+   *  it. Every other scope costs only confidentiality if the key leaks; this one
+   *  can move stock, so the brief and the issuing UI both call it out. */
+  write?: boolean;
 }
 
 export const API_SCOPES: ApiScope[] = [
@@ -32,6 +36,8 @@ export const API_SCOPES: ApiScope[] = [
     description: "Customer records — names, emails, phone numbers, addresses, loyalty balances." },
   { id: "sales:read",     label: "Sales",     sensitive: true,
     description: "Completed sales with their line items, totals and payment method." },
+  { id: "orders:write",   label: "Place orders", sensitive: false, write: true,
+    description: "Place orders against the catalogue — reserves stock and creates the customer. Prices are always recomputed from the merchant's own catalogue, and an order never counts as revenue until the merchant confirms payment." },
 ];
 
 /** What a new key gets unless the merchant ticks more: catalogue only, no PII. */
@@ -54,6 +60,8 @@ export interface ApiParam { name: string; description: string }
 export interface ApiEndpoint {
   /** Path under the API base, e.g. "/products/:id". */
   path: string;
+  /** HTTP method. Absent means GET — everything but ordering is a read. */
+  method?: "GET" | "POST";
   /** Scope required, or null when any valid key may call it. */
   scope: string | null;
   summary: string;
@@ -140,6 +148,19 @@ export const API_ENDPOINTS: ApiEndpoint[] = [
     path: "/sales/:id", scope: "sales:read",
     summary: "One sale by id, with its line items.",
     fields: ["id", "receiptNumber", "status", "customerId", "subtotal", "taxTotal", "discountTotal", "total", "paymentMethod", "items", "createdAt"],
+  },
+  {
+    path: "/orders", method: "POST", scope: "orders:write",
+    summary: "Place an order. Send only what is being bought and who is buying — every price, discount and total is recomputed from the merchant's own catalogue, so anything you send about money is ignored. Stock is reserved and the customer created or updated. The order is recorded unpaid: it appears in the merchant's orders for fulfilment and counts as revenue only once they confirm payment. Send a `reference` you can repeat, and a retry returns the original order instead of placing a second one.",
+    params: [
+      { name: "items", description: "Body. Array of `{ productId, qty }`, at least one." },
+      { name: "customer", description: "Body. `{ name, email, phone? }` — email identifies the customer." },
+      { name: "address", description: "Body, optional. `{ line, city, state, postcode }`." },
+      { name: "discountCode", description: "Body, optional. Re-validated; an invalid code fails the order." },
+      { name: "notes", description: "Body, optional. Free text shown to the merchant." },
+      { name: "reference", description: "Body, optional but recommended. Your own order id; repeating it returns the first order rather than placing another." },
+    ],
+    fields: ["orderNumber", "subtotal", "discountTotal", "taxTotal", "total", "currency", "paymentStatus", "duplicate"],
   },
 ];
 
@@ -270,9 +291,17 @@ export function buildConnectionManifest(input: ManifestInput): string {
   w();
   for (const s of API_SCOPES) {
     const has = scopes.includes(s.id);
-    w(`- ${has ? "✅" : "❌"} \`${s.id}\` — ${s.description}${s.sensitive ? " **(personal information)**" : ""}`);
+    const tag = s.sensitive ? " **(personal information)**" : s.write ? " **(writes data)**" : "";
+    w(`- ${has ? "✅" : "❌"} \`${s.id}\` — ${s.description}${tag}`);
   }
   w();
+  if (granted.some((s) => s.write)) {
+    w(`This key can **change** data, not just read it. Placing an order reserves`);
+    w(`stock and creates a customer record, so treat it like a payment credential:`);
+    w(`keep it on your server, never in browser or app code where a visitor could`);
+    w(`read it. It cannot set prices, refund, or move money.`);
+    w();
+  }
   w(`Requests outside these scopes return \`403 insufficient_scope\`. To change`);
   w(`them the merchant issues a new key — scopes are fixed for the life of a key.`);
   w();
@@ -285,7 +314,7 @@ export function buildConnectionManifest(input: ManifestInput): string {
   w(`single-item endpoints return the object itself.`);
   w();
   for (const e of endpoints) {
-    w(`### \`GET ${e.path}\``);
+    w(`### \`${e.method ?? "GET"} ${e.path}\``);
     w();
     w(e.summary);
     w();

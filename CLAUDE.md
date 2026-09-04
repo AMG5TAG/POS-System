@@ -431,15 +431,34 @@ third-party grid, and managed at Management › Online Store › Data API.
   hands to their AI (base URL, auth, every endpoint, paging, errors, security
   and privacy rules, plus a JSON block for tools that parse rather than read).
   `routes/storefront-api.ts` implements exactly those paths and
-  `storefront-api.test.ts` asserts the two lists match, so the brief cannot
-  promise an endpoint that does not exist. **Add an endpoint in both places.**
+  `storefront-api.test.ts` asserts the two lists match — on **method and path**,
+  so a brief promising `POST /orders` cannot be satisfied by a GET — and the
+  brief cannot promise an endpoint that does not exist. **Add an endpoint in
+  both places.**
 - **Scopes** are `products:read`, `inventory:read`, `customers:read`,
-  `sales:read`. The last two expose real customer PII and are never defaults;
-  granting one adds a privacy section to the brief. Scopes are fixed for a key's
-  life — changing them means issuing a new key.
-- **Everything is read-only and merchant-scoped**: `merchantId` comes from the
-  key, never from the request. A leaked key costs confidentiality, never money
-  or stock.
+  `sales:read` and `orders:write`. `customers:read`/`sales:read` expose real
+  customer PII and are never defaults; granting one adds a privacy section to
+  the brief. Scopes are fixed for a key's life — changing them means issuing a
+  new key.
+- **Merchant-scoped always**: `merchantId` comes from the key, never from the
+  request, so no parameter reaches another merchant's data.
+- **One endpoint writes — `POST /orders`, behind `orders:write`.** It is not a
+  default, it is flagged `write: true` so the brief and the key-issuing UI warn
+  before it is granted, and it has its own much tighter rate limit (20/min
+  against the read budget's 120/min) because a storefront reads constantly and
+  orders rarely. Two properties keep a leaked write key survivable, and both are
+  pinned by `storefront-order.test.ts`: **a caller cannot name its own price**
+  (`placeStorefrontOrder` recomputes every line, discount and total from the
+  merchant's own catalogue — anything monetary in the request body is ignored),
+  and **an order is never money** (written `paymentStatus: "pending"`; only a
+  human marking it paid books the sale). So the worst a stolen key does is
+  reserve stock and create junk orders — recoverable, unlike a refund or a
+  price change.
+- **`services/storefrontOrder.ts` is the single implementation of taking an
+  order.** The merchant's own storefront checkout and the API endpoint both call
+  it. Two implementations would be two implementations of stock validation and
+  price computation, and the one that drifted would be the one holding the
+  money. Order placement changes go there, not in either route.
 - Two rate limiters, and the order matters: an IP-keyed one *before*
   authentication counting only failures (key guessing), and a per-key one after.
   A per-key limiter alone cannot bound requests that never authenticate.

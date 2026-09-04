@@ -64,23 +64,28 @@ beforeEach(() => { h.rows = []; });
 /* ─── The brief cannot promise an API that does not exist ─────────────────── */
 
 describe("the described API and the implemented API are the same API", () => {
-  /** Paths Express has registered on the router, normalised to the brief's form. */
+  /** Routes Express has registered, as "METHOD /path" in the brief's form. The
+   *  method is part of the identity now that one endpoint writes: a brief
+   *  promising `POST /orders` must not be satisfied by a `GET /orders`. */
   const registeredPaths = async (): Promise<string[]> => {
     const { default: router } = await import("../routes/storefront-api");
     const stack = (router as unknown as { stack: Array<{ route?: { path: string; methods: Record<string, boolean> } }> }).stack;
     return stack
-      .filter((l) => l.route && l.route.methods.get)
-      .map((l) => l.route!.path.replace("/storefront/v1", ""))
+      .filter((l) => l.route)
+      .flatMap((l) => Object.keys(l.route!.methods)
+        .filter((m) => m === "get" || m === "post")
+        .map((m) => `${m.toUpperCase()} ${l.route!.path.replace("/storefront/v1", "")}`))
       .filter((p) => !p.includes("*"));
   };
+  const briefPaths = () => API_ENDPOINTS.map((e) => `${e.method ?? "GET"} ${e.path}`);
 
   it("implements every endpoint the merchant's brief documents", async () => {
     const registered = await registeredPaths();
-    for (const e of API_ENDPOINTS) expect(registered, `missing route for ${e.path}`).toContain(e.path);
+    for (const e of briefPaths()) expect(registered, `missing route for ${e}`).toContain(e);
   });
 
   it("documents every endpoint it implements", async () => {
-    const documented = API_ENDPOINTS.map((e) => e.path);
+    const documented = briefPaths();
     for (const path of await registeredPaths()) {
       expect(documented, `${path} is served but absent from the brief`).toContain(path);
     }

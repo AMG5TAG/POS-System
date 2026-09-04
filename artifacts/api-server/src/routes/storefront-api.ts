@@ -7,6 +7,8 @@ import {
 import { and, eq, lt, gte, gt, desc, asc, ilike, or, type SQL } from "drizzle-orm";
 import { requireStorefrontKey, requireScope } from "../middlewares/requireStorefrontKey";
 import { PAGE_SIZE, RATE_LIMIT } from "../lib/storefront-api";
+import { placeStorefrontOrder } from "../services/storefrontOrder";
+import { z } from "zod/v4";
 
 /**
  * The Storefront Data API — read-only access to a merchant's own data for the
@@ -56,6 +58,18 @@ const limiter = rateLimit({
   legacyHeaders: false,
   keyGenerator: (req: Request) => (req.storefront ? `k${req.storefront.keyId}` : ipKeyGenerator(req.ip ?? "")),
   message: { error: "rate_limited", message: "Too many requests — slow down and cache responses." },
+});
+
+/* Placing orders is bounded far below the read budget: a storefront reads the
+   catalogue constantly and orders rarely, so a key suddenly placing hundreds of
+   orders a minute is a runaway or a stolen key, not normal trade. */
+const writeLimiter = rateLimit({
+  windowMs: 60_000,
+  max: 20,
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req: Request) => (req.storefront ? `w${req.storefront.keyId}` : ipKeyGenerator(req.ip ?? "")),
+  message: { error: "rate_limited", message: "Too many orders — slow down." },
 });
 
 /* ── Shared helpers ──────────────────────────────────────────────────────── */
@@ -402,6 +416,69 @@ router.get("/storefront/v1/sales/:id", requireScope("sales:read"), async (req, r
     .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId))).limit(1);
   if (!row) { res.status(404).json({ error: "not_found", message: "Sale not found" }); return; }
   res.json(salePayload(row));
+});
+
+/* ── Orders (the one write) ──────────────────────────────────────────────── */
+
+const OrderBody = z.object({
+  items: z.array(z.object({
+    productId: z.number().int().positive(),
+    qty: z.number().int().positive().max(999),
+  })).min(1).max(200),
+  customer: z.object({
+    name: z.string().trim().min(1).max(200),
+    email: z.string().trim().email().max(320),
+    phone: z.string().trim().max(50).optional(),
+  }),
+  address: z.object({
+    line: z.string().trim().max(300).optional(),
+    city: z.string().trim().max(120).optional(),
+    state: z.string().trim().max(120).optional(),
+    postcode: z.string().trim().max(20).optional(),
+  }).optional(),
+  discountCode: z.string().trim().max(60).optional(),
+  notes: z.string().trim().max(2000).optional(),
+  reference: z.string().trim().min(1).max(60).optional(),
+});
+
+/**
+ * The only endpoint that changes anything. It takes what is being bought and who
+ * is buying; it does not take prices. Everything monetary is recomputed from the
+ * merchant's own catalogue in `placeStorefrontOrder`, the same code the merchant's
+ * own storefront checkout runs, so an external site cannot name its own price.
+ *
+ * Orders are written unpaid. A key that leaks can therefore cost a merchant
+ * reserved stock and junk orders — recoverable — but never money: booking the
+ * sale needs a human in the merchant's own app.
+ */
+router.post("/storefront/v1/orders", writeLimiter, requireScope("orders:write"), async (req, res): Promise<void> => {
+  const { merchantId } = req.storefront!;
+
+  const parsed = OrderBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "invalid_request", message: parsed.error.issues[0]?.message ?? "Invalid order" });
+    return;
+  }
+
+  let placed: Awaited<ReturnType<typeof placeStorefrontOrder>>;
+  try {
+    placed = await placeStorefrontOrder(merchantId, { ...parsed.data, channel: "API" });
+  } catch {
+    res.status(500).json({ error: "order_failed", message: "Could not place the order." });
+    return;
+  }
+  if (!placed.ok) { res.status(placed.status).json({ error: "order_rejected", message: placed.error }); return; }
+
+  const o = placed.order;
+  /* 200 rather than 201 for a repeat, so a caller can tell that its retry
+     matched an existing order instead of creating a second one. */
+  res.status(o.duplicate ? 200 : 201).json({
+    orderNumber: o.orderNumber,
+    subtotal: o.subtotal, discountTotal: o.discountTotal,
+    taxTotal: o.taxTotal, total: o.total,
+    currency: o.currency, paymentStatus: o.paymentStatus,
+    duplicate: o.duplicate,
+  });
 });
 
 /* Anything else under the API base is a typo in the caller's code — answer with

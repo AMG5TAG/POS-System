@@ -15712,6 +15712,11 @@ components:
         label:       { type: string }
         description: { type: string }
         sensitive:   { type: boolean }
+        write:
+          type: boolean
+          description: >-
+            True when the scope lets a key change the merchant's data rather than
+            only read it, so the UI can warn before it is granted.
 
     StorefrontApiKey:
       type: object
