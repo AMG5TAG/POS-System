@@ -9,6 +9,7 @@ import forge from "node-forge";
 import { publicDomain } from "../lib/publicUrl";
 import { applyEstimateApprovalToJob } from "../services/quoteApproval";
 import { resolvePortalAccess } from "../lib/portalAuth";
+import { normalisePhoneFor } from "../lib/phone";
 
 const router: IRouter = Router();
 
@@ -314,6 +315,11 @@ router.patch("/portal/:token/profile", async (req, res): Promise<void> => {
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
   const data = parsed.data;
+  // A customer editing their own details has no merchant session, so the phone
+  // middleware doesn't reach this body — the shop is known from the portal token.
+  if (data.phone !== undefined) {
+    data.phone = await normalisePhoneFor(customer.merchantId, data.phone);
+  }
   // Keep the legacy free-text `address` in sync with the structured billing fields.
   // Merge the submitted fields over the EXISTING row so a partial update (or a
   // submission with empty structured fields) can't clobber the stored address.

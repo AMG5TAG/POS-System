@@ -61,7 +61,6 @@ interface ExtSettings {
   taxLabel:         string;
   customTaxLabel:   string;
   taxNumberLabel:   string;
-  receiptPaperSize: "a4" | "80mm" | "58mm";
   defaultTaxRate:   string;
 }
 
@@ -70,7 +69,6 @@ const EXT_DEFAULTS: ExtSettings = {
   taxLabel:         "GST",
   customTaxLabel:   "",
   taxNumberLabel:   "ABN",
-  receiptPaperSize: "80mm",
   defaultTaxRate:   "10",
 };
 
@@ -103,7 +101,6 @@ export default function SettingsTaxPage() {
         taxLabel: anyExt.taxLabel || EXT_DEFAULTS.taxLabel,
         customTaxLabel: anyExt.customTaxLabel || EXT_DEFAULTS.customTaxLabel,
         taxNumberLabel: anyExt.taxNumberLabel || EXT_DEFAULTS.taxNumberLabel,
-        receiptPaperSize: (anyExt.receiptPaperSize as "a4" | "80mm" | "58mm") || EXT_DEFAULTS.receiptPaperSize,
         defaultTaxRate: anyExt.defaultTaxRate ?? EXT_DEFAULTS.defaultTaxRate,
       });
     }
@@ -159,7 +156,6 @@ export default function SettingsTaxPage() {
             taxLabel: ext.taxLabel,
             customTaxLabel: ext.customTaxLabel,
             taxNumberLabel: ext.taxNumberLabel,
-            receiptPaperSize: ext.receiptPaperSize,
             defaultTaxRate: ext.defaultTaxRate,
           } as any,
         }),

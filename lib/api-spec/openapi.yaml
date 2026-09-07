@@ -10711,6 +10711,12 @@ components:
           type: ["string", "null"]
         country:
           type: ["string", "null"]
+        defaultPhoneCountry:
+          type: string
+          description: >-
+            ISO 3166-1 alpha-2 country whose dialling code is appended to phone
+            numbers saved without one, so "0412 345 678" is stored as
+            "+61412345678". Empty means follow `country`.
         currency:
           type: string
         timezone:
@@ -10764,6 +10770,11 @@ components:
           type: string
         country:
           type: string
+        defaultPhoneCountry:
+          type: string
+          description: >-
+            ISO 3166-1 alpha-2 country whose dialling code is appended to phone
+            numbers saved without one. Empty means follow `country`.
         currency:
           type: string
         timezone:
@@ -16231,14 +16242,13 @@ components:
 
     RegionalExtSettings:
       type: object
-      required: [id, merchantId, abn, taxRates, defaultTaxRate, receiptPaperSize, language, dateFormat, timeFormat, decimalSeparator, thousandsSeparator, measurementSystem, paperSize, firstDayOfWeek, fiscalYearStart, taxLabel, customTaxLabel, taxNumberLabel]
+      required: [id, merchantId, abn, taxRates, defaultTaxRate, language, dateFormat, timeFormat, decimalSeparator, thousandsSeparator, measurementSystem, paperSize, firstDayOfWeek, fiscalYearStart, taxLabel, customTaxLabel, taxNumberLabel]
       properties:
         id: { type: integer }
         merchantId: { type: integer }
         abn: { type: string }
         taxRates: { type: string }
         defaultTaxRate: { type: string }
-        receiptPaperSize: { type: string }
         language: { type: string }
         dateFormat: { type: string }
         timeFormat: { type: string }
@@ -16258,7 +16268,6 @@ components:
         abn: { type: string }
         taxRates: { type: string }
         defaultTaxRate: { type: string }
-        receiptPaperSize: { type: string }
         language: { type: string }
         dateFormat: { type: string }
         timeFormat: { type: string }

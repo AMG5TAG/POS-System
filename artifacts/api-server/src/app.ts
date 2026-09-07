@@ -10,6 +10,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middlewares/errorHandler";
+import { normalisePhoneFields } from "./middlewares/normalisePhoneFields";
 import { publicOrigin } from "./lib/publicUrl";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
@@ -121,6 +122,11 @@ app.use(express.json({
   verify: (req, _res, buf) => { (req as express.Request & { rawBody?: string }).rawBody = buf.toString("utf8"); },
 }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));
+
+// Phone numbers are stored in E.164, whoever wrote them. Sits between the body
+// parsers and the routers so every handler below sees a number that already
+// carries its country code — see middlewares/normalisePhoneFields.ts.
+app.use("/api", normalisePhoneFields);
 
 app.use("/api", router);
 

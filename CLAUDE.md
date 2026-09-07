@@ -50,7 +50,7 @@ Workflow to change an endpoint: edit `openapi.yaml` → run codegen → implemen
 - `artifacts/api-server` — Express 5 API. `src/app.ts` builds the app; `src/routes/index.ts` mounts ~139 feature routers; `src/services/` holds background schedulers and cross-cutting logic (email, SMS, backups, payments, token vault); `src/lib/` holds shared helpers; `src/middlewares/requireAuth.ts` is the session auth middleware.
 - `artifacts/koapos` — React 19 frontend. Pages in `src/pages/` (marketing + authenticated app), auth in `src/lib/auth.tsx` (AuthProvider + `useAuth`).
 - `lib/db` — Drizzle schema, one file per domain in `src/schema/` (merchants, products, customers, transactions, staff, …).
-- `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/object-storage-web` — shared libraries. Note that cloud-storage integrations do **not** live here: they are in `artifacts/api-server/src/lib/` (`backup-storage/`, `nextcloud.ts`, `objectStorage.ts`) and `src/services/`.
+- `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/phone-shared`, `lib/object-storage-web` — shared libraries. Note that cloud-storage integrations do **not** live here: they are in `artifacts/api-server/src/lib/` (`backup-storage/`, `nextcloud.ts`, `objectStorage.ts`) and `src/services/`.
 - `artifacts/print-bridge` (`@workspace/print-bridge`) — a standalone, dependency-free Node service that runs **on the merchant's till**, not on the server. It is what lets the browser print without the OS print dialog. Not part of the deployed app; built to a single `dist/index.mjs` and installed on each till. See "Printing" below and its own README.
 - `scripts` (`@workspace/scripts`) — one-off migration/seed scripts wired into `db:push`.
 
@@ -96,6 +96,16 @@ Three hazards worth knowing, all learned the hard way:
   re-run on any parent re-render. A `window.print()` closed that window in
   milliseconds; a bridge print takes seconds, which is long enough to fire a
   second job. Guard with a ref — see `POPrintArea`.
+
+**Paper size is the printer profile's, not a setting of its own.** A document's
+paper comes from the profile its purpose is routed to — `paperFor` and
+`thermalWidth` in `print-router.ts` — so 58mm vs 80mm vs A4 is set once, on the
+printer, under Staff & Operations › POS Registers › Printers & Routing. Sales
+Templates used to carry its own "Receipt & Print Settings" paper picker writing
+`regional_ext_settings.receipt_paper_size`; no print path ever read that field,
+so it silently did nothing. The tile is now a signpost to the real control and
+the column is gone (`scripts/src/drop-receipt-paper-size.ts`) — if paper ever
+needs a second home, it belongs on the printer profile, not on a settings row.
 
 Config lives in two places for a reason:
 - **Merchant-level** (`pos_settings.hardwareConfig` JSON): printer *profiles*
@@ -242,6 +252,70 @@ pins that.
 
 The section is gated by `showQuote` in `service_settings`, like every other
 service job section (Management › Invoices & Services › Service Options).
+
+### Phone numbers
+
+Phone numbers are stored in **E.164** — `+61412345678` — whatever was typed.
+A counter staff member types `0412 345 678` because that is what the customer
+reads out; every machine that later has to *use* the number (an SMS gateway, a
+`tel:` link, a vCard QR, an exported contact) needs the country code, and asking
+the operator for `+61` every time is how a third of the numbers end up
+un-textable.
+
+`lib/phone-shared` (`@workspace/phone-shared`) holds the whole rule — the country
+table (dial code, trunk prefix, plausible national lengths) and `normalisePhone`
+— so the browser and the API server cannot disagree about what a saved number
+looks like. It is deliberately **not** libphonenumber: nothing here rejects a
+number, it only writes the country code onto one.
+
+**The guarantee is server-side.** `middlewares/normalisePhoneFields.ts` runs
+between the body parsers and the routers, so every handler sees a number that
+already carries its country code. It is a middleware and not a call per handler
+because a phone number is written by a dozen of ~140 routers, and a per-handler
+habit is one the next router won't have. Three things keep that safe:
+
+- It matches on **field name**, from a fixed list, never on the shape of a value
+  — a note or a search term that reads like a number is not a phone number.
+- `normalisePhone` returns anything it can't confidently read as a bare national
+  or international number **exactly as given**: "0400 000 000 ext 12", "ask for
+  Dave", too short, too long, already `+`. A number left as typed is an
+  annoyance; a mangled one is a customer the shop can no longer reach.
+- It runs only for a request with a merchant session, since that is what says
+  which country to assume. The public write paths — `public-booking.ts`,
+  `services/storefrontOrder.ts` (the storefront checkout *and* the Data API's
+  `orders:write`), and the portal's profile update — know their merchant another
+  way and call `normalisePhoneFor` in the handler. **A new public write path that
+  takes a phone number must do the same.**
+
+The frontend half is the base `Input`, which rewrites a phone field **on blur**
+(not while typing — turning "04" into "+614" under the cursor fights the
+typist). Detection is in `lib/phone-format.ts`: `type="tel"`, a tel-ish
+`name`/`id`, or a placeholder that is an *example number* — most phone fields in
+this app are a bare `<Input>` whose `placeholder="0400 000 000"` is the only clue.
+`NOT_PHONE_NAME_RE` is what stops an ABN, IMEI or BSB field being caught by that
+last rule, and the placeholder test is strict enough to exclude
+"Search by name, email or phone…" — rewriting a search query turns a lookup into
+a miss. Opt out with `noPhoneFormat`.
+
+The country comes from `merchants.defaultPhoneCountry` (Settings › Regional ›
+Phone Numbers), and **every merchant who has not set one gets Australia** —
+`resolvePhoneCountry`, whose only fallback is `FALLBACK_PHONE_COUNTRY`. It
+deliberately does *not* read `merchants.country`: KoaPOS sells to Australian
+retail, so +61 is right for all but a handful of accounts, and a default that
+varied per merchant would be one nobody could predict from the settings screen.
+`""` is what every merchant stores until they choose, and an unrecognised code
+resolves the same way. The server caches the resolved country for 60s, so
+changing the setting calls `invalidatePhoneCountryCache`; the browser gets it
+from `/auth/me`, pushed into `phone-format.ts` by `AuthProvider` (the base
+`Input` also renders on the login and marketing pages, where a settings query
+would be a guaranteed 401).
+
+Two things that are *not* affected: `lib/phone-match.ts` compares the last 9
+digits, so a legacy `0400 000 000` and a new `+61400000000` are still the same
+customer — which is what makes a partial migration safe. And numbers already in
+the database are only rewritten by `scripts/backfill-phone-e164.ts`
+(dry-run by default, `--commit` to write, idempotent) — **not reversible**, the
+pre-backfill string is kept nowhere.
 
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.

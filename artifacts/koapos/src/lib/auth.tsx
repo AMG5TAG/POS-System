@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from "react";
 import { useGetMe, Merchant } from "@workspace/api-client-react";
 import { AuthContext } from "./auth-context";
+import { setDefaultPhoneCountry } from "./phone-format";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Merchant | null>(null);
@@ -26,6 +27,16 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       setIsInitializing(false);
     }
   }, [me, meLoading, error]);
+
+  // Phone fields append this merchant's country code when they lose focus, and
+  // the base Input reads it synchronously — it renders on the marketing and
+  // login pages too, where there is no merchant to query. So the signed-in
+  // merchant's setting is pushed to it here, where the merchant is already
+  // known, and re-pushed when Regional Settings changes it (login() merges the
+  // update response into `user`).
+  useEffect(() => {
+    setDefaultPhoneCountry(user?.defaultPhoneCountry);
+  }, [user?.defaultPhoneCountry]);
 
   // Auth state is sourced from the server session via useGetMe() on every mount,
   // so there is no cached user in localStorage to trust or clear.

@@ -681,6 +681,8 @@ export interface Merchant {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one, so "0412 345 678" is stored as "+61412345678". Empty means follow `country`. */
+  defaultPhoneCountry?: string;
   currency?: string;
   /** @nullable */
   timezone?: string | null;
@@ -709,6 +711,8 @@ export interface MerchantUpdate {
   address?: string;
   city?: string;
   country?: string;
+  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one. Empty means follow `country`. */
+  defaultPhoneCountry?: string;
   currency?: string;
   timezone?: string;
   logoUrl?: string;
@@ -5341,7 +5345,6 @@ export interface RegionalExtSettings {
   abn: string;
   taxRates: string;
   defaultTaxRate: string;
-  receiptPaperSize: string;
   language: string;
   dateFormat: string;
   timeFormat: string;
@@ -5360,7 +5363,6 @@ export interface RegionalExtSettingsInput {
   abn?: string;
   taxRates?: string;
   defaultTaxRate?: string;
-  receiptPaperSize?: string;
   language?: string;
   dateFormat?: string;
   timeFormat?: string;

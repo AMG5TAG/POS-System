@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, merchantsTable, customersTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
+import { normalisePhoneFor } from "../lib/phone";
+import { phoneMatchKey } from "../lib/phone-match";
 
 const router: IRouter = Router();
 
@@ -37,7 +39,9 @@ router.post("/book/:username", async (req, res): Promise<void> => {
   const firstName = typeof b.firstName === "string" ? b.firstName.trim() : "";
   const lastName  = typeof b.lastName === "string" ? b.lastName.trim() : "";
   const email     = typeof b.email === "string" ? b.email.trim() : "";
-  const phone     = typeof b.phone === "string" ? b.phone.trim() : "";
+  // Public route: no session, so the normalisation middleware doesn't run here.
+  // The shop is known from the URL, so its country code is applied directly.
+  const phone     = await normalisePhoneFor(merchantId, typeof b.phone === "string" ? b.phone : "");
   const deviceType = typeof b.deviceType === "string" ? b.deviceType.trim() : "";
   const deviceDescription = typeof b.deviceDescription === "string" ? b.deviceDescription.trim() : "";
   const faultDescription  = typeof b.faultDescription === "string" ? b.faultDescription.trim() : "";
@@ -53,9 +57,18 @@ router.post("/book/:username", async (req, res): Promise<void> => {
       .where(and(eq(customersTable.merchantId, merchantId), eq(customersTable.email, email))).limit(1);
     if (c) customer = c;
   }
-  if (!customer && phone) {
+  // Matched on the digit tail rather than the string: the regular whose record
+  // reads "0400 000 000" is the same person as the "+61400000000" this form now
+  // submits, and an exact comparison would book them a second customer record.
+  const phoneKey = phoneMatchKey(phone);
+  if (!customer && phoneKey) {
+    const digits = sql`regexp_replace(coalesce(${customersTable.phone}, ''), '[^0-9]', '', 'g')`;
     const [c] = await db.select().from(customersTable)
-      .where(and(eq(customersTable.merchantId, merchantId), eq(customersTable.phone, phone))).limit(1);
+      .where(and(
+        eq(customersTable.merchantId, merchantId),
+        sql`length(${digits}) >= ${phoneKey.length}`,
+        sql`right(${digits}, ${phoneKey.length}) = ${phoneKey}`,
+      )).limit(1);
     if (c) customer = c;
   }
   if (!customer) {

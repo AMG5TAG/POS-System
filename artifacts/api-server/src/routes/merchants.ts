@@ -3,6 +3,7 @@ import { db, merchantsTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateMerchantBody } from "@workspace/api-zod";
+import { invalidatePhoneCountryCache, isValidPhoneCountry } from "../lib/phone";
 
 const router: IRouter = Router();
 
@@ -19,6 +20,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     address: m.address ?? null,
     city: m.city ?? null,
     country: m.country ?? null,
+    defaultPhoneCountry: m.defaultPhoneCountry ?? "",
     currency: m.currency,
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,
@@ -83,6 +85,14 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     }
   }
 
+  // A default we can't resolve to a dialling code would silently switch phone
+  // normalisation off, so it is rejected rather than stored. "" is legitimate:
+  // it means "follow the business country".
+  if (body.defaultPhoneCountry !== undefined && !isValidPhoneCountry(body.defaultPhoneCountry)) {
+    res.status(400).json({ error: "Unknown country for the default phone country code." });
+    return;
+  }
+
   // Validate and check uniqueness of portal domain
   if (portalDomain !== undefined && portalDomain !== null) {
     const domain = portalDomain.toLowerCase().replace(/^https?:\/\//i, "").replace(/\/.*$/, "");
@@ -111,6 +121,13 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     ...(passwordChangeAlertEmail !== undefined && { passwordChangeAlertEmail: passwordChangeAlertEmail ? "true" : "false" }),
     ...(requirePortalPassword !== undefined && { requirePortalPassword: requirePortalPassword ? "true" : "false" }),
   };
+
+  // The setting drives the phone normalisation middleware, which caches it for a
+  // minute. Without this, a merchant who changes their country code would watch
+  // the next few saves still use the old one.
+  if (updateData.defaultPhoneCountry !== undefined) {
+    invalidatePhoneCountryCache(req.session.merchantId!);
+  }
 
   const [merchant] = await db
     .update(merchantsTable)

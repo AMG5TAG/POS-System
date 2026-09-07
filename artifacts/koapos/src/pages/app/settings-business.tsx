@@ -156,7 +156,6 @@ interface RegExtSettings {
   measurementSystem: "metric" | "imperial"; paperSize: "A4" | "letter";
   firstDayOfWeek: "monday" | "sunday" | "saturday"; fiscalYearStart: number;
   taxLabel: string; customTaxLabel: string; taxNumberLabel: string;
-  receiptPaperSize: "a4" | "80mm" | "58mm";
 }
 
 const REG_DEFAULT: RegExtSettings = {
@@ -164,7 +163,6 @@ const REG_DEFAULT: RegExtSettings = {
   decimalSeparator: ".", thousandsSeparator: ",",
   measurementSystem: "metric", paperSize: "A4", firstDayOfWeek: "monday",
   fiscalYearStart: 7, taxLabel: "GST", customTaxLabel: "", taxNumberLabel: "ABN",
-  receiptPaperSize: "80mm",
 };
 
 function loadRegExt(): RegExtSettings {
@@ -334,7 +332,6 @@ export default function SettingsBusinessPage() {
         taxLabel:           regExtData.taxLabel,
         customTaxLabel:     regExtData.customTaxLabel,
         taxNumberLabel:     regExtData.taxNumberLabel,
-        receiptPaperSize:   regExtData.receiptPaperSize as RegExtSettings["receiptPaperSize"],
       });
     }
   }, [regExtData]);

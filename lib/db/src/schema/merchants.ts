@@ -12,6 +12,12 @@ export const merchantsTable = pgTable("merchants", {
   address: text("address"),
   city: text("city"),
   country: text("country").default("AU"),
+  /* Country whose dialling code is appended to phone numbers typed without one,
+     so "0412 345 678" is stored as "+61412345678". Empty means "follow
+     `country`" — see resolvePhoneCountry in @workspace/phone-shared — so a
+     merchant who moves the business country moves the phone default with it
+     unless they have deliberately pinned a different one. */
+  defaultPhoneCountry: text("default_phone_country").notNull().default(""),
   currency: text("currency").notNull().default("AUD"),
   timezone: text("timezone").default("Australia/Sydney"),
   logoUrl: text("logo_url"),

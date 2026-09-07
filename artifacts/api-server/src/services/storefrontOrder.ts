@@ -3,6 +3,7 @@ import {
 } from "@workspace/db";
 import { eq, and, inArray, sql } from "drizzle-orm";
 import { formatAddressParts } from "../lib/address";
+import { normalisePhoneFor } from "../lib/phone";
 
 /**
  * Placing an order against a merchant's catalogue.
@@ -150,7 +151,9 @@ export async function placeStorefrontOrder(
   const lastName = nameParts.slice(1).join(" ");
   const addr = input.address ?? {};
   const addressStr = formatAddressParts(addr.line, addr.city, addr.state, addr.postcode);
-  const phone = input.customer.phone ?? "";
+  // Both callers are unauthenticated (a storefront checkout, an API key), so
+  // the phone middleware never sees this body. The merchant is known here.
+  const phone = await normalisePhoneFor(merchantId, input.customer.phone ?? "");
 
   // ── Persist atomically: decrement stock, bump discount usage, write order ──
   await db.transaction(async (tx) => {

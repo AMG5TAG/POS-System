@@ -6,8 +6,6 @@ import {
   useUpdateTaxSettings,
   useListSalesTemplates,
   useUpsertSalesTemplate,
-  useGetRegionalExtSettings,
-  useUpdateRegionalExtSettings,
   useListPartnerReferrals,
   type SalesTemplate,
 } from "@workspace/api-client-react";
@@ -30,6 +28,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
 import Barcode from "react-barcode";
 import {
   Receipt, FileText, Mail, MessageSquare, Tag, Printer, Info,
@@ -1982,70 +1981,43 @@ function CustomerPdfPreview({ businessName, brandColor, logo, email, abn, websit
   );
 }
 
-/* ─── Receipt & Print Settings ───────────────────────────────────────────── */
+/* ─── Where paper size lives ──────────────────────────────────────────────
+ *
+ * This page used to carry a "Receipt & Print Settings" tile that picked
+ * 58mm/80mm/A4 into `regional_ext_settings.receiptPaperSize`. Nothing ever read
+ * that field at print time — paper comes from the printer profile a purpose is
+ * routed to (`paperFor`/`thermalWidth` in lib/print-router.ts) — so a merchant
+ * who changed it saw no difference, while the setting that does work sits on
+ * another page. A control that silently does nothing is worse than no control,
+ * so the tile is gone and this points at the one that owns it. The column went
+ * with it — a dead column is an invitation to wire a new UI to it.
+ */
 
-type PaperSize = "58mm" | "80mm" | "a4";
-
-function ReceiptPrintSettings() {
-  const queryClient = useQueryClient();
-  const { data: regExtData } = useGetRegionalExtSettings({ query: { queryKey: ["regional-ext-settings"] } });
-  const updateRegExt = useUpdateRegionalExtSettings();
-  const [selected, setSelected] = useState<PaperSize>("80mm");
-
-  useEffect(() => {
-    if (regExtData?.receiptPaperSize) setSelected(regExtData.receiptPaperSize as PaperSize);
-  }, [regExtData]);
-
-  const sizes: { value: PaperSize; label: string; desc: string; w: number; h: number }[] = [
-    { value: "58mm", label: "58 mm",  desc: "Small handheld printers",             w: 24, h: 36 },
-    { value: "80mm", label: "80 mm",  desc: "Most counter-top thermal printers",   w: 30, h: 36 },
-    { value: "a4",   label: "A4",     desc: "Full invoices & detailed receipts",   w: 40, h: 56 },
-  ];
-
-  const handleSave = () => {
-    updateRegExt.mutate({ data: { receiptPaperSize: selected } }, {
-      onSuccess: () => {
-        queryClient.invalidateQueries({ queryKey: ["regional-ext-settings"] });
-        toast.success("Print settings saved");
-      },
-      onError: () => toast.error("Failed to save print settings"),
-    });
-  };
-
+function PaperSizeSignpost() {
   return (
     <Card className="h-full flex flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Printer className="h-5 w-5 text-primary" />
-          Receipt &amp; Print Settings
+          Receipt &amp; Print Paper
         </CardTitle>
         <CardDescription>
-          Choose the default paper size for receipts and printed documents.
+          Paper size follows the printer each document is sent to.
         </CardDescription>
       </CardHeader>
-      <CardContent className="space-y-5 flex-1">
-        <div className="grid grid-cols-3 gap-3 text-center">
-          {sizes.map(p => (
-            <div
-              key={p.value}
-              onClick={() => setSelected(p.value)}
-              className={`rounded-lg border-2 p-3 cursor-pointer transition-colors ${
-                p.value === selected
-                  ? "border-primary bg-primary/5"
-                  : "border-border hover:border-primary/40"
-              }`}
-            >
-              <div
-                className="mx-auto mb-2 rounded border-2 border-current bg-white"
-                style={{ width: p.w, height: p.h }}
-              />
-              <p className="text-xs font-semibold">{p.label}</p>
-              <p className="text-[11px] text-muted-foreground">{p.desc}</p>
-            </div>
-          ))}
-        </div>
+      <CardContent className="space-y-4 flex-1 flex flex-col justify-between">
+        <p className="text-sm text-muted-foreground">
+          Set a printer&apos;s paper — 58&nbsp;mm, 80&nbsp;mm, A4 or labels — and choose which
+          printer each receipt, invoice, docket and label goes to, under
+          Staff &amp; Operations › POS Registers › Printers &amp; Routing.
+        </p>
         <div className="flex justify-end">
-          <Button size="sm" onClick={handleSave}>Save Print Settings</Button>
+          <Link href="/management/staff-operations/pos-registers">
+            <Button size="sm" variant="outline" className="gap-1.5">
+              <Settings2 className="w-3.5 h-3.5" />
+              Open Printers &amp; Routing
+            </Button>
+          </Link>
         </div>
       </CardContent>
     </Card>
@@ -2317,7 +2289,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
         {section === "sales" && (
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
             <NotificationsPanel />
-            <ReceiptPrintSettings />
+            <PaperSizeSignpost />
           </div>
         )}
 

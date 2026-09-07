@@ -7,7 +7,6 @@ export const regionalExtSettingsTable = pgTable("regional_ext_settings", {
   abn:                 text("abn").notNull().default(""),
   taxRates:            text("tax_rates").notNull().default("[]"),
   defaultTaxRate:      text("default_tax_rate").notNull().default("10"),
-  receiptPaperSize:    text("receipt_paper_size").notNull().default("80mm"),
   language:            text("language").notNull().default("en-AU"),
   dateFormat:          text("date_format").notNull().default("DD/MM/YYYY"),
   timeFormat:          text("time_format").notNull().default("24"),
