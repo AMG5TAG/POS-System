@@ -166,8 +166,12 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
     children: [
       { name: "Account",          href: "/management/settings-integrations/account",          icon: UserCircle     },
       { name: "Locations",        href: "/management/settings-integrations/locations",        icon: MapPin         },
-      { name: "Business Details", href: "/management/settings-integrations/business-details", icon: Building2,
-        matchPaths: ["/management/settings-integrations/business-details/regional"] },
+      { name: "Business Details", href: "/management/settings-integrations/business-details", icon: Building2 },
+      // Regional had only a matchPaths entry, which highlights Business Details
+      // when you are already on the page but links nowhere — so currency,
+      // timezone, date format and the phone settings were reachable only by URL
+      // or the command palette.
+      { name: "Regional",         href: "/management/settings-integrations/business-details/regional", icon: Globe },
       { name: "Tax",              href: "/management/settings-integrations/tax",              icon: Receipt        },
       { name: "Surcharges",       href: "/management/settings-integrations/surcharges",       icon: Percent        },
       { name: "SMS",              href: "/management/settings-integrations/sms",              icon: MessageSquare  },
