@@ -36,6 +36,7 @@
     "add-customer-portal-auth": "tsx ./src/add-customer-portal-auth.ts",
     "add-merchant-default-phone-country": "tsx ./src/add-merchant-default-phone-country.ts",
     "drop-receipt-paper-size": "tsx ./src/drop-receipt-paper-size.ts",
+    "readd-receipt-paper-size": "tsx ./src/readd-receipt-paper-size.ts",
     "add-customer-group-pricing": "tsx ./src/add-customer-group-pricing.ts",
     "add-custom-payment-methods": "tsx ./src/add-custom-payment-methods.ts",
     "add-invoice-settings-table": "tsx ./src/add-invoice-settings-table.ts",
