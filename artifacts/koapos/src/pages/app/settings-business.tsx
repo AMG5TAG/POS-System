@@ -30,6 +30,7 @@ import {
 import { ColourPicker } from "@/components/ui/colour-picker";
 import { FontPicker } from "@/components/ui/font-picker";
 import { BlueSkyIcon, RedditIcon, ThreadsIcon } from "@/components/social-icons";
+import { Link } from "wouter";
 
 const BUSINESS_TABS = [
   { href: "#business-info",  label: "Business Info",  icon: Building2   },
@@ -673,6 +674,18 @@ export default function SettingsBusinessPage() {
                 <Input type="url" value={ext.website} onChange={(e) => setExtField("website", e.target.value)} placeholder="https://www.yourbusiness.com.au" className="truncate" />
               </div>
             </div>
+            {/* This is the card people open when they go looking for anything to
+                do with a phone number, so it says where the *format* settings
+                are rather than leaving them to find a page with no menu entry. */}
+            <p className="text-xs text-muted-foreground">
+              Country code and whether numbers show it are set in{" "}
+              <Link
+                href="/management/settings-integrations/business-details/regional"
+                className="underline underline-offset-2 hover:text-foreground"
+              >
+                Regional Settings
+              </Link>.
+            </p>
           </CardContent>
         </Card>
 
