@@ -1,5 +1,6 @@
 import PDFDocument from "pdfkit";
 import { buildInvoiceHtml, type InvoiceDocInput } from "@workspace/sales-documents";
+import { phoneFormatterFor } from "../lib/phone";
 import { htmlToPdf } from "./htmlToPdf";
 import { logger } from "../lib/logger";
 
@@ -24,6 +25,8 @@ export interface InvoicePdfData {
   discountType: string | null;
   discountValue: number | null;
   notes: string | null;
+  /** Whose invoice this is — resolves the merchant's phone display format. */
+  merchantId: number;
   customerName: string | null;
   customerEmail: string | null;
   customerPhone: string | null;
@@ -281,7 +284,17 @@ async function genQrDataUrl(value: string): Promise<string | null> {
   }
 }
 
-export async function buildInvoicePdf(data: InvoicePdfData): Promise<Buffer> {
+export async function buildInvoicePdf(input: InvoicePdfData): Promise<Buffer> {
+  // Phone numbers are stored in E.164 and shown the way the merchant asked for
+  // (Settings › Regional › Phone Numbers). Applied once, here, so both renderers
+  // below — the HTML one and the pdfkit fallback — print the same thing.
+  const fmtPhone = await phoneFormatterFor(input.merchantId);
+  const data: InvoicePdfData = {
+    ...input,
+    businessPhone: fmtPhone(input.businessPhone) || null,
+    customerPhone: fmtPhone(input.customerPhone) || null,
+  };
+
   const doc = mapToDoc(data);
   // Encode the customer-profile QR server-side (the renderer is pure HTML).
   if (data.showCustomerQr && data.customerQrValue) {

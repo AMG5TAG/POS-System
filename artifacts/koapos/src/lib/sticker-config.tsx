@@ -10,6 +10,7 @@ import { useBusinessProfile } from "@/lib/business-profile";
 import { publicOrigin, serviceJobQrUrl } from "@/lib/public-url";
 import { parseHardwareConfig } from "@/lib/hardware-config";
 import { isSilentRoute, printDocument } from "@/lib/print-router";
+import { formatPhoneForDisplay } from "./phone-format";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -120,12 +121,12 @@ export function resolveQuickCodes(
     "{{customer.name}}":    ctx.customer?.name     ?? "",
     "{{customer.id}}":      ctx.customer?.id       ?? "",
     "{{customer.loyalty}}": ctx.customer?.loyalty  ?? "",
-    "{{customer.phone}}":   ctx.customer?.phone    ?? "",
+    "{{customer.phone}}":   formatPhoneForDisplay(ctx.customer?.phone),
     "{{customer.email}}":   ctx.customer?.email    ?? "",
     "{{customer.group}}":   ctx.customer?.group    ?? "",
     "{{merchant.name}}":    ctx.merchant?.name     ?? "",
     "{{merchant.abn}}":     ctx.merchant?.abn      ?? "",
-    "{{merchant.phone}}":   ctx.merchant?.phone    ?? "",
+    "{{merchant.phone}}":   formatPhoneForDisplay(ctx.merchant?.phone),
     "{{date.today}}":       today,
     "{{date.time}}":        time,
   };

@@ -124,6 +124,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect, staffRole: "owner
     city: m.city ?? null,
     country: m.country ?? null,
     defaultPhoneCountry: m.defaultPhoneCountry ?? "",
+    phoneDisplay: m.phoneDisplay ?? "international",
     currency: m.currency,
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,

@@ -2,6 +2,7 @@ import { useState, useEffect, useMemo } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useFormDirty } from "@/hooks/use-form-dirty";
 import { AppLayout } from "@/components/layout/app-layout";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 import {
   useListStaff, useCreateStaff, useUpdateStaff, useDeleteStaff,
   useGetStaffSalesReport, useListTransactions,
@@ -1010,7 +1011,7 @@ function StaffDetailDialog({
                   <section className="py-2">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground mb-1">Contact</h3>
                     <DetailRow icon={Mail} label="Email" value={staff.email} />
-                    <DetailRow icon={Phone} label="Phone" value={staff.phone} />
+                    <DetailRow icon={Phone} label="Phone" value={formatPhoneForDisplay(staff.phone)} />
                     <DetailRow icon={Calendar} label="Date of birth" value={staff.dateOfBirth} />
                   </section>
                   <section className="py-2">

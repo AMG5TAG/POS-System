@@ -658,6 +658,17 @@ export interface LoginInput {
   password: string;
 }
 
+/**
+ * How phone numbers are shown in the app. Display only — numbers are always stored with their country code.
+ */
+export type MerchantPhoneDisplay = typeof MerchantPhoneDisplay[keyof typeof MerchantPhoneDisplay];
+
+
+export const MerchantPhoneDisplay = {
+  international: 'international',
+  national: 'national',
+} as const;
+
 export type MerchantStaffRole = typeof MerchantStaffRole[keyof typeof MerchantStaffRole];
 
 
@@ -681,8 +692,10 @@ export interface Merchant {
   city?: string | null;
   /** @nullable */
   country?: string | null;
-  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one, so "0412 345 678" is stored as "+61412345678". Empty means follow `country`. */
+  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one, so "0412 345 678" is stored as "+61412345678". Empty means Australia. */
   defaultPhoneCountry?: string;
+  /** How phone numbers are shown in the app. Display only — numbers are always stored with their country code. */
+  phoneDisplay?: MerchantPhoneDisplay;
   currency?: string;
   /** @nullable */
   timezone?: string | null;
@@ -704,6 +717,17 @@ export interface Merchant {
   isDemoAccount?: boolean;
 }
 
+/**
+ * How phone numbers are shown in the app. Display only.
+ */
+export type MerchantUpdatePhoneDisplay = typeof MerchantUpdatePhoneDisplay[keyof typeof MerchantUpdatePhoneDisplay];
+
+
+export const MerchantUpdatePhoneDisplay = {
+  international: 'international',
+  national: 'national',
+} as const;
+
 export interface MerchantUpdate {
   businessName?: string;
   ownerName?: string;
@@ -711,8 +735,10 @@ export interface MerchantUpdate {
   address?: string;
   city?: string;
   country?: string;
-  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one. Empty means follow `country`. */
+  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one. Empty means Australia. */
   defaultPhoneCountry?: string;
+  /** How phone numbers are shown in the app. Display only. */
+  phoneDisplay?: MerchantUpdatePhoneDisplay;
   currency?: string;
   timezone?: string;
   logoUrl?: string;

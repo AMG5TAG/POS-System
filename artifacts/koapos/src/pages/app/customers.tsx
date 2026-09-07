@@ -74,6 +74,7 @@ import {
   type FormSubmission,
   type FormTemplate,
 } from "@/lib/forms-api";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -382,7 +383,7 @@ function MergeWizardModal({
                     <span className="text-xs text-muted-foreground">
                       ID #{cust.id}
                       {cust.email ? ` · ${cust.email}` : ""}
-                      {cust.phone ? ` · ${cust.phone}` : ""}
+                      {cust.phone ? ` · ${formatPhoneForDisplay(cust.phone)}` : ""}
                     </span>
                     <span className="text-xs text-muted-foreground">
                       {cust.loyaltyPoints ?? 0} pts · ${parseFloat(String(cust.totalSpent ?? "0")).toFixed(2)} spent · {cust.visitCount ?? 0} visits
@@ -860,7 +861,7 @@ function DuplicateModal({
                       <p className="font-semibold">{idx === 0 ? nameA : nameB}</p>
                       <p className="text-xs text-muted-foreground">Customer #{c.id}</p>
                       {c.email   && <p className="text-xs text-muted-foreground flex items-center gap-1"><Mail      className="w-3 h-3 shrink-0" />{c.email}</p>}
-                      {c.phone   && <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone     className="w-3 h-3 shrink-0" />{c.phone}</p>}
+                      {c.phone   && <p className="text-xs text-muted-foreground flex items-center gap-1"><Phone     className="w-3 h-3 shrink-0" />{formatPhoneForDisplay(c.phone)}</p>}
                       {c.company && <p className="text-xs text-muted-foreground flex items-center gap-1"><Building2 className="w-3 h-3 shrink-0" />{c.company}</p>}
                       <p className="text-xs text-muted-foreground">
                         {c.loyaltyPoints ?? 0} pts · {c.visitCount ?? 0} visits
@@ -1417,7 +1418,7 @@ function CustomerDetailInner({
           )}
           <div className="rounded-xl border bg-muted/20 divide-y">
             <InfoRow icon={Mail}      label="Email"   value={customer.email} onClick={customer.email ? () => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); } : undefined} />
-            <InfoRow icon={Phone}     label="Phone"   value={customer.phone} href={customer.phone ? telHref(customer.phone) : undefined} />
+            <InfoRow icon={Phone}     label="Phone"   value={formatPhoneForDisplay(customer.phone)} href={customer.phone ? telHref(customer.phone) : undefined} />
             <InfoRow icon={Building2} label="Company" value={customer.company} />
           </div>
           <div className="rounded-xl border bg-muted/20 divide-y">
@@ -3050,7 +3051,7 @@ export default function CustomersPage() {
                           {customer.email || "—"}
                         </td>
                         <td className="p-3 hidden md:table-cell text-muted-foreground">
-                          {customer.phone || "—"}
+                          {formatPhoneForDisplay(customer.phone) || "—"}
                         </td>
                         <td className="p-3 hidden lg:table-cell text-muted-foreground">
                           {customer.company || "—"}

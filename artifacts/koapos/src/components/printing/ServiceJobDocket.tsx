@@ -4,6 +4,7 @@ import type { TplOpts } from "@/pages/app/management-templates";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { humanizeStatus, mergeCredentialLines, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /**
  * 80mm thermal Service Job Docket — the narrow-roll counterpart to
@@ -192,7 +193,7 @@ export function ServiceJobDocket({
           <div style={dividerStyle} />
           <div style={sectionTitle}>Customer</div>
           <Field label="Name" value={data.customerName || "Walk-in"} />
-          <Field label="Phone" value={data.customerPhone} />
+          <Field label="Phone" value={formatPhoneForDisplay(data.customerPhone)} />
           <Field label="Email" value={data.customerEmail} />
         </>
       )}

@@ -35,8 +35,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   // known, and re-pushed when Regional Settings changes it (login() merges the
   // update response into `user`).
   useEffect(() => {
-    setDefaultPhoneCountry(user?.defaultPhoneCountry);
-  }, [user?.defaultPhoneCountry]);
+    setDefaultPhoneCountry(user?.defaultPhoneCountry, user?.phoneDisplay);
+  }, [user?.defaultPhoneCountry, user?.phoneDisplay]);
 
   // Auth state is sourced from the server session via useGetMe() on every mount,
   // so there is no cached user in localStorage to trust or clear.

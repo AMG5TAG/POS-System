@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { customFetch, type Transaction } from "@workspace/api-client-react";
 import { useDocumentTemplate } from "@/lib/use-document-template";
 import { cn } from "@/lib/utils";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* One active warranty (product sale or service repair) as computed by the API. */
 type WarrantyItem = {
@@ -221,7 +222,7 @@ export default function ProductsWarrantyPage() {
                                         <>
                                           <p className="font-semibold">{r.customer.name}</p>
                                           {r.customer.email && <p className="text-xs text-muted-foreground">{r.customer.email}</p>}
-                                          {r.customer.phone && <p className="text-xs text-muted-foreground">{r.customer.phone}</p>}
+                                          {r.customer.phone && <p className="text-xs text-muted-foreground">{formatPhoneForDisplay(r.customer.phone)}</p>}
                                           <Button variant="outline" size="sm" className="w-full mt-2" onClick={() => setLocation("/customers")}>Open in Customers</Button>
                                         </>
                                       ) : (

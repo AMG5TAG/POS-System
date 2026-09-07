@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import { customerDisplayName } from "@/lib/customer-name";
 import type { Customer, CustomerNote, Transaction, Appointment, ServiceJob } from "@workspace/api-client-react";
 import type { FormSubmission, FormTemplate } from "@/lib/forms-api";
+import { formatPhoneForDisplay } from "./phone-format";
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -309,7 +310,7 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
   // Info rows
   const infoFields: [string, string | null | undefined][] = [
     ["Email",          customer.email],
-    ["Phone",          customer.phone],
+    ["Phone",          formatPhoneForDisplay(customer.phone)],
     ["Company",        customer.company],
     ["ABN",            customer.abn],
     ["Date of Birth",  customer.dateOfBirth],

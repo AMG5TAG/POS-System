@@ -12,10 +12,12 @@
 import { db, merchantsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import {
+  formatPhoneDisplay,
   normalisePhone,
   phoneCountry,
   resolvePhoneCountry,
   type PhoneCountry,
+  type PhoneDisplayMode,
 } from "@workspace/phone-shared";
 
 /**
@@ -25,26 +27,56 @@ import {
  * the settings route does after a change.
  */
 const CACHE_TTL_MS = 60_000;
-const countryCache = new Map<number, { country: PhoneCountry; expiresAt: number }>();
+
+interface PhoneSettings { country: PhoneCountry; display: PhoneDisplayMode }
+const countryCache = new Map<number, { settings: PhoneSettings; expiresAt: number }>();
 
 /** Drop a merchant's cached default (call after changing the setting). */
 export function invalidatePhoneCountryCache(merchantId: number): void {
   countryCache.delete(merchantId);
 }
 
-/** The country whose dialling code this merchant's numbers default to. */
-export async function merchantPhoneCountry(merchantId: number): Promise<PhoneCountry> {
+/** A merchant's phone country and how they want numbers displayed. */
+export async function merchantPhoneSettings(merchantId: number): Promise<PhoneSettings> {
   const cached = countryCache.get(merchantId);
-  if (cached && cached.expiresAt > Date.now()) return cached.country;
+  if (cached && cached.expiresAt > Date.now()) return cached.settings;
 
   const [row] = await db
-    .select({ defaultPhoneCountry: merchantsTable.defaultPhoneCountry })
+    .select({
+      defaultPhoneCountry: merchantsTable.defaultPhoneCountry,
+      phoneDisplay: merchantsTable.phoneDisplay,
+    })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, merchantId));
 
-  const country = resolvePhoneCountry(row?.defaultPhoneCountry);
-  countryCache.set(merchantId, { country, expiresAt: Date.now() + CACHE_TTL_MS });
-  return country;
+  const settings: PhoneSettings = {
+    country: resolvePhoneCountry(row?.defaultPhoneCountry),
+    display: row?.phoneDisplay === "national" ? "national" : "international",
+  };
+  countryCache.set(merchantId, { settings, expiresAt: Date.now() + CACHE_TTL_MS });
+  return settings;
+}
+
+/** The country whose dialling code this merchant's numbers default to. */
+export async function merchantPhoneCountry(merchantId: number): Promise<PhoneCountry> {
+  return (await merchantPhoneSettings(merchantId)).country;
+}
+
+/**
+ * A formatter for numbers this merchant is about to *read* — on a printed
+ * receipt, an invoice PDF, a job docket.
+ *
+ * Resolved once per document rather than per field, because a document renders
+ * many numbers and the merchant's setting cannot change halfway down the page.
+ *
+ * Display only. Never put the result where a machine will dial it: an SMS
+ * recipient, a `tel:` href and an integration payload all take the stored E.164.
+ */
+export async function phoneFormatterFor(
+  merchantId: number,
+): Promise<(value: string | null | undefined) => string> {
+  const { country, display } = await merchantPhoneSettings(merchantId);
+  return (value) => formatPhoneDisplay(value, country, display);
 }
 
 /**

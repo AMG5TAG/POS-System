@@ -1,5 +1,6 @@
 import type { Transaction } from "@workspace/api-client-react";
 import { buildInvoiceHtml } from "@workspace/sales-documents";
+import { formatPhoneForDisplay } from "./phone-format";
 import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
@@ -154,7 +155,7 @@ function businessTemplateVars(biz?: ReceiptBusinessInfo): Record<string, string>
     "business.name": b.businessName ?? "",
     "business.abn": b.abn ?? "",
     "business.email": b.email ?? "",
-    "business.phone": b.phone ?? "",
+    "business.phone": formatPhoneForDisplay(b.phone),
     "business.website": b.website ?? "",
     "business.tagline": b.tagline ?? "",
     "business.address": b.address ?? "",
@@ -178,7 +179,7 @@ export function buildTemplateVars(tx: Transaction, biz?: ReceiptBusinessInfo): R
     "customer.name": c ? (customerDisplayName(c, "") || "") : "",
     "customer.first_name": c?.firstName ?? "",
     "customer.email": c?.email ?? "",
-    "customer.phone": c?.phone ?? "",
+    "customer.phone": formatPhoneForDisplay(c?.phone),
     "customer.loyalty_points": c?.loyaltyPoints != null ? `${c.loyaltyPoints}` : "",
     "customer.loyalty_tier": c?.tierName ?? "",
     "customer.id": c?.id != null ? `CUS-${c.id}` : "",
@@ -418,7 +419,7 @@ export async function printReceipt(
   const cust = tx.customer;
   const custName = cust ? esc(customerDisplayName(cust, "") || cust.email || "") : "";
   const custEmail = cust ? esc(cust.email ?? "") : "";
-  const custPhone = cust ? esc((cust as { phone?: string }).phone ?? "") : "";
+  const custPhone = cust ? esc(formatPhoneForDisplay((cust as { phone?: string }).phone)) : "";
   const custAddress = cust ? esc((cust as { address?: string | null }).address ?? "") : "";
   const customerDetailsHtml = (tpl.showAllCustomerDetails && (custName || custEmail || custPhone || custAddress))
     ? `<div class="receipt"><div class="bdr-t pt mt small">
@@ -553,7 +554,7 @@ function printA4Document(
       ? {
           name: customerName,
           email: customer.email ?? null,
-          phone: (customer as { phone?: string }).phone ?? null,
+          phone: formatPhoneForDisplay((customer as { phone?: string }).phone) || null,
           address: (customer as { address?: string | null }).address ?? null,
           code: customerCode,
         }
@@ -652,7 +653,7 @@ export async function printA4Receipt(
     ? esc(customerDisplayName(customer, "") || customer.email || "")
     : "";
   const customerEmail = customer ? esc(customer.email ?? "") : "";
-  const customerPhone = customer ? esc((customer as { phone?: string }).phone ?? "") : "";
+  const customerPhone = customer ? esc(formatPhoneForDisplay((customer as { phone?: string }).phone)) : "";
 
   const items = (tx.items ?? []) as Array<{ productName?: string; quantity?: number; unitPrice?: number; totalPrice?: number; discount?: number; digitalCodes?: string[]; warranty?: string | null; serials?: string[] }>;
   const warrantyHtml = (item: { warranty?: string | null; serials?: string[] }) => {
@@ -1087,7 +1088,7 @@ export function printA4ServiceJob(
     "service.number": job.jobNumber ?? "",
     "customer.name": customerOverride?.name ?? job.customerName ?? "",
     "customer.email": customerOverride?.email ?? job.customerEmail ?? "",
-    "customer.phone": customerOverride?.phone ?? job.customerPhone ?? "",
+    "customer.phone": formatPhoneForDisplay(customerOverride?.phone ?? job.customerPhone),
   };
   const resolveStr = (text?: string) => applyTemplateVars(text, svcVars).trim();
   const headerText = resolveStr(tpl.headerText);
@@ -1103,7 +1104,7 @@ export function printA4ServiceJob(
 
   const custName = customerOverride?.name ?? job.customerName ?? "";
   const custEmail = customerOverride?.email ?? job.customerEmail ?? "";
-  const custPhone = customerOverride?.phone ?? job.customerPhone ?? "";
+  const custPhone = formatPhoneForDisplay(customerOverride?.phone ?? job.customerPhone);
 
   const statusLabel = (job.status ?? "pending").replace(/_/g, " ").replace(/\b\w/g, c => c.toUpperCase());
   const isWarranty = job.isUnderWarranty === true || job.isUnderWarranty === "true";

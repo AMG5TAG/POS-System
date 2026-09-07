@@ -36,6 +36,7 @@ import {
   Square, Minus, ZoomIn, ZoomOut,
 } from "lucide-react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ── Label sizes: DYMO LabelWriter series + Brother VC-500W continuous tape ── */
 const BROTHER_SIZES: DymoSize[] = [
@@ -93,12 +94,12 @@ function buildSubs(o: { businessName: string; abn: string; phone: string; produc
     "{{customer.name}}": c ? `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() : "",
     "{{customer.id}}": c ? `#CUS-${String(c.id).padStart(4, "0")}` : "",
     "{{customer.loyalty}}": c?.loyaltyPoints != null ? String(c.loyaltyPoints) : "",
-    "{{customer.phone}}": c?.phone ?? "",
+    "{{customer.phone}}": formatPhoneForDisplay(c?.phone),
     "{{customer.email}}": c?.email ?? "",
     "{{customer.group}}": c?.customerGroup ?? "",
     "{{merchant.name}}": o.businessName ?? "",
     "{{merchant.abn}}": o.abn ?? "",
-    "{{merchant.phone}}": o.phone ?? "",
+    "{{merchant.phone}}": formatPhoneForDisplay(o.phone),
     "{{date.today}}": today,
     "{{date.time}}": time,
   };

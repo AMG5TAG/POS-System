@@ -7,6 +7,7 @@ import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
+import { phoneFormatterFor } from "../lib/phone";
 import { customQrEmailBlock } from "../lib/custom-qr-email";
 import { mergeEmailTemplate, savedEmailTemplate } from "../lib/email-template";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
@@ -1198,6 +1199,7 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
 
   // Resolve Sales-Template quick codes ({{invoice.number}}, {{customer.name}}, …)
   // in the downloadable PDF's template-driven text fields.
+  const fmtPhone = await phoneFormatterFor(merchantId);
   const pdfQuickCodeVars = buildInvoiceQuickCodeVars({
     invoiceNumber:     inv.invoiceNumber,
     totalStr:          `$${Number(inv.total).toFixed(2)}`,
@@ -1208,18 +1210,19 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     businessEmail:     bp?.contactEmail ?? merchant?.email ?? "",
     businessWebsite:   bp?.website ?? "",
     businessAbn:       bp?.abn ?? "",
-    businessPhone:     merchant?.phone ?? "",
+    businessPhone:     fmtPhone(merchant?.phone),
     businessTagline:   bp?.tagline ?? "",
     businessAddress:   [merchant?.address, merchant?.city].filter(Boolean).join(", "),
     customerName:      inv.customerName ?? "",
     customerFirstName: (inv.customerName ?? "").split(" ")[0] ?? "",
     customerEmail:     inv.customerEmail ?? "",
-    customerPhone:     inv.customerPhone ?? "",
+    customerPhone:     fmtPhone(inv.customerPhone),
   });
   const pdfResolveNullable = (s: string | null | undefined): string | null =>
     typeof s === "string" ? applyQuickCodes(s, pdfQuickCodeVars) : (s ?? null);
 
   const pdfBuffer = await buildInvoicePdf({
+    merchantId,
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
     createdAt:     inv.createdAt,
@@ -1459,6 +1462,7 @@ export async function sendInvoiceEmailInternal(
   const invoiceDateStr = inv.createdAt
     ? new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
     : "";
+  const fmtPhone = await phoneFormatterFor(merchantId);
   const quickCodeVars = buildInvoiceQuickCodeVars({
     invoiceNumber:     inv.invoiceNumber,
     totalStr,
@@ -1469,13 +1473,13 @@ export async function sendInvoiceEmailInternal(
     businessEmail:     tpl.contactEmail ?? bp?.contactEmail ?? merchant?.email ?? "",
     businessWebsite:   tpl.website ?? bp?.website ?? "",
     businessAbn:       bp?.abn ?? "",
-    businessPhone:     merchant?.phone ?? "",
+    businessPhone:     fmtPhone(merchant?.phone),
     businessTagline:   bp?.tagline ?? "",
     businessAddress:   [merchant?.address, merchant?.city].filter(Boolean).join(", "),
     customerName:      cName || "",
     customerFirstName: row.customerFirstName ?? "",
     customerEmail:     row.customerEmail ?? "",
-    customerPhone:     row.customerPhone ?? "",
+    customerPhone:     fmtPhone(row.customerPhone),
   });
   const resolve = (s: string) => applyQuickCodes(s, quickCodeVars);
   const resolveNullable = (s: string | null | undefined): string | null =>
@@ -1577,6 +1581,7 @@ export async function sendInvoiceEmailInternal(
     || row.customerAddress
     || null;
   const pdfBuffer = settings.attachPdf ? await buildInvoicePdf({
+    merchantId,
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
     createdAt:     inv.createdAt.toISOString(),

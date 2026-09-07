@@ -297,6 +297,27 @@ last rule, and the placeholder test is strict enough to exclude
 "Search by name, email or phone…" — rewriting a search query turns a lookup into
 a miss. Opt out with `noPhoneFormat`.
 
+**Storage and display are separate settings.** `merchants.phoneDisplay`
+(`international` / `national`) decides only how a number *reads on screen* —
+`formatPhoneDisplay` in the shared lib, `formatPhoneForDisplay` in the frontend.
+Storage is always E.164, so the toggle rewrites nothing and can be flipped back
+and forth freely; `phone-normalise.test.ts` pins the round trip (saving what is
+on screen stores the same string either way). Two rules in it are load-bearing:
+only the merchant's *own* country code is ever dropped — an overseas number shown
+without its code can't be dialled — and a `tel:`/`sms:`/`wa.me` href always gets
+the **stored** value, never the display one. The base `Input` shows the
+normalised number in the merchant's display format on blur, which is why the
+field can read `0412345678` while the database holds `+61412345678`.
+
+Printed and emailed documents follow it too, which is why the server needs the
+setting as well: `phoneFormatterFor(merchantId)` in `api-server/src/lib/phone.ts`
+resolves it once per document (not per field — a merchant's setting cannot change
+halfway down a page). It is applied in `buildInvoicePdf`, which is why
+`InvoicePdfData` carries `merchantId`, and to the `{{business.phone}}` /
+`{{customer.phone}}` quick codes. On the browser side: the thermal and A4
+receipts, the ESC/POS header, service job sheet and docket, printed forms, the
+customer PDF and sticker shortcodes.
+
 The country comes from `merchants.defaultPhoneCountry` (Settings › Regional ›
 Phone Numbers), and **every merchant who has not set one gets Australia** —
 `resolvePhoneCountry`, whose only fallback is `FALLBACK_PHONE_COUNTRY`. It

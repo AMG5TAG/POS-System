@@ -1,5 +1,6 @@
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 import {
   useListStaff,
   useListStaffTimesheets,
@@ -50,7 +51,7 @@ function roleBadge(role: string) {
 }
 
 function formatPhone(phone?: string | null) {
-  return phone?.trim() || <span className="text-muted-foreground">—</span>;
+  return formatPhoneForDisplay(phone) || <span className="text-muted-foreground">—</span>;
 }
 
 /* ─── Summary card ───────────────────────────────────────────────────────── */

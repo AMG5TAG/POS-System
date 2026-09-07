@@ -10,6 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, Di
 import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User, MessageCircleReply } from "lucide-react";
 import { cn, telHref } from "@/lib/utils";
 import { toast } from "sonner";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 const WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
@@ -167,7 +168,7 @@ function BirthdayDialog({ birthday, onClose }: { birthday: CalendarBirthday; onC
         <div className="space-y-4 pt-2">
           {birthday.phone && (
             <div className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">Phone: </span>{birthday.phone}
+              <span className="font-medium text-foreground">Phone: </span>{formatPhoneForDisplay(birthday.phone)}
             </div>
           )}
           {birthday.email && (

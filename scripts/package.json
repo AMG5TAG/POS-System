@@ -35,6 +35,7 @@
     "add-customer-photo": "tsx ./src/add-customer-photo.ts",
     "add-customer-portal-auth": "tsx ./src/add-customer-portal-auth.ts",
     "add-merchant-default-phone-country": "tsx ./src/add-merchant-default-phone-country.ts",
+    "add-merchant-phone-display": "tsx ./src/add-merchant-phone-display.ts",
     "drop-receipt-paper-size": "tsx ./src/drop-receipt-paper-size.ts",
     "readd-receipt-paper-size": "tsx ./src/readd-receipt-paper-size.ts",
     "add-customer-group-pricing": "tsx ./src/add-customer-group-pricing.ts",

@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
 import { buildFormPrintHtml } from "@/lib/print-form";
+import { setDefaultPhoneCountry } from "@/lib/phone-format";
 import type { FormTemplate } from "@/lib/forms-api";
 
 const form = {
@@ -75,5 +76,46 @@ describe("buildFormPrintHtml", () => {
     const bad = buildFormPrintHtml({ form, business: { name: "X", primaryColor: "red; }" }, data: {} });
     expect(bad).not.toContain("red; }");
     expect(bad).toContain("#0f766e");
+  });
+});
+
+/**
+ * A printed document is the one place a merchant *hands* a phone number to a
+ * customer, so it follows the same display setting the screens do — and the
+ * number in the database is untouched either way.
+ */
+describe("buildFormPrintHtml — phone display setting", () => {
+  const render = () => buildFormPrintHtml({
+    form,
+    business: { name: "Koastal Repairs", phone: "+61212345678" },
+    customer: { name: "Sarah Johnson", phone: "+61400000000" },
+    data: {},
+  });
+
+  afterEach(() => setDefaultPhoneCountry(null, "international"));
+
+  it("prints the country code by default", () => {
+    setDefaultPhoneCountry("AU", "international");
+    const html = render();
+    expect(html).toContain("+61212345678");
+    expect(html).toContain("+61400000000");
+  });
+
+  it("prints numbers without the country code when the merchant asked", () => {
+    setDefaultPhoneCountry("AU", "national");
+    const html = render();
+    expect(html).toContain("0212345678");
+    expect(html).toContain("0400000000");
+    expect(html).not.toContain("+61");
+  });
+
+  it("keeps an overseas number dialable on the page", () => {
+    setDefaultPhoneCountry("AU", "national");
+    const html = buildFormPrintHtml({
+      form, business: { name: "Koastal Repairs" },
+      customer: { name: "Kiwi Customer", phone: "+64215551234" },
+      data: {},
+    });
+    expect(html).toContain("+64215551234");
   });
 });

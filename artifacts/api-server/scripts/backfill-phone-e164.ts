@@ -83,6 +83,24 @@ const TARGETS = [
   },
 ];
 
+/**
+ * A one-line description of how a number was typed — "10 digits, leading 0" —
+ * so a thousand rewrites collapse into the few shapes actually present. Two rows
+ * share a shape only if the same reasoning converts them, which is what makes
+ * the grouped output a real review rather than a spot check.
+ */
+function describeShape(raw: string): string {
+  const digits = raw.replace(/\D/g, "");
+  const parts: string[] = [`${digits.length} digits`];
+  if (raw.trim().startsWith("+")) parts.push("leading +");
+  else if (digits.startsWith("00")) parts.push("00 intl prefix");
+  else if (digits.startsWith("0")) parts.push("leading 0");
+  else parts.push("no trunk prefix");
+  if (/[()\s.-]/.test(raw.trim())) parts.push("separators");
+  if (raw !== raw.trim()) parts.push("whitespace");
+  return parts.join(", ");
+}
+
 function tally(values: string[]): [string, number][] {
   const counts = new Map<string, number>();
   for (const v of values) counts.set(v, (counts.get(v) ?? 0) + 1);
@@ -118,6 +136,7 @@ async function main(): Promise<void> {
 
   const planned: { target: (typeof TARGETS)[number]; id: number; next: string }[] = [];
   const samples: string[] = [];
+  const shapes = new Map<string, { count: number; example: { from: string; to: string } }>();
   let untouched = 0;
 
   for (const t of TARGETS) {
@@ -133,12 +152,28 @@ async function main(): Promise<void> {
 
       changed++;
       if (samples.length < 25) samples.push(`  ${t.name} #${r.id}: "${r.phone}" → "${next}"`);
+      const shape = describeShape(r.phone);
+      const g = shapes.get(shape);
+      if (g) g.count++;
+      else shapes.set(shape, { count: 1, example: { from: r.phone, to: next } });
       planned.push({ target: t, id: r.id, next });
     }
     console.log(`${t.name}: ${rows.length} rows, ${changed} to rewrite`);
   }
 
   console.log(`\nTo rewrite: ${planned.length}   Already correct or deliberately left alone: ${untouched}`);
+
+  /* A sample of 25 out of a thousand tells you the common case looks right and
+     nothing about the unusual ones, which are the whole risk. Group every
+     rewrite by the *shape* of what was typed instead, so a run can be reviewed
+     in full: a handful of lines covers every row, and anything strange shows up
+     as its own line with a real example rather than hiding in the tail. */
+  if (shapes.size) {
+    console.log("\nEvery rewrite, grouped by the shape of what was typed:");
+    for (const [shape, g] of [...shapes.entries()].sort((a, b) => b[1].count - a[1].count)) {
+      console.log(`  ${String(g.count).padStart(5)} ×  ${shape.padEnd(34)} e.g. "${g.example.from}" → "${g.example.to}"`);
+    }
+  }
   if (samples.length) console.log("\nSample rewrites:\n" + samples.join("\n"));
 
   if (planned.length === 0) { console.log("\nNothing to do."); return; }

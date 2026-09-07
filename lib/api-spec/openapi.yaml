@@ -10716,7 +10716,13 @@ components:
           description: >-
             ISO 3166-1 alpha-2 country whose dialling code is appended to phone
             numbers saved without one, so "0412 345 678" is stored as
-            "+61412345678". Empty means follow `country`.
+            "+61412345678". Empty means Australia.
+        phoneDisplay:
+          type: string
+          enum: [international, national]
+          description: >-
+            How phone numbers are shown in the app. Display only — numbers are
+            always stored with their country code.
         currency:
           type: string
         timezone:
@@ -10774,7 +10780,12 @@ components:
           type: string
           description: >-
             ISO 3166-1 alpha-2 country whose dialling code is appended to phone
-            numbers saved without one. Empty means follow `country`.
+            numbers saved without one. Empty means Australia.
+        phoneDisplay:
+          type: string
+          enum: [international, national]
+          description: >-
+            How phone numbers are shown in the app. Display only.
         currency:
           type: string
         timezone:

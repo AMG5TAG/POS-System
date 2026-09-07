@@ -5,6 +5,7 @@ import { formatSocialEntries } from "@/lib/social-links";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
 import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /**
  * Unified, print-ready Service Job Sheet.
@@ -225,7 +226,7 @@ export function ServiceJobSheet({
             <div style={boxStyle}>
               <div style={labelStyle}>Customer</div>
               <div><strong>Name:</strong> {data.customerName || "Walk-in"}</div>
-              {data.customerPhone && <div><strong>Phone:</strong> {data.customerPhone}</div>}
+              {data.customerPhone && <div><strong>Phone:</strong> {formatPhoneForDisplay(data.customerPhone)}</div>}
               {data.customerEmail && <div style={wrapStyle}><strong>Email:</strong> {data.customerEmail}</div>}
             </div>
           )}

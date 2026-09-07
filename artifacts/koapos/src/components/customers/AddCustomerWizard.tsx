@@ -36,6 +36,7 @@ import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 import { AddressAutocomplete } from "@/components/customers/AddressAutocomplete";
 import { ImageUploader } from "@/components/ui/image-uploader";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 type Step = "personal" | "address" | "account";
 const STEPS: Step[] = ["personal", "address", "account"];
@@ -326,7 +327,7 @@ export function AddCustomerWizard({
                         <div key={c.id} className="flex items-center justify-between gap-2 text-xs text-amber-900">
                           <span className="min-w-0 truncate">
                             <strong>{customerLabel(c)}</strong>
-                            {c.phone && <span className="ml-1.5 opacity-80">{c.phone}</span>}
+                            {c.phone && <span className="ml-1.5 opacity-80">{formatPhoneForDisplay(c.phone)}</span>}
                           </span>
                           {onCreated && (
                             <Button
@@ -448,7 +449,7 @@ export function AddCustomerWizard({
                                     >
                                       <Check className={cn("mr-2 h-4 w-4", form.referredByCustomerId === String(cust.id) ? "opacity-100" : "opacity-0")} />
                                       <span className="truncate">{`${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim() || "Unnamed"}</span>
-                                      {cust.phone && <span className="ml-2 text-xs text-muted-foreground">{cust.phone}</span>}
+                                      {cust.phone && <span className="ml-2 text-xs text-muted-foreground">{formatPhoneForDisplay(cust.phone)}</span>}
                                     </CommandItem>
                                   ))}
                               </CommandGroup>

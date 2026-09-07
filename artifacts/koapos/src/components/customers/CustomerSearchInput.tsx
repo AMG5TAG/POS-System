@@ -6,6 +6,7 @@ import { customerDisplayName } from "@/lib/customer-name";
 import { Search, UserSearch, X, AlertTriangle, UserPlus, Loader2 } from "lucide-react";
 import { QuickAddCustomerDialog } from "./QuickAddCustomerDialog";
 import { CustomerAvatar } from "./CustomerAvatar";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 interface CustomerSearchInputProps {
   value: string;
@@ -107,7 +108,7 @@ export function CustomerSearchInput({
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{displayName(selected)}</p>
             {(selected.email || selected.phone) && (
-              <p className="text-xs text-muted-foreground truncate">{selected.email || selected.phone}</p>
+              <p className="text-xs text-muted-foreground truncate">{selected.email || formatPhoneForDisplay(selected.phone)}</p>
             )}
           </div>
           {selected.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
@@ -203,7 +204,7 @@ export function CustomerSearchInput({
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{displayName(c)}</p>
-                    <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.email || formatPhoneForDisplay(c.phone) || "—"}</p>
                   </div>
                   {c.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
                 </button>

@@ -387,6 +387,7 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* default */ }
 
   const pdfBuffer = await buildInvoicePdf({
+    merchantId,
     title:         "Quote",
     dueDateLabel:  "Valid until",
     invoiceNumber: q.quoteNumber,
@@ -529,6 +530,7 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* default */ }
 
   const pdfBuffer = await buildInvoicePdf({
+    merchantId,
     title:         "Quote",
     dueDateLabel:  "Valid until",
     invoiceNumber: q.quoteNumber,

@@ -82,6 +82,7 @@ import {
   MessageSquareWarning, Package, ScanLine, BadgeCheck, BadgeX, Sparkles,
   WifiOff, ShieldCheck, ArrowBigUp, MonitorX, RefreshCw,
 } from "lucide-react";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 import { Checkbox } from "@/components/ui/checkbox";
 import { QuickAddCustomerDialog } from "@/components/customers/QuickAddCustomerDialog";
 import { CustomerAvatar } from "@/components/customers/CustomerAvatar";
@@ -3666,7 +3667,7 @@ export default function POSPage() {
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{c.email || formatPhoneForDisplay(c.phone) || "—"}</p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             {c.tierName && <span className="text-[10px] font-medium text-violet-600 bg-violet-50 px-1 rounded">{c.tierName}</span>}

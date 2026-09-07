@@ -27,6 +27,7 @@ import {
   useCreateDeliveryOrder,
   useUpdateDeliveryOrder,
 } from "@workspace/api-client-react";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -186,7 +187,7 @@ function OrderCard({ order, onAdvance, onCancel, onView }: {
           <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {formatTime(order.createdAt)}</span>
           <span className="font-semibold text-foreground">${order.total.toFixed(2)}</span>
           <span>{order.items.length} item{order.items.length !== 1 ? "s" : ""}</span>
-          {order.phone && <span className="flex items-center gap-0.5"><Phone className="w-3 h-3" /> {order.phone}</span>}
+          {order.phone && <span className="flex items-center gap-0.5"><Phone className="w-3 h-3" /> {formatPhoneForDisplay(order.phone)}</span>}
         </div>
         {order.note && (
           <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1.5 bg-amber-50 dark:bg-amber-950/20 rounded px-2 py-1">
@@ -413,7 +414,7 @@ export default function OnlineDeliveryOrdersPage() {
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div><p className="text-xs text-muted-foreground">Customer</p><p className="font-medium">{viewOrder.customerName}</p></div>
                     <div><p className="text-xs text-muted-foreground">Platform</p><p className="font-medium">{viewOrder.platform}</p></div>
-                    {viewOrder.phone && <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium">{viewOrder.phone}</p></div>}
+                    {viewOrder.phone && <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium">{formatPhoneForDisplay(viewOrder.phone)}</p></div>}
                     <div><p className="text-xs text-muted-foreground">Placed at</p><p className="font-medium">{formatTime(viewOrder.createdAt)}</p></div>
                   </div>
                   {viewOrder.address && (

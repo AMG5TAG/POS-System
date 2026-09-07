@@ -24,6 +24,7 @@ import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -776,7 +777,7 @@ export default function ProductsSuppliersPage() {
                     </div>
                     <div className="space-y-1 text-sm text-muted-foreground">
                       {(pc?.email || s.email) && <p className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 shrink-0" />{pc?.email || s.email}</p>}
-                      {(pc?.phone || s.phone) && <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 shrink-0" />{pc?.phone || s.phone}</p>}
+                      {(pc?.phone || s.phone) && <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 shrink-0" />{formatPhoneForDisplay(pc?.phone || s.phone)}</p>}
                       {s.website && <p className="flex items-center gap-1.5 truncate"><Globe className="w-3.5 h-3.5 shrink-0" /><span className="truncate">{s.website}</span></p>}
                       {allContacts.length > 1 && (
                         <p className="text-xs text-muted-foreground">+{allContacts.length - 1} more contact{allContacts.length > 2 ? "s" : ""}</p>

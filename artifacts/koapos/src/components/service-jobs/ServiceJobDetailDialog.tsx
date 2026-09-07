@@ -36,6 +36,7 @@ import { ServiceJobShippingPanel } from "@/components/service-jobs/ServiceJobShi
 import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDialog";
 import { History, ListChecks, Clock, PenLine, Truck, Wallet, Send, Lock } from "lucide-react";
 import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
@@ -434,7 +435,7 @@ export function ServiceJobDetailDialog({
                   {(job.customerPhone || showAll) && (
                     <DetailRow
                       icon={User} label="Phone"
-                      value={job.customerPhone ?? (showAll ? "—" : null)}
+                      value={formatPhoneForDisplay(job.customerPhone) || (showAll ? "—" : null)}
                       href={job.customerPhone ? telHref(job.customerPhone) : undefined}
                     />
                   )}

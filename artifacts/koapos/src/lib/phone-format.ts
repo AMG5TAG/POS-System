@@ -13,9 +13,11 @@
  */
 
 import {
+  formatPhoneDisplay as formatForMode,
   normalisePhone,
   resolvePhoneCountry,
   type PhoneCountry,
+  type PhoneDisplayMode,
 } from "@workspace/phone-shared";
 
 /* ── The merchant's default ──────────────────────────────────────────────────
@@ -28,20 +30,39 @@ import {
  * changes it; until then it is the fallback.
  */
 let current: PhoneCountry = resolvePhoneCountry(null);
+let displayMode: PhoneDisplayMode = "international";
 
 export function setDefaultPhoneCountry(
   defaultPhoneCountry: string | null | undefined,
+  mode?: string | null,
 ): void {
   current = resolvePhoneCountry(defaultPhoneCountry);
+  displayMode = mode === "national" ? "national" : "international";
 }
 
 export function getDefaultPhoneCountry(): PhoneCountry {
   return current;
 }
 
+export function getPhoneDisplayMode(): PhoneDisplayMode {
+  return displayMode;
+}
+
 /** Normalise with the merchant's current default. */
 export function formatPhoneForSave(value: string): string {
   return normalisePhone(value, current);
+}
+
+/**
+ * A stored number as this merchant wants to read it. Display only — every save
+ * path still writes E.164, so this can never change what is in the database.
+ *
+ * Use it wherever a number is *rendered*. Do not use it to build a `tel:`,
+ * `sms:` or `wa.me` link: those need the country code to work from a mobile, and
+ * they should be given the stored value.
+ */
+export function formatPhoneForDisplay(value: string | null | undefined): string {
+  return formatForMode(value, current, displayMode);
 }
 
 /* ── Which fields are phone fields ───────────────────────────────────────────*/
@@ -110,7 +131,10 @@ export function isPhoneField(type?: string, hints?: PhoneFieldHints): boolean {
  * box agree.
  */
 export function applyPhoneFormat(el: HTMLInputElement): boolean {
-  const next = formatPhoneForSave(el.value);
+  // Normalise first, then show it the way this merchant reads numbers: the field
+  // shows "0412345678" under the national setting while the server still stores
+  // "+61412345678", because the save path normalises again on the way in.
+  const next = formatPhoneForDisplay(formatPhoneForSave(el.value));
   if (next === el.value) return false;
 
   const setter = Object.getOwnPropertyDescriptor(

@@ -4,6 +4,7 @@ import { eq, and, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateMerchantBody } from "@workspace/api-zod";
 import { invalidatePhoneCountryCache, isValidPhoneCountry } from "../lib/phone";
+import { isPhoneDisplayMode } from "@workspace/phone-shared";
 
 const router: IRouter = Router();
 
@@ -21,6 +22,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     city: m.city ?? null,
     country: m.country ?? null,
     defaultPhoneCountry: m.defaultPhoneCountry ?? "",
+    phoneDisplay: m.phoneDisplay ?? "international",
     currency: m.currency,
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,
@@ -90,6 +92,13 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
   // it means "follow the business country".
   if (body.defaultPhoneCountry !== undefined && !isValidPhoneCountry(body.defaultPhoneCountry)) {
     res.status(400).json({ error: "Unknown country for the default phone country code." });
+    return;
+  }
+
+  // Display only — it can't corrupt a stored number, but an unknown value would
+  // leave the UI falling back to a format the settings screen doesn't show.
+  if (body.phoneDisplay !== undefined && !isPhoneDisplayMode(body.phoneDisplay)) {
+    res.status(400).json({ error: "Phone display must be 'international' or 'national'." });
     return;
   }
 

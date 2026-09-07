@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  formatPhoneDisplay,
   normalisePhone,
   phoneCountry,
   phoneExample,
@@ -140,5 +141,43 @@ describe("resolvePhoneCountry", () => {
   it("defaults rather than guessing when the stored code is unknown", () => {
     expect(resolvePhoneCountry("ZZ").code).toBe("AU");
     expect(resolvePhoneCountry("Australia").code).toBe("AU");
+  });
+});
+
+describe("formatPhoneDisplay — how a stored number reads on screen", () => {
+  it("shows the country code by default", () => {
+    expect(formatPhoneDisplay("+61412345678", AU, "international")).toBe("+61412345678");
+  });
+
+  it("drops the merchant's own country code when asked", () => {
+    expect(formatPhoneDisplay("+61412345678", AU, "national")).toBe("0412345678");
+    expect(formatPhoneDisplay("+61293334444", AU, "national")).toBe("0293334444");
+    // The NANP has no trunk prefix to put back.
+    expect(formatPhoneDisplay("+14155551234", US, "national")).toBe("4155551234");
+  });
+
+  it("keeps the code on an overseas number whatever the setting says", () => {
+    // Shown as "215551234" to an Australian shop it is unusable: it can't be
+    // dialled and can't be told apart from a local number.
+    expect(formatPhoneDisplay("+64215551234", AU, "national")).toBe("+64215551234");
+    expect(formatPhoneDisplay("+14155551234", AU, "national")).toBe("+14155551234");
+  });
+
+  it("leaves anything not stored in E.164 exactly as it is", () => {
+    for (const value of ["0412 345 678", "ask for Dave", "", "   "]) {
+      expect(formatPhoneDisplay(value, AU, "national")).toBe(value.trim());
+    }
+    expect(formatPhoneDisplay(null, AU, "national")).toBe("");
+  });
+
+  it("never changes what would be stored — display is a round trip", () => {
+    // This is the property the whole setting rests on: whichever way a number is
+    // shown, saving what is on screen stores the same E.164 string.
+    for (const stored of ["+61412345678", "+61293334444", "+611300123456", "+64215551234"]) {
+      for (const mode of ["international", "national"] as const) {
+        const shown = formatPhoneDisplay(stored, AU, mode);
+        expect(normalisePhone(shown, AU), `${stored} via ${mode}`).toBe(stored);
+      }
+    }
   });
 });

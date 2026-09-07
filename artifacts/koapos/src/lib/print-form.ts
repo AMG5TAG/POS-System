@@ -7,6 +7,7 @@
  * form on its own so what comes out is a document a customer can sign and keep.
  */
 import type { FormField, FormTemplate } from "@/lib/forms-api";
+import { formatPhoneForDisplay } from "./phone-format";
 
 export interface FormPrintBusiness {
   name?: string;
@@ -82,12 +83,12 @@ export function buildFormPrintHtml(opts: {
     })
     .join("\n");
 
-  const contact = [business?.address, business?.phone, business?.email]
+  const contact = [business?.address, formatPhoneForDisplay(business?.phone), business?.email]
     .filter(Boolean)
     .map((v) => esc(v))
     .join(" &nbsp;·&nbsp; ");
 
-  const customerLine = [customer?.name, customer?.phone, customer?.email]
+  const customerLine = [customer?.name, formatPhoneForDisplay(customer?.phone), customer?.email]
     .filter(Boolean)
     .map((v) => esc(v))
     .join(" &nbsp;·&nbsp; ");

@@ -241,6 +241,60 @@ export function normalisePhoneOrNull<T extends string | null | undefined>(
   return normalisePhone(raw, country) as never;
 }
 
+/* ── Displaying a number ─────────────────────────────────────────────────────
+ *
+ * Storage and display are separate questions. A number is *always* stored in
+ * E.164 — that is what an SMS gateway, a `tel:` link and an exported contact
+ * need — but a shop in Sydney reading a number back off the screen is reading it
+ * to an Australian, and "0412 345 678" is the form they say out loud.
+ *
+ * So the merchant picks how numbers are *shown* and it changes nothing about
+ * what is written. `formatPhoneDisplay` is display-only, and every path that
+ * saves still runs the value through `normalisePhone`.
+ */
+
+export type PhoneDisplayMode = "international" | "national";
+
+export const PHONE_DISPLAY_MODES: readonly PhoneDisplayMode[] = ["international", "national"];
+
+export function isPhoneDisplayMode(value: unknown): value is PhoneDisplayMode {
+  return value === "international" || value === "national";
+}
+
+/**
+ * How a stored number should read on screen.
+ *
+ *   formatPhoneDisplay("+61412345678", AU, "national")      → "0412345678"
+ *   formatPhoneDisplay("+61412345678", AU, "international") → "+61412345678"
+ *   formatPhoneDisplay("+64215551234", AU, "national")      → "+64215551234"
+ *
+ * That last one is the rule worth knowing: the country code is only dropped when
+ * it is the merchant's *own*. An overseas number shown without its code can't be
+ * dialled and can't be told apart from a local one, so it keeps the "+" whatever
+ * the setting says.
+ *
+ * Anything not stored in E.164 — a legacy row, a value normalisation declined to
+ * touch — is returned exactly as it is.
+ */
+export function formatPhoneDisplay(
+  raw: string | null | undefined,
+  country: PhoneCountry | string | null | undefined,
+  mode: PhoneDisplayMode,
+): string {
+  const value = String(raw ?? "").trim();
+  if (!value || mode !== "national" || !value.startsWith("+")) return value;
+
+  const c = typeof country === "string" || country == null ? phoneCountry(country) : country;
+  if (!c) return value;
+
+  const digits = value.slice(1).replace(/\D/g, "");
+  if (!digits.startsWith(c.dial)) return value;
+
+  const nsn = digits.slice(c.dial.length);
+  if (!nsn) return value;
+  return `${c.trunk}${nsn}`;
+}
+
 /** "+61" — for display next to a country in a picker. */
 export function dialCode(country: PhoneCountry | string | null | undefined): string {
   const c = typeof country === "string" || country == null ? phoneCountry(country) : country;

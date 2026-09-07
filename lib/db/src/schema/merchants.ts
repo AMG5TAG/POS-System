@@ -18,6 +18,10 @@ export const merchantsTable = pgTable("merchants", {
      merchant who moves the business country moves the phone default with it
      unless they have deliberately pinned a different one. */
   defaultPhoneCountry: text("default_phone_country").notNull().default(""),
+  /* How numbers are shown on screen — "international" (+61412345678) or
+     "national" (0412345678). Display only: every save still stores E.164, so
+     changing this rewrites nothing. */
+  phoneDisplay: text("phone_display").notNull().default("international"),
   currency: text("currency").notNull().default("AUD"),
   timezone: text("timezone").default("Australia/Sydney"),
   logoUrl: text("logo_url"),

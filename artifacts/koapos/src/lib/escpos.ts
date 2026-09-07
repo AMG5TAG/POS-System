@@ -11,6 +11,7 @@ import {
   type ReceiptBusinessInfo, type ReceiptTemplateOpts,
 } from "@/lib/print-receipt";
 import type { PrinterCfg } from "@/lib/hardware-config";
+import { formatPhoneForDisplay } from "./phone-format";
 
 const ESC = 0x1b;
 const GS = 0x1d;
@@ -157,7 +158,7 @@ export function buildReceiptBytes(
   b.align("center").bold(true).double(true).line(toAscii(businessInfo?.businessName ?? "Your Store")).double(false);
   if (o.showAbn && businessInfo?.abn) b.line(`ABN ${toAscii(businessInfo.abn)}`);
   if (o.showWebsite && businessInfo?.website) b.line(toAscii(businessInfo.website));
-  if (businessInfo?.phone) b.line(toAscii(businessInfo.phone));
+  if (businessInfo?.phone) b.line(toAscii(formatPhoneForDisplay(businessInfo.phone)));
   b.bold(false);
   b.line(`${dateStr} ${timeStr}`);
   b.line(`Receipt ${toAscii(receiptNum)}`);
