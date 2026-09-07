@@ -134,8 +134,8 @@ export default function OnlineMarketplacePage() {
   const completeSetup = () => {
     if (!setupOpen) return;
     setAuthorizing(true);
-    const productsCount = Math.floor(Math.random() * 120) + 40;
-    const ordersCount = Math.floor(Math.random() * 40) + 5;
+    // A freshly-connected marketplace has not synced yet, so product/order counts
+    // start at 0 — they're populated by a real sync, never fabricated.
     const cfg: MarketplaceConfig = { ...DEFAULT_CONFIG, storeUrl: setupForm.storeUrl, storeId: setupForm.storeId, apiKey: setupForm.apiKey };
     upsertConnection.mutate({
       marketplaceId: setupOpen.id,
@@ -143,8 +143,8 @@ export default function OnlineMarketplacePage() {
         connected: "true",
         connectedAt: new Date().toISOString(),
         lastSync: new Date().toISOString(),
-        productsCount,
-        ordersCount,
+        productsCount: 0,
+        ordersCount: 0,
         config: JSON.stringify(cfg),
       },
     }, {
@@ -152,7 +152,7 @@ export default function OnlineMarketplacePage() {
         refetch();
         setAuthorizing(false);
         setSetupOpen(null);
-        toast.success(`${setupOpen.name} connected — synced ${productsCount} products`);
+        toast.success(`${setupOpen.name} connected`);
       },
       onError: () => { setAuthorizing(false); toast.error("Failed to connect"); },
     });

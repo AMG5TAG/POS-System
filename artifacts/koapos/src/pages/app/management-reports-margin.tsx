@@ -202,7 +202,7 @@ export default function ManagementReportsMarginPage() {
                       "px-3 py-1.5 rounded-md text-sm font-medium border transition-colors",
                       preset === p.id
                         ? "bg-primary text-primary-foreground border-primary"
-                        : "bg-background text-foreground border-border hover:bg-muted"
+                        : "pill-selector bg-background text-foreground border-border hover:bg-muted"
                     )}>
                     {p.label}
                   </button>

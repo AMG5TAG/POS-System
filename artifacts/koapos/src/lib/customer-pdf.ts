@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import { customerDisplayName } from "@/lib/customer-name";
 import type { Customer, CustomerNote, Transaction, Appointment, ServiceJob } from "@workspace/api-client-react";
 import type { FormSubmission, FormTemplate } from "@/lib/forms-api";
+import { formatPhoneForDisplay } from "./phone-format";
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
@@ -119,6 +120,10 @@ export interface CustomerPdfTemplate {
   fontFamily?: string | null;
   headerText?: string | null;
   footerText?: string | null;
+  /** Merchant-supplied QR — uploaded, or picked from Marketing › QR Codes. */
+  showCustomQr?: boolean;
+  customQrImage?: string | null;
+  customQrCaption?: string | null;
   sections?: {
     transactions?: boolean;
     appointments?: boolean;
@@ -305,7 +310,7 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
   // Info rows
   const infoFields: [string, string | null | undefined][] = [
     ["Email",          customer.email],
-    ["Phone",          customer.phone],
+    ["Phone",          formatPhoneForDisplay(customer.phone)],
     ["Company",        customer.company],
     ["ABN",            customer.abn],
     ["Date of Birth",  customer.dateOfBirth],
@@ -690,7 +695,35 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
   }
 
   /* ──────────────────────────────────────────────────────────────────────── */
-  /* 8. Footer on each page                                                   */
+  /* 8. Custom QR                                                             */
+  /* ──────────────────────────────────────────────────────────────────────── */
+
+  // Closes the document rather than sitting in the page footer, which repeats on
+  // every page — one scannable code at the end, where a reader finishes.
+  if (template?.showCustomQr && template.customQrImage) {
+    const img = await loadImageDataUrl(template.customQrImage);
+    if (img) {
+      const size = 28;
+      const caption = template.customQrCaption?.trim();
+      checkPage(size + (caption ? 8 : 4));
+      const x = ML + (CONTENT_W - size) / 2;
+      try {
+        doc.addImage(img.dataUrl, "PNG", x, y, size, size);
+        y += size + 3;
+        if (caption) {
+          doc.setFont(font, "normal");
+          doc.setFontSize(8);
+          doc.setTextColor(...C.light);
+          const capW = doc.getStringUnitWidth(caption) * 8 * 0.352778;
+          doc.text(caption, ML + (CONTENT_W - capW) / 2, y);
+          y += 5;
+        }
+      } catch { /* unsupported image — skip the QR rather than fail the export */ }
+    }
+  }
+
+  /* ──────────────────────────────────────────────────────────────────────── */
+  /* 9. Footer on each page                                                   */
   /* ──────────────────────────────────────────────────────────────────────── */
 
   const pageCount = doc.getNumberOfPages();

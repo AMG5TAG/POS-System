@@ -1,4 +1,6 @@
 import type { Browser } from "puppeteer";
+import { existsSync, readdirSync } from "node:fs";
+import { execSync } from "node:child_process";
 
 /**
  * Renders an HTML string to a PDF Buffer using a shared headless-Chromium
@@ -10,6 +12,49 @@ import type { Browser } from "puppeteer";
  */
 
 let browserPromise: Promise<Browser> | null = null;
+
+/**
+ * Locate a Chromium executable for Puppeteer to drive. Puppeteer only ships a
+ * bundled Chromium when `puppeteer install` has run; in slim/Nix runtimes that
+ * download is often skipped, so `launch()` with no path fails and every PDF
+ * falls back to the (template-unfaithful) legacy renderer. We therefore look,
+ * in order, for an explicit override, a Chromium on PATH, then a recent build
+ * in the Nix store, before deferring to Puppeteer's own bundled binary.
+ */
+export function resolveChromiumExecutable(): string | undefined {
+  // 1. Explicit operator override always wins.
+  if (process.env.PUPPETEER_EXECUTABLE_PATH) return process.env.PUPPETEER_EXECUTABLE_PATH;
+
+  // 1b. Replit provisions a Playwright Chromium and exposes its path; reuse it
+  //     rather than relying on Puppeteer's (often-absent) bundled download.
+  const replitChromium = process.env.REPLIT_PLAYWRIGHT_CHROMIUM_EXECUTABLE;
+  if (replitChromium && existsSync(replitChromium)) return replitChromium;
+
+  // 2. A Chromium/Chrome on PATH (standard Linux/container installs).
+  for (const name of ["chromium", "chromium-browser", "google-chrome-stable", "google-chrome"]) {
+    try {
+      const p = execSync(`command -v ${name} 2>/dev/null`, { encoding: "utf8" }).trim();
+      if (p && existsSync(p)) return p;
+    } catch { /* not found — keep looking */ }
+  }
+
+  // 3. Nix store (Replit/NixOS deployments): pick the highest-version chromium
+  //    that's recent enough for Puppeteer's DevTools protocol (≥ v120).
+  try {
+    const base = "/nix/store";
+    const builds = readdirSync(base)
+      .map((d) => ({ d, v: Number(d.match(/-chromium-(\d+)\./)?.[1] ?? 0) }))
+      .filter((x) => x.v >= 120 && !x.d.includes("sandbox"))
+      .sort((a, b) => b.v - a.v);
+    for (const { d } of builds) {
+      const p = `${base}/${d}/bin/chromium`;
+      if (existsSync(p)) return p;
+    }
+  } catch { /* not a Nix runtime — fall through */ }
+
+  // 4. Defer to Puppeteer's bundled Chromium (may be absent).
+  return undefined;
+}
 
 async function getBrowser(): Promise<Browser> {
   if (!browserPromise) {
@@ -24,7 +69,7 @@ async function getBrowser(): Promise<Browser> {
           "--disable-dev-shm-usage",
           "--font-render-hinting=none",
         ],
-        executablePath: process.env.PUPPETEER_EXECUTABLE_PATH || undefined,
+        executablePath: resolveChromiumExecutable(),
       });
     })().catch((err) => {
       // Reset so a later call can retry rather than caching the rejection.

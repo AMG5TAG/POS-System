@@ -2,7 +2,16 @@ import { Router } from "express";
 import { db, conversations, messages, productsTable, transactionsTable, merchantsTable, invoicesTable, laybysTable } from "@workspace/db";
 import { eq, and, desc, gte, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { openai } from "@workspace/integrations-openai-ai-server";
+import { z } from "zod/v4";
+import { aiText, aiStream, aiJson, NoAiProviderError, type AiMessage } from "../services/ai";
+
+/*
+ * Historical name: these paths were built when OpenAI was the only provider,
+ * and the frontend and OpenAPI spec still address them as `/openai/...`. The
+ * provider is now chosen by `services/ai` — Claude first, OpenAI as fallback —
+ * so nothing here names a vendor beyond the URL it cannot change without a
+ * breaking API change.
+ */
 
 const router = Router();
 router.use(requireAuth);
@@ -231,27 +240,51 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
     .limit(40);
 
   const systemPrompt = await buildSystemPrompt(merchantId, conv.mode);
-  const chatMessages = [
-    { role: "system" as const, content: systemPrompt },
-    ...history.map(m => ({ role: m.role as "user" | "assistant", content: m.content })),
-  ];
+  const chatMessages: AiMessage[] = history.map(m => ({
+    role: m.role as "user" | "assistant",
+    content: m.content,
+  }));
+
+  const onFallback = (err: unknown, provider: string) =>
+    req.log.warn({ err, provider }, "AI provider failed, falling back");
 
   const wantsStream = (req.headers.accept ?? "").includes("text/event-stream");
 
   if (!wantsStream) {
     try {
-      const completion = await openai.chat.completions.create({
-        model: "gpt-5.4",
-        max_completion_tokens: 8192,
-        messages: chatMessages,
-      });
-      const assistantContent = completion.choices[0]?.message?.content ?? "";
-      await db.insert(messages).values({ conversationId: id, role: "assistant", content: assistantContent });
-      res.json({ role: "assistant", content: assistantContent });
+      const { text, provider } = await aiText(
+        merchantId,
+        { system: systemPrompt, messages: chatMessages, maxTokens: 16000 },
+        onFallback,
+      );
+      await db.insert(messages).values({ conversationId: id, role: "assistant", content: text });
+      res.json({ role: "assistant", content: text, provider });
     } catch (err) {
-      req.log.error({ err }, "OpenAI error");
-      res.status(500).json({ error: "AI request failed" });
+      req.log.error({ err }, "AI request failed");
+      res.status(err instanceof NoAiProviderError ? 503 : 500).json({ error: "AI request failed" });
     }
+    return;
+  }
+
+  /* The stream is opened before any header is written, so a provider that fails
+   * to start can still fall back to the next one. Once the first delta is out
+   * the provider is committed — see `aiStream`. */
+  let deltas: AsyncIterable<string>;
+  try {
+    ({ deltas } = await aiStream(
+      merchantId,
+      { system: systemPrompt, messages: chatMessages, maxTokens: 32000 },
+      onFallback,
+    ));
+  } catch (err) {
+    req.log.error({ err }, "AI stream failed to open");
+    // The client asked for an event stream, so the failure is reported as one.
+    res.setHeader("Content-Type", "text/event-stream");
+    res.setHeader("Cache-Control", "no-cache");
+    res.setHeader("Connection", "keep-alive");
+    res.write(`data: ${JSON.stringify({ error: "AI request failed" })}\n\n`);
+    res.write(`data: ${JSON.stringify({ done: true })}\n\n`);
+    res.end();
     return;
   }
 
@@ -261,24 +294,13 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
 
   let fullResponse = "";
   try {
-    const stream = await openai.chat.completions.create({
-      model: "gpt-5.4",
-      max_completion_tokens: 8192,
-      messages: chatMessages,
-      stream: true,
-    });
-
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) {
-        fullResponse += delta;
-        res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
-      }
+    for await (const delta of deltas) {
+      fullResponse += delta;
+      res.write(`data: ${JSON.stringify({ content: delta })}\n\n`);
     }
-
     await db.insert(messages).values({ conversationId: id, role: "assistant", content: fullResponse });
   } catch (err) {
-    req.log.error({ err }, "OpenAI streaming error");
+    req.log.error({ err }, "AI streaming error");
     res.write(`data: ${JSON.stringify({ error: "AI request failed" })}\n\n`);
   }
 
@@ -288,6 +310,16 @@ router.post("/openai/conversations/:id/messages", async (req, res) => {
 });
 
 /* ── AI Upsell Coach ────────────────────────────────────────────────────── */
+
+/* The model picks from a list of ids we supplied, but nothing downstream would
+ * catch it inventing one — so the shape is validated here and each id is checked
+ * against `available` before it reaches the cashier. */
+const upsellSchema = z.object({
+  suggestions: z.array(z.object({
+    productId: z.number().int(),
+    reason: z.string().min(1).max(200),
+  })).max(2),
+});
 // POST /ai/upsell-suggestions
 // Returns 2 product suggestions the cashier should recommend at checkout.
 router.post("/ai/upsell-suggestions", async (req, res) => {
@@ -350,28 +382,53 @@ Available products (only pick from these, by exact ID):
 ${productList}
 
 Rules:
-- Return ONLY a JSON array, no other text: [{"productId":number,"reason":"one short sentence for the cashier to say"}]
 - Pick products that complement the cart or match past purchases
-- Maximum 2 items`;
+- Give the cashier one short sentence they can say out loud
+- Maximum 2 items, and only IDs from the list above`;
 
+  /* This fires on every cart change while a customer waits at the counter, so
+   * it runs at low effort: same model, less deliberation. A suggestion that
+   * arrives after the sale is rung up is worth nothing. */
   try {
-    const completion = await openai.chat.completions.create({
-      model: "gpt-5-mini",
-      max_completion_tokens: 300,
-      messages: [{ role: "user", content: prompt }],
-    });
+    const { data } = await aiJson(
+      merchantId,
+      {
+        system: "You suggest complementary products at the point of sale. Answer only with the requested JSON.",
+        messages: [{ role: "user", content: prompt }],
+        maxTokens: 1000,
+        effort: "low",
+        schema: {
+          type: "object",
+          additionalProperties: false,
+          required: ["suggestions"],
+          properties: {
+            suggestions: {
+              type: "array",
+              maxItems: 2,
+              items: {
+                type: "object",
+                additionalProperties: false,
+                required: ["productId", "reason"],
+                properties: {
+                  productId: { type: "integer" },
+                  reason: { type: "string" },
+                },
+              },
+            },
+          },
+        },
+      },
+      (err, provider) => req.log.warn({ err, provider }, "AI upsell falling back"),
+    );
 
-    let parsed: Array<{ productId: number; reason: string }> = [];
-    try { parsed = JSON.parse(completion.choices[0]?.message?.content ?? "[]"); } catch { parsed = []; }
-
-    const suggestions = parsed
-      .filter(s => typeof s.productId === "number" && typeof s.reason === "string")
+    const parsed = upsellSchema.safeParse(data);
+    const suggestions = (parsed.success ? parsed.data.suggestions : [])
       .map(s => {
         const p = available.find(pr => pr.id === s.productId);
         if (!p) return null;
         return { productId: p.id, name: p.name, price: parseFloat(String(p.price)), reason: s.reason };
       })
-      .filter(Boolean)
+      .filter((s): s is NonNullable<typeof s> => s !== null)
       .slice(0, 2);
 
     res.json({ suggestions });

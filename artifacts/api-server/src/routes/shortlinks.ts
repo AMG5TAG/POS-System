@@ -3,6 +3,7 @@ import { db, shortlinksTable, shortlinkSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { validateEnding, normalizeEnding, SHORT_DOMAIN } from "@workspace/shortlinks-shared";
+import { recordMarketingEvent } from "../lib/marketingEvents";
 
 const router: IRouter = Router();
 
@@ -34,6 +35,35 @@ router.post("/shortlinks", requireAuth, async (req, res): Promise<void> => {
     if (isUniqueViolation(err)) { res.status(409).json({ error: `"${ending}" is already in use` }); return; }
     throw err;
   }
+});
+
+// Public, unauthenticated shortlink resolver. The branded short domain
+// (koast.al) serves the SPA, which calls this to turn a slug into its
+// destination and redirect the visitor. It must be unauthenticated — anyone
+// following the link or scanning the QR has to be able to resolve it.
+//
+// Slugs are unique *per merchant*, but every shortlink shares the one branded
+// domain, so a slug could in theory be claimed by two merchants. We resolve the
+// earliest claimant (lowest id) deterministically; enforcing global uniqueness
+// on the shared domain is a separate follow-up.
+//
+// Note: the two-segment path (/shortlinks/r/:slug) can't collide with the
+// authenticated single-segment /shortlinks/:id below.
+router.get("/shortlinks/r/:slug", async (req, res): Promise<void> => {
+  const slug = normalizeEnding(String(req.params.slug ?? ""));
+  if (!slug) { res.status(404).json({ error: "Not found" }); return; }
+  const [row] = await db
+    .select()
+    .from(shortlinksTable)
+    .where(eq(shortlinksTable.slug, slug))
+    .orderBy(shortlinksTable.id)
+    .limit(1);
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  // Best-effort click tracking — never block (or fail) the redirect on it.
+  void db.update(shortlinksTable).set({ clicks: row.clicks + 1 }).where(eq(shortlinksTable.id, row.id)).catch(() => {});
+  // Per-click engagement event (device / geo / referrer) for Marketing Analytics.
+  recordMarketingEvent(req, { merchantId: row.merchantId, kind: "shortlink", targetId: row.id, targetSlug: row.slug });
+  res.json({ longUrl: row.longUrl, slug: row.slug });
 });
 
 router.get("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {

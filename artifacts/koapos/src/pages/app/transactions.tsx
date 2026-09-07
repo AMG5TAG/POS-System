@@ -1,4 +1,5 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useRef } from "react";
+import { useVirtualizer } from "@tanstack/react-virtual";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListTransactions, useRefundTransaction, useGetLoyaltySettings, useListStaff, Transaction, Staff, LoyaltySettings } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -9,13 +10,15 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { formatLoyaltyAmount } from "@/lib/loyalty-naming";
+import { customerDisplayName } from "@/lib/customer-name";
 import {
   Receipt, RotateCcw, CreditCard, Banknote,
-  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle,
+  ChevronUp, ChevronDown, ChevronsUpDown, Gift, AlertTriangle, PencilLine, Search,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
+import { ModifyCompletedSaleDialog } from "@/components/modify-completed-sale-dialog";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -41,7 +44,7 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 }) {
   const isActive = active === sortKey;
   return (
-    <th className={cn("p-3 font-medium whitespace-nowrap cursor-pointer select-none group", align === "right" ? "text-right" : "text-left", className)}
+    <th className={cn("p-3 font-medium whitespace-nowrap cursor-pointer select-none group bg-muted/50", align === "right" ? "text-right" : "text-left", className)}
       onClick={() => onSort(sortKey)}>
       <span className={cn("inline-flex items-center gap-1 hover:text-foreground transition-colors", align === "right" && "flex-row-reverse")}>
         {label}
@@ -56,8 +59,8 @@ function SortTh({ label, sortKey, active, dir, onSort, className, align = "left"
 /* ─── Receipt detail dialog ──────────────────────────────────────────────── */
 
 function ReceiptDialog({
-  tx, onClose, onRefund, loyalty, staffList,
-}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; loyalty?: LoyaltySettings | null; staffList?: Staff[] }) {
+  tx, onClose, onRefund, onModify, loyalty, staffList,
+}: { tx: Transaction | null; onClose: () => void; onRefund: (tx: Transaction) => void; onModify: (tx: Transaction) => void; loyalty?: LoyaltySettings | null; staffList?: Staff[] }) {
   if (!tx) return null;
 
   const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
@@ -148,10 +151,16 @@ function ReceiptDialog({
 
         <DialogFooter className="flex-row justify-between sm:justify-between gap-2">
           {tx.status === "completed" ? (
-            <Button variant="destructive" size="sm" className="gap-1.5"
-              onClick={() => { onRefund(tx); onClose(); }}>
-              <RotateCcw className="w-3.5 h-3.5" /> Refund
-            </Button>
+            <div className="flex gap-2">
+              <Button variant="destructive" size="sm" className="gap-1.5"
+                onClick={() => { onRefund(tx); onClose(); }}>
+                <RotateCcw className="w-3.5 h-3.5" /> Refund
+              </Button>
+              <Button variant="outline" size="sm" className="gap-1.5"
+                onClick={() => { onModify(tx); onClose(); }}>
+                <PencilLine className="w-3.5 h-3.5" /> Modify
+              </Button>
+            </div>
           ) : <div />}
           <Button variant="outline" size="sm" onClick={onClose}>Close</Button>
         </DialogFooter>
@@ -165,7 +174,9 @@ function ReceiptDialog({
 export default function TransactionsPage() {
   const queryClient = useQueryClient();
   const [statusFilter, setStatusFilter]   = useState<string>("");
+  const [search, setSearch]               = useState("");
   const [selectedTx, setSelectedTx]       = useState<Transaction | null>(null);
+  const [modifyTx, setModifyTx]           = useState<Transaction | null>(null);
   const [refundDialogOpen, setRefundDialogOpen] = useState(false);
   const [refundReason, setRefundReason]   = useState("");
   const [refundingTx, setRefundingTx]     = useState<Transaction | null>(null);
@@ -180,7 +191,18 @@ export default function TransactionsPage() {
   const { data: loyaltySettings } = useGetLoyaltySettings();
   const { data: staffData } = useListStaff({ query: { queryKey: ["staff-tx"] } });
   const refundMutation = useRefundTransaction();
-  const transactions = txData?.items || [];
+  const allTransactions = txData?.items || [];
+
+  /* Free-text search across receipt number, customer, payment method and status.
+     Filtering is client-side — the list endpoint has no text-search param. */
+  const q = search.trim().toLowerCase();
+  const transactions = !q ? allTransactions : allTransactions.filter((tx) => [
+    tx.receiptNumber,
+    tx.customer ? customerDisplayName(tx.customer, "") : "",
+    tx.paymentMethod,
+    tx.status,
+    String(tx.total),
+  ].some((v) => (v ?? "").toString().toLowerCase().includes(q)));
 
   /* Sort */
   const sorted = [...transactions].sort((a, b) => {
@@ -194,6 +216,21 @@ export default function TransactionsPage() {
     const r = av < bv ? -1 : av > bv ? 1 : 0;
     return sortDir === "asc" ? r : -r;
   });
+
+  // Virtualise the rows: with up to 1000 transactions, rendering every <tr>
+  // stalls the page. The bounded scroll container below windows to just the
+  // visible rows (+ overscan); sort/selection are unaffected (we key by id).
+  const scrollRef = useRef<HTMLDivElement>(null);
+  const rowVirtualizer = useVirtualizer({
+    count: sorted.length,
+    getScrollElement: () => scrollRef.current,
+    estimateSize: () => 53,
+    overscan: 12,
+    getItemKey: (i) => sorted[i].id,
+  });
+  const virtualRows = rowVirtualizer.getVirtualItems();
+  const padTop = virtualRows.length ? virtualRows[0].start : 0;
+  const padBottom = virtualRows.length ? rowVirtualizer.getTotalSize() - virtualRows[virtualRows.length - 1].end : 0;
 
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => { if (prev === key) { setSortDir((d) => d === "asc" ? "desc" : "asc"); return prev; } setSortDir("asc"); return key; });
@@ -226,16 +263,29 @@ export default function TransactionsPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
-          <h1 className="text-2xl font-bold">Transactions</h1>
-          <p className="text-sm text-muted-foreground">View and manage all completed and refunded sales transactions.</p>
-          <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
-            <SelectTrigger className="w-[180px]"><SelectValue placeholder="All transactions" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Transactions</SelectItem>
-              <SelectItem value="completed">Completed</SelectItem>
-              <SelectItem value="refunded">Refunded</SelectItem>
-            </SelectContent>
-          </Select>
+          <div>
+            <h1 className="text-2xl font-bold">Transactions</h1>
+            <p className="text-sm text-muted-foreground">View and manage all completed and refunded sales transactions.</p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground pointer-events-none" />
+              <Input
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+                placeholder="Search receipt, customer, payment…"
+                className="w-[260px] pl-9"
+              />
+            </div>
+            <Select value={statusFilter || "all"} onValueChange={(v) => setStatusFilter(v === "all" ? "" : v)}>
+              <SelectTrigger className="w-[180px]"><SelectValue placeholder="All transactions" /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Transactions</SelectItem>
+                <SelectItem value="completed">Completed</SelectItem>
+                <SelectItem value="refunded">Refunded</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
 
         {isLoading ? (
@@ -245,21 +295,30 @@ export default function TransactionsPage() {
             <div className="flex flex-col items-center justify-center py-16 text-center gap-4">
               <Receipt className="w-16 h-16 text-muted-foreground/30" />
               <div>
-                <p className="font-medium text-lg">No transactions yet</p>
-                <p className="text-muted-foreground text-sm">Transactions will appear here after your first sale.</p>
+                {q || statusFilter ? (
+                  <>
+                    <p className="font-medium text-lg">No matching transactions</p>
+                    <p className="text-muted-foreground text-sm">Try a different search or filter.</p>
+                  </>
+                ) : (
+                  <>
+                    <p className="font-medium text-lg">No transactions yet</p>
+                    <p className="text-muted-foreground text-sm">Transactions will appear here after your first sale.</p>
+                  </>
+                )}
               </div>
             </div>
           </div>
         ) : (
-          <div className="rounded-lg border overflow-x-auto">
+          <div ref={scrollRef} className="rounded-lg border overflow-auto max-h-[70vh]">
             <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
+              <thead className="bg-muted/50 border-b sticky top-0 z-10">
                 <tr>
-                  <th className="p-3 w-10">
+                  <th className="p-3 w-10 bg-muted/50">
                     <input type="checkbox" checked={allChecked} onChange={toggleAll}
                       className="rounded border-muted-foreground/40 accent-primary" />
                   </th>
-                  <th className="p-3 text-left font-medium whitespace-nowrap">Receipt</th>
+                  <th className="p-3 text-left font-medium whitespace-nowrap bg-muted/50">Receipt</th>
                   <SortTh {...sh("Date", "date", "hidden md:table-cell")} />
                   <SortTh {...sh("Payment", "payment", "hidden sm:table-cell")} />
                   <SortTh {...sh("Status", "status", "hidden lg:table-cell")} />
@@ -267,11 +326,15 @@ export default function TransactionsPage() {
                 </tr>
               </thead>
               <tbody className="divide-y">
-                {sorted.map((tx) => {
+                {padTop > 0 && <tr aria-hidden><td colSpan={99} style={{ height: padTop, padding: 0, border: 0 }} /></tr>}
+                {virtualRows.map((vr) => {
+                  const tx = sorted[vr.index];
                   const isChecked   = checked.has(tx.id);
                   const statusClass = STATUS_COLORS[tx.status] ?? "bg-muted text-muted-foreground border-border";
                   return (
                     <tr key={tx.id}
+                      data-index={vr.index}
+                      ref={rowVirtualizer.measureElement}
                       className={cn("bg-background hover:bg-muted/30 transition-colors cursor-pointer", isChecked && "bg-primary/5")}
                       onClick={() => setSelectedTx(tx)}
                     >
@@ -313,6 +376,7 @@ export default function TransactionsPage() {
                     </tr>
                   );
                 })}
+                {padBottom > 0 && <tr aria-hidden><td colSpan={99} style={{ height: padBottom, padding: 0, border: 0 }} /></tr>}
               </tbody>
             </table>
           </div>
@@ -323,8 +387,14 @@ export default function TransactionsPage() {
         tx={selectedTx}
         onClose={() => setSelectedTx(null)}
         onRefund={(tx) => { setRefundingTx(tx); setRefundDialogOpen(true); }}
+        onModify={(tx) => setModifyTx(tx)}
         loyalty={loyaltySettings}
         staffList={staffData}
+      />
+
+      <ModifyCompletedSaleDialog
+        tx={modifyTx}
+        onClose={() => setModifyTx(null)}
       />
 
       <Dialog open={refundDialogOpen} onOpenChange={setRefundDialogOpen}>

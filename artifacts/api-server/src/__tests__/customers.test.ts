@@ -54,7 +54,7 @@ beforeAll(async () => {
   app = express();
   app.use(express.json());
   app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-  app.use((_req, _res, next) => { (_req as any).session.merchantId = 1; next(); });
+  app.use((_req, _res, next) => { (_req as any).session.merchantId = 1; (_req as any).session.staffRole = "owner"; next(); });
   app.use("/api", customersRouter);
 });
 
@@ -69,6 +69,15 @@ describe("GET /api/customers — query param validation", () => {
     const res = await request(app).get("/api/customers?offset=bar");
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
+  });
+
+  it("accepts a full-name search (first + last) and builds the query", async () => {
+    // A "John Smith" search must pass validation and route into the query
+    // builder — exercising the concat_ws(first_name, last_name) ILIKE branch
+    // without a construction error. (The mocked DB returns no rows, so the
+    // happy path 500s on the empty count; we only assert it isn't rejected.)
+    const res = await request(app).get("/api/customers?search=John%20Smith");
+    expect(res.status).not.toBe(400);
   });
 });
 

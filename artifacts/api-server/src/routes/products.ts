@@ -1,10 +1,12 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable, transactionsTable, invoicesTable, customersTable } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { parseCsvBuffer, normaliseHeaders } from "../lib/parseCsv";
+import { registerProductQr, registerProductQrsBatch, registerQrBestEffort } from "../services/entityQr";
+import { reconcileOversellLedger } from "../lib/oversellLedger";
 import {
   ListProductsQueryParams,
   CreateProductBody,
@@ -30,6 +32,7 @@ import {
   UpdateProductVariantParams,
   DeleteProductVariantParams,
   GetProductPricingHistoryParams,
+  GetProductSalesHistoryParams,
 } from "@workspace/api-zod";
 
 const router: IRouter = Router();
@@ -44,6 +47,27 @@ function readWarranty(body: unknown): { warrantyDuration: number; warrantyUnit: 
   const warrantyDuration = Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
   const warrantyUnit = b.warrantyUnit === "years" ? "years" : "months";
   return { warrantyDuration, warrantyUnit };
+}
+
+// The CSV importer (and other clients) send a free-text `category` NAME rather
+// than a numeric `categoryId`. CreateProductBody/UpdateProductBody only know
+// about `categoryId` and strip unknown keys, so read `category` from the raw
+// body and resolve it to an existing category for the merchant — creating one
+// on the fly if it doesn't exist yet, mirroring the /products/import endpoint.
+// Returns: a category id, `null` to clear (empty string), or `undefined` when
+// no `category` field was supplied (leave categoryId untouched).
+async function resolveCategoryName(merchantId: number, body: unknown): Promise<number | null | undefined> {
+  const raw = (body as { category?: unknown })?.category;
+  if (typeof raw !== "string") return undefined;
+  const name = raw.trim();
+  if (!name) return null;
+  const [existing] = await db
+    .select()
+    .from(categoriesTable)
+    .where(and(eq(categoriesTable.merchantId, merchantId), sql`lower(${categoriesTable.name}) = ${name.toLowerCase()}`));
+  if (existing) return existing.id;
+  const [created] = await db.insert(categoriesTable).values({ merchantId, name }).returning();
+  return created.id;
 }
 
 function formatProduct(
@@ -85,12 +109,14 @@ function formatProduct(
     supplierCode: p.supplierCode ?? null,
     isEpay: p.isEpay === "true",
     isRefurbished: p.isRefurbished === "true",
+    tracksSerial: p.tracksSerial === "true",
     tags: p.tags ?? [],
     stockLocation: p.stockLocation ?? null,
     overflowLocation: p.overflowLocation ?? null,
     notification: p.notification ?? null,
     warrantyDuration: p.warrantyDuration ?? 0,
     warrantyUnit: p.warrantyUnit ?? "months",
+    timeCardMinutes: p.timeCardMinutes ?? 0,
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -236,10 +262,39 @@ router.get("/products", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+/** Best-effort cost price-history audit row; never blocks the product write. */
+async function logCostHistory(
+  merchantId: number,
+  productId: number,
+  costPrice: string,
+  retailPrice: string | null,
+  source: "manual" | "import",
+): Promise<void> {
+  try {
+    await db.insert(productPriceHistoryTable).values({ merchantId, productId, costPrice, retailPrice, source });
+  } catch { /* audit row is non-critical — never fail the product write over it */ }
+}
+
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, productTypeId, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
+
+  // Reject a SKU that already exists for this merchant (case-insensitive, like
+  // the CSV import path). SKU has no DB unique constraint, so this is enforced
+  // in application code.
+  const skuValue = typeof rest.sku === "string" ? rest.sku.trim() : "";
+  if (skuValue) {
+    const [dupe] = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(and(
+        eq(productsTable.merchantId, req.session.merchantId!),
+        sql`lower(${productsTable.sku}) = ${skuValue.toLowerCase()}`,
+      ))
+      .limit(1);
+    if (dupe) { res.status(409).json({ error: `SKU already exists: ${skuValue}` }); return; }
+  }
 
   let ptRecord: typeof productTypesTable.$inferSelect | null = null;
 
@@ -256,13 +311,29 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
   }
 
   const warranty = readWarranty(req.body) ?? { warrantyDuration: 0, warrantyUnit: "months" };
+  const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);
+
+  // When no low-stock amount was supplied, inherit the merchant's default
+  // (Management → Products & Inventory → Inventory). Null leaves it unset.
+  let resolvedLowStockThreshold = rest.lowStockThreshold ?? null;
+  if (resolvedLowStockThreshold == null) {
+    const [lowStock] = await db
+      .select({ globalThreshold: lowStockAlertSettingsTable.globalThreshold })
+      .from(lowStockAlertSettingsTable)
+      .where(eq(lowStockAlertSettingsTable.merchantId, req.session.merchantId!))
+      .limit(1);
+    resolvedLowStockThreshold = lowStock?.globalThreshold ?? null;
+  }
+
   const [product] = await db
     .insert(productsTable)
     .values({
       ...rest,
+      lowStockThreshold: resolvedLowStockThreshold,
       ...warranty,
       merchantId: req.session.merchantId!,
       productTypeId: ptRecord.id,
+      ...(resolvedCategoryId !== undefined ? { categoryId: resolvedCategoryId } : {}),
       price: price.toString(),
       costPrice: costPrice?.toString(),
       taxRate: taxRate?.toString(),
@@ -270,10 +341,16 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       isActive: isActive === false ? "false" : "true",
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
       isEpay: isEpayRaw === true ? "true" : "false",
+      ...(tracksSerial !== undefined ? { tracksSerial: tracksSerial === true ? "true" : "false" } : {}),
       groupPrices: groupPrices ?? null,
       tags: tags ?? null,
     })
     .returning();
+  // Record the initial cost as the first price-history entry.
+  if (product && costPrice != null) {
+    void logCostHistory(req.session.merchantId!, product.id, costPrice.toString(), price.toString(), "manual");
+  }
+  registerQrBestEffort(registerProductQr(req.session.merchantId!, product.id, product.name));
   res.status(201).json(formatProduct(product, null, ptRecord));
 });
 
@@ -507,8 +584,17 @@ router.post("/products/import", requireAuth, uploadMemoryProducts.single("file")
   const skipped = rawRows.length - toInsert.length;
 
   try {
-    await db.insert(productsTable).values(insertValues);
-    imported = insertValues.length;
+    const inserted = await db.insert(productsTable).values(insertValues)
+      .returning({ id: productsTable.id, name: productsTable.name, costPrice: productsTable.costPrice, price: productsTable.price });
+    imported = inserted.length;
+    registerQrBestEffort(registerProductQrsBatch(merchantId, inserted.map((p) => ({ id: p.id, name: p.name }))));
+    // Record the imported cost as each product's first price-history entry.
+    const historyRows = inserted
+      .filter((p) => p.costPrice != null)
+      .map((p) => ({ merchantId, productId: p.id, costPrice: p.costPrice as string, retailPrice: p.price ?? null, source: "import" as const }));
+    if (historyRows.length > 0) {
+      await db.insert(productPriceHistoryTable).values(historyRows).catch(() => { /* audit non-critical */ });
+    }
   } catch (err) {
     req.log.error({ err }, "Product CSV bulk insert failed");
     res.status(500).json({ error: "Database error during bulk insert" }); return;
@@ -535,22 +621,47 @@ router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...formatProduct(product, category, ptRecord), digitalCodesCount: digitalCodeCount });
 });
 
+// ── Bulk-set the ePay flag for every product under a supplier ────────────────────
+// Lets a merchant flag (or unflag) their whole "ePay" catalogue at once so those
+// pass-through products drop out of Cost of Goods. Registered before /products/:id.
+const EpayBySupplierBody = z.object({
+  supplier: z.string().trim().min(1),
+  isEpay: z.boolean(),
+});
+
+router.patch("/products/epay-by-supplier", requireAuth, async (req, res): Promise<void> => {
+  const parsed = EpayBySupplierBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { supplier, isEpay } = parsed.data;
+  const merchantId = req.session.merchantId!;
+  const updated = await db
+    .update(productsTable)
+    .set({ isEpay: isEpay ? "true" : "false" })
+    .where(and(
+      eq(productsTable.merchantId, merchantId),
+      sql`lower(trim(${productsTable.supplier})) = lower(trim(${supplier}))`,
+    ))
+    .returning({ id: productsTable.id });
+  res.json({ updated: updated.length });
+});
+
 // ── Bulk update ────────────────────────────────────────────────────────────────
 // IMPORTANT: must be registered before /products/:id to avoid ":id" matching "bulk"
 
 const BulkProductsBody = z.object({
   ids: z.array(z.number().int().positive()).min(1).max(500),
-  action: z.enum(["price_percent", "price_flat", "set_category", "set_track_inventory", "delete"]),
+  action: z.enum(["price_percent", "price_flat", "set_category", "set_track_inventory", "set_product_type", "delete"]),
   value: z.number().nullable().optional(),
   categoryId: z.number().int().positive().nullable().optional(),
   trackInventory: z.boolean().nullable().optional(),
+  productTypeId: z.number().int().positive().nullable().optional(),
 });
 
 router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
   const parsed = BulkProductsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
-  const { ids, action, value, categoryId, trackInventory } = parsed.data;
+  const { ids, action, value, categoryId, trackInventory, productTypeId } = parsed.data;
   const merchantId = req.session.merchantId!;
 
   // Verify ownership — only operate on IDs that belong to this merchant
@@ -612,6 +723,19 @@ router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
+  if (action === "set_product_type") {
+    if (productTypeId == null) { res.status(400).json({ error: "productTypeId is required" }); return; }
+    // Only switch to a product type the merchant actually owns.
+    const [pt] = await db.select({ id: productTypesTable.id }).from(productTypesTable)
+      .where(and(eq(productTypesTable.id, productTypeId), eq(productTypesTable.merchantId, merchantId)));
+    if (!pt) { res.status(400).json({ error: "Product type not found" }); return; }
+    await db.update(productsTable)
+      .set({ productTypeId: pt.id })
+      .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
+    res.json({ updated: validIds.length, deleted: 0 });
+    return;
+  }
+
   res.status(400).json({ error: "Unknown action" });
 });
 
@@ -620,7 +744,26 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tags, productTypeId, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
+
+  // Reject a SKU that already exists on a DIFFERENT product for this merchant
+  // (case-insensitive), matching the create path. Only runs when the SKU is
+  // being set to a non-empty value; re-saving a product with its own unchanged
+  // SKU is fine because the current product id is excluded.
+  const skuValue = typeof rest.sku === "string" ? rest.sku.trim() : "";
+  if (skuValue) {
+    const [dupe] = await db
+      .select({ id: productsTable.id })
+      .from(productsTable)
+      .where(and(
+        eq(productsTable.merchantId, req.session.merchantId!),
+        sql`lower(${productsTable.sku}) = ${skuValue.toLowerCase()}`,
+        sql`${productsTable.id} <> ${params.data.id}`,
+      ))
+      .limit(1);
+    if (dupe) { res.status(409).json({ error: `SKU already exists: ${skuValue}` }); return; }
+  }
+
   const updates: Record<string, unknown> = { ...rest };
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
@@ -629,10 +772,31 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
+  if (tracksSerial !== undefined) updates.tracksSerial = tracksSerial ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;
   if (tags !== undefined) updates.tags = tags;
   const warranty = readWarranty(req.body);
   if (warranty) { updates.warrantyDuration = warranty.warrantyDuration; updates.warrantyUnit = warranty.warrantyUnit; }
+  const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);
+  if (resolvedCategoryId !== undefined) updates.categoryId = resolvedCategoryId;
+
+  // Capture the prior cost so we only write a price-history row on a real change.
+  let previousCost: string | null = null;
+  if (costPrice !== undefined) {
+    const [existing] = await db.select({ costPrice: productsTable.costPrice }).from(productsTable)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+    previousCost = existing?.costPrice ?? null;
+  }
+
+  // Capture prior stock when it's being set manually, so a correction that lifts
+  // a product out of (or into) the negative reconciles the backorder ledger.
+  const stockBeingSet = typeof (rest as { stockQuantity?: unknown }).stockQuantity === "number";
+  let previousStock: number | null = null;
+  if (stockBeingSet) {
+    const [existing] = await db.select({ stockQuantity: productsTable.stockQuantity }).from(productsTable)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+    previousStock = existing?.stockQuantity ?? null;
+  }
 
   let patchPtRecord: typeof productTypesTable.$inferSelect | null = null;
   if (productTypeId != null) {
@@ -657,6 +821,25 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
       .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
   }
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
+
+  // Reconcile the backorder ledger when stock was manually adjusted and the
+  // product tracks inventory (a manual set can cover or re-open oversold units).
+  if (stockBeingSet && previousStock !== null && product.trackInventory === "true") {
+    await reconcileOversellLedger(db, {
+      merchantId: req.session.merchantId!,
+      productId: product.id,
+      prevStock: previousStock,
+      newStock: product.stockQuantity,
+    });
+  }
+
+  // Audit a manual cost change (only when the value actually changed).
+  if (costPrice !== undefined) {
+    const newCost = costPrice.toString();
+    if (previousCost !== newCost) {
+      void logCostHistory(req.session.merchantId!, product.id, newCost, product.price ?? null, "manual");
+    }
+  }
 
   if (patchPtRecord === null && product.productTypeId) {
     const [pt] = await db.select().from(productTypesTable)
@@ -817,6 +1000,81 @@ router.get("/products/:id/pricing-history", requireAuth, async (req, res): Promi
     poId: r.poId ?? null,
     changedAt: r.changedAt.toISOString(),
   })));
+});
+
+// GET /products/:id/sales-history — every sale (transaction) and invoice whose
+// line items include this product. Line items are JSON blobs on the parent row
+// (no join table), so we push the "contains this productId" filter into the DB
+// via jsonb containment, then extract the matching line(s) from each document.
+router.get("/products/:id/sales-history", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = GetProductSalesHistoryParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+
+  // jsonb array containment: rows whose `items` array has an element {productId: id}.
+  const contains = JSON.stringify([{ productId: id }]);
+  const customerName = (first: string | null, last: string | null, company: string | null): string | null =>
+    ([first, last].filter(Boolean).join(" ").trim() || company || "") || null;
+
+  type Line = { productId?: number | null; quantity?: number | null; unitPrice?: number | null; totalPrice?: number | null };
+  /** Sum this product's units and line value across a document's line items. */
+  const aggregate = (items: unknown): { quantity: number; lineTotal: number; unitPrice: number } => {
+    const lines = (Array.isArray(items) ? items : []) as Line[];
+    let quantity = 0, lineTotal = 0;
+    for (const l of lines) {
+      if (Number(l.productId) !== id) continue;
+      const qty = Number(l.quantity) || 0;
+      const price = Number(l.unitPrice) || 0;
+      quantity += qty;
+      lineTotal += l.totalPrice != null ? Number(l.totalPrice) || 0 : qty * price;
+    }
+    return { quantity, lineTotal, unitPrice: quantity > 0 ? lineTotal / quantity : 0 };
+  };
+
+  const [txns, invs] = await Promise.all([
+    db.select({
+      id: transactionsTable.id, reference: transactionsTable.receiptNumber, status: transactionsTable.status,
+      total: transactionsTable.total, createdAt: transactionsTable.createdAt, items: transactionsTable.items,
+      first: customersTable.firstName, last: customersTable.lastName, company: customersTable.company,
+    })
+      .from(transactionsTable)
+      .leftJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+      .where(and(eq(transactionsTable.merchantId, merchantId), sql`${transactionsTable.items} @> ${contains}::jsonb`)),
+    db.select({
+      id: invoicesTable.id, reference: invoicesTable.invoiceNumber, status: invoicesTable.status,
+      total: invoicesTable.total, createdAt: invoicesTable.createdAt, items: invoicesTable.items,
+      first: customersTable.firstName, last: customersTable.lastName, company: customersTable.company,
+    })
+      .from(invoicesTable)
+      .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .where(and(eq(invoicesTable.merchantId, merchantId), sql`${invoicesTable.items}::jsonb @> ${contains}::jsonb`)),
+  ]);
+
+  const entries = [
+    ...txns.map((t) => {
+      const agg = aggregate(t.items);
+      return {
+        type: "sale" as const, id: t.id, reference: t.reference ?? String(t.id),
+        date: t.createdAt.toISOString(), status: t.status ?? null,
+        customerName: customerName(t.first, t.last, t.company),
+        quantity: agg.quantity, unitPrice: agg.unitPrice, lineTotal: agg.lineTotal,
+        documentTotal: t.total != null ? parseFloat(t.total) : 0,
+      };
+    }),
+    ...invs.map((v) => {
+      const agg = aggregate(v.items);
+      return {
+        type: "invoice" as const, id: v.id, reference: v.reference ?? String(v.id),
+        date: v.createdAt.toISOString(), status: v.status ?? null,
+        customerName: customerName(v.first, v.last, v.company),
+        quantity: agg.quantity, unitPrice: agg.unitPrice, lineTotal: agg.lineTotal,
+        documentTotal: v.total != null ? parseFloat(v.total) : 0,
+      };
+    }),
+  ].sort((a, b) => b.date.localeCompare(a.date)); // newest first
+
+  res.json(entries);
 });
 
 export default router;

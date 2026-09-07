@@ -21,6 +21,10 @@ export const staffTable = pgTable("staff", {
   // Account
   role: text("role").notNull().default("cashier"),
   pin: text("pin"),
+  // Optional email+password login (hybrid auth): the PIN stays the primary
+  // register login; a passwordHash is only set once a staff member is invited
+  // to email sign-in for remote/management access.
+  passwordHash: text("password_hash"),
   isActive: text("is_active").notNull().default("true"),
   // Per-staff POS preferences (JSON: gridColumns, tileSize, showPrices,
   // showStockBadges, cartPosition) — overrides the account-level POS settings

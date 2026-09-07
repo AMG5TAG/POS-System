@@ -2,6 +2,7 @@ import { useState } from "react";
 import {
   useUpdateServiceJob,
   useCreateServiceJobRework,
+  useReopenServiceJob,
   getListServiceJobsQueryKey,
   type ServiceJob,
 } from "@workspace/api-client-react";
@@ -9,7 +10,7 @@ import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
-import { ShieldCheck, ShieldAlert, RotateCcw, Loader2, Link2 } from "lucide-react";
+import { ShieldCheck, ShieldAlert, RotateCcw, RefreshCw, Loader2, Link2 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
@@ -18,6 +19,7 @@ export function ServiceJobWarrantyPanel({ job }: { job: ServiceJob }) {
   const queryClient = useQueryClient();
   const update = useUpdateServiceJob();
   const rework = useCreateServiceJobRework();
+  const reopen = useReopenServiceJob();
   const [days, setDays] = useState(String(job.repairWarrantyDays ?? 0));
   const invalidate = () => queryClient.invalidateQueries({ queryKey: getListServiceJobsQueryKey() });
 
@@ -50,12 +52,29 @@ export function ServiceJobWarrantyPanel({ job }: { job: ServiceJob }) {
     });
   };
 
+  const startReopen = () => {
+    reopen.mutate({ id: job.id }, {
+      onSuccess: (created) => {
+        invalidate();
+        toast.success(`New repair ${(created as { jobNumber?: string })?.jobNumber ?? ""} opened from this job`);
+      },
+      onError: () => toast.error("Couldn't reopen this job"),
+    });
+  };
+
   return (
     <div className="space-y-3">
       {job.reworkOfJobId != null && (
         <div className="flex items-center gap-2 text-sm rounded-lg border bg-amber-50 dark:bg-amber-950/20 px-3 py-2">
           <Link2 className="w-4 h-4 text-amber-600 shrink-0" />
           <span>This is a <strong>no-charge rework</strong> of job #{job.reworkOfJobId}.</span>
+        </div>
+      )}
+
+      {job.reopenedFromJobId != null && (
+        <div className="flex items-center gap-2 text-sm rounded-lg border bg-sky-50 dark:bg-sky-950/20 px-3 py-2">
+          <Link2 className="w-4 h-4 text-sky-600 shrink-0" />
+          <span>This repair was <strong>reopened from</strong> job #{job.reopenedFromJobId}.</span>
         </div>
       )}
 
@@ -77,11 +96,19 @@ export function ServiceJobWarrantyPanel({ job }: { job: ServiceJob }) {
         )}
       </div>
 
-      {job.status === "completed" && job.reworkOfJobId == null && (
-        <Button size="sm" variant="outline" className="gap-1.5" onClick={startRework} disabled={rework.isPending}>
-          {rework.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
-          Return for rework (no charge)
-        </Button>
+      {job.status === "completed" && (
+        <div className="flex flex-wrap gap-2">
+          {job.reworkOfJobId == null && (
+            <Button size="sm" variant="outline" className="gap-1.5" onClick={startRework} disabled={rework.isPending}>
+              {rework.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RotateCcw className="w-3.5 h-3.5" />}
+              Return for rework (no charge)
+            </Button>
+          )}
+          <Button size="sm" variant="outline" className="gap-1.5" onClick={startReopen} disabled={reopen.isPending}>
+            {reopen.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <RefreshCw className="w-3.5 h-3.5" />}
+            Reopen as new repair
+          </Button>
+        </div>
       )}
     </div>
   );

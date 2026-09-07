@@ -16,7 +16,8 @@ import { Select, SelectContent, SelectGroup, SelectItem, SelectLabel, SelectTrig
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { Globe, Hash, Clock4 } from "lucide-react";
+import { Globe, Hash, Clock4, Phone } from "lucide-react";
+import { PHONE_COUNTRIES, formatPhoneDisplay, phoneExample, resolvePhoneCountry } from "@workspace/phone-shared";
 
 // ── Locale data ────────────────────────────────────────────────────────────
 
@@ -313,12 +314,19 @@ export default function SettingsRegionalPage() {
 
   const [currency, setCurrency] = useState("AUD");
   const [timezone, setTimezone] = useState("Australia/Sydney");
+  /* "" means "no choice made", which resolves to Australia — see
+     resolvePhoneCountry. Most merchants should stay on it. */
+  const [phoneCountryCode, setPhoneCountryCode] = useState("");
+  /* Display only. Numbers are stored with the country code either way. */
+  const [phoneDisplay, setPhoneDisplay] = useState<"international" | "national">("international");
   const [ext,      setExt]      = useState<ExtSettings>({ ...DEFAULT_EXT });
 
   useEffect(() => {
     if (merchant) {
       setCurrency(merchant.currency || "AUD");
       setTimezone(merchant.timezone || "Australia/Sydney");
+      setPhoneCountryCode(merchant.defaultPhoneCountry || "");
+      setPhoneDisplay(merchant.phoneDisplay === "national" ? "national" : "international");
     }
   }, [merchant]);
 
@@ -353,9 +361,21 @@ export default function SettingsRegionalPage() {
     setIsDirty(true);
   }, []);
 
+  const handlePhoneDisplayChange = useCallback((val: "international" | "national") => {
+    setPhoneDisplay(val);
+    setIsDirty(true);
+  }, []);
+
+  const handlePhoneCountryChange = useCallback((val: string) => {
+    // The select can't hold "", so "default" stands in for "nothing chosen" and
+    // is translated back on the way to the API.
+    setPhoneCountryCode(val === "default" ? "" : val);
+    setIsDirty(true);
+  }, []);
+
   const handleSave = () => {
     updateMutation.mutate(
-      { data: { currency: currency || undefined, timezone: timezone || undefined } },
+      { data: { currency: currency || undefined, timezone: timezone || undefined, defaultPhoneCountry: phoneCountryCode, phoneDisplay } },
       {
         onSuccess: (updated) => {
           updateExtMutation.mutate(
@@ -387,6 +407,12 @@ export default function SettingsRegionalPage() {
       }
     );
   };
+
+  // Built by running a real number through the same normaliser the till and the
+  // API use, so the preview can't promise something they wouldn't do.
+  const phoneCountry   = resolvePhoneCountry(phoneCountryCode);
+  const phonePreview   = phoneExample(phoneCountry);
+  const phoneOnScreen  = formatPhoneDisplay(phonePreview.stored, phoneCountry, phoneDisplay);
 
   const { ConfirmDialog } = useUnsavedChangesGuard(isDirty);
 
@@ -572,7 +598,75 @@ export default function SettingsRegionalPage() {
           </CardContent>
         </Card>
 
-        {/* ── Section 3: Clock & Calendar ── */}
+        {/* ── Section 3: Phone Numbers ── */}
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <Phone className="h-5 w-5 text-primary" />
+              Phone Numbers
+            </CardTitle>
+            <CardDescription>
+              Numbers are saved with their country code, so they can be texted, dialled from a
+              phone and exported to a contacts app without anyone retyping them.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-5">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
+              <div className="space-y-1.5">
+                <Label>Default Country Code</Label>
+                <Select value={phoneCountryCode || "default"} onValueChange={handlePhoneCountryChange}>
+                  <SelectTrigger><SelectValue /></SelectTrigger>
+                  <SelectContent className="max-h-64">
+                    <SelectItem value="default">
+                      Default — {resolvePhoneCountry(null).name} (+{resolvePhoneCountry(null).dial})
+                    </SelectItem>
+                    {PHONE_COUNTRIES.map(c => (
+                      <SelectItem key={c.code} value={c.code}>{c.name}  (+{c.dial})</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  Applied when a number is typed without one. Leave this on the default unless
+                  most of your customers are overseas.
+                </p>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Show Numbers</Label>
+                <SegmentToggle
+                  options={[
+                    { value: "international", label: `With code  +${phoneCountry.dial}…` },
+                    { value: "national",      label: `Without  ${phoneCountry.trunk || ""}…` },
+                  ]}
+                  value={phoneDisplay}
+                  onChange={handlePhoneDisplayChange}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Changes how numbers read on screen only. Every number is saved with its country
+                  code either way, so you can switch back and forth freely.
+                </p>
+              </div>
+            </div>
+
+            {/* One worked example, so both halves of the setting are visible at once. */}
+            <div className="rounded-lg bg-muted/40 border px-4 py-3 text-sm space-y-1">
+              <p className="font-mono">
+                <span className="text-muted-foreground">Typed</span> {phonePreview.typed}
+                <span className="text-muted-foreground"> &rarr; saved </span>
+                <span className="font-semibold">{phonePreview.stored}</span>
+                <span className="text-muted-foreground"> &rarr; shown </span>
+                <span className="font-semibold">{phoneOnScreen}</span>
+              </p>
+              <p className="text-xs text-muted-foreground">
+                A number already carrying a country code, or one that isn&apos;t a plain number
+                (&ldquo;0400 000 000 ext 12&rdquo;), is saved exactly as entered. An overseas number
+                always keeps its code on screen — without it, it can&apos;t be dialled. Numbers
+                already in your records are left as they are until you next edit them.
+              </p>
+            </div>
+          </CardContent>
+        </Card>
+
+        {/* ── Section 4: Clock & Calendar ── */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
@@ -594,6 +688,8 @@ export default function SettingsRegionalPage() {
                 { label: "Measurement",       value: ext.measurementSystem === "metric" ? "Metric" : "Imperial" },
                 { label: "Paper size",        value: ext.paperSize },
                 { label: "Week starts",       value: ext.firstDayOfWeek.charAt(0).toUpperCase() + ext.firstDayOfWeek.slice(1) },
+                { label: "Phone code",        value: `+${phoneCountry.dial}` },
+                { label: "Phone display",     value: phoneDisplay === "national" ? "No country code" : "With country code" },
               ].map(row => (
                 <div key={row.label}>
                   <p className="text-[11px] text-muted-foreground uppercase tracking-wide">{row.label}</p>

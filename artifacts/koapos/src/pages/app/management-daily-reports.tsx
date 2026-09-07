@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListDailyCloses } from "@workspace/api-client-react";
+import { useListDailyCloses, useGetPosSettings } from "@workspace/api-client-react";
 import type { DailyClose } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -24,6 +24,7 @@ import {
   ShoppingCart, CalendarDays, Printer, Download,
 } from "lucide-react";
 import { printDailyClose, exportDailyClosesCSV } from "@/lib/print-daily-close";
+import { parseHardwareConfig } from "@/lib/hardware-config";
 
 const fmt$ = (n: number) =>
   `$${Math.abs(n).toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
@@ -69,6 +70,10 @@ function DetailRow({ label, value, bold, dimmed }: { label: string; value: strin
 }
 
 function DetailSheet({ row, onClose }: { row: DailyClose; onClose: () => void }) {
+  // Hardware config decides whether the report goes straight to a printer or
+  // opens the usual print window.
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const b = row.breakdown as Record<string, number>;
   const variance = row.variance;
   const isOver = variance > 0;
@@ -168,7 +173,7 @@ function DetailSheet({ row, onClose }: { row: DailyClose; onClose: () => void })
           <Button
             variant="outline"
             className="w-full gap-2 mt-2"
-            onClick={() => printDailyClose(row)}
+            onClick={() => printDailyClose(row, undefined, hardware)}
           >
             <Printer className="w-4 h-4" />
             Print Report

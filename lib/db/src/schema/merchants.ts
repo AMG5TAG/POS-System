@@ -12,11 +12,26 @@ export const merchantsTable = pgTable("merchants", {
   address: text("address"),
   city: text("city"),
   country: text("country").default("AU"),
+  /* Country whose dialling code is appended to phone numbers typed without one,
+     so "0412 345 678" is stored as "+61412345678". Empty means "follow
+     `country`" — see resolvePhoneCountry in @workspace/phone-shared — so a
+     merchant who moves the business country moves the phone default with it
+     unless they have deliberately pinned a different one. */
+  defaultPhoneCountry: text("default_phone_country").notNull().default(""),
+  /* How numbers are shown on screen — "international" (+61412345678) or
+     "national" (0412345678). Display only: every save still stores E.164, so
+     changing this rewrites nothing. */
+  phoneDisplay: text("phone_display").notNull().default("international"),
   currency: text("currency").notNull().default("AUD"),
   timezone: text("timezone").default("Australia/Sydney"),
   logoUrl: text("logo_url"),
   username: text("username").unique(),
   portalDomain: text("portal_domain").unique(),
+  /* When "true", a customer who has set a portal password must supply it — the
+     portalToken in the URL then identifies the account rather than granting it.
+     Defaults off so existing portals (and every link already sent to a customer)
+     keep working exactly as before until a merchant opts in. */
+  requirePortalPassword: text("require_portal_password").notNull().default("false"),
   loginNotifyEmail: text("login_notify_email").notNull().default("false"),
   loginNotifyEmailFailed: text("login_notify_email_failed").notNull().default("false"),
   loginNotifyEmailNewLocation: text("login_notify_email_new_location").notNull().default("true"),

@@ -1,6 +1,6 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useMemo } from "react";
 import {
-  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand, useRequestUploadUrl, useConfirmUpload,
+  useListBrands, useCreateBrand, useUpdateBrand, useDeleteBrand,
   useListProducts, getListProductsQueryKey,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -17,8 +17,10 @@ import {
   DollarSign,
 } from "lucide-react";
 import { toast } from "sonner";
+import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
+import { useShowBrandCostValue } from "@/lib/brand-view-settings";
 
 type Brand = {
   id: number;
@@ -57,19 +59,13 @@ function LogoUploader({ value, onChange }: { value: string; onChange: (url: stri
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
 
-  const requestUploadUrlMutation = useRequestUploadUrl();
-  const confirmUploadMutation = useConfirmUpload();
-
   const upload = async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const result = await requestUploadUrlMutation.mutateAsync({ data: { name: file.name, size: file.size, contentType: file.type } });
-      const putRes = await fetch(result.uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      await confirmUploadMutation.mutateAsync({ data: { objectPath: result.objectPath } });
-      onChange(`/api/storage${result.objectPath}`);
-      toast.success("Logo uploaded");
+      const { url, deduped } = await uploadFile(file);
+      onChange(url);
+      toast.success(deduped ? "Reused an image already in your library" : "Logo uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
@@ -227,6 +223,24 @@ export default function ProductsBrandsPage() {
   );
   const brands = ((brandsData?.items ?? []) as unknown as Brand[]);
 
+  // "Cost Value" is a view option toggled from Management › Products and
+  // Inventory › Inventory. When on, fetch all products once and total each
+  // brand's inventory cost (cost price × stock on hand).
+  const [showCostValue] = useShowBrandCostValue();
+  const { data: allProductsData } = useListProducts(
+    { limit: 1000 } as unknown as Parameters<typeof useListProducts>[0],
+    { query: { queryKey: ["products", "brand-cost-value"], enabled: showCostValue } }
+  );
+  const costValueByBrand = useMemo(() => {
+    const map = new Map<number, number>();
+    const items = (allProductsData?.items ?? []) as Array<{ brandId?: number | null; costPrice?: number | null; stockQuantity?: number | null }>;
+    for (const p of items) {
+      if (p.brandId == null) continue;
+      map.set(p.brandId, (map.get(p.brandId) ?? 0) + (p.costPrice ?? 0) * (p.stockQuantity ?? 0));
+    }
+    return map;
+  }, [allProductsData]);
+
   const createBrandMutation = useCreateBrand();
   const updateBrandMutation = useUpdateBrand();
   const deleteBrandMutation = useDeleteBrand();
@@ -340,6 +354,9 @@ export default function ProductsBrandsPage() {
               <SortBtn label="Brand" col="name" sort={sort} onSort={handleSort} />
             </div>
             <div className="flex items-center gap-6 shrink-0 mr-16">
+              {showCostValue && (
+                <span className="text-sm font-medium text-muted-foreground">Cost Value</span>
+              )}
               <SortBtn label="Retail Value" col="retailValue" sort={sort} onSort={handleSort} />
               <SortBtn label="Products" col="productCount" sort={sort} onSort={handleSort} />
             </div>
@@ -396,6 +413,12 @@ export default function ProductsBrandsPage() {
 
                       {/* Stats */}
                       <div className="flex items-center gap-8 shrink-0">
+                        {showCostValue && (
+                          <div className="text-right w-24">
+                            <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Cost Value</p>
+                            <p className="text-sm font-semibold text-foreground">{fmt(costValueByBrand.get(b.id) ?? 0)}</p>
+                          </div>
+                        )}
                         <div className="text-right w-24">
                           <p className="text-[10px] text-muted-foreground leading-none mb-0.5">Retail Value</p>
                           <p className="text-sm font-semibold text-primary">{fmt(b.retailValue)}</p>

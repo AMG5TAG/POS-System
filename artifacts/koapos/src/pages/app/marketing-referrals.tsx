@@ -308,8 +308,6 @@ export default function MarketingReferralsPage() {
                 </p>
               ) : (
                 referredCustomers.map((r) => {
-                  const spendPct = Math.min(100, ((r.totalSpent ?? 0) / SETTINGS.minSpend) * 100);
-                  void spendPct;
                   const days = daysSince(r.createdAt);
                   const isExpired = days > SETTINGS.qualifyDays;
                   const isQualified = !isExpired && (r.totalSpent ?? 0) >= SETTINGS.minSpend && (r.visitCount ?? 0) >= SETTINGS.minVisits;

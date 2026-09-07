@@ -14,11 +14,12 @@ type PublicLandingPage = LandingPage & {
 
 export default function LandingPagePublicView() {
   // Two public URL shapes resolve to the same page:
-  //   /b/:businessUsername/a/:customName   (preferred)   and   /p/:slug   (legacy)
+  //   /b/:businessUsername/l/:customName   (preferred; `/a/` is a legacy alias)
+  //   /p/:slug   (legacy)
   const params = useParams<{ slug?: string; businessUsername?: string; customName?: string }>();
   const slug = params.slug ?? "";
   const byHandle = !!(params.businessUsername && params.customName);
-  const displayPath = byHandle ? `/b/${params.businessUsername}/a/${params.customName}` : `/p/${slug}`;
+  const displayPath = byHandle ? `/b/${params.businessUsername}/l/${params.customName}` : `/p/${slug}`;
 
   const { data: row, isLoading, isError } = useQuery<PublicLandingPage>({
     queryKey: byHandle
@@ -27,7 +28,7 @@ export default function LandingPagePublicView() {
     queryFn: () =>
       customFetch<PublicLandingPage>(
         byHandle
-          ? `/api/landing-pages/public/b/${encodeURIComponent(params.businessUsername!)}/a/${encodeURIComponent(params.customName!)}`
+          ? `/api/landing-pages/public/b/${encodeURIComponent(params.businessUsername!)}/l/${encodeURIComponent(params.customName!)}`
           : `/api/landing-pages/public/${encodeURIComponent(slug)}`,
         { method: "GET" },
       ),
@@ -39,6 +40,14 @@ export default function LandingPagePublicView() {
     try { return typeof row.links === "string" ? JSON.parse(row.links) : []; }
     catch { return []; }
   })();
+
+  /* Browser tab title: the page's own (editable) title, always suffixed with
+     "- KoaPOS". Restores the default on unmount. */
+  useEffect(() => {
+    const title = row?.title?.trim();
+    document.title = title ? `${title} - KoaPOS` : "KoaPOS";
+    return () => { document.title = "KoaPOS"; };
+  }, [row?.title]);
 
   /* Load Google Font if needed */
   useEffect(() => {

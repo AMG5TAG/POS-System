@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { MapPin, Plus, Loader2, Trash2, Star, Check, Search, ArrowRight, Package } from "lucide-react";
 import { toast } from "sonner";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 export default function ManagementLocationsPage() {
   const queryClient = useQueryClient();
@@ -117,7 +118,7 @@ export default function ManagementLocationsPage() {
                       </div>
                     </td>
                     <td className="px-5 py-3 text-muted-foreground">{l.address ?? "—"}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{l.phone ?? "—"}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{formatPhoneForDisplay(l.phone) || "—"}</td>
                     <td className="px-5 py-3">
                       <div className="flex items-center justify-end gap-1.5">
                         {l.id !== activeId && (

@@ -14,6 +14,8 @@ export interface EmailMessage {
   html: string;
   text?: string;
   attachments?: EmailAttachment[];
+  /** Optional blind-copy recipient (e.g. the business's own contact email). */
+  bcc?: string;
 }
 
 export interface SendResult {
@@ -59,6 +61,7 @@ export async function sendSystemEmail(message: EmailMessage): Promise<SendResult
       body: JSON.stringify({
         from: buildFrom(fromName, fromEmail, "onboarding@resend.dev"),
         to: [message.to],
+        ...(message.bcc ? { bcc: [message.bcc] } : {}),
         subject: message.subject,
         html: message.html,
         text: message.text,
@@ -90,6 +93,7 @@ export async function sendSystemEmail(message: EmailMessage): Promise<SendResult
     await transporter.sendMail({
       from: buildFrom(fromName, fromEmail ?? smtpUser, smtpUser),
       to: message.to,
+      ...(message.bcc ? { bcc: message.bcc } : {}),
       subject: message.subject,
       html: message.html,
       text: message.text,
@@ -131,6 +135,7 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
     await transporter.sendMail({
       from: buildFrom(settings.fromName ?? null, settings.fromEmail ?? null, settings.smtpUser),
       to: message.to,
+      ...(message.bcc ? { bcc: message.bcc } : {}),
       subject: message.subject,
       html: message.html,
       text: message.text,
@@ -153,6 +158,7 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
       body: JSON.stringify({
         from: buildFrom(settings.fromName ?? null, settings.fromEmail ?? null, "onboarding@resend.dev"),
         to: [message.to],
+        ...(message.bcc ? { bcc: [message.bcc] } : {}),
         subject: message.subject,
         html: message.html,
         text: message.text,
@@ -179,7 +185,7 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
       method: "POST",
       headers: { Authorization: `Bearer ${settings.apiKey}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        personalizations: [{ to: [{ email: message.to }] }],
+        personalizations: [{ to: [{ email: message.to }], ...(message.bcc ? { bcc: [{ email: message.bcc }] } : {}) }],
         from: { email: settings.fromEmail ?? "noreply@example.com", name: settings.fromName ?? undefined },
         subject: message.subject,
         content: [

@@ -3,6 +3,8 @@ import { db, merchantsTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateMerchantBody } from "@workspace/api-zod";
+import { invalidatePhoneCountryCache, isValidPhoneCountry } from "../lib/phone";
+import { isPhoneDisplayMode } from "@workspace/phone-shared";
 
 const router: IRouter = Router();
 
@@ -19,6 +21,8 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     address: m.address ?? null,
     city: m.city ?? null,
     country: m.country ?? null,
+    defaultPhoneCountry: m.defaultPhoneCountry ?? "",
+    phoneDisplay: m.phoneDisplay ?? "international",
     currency: m.currency,
     timezone: m.timezone ?? null,
     logoUrl: m.logoUrl ?? null,
@@ -29,6 +33,7 @@ function formatMerchant(m: typeof merchantsTable.$inferSelect) {
     loginNotifyEmailNewLocation: m.loginNotifyEmailNewLocation === "true" ? true : false,
     securityAlertEmail: m.securityAlertEmail === "true" ? true : false,
     passwordChangeAlertEmail: m.passwordChangeAlertEmail === "true" ? true : false,
+    requirePortalPassword: m.requirePortalPassword === "true" ? true : false,
     createdAt: m.createdAt.toISOString(),
     emailVerified: m.emailVerifiedAt !== null,
     onboardingCompleted: m.onboardingCompletedAt !== null,
@@ -58,7 +63,7 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
   }
 
   const body = req.body as Record<string, unknown>;
-  const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, passwordChangeAlertEmail, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean; passwordChangeAlertEmail?: boolean };
+  const { username, loginNotifyEmail, loginNotifyEmailFailed, loginNotifyEmailNewLocation, securityAlertEmail, passwordChangeAlertEmail, requirePortalPassword, ...rest } = parsed.data as typeof parsed.data & { username?: string; loginNotifyEmail?: boolean; loginNotifyEmailFailed?: boolean; loginNotifyEmailNewLocation?: boolean; securityAlertEmail?: boolean; passwordChangeAlertEmail?: boolean; requirePortalPassword?: boolean };
   const portalDomain: string | null | undefined = typeof body.portalDomain === "string"
     ? (body.portalDomain.trim() || null)
     : body.portalDomain === null ? null : undefined;
@@ -80,6 +85,21 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
       res.status(409).json({ error: "This username is already taken. Please choose another." });
       return;
     }
+  }
+
+  // A default we can't resolve to a dialling code would silently switch phone
+  // normalisation off, so it is rejected rather than stored. "" is legitimate:
+  // it means "follow the business country".
+  if (body.defaultPhoneCountry !== undefined && !isValidPhoneCountry(body.defaultPhoneCountry)) {
+    res.status(400).json({ error: "Unknown country for the default phone country code." });
+    return;
+  }
+
+  // Display only — it can't corrupt a stored number, but an unknown value would
+  // leave the UI falling back to a format the settings screen doesn't show.
+  if (body.phoneDisplay !== undefined && !isPhoneDisplayMode(body.phoneDisplay)) {
+    res.status(400).json({ error: "Phone display must be 'international' or 'national'." });
+    return;
   }
 
   // Validate and check uniqueness of portal domain
@@ -108,7 +128,15 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     ...(loginNotifyEmailNewLocation !== undefined && { loginNotifyEmailNewLocation: loginNotifyEmailNewLocation ? "true" : "false" }),
     ...(securityAlertEmail !== undefined && { securityAlertEmail: securityAlertEmail ? "true" : "false" }),
     ...(passwordChangeAlertEmail !== undefined && { passwordChangeAlertEmail: passwordChangeAlertEmail ? "true" : "false" }),
+    ...(requirePortalPassword !== undefined && { requirePortalPassword: requirePortalPassword ? "true" : "false" }),
   };
+
+  // The setting drives the phone normalisation middleware, which caches it for a
+  // minute. Without this, a merchant who changes their country code would watch
+  // the next few saves still use the old one.
+  if (updateData.defaultPhoneCountry !== undefined) {
+    invalidatePhoneCountryCache(req.session.merchantId!);
+  }
 
   const [merchant] = await db
     .update(merchantsTable)

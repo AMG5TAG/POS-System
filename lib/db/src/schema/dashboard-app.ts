@@ -1,4 +1,4 @@
-import { boolean, integer, pgTable, serial, timestamp } from "drizzle-orm/pg-core";
+import { boolean, integer, pgTable, serial, timestamp, text, uniqueIndex } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
 /**
@@ -22,8 +22,14 @@ export const dashboardAppSettingsTable = pgTable("dashboard_app_settings", {
   showServiceJobsPanel: boolean("show_service_jobs_panel").notNull().default(true),
   showCalendar:         boolean("show_calendar").notNull().default(true),
   showReferralRevenue:  boolean("show_referral_revenue").notNull().default(false),
+  // Unguessable token that addresses the public link (/d/:token). Replaces the
+  // guessable username-based URL so a merchant's shared dashboard can't be found
+  // by trying usernames. Nullable until backfilled / lazily generated.
+  publicToken:          text("public_token"),
   updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
-});
+}, (t) => [
+  uniqueIndex("dashboard_app_settings_public_token_unique").on(t.publicToken),
+]);
 
 export type DashboardAppSettings = typeof dashboardAppSettingsTable.$inferSelect;
 export type InsertDashboardAppSettings = typeof dashboardAppSettingsTable.$inferInsert;

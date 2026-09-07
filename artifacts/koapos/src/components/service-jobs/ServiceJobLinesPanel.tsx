@@ -7,12 +7,15 @@ import {
   useListProducts,
   useCreateQuote,
   useApproveQuote,
+  useCreateInvoice,
+  useGetInvoiceSettings,
   getListProductsQueryKey,
   getListServiceJobLinesQueryKey,
   getListServiceJobsQueryKey,
+  getListInvoicesQueryKey,
   type ServiceJobLine,
 } from "@workspace/api-client-react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -20,7 +23,9 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { formatCurrency, cn } from "@/lib/utils";
-import { Package, Wrench, Tag, Trash2, Plus, Loader2, Search, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+import { setPendingCart } from "@/lib/pending-cart";
+import { useStaffSession } from "@/lib/staff-day-session";
+import { Package, Wrench, Tag, Trash2, Plus, Loader2, Search, FileText, ExternalLink, CheckCircle2, ShoppingCart, ReceiptText } from "lucide-react";
 import { toast } from "sonner";
 
 type Kind = "part" | "labour" | "misc";
@@ -32,12 +37,17 @@ const KIND_META: Record<Kind, { label: string; icon: typeof Package; color: stri
 };
 
 /** Parts, labour and misc charges billed against a repair job, with live totals. */
-export function ServiceJobLinesPanel({ jobId, customerId, readOnly = false }: { jobId: number; customerId?: number | null; readOnly?: boolean }) {
+export function ServiceJobLinesPanel({ jobId, jobNumber, customerId, readOnly = false }: { jobId: number; jobNumber?: string | null; customerId?: number | null; readOnly?: boolean }) {
   const queryClient = useQueryClient();
+  const [, navigate] = useLocation();
+  const { dayStaff } = useStaffSession();
   const createQuote = useCreateQuote();
   const approveQuote = useApproveQuote();
+  const createInvoice = useCreateInvoice();
+  const { data: invoiceSettings } = useGetInvoiceSettings();
   const [createdQuoteNumber, setCreatedQuoteNumber] = useState<string | null>(null);
   const [createdQuoteId, setCreatedQuoteId] = useState<number | null>(null);
+  const [createdInvoice, setCreatedInvoice] = useState<{ id: number; invoiceNumber: string } | null>(null);
   const [approvedInStore, setApprovedInStore] = useState(false);
   const { data, isLoading, isError, refetch } = useListServiceJobLines(jobId, {
     query: { queryKey: getListServiceJobLinesQueryKey(jobId) },
@@ -118,7 +128,7 @@ export function ServiceJobLinesPanel({ jobId, customerId, readOnly = false }: { 
         customerId: customerId ?? undefined,
         serviceJobId: jobId,
         items: lines.map((l) => ({
-          description: l.description || (l.kind === "labour" ? "Labour" : "Part"),
+          description: billingDescription(l),
           quantity: l.quantity,
           unitPrice: l.unitPrice,
           taxRate: l.taxRate,
@@ -140,6 +150,61 @@ export function ServiceJobLinesPanel({ jobId, customerId, readOnly = false }: { 
       queryClient.invalidateQueries({ queryKey: getListServiceJobsQueryKey() });
       toast.success("Estimate approved (in-store)");
     } catch { toast.error("Couldn't record approval"); }
+  };
+
+  /* Bill the job's lines straight through the till: hand them to the POS cart
+     the way a converted quote does, linked to this job so taking the payment
+     completes the job like any other linked sale.
+
+     Every line goes over as a custom item (productId 0). A part's stock was
+     already consumed when the line was added to the job, so ringing it up
+     against the product would deduct the same unit a second time. */
+  const handleCreateSale = () => {
+    if (lines.length === 0) { toast.error("Add parts or labour first"); return; }
+    setPendingCart({
+      id: jobId,
+      reference: jobNumber ? `Service ${jobNumber}` : `Service job #${jobId}`,
+      note: null,
+      customerId: customerId ?? null,
+      items: lines.map((l) => ({
+        productId: 0,
+        name: billingDescription(l),
+        quantity: l.quantity,
+        price: l.unitPrice,
+      })),
+      total: totals?.total ?? 0,
+      createdAt: new Date().toISOString(),
+      serviceJobId: jobId,
+    });
+    navigate("/pos/sell");
+  };
+
+  /* Invoice the job's lines instead of taking payment now. Lines are financial
+     only (no productId) for the same double-deduction reason as the sale above;
+     the cost still rides along so invoice COGS/profit stays right. */
+  const handleCreateInvoice = async () => {
+    if (lines.length === 0) { toast.error("Add parts or labour first"); return; }
+    if (customerId == null) { toast.error("Add a customer to this job before invoicing"); return; }
+    try {
+      const invoice = await createInvoice.mutateAsync({ data: {
+        customerId,
+        staffId: dayStaff?.staffId ?? null,
+        serviceJobId: jobId,
+        dueDate: invoiceSettings ? dueDateFromToday(invoiceSettings.defaultDueDays) : undefined,
+        notes: invoiceSettings?.defaultNotes || undefined,
+        items: lines.map((l) => ({
+          description: billingDescription(l),
+          quantity: l.quantity,
+          unitPrice: l.unitPrice,
+          taxRate: l.taxRate,
+          costPrice: l.unitCost,
+        })),
+      } as never }) as unknown as { id: number; invoiceNumber: string };
+      setCreatedInvoice({ id: invoice.id, invoiceNumber: invoice.invoiceNumber });
+      queryClient.invalidateQueries({ queryKey: getListInvoicesQueryKey() });
+      queryClient.invalidateQueries({ queryKey: getListServiceJobsQueryKey() });
+      toast.success(`Invoice ${invoice.invoiceNumber} created from this job`);
+    } catch { toast.error("Couldn't create invoice"); }
   };
 
   if (isLoading) {
@@ -213,6 +278,21 @@ export function ServiceJobLinesPanel({ jobId, customerId, readOnly = false }: { 
           )}
           {!readOnly && totals.total > 0 && (
             <div className="pt-2 mt-1 border-t flex flex-wrap items-center gap-2">
+              <Button size="sm" className="h-7 gap-1.5 text-xs" onClick={handleCreateSale}>
+                <ShoppingCart className="w-3.5 h-3.5" /> Create sale
+              </Button>
+
+              {createdInvoice !== null ? (
+                <Link href="/pos/invoices" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
+                  <ExternalLink className="w-3.5 h-3.5" /> Invoice {createdInvoice.invoiceNumber} created — open Invoices
+                </Link>
+              ) : (
+                <Button size="sm" variant="outline" className="h-7 gap-1.5 text-xs" onClick={handleCreateInvoice} disabled={createInvoice.isPending}>
+                  {createInvoice.isPending ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ReceiptText className="w-3.5 h-3.5" />}
+                  Create invoice
+                </Button>
+              )}
+
               {createdQuoteNumber !== null ? (
                 <>
                   <Link href="/pos/quotes" className="flex items-center gap-1.5 text-xs text-primary hover:underline">
@@ -298,6 +378,21 @@ export function ServiceJobLinesPanel({ jobId, customerId, readOnly = false }: { 
       )}
     </div>
   );
+}
+
+/** What a job line is called on a sale, invoice or quote — never blank. */
+function billingDescription(line: ServiceJobLine): string {
+  return line.description?.trim() || (KIND_META[line.kind as Kind] ?? KIND_META.part).label;
+}
+
+/** ISO yyyy-mm-dd for `days` from today — mirrors the invoice page's default
+ *  due-date rule so a job-raised invoice falls due like any other. */
+function dueDateFromToday(days: number): string {
+  const d = new Date();
+  d.setDate(d.getDate() + Math.max(0, Math.round(days)));
+  const mm = String(d.getMonth() + 1).padStart(2, "0");
+  const dd = String(d.getDate()).padStart(2, "0");
+  return `${d.getFullYear()}-${mm}-${dd}`;
 }
 
 function Row({ label, value, muted }: { label: string; value: string; muted?: boolean }) {

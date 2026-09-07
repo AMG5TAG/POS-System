@@ -9,8 +9,18 @@ import {
   purchaseOrdersTable,
   customerNotesTable,
 } from "@workspace/db";
-import { eq, and, gte, desc } from "drizzle-orm";
+import { eq, and, gte, desc, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { publicOrigin } from "../lib/publicUrl";
+
+/* Platform-registered Xero OAuth app credentials. Xero connects in one click
+   against this single app — there is no per-merchant developer app. */
+function getXeroClientCreds(_merchantId: number): { clientId: string; clientSecret: string } | null {
+  const clientId = process.env.XERO_CLIENT_ID;
+  const clientSecret = process.env.XERO_CLIENT_SECRET;
+  if (clientId && clientSecret) return { clientId, clientSecret };
+  return null;
+}
 
 const router = Router();
 
@@ -20,8 +30,24 @@ const XERO_AUTH_URL    = "https://login.xero.com/identity/connect/authorize";
 const XERO_TOKEN_URL   = "https://identity.xero.com/connect/token";
 const XERO_CONNECTIONS = "https://api.xero.com/connections";
 const XERO_API         = "https://api.xero.com/api.xro/2.0";
+// Xero deprecated the broad `accounting.transactions` scope and split it into
+// granular scopes. Apps created on/after 2 March 2026 cannot use the broad scope
+// at all (Xero returns invalid_scope), so we request the granular replacement.
+// The sync only writes to /Invoices (accounting.invoices), /Contacts
+// (accounting.contacts) and reads /Accounts (accounting.settings). Add
+// `accounting.payments` here if we ever record payments via the /Payments API.
+// See https://developer.xero.com/documentation/guides/oauth2/scopes/
 const XERO_SCOPES      =
-  "openid profile email accounting.transactions accounting.contacts accounting.settings offline_access";
+  "openid profile email accounting.invoices accounting.contacts accounting.settings offline_access";
+
+/* Canonical Xero setup-wizard route. Every OAuth redirect MUST target this exact
+   path — never the legacy /management/xero or /management/integrations aliases.
+   Those aliases are client-side wouter <Redirect>s that navigate with a hardcoded
+   `to` and DROP the query string, so ?success=/?error= would be lost before the
+   wizard reads it: a failed connect would then silently bounce the user back to
+   the Connect step with no message, looking exactly like "the page just refreshed".
+   The error codes below match the wizard's error map in management-xero.tsx. */
+const XERO_WIZARD_PATH = "/management/settings-integrations/integrations/xero";
 
 /* ── Credential shape stored in merchantIntegrationsTable.credentials ─────── */
 
@@ -41,6 +67,8 @@ type XeroCredentials = {
     refundAccountName?: string;
     roundingAccount?: string;
     roundingAccountName?: string;
+    purchasesAccount?: string;
+    purchasesAccountName?: string;
     gstTaxType?: string;
   };
   syncSettings?: {
@@ -65,8 +93,12 @@ type XeroCredentials = {
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
-function buildCallbackUrl(proto: string, host: string): string {
-  return `${proto}://${host}/api/xero/auth/callback`;
+// Build the OAuth callback from the app's canonical public origin (koapos.com.au
+// in production) — NOT from raw request headers, which in the Replit deployment
+// resolve to the internal *.replit.dev host and make Xero reject the redirect_uri.
+// This URL must exactly match a Redirect URI registered in the Xero app config.
+function buildCallbackUrl(req: { hostname?: string }): string {
+  return `${publicOrigin(req)}/api/xero/auth/callback`;
 }
 
 async function getRow(merchantId: number) {
@@ -117,9 +149,9 @@ async function withFreshToken(
     return { accessToken: row.accessToken, tenantId };
   }
 
-  const clientId     = process.env.XERO_CLIENT_ID;
-  const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret || !row.refreshToken) return null;
+  const cc = await getXeroClientCreds(merchantId);
+  if (!cc || !row.refreshToken) return null;
+  const { clientId, clientSecret } = cc;
 
   const r = await fetch(XERO_TOKEN_URL, {
     method: "POST",
@@ -164,13 +196,142 @@ async function appendSyncLog(
   await saveCreds(merchantId, creds);
 }
 
+/* Turn a failed Xero API Response into a human-readable reason.
+
+   Xero's Accounting API returns a rich body on 400 that pinpoints WHY the payload
+   was rejected — for a rejected /Invoices or /Contacts PUT it looks like:
+     { Type:"ValidationException", Message:"A validation exception occurred",
+       Elements:[{ ValidationErrors:[{ Message:"Account code '200' ..." }] }] }
+   Older/other errors use a flat { Message } or { detail }. We surface the most
+   specific message(s) available so the merchant's sync log and the API response
+   say e.g. "Xero API error: 400 — Account code '200' is not a valid code" instead
+   of a bare status. The body can only be consumed once, so call this exactly once
+   on the `!r.ok` branch. */
+type XeroErrorBody = {
+  Message?: string;
+  detail?: string;
+  Detail?: string;
+  Elements?: Array<{ ValidationErrors?: Array<{ Message?: string }> }>;
+};
+
+// Extract the most specific reason from an already-parsed Xero error body.
+// Returns null when the body carries nothing more useful than the status.
+function xeroReasonFromBody(body: unknown): string | null {
+  if (!body || typeof body !== "object") return null;
+  const b = body as XeroErrorBody;
+
+  // Most specific first: per-element validation errors (deduped).
+  const validationMsgs = Array.from(new Set(
+    (b.Elements ?? [])
+      .flatMap((el) => el.ValidationErrors ?? [])
+      .map((ve) => ve.Message)
+      .filter((m): m is string => !!m),
+  ));
+  if (validationMsgs.length > 0) return validationMsgs.join("; ").slice(0, 500);
+
+  const flat = b.Message ?? b.detail ?? b.Detail;
+  if (flat) return String(flat).slice(0, 300);
+
+  return null;
+}
+
+async function xeroErrorMessage(r: Response): Promise<string> {
+  const prefix = `Xero API error: ${r.status}`;
+  let raw = "";
+  try { raw = await r.text(); } catch { return prefix; }
+  if (!raw) return prefix;
+
+  let body: unknown;
+  try { body = JSON.parse(raw); } catch { return `${prefix} — ${raw.slice(0, 300)}`; }
+
+  const reason = xeroReasonFromBody(body);
+  return reason ? `${prefix} — ${reason}` : `${prefix} — ${raw.slice(0, 300)}`;
+}
+
+type XeroAuth = { accessToken: string; tenantId: string };
+
+// Standard headers for every Xero Accounting API call. `Accept: application/json`
+// is REQUIRED — without it Xero returns XML and `r.json()` throws.
+function xeroHeaders(auth: XeroAuth): Record<string, string> {
+  return {
+    Authorization:    `Bearer ${auth.accessToken}`,
+    "xero-tenant-id": auth.tenantId,
+    "Content-Type":   "application/json",
+    Accept:           "application/json",
+  };
+}
+
+/* Build name/email → ContactID maps for the org's ACTIVE contacts, so a contact
+   sync can attach the ContactID and UPDATE the existing record rather than relying
+   on Xero's name-matching (which misses on any whitespace/spelling drift and 400s
+   on the unique-name rule). Best-effort: on any read failure we return whatever we
+   have so far and let the sync fall back to create-or-update by name. Paginated at
+   Xero's 100-per-page cap; bounded so a huge book can't spin forever. */
+async function fetchXeroContactIndex(
+  auth: XeroAuth,
+): Promise<{ byName: Map<string, string>; byEmail: Map<string, string> }> {
+  const byName  = new Map<string, string>();
+  const byEmail = new Map<string, string>();
+  const MAX_PAGES = 50; // 50 × 100 = 5000 contacts
+
+  for (let page = 1; page <= MAX_PAGES; page++) {
+    const url = `${XERO_API}/Contacts?where=${encodeURIComponent('ContactStatus=="ACTIVE"')}&page=${page}`;
+    let r: Response;
+    try { r = await fetch(url, { headers: xeroHeaders(auth) }); } catch { break; }
+    if (!r.ok) break;
+
+    let body: { Contacts?: Array<{ ContactID?: string; Name?: string; EmailAddress?: string }> };
+    try { body = await r.json() as typeof body; } catch { break; }
+
+    const contacts = body.Contacts ?? [];
+    for (const c of contacts) {
+      if (!c.ContactID) continue;
+      if (c.Name)         byName.set(c.Name.trim().toLowerCase(), c.ContactID);
+      if (c.EmailAddress) byEmail.set(c.EmailAddress.trim().toLowerCase(), c.ContactID);
+    }
+    if (contacts.length < 100) break; // last page
+  }
+  return { byName, byEmail };
+}
+
+/* Return the subset of the given InvoiceNumbers that ALREADY exist in Xero (any
+   status), so an invoice/bill sync can skip re-creating them — making re-syncs
+   idempotent. Uses Xero's `InvoiceNumbers` filter, chunked to keep the URL bounded.
+   Best-effort: a failed read for a chunk just means those numbers aren't treated as
+   existing (worst case a duplicate, same as before this guard). */
+async function fetchExistingInvoiceNumbers(
+  auth: XeroAuth,
+  numbers: string[],
+): Promise<Set<string>> {
+  const existing = new Set<string>();
+  const unique = Array.from(new Set(numbers.filter(Boolean)));
+  if (unique.length === 0) return existing;
+
+  const CHUNK = 50;
+  for (let i = 0; i < unique.length; i += CHUNK) {
+    const chunk = unique.slice(i, i + CHUNK);
+    const qs = new URLSearchParams({ InvoiceNumbers: chunk.join(",") });
+    let r: Response;
+    try { r = await fetch(`${XERO_API}/Invoices?${qs.toString()}`, { headers: xeroHeaders(auth) }); }
+    catch { continue; }
+    if (!r.ok) continue;
+
+    let body: { Invoices?: Array<{ InvoiceNumber?: string }> };
+    try { body = await r.json() as typeof body; } catch { continue; }
+    for (const inv of body.Invoices ?? []) {
+      if (inv.InvoiceNumber) existing.add(inv.InvoiceNumber);
+    }
+  }
+  return existing;
+}
+
 /* ── GET /api/xero/status ────────────────────────────────────────────────── */
 
 router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const row        = await getRow(merchantId);
 
-  const configured = !!(process.env.XERO_CLIENT_ID && process.env.XERO_CLIENT_SECRET);
+  const configured = !!(await getXeroClientCreds(merchantId));
 
   if (!row || row.status !== "connected") {
     res.json({ connected: false, configured });
@@ -193,19 +354,21 @@ router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
 
 /* ── GET /api/xero/auth/start ─────────────────────────────────────────────── */
 
-router.get("/xero/auth/start", requireAuth, (req, res): void => {
-  const clientId = process.env.XERO_CLIENT_ID;
-  if (!clientId) {
-    res.redirect("/management/xero?error=not_configured");
+router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
+  const cc = await getXeroClientCreds(req.session.merchantId!);
+  if (!cc) {
+    // Platform Xero app isn't configured (no XERO_CLIENT_ID/SECRET). Send the user
+    // to the wizard, which shows a clear "Xero isn't available yet" message, rather
+    // than bouncing back to the integrations list (which looks like a page refresh).
+    res.redirect(`${XERO_WIZARD_PATH}?error=not_configured`);
     return;
   }
+  const clientId = cc.clientId;
 
-  const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const host  = req.headers.host ?? "";
   const params = new URLSearchParams({
     response_type: "code",
     client_id:     clientId,
-    redirect_uri:  buildCallbackUrl(proto, host),
+    redirect_uri:  buildCallbackUrl(req),
     scope:         XERO_SCOPES,
     state:         String(req.session.merchantId!),
   });
@@ -219,26 +382,24 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
   const { code, state, error } = req.query as Record<string, string>;
 
   if (error || !code) {
-    res.redirect("/management/xero?error=oauth_denied");
+    res.redirect(`${XERO_WIZARD_PATH}?error=oauth_denied`);
     return;
   }
 
   const merchantId = parseInt(state ?? "", 10);
   if (isNaN(merchantId)) {
-    res.redirect("/management/xero?error=invalid_state");
+    res.redirect(`${XERO_WIZARD_PATH}?error=invalid_state`);
     return;
   }
 
-  const clientId     = process.env.XERO_CLIENT_ID;
-  const clientSecret = process.env.XERO_CLIENT_SECRET;
-  if (!clientId || !clientSecret) {
-    res.redirect("/management/xero?error=not_configured");
+  const cc = await getXeroClientCreds(merchantId);
+  if (!cc) {
+    res.redirect(`${XERO_WIZARD_PATH}?error=not_configured`);
     return;
   }
+  const { clientId, clientSecret } = cc;
 
-  const cbProto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
-  const cbHost  = req.headers.host ?? "";
-  const cb = buildCallbackUrl(cbProto, cbHost);
+  const cb = buildCallbackUrl(req);
 
   let tokens: { access_token: string; refresh_token: string; expires_in: number };
   try {
@@ -250,10 +411,10 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
       },
       body: new URLSearchParams({ grant_type: "authorization_code", code, redirect_uri: cb }),
     });
-    if (!r.ok) { res.redirect("/management/xero?error=token_failed"); return; }
+    if (!r.ok) { res.redirect(`${XERO_WIZARD_PATH}?error=token_failed`); return; }
     tokens = (await r.json()) as typeof tokens;
   } catch {
-    res.redirect("/management/xero?error=token_failed");
+    res.redirect(`${XERO_WIZARD_PATH}?error=token_failed`);
     return;
   }
 
@@ -288,7 +449,7 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
     });
   }
 
-  res.redirect("/management/xero?success=connected");
+  res.redirect(`${XERO_WIZARD_PATH}?success=connected`);
 });
 
 /* ── DELETE /api/xero/disconnect ─────────────────────────────────────────── */
@@ -350,11 +511,7 @@ router.get("/xero/accounts", requireAuth, async (req, res): Promise<void> => {
   if (!auth) { res.status(401).json({ error: "Not connected or no tenant selected" }); return; }
 
   const r = await fetch(`${XERO_API}/Accounts?where=Status%3D%3D%22ACTIVE%22`, {
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-    },
+    headers: xeroHeaders(auth),
   });
 
   if (!r.ok) { res.status(r.status).json({ error: "Failed to fetch accounts" }); return; }
@@ -421,8 +578,20 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     .from(suppliersTable)
     .where(eq(suppliersTable.merchantId, merchantId));
 
-  const xeroContacts = [
-    ...customers.map((c) => ({
+  type XeroContactPayload = {
+    ContactID?:    string;
+    Name:          string;
+    FirstName?:    string;
+    LastName?:     string;
+    EmailAddress?: string;
+    Phones:        Array<{ PhoneType: string; PhoneNumber: string }>;
+    IsCustomer:    boolean;
+    IsSupplier:    boolean;
+    AccountNumber?: string;
+  };
+
+  const xeroContacts: XeroContactPayload[] = [
+    ...customers.map((c): XeroContactPayload => ({
       Name:         `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || `Customer ${c.id}`,
       FirstName:    c.firstName  ?? undefined,
       LastName:     c.lastName   ?? undefined,
@@ -431,7 +600,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
       IsCustomer:   true,
       IsSupplier:   false,
     })),
-    ...suppliers.map((s) => ({
+    ...suppliers.map((s): XeroContactPayload => ({
       Name:          s.name,
       EmailAddress:  s.email         ?? undefined,
       Phones:        s.phone ? [{ PhoneType: "DEFAULT", PhoneNumber: s.phone }] : [],
@@ -446,25 +615,75 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
     return;
   }
 
-  const r = await fetch(`${XERO_API}/Contacts`, {
-    method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-    },
-    body: JSON.stringify({ Contacts: xeroContacts }),
+  // Xero rejects a whole batch that contains two contacts with the same Name — and
+  // a customer and a supplier can legitimately share one ("Ross Gregory" as both).
+  // Dedupe by name so the batch can't self-collide; the first row for a name wins.
+  const seenNames = new Set<string>();
+  const contactsToSync = xeroContacts.filter((c) => {
+    const key = c.Name.trim().toLowerCase();
+    if (seenNames.has(key)) return false;
+    seenNames.add(key);
+    return true;
   });
 
-  // Parse the full response body so we can extract Xero ContactIDs for notes sync
-  type XeroContactRecord = { ContactID?: string; EmailAddress?: string };
+  // Bulletproof upsert: look up each contact's existing Xero ContactID (by email
+  // first, then name) and attach it, so Xero UPDATES the record by ID instead of
+  // trying to create a duplicate and 400ing on the unique-name rule. Contacts with
+  // no match get created fresh (no ContactID).
+  const { byName, byEmail } = await fetchXeroContactIndex(auth);
+  for (const c of contactsToSync) {
+    const email = c.EmailAddress?.trim().toLowerCase();
+    const name  = c.Name.trim().toLowerCase();
+    const id    = (email ? byEmail.get(email) : undefined) ?? byName.get(name);
+    if (id) c.ContactID = id;
+  }
+
+  // POST (create-or-update), NOT PUT (create-only): Contact Name must be unique
+  // across active contacts, so PUT 400s the moment a name already exists in Xero.
+  // `summarizeErrors=false` makes Xero return HTTP 200 and validate each contact
+  // INDEPENDENTLY — so one still-colliding row can't fail the whole batch; we read
+  // the per-contact ValidationErrors below and report them instead of losing every
+  // good contact to one bad one.
+  const r = await fetch(`${XERO_API}/Contacts?summarizeErrors=false`, {
+    method:  "POST",
+    headers: xeroHeaders(auth),
+    body: JSON.stringify({ Contacts: contactsToSync }),
+  });
+
+  // Parse the body once: it feeds ContactIDs to the notes sync AND carries per-row
+  // ValidationErrors (present because of summarizeErrors=false).
+  type XeroContactRecord = {
+    ContactID?:        string;
+    EmailAddress?:     string;
+    ValidationErrors?: Array<{ Message?: string }>;
+  };
   let responseBody: { Contacts?: XeroContactRecord[] } = {};
   try { responseBody = await r.json() as { Contacts?: XeroContactRecord[] }; } catch { /* ignore */ }
 
-  const syncStatus = r.ok ? "success" : "error";
-  let msg = r.ok
-    ? `Synced ${xeroContacts.length} contacts`
-    : `Xero API error: ${r.status}`;
+  const returned    = responseBody.Contacts ?? [];
+  const rowErrors   = Array.from(new Set(
+    returned.flatMap((c) => c.ValidationErrors ?? [])
+            .map((v) => v.Message)
+            .filter((m): m is string => !!m),
+  ));
+  const failedCount = returned.filter((c) => (c.ValidationErrors?.length ?? 0) > 0).length;
+  const syncedCount = Math.max(0, contactsToSync.length - failedCount);
+
+  // `!r.ok` = whole-request failure (auth/structural). A 200 with some failed rows
+  // is a partial success — sync what we can and surface the rest.
+  const syncStatus = (!r.ok || syncedCount === 0) ? "error" : "success";
+  let msg: string;
+  if (!r.ok) {
+    const errReason = xeroReasonFromBody(responseBody);
+    msg = `Xero API error: ${r.status}${errReason ? ` — ${errReason}` : ""}`;
+    req.log.warn({ merchantId, count: contactsToSync.length, status: r.status, msg }, "Xero sync/contacts failed");
+  } else {
+    msg = `Synced ${syncedCount} contact${syncedCount !== 1 ? "s" : ""}`;
+    if (failedCount > 0) {
+      msg += `, ${failedCount} failed${rowErrors.length ? `: ${rowErrors.slice(0, 3).join("; ").slice(0, 300)}` : ""}`;
+      req.log.warn({ merchantId, failedCount, rowErrors: rowErrors.slice(0, 5) }, "Xero sync/contacts partial failure");
+    }
+  }
 
   // ── Notes sync (best-effort, only when the main contact sync succeeded) ──
   let notesSynced = 0;
@@ -525,11 +744,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
       try {
         const hr = await fetch(`${XERO_API}/Contacts/${contactId}/History`, {
           method:  "POST",
-          headers: {
-            Authorization:    `Bearer ${auth.accessToken}`,
-            "xero-tenant-id": auth.tenantId,
-            "Content-Type":   "application/json",
-          },
+          headers: xeroHeaders(auth),
           body: JSON.stringify({ HistoryRecords: [{ Details: noteText }] }),
         });
         if (hr.ok) {
@@ -553,12 +768,12 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
   await appendSyncLog(merchantId, {
     timestamp: new Date().toISOString(),
     type:      "contacts",
-    synced:    xeroContacts.length,
+    synced:    syncedCount,
     ...(syncStatus === "error" ? { error: msg } : { message: msg }),
   });
 
-  if (!r.ok) { res.status(r.status).json({ error: `Xero API error: ${r.status}` }); return; }
-  res.json({ ok: true, synced: xeroContacts.length, notesSynced, notesFailed, message: msg });
+  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
+  res.json({ ok: true, synced: syncedCount, failed: failedCount, notesSynced, notesFailed, message: msg });
 });
 
 /* ── POST /api/xero/sync/transactions ───────────────────────────────────────
@@ -596,6 +811,23 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
     return;
   }
 
+  // Xero requires a Contact on every ACCREC invoice. Resolve the customer name for
+  // linked sales; walk-in sales (no customerId) fall back to a shared contact.
+  const custIds = Array.from(new Set(
+    txs.map((t) => t.customerId).filter((id): id is number => id != null),
+  ));
+  const custRows = custIds.length
+    ? await db.select().from(customersTable).where(and(
+        eq(customersTable.merchantId, merchantId),
+        inArray(customersTable.id, custIds),
+      ))
+    : [];
+  const custName = new Map<number, string>();
+  for (const c of custRows) {
+    custName.set(c.id, `${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || c.email || `Customer ${c.id}`);
+  }
+  const WALK_IN_CONTACT = "Walk-in Customer";
+
   type XeroInvoice = Record<string, unknown>;
   const invoices: XeroInvoice[] = txs.map((tx) => {
     const items = Array.isArray(tx.items) ? (tx.items as Array<{
@@ -621,34 +853,49 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
     return {
       Type:      "ACCREC",
       Status:    "AUTHORISED",
+      Contact:   { Name: (tx.customerId != null ? custName.get(tx.customerId) : undefined) ?? WALK_IN_CONTACT },
       InvoiceNumber: tx.receiptNumber ?? `KP-${tx.id}`,
       Date:      new Date(tx.createdAt).toISOString().split("T")[0],
       DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
       Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
       LineItems: lineItems,
-      LineAmountTypes: "INCLUSIVE",
+      LineAmountTypes: "Inclusive",
     };
   });
 
+  // Idempotent re-sync: skip any invoice whose InvoiceNumber already exists in
+  // Xero, so re-running never creates duplicates (or 400s under the org's "unique
+  // invoice numbers" setting). Only brand-new invoices are pushed.
+  const existingNumbers = await fetchExistingInvoiceNumbers(
+    auth,
+    invoices.map((inv) => String(inv.InvoiceNumber)),
+  );
+  const toCreate = invoices.filter((inv) => !existingNumbers.has(String(inv.InvoiceNumber)));
+  const skipped  = invoices.length - toCreate.length;
+
+  if (toCreate.length === 0) {
+    const msg = `All ${invoices.length} transactions already in Xero — nothing to sync`;
+    await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: 0, message: msg });
+    res.json({ ok: true, synced: 0, skipped, message: msg });
+    return;
+  }
+
   const r = await fetch(`${XERO_API}/Invoices`, {
     method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-    },
-    body: JSON.stringify({ Invoices: invoices }),
+    headers: xeroHeaders(auth),
+    body: JSON.stringify({ Invoices: toCreate }),
   });
 
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
-    ? `Synced ${invoices.length} transactions`
-    : `Xero API error: ${r.status}`;
+    ? `Synced ${toCreate.length} transactions${skipped ? ` (${skipped} already in Xero)` : ""}`
+    : await xeroErrorMessage(r);
+  if (!r.ok) req.log.warn({ merchantId, count: toCreate.length, status: r.status, msg }, "Xero sync/transactions failed");
 
-  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: invoices.length, ...(status === "error" ? { error: msg } : { message: msg }) });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: toCreate.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
-  res.json({ ok: true, synced: invoices.length, message: msg });
+  res.json({ ok: true, synced: toCreate.length, skipped, message: msg });
 });
 
 /* ── POST /api/xero/sync/purchase-orders ─────────────────────────────────── */
@@ -669,41 +916,75 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
     return;
   }
 
+  // Xero requires a Contact (the supplier) on every ACCPAY bill, and an AccountCode
+  // on each bill line. Resolve supplier names; bills with no linked supplier fall
+  // back to a shared contact. The expense account uses the mapped purchases account
+  // if set, else Xero's conventional "300" (Purchases) — a wrong/absent code will
+  // now surface a clear 400 reason to map.
+  const creds = (await getCreds(merchantId)) ?? {};
+  const purchasesCode = creds.mappings?.purchasesAccount ?? "300";
+
+  const supIds = Array.from(new Set(
+    pos.map((p) => p.supplierId).filter((id): id is number => id != null),
+  ));
+  const supRows = supIds.length
+    ? await db.select().from(suppliersTable).where(and(
+        eq(suppliersTable.merchantId, merchantId),
+        inArray(suppliersTable.id, supIds),
+      ))
+    : [];
+  const supName = new Map<number, string>();
+  for (const s of supRows) supName.set(s.id, s.name);
+  const UNKNOWN_SUPPLIER = "Unknown Supplier";
+
   type XeroPO = Record<string, unknown>;
   const xeroPos: XeroPO[] = pos.map((po) => {
     return {
       Type:            "ACCPAY",
       Status:          po.status === "received" ? "AUTHORISED" : "DRAFT",
+      Contact:         { Name: (po.supplierId != null ? supName.get(po.supplierId) : undefined) ?? UNKNOWN_SUPPLIER },
       InvoiceNumber:   po.poNumber ?? `PO-${po.id}`,
       Date:            new Date(po.createdAt).toISOString().split("T")[0],
       DueDate:         po.expectedDate
         ? new Date(po.expectedDate).toISOString().split("T")[0]
         : new Date(po.createdAt).toISOString().split("T")[0],
       Reference:       `KoaPOS PO ${po.poNumber ?? po.id}`,
-      LineItems:       [{ Description: "Purchase Order", Quantity: 1, UnitAmount: parseFloat(String(po.totalCost ?? 0)) }],
-      LineAmountTypes: "EXCLUSIVE",
+      LineItems:       [{ Description: "Purchase Order", Quantity: 1, UnitAmount: parseFloat(String(po.totalCost ?? 0)), AccountCode: purchasesCode }],
+      LineAmountTypes: "Exclusive",
     };
   });
 
+  // Idempotent re-sync: skip bills whose InvoiceNumber already exists in Xero.
+  const existingNumbers = await fetchExistingInvoiceNumbers(
+    auth,
+    xeroPos.map((po) => String(po.InvoiceNumber)),
+  );
+  const toCreate = xeroPos.filter((po) => !existingNumbers.has(String(po.InvoiceNumber)));
+  const skipped  = xeroPos.length - toCreate.length;
+
+  if (toCreate.length === 0) {
+    const msg = `All ${xeroPos.length} purchase orders already in Xero — nothing to sync`;
+    await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: 0, message: msg });
+    res.json({ ok: true, synced: 0, skipped, message: msg });
+    return;
+  }
+
   const r = await fetch(`${XERO_API}/Invoices`, {
     method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-    },
-    body: JSON.stringify({ Invoices: xeroPos }),
+    headers: xeroHeaders(auth),
+    body: JSON.stringify({ Invoices: toCreate }),
   });
 
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
-    ? `Synced ${xeroPos.length} purchase orders as bills`
-    : `Xero API error: ${r.status}`;
+    ? `Synced ${toCreate.length} purchase orders as bills${skipped ? ` (${skipped} already in Xero)` : ""}`
+    : await xeroErrorMessage(r);
+  if (!r.ok) req.log.warn({ merchantId, count: toCreate.length, status: r.status, msg }, "Xero sync/purchase-orders failed");
 
-  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: xeroPos.length, ...(status === "error" ? { error: msg } : { message: msg }) });
+  await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: toCreate.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
   if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
-  res.json({ ok: true, synced: xeroPos.length, message: msg });
+  res.json({ ok: true, synced: toCreate.length, skipped, message: msg });
 });
 
 /* ── GET /api/xero/sync/log ──────────────────────────────────────────────── */
@@ -761,31 +1042,51 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
         TaxType:     gstType,
       }];
 
+  // Xero requires a Contact on every ACCREC invoice — resolve the linked customer,
+  // else fall back to the shared walk-in contact.
+  let contactName = "Walk-in Customer";
+  if (tx.customerId != null) {
+    const [cust] = await db.select().from(customersTable).where(and(
+      eq(customersTable.id, tx.customerId),
+      eq(customersTable.merchantId, merchantId),
+    ));
+    if (cust) contactName = `${cust.firstName ?? ""} ${cust.lastName ?? ""}`.trim() || cust.email || `Customer ${cust.id}`;
+  }
+
+  const invoiceNumber = tx.receiptNumber ?? `KP-${tx.id}`;
   const invoice = {
     Type:      "ACCREC",
     Status:    "AUTHORISED",
-    InvoiceNumber: tx.receiptNumber ?? `KP-${tx.id}`,
+    Contact:   { Name: contactName },
+    InvoiceNumber: invoiceNumber,
     Date:      new Date(tx.createdAt).toISOString().split("T")[0],
     DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
     Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
     LineItems: lineItems,
-    LineAmountTypes: "INCLUSIVE",
+    LineAmountTypes: "Inclusive",
   };
+
+  // Idempotent: if this sale's invoice is already in Xero (e.g. a manual retry
+  // after the auto sync-on-sale already landed it), don't create a duplicate.
+  const existingNumbers = await fetchExistingInvoiceNumbers(auth, [invoiceNumber]);
+  if (existingNumbers.has(invoiceNumber)) {
+    const msg = `Sale ${invoiceNumber} already in Xero`;
+    await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "sale", synced: 0, message: msg });
+    res.json({ ok: true, synced: 0, skipped: 1, message: msg });
+    return;
+  }
 
   const r = await fetch(`${XERO_API}/Invoices`, {
     method:  "PUT",
-    headers: {
-      Authorization:    `Bearer ${auth.accessToken}`,
-      "xero-tenant-id": auth.tenantId,
-      "Content-Type":   "application/json",
-    },
+    headers: xeroHeaders(auth),
     body: JSON.stringify({ Invoices: [invoice] }),
   });
 
   const status = r.ok ? "success" : "error";
   const msg    = r.ok
     ? `Synced sale ${tx.receiptNumber ?? tx.id} to Xero`
-    : `Xero API error: ${r.status}`;
+    : await xeroErrorMessage(r);
+  if (!r.ok) req.log.warn({ merchantId, transactionId, status: r.status, msg }, "Xero sync-sale failed");
 
   await appendSyncLog(merchantId, {
     timestamp: new Date().toISOString(),

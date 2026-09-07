@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, regionalExtSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { stripManagedFields } from "../lib/settings-body";
 
 const router: IRouter = Router();
 
@@ -17,7 +18,7 @@ router.get("/regional-ext-settings", requireAuth, async (req, res): Promise<void
 
 router.put("/regional-ext-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof regionalExtSettingsTable.$inferInsert>;
+  const body = stripManagedFields(req.body ?? {}) as Partial<typeof regionalExtSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(regionalExtSettingsTable).where(eq(regionalExtSettingsTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(regionalExtSettingsTable).set(body).where(eq(regionalExtSettingsTable.merchantId, merchantId)).returning();

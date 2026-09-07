@@ -45,13 +45,17 @@ export const salesSettingsTable = pgTable("sales_settings", {
   quoteDepositPercent:   numeric("quote_deposit_percent", { precision: 5, scale: 2 }).notNull().default("0"),
 
   // ── Sales Overview defaults (Management → Sales Overview) ──
-  // Which period tab opens first for the Sales Overview KPIs (today | month | year)
+  // Which period tab opens first for the Sales Overview KPIs (today | week | month | year)
   overviewDefaultSalesPeriod:    text("overview_default_sales_period").notNull().default("today"),
   // Which period tab opens first for the Activity Overview (day | week | month | year)
   overviewDefaultActivityPeriod: text("overview_default_activity_period").notNull().default("week"),
   // What "Month" means on the overview: rolling last-30-days, or calendar month-to-date
   // (rolling30 | calendar_mtd)
   overviewMonthMode:             text("overview_month_mode").notNull().default("rolling30"),
+  // What "Year" means on the overview: the current Australian financial year
+  // (1 Jul → 30 Jun), or a rolling window of the last 365 days
+  // (financial | rolling365)
+  overviewYearMode:              text("overview_year_mode").notNull().default("financial"),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

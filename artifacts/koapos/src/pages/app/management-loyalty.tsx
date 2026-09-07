@@ -381,6 +381,7 @@ function toForm(s: LoyaltySettings) {
     cashbackRate:           ((s.cashbackRate ?? 0.01) * 100).toString(),
     pointsPerDollar:        (s.pointsPerDollar ?? 1).toString(),
     dollarPerPoint:         (s.dollarPerPoint ?? 0.01).toString(),
+    birthdayBonusPoints:    (s.birthdayBonusPoints ?? 100).toString(),
     tiers:                  (s.tiers ?? [{ name: "Bronze", minSpend: 0, rate: 1 }, { name: "Silver", minSpend: 500, rate: 2 }, { name: "Gold", minSpend: 1000, rate: 3 }]) as Tier[],
     stampsRequired:         (s.stampsRequired ?? 10).toString(),
     stampRewardValue:       (s.stampRewardValue ?? 10).toString(),
@@ -414,6 +415,7 @@ export default function ManagementLoyaltyPage() {
     cashbackRate:           "1",
     pointsPerDollar:        "1",
     dollarPerPoint:         "0.01",
+    birthdayBonusPoints:    "100",
     tiers:                  [
       { name: "Bronze", minSpend: 0,    rate: 1 },
       { name: "Silver", minSpend: 500,  rate: 2 },
@@ -431,6 +433,16 @@ export default function ManagementLoyaltyPage() {
   });
 
   const naming = form.naming;
+  // Reward unit label for the active program type (e.g. cashback → "Credits",
+  // not "Points"). Falls back to the default if the merchant cleared the name.
+  const UNIT_KEY: Record<ProgramType, keyof LoyaltyNaming> = {
+    cashback: "cashbackUnit",
+    points:   "pointsUnit",
+    tiered:   "tieredUnit",
+    stamp:    "stampUnit",
+    custom:   "customUnit",
+  };
+  const unitName = naming[UNIT_KEY[form.programType]]?.trim() || NAMING_DEFAULTS[UNIT_KEY[form.programType]];
   const setNamingField = <K extends keyof LoyaltyNaming>(key: K, value: string) =>
     setForm((prev) => ({ ...prev, naming: { ...prev.naming, [key]: value } }));
 
@@ -468,6 +480,7 @@ export default function ManagementLoyaltyPage() {
         cashbackRate:           parseFloat(form.cashbackRate) / 100,
         pointsPerDollar:        parseFloat(form.pointsPerDollar),
         dollarPerPoint:         parseFloat(form.dollarPerPoint),
+        birthdayBonusPoints:    Math.max(0, Math.round(parseFloat(form.birthdayBonusPoints) || 0)),
         tiers:                  form.tiers.map(t => ({ ...t, rate: (t.rate ?? 0) / 100 })),
         stampsRequired:         parseInt(form.stampsRequired),
         stampRewardValue:       parseFloat(form.stampRewardValue),
@@ -800,6 +813,24 @@ export default function ManagementLoyaltyPage() {
                 </div>
               </div>
             )}
+
+            {/* Birthday Bonus — applies to every program type; the dashboard
+                birthday prompt awards this many loyalty points. */}
+            <div id="birthday-bonus" className="border-t pt-4 flex items-center justify-between gap-4">
+              <div className="flex items-center gap-2 min-w-0">
+                <Gift className="w-4 h-4 text-primary shrink-0" />
+                <div className="min-w-0">
+                  <Label className="text-sm">Birthday Bonus</Label>
+                  <p className="text-xs text-muted-foreground">{unitName} from the Dashboard birthday prompt. 0 disables.</p>
+                </div>
+              </div>
+              <Input
+                type="number" step="1" min="0"
+                value={form.birthdayBonusPoints}
+                onChange={(e) => set("birthdayBonusPoints", e.target.value)}
+                className="w-24 shrink-0"
+              />
+            </div>
           </CardContent>
         </Card>
 

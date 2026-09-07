@@ -4,17 +4,13 @@ import { useGetLoyaltyLeaderboard, useGetLoyaltySettings } from "@workspace/api-
 import { loyaltyUnitName } from "@/lib/loyalty-naming";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { CustomerAvatar } from "@/components/customers/CustomerAvatar";
 import { Progress } from "@/components/ui/progress";
 import {
   Trophy, Medal, Crown, TrendingUp, Users, ArrowLeft,
 } from "lucide-react";
 import { Link } from "wouter";
 import { cn } from "@/lib/utils";
-
-function getInitials(first?: string | null, last?: string | null) {
-  return `${(first ?? "").charAt(0)}${(last ?? "").charAt(0)}`.toUpperCase();
-}
 
 const RANK_ICONS = [
   { icon: Crown, color: "text-yellow-500", bg: "bg-yellow-500/10", label: "1st" },
@@ -110,11 +106,13 @@ export default function ManagementLoyaltyLeaderboardPage() {
                       </div>
 
                       {/* Avatar */}
-                      <Avatar className="w-10 h-10 shrink-0">
-                        <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">
-                          {getInitials(customer.firstName, customer.lastName)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <CustomerAvatar
+                        firstName={customer.firstName}
+                        lastName={customer.lastName}
+                        photoUrl={(customer as { photoUrl?: string | null }).photoUrl}
+                        className="w-10 h-10"
+                        textClassName="text-sm"
+                      />
 
                       {/* Customer info */}
                       <div className="flex-1 min-w-0">

@@ -87,7 +87,11 @@ export class ObjectStorageService {
     return null;
   }
 
-  async downloadObject(file: File, cacheTtlSec: number = 3600): Promise<Response> {
+  async downloadObject(
+    file: File,
+    cacheTtlSec: number = 3600,
+    immutable: boolean = false,
+  ): Promise<Response> {
     const [metadata] = await file.getMetadata();
     const aclPolicy = await getObjectAclPolicy(file);
     const isPublic = aclPolicy?.visibility === "public";
@@ -97,13 +101,27 @@ export class ObjectStorageService {
 
     const headers: Record<string, string> = {
       "Content-Type": (metadata.contentType as string) || "application/octet-stream",
-      "Cache-Control": `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}`,
+      "Cache-Control":
+        `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}` +
+        (immutable ? ", immutable" : ""),
     };
     if (metadata.size) {
       headers["Content-Length"] = String(metadata.size);
     }
+    if (metadata.etag) {
+      headers["ETag"] = String(metadata.etag);
+    }
 
     return new Response(webStream, { headers });
+  }
+
+  /**
+   * Fetch an object's bytes. Used to hash legacy uploads during the media
+   * library backfill.
+   */
+  async readObjectBytes(file: File): Promise<Buffer> {
+    const [contents] = await file.download();
+    return contents;
   }
 
   async getObjectEntityUploadURL(merchantId: string): Promise<string> {
@@ -126,6 +144,71 @@ export class ObjectStorageService {
       method: "PUT",
       ttlSec: 900,
     });
+  }
+
+  /**
+   * Presigned PUT for a content-addressed upload.
+   *
+   * The key is derived from the file's SHA-256, so uploading identical bytes
+   * twice targets the same object and the second write is a harmless overwrite
+   * with the same content. Callers should check merchant_assets first and skip
+   * the upload entirely on a hit.
+   */
+  async getAssetUploadURL(merchantId: string, sha256: string): Promise<string> {
+    const privateObjectDir = this.getPrivateObjectDir();
+    const fullPath = `${privateObjectDir}/merchants/${merchantId}/assets/${sha256}`;
+    const { bucketName, objectName } = parseObjectPath(fullPath);
+
+    return signObjectURL({
+      bucketName,
+      objectName,
+      method: "PUT",
+      ttlSec: 900,
+    });
+  }
+
+  /** The normalized path an asset with this hash occupies for this merchant. */
+  assetObjectPath(merchantId: string, sha256: string): string {
+    return `/objects/merchants/${merchantId}/assets/${sha256}`;
+  }
+
+  async objectExists(objectPath: string): Promise<boolean> {
+    try {
+      await this.getObjectEntityFile(objectPath);
+      return true;
+    } catch (error) {
+      if (error instanceof ObjectNotFoundError) return false;
+      throw error;
+    }
+  }
+
+  /**
+   * Permanently remove a stored object. Callers MUST verify the object is
+   * unreferenced first — see findAssetUsage in lib/assetUsage.
+   */
+  async deleteObjectEntity(objectPath: string): Promise<void> {
+    const file = await this.getObjectEntityFile(objectPath);
+    await file.delete({ ignoreNotFound: true });
+  }
+
+  /**
+   * List every stored object under a merchant's private prefix, as normalized
+   * `/objects/...` paths.
+   */
+  async listMerchantObjects(merchantId: string): Promise<Array<{ objectPath: string; size: number; contentType: string }>> {
+    let entityDir = this.getPrivateObjectDir();
+    if (!entityDir.endsWith("/")) entityDir = `${entityDir}/`;
+
+    const { bucketName, objectName: prefixBase } = parseObjectPath(entityDir);
+    const prefix = `${prefixBase}merchants/${merchantId}/`;
+
+    const [files] = await objectStorageClient.bucket(bucketName).getFiles({ prefix });
+
+    return files.map((file) => ({
+      objectPath: `/objects/${file.name.slice(prefixBase.length)}`,
+      size: Number(file.metadata.size ?? 0),
+      contentType: String(file.metadata.contentType ?? "application/octet-stream"),
+    }));
   }
 
   async getObjectEntityFile(objectPath: string): Promise<File> {

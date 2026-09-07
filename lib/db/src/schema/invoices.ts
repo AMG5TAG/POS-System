@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, json, index, type AnyPgColumn } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, json, index, uniqueIndex, type AnyPgColumn } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -27,6 +27,10 @@ export const invoicesTable = pgTable("invoices", {
   viewedAt: timestamp("viewed_at", { withTimezone: true }),
   notes: text("notes"),
   events: json("events"),
+  // Optional planned instalment schedule: an array of { label?, amount, dueDate? }.
+  // Payments are still tracked by the single `amountPaid` total; instalment
+  // coverage (paid / partial / due) is derived from it cumulatively (FIFO).
+  paymentSchedule: json("payment_schedule"),
   discountType:  text("discount_type"),
   discountValue: numeric("discount_value", { precision: 10, scale: 2 }),
   discountTotal: numeric("discount_total", { precision: 10, scale: 2 }),
@@ -43,6 +47,9 @@ export const invoicesTable = pgTable("invoices", {
   index("invoices_merchant_id_idx").on(t.merchantId),
   index("invoices_merchant_id_status_idx").on(t.merchantId, t.status),
   index("invoices_merchant_id_paid_at_idx").on(t.merchantId, t.paidAt),
+  // Invoice numbers are unique per merchant — the generator now derives max+1
+  // (not count+1) and retries on conflict, and this index makes it authoritative.
+  uniqueIndex("invoices_merchant_invoice_number_unique").on(t.merchantId, t.invoiceNumber),
 ]);
 
 export const insertInvoiceSchema = createInsertSchema(invoicesTable).omit({ id: true, createdAt: true, updatedAt: true });

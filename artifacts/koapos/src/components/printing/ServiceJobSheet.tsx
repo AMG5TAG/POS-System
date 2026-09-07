@@ -2,8 +2,10 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
-import { publicOrigin } from "@/lib/public-url";
+import { serviceJobQrUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
+import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /**
  * Unified, print-ready Service Job Sheet.
@@ -29,9 +31,6 @@ export interface ServiceSheetBranding {
   logo?: string;
   /** Configured social links (e.g. { facebook: "...", instagram: "..." }). */
   socialLinks?: Record<string, string>;
-  /** Business username — forms the Tech App address (/b/:username/t/webapp).
-      When present, the sheet QR deep-links into the Tech App for this job. */
-  techAppUsername?: string;
 }
 
 export interface ServiceSheetFormFile {
@@ -39,29 +38,9 @@ export interface ServiceSheetFormFile {
   detail?: string;
 }
 
-/** Canonical human-readable labels for service-job status codes. */
-const STATUS_LABELS: Record<string, string> = {
-  pending: "Pending",
-  "in-progress": "In Progress",
-  "awaiting-parts": "Awaiting Parts",
-  "awaiting-stock": "Awaiting Stock",
-  "at-repairer": "At Repairer",
-  "awaiting-partner-approval": "Awaiting Partner Approval",
-  "partner-replacement": "Partner Replacement",
-  "awaiting-customer": "Awaiting Customer",
-  completed: "Completed",
-  cancelled: "Cancelled",
-};
-
-function humanizeStatus(s: string): string {
-  if (!s) return "";
-  return STATUS_LABELS[s] ?? s.replace(/[-_]/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
-}
-
 export interface ServiceSheetData {
-  /** Database id — drives the bottom-left QR code that deep-links into the
-      Tech App for this job (/b/:username/t/webapp?job=:id). Omit to print
-      without a QR. */
+  /** Database id — drives the bottom-left QR code, which encodes the job's
+      stable resolver (/api/qr/j/:id). Omit to print without a QR. */
   jobId?: number | null;
   jobNumber: string;
   date?: string | number | Date | null;
@@ -72,6 +51,9 @@ export interface ServiceSheetData {
   customerEmail?: string;
   deviceType?: string;
   deviceModel?: string;
+  deviceColour?: string;
+  /** Items booked in under this job (media stacks); omitted for single devices. */
+  deviceQuantity?: number;
   serialNumber?: string;
   condition?: string;
   workDescription?: string;
@@ -137,18 +119,6 @@ function buildQr(text: string): { path: string; size: number } | null {
   }
 }
 
-function mergeCredentials(accounts?: string, logins?: string): string[] {
-  const accts = (accounts ?? "").split("\n").map((s) => s.trim());
-  const pins = (logins ?? "").split("\n").map((s) => s.trim());
-  const max = Math.max(accts.length, pins.length);
-  return Array.from({ length: max }, (_, i) => {
-    const a = accts[i] || "";
-    const p = pins[i] || "";
-    if (a && p) return `${a} — ${p}`;
-    return a || p;
-  }).filter(Boolean);
-}
-
 export function ServiceJobSheet({
   id,
   data,
@@ -171,25 +141,22 @@ export function ServiceJobSheet({
         : "16px";
 
   const dateStr = data.date ? new Date(data.date).toLocaleDateString("en-AU") : "";
-  const credentialLines = mergeCredentials(data.accounts, data.logins);
+  const credentialLines = mergeCredentialLines(data.accounts, data.logins, "\u2014");
   const photos = (data.photos ?? []).filter(Boolean);
   const socialEntries = formatSocialEntries(branding.socialLinks);
 
   const showCustomer = opts.showCustomerDetails;
   const showDevice = opts.showDeviceDetails;
 
-  /* Bottom-left QR — scanning opens the job in the Tech App
-     (/b/:username/t/webapp?job=:id). Falls back to the staff Service View only
-     when no business username is configured (the Tech App can't exist without
-     one). The `?job=` deep link is also understood by the Tech App's in-app
-     scanner. */
+  /* Bottom-left QR — the sheet is printed once and then follows the device, so
+     the ink carries the job's stable resolver rather than a destination that
+     goes stale: the server sends a scan to the Tech App while the job is open
+     and to the customer's portal once it is completed. */
+  const showQr = opts.showServiceQr !== false; // default on; template toggle can hide it
   const qrTarget = useMemo(() => {
-    if (data.jobId == null) return null;
-    if (branding.techAppUsername) {
-      return `${publicOrigin()}/b/${encodeURIComponent(branding.techAppUsername)}/t/webapp?job=${data.jobId}`;
-    }
-    return `${publicOrigin()}/service-jobs/${data.jobId}`;
-  }, [data.jobId, branding.techAppUsername]);
+    if (data.jobId == null || !showQr) return null;
+    return serviceJobQrUrl(data.jobId);
+  }, [data.jobId, showQr]);
   const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
 
   return (
@@ -259,7 +226,7 @@ export function ServiceJobSheet({
             <div style={boxStyle}>
               <div style={labelStyle}>Customer</div>
               <div><strong>Name:</strong> {data.customerName || "Walk-in"}</div>
-              {data.customerPhone && <div><strong>Phone:</strong> {data.customerPhone}</div>}
+              {data.customerPhone && <div><strong>Phone:</strong> {formatPhoneForDisplay(data.customerPhone)}</div>}
               {data.customerEmail && <div style={wrapStyle}><strong>Email:</strong> {data.customerEmail}</div>}
             </div>
           )}
@@ -268,6 +235,8 @@ export function ServiceJobSheet({
               <div style={labelStyle}>Device</div>
               {data.deviceType && <div><strong>Type:</strong> {data.deviceType}</div>}
               {data.deviceModel && <div><strong>Model:</strong> {data.deviceModel}</div>}
+              {data.deviceColour && <div><strong>Colour:</strong> {data.deviceColour}</div>}
+              {data.deviceQuantity != null && <div><strong>Quantity:</strong> {data.deviceQuantity}</div>}
               {data.serialNumber && <div><strong>Serial:</strong> {data.serialNumber}</div>}
               {data.condition && <div><strong>Condition:</strong> {data.condition}</div>}
             </div>
@@ -423,7 +392,7 @@ export function ServiceJobSheet({
         </div>
       )}
 
-      {/* ── Tech App QR — bottom-left corner ───────────────────── */}
+      {/* ── Service job QR — bottom-left corner ────────────────── */}
       {qr && (
         <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-start", alignItems: "flex-end", gap: "8px" }}>
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "4px", padding: "5px", background: "white" }}>
@@ -440,8 +409,8 @@ export function ServiceJobSheet({
             </svg>
           </div>
           <div style={{ fontSize: "9px", color: MUTED, lineHeight: 1.4, paddingBottom: "2px" }}>
-            Scan to open in the<br />
-            <strong>Tech App</strong> — {data.jobNumber}
+            Scan to open<br />
+            <strong>this job</strong> — {data.jobNumber}
           </div>
         </div>
       )}

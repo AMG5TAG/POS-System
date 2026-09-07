@@ -1,4 +1,4 @@
-import { pgTable, text, serial, timestamp, integer, numeric, index } from "drizzle-orm/pg-core";
+import { pgTable, text, serial, timestamp, integer, numeric, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
@@ -15,7 +15,11 @@ export const serviceJobsTable = pgTable("service_jobs", {
   bookInDate: text("book_in_date").notNull().default(""),
   // Device info
   deviceType: text("device_type"),
+  /** Brand / model, e.g. "Apple MacBook Pro". Labelled "Brand" on the booking form. */
   deviceDescription: text("device_description"),
+  deviceColour: text("device_colour"),
+  /** Items booked in under one job — media types arrive as a stack of tapes/discs. */
+  deviceQuantity: integer("device_quantity"),
   serialNumber: text("serial_number"),
   condition: text("condition"),
   partnerRepairCode: text("partner_repair_code"),
@@ -29,6 +33,10 @@ export const serviceJobsTable = pgTable("service_jobs", {
   completedAt: timestamp("completed_at", { withTimezone: true }),
   // If this job is a no-charge rework, the original job it redoes.
   reworkOfJobId: integer("rework_of_job_id"),
+  // If this job was opened by reopening a completed job (a fresh, chargeable
+  // repair), the original job it continues from. Distinct from reworkOfJobId:
+  // a rework is a no-charge redo, a reopen is a new repair linked for history.
+  reopenedFromJobId: integer("reopened_from_job_id"),
   // Estimate approval (customer authorised the quoted work before it begins).
   // Set when a linked quote is accepted via the portal or recorded in-store.
   estimateApprovedAt: timestamp("estimate_approved_at", { withTimezone: true }),
@@ -64,6 +72,9 @@ export const serviceJobsTable = pgTable("service_jobs", {
 }, (t) => [
   index("service_jobs_merchant_id_idx").on(t.merchantId),
   index("service_jobs_merchant_id_created_at_idx").on(t.merchantId, t.createdAt),
+  // Job numbers are unique per merchant — enforced in the DB so a concurrent
+  // create can't race past the read-max+1 generator (retried on conflict).
+  uniqueIndex("service_jobs_merchant_job_number_unique").on(t.merchantId, t.jobNumber),
 ]);
 
 export const insertServiceJobSchema = createInsertSchema(serviceJobsTable).omit({ id: true, createdAt: true, updatedAt: true });

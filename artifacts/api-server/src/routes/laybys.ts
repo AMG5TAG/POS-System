@@ -1,8 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db, laybysTable, laybyPaymentsTable, customersTable, productsTable } from "@workspace/db";
-import { eq, and, desc, ilike, or, sql, count } from "drizzle-orm";
+import { eq, and, desc, ilike, or, sql, count, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
+import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import {
   GetLaybyParams,
   UpdateLaybyParams,
@@ -18,6 +20,11 @@ type LaybyRow = typeof laybysTable.$inferSelect;
 type CustomerRow = typeof customersTable.$inferSelect;
 type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0];
 
+/** Round to cents. Layby balances accumulate across many installments, so every
+ *  amount is rounded before it touches amountPaid to stop float drift (matches
+ *  round2 in invoices.ts / transactions.ts). */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 /* ── Layby stock + customer-spend side effects ───────────────────────────────
  * A completed layby is treated like a POS sale / paid invoice: it deducts stock
  * for each product-linked line item and rolls its total into the customer's
@@ -25,6 +32,28 @@ type DbExecutor = typeof db | Parameters<Parameters<typeof db.transaction>[0]>[0
  * completed state (cancelled / re-opened) so the figures never drift. Layby
  * line items always carry a real productId. */
 interface LaybyStockLine { productId?: number | null; quantity?: number | null }
+
+/** Snapshot each product-linked layby line item's cost price (server-authoritative)
+ *  so completed-layby COGS reflects cost at sale, not the product's later cost. */
+async function snapshotLaybyItemCosts(merchantId: number, items: unknown): Promise<unknown> {
+  if (!Array.isArray(items)) return items;
+  const arr = items as Array<Record<string, unknown>>;
+  const ids = [...new Set(arr.map((l) => l.productId).filter((v): v is number => typeof v === "number" && Number.isInteger(v) && v > 0))];
+  if (ids.length === 0) return items;
+  const rows = await db
+    .select({ id: productsTable.id, costPrice: productsTable.costPrice })
+    .from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)));
+  const costById = new Map(rows.map((r) => [r.id, r.costPrice != null ? parseFloat(r.costPrice) : NaN]));
+  return arr.map((l) => {
+    const pid = l.productId;
+    if (typeof pid === "number" && costById.has(pid)) {
+      const c = costById.get(pid)!;
+      if (Number.isFinite(c)) return { ...l, costPrice: c };
+    }
+    return l;
+  });
+}
 
 function aggregateQtyByProduct(items: unknown): Map<number, number> {
   const map = new Map<number, number>();
@@ -106,13 +135,15 @@ function fmtLayby(l: LaybyRow, customer?: CustomerRow | null) {
   };
 }
 
-async function generateReference(merchantId: number): Promise<string> {
-  const [row] = await db
-    .select({ cnt: count() })
+// Reference = LB-<max existing suffix + 1 + tryIndex>. max+1 (not count+1) so a
+// deleted layby never causes its reference to be re-issued; tryIndex lets the
+// caller's retry step past a reference a concurrent create just claimed.
+async function generateReference(merchantId: number, tryIndex = 0): Promise<string> {
+  const existing = await db
+    .select({ n: laybysTable.reference })
     .from(laybysTable)
     .where(eq(laybysTable.merchantId, merchantId));
-  const num = (row?.cnt ?? 0) + 1;
-  return `LB-${String(num).padStart(4, "0")}`;
+  return `LB-${String(nextSequential(existing.map((r) => r.n), tryIndex)).padStart(4, "0")}`;
 }
 
 // GET /laybys
@@ -177,12 +208,19 @@ router.post("/laybys", requireAuth, async (req, res) => {
     return;
   }
 
-  const reference = await generateReference(merchantId);
   // A deposit covering the full amount completes the layby immediately, which
   // (like a POS sale) deducts stock and rolls into the customer's spend.
   const completedOnCreate = depositAmount >= totalAmount;
+  const itemsWithCost = await snapshotLaybyItemCosts(merchantId, items);
+  // Pass-on surcharge on the deposit, collected on top of it, when the deposit's
+  // payment method passes its acceptance cost to the customer.
+  const depositSurchargeMap = await getPassOnSurchargeMap(merchantId);
+  const depositSurcharge = surchargeForLeg(depositSurchargeMap, paymentMethod ?? "cash", depositAmount);
 
-  const layby = await db.transaction(async (tx) => {
+  // Derive the reference inside the retry so a concurrent create can't claim the
+  // same LB-#### (the unique index enforces it; the retry bumps the suffix).
+  const layby = await withUniqueRetry("laybys_merchant_reference_unique", (tryIndex) => db.transaction(async (tx) => {
+    const reference = await generateReference(merchantId, tryIndex);
     const [created] = await tx
       .insert(laybysTable)
       .values({
@@ -190,7 +228,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
         customerId: customerId ?? null,
         staffId: typeof staffId === "number" ? staffId : null,
         reference,
-        items,
+        items: itemsWithCost,
         totalAmount: String(totalAmount),
         depositAmount: String(depositAmount),
         amountPaid: String(depositAmount),
@@ -206,6 +244,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
         laybyId: created.id,
         amount: String(depositAmount),
         paymentMethod: paymentMethod ?? "cash",
+        surchargeAmount: String(depositSurcharge),
         note: "Initial deposit",
       });
     }
@@ -214,7 +253,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
       await applyLaybyCompletion(tx, merchantId, created);
     }
     return created;
-  });
+  }));
 
   let customer: CustomerRow | undefined;
   if (customerId) {
@@ -344,19 +383,26 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
   const { amount, paymentMethod, payments, note } = req.body ?? {};
+  const rawKey = (req.body ?? {}).idempotencyKey;
+  const idempotencyKey = typeof rawKey === "string" && rawKey.trim() ? rawKey.trim() : null;
 
   // Normalise to a list of payment legs. A split payment supplies `payments`
   // (each method + amount, recorded as its own layby_payments row so reporting
-  // attributes each leg to its method); a single payment is one leg.
+  // attributes each leg to its method); a single payment is one leg. Amounts are
+  // rounded to cents so accumulated float error can't creep into amountPaid.
   const isSplit = Array.isArray(payments) && payments.length > 0;
   const legs: { amount: number; paymentMethod: string }[] = isSplit
-    ? payments.map((p: { amount?: unknown; method?: unknown }) => ({ amount: Number(p.amount), paymentMethod: typeof p.method === "string" && p.method ? p.method : "cash" }))
-    : [{ amount: Number(amount), paymentMethod: typeof paymentMethod === "string" && paymentMethod ? paymentMethod : "cash" }];
+    ? payments.map((p: { amount?: unknown; method?: unknown }) => ({ amount: round2(Number(p.amount)), paymentMethod: typeof p.method === "string" && p.method ? p.method : "cash" }))
+    : [{ amount: round2(Number(amount)), paymentMethod: typeof paymentMethod === "string" && paymentMethod ? paymentMethod : "cash" }];
   if (legs.some((l) => !Number.isFinite(l.amount) || l.amount <= 0)) {
     res.status(400).json({ error: "Invalid payment amount" });
     return;
   }
-  const payTotal = legs.reduce((s, l) => s + l.amount, 0);
+  const payTotal = round2(legs.reduce((s, l) => s + l.amount, 0));
+
+  // Pass-on surcharge per leg, collected on top of the amount applied to the
+  // balance. Config is merchant-global, so read once outside the lock.
+  const surchargeMap = await getPassOnSurchargeMap(merchantId);
 
   // Lock the row, record the payment leg(s), and — if this payment settles the
   // layby in full — complete it (deducting stock + crediting customer spend),
@@ -371,18 +417,38 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
     if (!layby) return { error: 404 as const };
     if (layby.status !== "active") return { error: 400 as const };
 
+    // Idempotency: if this attempt's key already recorded a payment on this
+    // layby, return the layby unchanged instead of applying it twice. The row is
+    // locked FOR UPDATE above, so a concurrent duplicate serialises behind this
+    // check rather than racing it.
+    if (idempotencyKey) {
+      const [dupe] = await tx
+        .select({ id: laybyPaymentsTable.id })
+        .from(laybyPaymentsTable)
+        .where(and(eq(laybyPaymentsTable.laybyId, id), eq(laybyPaymentsTable.idempotencyKey, idempotencyKey)));
+      if (dupe) return { row: layby, deduped: true as const };
+    }
+
     await tx.insert(laybyPaymentsTable).values(
-      legs.map((l) => ({
+      legs.map((l, i) => ({
         laybyId: id,
         amount: String(l.amount),
         paymentMethod: l.paymentMethod,
+        // Single-method payments only (split legs aren't surcharged), matching
+        // the POS terminal and what the payment UI collects.
+        surchargeAmount: String(isSplit ? 0 : surchargeForLeg(surchargeMap, l.paymentMethod, l.amount)),
         note: note ?? null,
+        // Stamp the key on the first leg only — the unique (laybyId, key) index
+        // permits the remaining split legs to carry null.
+        idempotencyKey: i === 0 ? idempotencyKey : null,
       })),
     );
 
-    const newPaid = parseFloat(layby.amountPaid as string) + payTotal;
     const total = parseFloat(layby.totalAmount as string);
-    const nowCompleted = newPaid >= total;
+    const newPaid = round2(parseFloat(layby.amountPaid as string) + payTotal);
+    // Epsilon tolerance so a cent of float noise doesn't leave a fully-paid
+    // layby stuck "active" (matches the invoice payment completion check).
+    const nowCompleted = newPaid >= total - 0.005;
 
     const [row] = await tx
       .update(laybysTable)

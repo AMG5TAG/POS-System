@@ -5,6 +5,8 @@ import {
   useListServiceJobs,
   useDeleteServiceJob,
   useGetMerchant,
+  useGetPosSettings,
+  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -31,17 +33,31 @@ import {
   Package,
   Wrench,
   History,
+  Search,
+  Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
+import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
+import { callTimes } from "@/lib/service-job-notes";
 import { SendButton } from "@/components/send/send-dialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
-import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
+import { ServiceJobSheet, type ServiceSheetBranding, type ServiceSheetData } from "@/components/printing/ServiceJobSheet";
+import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
+import { parseHardwareConfig } from "@/lib/hardware-config";
+import {
+  isServiceJobRouteSilent, printServiceJobDocument, serviceJobPaperFromOpts,
+  serviceDocketDensity, SERVICE_PAPER_LABEL, type ServicePaper,
+} from "@/lib/service-job-print";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
+
+/* The Called column only means anything once the job is waiting to be picked
+   up — that is the point at which someone has to ring the customer. */
+const AWAITING_PICKUP = "awaiting-pickup";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   pending:                     { label: "Pending",                     className: "bg-amber-50 text-amber-700 border-amber-300" },
@@ -52,31 +68,10 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   "awaiting-partner-approval": { label: "Awaiting Partner Approval",   className: "bg-indigo-50 text-indigo-700 border-indigo-300" },
   "partner-replacement":       { label: "Partner Replacement",         className: "bg-teal-50 text-teal-700 border-teal-300" },
   "awaiting-customer":         { label: "Awaiting Customer",           className: "bg-orange-50 text-orange-600 border-orange-300" },
+  "awaiting-pickup":           { label: "Completed - Awaiting Pickup", className: "bg-lime-50 text-lime-700 border-lime-300" },
   completed:                   { label: "Completed",                   className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
   cancelled:                   { label: "Cancelled",                   className: "bg-red-50 text-red-700 border-red-300" },
 };
-
-/* ─── Note helpers ──────────────────────────────────────────────────────── */
-
-const NOTE_SEP = "\n\n---\n\n";
-
-function parseNotes(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw.split("---").map((s) => s.trim()).filter(Boolean);
-}
-
-function buildNoteTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
-}
-
-function appendNote(existing: string | null | undefined, text: string): string {
-  const ts = buildNoteTimestamp();
-  const entry = `${ts} ${text.trim()}`;
-  const parts = parseNotes(existing);
-  return [...parts, entry].join(NOTE_SEP);
-}
 
 function getStatus(s: string) {
   return STATUS_CONFIG[s] ?? { label: s, className: "bg-muted text-muted-foreground border-border" };
@@ -190,27 +185,32 @@ function PrintChoiceDialog({
   onClose,
   onSelect,
   defaultCopies,
+  defaultPaper,
   initialMode,
 }: {
   job: ServiceJob | null;
   onClose: () => void;
-  onSelect: (mode: "sheet" | "sticker", copies: number) => void;
+  onSelect: (mode: "sheet" | "sticker", copies: number, paper: ServicePaper) => void;
   defaultCopies: number;
+  /** Paper pre-selected from the saved Service Ticket template. */
+  defaultPaper: ServicePaper;
   initialMode?: "sheet" | null;
 }) {
   const [mode, setMode] = useState<"sheet" | "sticker" | null>(initialMode ?? null);
   const [copies, setCopies] = useState(defaultCopies);
+  const [paper, setPaper] = useState<ServicePaper>(defaultPaper);
 
   // Reset when dialog opens
   useEffect(() => {
     if (job) {
       setMode(initialMode ?? null);
       setCopies(defaultCopies);
+      setPaper(defaultPaper);
     }
-  }, [job, initialMode, defaultCopies]);
+  }, [job, initialMode, defaultCopies, defaultPaper]);
 
   const handleCardClick = (m: "sheet" | "sticker") => {
-    if (m === "sticker") { onSelect("sticker", 1); return; }
+    if (m === "sticker") { onSelect("sticker", 1, paper); return; }
     setMode("sheet");
   };
 
@@ -227,8 +227,8 @@ function PrintChoiceDialog({
           >
             <Printer className="w-8 h-8 text-primary" />
             <div className="text-center">
-              <p className="font-semibold text-sm">A4 Service Sheet</p>
-              <p className="text-xs text-muted-foreground mt-0.5">Full job details on A4</p>
+              <p className="font-semibold text-sm">Service Job</p>
+              <p className="text-xs text-muted-foreground mt-0.5">A4 sheet or 80mm docket</p>
             </div>
           </button>
           <button
@@ -243,25 +243,41 @@ function PrintChoiceDialog({
           </button>
         </div>
         {mode === "sheet" && (
-          <div className="flex items-center justify-between border-t pt-4 gap-3">
-            <div className="flex items-center gap-2">
-              <Label className="text-sm whitespace-nowrap">Copies</Label>
-              <Input
-                type="number"
-                min="1"
-                max="20"
-                value={copies}
-                onChange={(e) => setCopies(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
-                className="w-16 h-8 text-center text-sm"
-              />
+          <div className="border-t pt-4 space-y-4">
+            {/* Paper choice — the A4 sheet and the 80mm docket carry the same
+                fields, so this is purely where it prints. */}
+            <div className="grid grid-cols-2 gap-2">
+              {(["a4", "80mm"] as const).map((p) => (
+                <button
+                  key={p}
+                  onClick={() => setPaper(p)}
+                  className={`px-3 py-2 rounded-lg border-2 text-left transition-colors ${paper === p ? "border-primary bg-primary/5" : "border-border hover:border-primary/50"}`}
+                >
+                  <p className="text-sm font-semibold">{SERVICE_PAPER_LABEL[p].title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">{SERVICE_PAPER_LABEL[p].detail}</p>
+                </button>
+              ))}
             </div>
-            <button
-              onClick={() => onSelect("sheet", copies)}
-              className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
-            >
-              <Printer className="w-3.5 h-3.5" />
-              Print {copies > 1 ? `${copies} Copies` : "1 Copy"}
-            </button>
+            <div className="flex items-center justify-between gap-3">
+              <div className="flex items-center gap-2">
+                <Label className="text-sm whitespace-nowrap">Copies</Label>
+                <Input
+                  type="number"
+                  min="1"
+                  max="20"
+                  value={copies}
+                  onChange={(e) => setCopies(Math.max(1, Math.min(20, parseInt(e.target.value) || 1)))}
+                  className="w-16 h-8 text-center text-sm"
+                />
+              </div>
+              <button
+                onClick={() => onSelect("sheet", copies, paper)}
+                className="flex items-center gap-1.5 px-4 py-2 rounded-lg bg-primary text-primary-foreground text-sm font-semibold hover:bg-primary/90 transition-colors"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                Print {copies > 1 ? `${copies} Copies` : "1 Copy"}
+              </button>
+            </div>
           </div>
         )}
       </DialogContent>
@@ -276,44 +292,127 @@ export default function ServiceJobsPage() {
   const [collapsed, setCollapsed]           = useState(false);
   const [priority, setPriority]             = useState("all");
   const [statusFilter, setStatus]           = useState("all");
+  const [search, setSearch]                 = useState("");
   const [selected, setSelected]             = useState<Set<number>>(new Set());
   const [viewing, setViewing]               = useState<ServiceJob | null>(null);
   const [printChoiceJob, setPrintChoiceJob] = useState<ServiceJob | null>(null);
-  const [printState, setPrintState]         = useState<{ job: ServiceJob; copies: number } | null>(null);
+  const [printState, setPrintState]         = useState<{ job: ServiceJob; copies: number; paper: ServicePaper } | null>(null);
   const [activeSortKey, setSortKey]         = useState<SortKey>("bookInDate");
   const [sortDir, setSortDir]               = useState<SortDir>("desc");
 
   const queryClient = useQueryClient();
   const { data: jobsData, isLoading } = useListServiceJobs();
+  /* Management › Service Options › Printing — what pressing Print produces. */
+  const { data: serviceSettings } = useGetServiceSettings();
   const deleteMutation = useDeleteServiceJob();
 
   const { data: merchant }   = useGetMerchant({ query: { queryKey: ["merchant"] } });
+  const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
+  const hardware              = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const { profile }          = useBusinessProfile();
   const businessName         = merchant?.businessName ?? "Your Business";
   const brandColor           = (profile.brandColors as string[] | undefined)?.[0] ?? "#efbf04";
   const { printStickers } = useStickerPrinter();
 
-  // Sheet print: reveal the hidden A4 print area, fire window.print(), then clean up.
+  /* Read active service-sheet template + opts from Management > Templates */
+  const { opts: serviceOpts, fontCss: serviceFontCss, selectedStyle: serviceStyle } = useSalesTemplate("Service_Ticket");
+  /* The saved Service Ticket style picks the docket layout: the thermal styles
+     print the roll, and the compact one prints it tighter. */
+  const docketDensity = serviceDocketDensity(serviceStyle);
+
+  /* Branding + data shared by the A4 sheet and the 80mm docket, so the two
+     outputs can never drift apart. */
+  const sheetBranding: ServiceSheetBranding = {
+    businessName,
+    abn: (profile as { abn?: string }).abn,
+    website: (profile as { website?: string }).website,
+    email: (profile as { contactEmail?: string }).contactEmail ?? merchant?.email ?? undefined,
+    address: [
+      (merchant as { address?: string } | undefined)?.address,
+      (merchant as { city?: string } | undefined)?.city,
+      (profile as { state?: string }).state,
+      (profile as { postcode?: string }).postcode,
+    ].filter(Boolean).join(", "),
+    brandColor,
+    logo: (profile as { logo?: string }).logo,
+    socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
+  };
+
+  const buildSheetData = (pj: ServiceJob): ServiceSheetData => ({
+    jobId: pj.id ?? null,
+    jobNumber: pj.jobNumber ?? `SVC-${pj.id ?? ""}`,
+    date: pj.bookInDate || null,
+    status: pj.status,
+    customerName: pj.customerName ?? "Walk-in",
+    customerPhone: pj.customerPhone ?? undefined,
+    customerEmail: pj.customerEmail ?? undefined,
+    deviceType: pj.deviceType ?? undefined,
+    deviceModel: pj.deviceDescription ?? undefined,
+    deviceColour: pj.deviceColour ?? undefined,
+    deviceQuantity: pj.deviceQuantity ?? undefined,
+    serialNumber: pj.serialNumber ?? undefined,
+    condition: pj.condition ?? undefined,
+    workDescription: pj.workDescription ?? undefined,
+    additionalEquipment: pj.additionalEquipment ?? undefined,
+    accounts: pj.accounts ?? undefined,
+    logins: pj.passwordOrPin ?? undefined,
+    notes: pj.notes ?? undefined,
+    photos: Array.isArray(pj.photos) ? (pj.photos as string[]) : undefined,
+    signature: pj.signature ?? undefined,
+    isCritical: !!pj.isCritical,
+    isUnderWarranty: !!pj.isUnderWarranty,
+    isPartnerRepair: !!pj.isPartnerRepair,
+    partnerRepairCode: pj.partnerRepairCode ?? undefined,
+  });
+
+  /* Job print: hand the job to the print router, which sends it straight to the
+     routed printer when one is reachable (ESC/POS over USB/serial, or the Print
+     Bridge) and otherwise reveals the hidden print area and uses window.print(). */
   useEffect(() => {
     if (!printState) return;
-    const t = setTimeout(() => {
-      document.body.setAttribute("data-print", "sj-sheet");
-      const cleanup = () => {
-        document.body.removeAttribute("data-print");
-        setPrintState(null);
-      };
-      // Use afterprint so the print area stays mounted until the browser is done rendering the print
-      window.addEventListener("afterprint", cleanup, { once: true });
-      window.print();
-      // Fallback: if afterprint never fires (some environments), clean up after 30 s
-      const fallback = window.setTimeout(cleanup, 30_000);
-      window.addEventListener("afterprint", () => window.clearTimeout(fallback), { once: true });
-    }, 150);
-    return () => clearTimeout(t);
-  }, [printState]);
+    let cancelled = false;
+    const timer = window.setTimeout(() => {
+      const { job, copies, paper } = printState;
+      const printMode = paper === "80mm" ? "sj-docket" : "sj-sheet";
 
-  /* Read active service-sheet template + opts from Management > Templates */
-  const { opts: serviceOpts, fontCss: serviceFontCss } = useSalesTemplate("Service_Ticket");
+      const browserFallback = () => new Promise<void>((resolve) => {
+        document.body.setAttribute("data-print", printMode);
+        let done = false;
+        let guard = 0;
+        const finish = () => {
+          if (done) return;
+          done = true;
+          window.clearTimeout(guard);
+          document.body.removeAttribute("data-print");
+          resolve();
+        };
+        // afterprint keeps the print area mounted until the browser is finished;
+        // some environments never fire it, hence the guard.
+        window.addEventListener("afterprint", finish, { once: true });
+        guard = window.setTimeout(finish, 30_000);
+        window.print();
+      });
+
+      void printServiceJobDocument({
+        paper,
+        copies,
+        hw: hardware,
+        data: buildSheetData(job),
+        branding: sheetBranding,
+        opts: serviceOpts,
+        fontCss: serviceFontCss,
+        density: docketDensity,
+        elementId: `${printMode}-print-area`,
+        browserFallback,
+      })
+        .then((method) => {
+          if (method !== "browser") toast.success(`${SERVICE_PAPER_LABEL[paper].title} sent to the printer`);
+        })
+        .catch((err) => toast.error(err instanceof Error ? err.message : "Couldn't print this job"))
+        .finally(() => { if (!cancelled) setPrintState(null); });
+    }, 150);
+    return () => { cancelled = true; window.clearTimeout(timer); };
+  }, [printState]);
 
   /* Repair sticker prints through the shared sticker printer so the saved
    * "repair" template (size + field toggles) is applied. The A4 sheet keeps its
@@ -329,14 +428,34 @@ export default function ServiceJobsPage() {
         fault:    job.workDescription ?? "",
         dueDate:  "",
         tech:     "",
+        // Device credentials (opt-in via the "Username"/"Password" label toggles).
+        // Both are stored newline-joined on the job; collapse to one line for the
+        // sticker and drop blanks so an empty credential doesn't print " / ".
+        username: (job.accounts ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
+        password: (job.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
+        // Tech App deep link for the optional service QR (shown when the saved
+        // repair template enables it).
+        serviceQrUrl: job.id != null ? serviceJobQrUrl(job.id) : "",
       },
     });
     if (!ok) toast.error("Couldn't open the print dialog — please try again");
   };
 
-  const startPrint = (job: ServiceJob, mode: "sheet" | "sticker", copies = 1) => {
+  const startPrint = (job: ServiceJob, mode: "sheet" | "sticker", copies = 1, paper: ServicePaper = "a4") => {
     if (mode === "sticker") { printRepairSticker(job); return; }
-    setPrintState({ job, copies });
+    setPrintState({ job, copies, paper });
+  };
+
+  /* Pressing Print. With a default nominated in Service Options it prints that
+     document outright; otherwise it opens the chooser, which is what every
+     merchant gets until they set one. */
+  const pressPrint = (job: ServiceJob) => {
+    switch (serviceSettings?.defaultPrint ?? "ask") {
+      case "a4":      startPrint(job, "sheet", 1, "a4");   return;
+      case "80mm":    startPrint(job, "sheet", 1, "80mm"); return;
+      case "sticker": startPrint(job, "sticker");          return;
+      default:        setPrintChoiceJob(job);
+    }
   };
 
   const jobs = Array.isArray(jobsData) ? jobsData : [];
@@ -354,6 +473,7 @@ export default function ServiceJobsPage() {
     setTab(t);
     setPriority("all");
     setStatus("all");
+    setSearch("");
     setSelected(new Set());
     setSortKey("bookInDate");
     setSortDir("desc");
@@ -370,11 +490,28 @@ export default function ServiceJobsPage() {
     }
   }, [routeParams?.id, jobs]);
 
-  /* Filter */
+  /* `viewing` is a snapshot taken when the row was clicked, but the dialog writes
+     back to the job — notes, a logged call, a quote raised against it — and then
+     invalidates this list. Without re-syncing from the refetched row those writes
+     are invisible until the dialog is closed and reopened. Compares by identity,
+     so this settles after the one refetch rather than looping. */
+  useEffect(() => {
+    if (!viewing) return;
+    const fresh = jobs.find((j) => j.id === viewing.id);
+    if (fresh && fresh !== viewing) setViewing(fresh);
+  }, [jobs, viewing]);
+
+  /* Filter — priority + status dropdowns plus a free-text search across the
+     job number, customer, device and fault fields. */
+  const q = search.trim().toLowerCase();
   const filtered = tabJobs.filter((j) => {
     if (priority === "critical" && !j.isCritical) return false;
     if (priority === "normal"   &&  j.isCritical) return false;
     if (statusFilter !== "all"  && j.status !== statusFilter) return false;
+    if (q && ![
+      j.jobNumber, j.customerName, j.customerPhone, j.customerEmail,
+      j.deviceType, j.deviceDescription, j.workDescription, j.serialNumber,
+    ].some((v) => (v ?? "").toString().toLowerCase().includes(q))) return false;
     return true;
   });
 
@@ -503,8 +640,17 @@ export default function ServiceJobsPage() {
         {!collapsed && (
           <>
             {/* Filter bar */}
-            <div className="flex items-center justify-between border-x border-b border-border bg-muted/20 px-5 py-2.5 gap-3">
-              <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between border-x border-b border-border bg-muted/20 px-5 py-2.5 gap-3">
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                  <Input
+                    value={search}
+                    onChange={(e) => setSearch(e.target.value)}
+                    placeholder="Search job #, customer, device…"
+                    className="h-8 text-xs w-64 pl-8 bg-background"
+                  />
+                </div>
                 <SlidersHorizontal className="w-4 h-4 text-muted-foreground shrink-0" />
                 <Select value={priority} onValueChange={setPriority}>
                   <SelectTrigger className="h-8 text-xs w-36 bg-background">
@@ -532,6 +678,7 @@ export default function ServiceJobsPage() {
                         <SelectItem value="awaiting-partner-approval">Awaiting Partner Approval</SelectItem>
                         <SelectItem value="partner-replacement">Partner Replacement</SelectItem>
                         <SelectItem value="awaiting-customer">Awaiting Customer</SelectItem>
+                        <SelectItem value="awaiting-pickup">Completed - Awaiting Pickup</SelectItem>
                       </>
                     ) : (
                       <>
@@ -585,12 +732,14 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Status",      "status")} />
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
+                        <th className="px-3 py-3 text-left font-medium select-none">Called</th>
                         <th className="px-3 py-3" />
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border bg-background">
                       {sorted.map((job) => {
                         const { label, className } = getStatus(job.status);
+                        const calls = callTimes(job.notes);
                         const isChecked = selected.has(job.id);
                         const isCompleted = job.status === "completed";
                         return (
@@ -649,6 +798,29 @@ export default function ServiceJobsPage() {
                               </span>
                             </td>
 
+                            {/* Blank unless the job is awaiting pickup: elsewhere
+                                "not called" is not outstanding work, and a dash on
+                                every other row would read as one. An empty box on a
+                                waiting job is the whole point — it is the customer
+                                nobody has rung yet. */}
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              {job.status !== AWAITING_PICKUP ? null : calls.length ? (
+                                <span
+                                  title={`Called ${calls[calls.length - 1]}${calls.length > 1 ? ` (${calls.length} calls)` : ""}`}
+                                  aria-label="Customer called"
+                                  className="inline-flex"
+                                >
+                                  <Check className="w-4 h-4 text-emerald-600" />
+                                </span>
+                              ) : (
+                                <span
+                                  title="Customer not called yet"
+                                  aria-label="Customer not called yet"
+                                  className="inline-block h-4 w-4 rounded-sm border border-muted-foreground/40"
+                                />
+                              )}
+                            </td>
+
                             <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-2">
                                 <SendButton
@@ -676,7 +848,7 @@ export default function ServiceJobsPage() {
                                   Send
                                 </SendButton>
                                 <button
-                                  onClick={() => setPrintChoiceJob(job)}
+                                  onClick={() => pressPrint(job)}
                                   className="flex items-center gap-1 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors"
                                 >
                                   <Printer className="w-3 h-3" />
@@ -711,96 +883,88 @@ export default function ServiceJobsPage() {
         onPrint={(job, mode) => {
           setViewing(null);
           if (mode === "sticker") { startPrint(job, "sticker"); return; }
-          setPrintChoiceJob(job);
+          pressPrint(job);
         }}
       />
 
       <PrintChoiceDialog
         job={printChoiceJob}
         onClose={() => setPrintChoiceJob(null)}
-        onSelect={(mode, copies) => { const job = printChoiceJob!; setPrintChoiceJob(null); startPrint(job, mode, copies); }}
+        onSelect={(mode, copies, paper) => { const job = printChoiceJob!; setPrintChoiceJob(null); startPrint(job, mode, copies, paper); }}
         defaultCopies={Math.max(1, parseInt(serviceOpts.defaultPrintCopies ?? "1") || 1)}
+        defaultPaper={serviceJobPaperFromOpts(serviceOpts, serviceStyle)}
       />
 
       {/* ── Print areas ─────────────────────────────────────────────────── */}
       {printState && (() => {
-        const pj = printState.job;
-        const printCopies = printState.copies;
-        const sheetData = {
-          jobId: pj.id ?? null,
-          jobNumber: pj.jobNumber ?? `SVC-${pj.id ?? ""}`,
-          date: pj.bookInDate || null,
-          status: pj.status,
-          customerName: pj.customerName ?? "Walk-in",
-          customerPhone: pj.customerPhone ?? undefined,
-          customerEmail: pj.customerEmail ?? undefined,
-          deviceType: pj.deviceType ?? undefined,
-          deviceModel: pj.deviceDescription ?? undefined,
-          serialNumber: pj.serialNumber ?? undefined,
-          condition: pj.condition ?? undefined,
-          workDescription: pj.workDescription ?? undefined,
-          additionalEquipment: pj.additionalEquipment ?? undefined,
-          accounts: pj.accounts ?? undefined,
-          logins: pj.passwordOrPin ?? undefined,
-          notes: pj.notes ?? undefined,
-          photos: Array.isArray(pj.photos) ? (pj.photos as string[]) : undefined,
-          signature: pj.signature ?? undefined,
-          isCritical: !!pj.isCritical,
-          isUnderWarranty: !!pj.isUnderWarranty,
-          isPartnerRepair: !!pj.isPartnerRepair,
-          partnerRepairCode: pj.partnerRepairCode ?? undefined,
-        };
-        const sheetBranding = {
-          businessName,
-          abn: (profile as { abn?: string }).abn,
-          website: (profile as { website?: string }).website,
-          email: (profile as { contactEmail?: string }).contactEmail ?? merchant?.email ?? undefined,
-          address: [
-            (merchant as { address?: string } | undefined)?.address,
-            (merchant as { city?: string } | undefined)?.city,
-            (profile as { state?: string }).state,
-            (profile as { postcode?: string }).postcode,
-          ].filter(Boolean).join(", "),
-          brandColor,
-          logo: (profile as { logo?: string }).logo,
-          socialLinks: (profile as { socialLinks?: Record<string, string> }).socialLinks,
-          techAppUsername: merchant?.username ?? undefined,
-        };
+        const pj = printState.paper;
+        const sheetData = buildSheetData(printState.job);
+        // A silent route (ESC/POS or the Print Bridge) repeats the job itself, so
+        // the markup only needs one copy. The browser dialog prints the page once,
+        // so every copy has to be laid out here.
+        const domCopies = isServiceJobRouteSilent(hardware, pj) ? 1 : printState.copies;
         return (
           <>
-            {/* Screen: hide the print area so it doesn't appear in the UI.
-               Print: show only the A4 service sheet. */}
+            {/* Screen: hide the print areas so they don't appear in the UI.
+               Print: show only the area matching the chosen paper. */}
             <style>{`
               @media screen {
-                #sj-sheet-print-area { display: none !important; }
+                #sj-sheet-print-area, #sj-docket-print-area { display: none !important; }
               }
               @media print {
                 body * { visibility: hidden !important; }
                 body[data-print="sj-sheet"] #sj-sheet-print-area,
-                body[data-print="sj-sheet"] #sj-sheet-print-area * { visibility: visible !important; }
-                body[data-print="sj-sheet"] #sj-sheet-print-area {
+                body[data-print="sj-sheet"] #sj-sheet-print-area *,
+                body[data-print="sj-docket"] #sj-docket-print-area,
+                body[data-print="sj-docket"] #sj-docket-print-area * { visibility: visible !important; }
+                body[data-print="sj-sheet"] #sj-sheet-print-area,
+                body[data-print="sj-docket"] #sj-docket-print-area {
                   display: block !important;
                   position: fixed !important; left: 0 !important; top: 0 !important;
-                  width: 210mm !important; box-sizing: border-box !important;
+                  box-sizing: border-box !important;
                 }
-                @page { size: A4 portrait; margin: 10mm; }
+                body[data-print="sj-sheet"] #sj-sheet-print-area { width: 210mm !important; }
+                body[data-print="sj-docket"] #sj-docket-print-area { width: 80mm !important; }
               }
             `}</style>
+            {/* @page can't be toggled by an attribute selector, so each paper
+                brings its own rule and only the active print area is visible. */}
+            <style>{pj === "80mm"
+              ? "@media print { @page { size: 80mm auto; margin: 0; } }"
+              : "@media print { @page { size: A4 portrait; margin: 10mm; } }"}</style>
 
-            {/* A4 service sheet — rendered once per copy with page breaks */}
-            <div id="sj-sheet-print-area">
-              {Array.from({ length: printCopies }, (_, i) => (
-                <div key={i} style={i < printCopies - 1 ? { pageBreakAfter: "always" } : {}}>
-                  <ServiceJobSheet
-                    id={`sj-sheet-copy-${i}`}
-                    opts={serviceOpts}
-                    fontCss={serviceFontCss}
-                    branding={sheetBranding}
-                    data={sheetData}
-                  />
-                </div>
-              ))}
-            </div>
+            {pj === "a4" ? (
+              /* A4 service sheet — rendered once per copy with page breaks */
+              <div id="sj-sheet-print-area">
+                {Array.from({ length: domCopies }, (_, i) => (
+                  <div key={i} style={i < domCopies - 1 ? { pageBreakAfter: "always" } : {}}>
+                    <ServiceJobSheet
+                      id={`sj-sheet-copy-${i}`}
+                      opts={serviceOpts}
+                      fontCss={serviceFontCss}
+                      branding={sheetBranding}
+                      data={sheetData}
+                    />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              /* 80mm thermal docket — same fields, receipt-roll layout */
+              <div id="sj-docket-print-area">
+                {Array.from({ length: domCopies }, (_, i) => (
+                  <div key={i} style={i < domCopies - 1 ? { pageBreakAfter: "always" } : {}}>
+                    <ServiceJobDocket
+                      id={`sj-docket-copy-${i}`}
+                      opts={serviceOpts}
+                      fontCss={serviceFontCss}
+                      density={docketDensity}
+                      branding={sheetBranding}
+                      data={sheetData}
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
           </>
         );
       })()}

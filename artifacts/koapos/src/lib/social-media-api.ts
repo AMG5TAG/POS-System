@@ -1,5 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { uploadFile } from "./upload";
 
 /* ── Types ──────────────────────────────────────────────────────────────────
  * Mirrors the /social/* API. The server stores per-platform results and the
@@ -163,18 +164,6 @@ export function useDrawWinner() {
 
 /** Upload a media file via the storage pipeline; returns the servable URL. */
 export async function uploadMedia(file: File): Promise<PostMedia> {
-  const urlRes = await fetch("/api/storage/uploads/request-url", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-    credentials: "include",
-  });
-  if (!urlRes.ok) throw new Error("Could not get upload URL");
-  const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-  const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-  if (!putRes.ok) throw new Error("Upload to storage failed");
-  await fetch("/api/storage/uploads/confirm", {
-    method: "POST", headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ objectPath }), credentials: "include",
-  });
-  return { url: `/api/storage${objectPath}`, type: file.type.startsWith("video/") ? "video" : "image" };
+  const { url } = await uploadFile(file);
+  return { url, type: file.type.startsWith("video/") ? "video" : "image" };
 }

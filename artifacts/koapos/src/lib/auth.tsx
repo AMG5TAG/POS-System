@@ -1,15 +1,19 @@
 import React, { useEffect, useState } from "react";
 import { useGetMe, Merchant } from "@workspace/api-client-react";
 import { AuthContext } from "./auth-context";
+import { setDefaultPhoneCountry } from "./phone-format";
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<Merchant | null>(null);
   const [isInitializing, setIsInitializing] = useState(true);
 
+  // No `retry` override here on purpose: inherit the QueryClient's smart retry
+  // (see query-retry.ts) so a transient failure while the API server is still
+  // booting on a cold load self-heals, while a genuine 401 still fails fast and
+  // redirects to /login.
   const { data: me, isLoading: meLoading, error } = useGetMe({
     query: {
       queryKey: ["me"],
-      retry: false,
     }
   });
 
@@ -24,10 +28,32 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     }
   }, [me, meLoading, error]);
 
+  // Phone fields append this merchant's country code when they lose focus, and
+  // the base Input reads it synchronously — it renders on the marketing and
+  // login pages too, where there is no merchant to query. So the signed-in
+  // merchant's setting is pushed to it here, where the merchant is already
+  // known, and re-pushed when Regional Settings changes it (login() merges the
+  // update response into `user`).
+  useEffect(() => {
+    setDefaultPhoneCountry(user?.defaultPhoneCountry, user?.phoneDisplay);
+  }, [user?.defaultPhoneCountry, user?.phoneDisplay]);
+
   // Auth state is sourced from the server session via useGetMe() on every mount,
   // so there is no cached user in localStorage to trust or clear.
+  //
+  // For the SAME account (e.g. settings pages calling login() with a
+  // merchant-update response), merge over the existing user instead of
+  // replacing it. Update responses don't carry session-only fields such as
+  // `staffRole`, `emailVerified` and `onboardingCompleted`, so a wholesale
+  // replace would drop them — logging the owner out of owner-level access and
+  // re-triggering the verify/onboarding prompts. A genuinely different account
+  // (fresh sign-in / register) still replaces wholesale.
   const login = (newUser: Merchant) => {
-    setUser(newUser);
+    setUser((prev) =>
+      prev && newUser && prev.id === newUser.id
+        ? { ...prev, ...newUser }
+        : newUser,
+    );
   };
 
   const logout = () => {

@@ -5,6 +5,8 @@ import { cn } from "@/lib/utils";
 import { customerDisplayName } from "@/lib/customer-name";
 import { Search, UserSearch, X, AlertTriangle, UserPlus, Loader2 } from "lucide-react";
 import { QuickAddCustomerDialog } from "./QuickAddCustomerDialog";
+import { CustomerAvatar } from "./CustomerAvatar";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 interface CustomerSearchInputProps {
   value: string;
@@ -88,25 +90,25 @@ export function CustomerSearchInput({
     onChange("", null);
   };
 
-  const initials = (c: Customer) =>
-    (((c.firstName?.[0] ?? "") + (c.lastName?.[0] ?? "")) || c.company?.[0] || "?").toUpperCase();
-
   const displayName = (c: Customer) => customerDisplayName(c);
 
   return (
     <div ref={containerRef} className={cn("relative", className)}>
       {selected ? (
         <div className="flex items-center gap-2 border border-primary rounded-lg px-2.5 py-2 bg-primary/5">
-          <div className={cn(
-            "w-6 h-6 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-            selected.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"
-          )}>
-            {initials(selected)}
-          </div>
+          <CustomerAvatar
+            firstName={selected.firstName}
+            lastName={selected.lastName}
+            company={selected.company}
+            photoUrl={selected.photoUrl}
+            className="w-6 h-6"
+            textClassName="text-[10px]"
+            variant={selected.warningNote ? "warning" : "default"}
+          />
           <div className="flex-1 min-w-0">
             <p className="text-sm font-medium truncate">{displayName(selected)}</p>
             {(selected.email || selected.phone) && (
-              <p className="text-xs text-muted-foreground truncate">{selected.email || selected.phone}</p>
+              <p className="text-xs text-muted-foreground truncate">{selected.email || formatPhoneForDisplay(selected.phone)}</p>
             )}
           </div>
           {selected.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
@@ -191,15 +193,18 @@ export function CustomerSearchInput({
                     value === String(c.id) && "bg-primary/10"
                   )}
                 >
-                  <div className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0",
-                    c.warningNote ? "bg-destructive/15 text-destructive" : "bg-primary/15 text-primary"
-                  )}>
-                    {initials(c)}
-                  </div>
+                  <CustomerAvatar
+                    firstName={c.firstName}
+                    lastName={c.lastName}
+                    company={c.company}
+                    photoUrl={c.photoUrl}
+                    className="w-7 h-7"
+                    textClassName="text-[10px]"
+                    variant={c.warningNote ? "warning" : "default"}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{displayName(c)}</p>
-                    <p className="text-xs text-muted-foreground truncate">{c.email || c.phone || "—"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{c.email || formatPhoneForDisplay(c.phone) || "—"}</p>
                   </div>
                   {c.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
                 </button>

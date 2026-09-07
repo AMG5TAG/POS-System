@@ -255,7 +255,8 @@ export interface FormRendererProps {
   customer?: { firstName?: string; lastName?: string; email?: string; phone?: string } | null;
   business?: { name?: string; phone?: string; email?: string; address?: string; primaryColor?: string; logoUrl?: string } | null;
   onSubmit: (data: Record<string, unknown>) => void;
-  onPrint?: () => void;
+  /** Receives the form's current answers, so the printout matches the screen. */
+  onPrint?: (data: Record<string, unknown>) => void;
   onSaveToProfile?: () => void;
   isSubmitting?: boolean;
   staffMode?: boolean;
@@ -345,7 +346,7 @@ export function FormRenderer({
             {staffMode && (
               <>
                 {onPrint && (
-                  <Button type="button" variant="outline" onClick={onPrint}>
+                  <Button type="button" variant="outline" onClick={() => onPrint(values)}>
                     <Printer className="h-4 w-4 mr-1.5" /> Print
                   </Button>
                 )}

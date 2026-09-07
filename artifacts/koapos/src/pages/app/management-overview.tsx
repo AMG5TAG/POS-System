@@ -13,6 +13,7 @@ import {
   GetDashboardSummaryPeriod,
   GetDashboardActivityPeriod,
   GetDashboardSummaryMonthMode,
+  GetDashboardSummaryYearMode,
   SalesSettings,
 } from "@workspace/api-client-react";
 import { Button } from "@/components/ui/button";
@@ -22,21 +23,23 @@ import {
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
 import { formatCurrency, cn } from "@/lib/utils";
+import { Delta } from "@/components/reports/Delta";
 import {
   DollarSign, ShoppingCart, TrendingUp, Gift, TrendingDown,
   Mail, Activity, MapPin, Monitor, AlertCircle,
   RotateCcw, Receipt, Percent, Package2, Calendar,
-  ArrowUp, ArrowDown, Minus, Settings,
+  Settings,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { CustomerLocationMap } from "@/components/maps/CustomerLocationMap";
 
 /* ─── Period tabs ─────────────────────────────────────────────────────────── */
 
-type Period = "today" | "month" | "year";
+type Period = "today" | "week" | "month" | "year";
 
 const PERIOD_TABS: { id: Period; label: string; api: GetDashboardSummaryPeriod }[] = [
   { id: "today", label: "Today", api: "today" },
+  { id: "week",  label: "Week",  api: "week"  },
   { id: "month", label: "Month", api: "month" },
   { id: "year",  label: "Year",  api: "year"  },
 ];
@@ -85,27 +88,6 @@ function KpiCard({
   );
 }
 
-/* ─── Delta chip ──────────────────────────────────────────────────────────── */
-
-function Delta({ current, previous, prefix = "" }: { current: number; previous: number; prefix?: string }) {
-  if (previous === 0 && current === 0) return <span className="text-muted-foreground font-medium">—</span>;
-  const diff = current - previous;
-  const pct = previous > 0 ? Math.abs((diff / previous) * 100).toFixed(0) : null;
-  if (diff === 0) return (
-    <span className="inline-flex items-center gap-0.5 text-muted-foreground font-medium">
-      <Minus className="w-3 h-3" /> no change
-    </span>
-  );
-  const positive = diff > 0;
-  return (
-    <span className={cn("inline-flex items-center gap-0.5 font-medium", positive ? "text-emerald-600" : "text-red-500")}>
-      {positive ? <ArrowUp className="w-3 h-3" /> : <ArrowDown className="w-3 h-3" />}
-      {prefix}{Math.abs(diff).toLocaleString()}
-      {pct && <span className="text-[10px] opacity-70 ml-0.5">({pct}%)</span>}
-    </span>
-  );
-}
-
 /* ─── Activity stat tile ──────────────────────────────────────────────────── */
 
 function ActivityTile({
@@ -140,7 +122,7 @@ function Segmented<T extends string>({
             "flex-1 px-3 py-1.5 text-sm font-medium transition-colors",
             value === o.id
               ? "bg-primary text-primary-foreground"
-              : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+              : "pill-selector bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
           )}
         >
           {o.label}
@@ -159,15 +141,17 @@ function OverviewSettingsDialog({
   const [salesPeriod, setSalesPeriod]       = useState<Period>("today");
   const [activityPeriod, setActivityPeriod] = useState<ActivityPeriod>("week");
   const [monthMode, setMonthMode]           = useState<GetDashboardSummaryMonthMode>("rolling30");
+  const [yearMode, setYearMode]             = useState<GetDashboardSummaryYearMode>("financial");
 
   // Re-seed the form whenever the dialog opens with the latest saved values.
   useEffect(() => {
     if (!open || !settings) return;
     const sp = settings.overviewDefaultSalesPeriod;
-    setSalesPeriod(sp === "month" || sp === "year" ? sp : "today");
+    setSalesPeriod(sp === "week" || sp === "month" || sp === "year" ? sp : "today");
     const ap = settings.overviewDefaultActivityPeriod;
     setActivityPeriod(ap === "day" || ap === "month" || ap === "year" ? ap : "week");
     setMonthMode(settings.overviewMonthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30");
+    setYearMode(settings.overviewYearMode === "rolling365" ? "rolling365" : "financial");
   }, [open, settings]);
 
   function handleSave() {
@@ -177,6 +161,7 @@ function OverviewSettingsDialog({
           overviewDefaultSalesPeriod: salesPeriod,
           overviewDefaultActivityPeriod: activityPeriod,
           overviewMonthMode: monthMode,
+          overviewYearMode: yearMode,
         },
       },
       {
@@ -197,7 +182,7 @@ function OverviewSettingsDialog({
         <DialogHeader>
           <DialogTitle>Overview Defaults</DialogTitle>
           <DialogDescription>
-            Choose which period opens first and how “Month” is calculated. Saved to this business.
+            Choose which period opens first and how “Month” and “Year” are calculated. Saved to this business.
           </DialogDescription>
         </DialogHeader>
 
@@ -236,6 +221,23 @@ function OverviewSettingsDialog({
                 : "Month tabs cover a rolling window of the last 30 days."}
             </p>
           </div>
+
+          <div className="space-y-2">
+            <Label>“Year” means</Label>
+            <Segmented<GetDashboardSummaryYearMode>
+              value={yearMode}
+              onChange={setYearMode}
+              options={[
+                { id: "financial", label: "Financial year" },
+                { id: "rolling365", label: "Last 365 days" },
+              ]}
+            />
+            <p className="text-xs text-muted-foreground">
+              {yearMode === "financial"
+                ? "Year tabs cover the current financial year (1 July to today)."
+                : "Year tabs cover a rolling window of the last 365 days."}
+            </p>
+          </div>
         </div>
 
         <DialogFooter>
@@ -257,10 +259,12 @@ export default function ManagementOverviewPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [, navigate] = useLocation();
 
-  /* Per-merchant overview preferences (default tabs + Month definition) */
+  /* Per-merchant overview preferences (default tabs + Month/Year definitions) */
   const { data: salesSettings } = useGetSalesSettings();
   const monthMode: GetDashboardSummaryMonthMode =
     salesSettings?.overviewMonthMode === "calendar_mtd" ? "calendar_mtd" : "rolling30";
+  const yearMode: GetDashboardSummaryYearMode =
+    salesSettings?.overviewYearMode === "rolling365" ? "rolling365" : "financial";
 
   /* Apply the saved default tabs once, the first time settings load. After that
      the user's manual tab clicks win and aren't overridden on refetch. */
@@ -269,21 +273,26 @@ export default function ManagementOverviewPage() {
     if (defaultsApplied.current || !salesSettings) return;
     defaultsApplied.current = true;
     const sp = salesSettings.overviewDefaultSalesPeriod;
-    if (sp === "today" || sp === "month" || sp === "year") setPeriod(sp);
+    if (sp === "today" || sp === "week" || sp === "month" || sp === "year") setPeriod(sp);
     const ap = salesSettings.overviewDefaultActivityPeriod;
     if (ap === "day" || ap === "week" || ap === "month" || ap === "year") setActPeriod(ap);
   }, [salesSettings]);
 
   const api = PERIOD_TABS.find((t) => t.id === period)!.api;
 
-  /* Only the "month" period is affected by monthMode; send it so the server can
-     switch between rolling-30-days and calendar month-to-date. */
+  /* "month" is affected by monthMode and "year" by yearMode; send each so the
+     server can switch between rolling and calendar windows. */
   const summaryMonthMode = period === "month" ? monthMode : undefined;
+  const summaryYearMode = period === "year" ? yearMode : undefined;
   const activityMonthMode = actPeriod === "month" ? monthMode : undefined;
 
   const { data: summary, isLoading } = useGetDashboardSummary(
-    { period: api, ...(summaryMonthMode ? { monthMode: summaryMonthMode } : {}) },
-    { query: { queryKey: ["mgmt-overview", api, summaryMonthMode ?? "default"] } },
+    {
+      period: api,
+      ...(summaryMonthMode ? { monthMode: summaryMonthMode } : {}),
+      ...(summaryYearMode ? { yearMode: summaryYearMode } : {}),
+    },
+    { query: { queryKey: ["mgmt-overview", api, summaryMonthMode ?? "default", summaryYearMode ?? "default"] } },
   );
 
   /* Always fetch "yesterday" for the VS Yesterday comparison bar */
@@ -327,6 +336,10 @@ export default function ManagementOverviewPage() {
   /* Cost of goods sold */
   const costTotal = summary?.costTotal ?? 0;
 
+  /* Absorbed payment surcharges (pass-on disabled) — a cost of business that
+     reduces profit alongside COGS. */
+  const surchargeCost = summary?.surchargeCost ?? 0;
+
   /* Loyalty / store credit dollar value */
   const customers     = customerData?.items ?? [];
   const totalPoints   = customers.reduce((s, c) => s + (c.loyaltyPoints ?? 0), 0);
@@ -342,9 +355,11 @@ export default function ManagementOverviewPage() {
   /* Period label text */
   const periodLabel = period === "today"
     ? "today"
-    : period === "month"
-      ? (monthMode === "calendar_mtd" ? "this month" : "in the last 30 days")
-      : "this year";
+    : period === "week"
+      ? "this week"
+      : period === "month"
+        ? (monthMode === "calendar_mtd" ? "this month" : "in the last 30 days")
+        : (yearMode === "financial" ? "this financial year" : "in the last 365 days");
 
   /* Activity data */
   const actServices     = activity?.services       ?? 0;
@@ -397,7 +412,7 @@ export default function ManagementOverviewPage() {
                       "px-3 py-1.5 text-sm font-medium transition-colors",
                       period === t.id
                         ? "bg-primary text-primary-foreground"
-                        : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+                        : "pill-selector bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
                     )}
                   >
                     {t.label}
@@ -486,8 +501,13 @@ export default function ManagementOverviewPage() {
               title="Net Profit"
               icon={TrendingUp}
               iconBg="bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600"
-              value={isLoading ? "—" : formatCurrency(revenueExGst - discountTotal - refundTotal - costTotal)}
-              sub="Revenue ex-GST, less COGS, discounts & refunds"
+              // Matches the Sales Overview P&L definition exactly: Revenue (ex-GST)
+              // − COGS − absorbed payment surcharges. Sales totals are already net
+              // of discounts, so discounts / refunds are NOT subtracted again here
+              // (doing so double-counted them and produced a lower figure than the
+              // Sales Overview screen).
+              value={isLoading ? "—" : formatCurrency(revenueExGst - costTotal - surchargeCost)}
+              sub="Revenue ex-GST, less COGS & surcharges"
               valueClass="text-emerald-600"
               href="/management/marketing-reports/sales-overview"
             />
@@ -547,7 +567,7 @@ export default function ManagementOverviewPage() {
                     "px-3 py-1.5 text-sm font-medium transition-colors",
                     actPeriod === t.id
                       ? "bg-primary text-primary-foreground"
-                      : "bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
+                      : "pill-selector bg-background text-muted-foreground hover:text-foreground hover:bg-muted",
                   )}
                 >
                   {t.label}
@@ -610,7 +630,7 @@ export default function ManagementOverviewPage() {
           {deviceTypes.length > 0 && (
             <div className="rounded-2xl border bg-card p-5 space-y-3">
               <div className="flex items-center justify-between">
-                <p className="font-semibold text-primary flex items-center gap-2">
+                <p className="font-semibold flex items-center gap-2">
                   <Monitor className="w-4 h-4" />
                   Device Types
                 </p>
@@ -620,7 +640,7 @@ export default function ManagementOverviewPage() {
                 {deviceTypes.map(({ type, count }) => (
                   <div key={type}>
                     <div className="flex items-center justify-between text-sm mb-1">
-                      <span className="text-primary capitalize">{type}</span>
+                      <span className="capitalize">{type}</span>
                       <span>{count}</span>
                     </div>
                     <div className="h-2 rounded-full bg-muted overflow-hidden">

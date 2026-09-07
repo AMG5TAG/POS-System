@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   useUpdateServiceJob,
+  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -15,14 +16,17 @@ import {
 } from "@/components/ui/alert-dialog";
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
-  Hash, ClipboardList, KeyRound, Package, StickyNote, Camera, Upload, X,
-  Trash2, Eye,
+  Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
+  Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
+import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
+import { parseNotes, appendNote, callTimes, CALL_NOTE_TEXT } from "@/lib/service-job-notes";
+import { ServiceJobQuotePanel } from "@/components/service-jobs/ServiceJobQuotePanel";
 import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
 import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
 import { ServiceJobWarrantyPanel } from "@/components/service-jobs/ServiceJobWarrantyPanel";
@@ -30,8 +34,9 @@ import { ServiceJobTimePanel } from "@/components/service-jobs/ServiceJobTimePan
 import { ServiceJobSignaturePanel } from "@/components/service-jobs/ServiceJobSignaturePanel";
 import { ServiceJobShippingPanel } from "@/components/service-jobs/ServiceJobShippingPanel";
 import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDialog";
-import { History, ListChecks, Clock, PenLine, Truck, Wallet } from "lucide-react";
+import { History, ListChecks, Clock, PenLine, Truck, Wallet, Send, Lock } from "lucide-react";
 import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
@@ -44,31 +49,12 @@ const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
   "awaiting-partner-approval": { label: "Awaiting Partner Approval",   className: "bg-indigo-50 text-indigo-700 border-indigo-300" },
   "partner-replacement":       { label: "Partner Replacement",         className: "bg-teal-50 text-teal-700 border-teal-300" },
   "awaiting-customer":         { label: "Awaiting Customer",           className: "bg-orange-50 text-orange-600 border-orange-300" },
+  "awaiting-pickup":           { label: "Completed - Awaiting Pickup", className: "bg-lime-50 text-lime-700 border-lime-300" },
   completed:                   { label: "Completed",                   className: "bg-emerald-50 text-emerald-700 border-emerald-300" },
   cancelled:                   { label: "Cancelled",                   className: "bg-red-50 text-red-700 border-red-300" },
 };
 
 /* ─── Note helpers ──────────────────────────────────────────────────────── */
-
-const NOTE_SEP = "\n\n---\n\n";
-
-function parseNotes(raw: string | null | undefined): string[] {
-  if (!raw?.trim()) return [];
-  return raw.split("---").map((s) => s.trim()).filter(Boolean);
-}
-
-function buildNoteTimestamp(): string {
-  const now = new Date();
-  const pad = (n: number) => n.toString().padStart(2, "0");
-  return `[${pad(now.getDate())}/${pad(now.getMonth() + 1)}/${now.getFullYear()} ${pad(now.getHours())}:${pad(now.getMinutes())}]`;
-}
-
-function appendNote(existing: string | null | undefined, text: string): string {
-  const ts = buildNoteTimestamp();
-  const entry = `${ts} ${text.trim()}`;
-  const parts = parseNotes(existing);
-  return [...parts, entry].join(NOTE_SEP);
-}
 
 function getStatus(s: string) {
   return STATUS_CONFIG[s] ?? { label: s, className: "bg-muted text-muted-foreground border-border" };
@@ -84,10 +70,12 @@ function formatDate(d: string) {
 
 /* ─── Detail row ────────────────────────────────────────────────────────── */
 
-function DetailRow({ icon: Icon, label, value }: {
+function DetailRow({ icon: Icon, label, value, href }: {
   icon: React.ComponentType<{ className?: string }>;
   label: string;
   value?: string | null;
+  /** When set, the value becomes a link — a `mailto:`/`tel:` for contact rows. */
+  href?: string;
 }) {
   if (!value) return null;
   return (
@@ -95,7 +83,11 @@ function DetailRow({ icon: Icon, label, value }: {
       <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
       <div className="text-sm min-w-0">
         <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
-        <p className="font-medium break-words">{value}</p>
+        {href ? (
+          <a href={href} className="font-medium break-words text-primary hover:underline">{value}</a>
+        ) : (
+          <p className="font-medium break-words">{value}</p>
+        )}
       </div>
     </div>
   );
@@ -125,6 +117,12 @@ export function ServiceJobDetailDialog({
   const queryClient  = useQueryClient();
   const updateMutation = useUpdateServiceJob();
   const fileInputRef   = useRef<HTMLInputElement>(null);
+
+  /* Which menu sections this merchant has enabled (Management → Invoices &
+     Services → Service Options). Until loaded, every section shows — matching
+     the all-on default so nothing flickers away on open. */
+  const { data: serviceSettings } = useGetServiceSettings();
+  const show = (key: keyof NonNullable<typeof serviceSettings>) => serviceSettings?.[key] ?? true;
 
   const [localStatus, setLocalStatus] = useState<string>(job?.status ?? "pending");
   const [newNoteText, setNewNoteText] = useState("");
@@ -160,9 +158,44 @@ export function ServiceJobDetailDialog({
     if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send SMS");
     toast.success(`SMS sent to ${job.customerPhone}`);
   };
+
+  /* Send the customer their portal login link so they can track this job.
+   * The server resolves the customer's portal token and delivers the link to
+   * the contact on file via the requested channel. */
+  const sendPortalLink = async (via: "email" | "sms") => {
+    if (!job) return;
+    let res: Response;
+    try {
+      res = await fetch(`/api/service-jobs/${job.id}/portal-link?via=${via}`, { method: "POST", credentials: "include" });
+    } catch {
+      throw new Error(`Network error — login link not sent`);
+    }
+    const data = await res.json().catch(() => ({ success: false, error: "Server error" }));
+    if (!res.ok || !data.success) throw new Error(data.error ?? "Failed to send login link");
+    toast.success(`Login link sent to ${via === "email" ? job.customerEmail : job.customerPhone}`);
+  };
+
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [showAll,     setShowAll]     = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
+
+  type SvcTab = "details" | "service" | "quote" | "notes" | "files";
+  /* Quote is a tab in its own right rather than a section buried under Service:
+     it is the document the customer agrees to, and the one the till offers to
+     import when this job is linked to a sale. A merchant who has switched the
+     section off gets no tab at all rather than an empty one. */
+  const TABS: { key: SvcTab; label: string }[] = [
+    { key: "details", label: "Details" },
+    { key: "service", label: "Service" },
+    ...(show("showQuote") ? [{ key: "quote" as const, label: "Quote" }] : []),
+    { key: "notes",   label: "Notes"   },
+    { key: "files",   label: "Files"   },
+  ];
+  const [tab, setTab] = useState<SvcTab>("details");
+  const tabIndex = TABS.findIndex(t => t.key === tab);
+  const goPrevTab = () => { if (tabIndex > 0) setTab(TABS[tabIndex - 1].key); };
+  const goNextTab = () => { if (tabIndex < TABS.length - 1) setTab(TABS[tabIndex + 1].key); };
+  useTabArrowKeys(!!job, goPrevTab, goNextTab);
 
   useEffect(() => {
     if (!job) return;
@@ -171,7 +204,14 @@ export function ServiceJobDetailDialog({
     setLocalPhotos(Array.isArray(job.photos) ? (job.photos as string[]).filter(Boolean) : []);
     setLightboxSrc(null);
     setShowAll(false);
+    setTab("details");
   }, [job?.id]);
+
+  /* Service Options can switch a section off while the dialog is open, taking
+     its tab with it — don't strand the user on a tab that no longer exists. */
+  useEffect(() => {
+    if (tabIndex === -1) setTab("details");
+  }, [tabIndex]);
 
   if (!job) return null;
 
@@ -184,6 +224,9 @@ export function ServiceJobDetailDialog({
   };
 
   const handleStatusChange = (status: string) => {
+    // Completed repairs are locked — they can only be continued by reopening
+    // (which spawns a new linked repair), not by moving them to another status.
+    if (job.status === "completed") return;
     setLocalStatus(status);
     updateMutation.mutate(
       { id: job.id, data: { status } as never },
@@ -206,6 +249,19 @@ export function ServiceJobDetailDialog({
       {
         onSuccess: () => { invalidate(); setNewNoteText(""); toast.success("Note appended"); },
         onError: () => toast.error("Failed to save note"),
+      }
+    );
+  };
+
+  const calls = callTimes(job.notes);
+  const lastCalledAt = calls.length ? calls[calls.length - 1] : null;
+
+  const handleLogCall = () => {
+    updateMutation.mutate(
+      { id: job.id, data: { notes: appendNote(job.notes, CALL_NOTE_TEXT) } as never },
+      {
+        onSuccess: () => { invalidate(); toast.success("Call logged"); },
+        onError: () => toast.error("Failed to log call"),
       }
     );
   };
@@ -263,38 +319,75 @@ export function ServiceJobDetailDialog({
       )}
 
       <Dialog open={!!job} onOpenChange={onClose}>
-        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 max-h-[90vh] overflow-hidden">
+        <DialogContent className="max-w-2xl flex flex-col p-0 gap-0 h-[80vh] overflow-hidden">
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
-            <DialogTitle className="flex items-center gap-2 text-base font-semibold flex-wrap">
-              <Wrench className="w-5 h-5 text-primary shrink-0" />
-              <span className="font-mono">{job.jobNumber}</span>
-              <Select value={localStatus} onValueChange={handleStatusChange}>
-                <SelectTrigger className={cn("h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}>
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
-                    <SelectItem key={val} value={val} className="text-xs">{cfg.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <button
-                type="button"
-                onClick={() => setShowAll((v) => !v)}
-                className={cn(
-                  "ml-auto text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors",
-                  showAll
-                    ? "bg-primary text-primary-foreground border-primary"
-                    : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-foreground"
-                )}
-              >
-                {showAll ? "Compact View" : "Display All"}
-              </button>
+            <DialogTitle>
+              <div className="flex items-center gap-3">
+                <div className="w-12 h-12 rounded-full bg-primary/15 flex items-center justify-center text-primary shrink-0">
+                  <Wrench className="w-6 h-6" />
+                </div>
+                <div className="min-w-0 flex-1">
+                  <p className="font-bold text-2xl leading-tight truncate font-mono">{job.jobNumber}</p>
+                  <div className="flex items-center gap-2 mt-1 flex-wrap">
+                    {job.status === "completed" ? (
+                      <span
+                        title="Completed repairs are locked. Use “Reopen as new repair” to continue work."
+                        className={cn("inline-flex items-center gap-1 h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}
+                      >
+                        <Lock className="w-3 h-3" />
+                        {getStatus(localStatus).label}
+                      </span>
+                    ) : (
+                      <Select value={localStatus} onValueChange={handleStatusChange}>
+                        <SelectTrigger className={cn("h-7 text-[11px] font-medium border w-auto min-w-[140px] px-2.5 rounded-md", className)}>
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {Object.entries(STATUS_CONFIG).map(([val, cfg]) => (
+                            <SelectItem key={val} value={val} className="text-xs">{cfg.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => setShowAll((v) => !v)}
+                      className={cn(
+                        "text-[11px] font-medium px-2.5 py-1 rounded-md border transition-colors",
+                        showAll
+                          ? "bg-primary text-primary-foreground border-primary"
+                          : "bg-muted text-muted-foreground border-border hover:border-primary hover:text-foreground"
+                      )}
+                    >
+                      {showAll ? "Compact View" : "Display All"}
+                    </button>
+                  </div>
+                </div>
+              </div>
             </DialogTitle>
           </DialogHeader>
 
+          {/* Tabs */}
+          <div className="flex flex-wrap gap-1.5 px-6 pt-3 pb-0 shrink-0 mt-2">
+            {TABS.map(({ key, label }) => (
+              <button
+                key={key}
+                onClick={() => setTab(key)}
+                className={cn(
+                  "px-3 py-1.5 text-sm font-medium rounded-lg transition-colors whitespace-nowrap shrink-0",
+                  tab === key
+                    ? "bg-primary text-primary-foreground shadow-sm"
+                    : "bg-muted/40 text-muted-foreground hover:bg-muted hover:text-foreground",
+                )}
+              >
+                {label}
+              </button>
+            ))}
+          </div>
+
           <div className="flex-1 overflow-y-auto px-6 min-h-0">
           <div className="space-y-4 py-4">
+            {tab === "details" && (<>
             {(job.isCritical || job.isUnderWarranty || job.isPartnerRepair) && (
               <div className="flex flex-wrap gap-2">
                 {job.isCritical && (
@@ -340,10 +433,18 @@ export function ServiceJobDetailDialog({
                 </div>
                 <div className="divide-y">
                   {(job.customerPhone || showAll) && (
-                    <DetailRow icon={User} label="Phone" value={job.customerPhone ?? (showAll ? "—" : null)} />
+                    <DetailRow
+                      icon={User} label="Phone"
+                      value={formatPhoneForDisplay(job.customerPhone) || (showAll ? "—" : null)}
+                      href={job.customerPhone ? telHref(job.customerPhone) : undefined}
+                    />
                   )}
                   {(job.customerEmail || showAll) && (
-                    <DetailRow icon={User} label="Email" value={job.customerEmail ?? (showAll ? "—" : null)} />
+                    <DetailRow
+                      icon={User} label="Email"
+                      value={job.customerEmail ?? (showAll ? "—" : null)}
+                      href={job.customerEmail ? `mailto:${job.customerEmail.trim()}` : undefined}
+                    />
                   )}
                   {job.estimatedCost != null && (
                     <DetailRow icon={ClipboardList} label="Estimated Cost" value={`$${job.estimatedCost.toFixed(2)}`} />
@@ -362,7 +463,7 @@ export function ServiceJobDetailDialog({
             </div>
 
             {/* Device */}
-            {(showAll || job.deviceType || job.deviceDescription || job.serialNumber || job.condition) && (
+            {(showAll || job.deviceType || job.deviceDescription || job.deviceColour || job.deviceQuantity != null || job.serialNumber || job.condition) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
                 <div className="flex items-center justify-between gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                   <div className="flex items-center gap-2">
@@ -378,6 +479,8 @@ export function ServiceJobDetailDialog({
                 </div>
                 {(job.deviceType || showAll) && <DetailRow icon={MonitorSmartphone} label="Device Type"   value={job.deviceType ?? (showAll ? "—" : null)} />}
                 {(job.deviceDescription || showAll) && <DetailRow icon={MonitorSmartphone} label="Description"   value={job.deviceDescription ?? (showAll ? "—" : null)} />}
+                {(job.deviceColour || showAll) && <DetailRow icon={Palette}            label="Colour"        value={job.deviceColour ?? (showAll ? "—" : null)} />}
+                {(job.deviceQuantity != null || showAll) && <DetailRow icon={Layers}     label="Quantity"      value={job.deviceQuantity != null ? String(job.deviceQuantity) : (showAll ? "—" : null)} />}
                 {(job.serialNumber || showAll) && <DetailRow icon={Hash}              label="Serial Number" value={job.serialNumber ?? (showAll ? "—" : null)} />}
                 {(job.condition || showAll) && <DetailRow icon={AlertCircle}       label="Known Damage / Condition"  value={job.condition ?? (showAll ? "—" : null)} />}
                 {/* Logins / Accounts */}
@@ -415,6 +518,9 @@ export function ServiceJobDetailDialog({
               </div>
             )}
 
+            </>)}
+
+            {tab === "service" && (<>
             {/* Work Details */}
             {(showAll || job.workDescription || job.additionalEquipment) && (
               <div className="rounded-xl border bg-muted/20 divide-y">
@@ -436,17 +542,20 @@ export function ServiceJobDetailDialog({
             )}
 
             {/* Parts & Labour */}
+            {show("showPartsLabour") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Wrench className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Parts &amp; Labour</span>
               </div>
               <div className="p-4">
-                <ServiceJobLinesPanel jobId={job.id} customerId={job.customerId} />
+                <ServiceJobLinesPanel jobId={job.id} jobNumber={job.jobNumber} customerId={job.customerId} />
               </div>
             </div>
+            )}
 
             {/* Estimate approval & deposit */}
+            {show("showApprovalDeposit") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Wallet className="w-3.5 h-3.5 text-primary" />
@@ -456,8 +565,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobDepositPanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Diagnostics / QC Checklist */}
+            {show("showDiagnostics") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <ListChecks className="w-3.5 h-3.5 text-primary" />
@@ -467,8 +578,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobChecklistPanel jobId={job.id} deviceType={job.deviceType} />
               </div>
             </div>
+            )}
 
             {/* Repair warranty & rework */}
+            {show("showWarranty") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Shield className="w-3.5 h-3.5 text-primary" />
@@ -478,8 +591,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobWarrantyPanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Technician time */}
+            {show("showTechnicianTime") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Clock className="w-3.5 h-3.5 text-primary" />
@@ -489,8 +604,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobTimePanel jobId={job.id} />
               </div>
             </div>
+            )}
 
             {/* Customer sign-off */}
+            {show("showSignOff") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <PenLine className="w-3.5 h-3.5 text-primary" />
@@ -500,8 +617,10 @@ export function ServiceJobDetailDialog({
                 <ServiceJobSignaturePanel job={job} />
               </div>
             </div>
+            )}
 
             {/* Mail-in / shipping */}
+            {show("showShipping") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <Truck className="w-3.5 h-3.5 text-primary" />
@@ -511,14 +630,71 @@ export function ServiceJobDetailDialog({
                 <ServiceJobShippingPanel job={job} />
               </div>
             </div>
+            )}
+            </>)}
 
+            {tab === "quote" && (<>
+            {/* What the customer is being offered — distinct from Parts & Labour
+                on the Service tab, which is what was actually consumed. This is
+                the document the POS imports when the job is linked to a sale. */}
+            {show("showQuote") && (
+            <div className="rounded-xl border bg-muted/20">
+              <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
+                <FileText className="w-3.5 h-3.5 text-primary" />
+                <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quote</span>
+              </div>
+              <div className="p-4">
+                <ServiceJobQuotePanel jobId={job.id} customerId={job.customerId} />
+              </div>
+            </div>
+            )}
+            </>)}
+
+            {tab === "notes" && (<>
             {/* Notes */}
+            {show("showNotes") && (
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <StickyNote className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</span>
               </div>
               <div className="p-4 space-y-3">
+                {/* One-click log for the note a repair shop writes most: ringing
+                    the customer. Chasing a customer takes more than one call, so
+                    every press logs another — the tick is an indicator that the
+                    customer has been rung at least once, not a control, which is
+                    why this is a button rather than a real checkbox. Notes are
+                    append-only, so a call can be logged but never unsaid. */}
+                <button
+                  type="button"
+                  onClick={handleLogCall}
+                  disabled={updateMutation.isPending}
+                  title={lastCalledAt ? "Log another call" : "Log a call to the customer"}
+                  className="flex w-full items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:opacity-60"
+                >
+                  {/* Drawn rather than a real Checkbox: Radix renders one as a
+                      <button>, which cannot legally nest inside this one. */}
+                  <span
+                    aria-hidden
+                    className={cn(
+                      "grid h-4 w-4 shrink-0 place-content-center rounded-sm border border-primary shadow",
+                      lastCalledAt && "bg-primary text-primary-foreground",
+                    )}
+                  >
+                    {lastCalledAt && <Check className="h-3.5 w-3.5" />}
+                  </span>
+                  <PhoneCall className="w-3.5 h-3.5 text-primary shrink-0" />
+                  <span className="text-sm min-w-0 flex-1">
+                    {lastCalledAt ? "Called customer" : "Customer called"}
+                    {lastCalledAt && (
+                      <span className="text-muted-foreground">
+                        {` — ${lastCalledAt}`}
+                        {calls.length > 1 && ` (${calls.length} calls)`}
+                      </span>
+                    )}
+                  </span>
+                </button>
+
                 {/* Append note input */}
                 <div className="flex gap-2 items-start">
                   <Textarea
@@ -560,7 +736,10 @@ export function ServiceJobDetailDialog({
                 )}
               </div>
             </div>
+            )}
+            </>)}
 
+            {tab === "files" && (<>
             {/* Photos & Files */}
             <div className="rounded-xl border bg-muted/20">
               <div className="flex items-center justify-between px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
@@ -631,22 +810,29 @@ export function ServiceJobDetailDialog({
               customerId={job.customerId ?? undefined}
               customerName={job.customerName ?? undefined}
             />
+            </>)}
           </div>
           </div>
 
           <DialogFooter className="flex-row justify-between sm:justify-between gap-2 px-6 pb-5 pt-4 border-t shrink-0">
-            {onDelete && (
-              <Button
-                variant="destructive"
-                size="sm"
-                className="gap-1.5"
-                onClick={() => setConfirmDelete(true)}
-                disabled={deleteIsPending}
-              >
-                <Trash2 className="w-3.5 h-3.5" />
-                Delete
+            <div className="flex gap-2 items-center">
+              {onDelete && (
+                <Button
+                  variant="destructive" size="sm" className="w-8 h-8 p-0"
+                  onClick={() => setConfirmDelete(true)}
+                  disabled={deleteIsPending}
+                  title="Delete service job"
+                >
+                  <Trash2 className="w-4 h-4" />
+                </Button>
+              )}
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
+                <ChevronLeft className="w-4 h-4" />
               </Button>
-            )}
+              <Button variant="outline" size="sm" className="h-8 px-3" onClick={goNextTab} disabled={tabIndex === TABS.length - 1} title="Next tab">
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+            </div>
             <div className="flex gap-2">
               {(job.customerEmail || job.customerPhone || onPrint) && (
                 <SendButton
@@ -656,6 +842,7 @@ export function ServiceJobDetailDialog({
                   buttonTitle="Send or print job"
                   title="Send Job"
                   documentLabel={job.jobNumber}
+                  children={<><Send className="w-4 h-4 mr-1.5" />Job Info</>}
                   {...(onPrint && {
                     reprintLabel: "Print",
                     reprintSub: "Sheet or sticker",
@@ -675,6 +862,29 @@ export function ServiceJobDetailDialog({
                     smsReadonly: true,
                     smsHint: "Texts a status update to the customer's number on file.",
                     onSms: () => sendJobSms(),
+                  })}
+                />
+              )}
+              {(job.customerEmail || job.customerPhone) && (
+                <SendButton
+                  variant="outline"
+                  size="sm"
+                  className="gap-1.5"
+                  buttonTitle="Send customer login link"
+                  title="Send Login Link"
+                  documentLabel={job.jobNumber}
+                  children={<><Send className="w-4 h-4 mr-1.5" />Portal</>}
+                  {...(job.customerEmail && {
+                    defaultEmail: job.customerEmail,
+                    emailReadonly: true,
+                    emailHint: "Emails the customer their portal login link to track this job.",
+                    onEmail: () => sendPortalLink("email"),
+                  })}
+                  {...(job.customerPhone && {
+                    defaultPhone: job.customerPhone,
+                    smsReadonly: true,
+                    smsHint: "Texts the customer their portal login link to track this job.",
+                    onSms: () => sendPortalLink("sms"),
                   })}
                 />
               )}

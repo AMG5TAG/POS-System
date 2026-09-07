@@ -3,6 +3,7 @@ import { db, deliveryOrdersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
+import { recordPaidOrderAsSale } from "../services/deliveryOrderSale";
 
 const PostDeliveryOrder = z.object({
   orderId: z.string().min(1),
@@ -30,6 +31,9 @@ const PatchDeliveryOrder = z.object({
   status: z.string(), placedAt: z.string(),
   total: z.string(),
   items: z.string(), notes: z.string(),
+  /* Whether the money is actually in. Moving this to "paid" books the sale. */
+  paymentStatus: z.enum(["pending", "paid", "refunded"]),
+  paymentProvider: z.string(), paymentRef: z.string(),
 }).partial();
 
 const router: IRouter = Router();
@@ -73,6 +77,20 @@ router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void
     .set(parsed.data)
     .where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
+
+  /* An online order is a claim on revenue until the money is in; marking it paid
+     is what books it as a sale. Keyed on the order, so toggling the status back
+     and forth never books it twice. Best-effort: the status change is already
+     saved and is what the merchant asked for, so a booking failure is logged
+     rather than handed back as a failed update. */
+  if (parsed.data.paymentStatus === "paid") {
+    try {
+      await recordPaidOrderAsSale(merchantId, row);
+    } catch (err) {
+      console.error("Failed to record paid delivery order as a sale", err);
+    }
+  }
+
   res.json({ ...row, total: parseFloat(row.total as unknown as string) });
 });
 

@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, posReceiptSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { stripManagedFields } from "../lib/settings-body";
 
 const router: IRouter = Router();
 
@@ -17,7 +18,7 @@ router.get("/pos-receipt-settings", requireAuth, async (req, res): Promise<void>
 
 router.put("/pos-receipt-settings", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  const body = req.body as Partial<typeof posReceiptSettingsTable.$inferInsert>;
+  const body = stripManagedFields(req.body ?? {}) as Partial<typeof posReceiptSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(posReceiptSettingsTable).where(eq(posReceiptSettingsTable.merchantId, merchantId)).limit(1);
   if (existing) {
     const [updated] = await db.update(posReceiptSettingsTable).set(body).where(eq(posReceiptSettingsTable.merchantId, merchantId)).returning();

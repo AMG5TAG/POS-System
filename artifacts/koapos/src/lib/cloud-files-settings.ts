@@ -17,7 +17,7 @@ const LAST_CUSTOMER_SYNC_KEY = "koapos_last_customer_sync";
 export interface CustomerFilesCloudSettings {
   /** When true, every file uploaded to a customer is also sent to the cloud. */
   enabled: boolean;
-  /** Integration key of the chosen storage, e.g. "onedrive" | "google_drive" | "dropbox" | "proton_drive". */
+  /** Integration key of the chosen storage, e.g. "onedrive" | "google_drive" | "dropbox". */
   storageKey: string;
   /** Destination folder path inside that storage, set by the platform user. */
   folder: string;

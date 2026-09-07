@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListLaybys,
@@ -7,6 +7,7 @@ import {
   useCancelLayby,
   useCompleteLayby,
   useListProducts,
+  useGetPaymentSurcharges,
   Layby,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
@@ -97,6 +98,10 @@ export default function POSLaybuysPage() {
 
   const [createOpen, setCreateOpen] = useState(false);
   const [paymentLayby, setPaymentLayby] = useState<Layby | null>(null);
+  // One idempotency key per payment attempt, reused across manual retries so a
+  // double-click/retry can't double-charge the layby; reset on success/close so
+  // the next installment gets a fresh key. Mirrors the POS checkout key ref.
+  const idempotencyKeyRef = useRef<string | null>(null);
   const [cancelLayby, setCancelLayby] = useState<Layby | null>(null);
   const [detailLayby, setDetailLayby] = useState<Layby | null>(null);
 
@@ -124,6 +129,16 @@ export default function POSLaybuysPage() {
 
   const { data: productsData } = useListProducts({ limit: 500 });
   const allProducts = productsData?.items ?? [];
+
+  // Pass-on surcharge: when a payment method is configured to pass its acceptance
+  // cost to the customer, it's collected on top of the deposit / installment.
+  // Split payments are not surcharged (matches the server). Mirrors the POS calc.
+  const { data: surchargeConfig } = useGetPaymentSurcharges({ query: { queryKey: ["payment-surcharges"] } });
+  const surchargeFor = useMemo(() => (method: string, base: number) => {
+    const cfg = (surchargeConfig?.items ?? []).find((s) => s.paymentMethod === method);
+    if (!cfg || !cfg.enabled || !cfg.passOn || !(base > 0)) return 0;
+    return Math.round(((cfg.percent / 100) * base + cfg.fixed) * 100) / 100;
+  }, [surchargeConfig]);
   const filteredProducts = allProducts.filter(
     (p) =>
       p.name?.toLowerCase().includes(productSearch.toLowerCase()) &&
@@ -185,6 +200,7 @@ export default function POSLaybuysPage() {
     setPaymentForm({ amount: "", paymentMethod: "cash", note: "" });
     setPaymentSplit(false);
     setPaymentLegs([{ method: "cash", amount: "" }, { method: "card", amount: "" }]);
+    idempotencyKeyRef.current = null;
   }
 
   async function handlePayment() {
@@ -202,6 +218,8 @@ export default function POSLaybuysPage() {
     if (paymentSplit && legs.length === 0) { toast.error("Add at least one payment method"); return; }
     if (amount > balance + 0.01) { toast.error(`Amount exceeds remaining balance of ${formatCurrency(balance)}`); return; }
 
+    const idempotencyKey = (idempotencyKeyRef.current ??= crypto.randomUUID());
+
     try {
       await paymentMutation.mutateAsync({
         id: paymentLayby.id,
@@ -211,6 +229,7 @@ export default function POSLaybuysPage() {
             ? { payments: legs }
             : { paymentMethod: paymentForm.paymentMethod }),
           note: paymentForm.note || undefined,
+          idempotencyKey,
         } as Parameters<typeof paymentMutation.mutateAsync>[0]["data"],
       });
       queryClient.invalidateQueries({ queryKey: ["/api/laybys"] });
@@ -507,6 +526,14 @@ export default function POSLaybuysPage() {
                     <SelectItem value="eftpos">EFTPOS</SelectItem>
                   </SelectContent>
                 </Select>
+                {(() => {
+                  const sc = surchargeFor(form.paymentMethod, parseFloat(form.depositAmount) || 0);
+                  return sc > 0 ? (
+                    <p className="text-xs text-muted-foreground">
+                      +{formatCurrency(sc)} surcharge — customer pays {formatCurrency((parseFloat(form.depositAmount) || 0) + sc)}
+                    </p>
+                  ) : null;
+                })()}
               </div>
             </div>
 
@@ -600,6 +627,14 @@ export default function POSLaybuysPage() {
                       <SelectItem value="eftpos">EFTPOS</SelectItem>
                     </SelectContent>
                   </Select>
+                  {(() => {
+                    const sc = surchargeFor(paymentForm.paymentMethod, parseFloat(paymentForm.amount) || 0);
+                    return sc > 0 ? (
+                      <p className="text-xs text-muted-foreground">
+                        +{formatCurrency(sc)} surcharge — customer pays {formatCurrency((parseFloat(paymentForm.amount) || 0) + sc)}
+                      </p>
+                    ) : null;
+                  })()}
                 </div>
               </>
             ) : (

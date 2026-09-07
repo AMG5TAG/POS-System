@@ -17,6 +17,10 @@ export const marketingAutomationRulesTable = pgTable("marketing_automation_rules
   // scheduled send at an absolute time (scheduled_time).
   delayDays:       integer("delay_days"),
   scheduledAt:     timestamp("scheduled_at", { withTimezone: true }),
+  // Birthday trigger settings: an optional discount/gift line included in the
+  // message, and how many days before the birthday to send (0 = on the day).
+  birthdayDiscount:    text("birthday_discount"),
+  birthdayDaysBefore:  integer("birthday_days_before"),
   lastRunAt:       timestamp("last_run_at", { withTimezone: true }),
   createdAt:       timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:       timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

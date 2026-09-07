@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, merchantBackupsTable, merchantBackupConfigsTable } from "@workspace/db";
-import type { MerchantBackup, BackupStorageDestination } from "@workspace/db";
+import { db, merchantBackupsTable, merchantBackupConfigsTable, merchantBackupSchedulesTable } from "@workspace/db";
+import type { MerchantBackup, BackupStorageDestination, MerchantBackupSchedule } from "@workspace/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
@@ -22,6 +22,9 @@ import {
   publicDestination,
   type StoredDestination,
 } from "../lib/backup-storage/types";
+import { retrieveArchive } from "../lib/backup-storage";
+import { existsSync } from "fs";
+import type { BackupLocation } from "@workspace/db";
 
 const router: IRouter = Router();
 
@@ -217,8 +220,26 @@ router.post(
       return;
     }
 
+    // Prefer the local canonical copy; if it's gone (the deployment filesystem
+    // is ephemeral), fall back to the durable server copy in object storage,
+    // then to any merchant-controlled copy that can serve it back.
+    let archivePath = backup.filePath;
+    let cleanup: (() => Promise<void>) | null = null;
+    if (!existsSync(archivePath)) {
+      const locations = (backup.locations ?? []) as BackupLocation[];
+      const retrieved = await retrieveArchive(locations, merchantId);
+      if (!retrieved) {
+        res.status(410).json({
+          error: "Backup file is no longer available on this server",
+        });
+        return;
+      }
+      archivePath = retrieved.path;
+      cleanup = retrieved.cleanup;
+    }
+
     try {
-      await restoreFromArchive(merchantId, backup.filePath, password);
+      await restoreFromArchive(merchantId, archivePath, password);
       res.json({ ok: true });
     } catch (err) {
       if (err instanceof InvalidBackupPasswordError) {
@@ -229,8 +250,125 @@ router.post(
       res.status(500).json({
         error: err instanceof Error ? err.message : "Restore failed",
       });
+    } finally {
+      if (cleanup) await cleanup();
     }
   },
 );
+
+// GET /backups/:id/download — stream the encrypted backup archive to the browser
+// so the merchant can keep an offline copy (still restorable with their password).
+router.get("/backups/:id/download", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { id } = RestoreBackupParams.parse(req.params);
+
+  const [backup] = await db
+    .select()
+    .from(merchantBackupsTable)
+    .where(and(eq(merchantBackupsTable.id, id), eq(merchantBackupsTable.merchantId, merchantId)));
+
+  if (!backup) { res.status(404).json({ error: "Backup not found" }); return; }
+  if (backup.status !== "completed" || !backup.filePath) {
+    res.status(400).json({ error: "Backup is not downloadable" });
+    return;
+  }
+
+  // Prefer the local canonical copy; fall back to the durable server copy, then
+  // to any merchant-controlled copy that can serve it back.
+  let archivePath = backup.filePath;
+  let cleanup: (() => Promise<void>) | null = null;
+  if (!existsSync(archivePath)) {
+    const locations = (backup.locations ?? []) as BackupLocation[];
+    const retrieved = await retrieveArchive(locations, merchantId);
+    if (!retrieved) { res.status(410).json({ error: "Backup file is no longer available on this server" }); return; }
+    archivePath = retrieved.path;
+    cleanup = retrieved.cleanup;
+  }
+
+  const startedAt = backup.startedAt ? new Date(backup.startedAt).toISOString().slice(0, 10) : "backup";
+  const fileName = `koapos-backup-${merchantId}-${startedAt}-${id}.koapos.enc`;
+  res.download(archivePath, fileName, async (err) => {
+    if (cleanup) await cleanup().catch(() => { /* best-effort */ });
+    if (err && !res.headersSent) res.status(500).end();
+    else if (err) req.log.warn({ merchantId, backupId: id, err }, "Backup download stream error");
+  });
+});
+
+/* ── Named backup schedules (multiple per merchant) ──────────────────────────── */
+
+const SCHEDULE_FREQUENCIES = new Set(["daily", "weekly", "monthly"]);
+
+function fmtSchedule(s: MerchantBackupSchedule) {
+  return {
+    id: s.id,
+    label: s.label,
+    frequency: s.frequency,
+    destinationIds: (s.destinationIds ?? []) as string[],
+    enabled: s.enabled,
+    lastBackupAt: s.lastBackupAt ?? null,
+  };
+}
+
+/** Validate + normalise an incoming schedule body. Returns an error string or the cleaned fields. */
+function parseScheduleBody(body: unknown): { error: string } | { label: string; frequency: string; destinationIds: string[]; enabled: boolean } {
+  const b = (body ?? {}) as Record<string, unknown>;
+  const frequency = String(b.frequency ?? "daily");
+  if (!SCHEDULE_FREQUENCIES.has(frequency)) {
+    return { error: `frequency must be one of: ${[...SCHEDULE_FREQUENCIES].join(", ")}` };
+  }
+  const label = String(b.label ?? "Backup").trim().slice(0, 100) || "Backup";
+  const destinationIds = Array.isArray(b.destinationIds) ? b.destinationIds.map(String) : [];
+  const enabled = b.enabled === undefined ? true : Boolean(b.enabled);
+  return { label, frequency, destinationIds, enabled };
+}
+
+// GET /backups/schedules — list named schedules
+router.get("/backups/schedules", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const rows = await db
+    .select()
+    .from(merchantBackupSchedulesTable)
+    .where(eq(merchantBackupSchedulesTable.merchantId, merchantId))
+    .orderBy(desc(merchantBackupSchedulesTable.createdAt));
+  res.json({ items: rows.map(fmtSchedule) });
+});
+
+// POST /backups/schedules — create
+router.post("/backups/schedules", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = parseScheduleBody(req.body);
+  if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
+  const [row] = await db.insert(merchantBackupSchedulesTable).values({ merchantId, ...parsed }).returning();
+  res.status(201).json(fmtSchedule(row));
+});
+
+// PUT /backups/schedules/:id — update
+router.put("/backups/schedules/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+  const parsed = parseScheduleBody(req.body);
+  if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
+  const [row] = await db
+    .update(merchantBackupSchedulesTable)
+    .set({ ...parsed, updatedAt: new Date() })
+    .where(and(eq(merchantBackupSchedulesTable.id, id), eq(merchantBackupSchedulesTable.merchantId, merchantId)))
+    .returning();
+  if (!row) { res.status(404).json({ error: "Schedule not found" }); return; }
+  res.json(fmtSchedule(row));
+});
+
+// DELETE /backups/schedules/:id
+router.delete("/backups/schedules/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
+  const deleted = await db
+    .delete(merchantBackupSchedulesTable)
+    .where(and(eq(merchantBackupSchedulesTable.id, id), eq(merchantBackupSchedulesTable.merchantId, merchantId)))
+    .returning();
+  if (deleted.length === 0) { res.status(404).json({ error: "Schedule not found" }); return; }
+  res.sendStatus(204);
+});
 
 export default router;

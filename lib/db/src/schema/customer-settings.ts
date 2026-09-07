@@ -13,6 +13,11 @@ export const customerSettingsTable = pgTable("customer_settings", {
   weeklyDigestOptIn:       text("weekly_digest_opt_in").notNull().default("false"),
   weeklyDigestSendDay:     integer("weekly_digest_send_day").notNull().default(1),
   referralSettings:        text("referral_settings").notNull().default("{}"),
+  // JSON-encoded GroupPricingRule[] — the automatic per-customer-group price
+  // formula (e.g. Trade = cost ex GST + 40%, capped at RRP). Resolved when a
+  // product is saved and by the POS; see koapos/src/lib/group-pricing.ts.
+  groupPricing:            text("group_pricing").notNull().default("[]"),
+  defaultCustomerImageUrl: text("default_customer_image_url").notNull().default(""),
   updatedAt:               timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

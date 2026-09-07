@@ -24,7 +24,7 @@ import { Separator } from "@/components/ui/separator";
 import {
   Zap, Plus, Trash2, Pencil, Play, RefreshCw, Mail, MessageSquare,
   Clock, CheckCircle2, XCircle, AlertTriangle, Info, Cake, Calendar,
-  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Share2,
+  ShoppingBag, Wrench, FileWarning, CalendarClock, Send, Gift, ShieldCheck,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -44,6 +44,8 @@ interface AutomationRule {
   templateBody: string | null;
   delayDays: number | null;
   scheduledAt: string | null;
+  birthdayDiscount: string | null;
+  birthdayDaysBefore: number | null;
   lastRunAt: string | null;
   createdAt: string;
   updatedAt: string;
@@ -78,18 +80,31 @@ const TRIGGER_EVENTS = [
   { value: "new_service_job", label: "New Service Job Created",     icon: Wrench,       desc: "Sent to the customer linked to a newly created service job" },
   { value: "invoice_overdue", label: "Invoice Overdue (Repair Reminder)", icon: FileWarning, desc: "Sent to customers with overdue unpaid invoices (max once per 7 days per invoice)" },
   { value: "days_after_sale", label: "X Days After Sale",                 icon: Clock,       desc: "Sent to opted-in customers a set number of days after they make a purchase" },
+  { value: "warranty_expiring", label: "Warranty Expiring",               icon: ShieldCheck, desc: "Reminds customers when a product or repair warranty is within N days of expiring" },
   { value: "scheduled_time",  label: "At a Set Time",                     icon: CalendarClock, desc: "One-off broadcast to opted-in customers at a date & time you choose" },
 ];
 
 /** Trigger types that use the time-window config fields. */
 const DELAY_TRIGGER = "days_after_sale";
+const WARRANTY_TRIGGER = "warranty_expiring";
 const SCHEDULED_TRIGGER = "scheduled_time";
+const BIRTHDAY_TRIGGER = "birthday";
+
+/** Triggers that store their day count in `delayDays`. */
+const usesDelayDays = (t: string) => t === DELAY_TRIGGER || t === WARRANTY_TRIGGER;
+
+const BIRTHDAY_DAYS_OPTIONS = [
+  { value: "0",  label: "On their birthday" },
+  { value: "1",  label: "1 day before" },
+  { value: "3",  label: "3 days before" },
+  { value: "7",  label: "7 days before" },
+  { value: "14", label: "14 days before" },
+];
 
 const CHANNELS = [
   { value: "email",  label: "Email",       icon: Mail },
   { value: "sms",    label: "SMS",         icon: MessageSquare },
   { value: "both",   label: "Email & SMS", icon: Send },
-  { value: "social", label: "Social Media", icon: Share2 },
 ];
 
 const EMPTY_FORM = {
@@ -99,6 +114,8 @@ const EMPTY_FORM = {
   templateId: "",
   delayDays: "",
   scheduledAt: "",
+  birthdayDiscount: "",
+  birthdayDaysBefore: "0",
 };
 
 /** ISO timestamp → value for an <input type="datetime-local"> (local time). */
@@ -134,9 +151,6 @@ function ChannelBadge({ value }: { value: string }) {
         <Mail className="w-3 h-3" /><MessageSquare className="w-3 h-3" /> Email &amp; SMS
       </Badge>
     );
-  }
-  if (value === "social") {
-    return <Badge variant="outline" className="gap-1"><Share2 className="w-3 h-3" /> Social Media</Badge>;
   }
   return (
     <Badge variant="outline" className="gap-1">
@@ -236,6 +250,8 @@ export default function ManagementMarketingAutomationPage() {
       templateId: rule.templateId ?? "",
       delayDays: rule.delayDays != null ? String(rule.delayDays) : "",
       scheduledAt: rule.scheduledAt ? isoToLocalInput(rule.scheduledAt) : "",
+      birthdayDiscount: rule.birthdayDiscount ?? "",
+      birthdayDaysBefore: rule.birthdayDaysBefore != null ? String(rule.birthdayDaysBefore) : "0",
     });
     setDialogOpen(true);
   }
@@ -246,6 +262,9 @@ export default function ManagementMarketingAutomationPage() {
     if (!form.templateId)      { toast.error("Please link an email template"); return; }
     if (form.triggerEvent === DELAY_TRIGGER && (!form.delayDays || Number(form.delayDays) <= 0)) {
       toast.error("Enter how many days after the sale to send"); return;
+    }
+    if (form.triggerEvent === WARRANTY_TRIGGER && (!form.delayDays || Number(form.delayDays) <= 0)) {
+      toast.error("Enter how many days before expiry to remind the customer"); return;
     }
     if (form.triggerEvent === SCHEDULED_TRIGGER && !form.scheduledAt) {
       toast.error("Choose a date & time to send"); return;
@@ -264,8 +283,10 @@ export default function ManagementMarketingAutomationPage() {
         templateSubject: tpl.subject,
         templateBody: tpl.body,
         isActive: editRule ? editRule.isActive : true,
-        delayDays: form.triggerEvent === DELAY_TRIGGER ? Number(form.delayDays) || null : null,
+        delayDays: usesDelayDays(form.triggerEvent) ? Number(form.delayDays) || null : null,
         scheduledAt: form.triggerEvent === SCHEDULED_TRIGGER && form.scheduledAt ? new Date(form.scheduledAt).toISOString() : null,
+        birthdayDiscount: form.triggerEvent === BIRTHDAY_TRIGGER ? (form.birthdayDiscount.trim() || null) : null,
+        birthdayDaysBefore: form.triggerEvent === BIRTHDAY_TRIGGER ? (Number(form.birthdayDaysBefore) || 0) : null,
       };
       if (editRule) {
         await apiFetch(`/marketing-automation/${editRule.id}`, { method: "PUT", body: JSON.stringify(body) });
@@ -564,6 +585,26 @@ export default function ManagementMarketingAutomationPage() {
               </div>
             )}
 
+            {form.triggerEvent === WARRANTY_TRIGGER && (
+              <div className="space-y-1.5">
+                <Label>Days before expiry <span className="text-destructive">*</span></Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="number"
+                    min={1}
+                    className="w-28"
+                    placeholder="30"
+                    value={form.delayDays}
+                    onChange={(e) => setForm((f) => ({ ...f, delayDays: e.target.value.replace(/[^0-9]/g, "") }))}
+                  />
+                  <span className="text-sm text-muted-foreground">day(s) before a product or repair warranty expires</span>
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  Merge tags: <strong>{"{{item_name}}"}</strong>, <strong>{"{{expiry_date}}"}</strong>, <strong>{"{{days_left}}"}</strong>, <strong>{"{{first_name}}"}</strong>.
+                </p>
+              </div>
+            )}
+
             {form.triggerEvent === SCHEDULED_TRIGGER && (
               <div className="space-y-1.5">
                 <Label>Send at <span className="text-destructive">*</span></Label>
@@ -574,6 +615,36 @@ export default function ManagementMarketingAutomationPage() {
                 />
                 <p className="text-xs text-muted-foreground">A one-off broadcast — sends within the hour after this time.</p>
               </div>
+            )}
+
+            {form.triggerEvent === BIRTHDAY_TRIGGER && (
+              <>
+                <div className="space-y-1.5">
+                  <Label>When to send</Label>
+                  <Select value={form.birthdayDaysBefore} onValueChange={(v) => setForm((f) => ({ ...f, birthdayDaysBefore: v }))}>
+                    <SelectTrigger className="w-48"><SelectValue /></SelectTrigger>
+                    <SelectContent>
+                      {BIRTHDAY_DAYS_OPTIONS.map((o) => (
+                        <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="flex items-center gap-1.5">
+                    <Gift className="w-4 h-4 text-muted-foreground" /> Birthday discount or gift
+                  </Label>
+                  <Input
+                    placeholder="e.g. Use code BDAY20 for 20% off this week"
+                    value={form.birthdayDiscount}
+                    onChange={(e) => setForm((f) => ({ ...f, birthdayDiscount: e.target.value }))}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Optional. Added to the bottom of the message, or insert it in your template with the{" "}
+                    <strong>{"{{birthday_discount}}"}</strong> merge tag.
+                  </p>
+                </div>
+              </>
             )}
 
             <div className="space-y-1.5">

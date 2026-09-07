@@ -1,7 +1,9 @@
 import { useState, useRef } from "react";
-import { Upload, X, Link as LinkIcon, Loader2, ImageIcon } from "lucide-react";
+import { Upload, X, Link as LinkIcon, Loader2, ImageIcon, Images } from "lucide-react";
 import { Button } from "./button";
 import { Input } from "./input";
+import { MediaLibraryDialog } from "./media-library-dialog";
+import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
@@ -19,30 +21,17 @@ export function ImageUploader({ value, onChange, className, aspectRatio = "squar
   const [dragOver, setDragOver] = useState(false);
   const [urlMode, setUrlMode] = useState(false);
   const [urlInput, setUrlInput] = useState("");
+  const [libraryOpen, setLibraryOpen] = useState(false);
 
   const upload = async (file: File) => {
     if (!file.type.startsWith("image/")) { toast.error("Please select an image file"); return; }
     setUploading(true);
     try {
-      const urlRes = await fetch("/api/storage/uploads/request-url", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name: file.name, size: file.size, contentType: file.type }),
-        credentials: "include",
-      });
-      if (!urlRes.ok) throw new Error("Could not get upload URL");
-      const { uploadURL, objectPath } = await urlRes.json() as { uploadURL: string; objectPath: string };
-      const putRes = await fetch(uploadURL, { method: "PUT", body: file, headers: { "Content-Type": file.type } });
-      if (!putRes.ok) throw new Error("Upload to storage failed");
-      const confirmRes = await fetch("/api/storage/uploads/confirm", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ objectPath }),
-        credentials: "include",
-      });
-      if (!confirmRes.ok) throw new Error("Failed to confirm upload");
-      onChange(`/api/storage${objectPath}`);
-      toast.success("Image uploaded");
+      // uploadFile hashes first, so re-using an image already in this
+      // merchant's library reuses the stored copy instead of writing another.
+      const { url, deduped } = await uploadFile(file);
+      onChange(url);
+      toast.success(deduped ? "Reused an image already in your library" : "Image uploaded");
     } catch (e) {
       toast.error(e instanceof Error ? e.message : "Upload failed");
     } finally {
@@ -163,6 +152,13 @@ export function ImageUploader({ value, onChange, className, aspectRatio = "squar
               </button>
               <button
                 type="button"
+                onClick={(e) => { e.stopPropagation(); setLibraryOpen(true); }}
+                className="flex-1 bg-background/90 backdrop-blur-sm rounded px-1.5 py-1 text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-background border transition-colors"
+              >
+                <Images className="w-2.5 h-2.5" /> Library
+              </button>
+              <button
+                type="button"
                 onClick={(e) => { e.stopPropagation(); setUrlMode(true); setUrlInput(value); }}
                 className="flex-1 bg-background/90 backdrop-blur-sm rounded px-1.5 py-1 text-[10px] font-medium flex items-center justify-center gap-1 hover:bg-background border transition-colors"
               >
@@ -179,13 +175,22 @@ export function ImageUploader({ value, onChange, className, aspectRatio = "squar
             <p className="text-[11px] text-muted-foreground/60 font-medium text-center leading-tight">
               Drop or click
             </p>
-            <button
-              type="button"
-              onClick={(e) => { e.stopPropagation(); setUrlMode(true); }}
-              className="pointer-events-auto text-[10px] text-primary/70 hover:text-primary flex items-center gap-0.5 transition-colors"
-            >
-              <LinkIcon className="w-2.5 h-2.5" /> Use URL
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setLibraryOpen(true); }}
+                className="pointer-events-auto text-[10px] text-primary/70 hover:text-primary flex items-center gap-0.5 transition-colors"
+              >
+                <Images className="w-2.5 h-2.5" /> Library
+              </button>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); setUrlMode(true); }}
+                className="pointer-events-auto text-[10px] text-primary/70 hover:text-primary flex items-center gap-0.5 transition-colors"
+              >
+                <LinkIcon className="w-2.5 h-2.5" /> Use URL
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -193,6 +198,12 @@ export function ImageUploader({ value, onChange, className, aspectRatio = "squar
       <input
         ref={inputRef} type="file" accept="image/*" className="hidden"
         onChange={(e) => handleFile(e.target.files)}
+      />
+
+      <MediaLibraryDialog
+        open={libraryOpen}
+        onOpenChange={setLibraryOpen}
+        onSelect={(url) => onChange(url)}
       />
     </div>
   );

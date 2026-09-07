@@ -32,7 +32,12 @@ type FormValues = z.infer<typeof schema>;
 
 function useToken(): string | null {
   if (typeof window === "undefined") return null;
-  return new URLSearchParams(window.location.search).get("token");
+  const m = window.location.search.match(/[?&]token=([^&]*)/);
+  if (!m) return null;
+  // Read the token WITHOUT the "+"→space conversion that URLSearchParams does,
+  // which would corrupt a base64 token in an unencoded reset link and make the
+  // server reject it as "invalid or expired". Tokens never contain real spaces.
+  try { return decodeURIComponent(m[1].replace(/\+/g, "%2B")); } catch { return m[1]; }
 }
 
 export default function ResetPasswordPage() {

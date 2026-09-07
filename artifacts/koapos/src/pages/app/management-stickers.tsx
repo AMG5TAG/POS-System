@@ -2,6 +2,7 @@ import { useState, useEffect, useRef } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useGetMerchant, useListProducts, Product } from "@workspace/api-client-react";
 import { useBusinessProfile } from "@/lib/business-profile";
+import { publicProductUrl } from "@/lib/public-url";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,11 +14,12 @@ import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 import {
   Printer, Tag, Info, Barcode, Search, X, ChevronRight, LayoutTemplate, Check,
-  Save, Star, Copy, Trash2, Plus,
+  Save, Star, Copy, Trash2, Plus, ZoomIn, ZoomOut,
 } from "lucide-react";
 import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
   useStickerTemplates, useStickerPrinter, DymoSize,
+  FONT_SIZE_OPTIONS, fieldHasFontSize, fontScaleKey,
 } from "@/lib/sticker-config";
 
 /* ─── On/Off pill toggle ──────────────────────────────────────────────────── */
@@ -42,7 +44,7 @@ function FieldPill({
             "px-3 py-1.5 transition-colors",
             isOn
               ? "bg-primary text-primary-foreground"
-              : "text-muted-foreground hover:bg-muted/60",
+              : "pill-selector text-muted-foreground hover:bg-muted/60",
           )}
         >
           On
@@ -54,11 +56,45 @@ function FieldPill({
             "px-3 py-1.5 border-l transition-colors",
             !isOn
               ? "bg-muted text-foreground"
-              : "text-muted-foreground hover:bg-muted/60",
+              : "pill-selector text-muted-foreground hover:bg-muted/60",
           )}
         >
           Off
         </button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Per-field font size selector ────────────────────────────────────────────
+ * Shown beneath a toggle (when on) so the option's text can be sized on the
+ * label. Writes the chosen scale into the template under its `fs_<key>` key. */
+
+function FieldFontSize({ value, onChange }: {
+  value: string;
+  onChange: (v: string) => void;
+}) {
+  const current = value || "1";
+  return (
+    <div className="flex items-center justify-between pb-2.5 pl-0.5 -mt-1 gap-3">
+      <span className="text-[11px] text-muted-foreground">Font size</span>
+      <div className="flex rounded-full border overflow-hidden text-[11px] font-semibold shrink-0">
+        {FONT_SIZE_OPTIONS.map((opt, i) => (
+          <button
+            key={opt.value}
+            type="button"
+            onClick={() => onChange(opt.value)}
+            className={cn(
+              "px-2.5 py-1 transition-colors",
+              i > 0 && "border-l",
+              current === opt.value
+                ? "bg-primary text-primary-foreground"
+                : "pill-selector text-muted-foreground hover:bg-muted/60",
+            )}
+          >
+            {opt.label}
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -98,6 +134,8 @@ export default function ManagementStickersPage() {
   const [orientation,   setOrientation]     = useState<"horizontal" | "vertical">("horizontal");
   const [barcodePosition, setBarcodePosition] = useState<"top" | "bottom">("bottom");
   const [colorMode,     setColorMode]       = useState<"bw" | "color">("bw");
+  const [previewZoom,   setPreviewZoom]     = useState(1);
+  const adjustZoom = (delta: number) => setPreviewZoom((z) => Math.min(3, Math.max(0.5, Math.round((z + delta) * 100) / 100)));
   const [quantity,      setQuantity]        = useState(1);
   const [showTplPicker, setShowTplPicker]   = useState(false);
 
@@ -106,6 +144,9 @@ export default function ManagementStickersPage() {
   const [showSaveForm, setShowSaveForm] = useState(false);
   const [tplName, setTplName] = useState("");
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  // When saving a new template whose name matches an existing one, holds that
+  // template's id so the user can choose to overwrite it or save a separate copy.
+  const [overwriteCandidateId, setOverwriteCandidateId] = useState<string | null>(null);
 
   // Product search
   const [productQuery,     setProductQuery]     = useState("");
@@ -180,11 +221,14 @@ export default function ManagementStickersPage() {
 
   /* ── Template save / manage (in-page, replacing the old Templates screen) ── */
 
-  // Templates only persist the configurable on/off fields for a type — not the
-  // transient product auto-fill text (which is filled per-print), matching the
-  // original template semantics.
-  const templateFieldsForSave = () =>
-    Object.fromEntries(selectedType.fields.map((f) => [f.key, currentFields[f.key] ?? f.defaultValue]));
+  // Templates persist the configurable on/off fields for a type plus each
+  // option's `fs_<key>` font scale — not the transient product auto-fill text
+  // (which is filled per-print), matching the original template semantics.
+  const templateFieldsForSave = () => {
+    const base = Object.fromEntries(selectedType.fields.map((f) => [f.key, currentFields[f.key] ?? f.defaultValue]));
+    const fontScales = Object.entries(currentFields).filter(([k]) => k.startsWith("fs_"));
+    return { ...base, ...Object.fromEntries(fontScales) };
+  };
 
   const startNewTemplate = () => {
     setEditingTemplateId(null);
@@ -192,24 +236,45 @@ export default function ManagementStickersPage() {
     setShowSaveForm(true);
   };
 
-  const saveTemplate = () => {
-    const name = tplName.trim();
-    if (!name) { toast.error("Please enter a template name."); return; }
+  // An existing template of the current type whose name matches the one typed
+  // (case-insensitive). Used to offer "overwrite vs save new" on a name clash.
+  const findNameClash = (name: string) =>
+    templates.find(
+      (t) => t.typeId === selectedTypeId && t.name.trim().toLowerCase() === name.toLowerCase(),
+    );
+
+  // Persist the current label as a template — either overwriting an existing one
+  // (when `overwriteId` is given) or creating a new one.
+  const persistTemplate = (overwriteId?: string) => {
     const data = {
-      name,
+      name: tplName.trim(),
       typeId: selectedTypeId,
       sizeId: selectedSizeId,
       fields: templateFieldsForSave(),
     };
-    if (editingTemplateId) {
-      update(editingTemplateId, data);
+    if (overwriteId) {
+      update(overwriteId, data);
+      setEditingTemplateId(overwriteId);
       toast.success("Template updated.");
     } else {
       const tpl = create(data);
       setEditingTemplateId(tpl.id);
       toast.success("Template saved.");
     }
+    setOverwriteCandidateId(null);
     setShowSaveForm(false);
+  };
+
+  const saveTemplate = () => {
+    const name = tplName.trim();
+    if (!name) { toast.error("Please enter a template name."); return; }
+    // Editing an existing template just updates it in place.
+    if (editingTemplateId) { persistTemplate(editingTemplateId); return; }
+    // Saving a new template: if the name collides with an existing one of the
+    // same type, ask whether to overwrite it or keep both.
+    const clash = findNameClash(name);
+    if (clash) { setOverwriteCandidateId(clash.id); return; }
+    persistTemplate();
   };
 
   const duplicateTemplate = (tpl: { name: string; typeId: string; sizeId: string; fields: Record<string, string> }) => {
@@ -230,11 +295,13 @@ export default function ManagementStickersPage() {
     setProductQuery(p.name);
     setShowProdDropdown(false);
     const updates: Record<string, string> = {
-      productName: p.name,
-      sku:         p.sku         ?? "",
-      price:       p.price != null ? `$${Number(p.price).toFixed(2)}` : "",
-      barcode:     p.barcode     ?? "",
-      category:    (p as Product & { category?: { name: string } }).category?.name ?? "",
+      productName:  p.name,
+      sku:          p.sku         ?? "",
+      price:        p.price != null ? `$${Number(p.price).toFixed(2)}` : "",
+      barcode:      p.barcode     ?? "",
+      category:     (p as Product & { category?: { name: string } }).category?.name ?? "",
+      // Public product-page URL for the optional QR toggle on the product sticker.
+      productQrUrl: publicProductUrl((merchant as { username?: string | null } | undefined)?.username, p.id),
     };
     setFields((prev) => ({ ...prev, [selectedTypeId]: { ...prev[selectedTypeId], ...updates } }));
   };
@@ -406,7 +473,7 @@ export default function ManagementStickersPage() {
             </Popover>
 
             {/* Save current label as a (new or updated) template */}
-            <Popover open={showSaveForm} onOpenChange={(o) => { if (o && !editingTemplateId) setTplName(""); setShowSaveForm(o); }}>
+            <Popover open={showSaveForm} onOpenChange={(o) => { if (o && !editingTemplateId) setTplName(""); if (!o) setOverwriteCandidateId(null); setShowSaveForm(o); }}>
               <PopoverTrigger asChild>
                 <Button variant="outline" size="sm" className="gap-1.5">
                   <Save className="w-3.5 h-3.5" />
@@ -420,22 +487,38 @@ export default function ManagementStickersPage() {
                 <Input
                   autoFocus
                   value={tplName}
-                  onChange={(e) => setTplName(e.target.value)}
+                  onChange={(e) => { setTplName(e.target.value); setOverwriteCandidateId(null); }}
                   onKeyDown={(e) => { if (e.key === "Enter") saveTemplate(); }}
                   placeholder="Template name…"
                   className="h-8 text-sm"
                 />
-                <div className="flex items-center justify-between gap-2">
-                  {editingTemplateId ? (
-                    <button onClick={() => { setEditingTemplateId(null); setTplName(""); }}
-                      className="text-[11px] text-muted-foreground hover:underline inline-flex items-center gap-0.5">
-                      <Plus className="w-3 h-3" /> Save as new
-                    </button>
-                  ) : <span />}
-                  <Button size="sm" className="gap-1.5 h-8" onClick={saveTemplate}>
-                    <Save className="w-3.5 h-3.5" /> {editingTemplateId ? "Update" : "Save"}
-                  </Button>
-                </div>
+                {overwriteCandidateId ? (
+                  <div className="space-y-2">
+                    <p className="text-[11px] text-amber-600">
+                      A {selectedType.label} template named “{tplName.trim()}” already exists. Overwrite it or save a new one?
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button size="sm" variant="outline" className="h-8 flex-1" onClick={() => persistTemplate(overwriteCandidateId)}>
+                        Overwrite
+                      </Button>
+                      <Button size="sm" className="gap-1.5 h-8 flex-1" onClick={() => persistTemplate()}>
+                        <Plus className="w-3.5 h-3.5" /> Save new
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="flex items-center justify-between gap-2">
+                    {editingTemplateId ? (
+                      <button onClick={() => { setEditingTemplateId(null); setTplName(""); }}
+                        className="text-[11px] text-muted-foreground hover:underline inline-flex items-center gap-0.5">
+                        <Plus className="w-3 h-3" /> Save as new
+                      </button>
+                    ) : <span />}
+                    <Button size="sm" className="gap-1.5 h-8" onClick={saveTemplate}>
+                      <Save className="w-3.5 h-3.5" /> {editingTemplateId ? "Update" : "Save"}
+                    </Button>
+                  </div>
+                )}
               </PopoverContent>
             </Popover>
 
@@ -522,7 +605,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setOrientation("horizontal")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-                        orientation === "horizontal" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        orientation === "horizontal" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <svg width="14" height="10" viewBox="0 0 14 10" fill="none" className="shrink-0"><rect x="1" y="1" width="12" height="8" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
@@ -532,7 +615,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setOrientation("vertical")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
-                        orientation === "vertical" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        orientation === "vertical" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <svg width="10" height="14" viewBox="0 0 10 14" fill="none" className="shrink-0"><rect x="1" y="1" width="8" height="12" rx="1.5" stroke="currentColor" strokeWidth="1.5" fill="none"/></svg>
@@ -549,7 +632,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setColorMode("bw")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-                        colorMode === "bw" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        colorMode === "bw" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <span className="w-3 h-3 rounded-full border border-current bg-black shrink-0" />
@@ -559,7 +642,7 @@ export default function ManagementStickersPage() {
                       onClick={() => setColorMode("color")}
                       className={cn(
                         "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
-                        colorMode === "color" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                        colorMode === "color" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                       )}
                     >
                       <span
@@ -580,7 +663,7 @@ export default function ManagementStickersPage() {
                         onClick={() => setBarcodePosition("top")}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium transition-colors",
-                          barcodePosition === "top" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                          barcodePosition === "top" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <Barcode className="w-3.5 h-3.5 shrink-0" />
@@ -590,7 +673,7 @@ export default function ManagementStickersPage() {
                         onClick={() => setBarcodePosition("bottom")}
                         className={cn(
                           "flex items-center gap-1.5 px-3 py-1.5 text-xs font-medium border-l transition-colors",
-                          barcodePosition === "bottom" ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:bg-muted",
+                          barcodePosition === "bottom" ? "bg-primary text-primary-foreground" : "pill-selector text-muted-foreground hover:bg-muted",
                         )}
                       >
                         <Barcode className="w-3.5 h-3.5 shrink-0" />
@@ -623,27 +706,49 @@ export default function ManagementStickersPage() {
           <div className="flex flex-col gap-4">
             <div className="flex items-center justify-between gap-2">
               <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Label Preview</p>
-              <Badge variant="outline" className="text-[10px]">
-                {selectedSize.widthMm}×{selectedSize.heightMm}mm · #{selectedSize.id}
-              </Badge>
+              <div className="flex items-center gap-2">
+                {/* Zoom controls */}
+                <div className="flex items-center gap-1">
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(-0.25)} disabled={previewZoom <= 0.5} aria-label="Zoom out">
+                    <ZoomOut className="w-3.5 h-3.5" />
+                  </Button>
+                  <button
+                    type="button"
+                    onClick={() => setPreviewZoom(1)}
+                    className="text-xs tabular-nums text-muted-foreground w-10 text-center hover:text-foreground"
+                    title="Reset zoom"
+                  >
+                    {Math.round(previewZoom * 100)}%
+                  </button>
+                  <Button variant="outline" size="icon" className="h-7 w-7" onClick={() => adjustZoom(0.25)} disabled={previewZoom >= 3} aria-label="Zoom in">
+                    <ZoomIn className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <Badge variant="outline" className="text-[10px]">
+                  {selectedSize.widthMm}×{selectedSize.heightMm}mm · #{selectedSize.id}
+                </Badge>
+              </div>
             </div>
 
             {/* Preview card — flex-1 so it fills column height */}
             <Card className="flex-1 flex flex-col">
               <CardContent className="p-5 flex flex-col flex-1 gap-4">
                 {/* Preview canvas — flex-1 to fill card */}
-                <div className="flex-1 flex items-center justify-center rounded-xl border bg-gray-50 min-h-48">
-                  <LabelPreview
-                    type={selectedType}
-                    fields={currentFields}
-                    size={selectedSize}
-                    businessName={businessName}
-                    brandColor={brandColor}
-                    logoUrl={profile.logo}
-                    orientation={orientation}
-                    barcodePosition={barcodePosition}
-                    colorMode={colorMode}
-                  />
+                <div className="flex-1 flex items-center justify-center rounded-xl border bg-gray-50 min-h-48 overflow-auto">
+                  <div style={{ transform: `scale(${previewZoom})`, transformOrigin: "center" }} className="transition-transform">
+                    <LabelPreview
+                      type={selectedType}
+                      fields={currentFields}
+                      size={selectedSize}
+                      businessName={businessName}
+                      brandColor={brandColor}
+                      logoUrl={profile.logo}
+                      businessWebsite={profile.website}
+                      orientation={orientation}
+                      barcodePosition={barcodePosition}
+                      colorMode={colorMode}
+                    />
+                  </div>
                 </div>
 
                 <p className="text-xs text-muted-foreground text-center">
@@ -665,7 +770,7 @@ export default function ManagementStickersPage() {
                             "text-[10px] px-2 py-0.5 rounded border transition-colors",
                             sid === selectedSizeId
                               ? "bg-primary text-primary-foreground border-primary"
-                              : "hover:bg-muted border-border",
+                              : "pill-selector hover:bg-muted border-border",
                           )}
                         >
                           {sid}
@@ -758,6 +863,13 @@ export default function ManagementStickersPage() {
                           isOn={(currentFields[field.key] ?? field.defaultValue) !== "false"}
                           onToggle={(v) => setField(field.key, v ? "true" : "false")}
                         />
+                        {fieldHasFontSize(field)
+                          && (currentFields[field.key] ?? field.defaultValue) !== "false" && (
+                          <FieldFontSize
+                            value={currentFields[fontScaleKey(field.key)] ?? "1"}
+                            onChange={(v) => setField(fontScaleKey(field.key), v)}
+                          />
+                        )}
                         {field.key === "showLogo"
                           && (currentFields[field.key] ?? field.defaultValue) !== "false"
                           && !profile.logo && (

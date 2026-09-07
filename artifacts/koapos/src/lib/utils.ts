@@ -32,6 +32,13 @@ export function exportToCsv(
   URL.revokeObjectURL(url);
 }
 
+/* A tel: link has to be digits (and a leading +). A number stored the way a
+   merchant types it — "0412 345 678" — is not a valid tel: URI, and some
+   dialers and softphones drop the call rather than tolerating the spaces. */
+export function telHref(phone: string) {
+  return `tel:${phone.replace(/[^\d+]/g, "")}`;
+}
+
 export function formatCurrency(value: number, currency = 'AUD') {
   return new Intl.NumberFormat('en-AU', {
     style: 'currency',

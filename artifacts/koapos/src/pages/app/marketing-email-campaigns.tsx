@@ -153,7 +153,17 @@ function RichToolbar({ editorRef }: { editorRef: React.RefObject<HTMLDivElement 
     editorRef.current?.focus();
     document.execCommand(cmd, false, val ?? undefined);
   }, [editorRef]);
-  const insertLink = () => { const url = prompt("Enter link URL:", "https://"); if (url) exec("createLink", url); };
+  const insertLink = () => {
+    const url = prompt("Enter link URL:", "https://");
+    if (!url) return;
+    // Block dangerous schemes (javascript:, data:, vbscript:) that would execute
+    // when a recipient opens or clicks the link. Allow only web/email/phone links.
+    if (!/^(https?:|mailto:|tel:)/i.test(url.trim())) {
+      toast.error("Only http, https, mailto and tel links are allowed");
+      return;
+    }
+    exec("createLink", url.trim());
+  };
   return (
     <div className="flex items-center gap-0.5 border-b px-2 py-1.5 bg-muted/30 flex-wrap">
       {[
@@ -272,7 +282,7 @@ export default function MarketingEmailCampaignsPage() {
 
   const loadTemplate = (tpl: QuickTemplate) => {
     setField("subject", tpl.subject);
-    if (editorRef.current) editorRef.current.innerHTML = tpl.body;
+    if (editorRef.current) editorRef.current.innerHTML = DOMPurify.sanitize(tpl.body);
     setField("body", tpl.body);
     toast.success(`Template loaded: ${tpl.label}`);
   };
@@ -361,7 +371,7 @@ export default function MarketingEmailCampaignsPage() {
         refetch();
         const fresh = blankDraft();
         setDraft(fresh);
-        if (editorRef.current) editorRef.current.innerHTML = fresh.body;
+        if (editorRef.current) editorRef.current.innerHTML = DOMPurify.sanitize(fresh.body);
         setSending(false);
         toast.success(draft.scheduled ? `Campaign scheduled for ${draft.scheduledAt}` : `Campaign sent to ${audienceCount} recipients!`);
       },
@@ -379,12 +389,12 @@ export default function MarketingEmailCampaignsPage() {
   const resetForm = () => {
     const fresh = blankDraft();
     setDraft(fresh);
-    if (editorRef.current) editorRef.current.innerHTML = fresh.body;
+    if (editorRef.current) editorRef.current.innerHTML = DOMPurify.sanitize(fresh.body);
   };
 
   useEffect(() => {
     if (editorRef.current && !editorRef.current.innerHTML) {
-      editorRef.current.innerHTML = draft.body;
+      editorRef.current.innerHTML = DOMPurify.sanitize(draft.body);
     }
   }, []);
 

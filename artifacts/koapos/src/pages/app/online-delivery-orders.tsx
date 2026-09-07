@@ -16,16 +16,18 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
+import { expandStreetType } from "@/lib/address-format";
 import {
   Truck, Package, Clock, CheckCircle2, XCircle, ChefHat, Bike,
   Plus, Eye, RefreshCw, Phone, MapPin, StickyNote, ChevronRight,
-  Receipt, Printer,
+  Receipt, Printer, Check,
 } from "lucide-react";
 import {
   useListDeliveryOrders,
   useCreateDeliveryOrder,
   useUpdateDeliveryOrder,
 } from "@workspace/api-client-react";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -51,6 +53,8 @@ interface DeliveryOrder {
   estimatedAt?: string;
   total: number;
   note?: string;
+  /** Whether the money is in. Only a paid order counts towards takings. */
+  paymentStatus: "pending" | "paid" | "refunded";
 }
 
 type ApiOrder = Record<string, unknown>;
@@ -75,6 +79,7 @@ function apiToLocal(o: ApiOrder): DeliveryOrder {
     estimatedAt: o.placedAt ? String(o.placedAt) : undefined,
     total: parseFloat(String(o.total ?? 0)),
     note: o.notes ? String(o.notes) : undefined,
+    paymentStatus: (o.paymentStatus as DeliveryOrder["paymentStatus"]) ?? "pending",
   };
 }
 
@@ -182,7 +187,7 @@ function OrderCard({ order, onAdvance, onCancel, onView }: {
           <span className="flex items-center gap-0.5"><Clock className="w-3 h-3" /> {formatTime(order.createdAt)}</span>
           <span className="font-semibold text-foreground">${order.total.toFixed(2)}</span>
           <span>{order.items.length} item{order.items.length !== 1 ? "s" : ""}</span>
-          {order.phone && <span className="flex items-center gap-0.5"><Phone className="w-3 h-3" /> {order.phone}</span>}
+          {order.phone && <span className="flex items-center gap-0.5"><Phone className="w-3 h-3" /> {formatPhoneForDisplay(order.phone)}</span>}
         </div>
         {order.note && (
           <p className="text-[11px] text-amber-600 dark:text-amber-400 flex items-center gap-1 mt-1.5 bg-amber-50 dark:bg-amber-950/20 rounded px-2 py-1">
@@ -224,6 +229,19 @@ export default function OnlineDeliveryOrdersPage() {
 
   const rawOrders = (response?.items ?? []) as unknown as ApiOrder[];
   const orders: DeliveryOrder[] = rawOrders.map(apiToLocal);
+  /* Marking an order paid is what books it as a sale — an online order is a
+     claim on revenue until the money is actually in. Stock and the customer's
+     totals moved when the order was placed, so this only records the takings. */
+  const markPaid = (order: DeliveryOrder) => {
+    updateOrder.mutate(
+      { id: Number(order.id), data: { paymentStatus: "paid" } as never },
+      {
+        onSuccess: () => { refetch(); toast.success(`Order ${order.orderId} marked paid — recorded in takings`); },
+        onError: () => toast.error("Couldn't mark this order paid"),
+      },
+    );
+  };
+
   const activeOrders = orders.filter((o) => o.status !== "delivered" && o.status !== "cancelled");
   const completedOrders = orders.filter((o) => o.status === "delivered" || o.status === "cancelled");
 
@@ -396,7 +414,7 @@ export default function OnlineDeliveryOrdersPage() {
                   <div className="grid grid-cols-2 gap-3 text-sm">
                     <div><p className="text-xs text-muted-foreground">Customer</p><p className="font-medium">{viewOrder.customerName}</p></div>
                     <div><p className="text-xs text-muted-foreground">Platform</p><p className="font-medium">{viewOrder.platform}</p></div>
-                    {viewOrder.phone && <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium">{viewOrder.phone}</p></div>}
+                    {viewOrder.phone && <div><p className="text-xs text-muted-foreground">Phone</p><p className="font-medium">{formatPhoneForDisplay(viewOrder.phone)}</p></div>}
                     <div><p className="text-xs text-muted-foreground">Placed at</p><p className="font-medium">{formatTime(viewOrder.createdAt)}</p></div>
                   </div>
                   {viewOrder.address && (
@@ -430,6 +448,19 @@ export default function OnlineDeliveryOrdersPage() {
                   </div>
                 </div>
                 <DialogFooter className="gap-2">
+                  {viewOrder.paymentStatus === "paid" ? (
+                    <span className="flex-1 inline-flex items-center gap-1.5 text-sm font-medium text-emerald-600">
+                      <Check className="w-4 h-4" /> Paid — recorded in takings
+                    </span>
+                  ) : (
+                    <Button
+                      variant="outline" className="flex-1"
+                      onClick={() => { markPaid(viewOrder); setViewOrder(null); }}
+                      disabled={updateOrder.isPending}
+                    >
+                      <Check className="w-4 h-4 mr-1" /> Mark Paid
+                    </Button>
+                  )}
                   {STATUS_FLOW[viewOrder.status] && (
                     <Button className="flex-1" onClick={() => { advanceStatus(viewOrder); setViewOrder(null); }}>
                       <ChevronRight className="w-4 h-4 mr-1" /> {STATUS_CONFIG[STATUS_FLOW[viewOrder.status]!].label}
@@ -462,7 +493,7 @@ export default function OnlineDeliveryOrdersPage() {
             </div>
             <div className="space-y-1.5">
               <Label className="text-xs">Delivery address</Label>
-              <Input className="h-8" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} />
+              <Input className="h-8" value={form.address} onChange={(e) => setForm((f) => ({ ...f, address: e.target.value }))} onBlur={(e) => setForm((f) => ({ ...f, address: expandStreetType(e.target.value) }))} />
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1.5">

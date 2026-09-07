@@ -9,12 +9,16 @@ export const kpiTargetsTable = pgTable("kpi_targets", {
   metric:     text("metric").notNull(),
   categoryId: text("category_id").notNull().default(""),
   period:     text("period").notNull().default("monthly"),
-  target:     numeric("target").notNull().default("0"),
+  target:     numeric("target", { precision: 12, scale: 2 }).notNull().default("0"),
   staffIds:   text("staff_ids").notNull().default("[]"),
   reward:     text("reward").notNull().default("null"),
   notes:      text("notes").notNull().default(""),
   startDate:         text("start_date"),
   endDate:           text("end_date"),
+  // "true" when a fixed budget window (startDate/endDate) should roll forward to
+  // the next period once it ends, carrying `target` over. Default "false" keeps a
+  // dated target a one-off campaign window that simply finishes.
+  repeats:           text("repeats").notNull().default("false"),
   isActive:          text("is_active").notNull().default("true"),
   showOnDashboard:   text("show_on_dashboard").notNull().default("false"),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),

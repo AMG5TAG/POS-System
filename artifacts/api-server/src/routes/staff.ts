@@ -11,6 +11,7 @@ import {
   VerifyStaffPinBody,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
+import { hashPin, matchStaffByPin } from "../lib/staff-pin";
 
 const router: IRouter = Router();
 
@@ -81,6 +82,9 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
     return;
   }
   const { firstName, lastName, isActive, ...rest } = parsed.data as typeof parsed.data & { isActive?: boolean };
+  // Hash the PIN before it ever touches the DB (the plaintext is still used for
+  // the welcome email below, which reads parsed.data.pin directly).
+  if (rest.pin) rest.pin = await hashPin(String(rest.pin));
   const derivedName =
     firstName || lastName
       ? `${firstName ?? ""} ${lastName ?? ""}`.trim() || parsed.data.name
@@ -139,7 +143,7 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
     .select()
     .from(staffTable)
     .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.isActive, "true")));
-  const match = staff.find((s) => s.pin && s.pin === pin);
+  const match = await matchStaffByPin(staff, pin);
   if (!match) {
     recordPinFailure(merchantId);
     res.json({ ok: false, reason: "invalid" });
@@ -342,6 +346,7 @@ router.patch("/staff/:id", requireAuth, async (req, res): Promise<void> => {
   const updates: Record<string, unknown> = { ...rest };
   /* "****" is the masked placeholder clients receive — never persist it. */
   if (updates.pin === "****") delete updates.pin;
+  else if (typeof updates.pin === "string" && updates.pin) updates.pin = await hashPin(updates.pin);
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (firstName !== undefined) updates.firstName = firstName;
   if (lastName !== undefined) updates.lastName = lastName;

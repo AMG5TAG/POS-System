@@ -4,8 +4,11 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
+import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { buildInvoicePdf } from "../services/invoicePdf";
+import { customQrEmailBlock } from "../lib/custom-qr-email";
 import { applyEstimateApprovalToJob, markJobAwaitingApproval } from "../services/quoteApproval";
+import { appendJobNote } from "../lib/service-job-notes";
 import {
   ListQuotesQueryParams,
   CreateQuoteBody,
@@ -182,12 +185,15 @@ async function appendQuoteEvent(id: number, merchantId: number, event: QuoteEven
 router.get("/quotes", requireAuth, async (req, res): Promise<void> => {
   const qParsed = ListQuotesQueryParams.safeParse(req.query);
   if (!qParsed.success) { res.status(400).json({ error: qParsed.error.message }); return; }
-  const { status, customerId, search, limit, offset } = qParsed.data;
+  const { status, customerId, serviceJobId, search, limit, offset } = qParsed.data;
   const merchantId = req.session.merchantId!;
 
   const conditions = [eq(quotesTable.merchantId, merchantId)];
   if (status) conditions.push(eq(quotesTable.status, status));
   if (customerId) conditions.push(eq(quotesTable.customerId, customerId));
+  // Quotes raised against one repair job — what the POS asks for when a cashier
+  // links that job to a sale.
+  if (serviceJobId) conditions.push(eq(quotesTable.serviceJobId, serviceJobId));
 
   const [countResult] = await db
     .select({ count: sql<number>`count(*)` })
@@ -242,34 +248,50 @@ router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
   const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
   const { total, taxTotal, subtotal, discountAmount } = computeTotals(lines, discountInput);
 
-  const [countRow] = await db
-    .select({ count: sql<number>`count(*)` })
-    .from(quotesTable)
-    .where(eq(quotesTable.merchantId, merchantId));
-
   const prefix = (quotePrefix ?? "QT-").toUpperCase();
   const digits = Math.max(1, Math.min(10, quoteDigits ?? 4));
-  const quoteNumber = `${prefix}${String(Number(countRow.count) + 1).padStart(digits, "0")}`;
 
   const depositRequired = await resolveDepositRequired(merchantId, total, (req.body as { depositRequired?: unknown }).depositRequired);
 
-  const [created] = await db.insert(quotesTable).values({
-    merchantId,
-    customerId: customerId ?? null,
-    serviceJobId: serviceJobId ?? null,
-    quoteNumber,
-    status: "draft",
-    subtotal: String(subtotal),
-    taxTotal: String(taxTotal),
-    total: String(total),
-    discountType:  discountInput?.type ?? null,
-    discountValue: discountInput?.value != null ? String(discountInput.value) : null,
-    discountTotal: discountAmount > 0 ? String(discountAmount) : null,
-    depositRequired,
-    items: lines.length ? lines : null,
-    expiryDate: expiryDate ? new Date(expiryDate) : null,
-    notes: notes ?? null,
-  }).returning();
+  // Number = <prefix><max existing suffix + 1> (max+1, not count+1, so a delete
+  // never re-issues a number), retried on the unique-index conflict.
+  const created = await withUniqueRetry("quotes_merchant_quote_number_unique", async (tryIndex) => {
+    const existing = await db
+      .select({ n: quotesTable.quoteNumber })
+      .from(quotesTable)
+      .where(eq(quotesTable.merchantId, merchantId));
+    const quoteNumber = `${prefix}${String(nextSequential(existing.map((r) => r.n), tryIndex)).padStart(digits, "0")}`;
+    const [row] = await db.insert(quotesTable).values({
+      merchantId,
+      customerId: customerId ?? null,
+      serviceJobId: serviceJobId ?? null,
+      quoteNumber,
+      status: "draft",
+      subtotal: String(subtotal),
+      taxTotal: String(taxTotal),
+      total: String(total),
+      discountType:  discountInput?.type ?? null,
+      discountValue: discountInput?.value != null ? String(discountInput.value) : null,
+      discountTotal: discountAmount > 0 ? String(discountAmount) : null,
+      depositRequired,
+      items: lines.length ? lines : null,
+      expiryDate: expiryDate ? new Date(expiryDate) : null,
+      notes: notes ?? null,
+    }).returning();
+    return row;
+  });
+
+  /* Record the quote in the job's own note log, so the job history shows what
+     the customer was offered and when without cross-referencing the Quotes page.
+     Best-effort: the quote row is already committed and is what the caller asked
+     for, so failing to annotate the job must not fail the request. */
+  if (serviceJobId != null) {
+    try {
+      await appendJobNote(merchantId, serviceJobId, `Quote ${created.quoteNumber} added — $${total.toFixed(2)}`);
+    } catch (err) {
+      console.error("Failed to note quote on service job", err);
+    }
+  }
 
   const row = await loadQuoteRow(created.id, merchantId);
   const body = row ? fmtRow(row) : fmt(created);
@@ -365,6 +387,7 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* default */ }
 
   const pdfBuffer = await buildInvoicePdf({
+    merchantId,
     title:         "Quote",
     dueDateLabel:  "Valid until",
     invoiceNumber: q.quoteNumber,
@@ -414,6 +437,18 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
     socialLinks:            (() => { try { return JSON.parse(bp?.socialLinks || "{}") as Record<string, string>; } catch { return null; } })(),
     fontFamily:             tplRow?.fontFamily || null,
     styleVariant:           tplRow?.selectedStyle || null,
+    showCustomerQr:         Boolean(tplOpts.showCustomerQr),
+    showCustomQr:           Boolean(tplOpts.showCustomQr),
+    customQrImage:          (tplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:        (tplOpts.customQrCaption as string | undefined) || null,
+    showLoyaltyEarned:      Boolean(tplOpts.showLoyaltyEarned),
+    showPaymentMethods:     Boolean(tplOpts.showPaymentMethods),
+    showBarcode:            Boolean(tplOpts.showBarcode),
+    showReferralLink:       Boolean(tplOpts.showReferralLink),
+    customMessage:          (tplOpts.customMessage as string | undefined) || null,
+    referralLinkText:       (tplOpts.referralLinkText as string | undefined) || null,
+    customerCode:           row.quote.customerId ? `CUS-${row.quote.customerId}` : null,
+    customerQrValue:        row.quote.customerId ? `CUS-${row.quote.customerId}` : null,
   });
 
   res.setHeader("Content-Type", "application/pdf");
@@ -461,6 +496,10 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
 
   const logoBlock = (bp?.logo) ? `<img src="${bp.logo}" alt="${bizName}" style="max-height:48px;max-width:140px;display:block;margin-bottom:8px"/>` : "";
 
+  // Saved Quote template row. Read before the body so the emailed QR and the QR
+  // on the attached PDF are always the one code.
+  const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
+
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#222;">
       <div style="border-bottom:3px solid ${brandColor};padding-bottom:12px;margin-bottom:20px;">${logoBlock}<h2 style="margin:0;font-size:18px;">${bizName}</h2></div>
@@ -481,16 +520,17 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
         <div style="font-size:16px;font-weight:bold;margin-top:8px;color:${brandColor};">Total: ${totalStr}</div>
       </div>
       ${q.notes ? `<p style="margin-top:24px;font-size:13px;color:#555;border-top:1px solid #eee;padding-top:16px;">${q.notes}</p>` : ""}
+      ${customQrEmailBlock(tplOpts)}
       <p style="margin-top:28px;font-size:13px;color:#444;">— The team at ${bizName}</p>
     </div>`;
 
-  const tplOpts = (tplRow?.options ?? {}) as Record<string, unknown>;
   const billingAddr = [row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode].filter(Boolean).join(", ")
     || row.customerAddress || null;
   let bpBrandColors: string[] = [];
   try { bpBrandColors = JSON.parse(bp?.brandColors || "[]"); } catch { /* default */ }
 
   const pdfBuffer = await buildInvoicePdf({
+    merchantId,
     title:         "Quote",
     dueDateLabel:  "Valid until",
     invoiceNumber: q.quoteNumber,
@@ -523,6 +563,9 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
     logoUrl:         bp?.logo || null,
     showLogo:              tplRow ? tplRow.showLogo : true,
     showGstBreakdown:      tplOpts.showGstBreakdown !== undefined ? Boolean(tplOpts.showGstBreakdown) : true,
+    showCustomQr:          Boolean(tplOpts.showCustomQr),
+    customQrImage:         (tplOpts.customQrImage as string | undefined) || null,
+    customQrCaption:       (tplOpts.customQrCaption as string | undefined) || null,
     fontFamily:            tplRow?.fontFamily || null,
     styleVariant:          tplRow?.selectedStyle || null,
   });

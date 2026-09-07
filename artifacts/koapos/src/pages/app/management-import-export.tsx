@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, DragEvent } from "react";
+import { useState, useCallback, useRef, useEffect, DragEvent } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -7,10 +7,12 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { cn } from "@/lib/utils";
 import {
   Download, Upload, Users, Package, Truck, Bookmark, Check, FileText,
-  AlertCircle, X, ArrowRight, Clock, ChevronLeft, ChevronRight,
+  AlertCircle, X, ArrowRight, ChevronLeft, ChevronRight,
   Tag, FolderOpen, History, Layers,
 } from "lucide-react";
 import { toast } from "sonner";
+import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
+import { capitalizeImportedName } from "@/lib/auto-capitalize";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -35,7 +37,6 @@ interface EntityConfig {
   label: string;
   pluralLabel: string;
   icon: React.ComponentType<{ className?: string }>;
-  comingSoon?: boolean;
   exportOnly?: boolean;
   description: string;
   fields: FieldDef[];
@@ -76,6 +77,16 @@ function expandCountryValue(value: string): string {
 }
 
 const COUNTRY_FIELD_KEYS = new Set(["billingCountry", "country"]);
+
+/* Names arrive from a spreadsheet in whatever case the merchant's old system
+   wrote them, and are capitalised on the way in so an imported customer is
+   indistinguishable from one typed at the till. Unlike typed entry this also
+   title-cases a fully-uppercase word, because "JANE SMITH" out of a legacy
+   export is an artefact rather than a choice — see capitalizeImportedName.
+   Applies to a row that updates an existing customer as well as a new one:
+   an import already overwrites the matched customer's name with the CSV's, so
+   only the casing of that write changes. */
+const NAME_FIELD_KEYS = new Set(["firstName", "lastName"]);
 
 const STATE_CODE_TO_NAME: Record<string, string> = {
   /* Australia */
@@ -224,13 +235,13 @@ const ENTITIES: EntityConfig[] = [
       { key: "excludeFromLoyalty", label: "Exclude from Loyalty", type: "boolean", hint: "true or false" },
       { key: "supplier",          label: "Supplier",             hint: "Supplier / vendor name" },
       { key: "supplierCode",      label: "Supplier Code",        hint: "Supplier's product code or SKU" },
-      { key: "isEpay",            label: "ePay / Physical Card", type: "boolean", hint: "true if no digital code prints (card handles it)" },
+      { key: "physicalOrPrintedCard", label: "Physical or Printed Card", type: "boolean", hint: "true if no digital code prints (card handles it)" },
     ],
     sampleRows: [
-      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Acme Wholesale",  supplierCode: "AW-WH-001", isEpay: "false" },
-      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Oz Distributors", supplierCode: "OZD-UC-2M",  isEpay: "false" },
-      { name: "Steam Gift Card $50", sku: "SG-050", price: "50.00",  costPrice: "48.00", description: "Steam wallet $50 gift card",   barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Valve",           supplierCode: "STEAM-50",   isEpay: "false" },
-      { name: "Visa ePay Card $100", sku: "VP-100", price: "100.00", costPrice: "99.00", description: "Visa prepaid ePay card $100",  barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Visa",            supplierCode: "VISA-EPAY-100", isEpay: "true" },
+      { name: "Wireless Headphones", sku: "WH-001", price: "79.99",  costPrice: "45.00", description: "Premium Bluetooth headphones", barcode: "9781234567890", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "50",  lowStockThreshold: "10", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Acme Wholesale",  supplierCode: "AW-WH-001", physicalOrPrintedCard: "false" },
+      { name: "USB-C Cable",         sku: "UC-002", price: "19.99",  costPrice: "8.00",  description: "Fast charging 2m USB-C cable", barcode: "9787654321098", productType: "standard", category: "Electronics", taxRate: "10", imageUrl: "", stockQuantity: "200", lowStockThreshold: "20", trackInventory: "true", isActive: "true", excludeFromLoyalty: "false", supplier: "Oz Distributors", supplierCode: "OZD-UC-2M",  physicalOrPrintedCard: "false" },
+      { name: "Steam Gift Card $50", sku: "SG-050", price: "50.00",  costPrice: "48.00", description: "Steam wallet $50 gift card",   barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Valve",           supplierCode: "STEAM-50",   physicalOrPrintedCard: "false" },
+      { name: "Visa ePay Card $100", sku: "VP-100", price: "100.00", costPrice: "99.00", description: "Visa prepaid ePay card $100",  barcode: "",              productType: "digital_code", category: "Electronics", taxRate: "0",  imageUrl: "", stockQuantity: "0",   lowStockThreshold: "5",  trackInventory: "false", isActive: "true", excludeFromLoyalty: "false", supplier: "Visa",            supplierCode: "VISA-EPAY-100", physicalOrPrintedCard: "true" },
     ],
     toExportRow: (item) => ({
       name:               String(item.name               ?? ""),
@@ -250,7 +261,7 @@ const ENTITIES: EntityConfig[] = [
       excludeFromLoyalty: String(item.excludeFromLoyalty ?? ""),
       supplier:           String(item.supplier           ?? ""),
       supplierCode:       String(item.supplierCode       ?? ""),
-      isEpay:             String((item as Record<string, unknown>).isEpay ?? "false"),
+      physicalOrPrintedCard: String((item as Record<string, unknown>).isEpay ?? "false"),
     }),
   },
   {
@@ -494,6 +505,31 @@ const ENTITIES: EntityConfig[] = [
       };
     },
   },
+  {
+    key: "group-export",
+    label: "Group Export",
+    pluralLabel: "Group Pricing Sheets",
+    icon: Layers,
+    exportOnly: true,
+    description: "Export a pricing sheet per customer group, with each group's custom prices highlighted.",
+    exportUrl: "/api/products?limit=10000",
+    createUrl: "",
+    fields: [
+      { key: "name",        label: "Product Name" },
+      { key: "sku",         label: "SKU" },
+      { key: "description", label: "Description" },
+      { key: "rrp",         label: "RRP (inc GST)" },
+      { key: "groupPrice",  label: "Group Price" },
+    ],
+    sampleRows: [],
+    toExportRow: (item) => ({
+      name:        String(item.name        ?? ""),
+      sku:         String(item.sku         ?? ""),
+      description: String(item.description ?? ""),
+      rrp:         item.price != null ? String(item.price) : "",
+      groupPrice:  "",
+    }),
+  },
 ];
 
 /* ─── Column alias matching ──────────────────────────────────────────────── */
@@ -553,6 +589,7 @@ const ALIASES: Record<string, string[]> = {
   parentName:         ["parentname", "parent", "parentcategory", "parentcat", "parentgroup"],
   paymentMethod:      ["paymentmethod", "payment", "method", "tender", "paidby"],
   customerName:       ["customername", "customer", "buyer", "clientname", "client"],
+  physicalOrPrintedCard: ["physicalorprintedcard", "physicalcard", "printedcard", "isepay", "epay", "epayphysicalcard"],
 };
 
 function normalize(s: string) { return s.toLowerCase().replace(/[^a-z0-9]/g, ""); }
@@ -618,8 +655,47 @@ function downloadCSV(filename: string, content: string) {
 
 /* ─── Export card ────────────────────────────────────────────────────────── */
 
+const ALL = "__all__";
+
 function ExportCard({ entity }: { entity: EntityConfig }) {
   const [exporting, setExporting] = useState(false);
+
+  // Products can be exported filtered by Category / Product Type / Supplier.
+  const isProducts = entity.key === "products";
+  const [catFilter, setCatFilter] = useState(ALL);
+  const [typeFilter, setTypeFilter] = useState(ALL);
+  const [supplierFilter, setSupplierFilter] = useState(ALL);
+  const [cats, setCats] = useState<{ id: number; name: string }[]>([]);
+  const [ptypes, setPtypes] = useState<{ id: number; name: string }[]>([]);
+  const [suppliers, setSuppliers] = useState<string[]>([]);
+  const anyFilter = catFilter !== ALL || typeFilter !== ALL || supplierFilter !== ALL;
+
+  useEffect(() => {
+    if (!isProducts) return;
+    let cancelled = false;
+    const load = async (url: string): Promise<Record<string, unknown>[]> => {
+      try {
+        const r = await fetch(url, { credentials: "include" });
+        if (!r.ok) return [];
+        const d = await r.json();
+        return Array.isArray(d) ? d : (Array.isArray(d.items) ? d.items : []);
+      } catch { return []; }
+    };
+    (async () => {
+      const [c, t, s] = await Promise.all([
+        load("/api/categories"),
+        load("/api/product-types"),
+        load("/api/suppliers?limit=10000"),
+      ]);
+      if (cancelled) return;
+      const named = (rows: Record<string, unknown>[]) =>
+        rows.map((x) => ({ id: Number(x.id), name: String(x.name ?? "").trim() })).filter((x) => x.name);
+      setCats(named(c));
+      setPtypes(named(t));
+      setSuppliers([...new Set(s.map((x) => String(x.name ?? "").trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)));
+    })();
+    return () => { cancelled = true; };
+  }, [isProducts]);
 
   const handleExportSample = () => {
     const headers = entity.fields.map((f) => f.key);
@@ -634,9 +710,21 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
       const res  = await fetch(entity.exportUrl, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch");
       const data = await res.json();
-      const list: Record<string, unknown>[] = Array.isArray(data)
+      let list: Record<string, unknown>[] = Array.isArray(data)
         ? data
         : (Array.isArray(data.items) ? data.items : []);
+      if (isProducts && anyFilter) {
+        list = list.filter((p) => {
+          if (catFilter !== ALL && String(p.categoryId ?? "") !== catFilter) return false;
+          if (typeFilter !== ALL && String(p.productTypeId ?? "") !== typeFilter) return false;
+          if (supplierFilter !== ALL && String(p.supplier ?? "").trim().toLowerCase() !== supplierFilter.toLowerCase()) return false;
+          return true;
+        });
+      }
+      if (list.length === 0) {
+        toast.info(anyFilter ? "No products match the selected filters." : `No ${entity.pluralLabel.toLowerCase()} to export.`);
+        return;
+      }
       const rows    = list.map((item) => entity.toExportRow(item, list));
       const headers = entity.fields.map((f) => f.key);
       const csv     = toCSV(headers, rows);
@@ -677,13 +765,183 @@ function ExportCard({ entity }: { entity: EntityConfig }) {
         <p className="text-[11px] text-muted-foreground pt-1.5">* Required when importing</p>
       </div>
 
+      {isProducts && (
+        <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-2.5">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium text-foreground/70 uppercase tracking-wide">Filter export</p>
+            {anyFilter && (
+              <button
+                className="text-[11px] text-muted-foreground hover:text-foreground underline"
+                onClick={() => { setCatFilter(ALL); setTypeFilter(ALL); setSupplierFilter(ALL); }}
+              >
+                Clear
+              </button>
+            )}
+          </div>
+          <div className="space-y-2">
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Category</p>
+              <Select value={catFilter} onValueChange={setCatFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All categories</SelectItem>
+                  {cats.map((c) => <SelectItem key={c.id} value={String(c.id)}>{c.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Product Type</p>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All product types</SelectItem>
+                  {ptypes.map((t) => <SelectItem key={t.id} value={String(t.id)}>{t.name}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-1">
+              <p className="text-[11px] text-muted-foreground">Supplier</p>
+              <Select value={supplierFilter} onValueChange={setSupplierFilter}>
+                <SelectTrigger className="h-8 text-xs"><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value={ALL}>All suppliers</SelectItem>
+                  {suppliers.map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <p className="text-[11px] text-muted-foreground">Leave as “All” to export everything. Filters combine (Category AND Type AND Supplier).</p>
+        </div>
+      )}
+
       <div className="flex flex-col gap-2 mt-auto">
         <Button variant="outline" size="sm" className="gap-1.5 justify-center" onClick={handleExportSample}>
           <FileText className="w-3.5 h-3.5" /> Download Sample CSV
         </Button>
         <Button size="sm" className="gap-1.5 justify-center" onClick={handleExportAll} disabled={exporting}>
-          {exporting ? "Exporting…" : <><Download className="w-3.5 h-3.5" /> Export All {entity.pluralLabel}</>}
+          {exporting ? "Exporting…" : <><Download className="w-3.5 h-3.5" /> Export {isProducts && anyFilter ? "Filtered" : "All"} {entity.pluralLabel}</>}
         </Button>
+      </div>
+    </div>
+  );
+}
+
+/* ─── Group pricing export card ──────────────────────────────────────────────
+ * Special export (no import) that downloads a per-customer-group pricing sheet
+ * as an Excel file, with each group's custom prices highlighted. Moved here
+ * from the Products screen. */
+function GroupExportCard() {
+  const { settings: customerSettings } = useCustomerSettings();
+  const customerGroups = customerSettings.groups.length ? customerSettings.groups : DEFAULT_CUSTOMER_GROUPS;
+  const [exportingId, setExportingId] = useState<string | null>(null);
+
+  const exportGroupPriceSheet = async (groupId: string, groupName: string) => {
+    setExportingId(groupId);
+    try {
+      const res = await fetch("/api/products?limit=10000", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch");
+      const data = await res.json();
+      const products: Record<string, unknown>[] = Array.isArray(data)
+        ? data
+        : (Array.isArray(data.items) ? data.items : []);
+
+      const hdrCell = "background:#1e293b;color:#fff;font-weight:bold;padding:8px 12px;border:1px solid #334155;font-size:13px;";
+      const cell    = "padding:8px 12px;border:1px solid #e2e8f0;font-size:12px;";
+      const hiCell  = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;";
+      const hiPriceCell = "padding:8px 12px;border:1px solid #fcd34d;font-size:12px;background:#fefce8;font-weight:bold;color:#92400e;";
+
+      const headerRow = `<tr>
+        <th style="${hdrCell}">Product Name</th>
+        <th style="${hdrCell}">SKU</th>
+        <th style="${hdrCell}">Description</th>
+        <th style="${hdrCell}">RRP (inc GST)</th>
+        <th style="${hdrCell}">${groupName} Price</th>
+      </tr>`;
+
+      const dataRows = products.map((p) => {
+        const ep = p as { name?: string; sku?: string; description?: string; price?: number | string; groupPrices?: Record<string, number> };
+        const gp = ep.groupPrices?.[groupId];
+        const hasPrice = gp != null && Number(gp) > 0;
+        const rowBg = hasPrice ? "background:#fefce8;" : "";
+        return `<tr style="${rowBg}">
+          <td style="${hasPrice ? hiCell : cell}">${(ep.name ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+          <td style="${hasPrice ? hiCell : cell}">${(ep.sku ?? "").replace(/&/g, "&amp;")}</td>
+          <td style="${hasPrice ? hiCell : cell}">${(ep.description ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")}</td>
+          <td style="${hasPrice ? hiCell : cell}">${ep.price != null ? "$" + Number(ep.price).toFixed(2) : ""}</td>
+          <td style="${hasPrice ? hiPriceCell : cell}">${hasPrice ? "$" + Number(gp).toFixed(2) : ""}</td>
+        </tr>`;
+      }).join("");
+
+      const legend = `<p style="font-family:sans-serif;font-size:12px;color:#92400e;background:#fefce8;border:1px solid #fcd34d;padding:6px 10px;display:inline-block;border-radius:4px;margin-bottom:8px;">
+        ★ Highlighted rows have a custom <strong>${groupName}</strong> price set
+      </p>`;
+
+      const html = `<html xmlns:o="urn:schemas-microsoft-com:office:office"
+        xmlns:x="urn:schemas-microsoft-com:office:excel"
+        xmlns="http://www.w3.org/TR/REC-html40">
+        <head><meta charset="utf-8">
+          <style>table{border-collapse:collapse;font-family:sans-serif;}</style>
+        </head>
+        <body>
+          <h2 style="font-family:sans-serif;margin-bottom:4px;">${groupName} Group Pricing</h2>
+          ${legend}
+          <table>${headerRow}${dataRows}</table>
+        </body></html>`;
+
+      const blob = new Blob(["﻿" + html], { type: "application/vnd.ms-excel;charset=utf-8" });
+      const url  = URL.createObjectURL(blob);
+      const a    = document.createElement("a");
+      a.href     = url;
+      a.download = `Group_Pricing_${groupName.replace(/\s+/g, "_")}.xls`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success(`${groupName} pricing exported`);
+    } catch {
+      toast.error("Export failed — check your connection and try again.");
+    } finally {
+      setExportingId(null);
+    }
+  };
+
+  return (
+    <div className="rounded-xl border bg-background p-5 flex flex-col gap-4 h-full">
+      <div>
+        <div className="flex items-center gap-2 mb-1">
+          <Download className="w-4 h-4 text-primary" />
+          <span className="font-semibold text-sm">Export</span>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Download a pricing sheet for a customer group as an Excel file. Products with a custom price for
+          that group are highlighted.
+        </p>
+      </div>
+
+      <div className="rounded-lg border bg-muted/20 px-4 py-3 space-y-1">
+        <p className="text-xs font-medium text-foreground/70 uppercase tracking-wide mb-2">Included Columns</p>
+        <div className="flex flex-wrap gap-1.5">
+          {["Product Name", "SKU", "Description", "RRP (inc GST)", "Group Price"].map((label) => (
+            <span key={label} className="inline-flex items-center px-2 py-0.5 rounded-full text-[11px] border bg-muted text-muted-foreground border-border">
+              {label}
+            </span>
+          ))}
+        </div>
+      </div>
+
+      <div className="flex flex-col gap-2 mt-auto">
+        <p className="text-xs font-medium text-muted-foreground">Choose a group to export</p>
+        {customerGroups.map((group) => (
+          <Button
+            key={group.id}
+            variant="outline"
+            size="sm"
+            className="gap-2 justify-start"
+            disabled={exportingId !== null}
+            onClick={() => exportGroupPriceSheet(group.id, group.name)}
+          >
+            <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ background: group.color }} />
+            {exportingId === group.id ? "Exporting…" : <>Export {group.name} Pricing</>}
+          </Button>
+        ))}
       </div>
     </div>
   );
@@ -762,6 +1020,11 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
         if (val !== undefined) {
           if (field.key === "agreedToMarketing") {
             payload[field.key] = MARKETING_TRUTHY.has(String(val).trim().toLowerCase()) ? "true" : "false";
+          } else if (NAME_FIELD_KEYS.has(field.key)) {
+            payload[field.key] = capitalizeImportedName(String(val));
+          } else if (field.key === "physicalOrPrintedCard") {
+            // CSV column is friendly-named, but the API field remains `isEpay`.
+            payload.isEpay = val;
           } else {
             payload[field.key] = val;
           }
@@ -907,6 +1170,7 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
       let val = col ? (row[col] ?? "") : "";
       if (expandCountryCodes && COUNTRY_FIELD_KEYS.has(field.key)) val = expandCountryValue(val);
       if (expandStateCodes   && STATE_FIELD_KEYS.has(field.key))   val = expandStateValue(val);
+      if (NAME_FIELD_KEYS.has(field.key)) val = capitalizeImportedName(val.trim());
       out[field.key] = val;
     }
     return out;
@@ -1237,22 +1501,6 @@ function ImportCard({ entity }: { entity: EntityConfig }) {
   );
 }
 
-/* ─── Coming Soon card ───────────────────────────────────────────────────── */
-
-function ComingSoonCard({ label }: { label: string }) {
-  return (
-    <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center col-span-2">
-      <Clock className="w-10 h-10 text-muted-foreground/30" />
-      <div>
-        <p className="font-medium text-muted-foreground">{label} Import/Export</p>
-        <p className="text-sm text-muted-foreground/70 mt-1">
-          Full support is coming soon. For now, manage {label.toLowerCase()} directly from the {label} screen.
-        </p>
-      </div>
-    </div>
-  );
-}
-
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
 export default function ManagementImportExportPage() {
@@ -1284,13 +1532,12 @@ export default function ManagementImportExportPage() {
                   <button
                     key={e.key}
                     type="button"
-                    onClick={() => !e.comingSoon && setActiveKey(e.key)}
+                    onClick={() => setActiveKey(e.key)}
                     className={cn(
                       "w-full flex items-center gap-3 px-4 py-3 text-sm transition-colors border-b last:border-b-0 text-left",
                       isActive
                         ? "bg-primary/5 text-primary font-semibold"
                         : "hover:bg-muted/50 text-foreground",
-                      e.comingSoon && "opacity-50 cursor-default",
                     )}
                   >
                     <Icon className={cn("w-4 h-4 shrink-0", isActive ? "text-primary" : "text-muted-foreground")} />
@@ -1298,9 +1545,6 @@ export default function ManagementImportExportPage() {
                       <p className="font-medium leading-tight">{e.label}</p>
                       <p className="text-[10px] text-muted-foreground truncate leading-tight mt-0.5">{e.description}</p>
                     </div>
-                    {e.comingSoon && (
-                      <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0">Soon</Badge>
-                    )}
                     {e.exportOnly && (
                       <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 ml-auto shrink-0">Export</Badge>
                     )}
@@ -1313,11 +1557,8 @@ export default function ManagementImportExportPage() {
           {/* Column 2: Export */}
           <div className="flex flex-col gap-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Export</p>
-            {entity.comingSoon ? (
-              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
-                <Download className="w-10 h-10 text-muted-foreground/30" />
-                <p className="font-medium text-muted-foreground">Coming Soon</p>
-              </div>
+            {entity.key === "group-export" ? (
+              <GroupExportCard />
             ) : (
               <ExportCard entity={entity} />
             )}
@@ -1326,12 +1567,7 @@ export default function ManagementImportExportPage() {
           {/* Column 3: Import */}
           <div className="flex flex-col gap-4">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Import</p>
-            {entity.comingSoon ? (
-              <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
-                <Upload className="w-10 h-10 text-muted-foreground/30" />
-                <p className="font-medium text-muted-foreground">Coming Soon</p>
-              </div>
-            ) : entity.exportOnly ? (
+            {entity.exportOnly ? (
               <div className="rounded-xl border border-dashed bg-muted/10 p-8 flex flex-col items-center justify-center gap-3 text-center h-full">
                 <Upload className="w-10 h-10 text-muted-foreground/30" />
                 <div>

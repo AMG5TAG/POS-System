@@ -3,10 +3,11 @@ import { db, appointmentsTable, customersTable, staffTable, merchantsTable, serv
 import { eq, and, gte, lt, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
-import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, UpdateAppointmentParams } from "@workspace/api-zod";
+import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, UpdateAppointmentParams, LinkAppointmentServiceJobParams, LinkAppointmentServiceJobBody } from "@workspace/api-zod";
 import { sendSms } from "../services/sms";
 import { sendEmail } from "../services/email";
 import { generateIcs } from "../services/icsGenerator";
+import { triggerInstantSync } from "../services/autoSyncScheduler";
 
 const router: IRouter = Router();
 
@@ -254,6 +255,7 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
   const formatted = await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt]));
+  triggerInstantSync(merchantId, "calendar");
   res.status(201).json(formatted);
 
   if ((sendSmsFlag || sendEmailFlag) && customer) {
@@ -314,6 +316,58 @@ router.patch("/appointments/:id", requireAuth, async (req, res): Promise<void> =
   const customerMap = new Map(customers.map((c) => [c.id, c]));
   const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
 
+  triggerInstantSync(merchantId, "calendar");
+  res.json(await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt])));
+});
+
+// POST /appointments/:id/service-job — link the service job raised from this
+// booking. The "Create service job" action pre-fills the new-service form from
+// the appointment, then calls this once the job is saved so the two records
+// point at each other. Passing serviceJobId: null unlinks.
+router.post("/appointments/:id/service-job", requireAuth, async (req, res): Promise<void> => {
+  const params = LinkAppointmentServiceJobParams.safeParse(req.params);
+  if (!params.success) {
+    res.status(400).json({ error: params.error.message });
+    return;
+  }
+  const parsed = LinkAppointmentServiceJobBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const merchantId = req.session.merchantId!;
+  const { serviceJobId } = parsed.data;
+
+  // Never link across merchants — the id comes from the browser.
+  if (serviceJobId != null) {
+    const [job] = await db
+      .select({ id: serviceJobsTable.id })
+      .from(serviceJobsTable)
+      .where(and(eq(serviceJobsTable.id, serviceJobId), eq(serviceJobsTable.merchantId, merchantId)))
+      .limit(1);
+    if (!job) {
+      res.status(404).json({ error: "Service job not found" });
+      return;
+    }
+  }
+
+  const [appt] = await db
+    .update(appointmentsTable)
+    .set({ serviceJobId: serviceJobId ?? null })
+    .where(and(eq(appointmentsTable.id, params.data.id), eq(appointmentsTable.merchantId, merchantId)))
+    .returning();
+
+  if (!appt) {
+    res.status(404).json({ error: "Appointment not found" });
+    return;
+  }
+
+  const customers = await db.select().from(customersTable).where(eq(customersTable.merchantId, merchantId));
+  const staffMembers = await db.select().from(staffTable).where(eq(staffTable.merchantId, merchantId));
+  const customerMap = new Map(customers.map((c) => [c.id, c]));
+  const staffMap = new Map(staffMembers.map((s) => [s.id, s]));
+
+  triggerInstantSync(merchantId, "calendar");
   res.json(await formatAppointment(appt, customerMap, staffMap, await buildJobMap(merchantId, [appt])));
 });
 

@@ -245,7 +245,7 @@ function NoteDetailDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg max-h-[85vh] overflow-y-auto">
+      <DialogContent className="max-w-2xl max-h-[90vh] flex flex-col">
         {note && (
           <>
             <DialogHeader>
@@ -259,8 +259,8 @@ function NoteDetailDialog({
                 {note.createdBy} · {new Date(note.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })}
               </DialogDescription>
             </DialogHeader>
-            <div className="space-y-4 py-1">
-              <p className="text-sm whitespace-pre-wrap break-words">{note.content}</p>
+            <div className="space-y-4 py-1 flex-1 overflow-y-auto min-h-0">
+              <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{note.content}</p>
               <Separator />
               <div className="flex flex-wrap items-center gap-1.5">
                 {note.isImportant && (

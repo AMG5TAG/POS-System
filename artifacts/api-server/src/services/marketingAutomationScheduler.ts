@@ -9,14 +9,13 @@ import {
   businessProfileTable,
   marketingAutomationRulesTable,
   marketingAutomationLogTable,
-  socialPostsTable,
-  socialAccountsTable,
 } from "@workspace/db";
-import { eq, and, gte, lt, lte, isNotNull, desc } from "drizzle-orm";
+import { trackedInterval } from "../lib/shutdown";
+import { jitteredStart } from "../lib/scheduler-jitter";
+import { eq, and, gt, gte, lt, lte, isNotNull, desc, sql } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
-import { runPublish } from "../routes/social-media";
 import type { Logger } from "pino";
 
 type Rule = typeof marketingAutomationRulesTable.$inferSelect;
@@ -55,7 +54,10 @@ function legalEmailFooterText(bizName: string, bizAddress: string, unsub: string
   return `\n\n---\n${bizName}${bizAddress ? ` · ${bizAddress}` : ""}\nTo unsubscribe: ${unsub}`;
 }
 
-/** Check if this rule+record combo was already dispatched (within window) */
+/** Check if this rule+record combo was already *successfully* dispatched (within
+ *  window). Only "sent" rows dedupe — a prior "failed" row must NOT block a
+ *  retry, otherwise a transient SMS/email failure permanently drops that
+ *  customer (the log records failed attempts too). */
 async function alreadySent(
   ruleId: number,
   recordId: string,
@@ -69,6 +71,7 @@ async function alreadySent(
       and(
         eq(marketingAutomationLogTable.ruleId, ruleId),
         eq(marketingAutomationLogTable.recordId, recordId),
+        eq(marketingAutomationLogTable.status, "sent"),
         gte(marketingAutomationLogTable.sentAt, cutoff),
       ),
     )
@@ -176,10 +179,13 @@ async function runBirthday(
   biz: BizInfo,
   logger: Logger,
 ): Promise<number> {
-  const today = new Date();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  const yearStr = String(today.getFullYear());
+  // Send on the day by default, or `birthdayDaysBefore` days ahead of it.
+  const daysBefore = rule.birthdayDaysBefore ?? 0;
+  const target = new Date();
+  target.setDate(target.getDate() + daysBefore);
+  const mm = String(target.getMonth() + 1).padStart(2, "0");
+  const dd = String(target.getDate()).padStart(2, "0");
+  const yearStr = String(new Date().getFullYear());
 
   const customers = await db
     .select()
@@ -189,10 +195,15 @@ async function runBirthday(
         eq(customersTable.merchantId, merchantId),
         isNotNull(customersTable.dateOfBirth),
         isNotNull(customersTable.email),
+        // Bound to today's birthday (month + day) in SQL. dateOfBirth is a
+        // Postgres `date` column, so match with extract() — substring() is not
+        // valid for the date type. Comparing on the date's own month/day is
+        // timezone-independent (the reason the fine-grained check below stays in JS).
+        sql`extract(month from ${customersTable.dateOfBirth}) = ${target.getMonth() + 1} and extract(day from ${customersTable.dateOfBirth}) = ${target.getDate()}`,
       ),
     );
 
-  // Filter in JS because Postgres date functions vary by timezone setting
+  // Re-check in JS (belt-and-suspenders against any non-standard stored format)
   const matches = customers.filter((c) => {
     if (!c.dateOfBirth) return false;
     const dob = String(c.dateOfBirth);
@@ -208,10 +219,17 @@ async function runBirthday(
     const dedupeKey = `${yearStr}-${c.id}`;
     if (await alreadySent(rule.id, dedupeKey, 365 * 24 * 3600 * 1000)) continue;
     const firstName = c.firstName ?? "Valued Customer";
-    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name };
+    const discount = rule.birthdayDiscount?.trim() ?? "";
+    const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, birthday_discount: discount };
     const subject = applyVars(rule.templateSubject ?? `Happy Birthday from ${biz.name}!`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
-    const text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
+    let html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
+    let text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
+    // Append the discount/gift line when set but not already woven into the template.
+    const bodyTemplate = rule.templateBody ?? "";
+    if (discount && !bodyTemplate.includes("{{birthday_discount}}")) {
+      html += `<p>🎁 ${discount}</p>`;
+      text += ` 🎁 ${discount}`;
+    }
     const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
     if (result.success) sent++;
@@ -279,16 +297,20 @@ async function runNewProduct(
 
   if (newProducts.length === 0) return 0;
 
+  // Only opted-in customers with an email (Spam Act 2003 s 16) — filter in SQL so
+  // the product×customer loop below doesn't iterate the whole customer table.
   const customers = await db
     .select()
     .from(customersTable)
-    .where(and(eq(customersTable.merchantId, merchantId), isNotNull(customersTable.email)));
+    .where(and(
+      eq(customersTable.merchantId, merchantId),
+      isNotNull(customersTable.email),
+      eq(customersTable.agreedToMarketing, "true"),
+    ));
 
   let sent = 0;
   for (const product of newProducts) {
-    // Broadcast to all opted-in customers — require explicit opt-in (Spam Act 2003 s 16)
     for (const c of customers) {
-      if (c.agreedToMarketing !== "true") continue;
       const dedupeKey = `product-${product.id}-customer-${c.id}`;
       if (await alreadySent(rule.id, dedupeKey, 30 * 24 * 3600 * 1000)) continue;
       const firstName = c.firstName ?? "Valued Customer";
@@ -468,6 +490,172 @@ async function runDaysAfterSale(
   return sent;
 }
 
+// ─── Trigger: Warranty expiring ───────────────────────────────────────────────
+
+/** Product warranty expiry = sale date + duration. Mirrors the warranty helper. */
+function productWarrantyExpiry(saleDate: Date | string, duration: number, unit: string): Date | null {
+  if (!duration || duration <= 0) return null;
+  const start = new Date(saleDate);
+  if (isNaN(start.getTime())) return null;
+  const months = unit === "years" ? duration * 12 : duration;
+  const end = new Date(start);
+  end.setMonth(end.getMonth() + months);
+  return end;
+}
+
+/**
+ * Remind customers whose product or repair warranty expires within the next
+ * `delayDays` days (the rule reuses delayDays as the "days before expiry"
+ * window; defaults to 30). Transactional service reminder — not marketing — so
+ * no opt-in is required, but a long dedup window keeps it to one nudge per item.
+ */
+async function runWarrantyExpiring(
+  merchantId: number,
+  rule: Rule,
+  biz: BizInfo,
+  logger: Logger,
+): Promise<number> {
+  const windowDays = rule.delayDays && rule.delayDays > 0 ? rule.delayDays : 30;
+  const dayMs = 24 * 3600 * 1000;
+  const now = Date.now();
+  const cutoff = now + windowDays * dayMs;
+  // Only ever remind once per warranty: dedup over a long horizon.
+  const dedupeMs = 365 * dayMs;
+
+  let sent = 0;
+
+  const sendReminder = async (opts: {
+    dedupeKey: string;
+    recordType: string;
+    customerId: number | null;
+    email: string | null;
+    phone: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    itemName: string;
+    expiry: Date;
+  }): Promise<void> => {
+    if (!opts.email && !opts.phone) return;
+    if (await alreadySent(rule.id, opts.dedupeKey, dedupeMs)) return;
+    const firstName = opts.firstName ?? "Valued Customer";
+    const expiryStr = opts.expiry.toLocaleDateString("en-AU");
+    const daysLeft = Math.max(0, Math.ceil((opts.expiry.getTime() - now) / dayMs));
+    const vars = {
+      first_name: firstName,
+      last_name: opts.lastName ?? "",
+      business_name: biz.name,
+      product_name: opts.itemName,
+      item_name: opts.itemName,
+      expiry_date: expiryStr,
+      days_left: String(daysLeft),
+    };
+    const subject = applyVars(rule.templateSubject ?? `Your warranty on {{item_name}} is expiring soon`, vars);
+    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that the warranty on your <strong>{{item_name}}</strong> from {{business_name}} expires on <strong>{{expiry_date}}</strong> ({{days_left}} days away).</p><p>If you're experiencing any issues, please get in touch before the warranty ends.</p>`, vars);
+    const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, the warranty on your {{item_name}} from {{business_name}} expires on {{expiry_date}} ({{days_left}} days away). Get in touch if you have any issues.`), vars);
+    // Transactional reminder about a customer's own purchase — no marketing footer.
+    const result = await dispatchMessage(merchantId, rule, opts.email, subject, html, text, biz, opts.customerId, false, opts.phone);
+    await logDispatch({ merchantId, ruleId: rule.id, customerId: opts.customerId, recordType: opts.recordType, recordId: opts.dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
+    if (result.success) sent++;
+  };
+
+  // ── Product warranties (from sales) ──────────────────────────────────────────
+  const products = await db
+    .select({ id: productsTable.id, name: productsTable.name, warrantyDuration: productsTable.warrantyDuration, warrantyUnit: productsTable.warrantyUnit })
+    .from(productsTable)
+    .where(and(eq(productsTable.merchantId, merchantId), gt(productsTable.warrantyDuration, 0)));
+  const productsById = new Map(products.map((p) => [p.id, p]));
+
+  if (productsById.size > 0) {
+    // Bound the scan instead of reading every sale ever: a warranty can only
+    // expire in [now, cutoff] if the sale is at most `maxWarranty` old (expiry =
+    // createdAt + duration ≥ now ⇒ createdAt ≥ now − maxWarranty). Use a generous
+    // 31-day month so the bound is a safe superset; exact expiry is still checked
+    // per row below.
+    const maxWarrantyMonths = Math.max(
+      ...products.map((p) => (p.warrantyUnit === "years" ? p.warrantyDuration * 12 : p.warrantyDuration)),
+    );
+    const earliestSale = new Date(now - maxWarrantyMonths * 31 * dayMs - windowDays * dayMs);
+    const rows = await db
+      .select({
+        txId: transactionsTable.id,
+        createdAt: transactionsTable.createdAt,
+        items: transactionsTable.items,
+        firstName: customersTable.firstName,
+        lastName: customersTable.lastName,
+        email: customersTable.email,
+        phone: customersTable.phone,
+        customerId: customersTable.id,
+      })
+      .from(transactionsTable)
+      .innerJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+      .where(and(
+        eq(transactionsTable.merchantId, merchantId),
+        gte(transactionsTable.createdAt, earliestSale),
+      ));
+
+    for (const row of rows) {
+      const lineItems = Array.isArray(row.items) ? (row.items as { productId?: number | null; productName?: string | null; name?: string | null }[]) : [];
+      for (let idx = 0; idx < lineItems.length; idx++) {
+        const it = lineItems[idx]!;
+        if (it.productId == null) continue;
+        const product = productsById.get(it.productId);
+        if (!product) continue;
+        const expiry = productWarrantyExpiry(row.createdAt, product.warrantyDuration, product.warrantyUnit);
+        if (!expiry) continue;
+        const t = expiry.getTime();
+        if (t < now || t > cutoff) continue;
+        await sendReminder({
+          dedupeKey: `warranty-prod-${row.txId}-${it.productId}-${idx}`,
+          recordType: "warranty_product",
+          customerId: row.customerId,
+          email: row.email ?? null,
+          phone: row.phone ?? null,
+          firstName: row.firstName,
+          lastName: row.lastName,
+          itemName: it.productName || it.name || product.name,
+          expiry,
+        });
+      }
+    }
+  }
+
+  // ── Service / repair warranties (from completed service jobs) ────────────────
+  const jobs = await db
+    .select({
+      job: serviceJobsTable,
+      firstName: customersTable.firstName,
+      lastName: customersTable.lastName,
+      email: customersTable.email,
+      phone: customersTable.phone,
+      customerId: customersTable.id,
+    })
+    .from(serviceJobsTable)
+    .leftJoin(customersTable, eq(serviceJobsTable.customerId, customersTable.id))
+    .where(and(eq(serviceJobsTable.merchantId, merchantId), gt(serviceJobsTable.repairWarrantyDays, 0), isNotNull(serviceJobsTable.completedAt)));
+
+  for (const row of jobs) {
+    if (!row.job.completedAt) continue;
+    const expiry = new Date(new Date(row.job.completedAt).getTime() + row.job.repairWarrantyDays * dayMs);
+    const t = expiry.getTime();
+    if (t < now || t > cutoff) continue;
+    const deviceName = row.job.deviceDescription || row.job.deviceType || row.job.title;
+    await sendReminder({
+      dedupeKey: `warranty-job-${row.job.id}`,
+      recordType: "warranty_service",
+      customerId: row.customerId,
+      email: row.email ?? null,
+      phone: row.phone ?? null,
+      firstName: row.firstName,
+      lastName: row.lastName,
+      itemName: `${deviceName} repair`,
+      expiry,
+    });
+  }
+
+  if (sent > 0) logger.info({ ruleId: rule.id, windowDays, sent, trigger: "warranty_expiring" }, "Automation: warranty-expiring reminders dispatched");
+  return sent;
+}
+
 // ─── Trigger: After a set time (one-off scheduled broadcast) ───────────────────
 
 async function runScheduledTime(
@@ -506,39 +694,6 @@ async function runScheduledTime(
   return sent;
 }
 
-/* ── Social broadcast automation ─────────────────────────────────────────────
- * Social rules don't message individual customers — they publish a single post
- * to every active connected account. `scheduled_time` rules fire once at their
- * configured moment; other triggers fire at most once per day. The post body is
- * the rule's templateBody (rendered to plain text). */
-async function runSocialAutomation(merchantId: number, rule: Rule, logger: Logger): Promise<number> {
-  if (rule.triggerEvent === "scheduled_time") {
-    if (!rule.scheduledAt) return 0;
-    if (Date.now() < new Date(rule.scheduledAt).getTime()) return 0;
-  }
-  const dedupeKey = `social-${rule.id}-${rule.triggerEvent}`;
-  const windowMs = rule.triggerEvent === "scheduled_time" ? 3650 * 24 * 3600 * 1000 : 24 * 3600 * 1000;
-  if (await alreadySent(rule.id, dedupeKey, windowMs)) return 0;
-
-  const accounts = await db.select().from(socialAccountsTable)
-    .where(and(eq(socialAccountsTable.merchantId, merchantId), eq(socialAccountsTable.status, "active")));
-  if (accounts.length === 0) {
-    await logDispatch({ merchantId, ruleId: rule.id, customerId: null, recordType: "social", recordId: dedupeKey, channel: "social", status: "failed", error: "No connected social accounts" });
-    return 0;
-  }
-
-  const content = bodyToText(rule.templateBody, "");
-  const targets = accounts.map((a) => ({ platform: a.platform, accountId: a.externalId }));
-  const [post] = await db.insert(socialPostsTable).values({
-    merchantId, content, media: [], targets, status: "publishing", automationRuleId: rule.id,
-  }).returning();
-  const published = await runPublish(merchantId, post!.id);
-  const ok = published?.status === "published" || published?.status === "partial";
-  await logDispatch({ merchantId, ruleId: rule.id, customerId: null, recordType: "social", recordId: dedupeKey, channel: "social", status: ok ? "sent" : "failed", error: ok ? undefined : "Publish failed — check connected accounts" });
-  logger.info({ ruleId: rule.id, postId: post!.id }, "Automation: social post published");
-  return ok ? 1 : 0;
-}
-
 // ─── Public API ───────────────────────────────────────────────────────────────
 
 export async function runAutomationRule(
@@ -551,18 +706,6 @@ export async function runAutomationRule(
   }
   const biz = await getBizInfo(merchantId);
 
-  // Social rules broadcast a post rather than messaging each customer.
-  if (rule.channel === "social") {
-    try {
-      const dispatched = await runSocialAutomation(merchantId, rule, logger);
-      await db.update(marketingAutomationRulesTable).set({ lastRunAt: new Date() }).where(eq(marketingAutomationRulesTable.id, rule.id));
-      return { dispatched, trigger: rule.triggerEvent };
-    } catch (err) {
-      logger.error({ ruleId: rule.id, err }, "Social automation error");
-      return { dispatched: 0, trigger: rule.triggerEvent, error: String(err) };
-    }
-  }
-
   try {
     let dispatched = 0;
     switch (rule.triggerEvent) {
@@ -572,6 +715,7 @@ export async function runAutomationRule(
       case "new_service_job":  dispatched = await runNewServiceJob(merchantId, rule, biz, logger); break;
       case "invoice_overdue":  dispatched = await runInvoiceOverdue(merchantId, rule, biz, logger); break;
       case "days_after_sale":  dispatched = await runDaysAfterSale(merchantId, rule, biz, logger); break;
+      case "warranty_expiring": dispatched = await runWarrantyExpiring(merchantId, rule, biz, logger); break;
       case "scheduled_time":   dispatched = await runScheduledTime(merchantId, rule, biz, logger); break;
       default:
         return { dispatched: 0, trigger: rule.triggerEvent, error: `Unknown trigger: ${rule.triggerEvent}` };
@@ -604,13 +748,14 @@ export async function processAllMerchantAutomations(logger: Logger): Promise<voi
 }
 
 export function scheduleMarketingAutomation(logger: Logger): void {
-  // Run once on startup (in case the server restarted during a scheduled window)
-  processAllMerchantAutomations(logger).catch((err) =>
+  // Run once on startup (in case the server restarted during a scheduled window),
+  // staggered so it doesn't hit the DB in the same instant as the other schedulers.
+  jitteredStart(() => processAllMerchantAutomations(logger).catch((err) =>
     logger.error({ err }, "Marketing automation startup run error"),
-  );
+  ));
   // Then hourly — frequent enough that "after a set time" sends land within the
   // hour, while per-record dedup keeps daily/event triggers idempotent.
-  setInterval(
+  trackedInterval(
     () =>
       processAllMerchantAutomations(logger).catch((err) =>
         logger.error({ err }, "Marketing automation scheduled run error"),

@@ -463,7 +463,7 @@ export default function MarketingEmailTemplatesPage() {
                   "px-3 py-1.5 rounded-lg text-xs font-medium transition-colors border",
                   category === cat
                     ? "bg-primary text-primary-foreground border-primary"
-                    : "border-border hover:bg-muted text-muted-foreground",
+                    : "pill-selector border-border hover:bg-muted text-muted-foreground",
                 )}>
                 {cat}
                 {cat !== "All" && (

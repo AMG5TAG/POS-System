@@ -89,7 +89,7 @@ export default function SettingsSmsPage() {
 
   return (
     <AppLayout>
-      <div className="p-6 max-w-5xl space-y-6">
+      <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold flex items-center gap-2">
             <MessageSquare className="w-6 h-6 text-primary" />
@@ -100,8 +100,8 @@ export default function SettingsSmsPage() {
           </p>
         </div>
 
-        {/* ── Two-column row: Twilio Connection | Notification Preferences ── */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+        {/* ── Full-width sections: Twilio Connection, then Notification Preferences ── */}
+        <div className="grid grid-cols-1 gap-6 items-start">
 
           {/* Twilio Connection */}
           <Card>

@@ -5,6 +5,303 @@
  * KoaPOS API specification
  * OpenAPI spec version: 0.1.0
  */
+export type FollowUpItemSourceType = typeof FollowUpItemSourceType[keyof typeof FollowUpItemSourceType];
+
+
+export const FollowUpItemSourceType = {
+  service_job: 'service_job',
+  appointment: 'appointment',
+} as const;
+
+export interface FollowUpItem {
+  /** Composite key, e.g. service_job-42 */
+  id: string;
+  sourceType: FollowUpItemSourceType;
+  sourceId: number;
+  /** Job number, or APT-<id> for an appointment */
+  reference: string;
+  title: string;
+  device: string;
+  staffName: string;
+  completedAt: string;
+  daysSince: number;
+  customerId: number | null;
+  customerName: string;
+  email: string;
+  phone: string;
+  agreedToMarketing: boolean;
+  lastFollowUpAt: string | null;
+  followUpCount: number;
+  /** When the merchant manually marked this record as followed up without sending a message. Non-null records drop out of the due list on the same rule as ones that were actually sent. */
+  markedDoneAt: string | null;
+}
+
+export interface FollowUpListResponse {
+  items: FollowUpItem[];
+  total: number;
+  windowValue: number;
+  windowUnit: string;
+  cutoff: string;
+}
+
+export type FollowUpSummaryWindowUnit = typeof FollowUpSummaryWindowUnit[keyof typeof FollowUpSummaryWindowUnit];
+
+
+export const FollowUpSummaryWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export interface FollowUpSummary {
+  dueCount: number;
+  /** Due records reachable on the merchant's default channel */
+  contactableCount: number;
+  servicesDue: number;
+  appointmentsDue: number;
+  oldestDaysSince: number;
+  windowValue: number;
+  windowUnit: FollowUpSummaryWindowUnit;
+}
+
+export interface FollowUpShortcode {
+  code: string;
+  label: string;
+  example: string;
+}
+
+export interface FollowUpShortcodeListResponse {
+  items: FollowUpShortcode[];
+  total: number;
+}
+
+export type FollowUpMarkDoneInputTargetsItemSourceType = typeof FollowUpMarkDoneInputTargetsItemSourceType[keyof typeof FollowUpMarkDoneInputTargetsItemSourceType];
+
+
+export const FollowUpMarkDoneInputTargetsItemSourceType = {
+  service_job: 'service_job',
+  appointment: 'appointment',
+} as const;
+
+export type FollowUpMarkDoneInputTargetsItem = {
+  sourceType: FollowUpMarkDoneInputTargetsItemSourceType;
+  sourceId: number;
+};
+
+export interface FollowUpMarkDoneInput {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  targets: FollowUpMarkDoneInputTargetsItem[];
+}
+
+export interface FollowUpMarkDoneResponse {
+  /** Records whose done marker was added or removed */
+  changed: number;
+  /** Targets that were already in the requested state, or not this merchant's */
+  skipped: number;
+}
+
+export interface FollowUpLogEntry {
+  id: number;
+  sourceType: string;
+  sourceId: number;
+  customerId: number | null;
+  templateId: number | null;
+  channel: string;
+  status: string;
+  recipient: string;
+  subject: string;
+  body: string;
+  error: string | null;
+  sentAt: string;
+}
+
+export interface FollowUpLogListResponse {
+  items: FollowUpLogEntry[];
+  total: number;
+}
+
+export type FollowUpTargetSourceType = typeof FollowUpTargetSourceType[keyof typeof FollowUpTargetSourceType];
+
+
+export const FollowUpTargetSourceType = {
+  service_job: 'service_job',
+  appointment: 'appointment',
+} as const;
+
+export interface FollowUpTarget {
+  sourceType: FollowUpTargetSourceType;
+  sourceId: number;
+}
+
+export type FollowUpSendInputChannel = typeof FollowUpSendInputChannel[keyof typeof FollowUpSendInputChannel];
+
+
+export const FollowUpSendInputChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpSendInput {
+  /** @minItems 1 */
+  targets: FollowUpTarget[];
+  channel: FollowUpSendInputChannel;
+  templateId?: number | null;
+  subject?: string;
+  body?: string;
+  smsBody?: string;
+}
+
+export type FollowUpSendResultStatus = typeof FollowUpSendResultStatus[keyof typeof FollowUpSendResultStatus];
+
+
+export const FollowUpSendResultStatus = {
+  sent: 'sent',
+  failed: 'failed',
+  skipped: 'skipped',
+} as const;
+
+export interface FollowUpSendResult {
+  sourceType: string;
+  sourceId: number;
+  channel: string;
+  status: FollowUpSendResultStatus;
+  error?: string;
+}
+
+export interface FollowUpSendResponse {
+  success: boolean;
+  sent: number;
+  failed: number;
+  skipped: number;
+  results: FollowUpSendResult[];
+}
+
+export interface FollowUpPreviewResponse {
+  subject: string;
+  html: string;
+  text: string;
+  sms: string;
+  recipientEmail: string;
+  recipientPhone: string;
+}
+
+export type FollowUpSettingsWindowUnit = typeof FollowUpSettingsWindowUnit[keyof typeof FollowUpSettingsWindowUnit];
+
+
+export const FollowUpSettingsWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export type FollowUpSettingsDefaultChannel = typeof FollowUpSettingsDefaultChannel[keyof typeof FollowUpSettingsDefaultChannel];
+
+
+export const FollowUpSettingsDefaultChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpSettings {
+  id: number;
+  merchantId: number;
+  windowValue: number;
+  windowUnit: FollowUpSettingsWindowUnit;
+  includeServices: boolean;
+  includeAppointments: boolean;
+  hideAlreadySent: boolean;
+  requireOptIn: boolean;
+  defaultChannel: FollowUpSettingsDefaultChannel;
+  defaultTemplateId: number | null;
+  reviewUrl: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export type FollowUpSettingsInputWindowUnit = typeof FollowUpSettingsInputWindowUnit[keyof typeof FollowUpSettingsInputWindowUnit];
+
+
+export const FollowUpSettingsInputWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export type FollowUpSettingsInputDefaultChannel = typeof FollowUpSettingsInputDefaultChannel[keyof typeof FollowUpSettingsInputDefaultChannel];
+
+
+export const FollowUpSettingsInputDefaultChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpSettingsInput {
+  /**
+     * @minimum 0
+     * @maximum 3650
+     */
+  windowValue?: number;
+  windowUnit?: FollowUpSettingsInputWindowUnit;
+  includeServices?: boolean;
+  includeAppointments?: boolean;
+  hideAlreadySent?: boolean;
+  requireOptIn?: boolean;
+  defaultChannel?: FollowUpSettingsInputDefaultChannel;
+  defaultTemplateId?: number | null;
+  reviewUrl?: string;
+}
+
+export type FollowUpTemplateChannel = typeof FollowUpTemplateChannel[keyof typeof FollowUpTemplateChannel];
+
+
+export const FollowUpTemplateChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpTemplate {
+  id: number;
+  merchantId: number;
+  name: string;
+  channel: FollowUpTemplateChannel;
+  subject: string;
+  body: string;
+  smsBody: string;
+  isDefault: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface FollowUpTemplateListResponse {
+  items: FollowUpTemplate[];
+  total: number;
+}
+
+export type FollowUpTemplateInputChannel = typeof FollowUpTemplateInputChannel[keyof typeof FollowUpTemplateInputChannel];
+
+
+export const FollowUpTemplateInputChannel = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface FollowUpTemplateInput {
+  name?: string;
+  channel?: FollowUpTemplateInputChannel;
+  subject?: string;
+  body?: string;
+  smsBody?: string;
+  isDefault?: boolean;
+}
+
 export interface SmsTemplate {
   id: number;
   merchantId: number;
@@ -128,6 +425,8 @@ export interface KpiTarget {
   notes: string;
   startDate?: string | null;
   endDate?: string | null;
+  /** "true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over. */
+  repeats?: string;
   isActive: string;
   showOnDashboard?: string;
   createdAt: string;
@@ -183,6 +482,7 @@ export const BackupStorageDestinationType = {
   gcs: 'gcs',
   sftp: 'sftp',
   onedrive: 'onedrive',
+  nextcloud: 'nextcloud',
 } as const;
 
 export interface BackupStorageDestination {
@@ -230,6 +530,7 @@ export const BackupStorageDestinationInputType = {
   gcs: 'gcs',
   sftp: 'sftp',
   onedrive: 'onedrive',
+  nextcloud: 'nextcloud',
 } as const;
 
 export interface BackupStorageDestinationInput {
@@ -357,6 +658,17 @@ export interface LoginInput {
   password: string;
 }
 
+/**
+ * How phone numbers are shown in the app. Display only — numbers are always stored with their country code.
+ */
+export type MerchantPhoneDisplay = typeof MerchantPhoneDisplay[keyof typeof MerchantPhoneDisplay];
+
+
+export const MerchantPhoneDisplay = {
+  international: 'international',
+  national: 'national',
+} as const;
+
 export type MerchantStaffRole = typeof MerchantStaffRole[keyof typeof MerchantStaffRole];
 
 
@@ -380,6 +692,10 @@ export interface Merchant {
   city?: string | null;
   /** @nullable */
   country?: string | null;
+  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one, so "0412 345 678" is stored as "+61412345678". Empty means Australia. */
+  defaultPhoneCountry?: string;
+  /** How phone numbers are shown in the app. Display only — numbers are always stored with their country code. */
+  phoneDisplay?: MerchantPhoneDisplay;
   currency?: string;
   /** @nullable */
   timezone?: string | null;
@@ -392,12 +708,25 @@ export interface Merchant {
   loginNotifyEmailNewLocation?: boolean;
   securityAlertEmail?: boolean;
   passwordChangeAlertEmail?: boolean;
+  /** When true, a customer who has set a portal password must enter it; the portalToken in the URL then identifies the account rather than granting access to it. Customers who have not set one yet are still admitted by the token and are prompted to set a password. */
+  requirePortalPassword?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
   emailVerified?: boolean;
   onboardingCompleted?: boolean;
   isDemoAccount?: boolean;
 }
+
+/**
+ * How phone numbers are shown in the app. Display only.
+ */
+export type MerchantUpdatePhoneDisplay = typeof MerchantUpdatePhoneDisplay[keyof typeof MerchantUpdatePhoneDisplay];
+
+
+export const MerchantUpdatePhoneDisplay = {
+  international: 'international',
+  national: 'national',
+} as const;
 
 export interface MerchantUpdate {
   businessName?: string;
@@ -406,6 +735,10 @@ export interface MerchantUpdate {
   address?: string;
   city?: string;
   country?: string;
+  /** ISO 3166-1 alpha-2 country whose dialling code is appended to phone numbers saved without one. Empty means Australia. */
+  defaultPhoneCountry?: string;
+  /** How phone numbers are shown in the app. Display only. */
+  phoneDisplay?: MerchantUpdatePhoneDisplay;
   currency?: string;
   timezone?: string;
   logoUrl?: string;
@@ -420,6 +753,7 @@ export interface MerchantUpdate {
   loginNotifyEmailNewLocation?: boolean;
   securityAlertEmail?: boolean;
   passwordChangeAlertEmail?: boolean;
+  requirePortalPassword?: boolean;
 }
 
 export interface Plan {
@@ -479,6 +813,27 @@ export interface ProductPriceHistoryEntry {
   poNumber?: string | null;
   poId?: number | null;
   changedAt: string;
+}
+
+export type ProductSalesHistoryEntryType = typeof ProductSalesHistoryEntryType[keyof typeof ProductSalesHistoryEntryType];
+
+
+export const ProductSalesHistoryEntryType = {
+  sale: 'sale',
+  invoice: 'invoice',
+} as const;
+
+export interface ProductSalesHistoryEntry {
+  type: ProductSalesHistoryEntryType;
+  id: number;
+  reference: string;
+  date: string;
+  status?: string | null;
+  customerName?: string | null;
+  quantity: number;
+  unitPrice: number;
+  lineTotal: number;
+  documentTotal: number;
 }
 
 export interface ProductType {
@@ -582,6 +937,7 @@ export interface Product {
   supplierCode?: string | null;
   isEpay?: boolean;
   isRefurbished?: boolean;
+  tracksSerial?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   /** @nullable */
@@ -590,6 +946,8 @@ export interface Product {
   overflowLocation?: string | null;
   /** @nullable */
   notification?: string | null;
+  /** @nullable */
+  timeCardMinutes?: number | null;
   /** @nullable */
   digitalCodesCount?: number | null;
   createdAt: string;
@@ -651,9 +1009,11 @@ export interface ProductInput {
   supplier?: string;
   supplierCode?: string;
   isEpay?: boolean;
+  tracksSerial?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   notification?: string;
+  timeCardMinutes?: number;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -684,12 +1044,14 @@ export interface ProductUpdate {
   /** @nullable */
   supplierCode?: string | null;
   isEpay?: boolean;
+  tracksSerial?: boolean;
   /** @maxItems 5 */
   tags?: string[];
   stockLocation?: string;
   overflowLocation?: string;
   /** @nullable */
   notification?: string | null;
+  timeCardMinutes?: number;
 }
 
 export interface ProductList {
@@ -745,6 +1107,8 @@ export interface Customer {
   address?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** @nullable */
+  photoUrl?: string | null;
   /** @nullable */
   dateOfBirth?: string | null;
   loyaltyPoints?: number;
@@ -808,6 +1172,7 @@ export interface CustomerInput {
   phone?: string;
   address?: string;
   notes?: string;
+  photoUrl?: string;
   dateOfBirth?: string;
   company?: string;
   abn?: string;
@@ -840,6 +1205,7 @@ export interface CustomerUpdate {
   phone?: string;
   address?: string;
   notes?: string;
+  photoUrl?: string;
   dateOfBirth?: string;
   company?: string;
   abn?: string;
@@ -915,6 +1281,9 @@ export const TransactionPaymentMethod = {
   store_credit: 'store_credit',
   laybuy: 'laybuy',
   loyalty: 'loyalty',
+  zip: 'zip',
+  afterpay: 'afterpay',
+  klarna: 'klarna',
 } as const;
 
 export type TransactionIssuedGiftCardsItem = {
@@ -937,6 +1306,8 @@ export interface Transaction {
   discountTotal?: number;
   total: number;
   paymentMethod: TransactionPaymentMethod;
+  /** Customer-facing surcharge added to the total at checkout when the chosen payment method passes its acceptance cost on to the customer. 0 when the method has no surcharge or the merchant absorbs the cost. */
+  surchargeAmount?: number;
   /** @nullable */
   amountTendered?: number | null;
   /** @nullable */
@@ -975,6 +1346,9 @@ export const TransactionInputPaymentMethod = {
   store_credit: 'store_credit',
   laybuy: 'laybuy',
   loyalty: 'loyalty',
+  zip: 'zip',
+  afterpay: 'afterpay',
+  klarna: 'klarna',
 } as const;
 
 /**
@@ -1007,6 +1381,44 @@ export interface TransactionInput {
   discountPct?: number;
   /** When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction. */
   giftCardPayment?: TransactionInputGiftCardPayment;
+  /**
+     * The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.
+     * @nullable
+     */
+  serviceJobId?: number | null;
+  /**
+     * The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.
+     * @nullable
+     */
+  appointmentId?: number | null;
+  /** Optional accounting date for the sale. The transaction's createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of "now". Used for tenders that actually landed on an earlier day, e.g. a direct deposit / bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future. */
+  paidAt?: string;
+}
+
+export interface ModifyCompletedSaleItem {
+  /** Catalog product id to add as a free line. Use 0 for a custom free line (supply productName). The line is always recorded at $0 regardless of the product's catalog price. */
+  productId: number;
+  /** Name for a custom free line (productId 0). Ignored for catalog products. */
+  productName?: string;
+  /** @minimum 1 */
+  quantity: number;
+}
+
+/**
+ * Limited post-sale amendments to a completed sale. Every field is optional; only the fields present are applied. Added items are always recorded at $0 (complimentary) so the sale total never changes.
+ */
+export interface ModifyCompletedSaleInput {
+  /**
+     * Link (or change) the customer on the sale. Pass null to detach the current customer. Omit to leave the customer unchanged.
+     * @nullable
+     */
+  customerId?: number | null;
+  /** Free products to add to the sale; each is forced to $0. */
+  addItems?: ModifyCompletedSaleItem[];
+  /** Link the sale to a service job by its job number. The job is marked completed and a reference is appended to the sale notes. */
+  serviceJobNumber?: string;
+  /** Link the sale to an appointment by id. The appointment is marked completed and a reference is appended to the sale notes. */
+  appointmentId?: number;
 }
 
 export interface RefundInput {
@@ -1318,6 +1730,8 @@ export interface CalendarDay {
   sales: number;
   serviceJobs: number;
   invoices: number;
+  /** Distinct service jobs / appointments that were followed up on this date — a message successfully sent, or the record marked done by hand. Email + SMS on the same record counts once. */
+  followUpsCompleted: number;
   appointments: CalendarAppointment[];
   customerBirthdays: CalendarBirthday[];
 }
@@ -1340,6 +1754,7 @@ export const ServiceJobStatus = {
   'awaiting-partner-approval': 'awaiting-partner-approval',
   'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
+  'awaiting-pickup': 'awaiting-pickup',
   completed: 'completed',
   cancelled: 'cancelled',
 } as const;
@@ -1376,6 +1791,13 @@ export interface ServiceJob {
   /** @nullable */
   deviceDescription?: string | null;
   /** @nullable */
+  deviceColour?: string | null;
+  /**
+     * How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.
+     * @nullable
+     */
+  deviceQuantity?: number | null;
+  /** @nullable */
   serialNumber?: string | null;
   /** @nullable */
   condition?: string | null;
@@ -1402,6 +1824,8 @@ export interface ServiceJob {
   completedAt?: string | null;
   /** @nullable */
   reworkOfJobId?: number | null;
+  /** @nullable */
+  reopenedFromJobId?: number | null;
   /** @nullable */
   estimateApprovedAt?: string | null;
   /** @nullable */
@@ -1447,6 +1871,7 @@ export const ServiceJobInputStatus = {
   'awaiting-partner-approval': 'awaiting-partner-approval',
   'partner-replacement': 'partner-replacement',
   'awaiting-customer': 'awaiting-customer',
+  'awaiting-pickup': 'awaiting-pickup',
   completed: 'completed',
   cancelled: 'cancelled',
 } as const;
@@ -1462,6 +1887,13 @@ export interface ServiceJobInput {
   deviceType?: string | null;
   /** @nullable */
   deviceDescription?: string | null;
+  /** @nullable */
+  deviceColour?: string | null;
+  /**
+     * How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.
+     * @nullable
+     */
+  deviceQuantity?: number | null;
   /** @nullable */
   serialNumber?: string | null;
   /** @nullable */
@@ -2095,6 +2527,14 @@ export interface Appointment {
   createdAt: string;
 }
 
+export interface LinkAppointmentServiceJobInput {
+  /**
+     * Service job to link, or null to unlink.
+     * @nullable
+     */
+  serviceJobId: number | null;
+}
+
 export type AppointmentInputStatus = typeof AppointmentInputStatus[keyof typeof AppointmentInputStatus];
 
 
@@ -2132,6 +2572,10 @@ export interface DashboardConfigResponse {
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
   showReferralRevenue: boolean;
+  showBirthdayNotifications: boolean;
+  showFollowUpNotifications: boolean;
+  /** Custom vertical order of dashboard content sections; null = default order */
+  sectionOrder?: string[] | null;
   updatedAt: string;
 }
 
@@ -2143,6 +2587,10 @@ export interface UpsertDashboardConfigBody {
   showServiceJobsPanel?: boolean;
   showCalendar?: boolean;
   showReferralRevenue?: boolean;
+  showBirthdayNotifications?: boolean;
+  showFollowUpNotifications?: boolean;
+  /** Custom vertical order of dashboard content sections */
+  sectionOrder?: string[];
 }
 
 export type DailyCloseCurrentByPaymentMethod = {[key: string]: number};
@@ -2190,6 +2638,20 @@ export interface CreateDailyCloseInput {
   breakdown?: CreateDailyCloseInputBreakdown;
 }
 
+/**
+ * Previous equivalent period's headline totals (present only when compare=true).
+ * @nullable
+ */
+export type DashboardSummaryPrevious = {
+  totalSales?: number;
+  transactionCount?: number;
+  posSales?: number;
+  posCount?: number;
+  invoiceSales?: number;
+  invoiceCount?: number;
+  averageOrderValue?: number;
+} | null;
+
 export interface DashboardSummary {
   totalSales: number;
   posSales?: number;
@@ -2206,8 +2668,15 @@ export interface DashboardSummary {
   discountTotal?: number;
   itemsSold?: number;
   costTotal?: number;
+  /** Absorbed payment surcharges (pass-on disabled) for the period — a cost of business. */
+  surchargeCost?: number;
   /** @nullable */
   topPaymentMethod?: string | null;
+  /**
+     * Previous equivalent period's headline totals (present only when compare=true).
+     * @nullable
+     */
+  previous?: DashboardSummaryPrevious;
 }
 
 export type DashboardActivityDeviceTypesItem = {
@@ -2267,12 +2736,21 @@ export interface InvoiceLineItem {
 }
 
 export interface InvoiceEvent {
+  id?: string | null;
   type: string;
   timestamp: string;
   detail?: string | null;
   method?: string | null;
   amount?: number | null;
+  reverses?: string | null;
   idempotencyKey?: string | null;
+}
+
+export interface InvoiceInstalment {
+  label?: string | null;
+  /** @minimum 0 */
+  amount: number;
+  dueDate?: string | null;
 }
 
 export interface Invoice {
@@ -2290,6 +2768,7 @@ export interface Invoice {
   discountTotal?: number | null;
   items: InvoiceLineItem[];
   events: InvoiceEvent[];
+  paymentSchedule?: InvoiceInstalment[] | null;
   notes?: string | null;
   dueDate?: string | null;
   paidAt?: string | null;
@@ -2357,11 +2836,23 @@ export interface UploadUrlRequest {
   size: number;
   /** @minLength 1 */
   contentType: string;
+  /**
+     * Lowercase hex SHA-256 of the file contents, computed by the client before uploading. When supplied, the server de-duplicates: if this merchant has already stored a file with this hash, the response omits uploadURL and returns the existing objectPath, and the client skips the upload entirely.
+
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256?: string;
 }
 
 export interface UploadUrlResponse {
-  uploadURL: string;
+  /** Presigned PUT URL. Absent when deduped is true — the bytes are already stored and must not be re-uploaded.
+   */
+  uploadURL?: string;
   objectPath: string;
+  /** True when an existing asset with the same hash was reused. */
+  deduped: boolean;
+  /** Media library id, present when deduped is true. */
+  assetId?: number;
   metadata?: UploadUrlRequest;
 }
 
@@ -2371,11 +2862,161 @@ export interface ConfirmUploadBody {
      * @minLength 1
      */
   objectPath: string;
+  /**
+     * The same hash sent to request-url. When supplied, the upload is registered in the merchant's media library so it can be reused.
+
+     * @pattern ^[a-f0-9]{64}$
+     */
+  sha256?: string;
+  name?: string;
+  /** @minimum 0 */
+  size?: number;
+  contentType?: string;
+  /** @minimum 0 */
+  width?: number;
+  /** @minimum 0 */
+  height?: number;
 }
 
 export interface ConfirmUploadResponse {
   /** The confirmed, normalized object path with ACL policy applied. */
   objectPath: string;
+  /** Media library id, present when the upload was registered as an asset. */
+  assetId?: number;
+}
+
+/**
+ * Media kind derived from contentType.
+ */
+export type MerchantAssetKind = typeof MerchantAssetKind[keyof typeof MerchantAssetKind];
+
+
+export const MerchantAssetKind = {
+  image: 'image',
+  video: 'video',
+  document: 'document',
+} as const;
+
+export interface MerchantAssetReference {
+  /** Table holding the reference, e.g. "products". */
+  entity: string;
+  column: string;
+  /** Row id, when the table has one. */
+  id?: string | null;
+  /** Human-readable row label, e.g. the product name. */
+  label?: string | null;
+}
+
+export interface MerchantAsset {
+  id: number;
+  /** Normalized storage path, e.g. /objects/merchants/4/assets/<sha256>. */
+  objectPath: string;
+  /** Ready-to-use src for an img tag, i.e. /api/storage + objectPath. */
+  url: string;
+  sha256?: string | null;
+  contentType: string;
+  sizeBytes: number;
+  filename?: string | null;
+  width?: number | null;
+  height?: number | null;
+  /** Media kind derived from contentType. */
+  kind?: MerchantAssetKind;
+  /** Present only when the listing was requested withUsage=true. */
+  usageCount?: number;
+  /** What the asset is attached to. Present only with withReferences=true. */
+  references?: MerchantAssetReference[];
+  createdAt: string;
+}
+
+export interface MerchantAssetListResponse {
+  assets: MerchantAsset[];
+  total: number;
+  totalBytes?: number;
+}
+
+export interface MerchantAssetUsageEntry {
+  /** Table holding the reference, e.g. "products". */
+  entity: string;
+  column: string;
+  count: number;
+}
+
+export interface MerchantAssetUsageResponse {
+  /** Total references. 0 means the asset is safe to delete. */
+  total: number;
+  usage: MerchantAssetUsageEntry[];
+  error?: string;
+}
+
+export interface DeleteMerchantAssetResponse {
+  deleted: boolean;
+  reclaimedBytes?: number;
+}
+
+export interface BulkDeleteMerchantAssetsBody {
+  /**
+     * Ids of the assets to delete. Capped so one request cannot hold a storage-delete loop open indefinitely.
+
+     * @minItems 1
+     * @maxItems 200
+     */
+  assetIds: number[];
+}
+
+export interface BulkDeleteSkippedAsset {
+  id: number;
+  filename?: string | null;
+  /** Why it was skipped — how many rows still point at it. */
+  usageCount: number;
+}
+
+export interface BulkDeleteFailedAsset {
+  id: number;
+  filename?: string | null;
+  error: string;
+}
+
+export interface BulkDeleteMerchantAssetsResponse {
+  /** How many assets were actually removed. */
+  deleted: number;
+  deletedIds: number[];
+  /** Still referenced, so deliberately left alone. */
+  skipped: BulkDeleteSkippedAsset[];
+  /** Storage delete errored; the library row was kept. */
+  failed: BulkDeleteFailedAsset[];
+  /** Ids that do not belong to this merchant, or no longer exist. */
+  notFound: number[];
+  reclaimedBytes: number;
+}
+
+export interface ReplaceMerchantAssetBody {
+  /** Id of the asset to point everything at. Upload the new file through the normal flow first; that registers it and returns its id.
+   */
+  replacementAssetId: number;
+}
+
+export interface ReplaceMerchantAssetResponse {
+  /** Number of rows repointed at the replacement. */
+  replaced: number;
+}
+
+export interface ImportMerchantAssetsResponse {
+  imported: number;
+  /** Objects already present in the library. */
+  skipped: number;
+  scanned: number;
+}
+
+export interface OrphanObject {
+  objectPath: string;
+  sizeBytes: number;
+}
+
+export interface SweepOrphansResponse {
+  dryRun: boolean;
+  orphans: OrphanObject[];
+  reclaimableBytes: number;
+  deletedCount?: number;
 }
 
 export interface LoyaltyLeaderboardEntry {
@@ -2484,6 +3125,8 @@ export interface LoyaltySettings {
   cashbackRate?: number;
   pointsPerDollar?: number;
   dollarPerPoint?: number;
+  /** Loyalty points awarded from the dashboard birthday prompt. */
+  birthdayBonusPoints?: number;
   tiers?: LoyaltyTier[];
   stampsRequired?: number;
   stampRewardValue?: number;
@@ -2534,6 +3177,8 @@ export interface LoyaltySettingsInput {
   cashbackRate?: number;
   pointsPerDollar?: number;
   dollarPerPoint?: number;
+  /** Loyalty points awarded from the dashboard birthday prompt. */
+  birthdayBonusPoints?: number;
   tiers?: LoyaltyTier[];
   stampsRequired?: number;
   stampRewardValue?: number;
@@ -2550,6 +3195,199 @@ export interface LoyaltySettingsInput {
   /** Active loyalty promotions (Double Points, Category Bonuses, etc.). */
   promotions?: LoyaltyPromotion[];
   naming?: LoyaltyNaming;
+}
+
+/**
+ * What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away.
+ */
+export type ServiceSettingsDefaultPrint = typeof ServiceSettingsDefaultPrint[keyof typeof ServiceSettingsDefaultPrint];
+
+
+export const ServiceSettingsDefaultPrint = {
+  ask: 'ask',
+  a4: 'a4',
+  '80mm': '80mm',
+  sticker: 'sticker',
+} as const;
+
+export interface ServiceSettings {
+  showQuote: boolean;
+  showPartsLabour: boolean;
+  showApprovalDeposit: boolean;
+  showDiagnostics: boolean;
+  showWarranty: boolean;
+  showTechnicianTime: boolean;
+  showSignOff: boolean;
+  showShipping: boolean;
+  showNotes: boolean;
+  /**
+     * Default repair warranty period (days) pre-filled on new service jobs.
+     * @minimum 0
+     */
+  repairWarrantyDays: number;
+  /**
+     * Default warranty period (days) applied to no-charge rework jobs.
+     * @minimum 0
+     */
+  reworkWarrantyDays: number;
+  /** What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away. */
+  defaultPrint: ServiceSettingsDefaultPrint;
+}
+
+/**
+ * What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away.
+ */
+export type ServiceSettingsInputDefaultPrint = typeof ServiceSettingsInputDefaultPrint[keyof typeof ServiceSettingsInputDefaultPrint];
+
+
+export const ServiceSettingsInputDefaultPrint = {
+  ask: 'ask',
+  a4: 'a4',
+  '80mm': '80mm',
+  sticker: 'sticker',
+} as const;
+
+export interface ServiceSettingsInput {
+  showQuote?: boolean;
+  showPartsLabour: boolean;
+  showApprovalDeposit: boolean;
+  showDiagnostics: boolean;
+  showWarranty: boolean;
+  showTechnicianTime: boolean;
+  showSignOff: boolean;
+  showShipping: boolean;
+  showNotes: boolean;
+  /** @minimum 0 */
+  repairWarrantyDays?: number;
+  /** @minimum 0 */
+  reworkWarrantyDays?: number;
+  /** What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away. */
+  defaultPrint?: ServiceSettingsInputDefaultPrint;
+}
+
+/**
+ * Default delivery channel pre-selected when sending an invoice.
+ */
+export type InvoiceSettingsDefaultSendMethod = typeof InvoiceSettingsDefaultSendMethod[keyof typeof InvoiceSettingsDefaultSendMethod];
+
+
+export const InvoiceSettingsDefaultSendMethod = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface InvoiceSettings {
+  /**
+     * Days from issue date used to pre-fill a new invoice's due date. 0 = due on receipt.
+     * @minimum 0
+     */
+  defaultDueDays: number;
+  /** Prefix shown before invoice numbers (e.g. INV-). */
+  numberPrefix: string;
+  /** Notes pre-filled on every new invoice and printed on the PDF. */
+  defaultNotes: string;
+  /** Payment terms / conditions printed in the invoice footer. */
+  defaultTerms: string;
+  /** Email the customer a reminder before the invoice falls due. */
+  reminderEnabled: boolean;
+  /**
+     * How many days before the due date the reminder is sent.
+     * @minimum 0
+     */
+  reminderDaysBefore: number;
+  /** Email the customer when an invoice becomes overdue. */
+  overdueEnabled: boolean;
+  /**
+     * Days after the due date before the first overdue notice is sent.
+     * @minimum 0
+     */
+  overdueDaysAfter: number;
+  /**
+     * Repeat the overdue notice every N days. 0 = send once only.
+     * @minimum 0
+     */
+  overdueRepeatDays: number;
+  /** Apply a one-time late fee to an invoice as soon as it becomes overdue. */
+  lateFeeEnabled: boolean;
+  /**
+     * Late fee as a percentage of the invoice total.
+     * @minimum 0
+     */
+  lateFeePercent: number;
+  /** Apply an additional one-time surcharge once an invoice has had a set number of overdue reminders. */
+  surchargeEnabled: boolean;
+  /**
+     * Surcharge as a percentage of the invoice total, added after the overdue-reminder threshold is reached.
+     * @minimum 0
+     */
+  surchargePercent: number;
+  /**
+     * Number of overdue reminders that must be sent before the surcharge is applied. 0 = apply as soon as overdue.
+     * @minimum 0
+     */
+  surchargeAfterReminders: number;
+  /** Email a debt-collection escalation notice to a customer once they accumulate too many overdue invoices. */
+  debtCollectionEnabled: boolean;
+  /**
+     * Number of overdue invoices a single customer must reach before the debt-collection email is sent.
+     * @minimum 1
+     */
+  debtCollectionThreshold: number;
+  /** Automatically send the invoice to the customer as soon as it is created. */
+  autoSendOnCreate: boolean;
+  /** Default delivery channel pre-selected when sending an invoice. */
+  defaultSendMethod: InvoiceSettingsDefaultSendMethod;
+  /** Attach a PDF copy of the invoice to outgoing emails. */
+  attachPdf: boolean;
+  /** Send a blind copy of every invoice email to the business email address. */
+  bccBusinessEmail: boolean;
+  /** Default email subject. Supports {number} and {business} placeholders. */
+  emailSubject: string;
+  /** Default email body. Supports {number}, {business}, {total} and {dueDate} placeholders. */
+  emailMessage: string;
+}
+
+export type InvoiceSettingsInputDefaultSendMethod = typeof InvoiceSettingsInputDefaultSendMethod[keyof typeof InvoiceSettingsInputDefaultSendMethod];
+
+
+export const InvoiceSettingsInputDefaultSendMethod = {
+  email: 'email',
+  sms: 'sms',
+  both: 'both',
+} as const;
+
+export interface InvoiceSettingsInput {
+  /** @minimum 0 */
+  defaultDueDays?: number;
+  numberPrefix?: string;
+  defaultNotes?: string;
+  defaultTerms?: string;
+  reminderEnabled?: boolean;
+  /** @minimum 0 */
+  reminderDaysBefore?: number;
+  overdueEnabled?: boolean;
+  /** @minimum 0 */
+  overdueDaysAfter?: number;
+  /** @minimum 0 */
+  overdueRepeatDays?: number;
+  lateFeeEnabled?: boolean;
+  /** @minimum 0 */
+  lateFeePercent?: number;
+  surchargeEnabled?: boolean;
+  /** @minimum 0 */
+  surchargePercent?: number;
+  /** @minimum 0 */
+  surchargeAfterReminders?: number;
+  debtCollectionEnabled?: boolean;
+  /** @minimum 1 */
+  debtCollectionThreshold?: number;
+  autoSendOnCreate?: boolean;
+  defaultSendMethod?: InvoiceSettingsInputDefaultSendMethod;
+  attachPdf?: boolean;
+  bccBusinessEmail?: boolean;
+  emailSubject?: string;
+  emailMessage?: string;
 }
 
 export interface CashDrawerEntry {
@@ -2612,6 +3450,12 @@ export interface ReceiveItemsInput {
   items: ReceiveItemsInputItemsItem[];
 }
 
+export type PurchaseOrderItemOversellSalesItem = {
+  receiptNumber?: string | null;
+  quantity?: number;
+  saleAt?: string;
+};
+
 export interface PurchaseOrderItem {
   id?: number;
   productId?: number | null;
@@ -2620,6 +3464,13 @@ export interface PurchaseOrderItem {
   received?: number;
   unitCost?: number;
   notes?: string | null;
+  tracksSerial?: boolean;
+  /** Current on-hand stock for this line's product (negative = oversold). Null for non-catalogued lines. */
+  currentStock?: number | null;
+  /** Total units this product is currently oversold by (0 if none). */
+  oversoldUnits?: number;
+  /** Sales that oversold this product and remain uncovered, oldest first. */
+  oversellSales?: PurchaseOrderItemOversellSalesItem[];
 }
 
 export interface PurchaseOrder {
@@ -2636,6 +3487,10 @@ export interface PurchaseOrder {
   totalCost: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  amountPaid?: number;
+  paymentStatus?: string;
+  paymentMethod?: string | null;
+  paidAt?: string | null;
   invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
   receipts?: POReceiptLog[];
@@ -2656,6 +3511,9 @@ export interface PurchaseOrderInput {
   totalCost?: number;
   deliveryCharge?: number;
   deliveryTaxMode?: string;
+  payFull?: boolean;
+  paymentAmount?: number;
+  paymentMethod?: string;
   invoiceUrls?: string[];
   items?: PurchaseOrderItem[];
 }
@@ -2935,6 +3793,7 @@ export interface AddLaybyPaymentBody {
   paymentMethod?: string;
   payments?: PaymentLeg[];
   note?: string;
+  idempotencyKey?: string;
 }
 
 export interface Camera {
@@ -2994,59 +3853,6 @@ export interface PosSecurityCaptureInput {
   deviceLabel?: string;
   takenBy?: string;
   storedLocally?: boolean;
-}
-
-export interface SocialFeedSettings {
-  id?: number | null;
-  showFacebook: boolean;
-  showInstagram: boolean;
-  showTwitter: boolean;
-  showLinkedin: boolean;
-  facebookEnabled: boolean;
-  instagramEnabled: boolean;
-  twitterEnabled: boolean;
-  tiktokEnabled: boolean;
-  linkedinEnabled: boolean;
-  refreshIntervalMinutes: number;
-}
-
-export interface SocialFeedSettingsInput {
-  showFacebook?: boolean;
-  showInstagram?: boolean;
-  showTwitter?: boolean;
-  showLinkedin?: boolean;
-  facebookEnabled?: boolean;
-  instagramEnabled?: boolean;
-  twitterEnabled?: boolean;
-  tiktokEnabled?: boolean;
-  linkedinEnabled?: boolean;
-  refreshIntervalMinutes?: number;
-}
-
-export interface SocialPost {
-  id: string;
-  platform: string;
-  accountName: string;
-  accountHandle: string;
-  text: string;
-  imageUrl?: string | null;
-  videoUrl?: string | null;
-  permalink?: string | null;
-  likes: number;
-  comments: number;
-  shares: number;
-  postedAt: string;
-}
-
-export interface SocialPlatformResult {
-  platform: string;
-  status: string;
-  posts: SocialPost[];
-  error?: string | null;
-}
-
-export interface SocialFeedResponse {
-  results: SocialPlatformResult[];
 }
 
 export interface CameraSnapshot {
@@ -3262,6 +4068,14 @@ export interface ProductRecallListResponse {
   total: number;
 }
 
+export interface ProductPreOrderItem {
+  id?: number | null;
+  productId?: number | null;
+  productName: string;
+  quantity: number;
+  unitPrice?: number;
+}
+
 export interface ProductPreOrder {
   id: number;
   merchantId: number;
@@ -3271,6 +4085,7 @@ export interface ProductPreOrder {
   productId?: number | null;
   productName: string;
   quantity: number;
+  items: ProductPreOrderItem[];
   depositAmount: number;
   status: string;
   expectedDate?: string | null;
@@ -3281,9 +4096,7 @@ export interface ProductPreOrder {
 export interface ProductPreOrderInput {
   customerId?: number;
   customerName: string;
-  productId?: number;
-  productName: string;
-  quantity: number;
+  items: ProductPreOrderItem[];
   depositAmount?: number;
   status?: string;
   expectedDate?: string;
@@ -3295,32 +4108,106 @@ export interface ProductPreOrderListResponse {
   total: number;
 }
 
+export interface ReturnAuthItem {
+  productId?: number | null;
+  name: string;
+  quantity: number;
+}
+
+export interface ReturnAuthAttachment {
+  fileKey: string;
+  filename: string;
+  contentType?: string;
+  sizeBytes?: number;
+}
+
 export interface ProductReturnAuth {
   id: number;
   merchantId: number;
   raNumber: string;
-  customerId?: number | null;
-  customerName: string;
-  reason?: string | null;
+  supplierId?: number | null;
+  supplierName: string;
+  purchaseOrderId?: number | null;
   items: string;
-  refundAmount: number;
+  quantity: number;
+  /** @nullable */
+  returnItems?: ReturnAuthItem[] | null;
+  /** @nullable */
+  attachments?: ReturnAuthAttachment[] | null;
+  reason?: string | null;
+  returnType?: string | null;
+  supplierRmaNumber?: string | null;
+  trackingNumber?: string | null;
   status: string;
   notes?: string | null;
   createdAt: string;
 }
 
 export interface ProductReturnAuthInput {
-  customerId?: number;
-  customerName: string;
-  reason?: string;
+  supplierId?: number;
+  supplierName: string;
+  purchaseOrderId?: number | null;
   items: string;
-  refundAmount?: number;
+  quantity?: number;
+  returnItems?: ReturnAuthItem[];
+  attachments?: ReturnAuthAttachment[];
+  reason?: string;
+  returnType?: string;
+  supplierRmaNumber?: string;
+  trackingNumber?: string;
   status?: string;
   notes?: string;
 }
 
 export interface ProductReturnAuthListResponse {
   items: ProductReturnAuth[];
+  total: number;
+}
+
+export interface TimeCardSession {
+  id: number;
+  merchantId: number;
+  /** @nullable */
+  transactionId?: number | null;
+  /** @nullable */
+  productId?: number | null;
+  /** @nullable */
+  customerId?: number | null;
+  customerName: string;
+  label: string;
+  purchasedSeconds: number;
+  status: string;
+  elapsedSeconds: number;
+  /** @nullable */
+  runningSince?: string | null;
+  createdAt: string;
+  updatedAt?: string;
+}
+
+export interface TimeCardSessionInput {
+  transactionId?: number;
+  productId?: number;
+  customerId?: number;
+  customerName?: string;
+  label: string;
+  purchasedSeconds: number;
+}
+
+export type TimeCardSessionActionAction = typeof TimeCardSessionActionAction[keyof typeof TimeCardSessionActionAction];
+
+
+export const TimeCardSessionActionAction = {
+  start: 'start',
+  pause: 'pause',
+  stop: 'stop',
+} as const;
+
+export interface TimeCardSessionAction {
+  action: TimeCardSessionActionAction;
+}
+
+export interface TimeCardSessionListResponse {
+  items: TimeCardSession[];
   total: number;
 }
 
@@ -3356,12 +4243,15 @@ export interface PosSettings {
   merchantId: number;
   enabledPaymentMethods: string;
   enabledIntegrationPayments: string;
+  customPaymentMethods: string;
   gridColumns: number;
   gridTileSize: string;
   gridShowPrices: string;
   gridShowStockBadges: string;
   gridCartPosition: string;
+  quickViewShowSupplier: string;
   forceStaffLogin: string;
+  promptCloseAllRegisters: string;
   staffLoginMessage: string;
   activeRegisterId: string;
   hardwareConfig: string;
@@ -3376,12 +4266,15 @@ export interface PosSettings {
 export interface PosSettingsInput {
   enabledPaymentMethods?: string;
   enabledIntegrationPayments?: string;
+  customPaymentMethods?: string;
   gridColumns?: number;
   gridTileSize?: string;
   gridShowPrices?: string;
   gridShowStockBadges?: string;
   gridCartPosition?: string;
+  quickViewShowSupplier?: string;
   forceStaffLogin?: string;
+  promptCloseAllRegisters?: string;
   staffLoginMessage?: string;
   activeRegisterId?: string;
   hardwareConfig?: string;
@@ -3390,6 +4283,26 @@ export interface PosSettingsInput {
   mapProvider?: string;
   roleDiscountLimits?: string;
   buttonStyle?: string;
+}
+
+export interface PaymentSurcharge {
+  paymentMethod: string;
+  /** Surcharge as a percentage of the sale total (0–100). */
+  percent: number;
+  /** Fixed surcharge amount added per transaction. */
+  fixed: number;
+  /** When true the cost is added to the customer's bill; when false the merchant absorbs it as a cost of business in reports. */
+  passOn: boolean;
+  /** Whether this method's surcharge is active. */
+  enabled: boolean;
+}
+
+export interface PaymentSurchargeListResponse {
+  items: PaymentSurcharge[];
+}
+
+export interface PaymentSurchargesInput {
+  items: PaymentSurcharge[];
 }
 
 export interface LaybySettings {
@@ -3424,6 +4337,7 @@ export type SalesSettingsOverviewDefaultSalesPeriod = typeof SalesSettingsOvervi
 
 export const SalesSettingsOverviewDefaultSalesPeriod = {
   today: 'today',
+  week: 'week',
   month: 'month',
   year: 'year',
 } as const;
@@ -3444,6 +4358,14 @@ export type SalesSettingsOverviewMonthMode = typeof SalesSettingsOverviewMonthMo
 export const SalesSettingsOverviewMonthMode = {
   rolling30: 'rolling30',
   calendar_mtd: 'calendar_mtd',
+} as const;
+
+export type SalesSettingsOverviewYearMode = typeof SalesSettingsOverviewYearMode[keyof typeof SalesSettingsOverviewYearMode];
+
+
+export const SalesSettingsOverviewYearMode = {
+  financial: 'financial',
+  rolling365: 'rolling365',
 } as const;
 
 export interface SalesSettings {
@@ -3475,6 +4397,7 @@ export interface SalesSettings {
   overviewDefaultSalesPeriod: SalesSettingsOverviewDefaultSalesPeriod;
   overviewDefaultActivityPeriod: SalesSettingsOverviewDefaultActivityPeriod;
   overviewMonthMode: SalesSettingsOverviewMonthMode;
+  overviewYearMode: SalesSettingsOverviewYearMode;
   createdAt?: string;
   updatedAt: string;
 }
@@ -3484,6 +4407,7 @@ export type SalesSettingsUpdateOverviewDefaultSalesPeriod = typeof SalesSettings
 
 export const SalesSettingsUpdateOverviewDefaultSalesPeriod = {
   today: 'today',
+  week: 'week',
   month: 'month',
   year: 'year',
 } as const;
@@ -3504,6 +4428,14 @@ export type SalesSettingsUpdateOverviewMonthMode = typeof SalesSettingsUpdateOve
 export const SalesSettingsUpdateOverviewMonthMode = {
   rolling30: 'rolling30',
   calendar_mtd: 'calendar_mtd',
+} as const;
+
+export type SalesSettingsUpdateOverviewYearMode = typeof SalesSettingsUpdateOverviewYearMode[keyof typeof SalesSettingsUpdateOverviewYearMode];
+
+
+export const SalesSettingsUpdateOverviewYearMode = {
+  financial: 'financial',
+  rolling365: 'rolling365',
 } as const;
 
 export interface SalesSettingsUpdate {
@@ -3533,6 +4465,7 @@ export interface SalesSettingsUpdate {
   overviewDefaultSalesPeriod?: SalesSettingsUpdateOverviewDefaultSalesPeriod;
   overviewDefaultActivityPeriod?: SalesSettingsUpdateOverviewDefaultActivityPeriod;
   overviewMonthMode?: SalesSettingsUpdateOverviewMonthMode;
+  overviewYearMode?: SalesSettingsUpdateOverviewYearMode;
 }
 
 export interface KpiSettings {
@@ -3568,12 +4501,38 @@ export interface KpiTargetInput {
   notes?: string;
   startDate?: string | null;
   endDate?: string | null;
+  /** "true" when the fixed budget window rolls forward to the next period once it ends, carrying the target over. */
+  repeats?: string;
   isActive?: string;
   showOnDashboard?: string;
 }
 
 export interface KpiTargetListResponse {
   items: KpiTarget[];
+  total: number;
+}
+
+export interface KpiHistoryEntry {
+  id: number;
+  merchantId: number;
+  targetId: string;
+  kpiTargetId?: number | null;
+  name: string;
+  metric: string;
+  categoryId?: string;
+  period: string;
+  target: number;
+  actual?: number | null;
+  staffIds?: string;
+  reward?: string;
+  periodStart: string;
+  periodEnd: string;
+  periodLabel: string;
+  createdAt: string;
+}
+
+export interface KpiHistoryListResponse {
+  items: KpiHistoryEntry[];
   total: number;
 }
 
@@ -3855,6 +4814,91 @@ export interface OnlineStoreSettingsInput {
   quickCodes?: string;
 }
 
+/**
+ * The provider that would serve a generation right now.
+ */
+export type OnlineStoreAiStatusProvider = typeof OnlineStoreAiStatusProvider[keyof typeof OnlineStoreAiStatusProvider] | null;
+
+
+export const OnlineStoreAiStatusProvider = {
+  claude: 'claude',
+  openai: 'openai',
+} as const;
+
+export interface OnlineStoreAiStatus {
+  available: boolean;
+  /** The provider that would serve a generation right now. */
+  provider?: OnlineStoreAiStatusProvider;
+}
+
+export interface OnlineStoreAiGenerateInput {
+  /**
+     * What the merchant wants from the store. Optional — their business details and product catalogue are used either way.
+     * @maxLength 2000
+     */
+  brief?: string;
+}
+
+export type OnlineStoreAiBlockData = { [key: string]: unknown };
+
+export interface OnlineStoreAiBlock {
+  id: string;
+  type: string;
+  data: OnlineStoreAiBlockData;
+}
+
+export interface OnlineStoreAiPage {
+  id: string;
+  name: string;
+  slug: string;
+  visible: boolean;
+  seoTitle?: string;
+  seoDescription?: string;
+  blocks: OnlineStoreAiBlock[];
+}
+
+export type OnlineStoreAiThemeFont = typeof OnlineStoreAiThemeFont[keyof typeof OnlineStoreAiThemeFont];
+
+
+export const OnlineStoreAiThemeFont = {
+  sans: 'sans',
+  serif: 'serif',
+  mono: 'mono',
+} as const;
+
+export type OnlineStoreAiThemeRadius = typeof OnlineStoreAiThemeRadius[keyof typeof OnlineStoreAiThemeRadius];
+
+
+export const OnlineStoreAiThemeRadius = {
+  none: 'none',
+  sm: 'sm',
+  md: 'md',
+  lg: 'lg',
+} as const;
+
+export interface OnlineStoreAiTheme {
+  primary: string;
+  accent: string;
+  bg: string;
+  text: string;
+  font: OnlineStoreAiThemeFont;
+  radius: OnlineStoreAiThemeRadius;
+}
+
+export type OnlineStoreAiDraftProvider = typeof OnlineStoreAiDraftProvider[keyof typeof OnlineStoreAiDraftProvider];
+
+
+export const OnlineStoreAiDraftProvider = {
+  claude: 'claude',
+  openai: 'openai',
+} as const;
+
+export interface OnlineStoreAiDraft {
+  provider: OnlineStoreAiDraftProvider;
+  theme: OnlineStoreAiTheme;
+  pages: OnlineStoreAiPage[];
+}
+
 export interface OnlineStoreThirdparty {
   id: number;
   merchantId: number;
@@ -3873,6 +4917,50 @@ export interface OnlineStoreThirdpartyInput {
   connected?: string;
   connectedAt?: string;
 }
+
+export interface StorefrontApiScope {
+  id: string;
+  label: string;
+  description: string;
+  sensitive: boolean;
+  /** True when the scope lets a key change the merchant's data rather than only read it, so the UI can warn before it is granted. */
+  write?: boolean;
+}
+
+export interface StorefrontApiKey {
+  id: number;
+  name: string;
+  keyPrefix: string;
+  scopes: string[];
+  lastUsedAt?: string | null;
+  requestCount: number;
+  expiresAt?: string | null;
+  revokedAt?: string | null;
+  createdAt: string;
+}
+
+export interface StorefrontApiKeyListResponse {
+  items: StorefrontApiKey[];
+  scopes: StorefrontApiScope[];
+  baseUrl: string;
+}
+
+export interface StorefrontApiKeyInput {
+  name?: string;
+  scopes?: string[];
+  expiresInDays?: number | null;
+}
+
+export interface StorefrontApiManifest {
+  filename: string;
+  content: string;
+}
+
+export type StorefrontApiKeyCreated = StorefrontApiKey & {
+  /** The secret. Returned once, never stored in plaintext. */
+  key: string;
+  manifest: StorefrontApiManifest;
+};
 
 export interface ShippingCarrier {
   id: number;
@@ -3924,6 +5012,18 @@ export interface MarketplaceConnectionListResponse {
   total: number;
 }
 
+/**
+ * Whether the money has actually been received. An order counts towards revenue only once this is "paid" — moving it there records the sale.
+ */
+export type DeliveryOrderPaymentStatus = typeof DeliveryOrderPaymentStatus[keyof typeof DeliveryOrderPaymentStatus];
+
+
+export const DeliveryOrderPaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  refunded: 'refunded',
+} as const;
+
 export interface DeliveryOrder {
   id: number;
   merchantId: number;
@@ -3943,8 +5043,26 @@ export interface DeliveryOrder {
   total: number;
   items: string;
   notes: string;
+  /** Whether the money has actually been received. An order counts towards revenue only once this is "paid" — moving it there records the sale. */
+  paymentStatus: DeliveryOrderPaymentStatus;
+  paymentProvider?: string;
+  subtotal?: number;
+  taxTotal?: number;
+  discountTotal?: number;
   createdAt: string;
 }
+
+/**
+ * Setting this to "paid" records the order as a sale, so it appears in the merchant's takings. Stock and customer spend were already applied when the order was placed, so neither moves again.
+ */
+export type DeliveryOrderInputPaymentStatus = typeof DeliveryOrderInputPaymentStatus[keyof typeof DeliveryOrderInputPaymentStatus];
+
+
+export const DeliveryOrderInputPaymentStatus = {
+  pending: 'pending',
+  paid: 'paid',
+  refunded: 'refunded',
+} as const;
 
 export interface DeliveryOrderInput {
   orderId: string;
@@ -3963,6 +5081,10 @@ export interface DeliveryOrderInput {
   total?: number;
   items?: string;
   notes?: string;
+  /** Setting this to "paid" records the order as a sale, so it appears in the merchant's takings. Stock and customer spend were already applied when the order was placed, so neither moves again. */
+  paymentStatus?: DeliveryOrderInputPaymentStatus;
+  paymentProvider?: string;
+  paymentRef?: string;
 }
 
 export interface DeliveryOrderListResponse {
@@ -4051,6 +5173,7 @@ export interface PosRegisterSession {
   merchantId: number;
   registerId: string;
   openedAt: string;
+  staffId?: number | null;
   openedBy: string;
   openingFloat: string;
   openingNotes: string;
@@ -4064,6 +5187,7 @@ export interface PosRegisterSession {
 
 export interface PosRegisterSessionInput {
   registerId?: string;
+  staffId?: number | null;
   openedBy?: string;
   openingFloat?: string;
   openingNotes?: string;
@@ -4229,6 +5353,7 @@ export interface InventorySettings {
   skuPrefix: string;
   showCosts: string;
   groupPricing: string;
+  stockColors: string;
   defaultImageUrl?: string | null;
 }
 
@@ -4236,6 +5361,7 @@ export interface InventorySettingsInput {
   skuPrefix?: string;
   showCosts?: string;
   groupPricing?: string;
+  stockColors?: string;
   defaultImageUrl?: string | null;
 }
 
@@ -4245,7 +5371,6 @@ export interface RegionalExtSettings {
   abn: string;
   taxRates: string;
   defaultTaxRate: string;
-  receiptPaperSize: string;
   language: string;
   dateFormat: string;
   timeFormat: string;
@@ -4264,7 +5389,6 @@ export interface RegionalExtSettingsInput {
   abn?: string;
   taxRates?: string;
   defaultTaxRate?: string;
-  receiptPaperSize?: string;
   language?: string;
   dateFormat?: string;
   timeFormat?: string;
@@ -4409,6 +5533,7 @@ export interface DailySalesSummary {
   totalCogs: number;
   netProfit: number;
   refundTotal: number;
+  surchargeCost?: number;
   transactionCount: number;
 }
 
@@ -4423,6 +5548,7 @@ export interface ProfitLossReport {
   netProfit: number;
   grossMarginPct: number;
   refundTotal: number;
+  surchargeCost?: number;
   transactionCount: number;
   dailyBreakdown: DailySalesSummary[];
 }
@@ -4632,6 +5758,57 @@ export interface ProductPerformanceReport {
   items: ProductPerformanceItem[];
 }
 
+export interface CostOfGoodsTotals {
+  /** Sold COGS attributed to suppliers (equals cogsSold; rolls unmatched lines into Unassigned) */
+  soldCogs: number;
+  /** Cost of goods sold across POS sales, paid invoices and completed laybys */
+  cogsSold: number;
+  cogsPos: number;
+  cogsInvoice: number;
+  cogsLayby: number;
+  /** Total purchase-order spend (goods + shipping), incl. GST */
+  purchaseSpend: number;
+  /** Purchase-order goods cost (qty × unit cost), excl. shipping */
+  goodsSpend: number;
+  /** Total purchase-order delivery/shipping cost */
+  shippingCost: number;
+  purchaseOrderCount: number;
+}
+
+export interface CostOfGoodsMonth {
+  /** YYYY-MM */
+  month: string;
+  cogsSold: number;
+  cogsPos: number;
+  cogsInvoice: number;
+  cogsLayby: number;
+  purchaseSpend: number;
+  goodsSpend: number;
+  shippingCost: number;
+  purchaseOrderCount: number;
+}
+
+export interface CostOfGoodsSupplier {
+  supplierId?: number | null;
+  supplierName: string;
+  /** Bought from this supplier (purchase orders, incl. shipping) */
+  purchaseSpend: number;
+  goodsSpend: number;
+  shippingCost: number;
+  purchaseOrderCount: number;
+  itemsOrdered: number;
+  /** Cost of goods SOLD for products attributed to this supplier */
+  soldCogs: number;
+}
+
+export interface CostOfGoodsReport {
+  startDate: string;
+  endDate: string;
+  totals: CostOfGoodsTotals;
+  monthly: CostOfGoodsMonth[];
+  suppliers: CostOfGoodsSupplier[];
+}
+
 export type PcSavedBuildBuild = { [key: string]: unknown };
 
 export interface PcSavedBuild {
@@ -4836,6 +6013,8 @@ export type CustomerSettingsGroupsItem = { [key: string]: unknown };
 
 export type CustomerSettingsRequiredFields = { [key: string]: unknown };
 
+export type CustomerSettingsGroupPricingItem = { [key: string]: unknown };
+
 export interface CustomerSettings {
   groups?: CustomerSettingsGroupsItem[];
   requiredFields?: CustomerSettingsRequiredFields;
@@ -4849,12 +6028,18 @@ export interface CustomerSettings {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  /** Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST / cost ex GST / RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS. */
+  groupPricing?: CustomerSettingsGroupPricingItem[];
+  /** Fallback avatar shown for customers without their own photo. Uploaded image or external URL. */
+  defaultCustomerImageUrl?: string;
   updatedAt?: string;
 }
 
 export type CustomerSettingsInputGroupsItem = { [key: string]: unknown };
 
 export type CustomerSettingsInputRequiredFields = { [key: string]: unknown };
+
+export type CustomerSettingsInputGroupPricingItem = { [key: string]: unknown };
 
 export interface CustomerSettingsInput {
   groups?: CustomerSettingsInputGroupsItem[];
@@ -4869,6 +6054,9 @@ export interface CustomerSettingsInput {
      * @maximum 6
      */
   weeklyDigestSendDay?: number;
+  /** Automatic default pricing per customer group (GroupPricingRule[]): a basis (cost inc GST / cost ex GST / RRP), markup or discount, percentage, an optional cap at RRP, and per-category overrides. Resolved when a product is saved and by the POS. */
+  groupPricing?: CustomerSettingsInputGroupPricingItem[];
+  defaultCustomerImageUrl?: string;
 }
 
 export type StickerTemplateFields = { [key: string]: unknown };
@@ -5135,7 +6323,6 @@ export interface IntegrationStatus {
   authType: IntegrationStatusAuthType;
   connected: boolean;
   enabled: boolean;
-  comingSoon: boolean;
   connectedAt?: string | null;
   oauthConfigured?: boolean;
 }
@@ -5195,6 +6382,7 @@ export interface InvoiceInput {
   invoicePrefix?: string;
   invoiceDigits?: number;
   recurring?: InvoiceRecurringInput;
+  paymentSchedule?: InvoiceInstalment[] | null;
   serviceJobId?: number | null;
   appointmentId?: number | null;
 }
@@ -5220,12 +6408,13 @@ export const InvoiceUpdateStatus = {
 
 export interface InvoiceUpdate {
   status?: InvoiceUpdateStatus;
-  notes?: string;
+  notes?: string | null;
   dueDate?: string | null;
   customerId?: number | null;
   items?: InvoiceLineItem[];
   discount?: InvoiceDiscountInput;
   recurring?: InvoiceRecurringUpdate | null;
+  paymentSchedule?: InvoiceInstalment[] | null;
   serviceJobId?: number | null;
   appointmentId?: number | null;
 }
@@ -5240,10 +6429,24 @@ export interface InvoicePaymentInput {
   method?: string;
   payments?: PaymentLeg[];
   giftCardPayment?: GiftCardPaymentRef;
+  note?: string;
   idempotencyKey?: string;
+  paidAt?: string;
 }
 
 export type InvoicePaymentResult = Invoice;
+
+export interface InvoicePaymentReverseInput {
+  /** @minimum 0 */
+  amount: number;
+  eventId?: string;
+  reason?: string;
+}
+
+export interface SendInvoiceSmsInput {
+  /** Optional override number; defaults to the customer's phone on file. */
+  phone?: string;
+}
 
 export type SendInvoiceEmailInputTemplateSocialLinks = {[key: string]: string};
 
@@ -5307,6 +6510,9 @@ export interface QuoteLineItem {
      * @maximum 100
      */
   taxRate: number;
+  productId?: number | null;
+  productName?: string | null;
+  costPrice?: number | null;
 }
 
 export type QuoteDiscountInputType = typeof QuoteDiscountInputType[keyof typeof QuoteDiscountInputType];
@@ -5635,6 +6841,7 @@ export const CustomerFilesCloudSettingsInputStorageKey = {
   onedrive: 'onedrive',
   google_drive: 'google_drive',
   dropbox: 'dropbox',
+  nextcloud: 'nextcloud',
 } as const;
 
 export interface CustomerFilesCloudSettingsInput {
@@ -5644,6 +6851,35 @@ export interface CustomerFilesCloudSettingsInput {
   storageKey: CustomerFilesCloudSettingsInputStorageKey;
   /** Destination folder path on that provider (set by the platform user) */
   folder: string;
+}
+
+export interface NextcloudLoginFlowStartInput {
+  /** The merchant's Nextcloud address. Accepts a bare host or a full URL; the server normalises it to an origin. */
+  serverUrl: string;
+}
+
+export interface NextcloudLoginFlowStart {
+  /** Open this in a new tab for the merchant to approve. */
+  loginUrl: string;
+  /** The normalised server address the flow was started against. */
+  serverUrl: string;
+}
+
+export type NextcloudLoginFlowPollStatus = typeof NextcloudLoginFlowPollStatus[keyof typeof NextcloudLoginFlowPollStatus];
+
+
+export const NextcloudLoginFlowPollStatus = {
+  pending: 'pending',
+  connected: 'connected',
+  expired: 'expired',
+} as const;
+
+export interface NextcloudLoginFlowPoll {
+  status: NextcloudLoginFlowPollStatus;
+  /** "user @ host" label for the connected account (status=connected). */
+  accountHandle?: string;
+  /** The server the app password was issued by (status=connected). */
+  serverUrl?: string;
 }
 
 export type CustomerFilesCloudSettings = CustomerFilesCloudSettingsInput & {
@@ -5748,6 +6984,14 @@ export type ImportProductsBody = {
   file: Blob;
 };
 
+export type LookupCustomersByPhoneParams = {
+phone: string;
+/**
+ * Customer to leave out — the one being edited.
+ */
+excludeId?: number;
+};
+
 export type ListCustomersParams = {
 search?: string;
 heardFrom?: string;
@@ -5768,6 +7012,49 @@ export type GenerateMissingReferralCodes200 = {
 export type MergeCustomerProfilesBody = {
   /** Optional reason or note for the merge, recorded in the audit trail */
   reason?: string;
+};
+
+export type ListMerchantAssetsParams = {
+search?: string;
+/**
+ * @minimum 1
+ * @maximum 200
+ */
+limit?: number;
+/**
+ * @minimum 0
+ */
+offset?: number;
+/**
+ * Include a reference count per asset. Costs a scan; off by default.
+ */
+withUsage?: boolean;
+/**
+ * Include what each asset is attached to (entity, row id and label). Implies withUsage. Used by the Uploads management page.
+
+ */
+withReferences?: boolean;
+/**
+ * Filter by media kind, derived from the stored content type.
+ */
+kind?: ListMerchantAssetsKind;
+};
+
+export type ListMerchantAssetsKind = typeof ListMerchantAssetsKind[keyof typeof ListMerchantAssetsKind];
+
+
+export const ListMerchantAssetsKind = {
+  all: 'all',
+  image: 'image',
+  video: 'video',
+  document: 'document',
+} as const;
+
+export type SweepMerchantAssetOrphansParams = {
+/**
+ * When true, delete the listed orphans. Destructive.
+ */
+apply?: boolean;
 };
 
 export type ListTransactionsParams = {
@@ -5814,6 +7101,14 @@ period?: GetDashboardSummaryPeriod;
  * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
  */
 monthMode?: GetDashboardSummaryMonthMode;
+/**
+ * How the "year" period is computed. financial = current Australian financial year, 1 Jul → now (default); rolling365 = last 365 days.
+ */
+yearMode?: GetDashboardSummaryYearMode;
+/**
+ * When true, also return the previous equivalent period's headline totals under `previous`.
+ */
+compare?: boolean;
 };
 
 export type GetDashboardSummaryPeriod = typeof GetDashboardSummaryPeriod[keyof typeof GetDashboardSummaryPeriod];
@@ -5833,6 +7128,14 @@ export type GetDashboardSummaryMonthMode = typeof GetDashboardSummaryMonthMode[k
 export const GetDashboardSummaryMonthMode = {
   rolling30: 'rolling30',
   calendar_mtd: 'calendar_mtd',
+} as const;
+
+export type GetDashboardSummaryYearMode = typeof GetDashboardSummaryYearMode[keyof typeof GetDashboardSummaryYearMode];
+
+
+export const GetDashboardSummaryYearMode = {
+  financial: 'financial',
+  rolling365: 'rolling365',
 } as const;
 
 export type GetDashboardActivityParams = {
@@ -5867,6 +7170,10 @@ limit?: number;
 
 export type GetSalesChartParams = {
 period?: GetSalesChartPeriod;
+/**
+ * How the "month" period is computed. rolling30 = last 30 days (default); calendar_mtd = 1st of the current month to now.
+ */
+monthMode?: GetSalesChartMonthMode;
 };
 
 export type GetSalesChartPeriod = typeof GetSalesChartPeriod[keyof typeof GetSalesChartPeriod];
@@ -5876,6 +7183,14 @@ export const GetSalesChartPeriod = {
   week: 'week',
   month: 'month',
   year: 'year',
+} as const;
+
+export type GetSalesChartMonthMode = typeof GetSalesChartMonthMode[keyof typeof GetSalesChartMonthMode];
+
+
+export const GetSalesChartMonthMode = {
+  rolling30: 'rolling30',
+  calendar_mtd: 'calendar_mtd',
 } as const;
 
 export type GetTopProductsParams = {
@@ -6063,10 +7378,6 @@ export type SaveFloorPlan200 = {
   ok?: boolean;
 };
 
-export type ListSocialFeedPostsParams = {
-platform?: string;
-};
-
 export type ListBrandsParams = {
 search?: string;
 };
@@ -6088,6 +7399,17 @@ status?: string;
 export type ListProductReturnAuthsParams = {
 search?: string;
 status?: string;
+};
+
+export type ListTimeCardSessionsParams = {
+/**
+ * When 'true', only sessions that are not stopped
+ */
+active?: string;
+};
+
+export type ListKpiHistoryParams = {
+limit?: number;
 };
 
 export type UpdateShippingCarrierBody = {
@@ -6148,6 +7470,17 @@ startDate: string;
 endDate: string;
 };
 
+export type GetCostOfGoodsParams = {
+/**
+ * Start date (YYYY-MM-DD, inclusive)
+ */
+startDate: string;
+/**
+ * End date (YYYY-MM-DD, inclusive)
+ */
+endDate: string;
+};
+
 export type ListPcSavedBuilds200 = {
   items: PcSavedBuild[];
 };
@@ -6177,6 +7510,10 @@ export const ListInvoicesStatus = {
 export type ListQuotesParams = {
 status?: ListQuotesStatus;
 customerId?: number;
+/**
+ * Only quotes raised against this service job. Used by the POS to offer a job's saved quote when the job is linked to a sale.
+ */
+serviceJobId?: number;
 search?: string;
 limit?: number;
 offset?: number;
@@ -6192,6 +7529,10 @@ export const ListQuotesStatus = {
   expired: 'expired',
   converted: 'converted',
 } as const;
+
+export type CancelNextcloudLoginFlow200 = {
+  ok: boolean;
+};
 
 export type ListBackupsParams = {
 limit?: number;
@@ -6213,5 +7554,58 @@ pin: string;
 
 export type GetPaymentTotalsParams = {
 date?: string;
+};
+
+export type ListFollowUpsParams = {
+/**
+ * @minimum 0
+ * @maximum 3650
+ */
+windowValue?: number;
+windowUnit?: ListFollowUpsWindowUnit;
+includeServices?: ListFollowUpsIncludeServices;
+includeAppointments?: ListFollowUpsIncludeAppointments;
+hideAlreadySent?: ListFollowUpsHideAlreadySent;
+};
+
+export type ListFollowUpsWindowUnit = typeof ListFollowUpsWindowUnit[keyof typeof ListFollowUpsWindowUnit];
+
+
+export const ListFollowUpsWindowUnit = {
+  days: 'days',
+  weeks: 'weeks',
+  months: 'months',
+} as const;
+
+export type ListFollowUpsIncludeServices = typeof ListFollowUpsIncludeServices[keyof typeof ListFollowUpsIncludeServices];
+
+
+export const ListFollowUpsIncludeServices = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListFollowUpsIncludeAppointments = typeof ListFollowUpsIncludeAppointments[keyof typeof ListFollowUpsIncludeAppointments];
+
+
+export const ListFollowUpsIncludeAppointments = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListFollowUpsHideAlreadySent = typeof ListFollowUpsHideAlreadySent[keyof typeof ListFollowUpsHideAlreadySent];
+
+
+export const ListFollowUpsHideAlreadySent = {
+  true: 'true',
+  false: 'false',
+} as const;
+
+export type ListFollowUpLogParams = {
+/**
+ * @minimum 1
+ * @maximum 500
+ */
+limit?: number;
 };
 

@@ -10,12 +10,16 @@ export const onlineStoreSettingsTable = pgTable("online_store_settings", {
   logoUrl:    text("logo_url").notNull().default(""),
   faviconUrl: text("favicon_url").notNull().default(""),
   domain:     text("domain").notNull().default(""),
+  /** Custom-domain lifecycle: pending → verifying → active | failed. */
+  domainStatus: text("domain_status").notNull().default("pending"),
   published:  text("published").notNull().default("false"),
   theme:      text("theme").notNull().default("{}"),
   payments:   text("payments").notNull().default("{}"),
   features:   text("features").notNull().default("{}"),
   pages:      text("pages").notNull().default("[]"),
   quickCodes: text("quick_codes").notNull().default("[]"),
+  /** Global footer config (JSON) shown on every storefront page. */
+  footer:     text("footer").notNull().default("{}"),
   updatedAt:  timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });
 

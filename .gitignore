@@ -47,3 +47,6 @@ Thumbs.db
 # Replit
 .cache/
 .local/
+
+# One-time backfill backups (contain real image data — never commit)
+scripts/backups/

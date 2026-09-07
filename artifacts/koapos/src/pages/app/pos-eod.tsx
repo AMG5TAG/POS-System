@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListPosRegisterSessions,
@@ -8,7 +8,10 @@ import {
   useCreatePosRegisterSession,
   useUpdatePosRegisterSession,
   useGetPaymentTotals,
+  useGetDailyCloseCurrent,
+  useCreateDailyClose,
 } from "@workspace/api-client-react";
+import { useAuth } from "@/lib/use-auth";
 import { getOrCreateDeviceId } from "@/lib/pos-local-settings";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -28,6 +31,7 @@ import {
   Monitor, DollarSign, ArrowDownLeft, ArrowUpRight,
   Lock, LockOpen, Plus, Minus, TrendingUp, Printer, MonitorX, AlertTriangle,
   CreditCard, Banknote, Wallet, Star, CalendarClock, Landmark, Ticket, SplitSquareHorizontal, Gift,
+  Moon,
 } from "lucide-react";
 import {
   getEnabledPaymentMethods,
@@ -37,7 +41,7 @@ import {
 } from "@/lib/pos-local-settings";
 import { ALL_PAYMENT_METHODS } from "@/pages/app/management-registers";
 import { cn } from "@/lib/utils";
-import { useQueryClient } from "@tanstack/react-query";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
 
 const toISO = (d: Date) => d.toISOString().split("T")[0];
 const TODAY = toISO(new Date());
@@ -75,14 +79,31 @@ export default function PosEodPage() {
   const myDeviceId = useMemo(() => getOrCreateDeviceId(), []);
 
   const { data: regsData }     = useListPosRegisters({});
-  const registers: { registerId: string; name: string }[] =
-    (regsData as { items?: { registerId: string; name: string }[] })?.items ?? [];
+  const registers: { registerId: string; name: string; type?: string }[] =
+    (regsData as { items?: { registerId: string; name: string; type?: string }[] })?.items ?? [];
 
   const { data: sessData, isLoading: sessLoading } = useListPosRegisterSessions(
     { registerId },
     { query: { queryKey: ["pos-register-sessions", registerId] } }
   );
   const sessions: Session[] = (sessData as { items?: Session[] })?.items ?? [];
+
+  /* All open sessions across every register/device (merchant-wide) — powers the
+     end-of-day "close all tills" action. The /open endpoint has no generated
+     hook, so read it directly (filters to open sessions server-side). */
+  const { data: openAllData, refetch: refetchOpenAll } = useQuery({
+    queryKey: ["pos-register-sessions", "open-all"],
+    queryFn: async () => {
+      const r = await fetch("/api/pos-register-sessions/open", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load open registers");
+      return (await r.json()) as { items: Session[]; total: number };
+    },
+  });
+  const openSessionsAll: Session[] = openAllData?.items ?? [];
+  const registerName = (rid: string) => registers.find(r => r.registerId === rid)?.name ?? rid;
+  const openCashRegisters = openSessionsAll.filter(
+    s => registers.find(r => r.registerId === s.registerId)?.type === "Cash"
+  );
 
   const { data: rawEntries = [], isLoading: entriesLoading } = useListCashDrawerEntries(
     { date: TODAY },
@@ -214,6 +235,57 @@ export default function PosEodPage() {
     );
   }
 
+  /* ── Close Day (unified: reconcile store-wide takings + close every till) ── */
+  const { user } = useAuth();
+  const canCloseDay = ["owner", "manager"].includes(user?.staffRole ?? "");
+  const [closeDayDlg, setCloseDayDlg]     = useState(false);
+  const [countedCash, setCountedCash]     = useState("");
+  const [closeDayNotes, setCloseDayNotes] = useState("");
+
+  const { data: dayCurrent, isLoading: dayLoading } = useGetDailyCloseCurrent({
+    query: { queryKey: ["daily-close-current"], enabled: closeDayDlg },
+  });
+  const createDailyClose = useCreateDailyClose();
+
+  /* Pre-fill counted cash with the expected figure when the dialog opens, so the
+     manager adjusts to their actual drawer count (variance starts at 0). */
+  useEffect(() => {
+    if (closeDayDlg && dayCurrent) setCountedCash(dayCurrent.expectedCash.toFixed(2));
+  }, [closeDayDlg, dayCurrent]);
+
+  const dayExpectedCash = dayCurrent?.expectedCash ?? 0;
+  const countedCashNum  = parseFloat(countedCash);
+  const dayVariance     = !isNaN(countedCashNum) ? countedCashNum - dayExpectedCash : null;
+
+  function handleCloseDay() {
+    if (!dayCurrent) return;
+    setSaving(true);
+    createDailyClose.mutate(
+      {
+        data: {
+          closeDate:    dayCurrent.date,
+          expectedCash: dayCurrent.expectedCash,
+          countedCash:  isNaN(countedCashNum) ? 0 : countedCashNum,
+          notes:        closeDayNotes || undefined,
+          breakdown:    dayCurrent.byPaymentMethod,
+        },
+      },
+      {
+        onSuccess: (res) => {
+          const n = (res as { registersClosed?: number })?.registersClosed ?? 0;
+          toast.success(`Day closed${n > 0 ? ` — ${n} register${n !== 1 ? "s" : ""} closed` : ""}`);
+          setCloseDayDlg(false);
+          setCloseDayNotes("");
+          qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
+          qc.invalidateQueries({ queryKey: ["daily-closes"] });
+          void refetchOpenAll();
+        },
+        onError: () => toast.error("Failed to close the day"),
+        onSettled: () => setSaving(false),
+      }
+    );
+  }
+
   /* ── cash movement dialog ── */
   const [moveDlg, setMoveDlg]   = useState(false);
   const [moveForm, setMoveForm] = useState({ type: "cash_in" as "cash_in" | "cash_out", amount: "", note: "" });
@@ -252,16 +324,23 @@ export default function PosEodPage() {
               Open and close register sessions, track float movements, and record your Z-read.
             </p>
           </div>
-          <Select value={registerId} onValueChange={setRegisterId}>
-            <SelectTrigger className="w-44">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {registerOptions.map(r => (
-                <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          <div className="flex items-center gap-2">
+            <Select value={registerId} onValueChange={setRegisterId}>
+              <SelectTrigger className="w-44">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {registerOptions.map(r => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {canCloseDay && (
+              <Button onClick={() => setCloseDayDlg(true)} className="gap-1.5">
+                <Moon className="w-4 h-4" /> Close Day
+              </Button>
+            )}
+          </div>
         </div>
 
         {/* ── Cross-device warning banner ── */}
@@ -350,6 +429,59 @@ export default function PosEodPage() {
             )}
           </div>
         </div>
+
+        {/* ── All open registers (business-wide) + Close All ── */}
+        {openSessionsAll.length > 0 && (
+          <div className="rounded-lg border border-border bg-card p-4 space-y-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2">
+                <Monitor className="w-4 h-4 text-primary" />
+                <h2 className="font-semibold text-sm">
+                  Open Registers <span className="text-muted-foreground font-normal">across your business</span>
+                </h2>
+                <Badge variant="secondary">{openSessionsAll.length} open</Badge>
+              </div>
+              {canCloseDay ? (
+                <Button size="sm" onClick={() => setCloseDayDlg(true)} className="gap-1.5">
+                  <Moon className="w-3.5 h-3.5" /> Close Day
+                </Button>
+              ) : (
+                <span className="text-xs text-muted-foreground">Closed together when a manager runs Close Day</span>
+              )}
+            </div>
+            <div className="divide-y">
+              {openSessionsAll.map(s => {
+                const isThisDevice = !s.deviceId || s.deviceId === myDeviceId;
+                return (
+                  <div key={s.id} className="flex items-center justify-between gap-3 py-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{registerName(s.registerId)}</p>
+                      <p className="text-xs text-muted-foreground">
+                        Opened{s.openedBy ? ` by ${s.openedBy}` : ""} at {format(new Date(s.openedAt), "h:mm a")}
+                        {" · "}Float {fmt(parseFloat(s.openingFloat))}
+                      </p>
+                    </div>
+                    <span className={cn("text-[10px] px-1.5 py-0.5 rounded font-medium shrink-0",
+                      isThisDevice ? "bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400" : "bg-muted text-muted-foreground"
+                    )}>
+                      {isThisDevice ? "This device" : "Other device"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            {openCashRegisters.length > 0 && (
+              <div className="rounded-md border border-amber-300 bg-amber-50 dark:bg-amber-950/20 p-2.5 flex items-start gap-2 text-xs text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                <span>
+                  “Close All” marks each session closed but does not count the cash drawer. To record a
+                  counted cash Z-read for {openCashRegisters.length === 1 ? "your cash register" : "cash registers"},
+                  use “Close &amp; Z-Read” on {openCashRegisters.length === 1 ? "it" : "them"} first.
+                </span>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* ── Summary cards ── */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -687,6 +819,119 @@ export default function PosEodPage() {
             <Button variant="outline" onClick={() => setMoveDlg(false)}>Cancel</Button>
             <Button onClick={handleAddEntry} disabled={!moveForm.amount || createEntry.isPending}>
               Record
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Close Day (unified reconciliation + close all tills) ── */}
+      <Dialog open={closeDayDlg} onOpenChange={setCloseDayDlg}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Moon className="w-4 h-4 text-primary" /> Close Day
+            </DialogTitle>
+          </DialogHeader>
+
+          {dayLoading || !dayCurrent ? (
+            <div className="py-10 text-center text-sm text-muted-foreground">Calculating today's takings…</div>
+          ) : (
+            <div className="space-y-4 py-2 max-h-[70vh] overflow-y-auto pr-1">
+              <p className="text-xs text-muted-foreground">
+                End-of-day for <span className="font-medium text-foreground">{dayCurrent.date}</span> —
+                store-wide takings across all registers and invoice payments.
+              </p>
+
+              {/* Store-wide takings */}
+              <div className="rounded-lg border overflow-hidden text-sm">
+                <div className="grid grid-cols-2 px-3 py-2 bg-muted/50 border-b text-[11px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  <span>Takings</span>
+                  <span className="text-right">Amount</span>
+                </div>
+                <div className="divide-y">
+                  {[
+                    { label: "Cash",      icon: Banknote,   val: dayCurrent.byPaymentMethod.cash ?? 0 },
+                    { label: "Card / EFTPOS", icon: CreditCard, val: dayCurrent.byPaymentMethod.card ?? 0 },
+                    { label: "Gift Card", icon: Gift,       val: dayCurrent.byPaymentMethod.giftCard ?? 0 },
+                    { label: "Other",     icon: Wallet,     val: dayCurrent.byPaymentMethod.other ?? 0 },
+                  ].map(row => {
+                    const Icon = row.icon;
+                    return (
+                      <div key={row.label} className="grid grid-cols-2 items-center px-3 py-2">
+                        <span className="flex items-center gap-1.5 text-muted-foreground">
+                          <Icon className="w-3.5 h-3.5 shrink-0" /> {row.label}
+                        </span>
+                        <span className="text-right tabular-nums">{fmt(row.val)}</span>
+                      </div>
+                    );
+                  })}
+                  <div className="grid grid-cols-2 items-center px-3 py-2 font-semibold bg-muted/30">
+                    <span>Gross Sales <span className="text-xs font-normal text-muted-foreground">({dayCurrent.transactionCount} txns)</span></span>
+                    <span className="text-right tabular-nums">{fmt(dayCurrent.grossSales)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cash drawer reconciliation */}
+              <div className="rounded-lg bg-muted/50 p-3 space-y-2.5">
+                <div className="flex justify-between text-sm">
+                  <span className="text-muted-foreground">Expected Cash (system)</span>
+                  <span className="tabular-nums">{fmt(dayExpectedCash)}</span>
+                </div>
+                <div className="flex items-center justify-between gap-3">
+                  <Label htmlFor="counted-cash" className="text-sm">Counted Cash (drawer)</Label>
+                  <Input
+                    id="counted-cash"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="h-8 w-32 text-right tabular-nums"
+                    value={countedCash}
+                    onChange={e => setCountedCash(e.target.value)}
+                  />
+                </div>
+                {dayVariance !== null && (
+                  <div className="flex justify-between text-sm border-t pt-2 font-semibold">
+                    <span>Variance</span>
+                    <span className={cn("tabular-nums",
+                      dayVariance < -0.005 ? "text-red-500"
+                      : dayVariance > 0.005 ? "text-amber-600"
+                      : "text-green-600"
+                    )}>
+                      {dayVariance >= 0 ? "+" : ""}{fmt(dayVariance)}{Math.abs(dayVariance) < 0.01 && " ✓"}
+                    </span>
+                  </div>
+                )}
+              </div>
+
+              {/* Registers that will be closed */}
+              {openSessionsAll.length > 0 && (
+                <div className="rounded-md border border-border bg-background p-2.5 text-xs">
+                  <p className="text-muted-foreground">
+                    This will also close <span className="font-semibold text-foreground">{openSessionsAll.length}</span> open
+                    register{openSessionsAll.length !== 1 ? "s" : ""}: {openSessionsAll.map(s => registerName(s.registerId)).join(", ")}.
+                  </p>
+                  {openCashRegisters.length > 0 && (
+                    <div className="mt-2 flex items-start gap-2 text-amber-700 dark:text-amber-300">
+                      <AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+                      <span>Your cash till is still open — the counted cash above is the day's reconciliation, so a per-shift Z-read isn't required, but you can run one first if you prefer.</span>
+                    </div>
+                  )}
+                </div>
+              )}
+
+              <div>
+                <Label>Notes (optional)</Label>
+                <Textarea rows={2} placeholder="Discrepancies, handover…" value={closeDayNotes}
+                  onChange={e => setCloseDayNotes(e.target.value)} />
+              </div>
+            </div>
+          )}
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCloseDayDlg(false)} disabled={saving}>Cancel</Button>
+            <Button onClick={handleCloseDay} disabled={saving || dayLoading || !dayCurrent} className="gap-1.5">
+              <Moon className="w-4 h-4" /> {saving ? "Closing…" : "Close Day"}
             </Button>
           </DialogFooter>
         </DialogContent>

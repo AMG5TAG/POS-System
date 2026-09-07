@@ -28,6 +28,7 @@ import {
   useDeleteSmsCampaign,
 } from "@workspace/api-client-react";
 import type { Customer } from "@workspace/api-client-react";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /* ── Types ─────────────────────────────────────────────────────────────── */
 
@@ -376,7 +377,7 @@ export default function MarketingSmsCampaignsPage() {
                           {allCustomers.filter((c) => c.phone).sort((a, b) => `${a.firstName ?? ""}`.localeCompare(`${b.firstName ?? ""}`)).map((c) => (
                             <SelectItem key={c.id} value={String(c.id)}>
                               {`${c.firstName ?? ""} ${c.lastName ?? ""}`.trim() || "Unnamed"}
-                              <span className="text-muted-foreground ml-1.5">({c.phone})</span>
+                              <span className="text-muted-foreground ml-1.5">({formatPhoneForDisplay(c.phone)})</span>
                             </SelectItem>
                           ))}
                         </SelectContent>

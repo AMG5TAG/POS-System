@@ -123,7 +123,7 @@ export function FontPicker({ value, onChange, className }: FontPickerProps) {
     if (!file) return;
     const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
     if (!["ttf", "otf", "woff", "woff2"].includes(ext)) {
-      alert("Please upload a .ttf, .otf, .woff, or .woff2 font file.");
+      toast.error("Please upload a .ttf, .otf, .woff, or .woff2 font file.");
       return;
     }
     const reader = new FileReader();

@@ -185,4 +185,65 @@ describe("POST /api/transactions — body validation", () => {
     expect(res.status).toBe(400);
     expect(res.body).toHaveProperty("error");
   });
+
+  it("returns 400 when paidAt is not a valid date", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .send({
+        items: [{ productId: 1, productName: "A", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+        paymentMethod: "direct_deposit",
+        subtotal: 10,
+        taxTotal: 0,
+        total: 10,
+        paidAt: "not-a-date",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/paidAt/i);
+  });
+
+  it("returns 400 when paidAt is in the future", async () => {
+    const res = await request(app)
+      .post("/api/transactions")
+      .send({
+        items: [{ productId: 1, productName: "A", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+        paymentMethod: "direct_deposit",
+        subtotal: 10,
+        taxTotal: 0,
+        total: 10,
+        paidAt: "2099-01-01",
+      });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toMatch(/future/i);
+  });
+
+  /* Back-dating is a property of the receipt, not of the tender — the POS offers
+     a sale date for every payment method, so the same guards must apply to cash
+     as to a direct deposit. */
+  it("applies the same paidAt guards to a cash sale", async () => {
+    const bad = await request(app)
+      .post("/api/transactions")
+      .send({
+        items: [{ productId: 1, productName: "A", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+        paymentMethod: "cash",
+        subtotal: 10,
+        taxTotal: 0,
+        total: 10,
+        paidAt: "not-a-date",
+      });
+    expect(bad.status).toBe(400);
+    expect(bad.body.error).toMatch(/paidAt/i);
+
+    const future = await request(app)
+      .post("/api/transactions")
+      .send({
+        items: [{ productId: 1, productName: "A", quantity: 1, unitPrice: 10, totalPrice: 10 }],
+        paymentMethod: "cash",
+        subtotal: 10,
+        taxTotal: 0,
+        total: 10,
+        paidAt: "2099-01-01",
+      });
+    expect(future.status).toBe(400);
+    expect(future.body.error).toMatch(/future/i);
+  });
 });

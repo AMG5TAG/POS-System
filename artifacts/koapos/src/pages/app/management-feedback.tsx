@@ -212,7 +212,7 @@ export default function ManagementFeedbackPage() {
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all",
                   tab === "bug"
                     ? "bg-red-50 border-red-200 text-red-700 dark:bg-red-950/30 dark:border-red-800 dark:text-red-400"
-                    : "bg-card border-border text-muted-foreground hover:bg-muted/50",
+                    : "pill-selector bg-card border-border text-muted-foreground hover:bg-muted/50",
                 )}
               >
                 <Bug className="w-4 h-4" />
@@ -224,7 +224,7 @@ export default function ManagementFeedbackPage() {
                   "flex items-center gap-2 px-4 py-2.5 rounded-xl text-sm font-medium border transition-all",
                   tab === "feature"
                     ? "bg-indigo-50 border-indigo-200 text-indigo-700 dark:bg-indigo-950/30 dark:border-indigo-800 dark:text-indigo-400"
-                    : "bg-card border-border text-muted-foreground hover:bg-muted/50",
+                    : "pill-selector bg-card border-border text-muted-foreground hover:bg-muted/50",
                 )}
               >
                 <Lightbulb className="w-4 h-4" />

@@ -220,6 +220,12 @@ export default function MarketingOverviewPage() {
               icon={Link2}
               badge={stats.shortlinks > 0 ? `${stats.shortlinks} links` : undefined}
             />
+            <SectionCard
+              title="Email Signatures"
+              description="Design professional email signatures for Outlook, Gmail / Web and Thunderbird, with your business details built in."
+              href="/management/marketing-reports/generators/email-signatures"
+              icon={Mail}
+            />
           </div>
         </div>
 

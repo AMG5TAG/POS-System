@@ -1,5 +1,6 @@
 import { db } from "@workspace/db";
 import { passwordResetTokensTable } from "@workspace/db/schema";
+import { trackedInterval } from "../lib/shutdown";
 import { lt, sql } from "drizzle-orm";
 import type { Logger } from "pino";
 
@@ -31,7 +32,7 @@ export function schedulePasswordResetTokensCleanup(logger: Logger): void {
   cleanupPasswordResetTokens(logger).catch((err) =>
     logger.error({ err }, "Password reset tokens cleanup startup run error"),
   );
-  setInterval(
+  trackedInterval(
     () =>
       cleanupPasswordResetTokens(logger).catch((err) =>
         logger.error({ err }, "Password reset tokens cleanup scheduled run error"),

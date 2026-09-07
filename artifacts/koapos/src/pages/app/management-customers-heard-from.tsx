@@ -302,7 +302,7 @@ export default function ManagementCustomersHeardFromPage() {
                     className={`px-3 py-1.5 text-xs font-medium rounded transition-colors ${
                       heardFromMetric === m.value
                         ? "bg-background shadow-sm text-foreground"
-                        : "text-muted-foreground hover:text-foreground"
+                        : "pill-selector text-muted-foreground hover:text-foreground"
                     }`}
                   >
                     {m.label}

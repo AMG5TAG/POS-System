@@ -22,6 +22,19 @@ export type PaymentMethodId =
   | "cash" | "eftpos" | "card" | "direct_deposit"
   | "voucher" | "store_credit" | "laybuy" | "loyalty" | "split" | "gift_card";
 
+/** A merchant-defined payment method configured in Management → POS Registers.
+ *  Appears in the POS checkout alongside the built-in tenders and is recorded
+ *  as a generic "other" transaction tender with an audit note carrying the label. */
+export interface CustomPaymentMethod {
+  /** Stable identifier (e.g. "cust_ab12cd"); used to build the checkout tender id `__custom__<id>`. */
+  id: string;
+  label: string;
+  description: string;
+  /** Key into the custom-payment icon set; falls back to a generic wallet icon when unknown. */
+  icon: string;
+  enabled: boolean;
+}
+
 export interface PosGridSettings {
   columns: 2 | 3 | 4 | 5;
   tileSize: "compact" | "normal" | "large";
@@ -105,6 +118,14 @@ export const INTEGRATION_PAYMENT_LABELS: Record<string, string> = {
   google_pay:      "Google Pay",
   wechat_alipay:   "WeChat / Alipay",
 };
+
+/**
+ * Integration payment methods that use the asynchronous "scan-to-pay" flow
+ * (parked sale → customer approves → webhook/poll captures), rather than being
+ * recorded instantly as a generic "other" tender. These are real first-class
+ * payment-method enum values handled by the POS pending dialog.
+ */
+export const ASYNC_PAYMENT_PROVIDERS: ReadonlySet<string> = new Set(["zip", "afterpay", "klarna"]);
 
 export const PAYMENT_INTEGRATION_CATEGORIES = [
   "Payments & EFTPOS",
@@ -217,6 +238,32 @@ export function getEnabledIntegrationPayments(): string[] {
     if (stored) return JSON.parse(stored) as string[];
   } catch { /* ignore */ }
   return [];
+}
+
+/* ── Custom payment methods ──────────────────────────────────────────────── */
+
+/** Parse pos_settings.customPaymentMethods JSON, dropping malformed entries.
+ *  Defensive: tolerates missing/legacy fields so a bad row never breaks checkout. */
+export function parseCustomPaymentMethods(raw: string | null | undefined): CustomPaymentMethod[] {
+  if (!raw) return [];
+  try {
+    const parsed = JSON.parse(raw);
+    if (!Array.isArray(parsed)) return [];
+    return parsed.flatMap((entry): CustomPaymentMethod[] => {
+      if (!entry || typeof entry !== "object") return [];
+      const e = entry as Record<string, unknown>;
+      const id = typeof e.id === "string" ? e.id : "";
+      const label = typeof e.label === "string" ? e.label.trim() : "";
+      if (!id || !label) return [];
+      return [{
+        id,
+        label,
+        description: typeof e.description === "string" ? e.description : "",
+        icon: typeof e.icon === "string" ? e.icon : "wallet",
+        enabled: e.enabled !== false,
+      }];
+    });
+  } catch { return []; }
 }
 
 /* ── POS grid settings ───────────────────────────────────────────────────── */
