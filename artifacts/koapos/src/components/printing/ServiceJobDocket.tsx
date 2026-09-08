@@ -2,7 +2,7 @@ import { useMemo, type CSSProperties } from "react";
 import QRCode from "qrcode";
 import type { TplOpts } from "@/pages/app/management-templates";
 import { serviceJobQrUrl } from "@/lib/public-url";
-import { humanizeStatus, mergeCredentialLines, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
+import { humanizeStatus, mergeCredentialLines, serviceQrAlign, QR_BLOCK_MARGIN, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
 
@@ -128,6 +128,10 @@ export function ServiceJobDocket({
   const customQrSrc = opts.showCustomQr && /^(https?:|data:image\/)/.test(opts.customQrImage || "")
     ? opts.customQrImage
     : "";
+
+  // The roll has always centred its codes, so that is the fallback when the
+  // template carries no explicit choice.
+  const qrAlign = serviceQrAlign(opts.serviceQrAlign, "center");
 
   const headerText = (opts.headerText || "").replace(/<[^>]*>/g, "").trim() || "SERVICE JOB";
   const footerText = (opts.footerText || "").replace(/<[^>]*>/g, "").trim();
@@ -284,7 +288,7 @@ export function ServiceJobDocket({
       {qr && (
         <>
           <div style={dividerStyle} />
-          <div style={{ textAlign: "center" }}>
+          <div style={{ textAlign: qrAlign }}>
             <svg
               width={m.qr}
               height={m.qr}
@@ -306,11 +310,11 @@ export function ServiceJobDocket({
       {customQrSrc && (
         <>
           <div style={dividerStyle} />
-          <div style={{ textAlign: "center" }}>
+          <div style={{ textAlign: qrAlign }}>
             <img
               src={customQrSrc}
               alt="custom qr"
-              style={{ width: m.qr, height: m.qr, objectFit: "contain", display: "block", margin: "0 auto" }}
+              style={{ width: m.qr, height: m.qr, objectFit: "contain", display: "block", margin: QR_BLOCK_MARGIN[qrAlign] }}
             />
             {opts.customQrCaption && <div style={{ fontSize: "10px" }}>{opts.customQrCaption}</div>}
           </div>

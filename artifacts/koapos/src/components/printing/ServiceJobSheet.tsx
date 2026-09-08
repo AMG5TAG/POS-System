@@ -4,7 +4,7 @@ import type { TplOpts } from "@/pages/app/management-templates";
 import { formatSocialEntries } from "@/lib/social-links";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { SocialIcon } from "@/components/printing/SocialIcon";
-import { humanizeStatus, mergeCredentialLines } from "@/lib/service-sheet-fields";
+import { humanizeStatus, mergeCredentialLines, serviceQrAlign, QR_JUSTIFY } from "@/lib/service-sheet-fields";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
 
 /**
@@ -158,6 +158,9 @@ export function ServiceJobSheet({
     return serviceJobQrUrl(data.jobId);
   }, [data.jobId, showQr]);
   const qr = useMemo(() => (qrTarget ? buildQr(qrTarget) : null), [qrTarget]);
+  // The sheet has always cornered its QR bottom-left, so that is the fallback
+  // when the template carries no explicit choice.
+  const qrJustify = QR_JUSTIFY[serviceQrAlign(opts.serviceQrAlign, "left")];
 
   return (
     <div
@@ -394,7 +397,7 @@ export function ServiceJobSheet({
 
       {/* ── Service job QR — bottom-left corner ────────────────── */}
       {qr && (
-        <div style={{ marginTop: "20px", display: "flex", justifyContent: "flex-start", alignItems: "flex-end", gap: "8px" }}>
+        <div style={{ marginTop: "20px", display: "flex", justifyContent: qrJustify, alignItems: "flex-end", gap: "8px" }}>
           <div style={{ border: `1px solid ${BORDER}`, borderRadius: "4px", padding: "5px", background: "white" }}>
             <svg
               width="72"

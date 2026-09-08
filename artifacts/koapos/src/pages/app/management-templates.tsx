@@ -50,7 +50,7 @@ import {
 import { SavedQrPicker } from "@/components/templates/saved-qr-picker";
 import { ServiceJobDocket } from "@/components/printing/ServiceJobDocket";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
-import { isThermalServiceStyle, serviceDocketDensity } from "@/lib/service-sheet-fields";
+import { isThermalServiceStyle, serviceDocketDensity, serviceQrAlign, QR_JUSTIFY } from "@/lib/service-sheet-fields";
 import { standaloneHtmlFrom } from "@/lib/print-dom";
 import { formatSocialEntries, KNOWN_SOCIAL_PLATFORMS, getSocialBrandColor } from "@/lib/social-links";
 import { SocialIcon } from "@/components/printing/SocialIcon";
@@ -134,6 +134,10 @@ export interface TplOpts {
   showLogins:           boolean;
   showFormsFiles:       boolean;
   showServiceQr:        boolean;
+  /** Where both service-ticket QR blocks sit: "left" | "center" | "right".
+   *  "" keeps each paper's own default — the A4 sheet corners its code left,
+   *  the 80mm roll centres it. Resolved by `serviceQrAlign`. */
+  serviceQrAlign:       string;
   defaultPrintCopies:   string;
   /** Paper the service job prints on by default: "a4" sheet or "80mm" docket. */
   serviceSheetPaper:    string;
@@ -171,7 +175,7 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
-  showLogins: false, showFormsFiles: false, showServiceQr: true, defaultPrintCopies: "1",
+  showLogins: false, showFormsFiles: false, showServiceQr: true, serviceQrAlign: "", defaultPrintCopies: "1",
   serviceSheetPaper: "a4",
   showTransactions: true, showAppointments: true, showServiceJobs: true,
   showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
@@ -379,6 +383,14 @@ function optionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
       { section: "Sections", key: "showServiceQr",      label: "Show job QR",              type: "toggle", hint: "Adds a QR that opens the job when scanned — the Tech App while it is open, the customer\u2019s portal once completed" },
+      { section: "Sections", key: "serviceQrAlign",     label: "QR Alignment",             type: "select",
+        options: [
+          { value: "",       label: "Default (A4 left \u00b7 80mm centred)" },
+          { value: "left",   label: "Left" },
+          { value: "center", label: "Centre" },
+          { value: "right",  label: "Right" },
+        ],
+        hint: "Aligns both the job QR and the custom QR, on the A4 sheet and the 80mm docket alike." },
       { section: "Custom QR", key: "showCustomQr",         label: "Show Custom QR Code",      type: "toggle", hint: "Attach your own QR (booking, payment, review link…)" },
       { section: "Custom QR", key: "customQrCodeId",       label: "Use a Saved QR Code",      type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",        label: "Custom QR Image",          type: "image",  hint: "Upload a QR image or paste an image URL" },
@@ -1721,6 +1733,8 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
   const socialEntries = formatSocialEntries(socialLinks);
   const jobFontSize = opts.jobNoFontSize?.toLowerCase();
   const jobNoClass = jobFontSize === "xlarge" ? "text-base font-black" : jobFontSize === "large" ? "text-sm font-bold" : "text-[9px] font-normal";
+  // Same fallback the A4 renderers use, so the preview shows what will print.
+  const qrJustify = QR_JUSTIFY[serviceQrAlign(opts.serviceQrAlign, "left")];
   return (
     <div className="text-[9px] text-gray-800 font-sans space-y-2">
       {/* Header */}
@@ -1851,7 +1865,7 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
 
       {/* Tech App QR */}
       {opts.showServiceQr && (
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1" style={{ justifyContent: qrJustify }}>
           <QRCodeVisual label="Tech App" size={40} />
           <p className="text-[8px] text-gray-500 leading-tight">Scan to open in the<br /><strong>Tech App</strong> — SVC-0001</p>
         </div>
@@ -1859,7 +1873,7 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
 
       {/* Custom QR */}
       {opts.showCustomQr && opts.customQrImage && (
-        <div className="flex items-center gap-2 pt-1">
+        <div className="flex items-center gap-2 pt-1" style={{ justifyContent: qrJustify }}>
           <img src={opts.customQrImage} alt="Custom QR" className="w-10 h-10 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
           {opts.customQrCaption && <p className="text-[8px] text-gray-500 leading-tight">{opts.customQrCaption}</p>}
         </div>
@@ -2168,6 +2182,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       showWorkDescription: opts.showWorkDescription,
       warrantyText: opts.warrantyText,
       showServiceQr: opts.showServiceQr,
+      serviceQrAlign: opts.serviceQrAlign,
     };
     const baseDate = new Date().toISOString();
     const demoTx: import("@workspace/api-client-react").Transaction = {

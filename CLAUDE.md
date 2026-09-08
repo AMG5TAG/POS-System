@@ -122,6 +122,19 @@ and the newer `printers`/`routing`. The Hardware settings UI keeps them in step 
 `patchPR` in `management-registers.tsx` mirrors edits into the `receipt-printer`
 profile. Don't let them drift.
 
+**QR alignment** is one setting for both codes a ticket can carry (the job QR and
+the custom QR), stored as `serviceQrAlign` on the Service Ticket template and
+resolved by `serviceQrAlign()` in `lib/service-sheet-fields.ts` — the shared
+module, because five renderers draw those blocks (the A4 report HTML in
+`print-receipt.ts`, `ServiceJobSheet`, `ServiceJobDocket`, the ESC/POS encoder,
+and the template preview) and five copies of a layout rule is five chances for
+the roll and the sheet to disagree. Unset is deliberately **not** "left": the A4
+sheet has always cornered its code bottom-left and the 80mm roll has always
+centred it, so each renderer passes its own historical default and only an
+explicit choice overrides both. On the roll the printer justifies the code
+itself (ESC a takes the same three positions), and the encoder returns to centre
+afterwards so the option moves the codes and not the footer under them.
+
 Service jobs print in two shapes from the same data: the A4 `ServiceJobSheet` and
 the 80mm `ServiceJobDocket` (+ its ESC/POS encoder). `lib/service-job-print.ts`
 owns the choice. The Service Ticket template catalogue carries both papers —

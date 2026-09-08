@@ -9,7 +9,7 @@
  */
 import { EscPos, charsPerLine, cols, toAscii, wrap } from "@/lib/escpos";
 import { serviceJobQrUrl } from "@/lib/public-url";
-import { humanizeStatus, mergeCredentialLines, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
+import { humanizeStatus, mergeCredentialLines, serviceQrAlign, type ServiceDocketDensity } from "@/lib/service-sheet-fields";
 import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printing/ServiceJobSheet";
 import type { TplOpts } from "@/pages/app/management-templates";
 
@@ -149,7 +149,12 @@ export function buildServiceJobDocketBytes(
   }
 
   /* ── Tech App QR ────────────────────────────────────────────────────────── */
-  b.line(divider).align("center");
+  /* ESC a takes the same three positions the template offers, so the printer
+     justifies the code itself — the roll has always centred it, which stays the
+     fallback. The caption lines that follow inherit the same justification,
+     which is what keeps a code and its label reading as one block. */
+  const qrAlign = serviceQrAlign(opts.serviceQrAlign, "center");
+  b.line(divider).align(qrAlign);
   if (opts.showServiceQr !== false && data.jobId != null) {
     const target = serviceJobQrUrl(data.jobId);
     if (target) {
@@ -169,6 +174,9 @@ export function buildServiceJobDocketBytes(
     if (caption) for (const l of wrap(caption, width)) b.line(l);
   }
 
+  // Back to centre before the footer: the option moves the QR blocks, not the
+  // closing message, which has always sat centred under them.
+  b.align("center");
   const footer = toAscii(opts.footerText).replace(/<[^>]*>/g, "").trim();
   if (footer) { b.line(); block(footer); }
 

@@ -5,6 +5,7 @@ import QRCode from "qrcode";
 import { getSocialLabel, getSocialHandle, getSocialIconSvg, getSocialBrandColor } from "@/lib/social-links";
 import { customerDisplayName } from "@/lib/customer-name";
 import { publicOrigin, serviceJobQrUrl } from "@/lib/public-url";
+import { serviceQrAlign, QR_JUSTIFY } from "@/lib/service-sheet-fields";
 import type { HardwareCfg, PrintPurpose } from "@/lib/hardware-config";
 import type { BridgePaper } from "@/lib/print-bridge";
 import { printDocument } from "@/lib/print-router";
@@ -95,6 +96,9 @@ export interface ReceiptTemplateOpts {
   warrantyText?: string;
   /** Print the Tech App QR (deep-links into the job) on the A4 service report. */
   showServiceQr?: boolean;
+  /** Where both QR blocks sit on a service ticket: "left" | "center" | "right".
+   *  Empty/absent keeps each paper's own default — see `serviceQrAlign`. */
+  serviceQrAlign?: string;
 }
 
 /* ─── shared helpers ────────────────────────────────────────────────────── */
@@ -1123,6 +1127,10 @@ export function printA4ServiceJob(
     isPartner   ? `<span class="badge badge-purple">Partner Repair</span>` : "",
   ].filter(Boolean).join(" ");
 
+  // Both QR blocks sit where the template says. The A4 report has always
+  // cornered them left, so that is the fallback when nothing is chosen.
+  const qrJustify = QR_JUSTIFY[serviceQrAlign(tpl.serviceQrAlign, "left")];
+
   // Service job QR — encodes the job's stable resolver; the server decides at
   // scan time whether that is the Tech App or the customer portal.
   const qrMarkup = tpl.showServiceQr && job.id != null
@@ -1177,7 +1185,7 @@ export function printA4ServiceJob(
 
     .status-pill { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 
-    .qr-block { display: flex; align-items: center; gap: 14px; margin: 8px 0 24px; }
+    .qr-block { display: flex; align-items: center; gap: 14px; margin: 8px 0 24px; justify-content: ${qrJustify}; }
     .qr-box { border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; background: #fff; line-height: 0; }
     .qr-caption { font-size: 11px; color: #6b7280; line-height: 1.6; }
 

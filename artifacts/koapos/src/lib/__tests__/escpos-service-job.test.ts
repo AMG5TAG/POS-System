@@ -3,6 +3,7 @@ import { charsPerLine, wrap } from "@/lib/escpos";
 import { buildServiceJobDocketBytes } from "@/lib/escpos-service-job";
 import {
   humanizeStatus, isThermalServiceStyle, mergeCredentialLines, serviceDocketDensity,
+  serviceQrAlign, QR_JUSTIFY, QR_BLOCK_MARGIN,
 } from "@/lib/service-sheet-fields";
 import { serviceJobPaperFromOpts } from "@/lib/service-job-print";
 import { DEFAULT_OPTS } from "@/pages/app/management-templates";
@@ -301,5 +302,83 @@ describe("service ticket styles", () => {
     expect(serviceJobPaperFromOpts({ serviceSheetPaper: "80mm" }, "ss-standard")).toBe("80mm");
     expect(serviceJobPaperFromOpts({ serviceSheetPaper: "80mm" })).toBe("80mm");
     expect(serviceJobPaperFromOpts({ serviceSheetPaper: "a4" })).toBe("a4");
+  });
+});
+
+/* ─── QR alignment ─────────────────────────────────────────────────────────── */
+
+/** ESC a n — the justification values a printer is told, in order. */
+function justifications(bytes: Uint8Array): number[] {
+  const out: number[] = [];
+  for (let i = 0; i < bytes.length - 2; i++) {
+    if (bytes[i] === ESC && bytes[i + 1] === 0x61) out.push(bytes[i + 2]);
+  }
+  return out;
+}
+
+/** The justification in force when the QR command (GS ( k … 1 P) is emitted. */
+function alignAtFirstQr(bytes: Uint8Array): number | null {
+  let current = 0;
+  for (let i = 0; i < bytes.length - 6; i++) {
+    if (bytes[i] === ESC && bytes[i + 1] === 0x61) { current = bytes[i + 2]; continue; }
+    // GS ( k pL pH 0x31 0x50 — the "store QR data" call, which every QR makes.
+    if (bytes[i] === GS && bytes[i + 1] === 0x28 && bytes[i + 2] === 0x6b
+        && bytes[i + 5] === 0x31 && bytes[i + 6] === 0x50) {
+      return current;
+    }
+  }
+  return null;
+}
+
+describe("serviceQrAlign", () => {
+  it("falls back to the paper's own default rather than a single global one", () => {
+    // The A4 sheet has always cornered its code left and the roll has always
+    // centred it. One shared default would silently re-align one of them for
+    // every merchant who never asked.
+    expect(serviceQrAlign("", "left")).toBe("left");
+    expect(serviceQrAlign("", "center")).toBe("center");
+    expect(serviceQrAlign(undefined, "center")).toBe("center");
+    expect(serviceQrAlign(null, "left")).toBe("left");
+  });
+
+  it("honours an explicit choice on either paper", () => {
+    expect(serviceQrAlign("right", "left")).toBe("right");
+    expect(serviceQrAlign("center", "left")).toBe("center");
+    expect(serviceQrAlign("left", "center")).toBe("left");
+  });
+
+  it("ignores a value it does not recognise", () => {
+    // A stale or hand-edited template option must not reach CSS as-is.
+    expect(serviceQrAlign("middle", "center")).toBe("center");
+    expect(serviceQrAlign("flex-end", "left")).toBe("left");
+  });
+
+  it("maps to CSS that actually moves the block", () => {
+    expect(QR_JUSTIFY.left).toBe("flex-start");
+    expect(QR_JUSTIFY.right).toBe("flex-end");
+    // text-align cannot move a block-level image, so the docket's custom QR
+    // needs the auto-margin form instead.
+    expect(QR_BLOCK_MARGIN.left).toBe("0 auto 0 0");
+    expect(QR_BLOCK_MARGIN.right).toBe("0 0 0 auto");
+  });
+});
+
+describe("thermal docket QR alignment", () => {
+  const build = (align: string) =>
+    buildServiceJobDocketBytes(data, branding, { ...DEFAULT_OPTS, serviceQrAlign: align }, "80mm");
+
+  it("centres the code when the template says nothing", () => {
+    expect(alignAtFirstQr(build(""))).toBe(1); // ESC a 1 = centre
+  });
+
+  it("tells the printer to justify the code left or right when asked", () => {
+    expect(alignAtFirstQr(build("left"))).toBe(0);
+    expect(alignAtFirstQr(build("right"))).toBe(2);
+  });
+
+  it("returns to centre after the codes so the footer is unmoved", () => {
+    // The option aligns the QR blocks, not the closing message under them.
+    expect(justifications(build("right")).at(-1)).toBe(1);
+    expect(justifications(build("left")).at(-1)).toBe(1);
   });
 });

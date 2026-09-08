@@ -80,3 +80,49 @@ export function isThermalServiceStyle(style?: string | null): boolean {
 export function serviceDocketDensity(style?: string | null): ServiceDocketDensity {
   return style === "ss-thermal-compact" ? "compact" : "standard";
 }
+
+/* ─── QR alignment ────────────────────────────────────────────────────────────
+ * Where the QR blocks sit on a service ticket, set once on the Service Ticket
+ * template (Management › Templates) and obeyed by every renderer: the A4 report
+ * HTML, the A4 `ServiceJobSheet`, the 80mm `ServiceJobDocket`, the ESC/POS
+ * encoder and the template preview. It lives here for the same reason the status
+ * labels do — five copies of a layout rule is five chances for the roll and the
+ * sheet to disagree.
+ *
+ * It governs BOTH QRs a ticket can carry (the job QR and the merchant's custom
+ * QR), because a merchant asking for their codes to line up means all of them.
+ */
+
+/** The three alignments a merchant can pick. */
+export type ServiceQrAlign = "left" | "center" | "right";
+
+/**
+ * Resolve the saved template value, falling back to the paper's own default.
+ *
+ * Unset is not "left": the A4 sheet corners its QR bottom-left while the 80mm
+ * roll centres it, and both were deliberate. A single stored default would
+ * silently re-align one of them for every merchant who never asked, so each
+ * renderer passes the default it has always used and only an explicit choice
+ * overrides it.
+ */
+export function serviceQrAlign(
+  saved: string | null | undefined,
+  fallback: ServiceQrAlign,
+): ServiceQrAlign {
+  return saved === "left" || saved === "center" || saved === "right" ? saved : fallback;
+}
+
+/** `justify-content` for the A4 blocks, which lay the QR and its caption in a row. */
+export const QR_JUSTIFY: Record<ServiceQrAlign, "flex-start" | "center" | "flex-end"> = {
+  left: "flex-start",
+  center: "center",
+  right: "flex-end",
+};
+
+/** `margin` that pushes a fixed-width block (the docket's custom QR image) to
+ *  the chosen side. `text-align` cannot move a block-level image. */
+export const QR_BLOCK_MARGIN: Record<ServiceQrAlign, string> = {
+  left: "0 auto 0 0",
+  center: "0 auto",
+  right: "0 0 0 auto",
+};
