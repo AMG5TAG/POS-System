@@ -153,8 +153,7 @@ export function buildServiceJobDocketBytes(
      justifies the code itself — the roll has always centred it, which stays the
      fallback. The caption lines that follow inherit the same justification,
      which is what keeps a code and its label reading as one block. */
-  const qrAlign = serviceQrAlign(opts.serviceQrAlign, "center");
-  b.line(divider).align(qrAlign);
+  b.line(divider).align(serviceQrAlign(opts.serviceQrAlign, "center"));
   if (opts.showServiceQr !== false && data.jobId != null) {
     const target = serviceJobQrUrl(data.jobId);
     if (target) {
@@ -168,7 +167,7 @@ export function buildServiceJobDocketBytes(
      image, but a code picked from Marketing > QR Codes carries what it encodes,
      and that prints natively. */
   if (opts.showCustomQr && opts.customQrData) {
-    b.line();
+    b.line().align(serviceQrAlign(opts.serviceCustomQrAlign, "center"));
     b.qr(opts.customQrData, paperWidth === "58mm" || compact ? 4 : 6);
     const caption = toAscii(opts.customQrCaption).trim();
     if (caption) for (const l of wrap(caption, width)) b.line(l);

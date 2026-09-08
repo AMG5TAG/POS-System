@@ -130,8 +130,9 @@ export function ServiceJobDocket({
     : "";
 
   // The roll has always centred its codes, so that is the fallback when the
-  // template carries no explicit choice.
-  const qrAlign = serviceQrAlign(opts.serviceQrAlign, "center");
+  // template carries no explicit choice. The two codes align independently.
+  const jobQrAlign    = serviceQrAlign(opts.serviceQrAlign, "center");
+  const customQrAlign = serviceQrAlign(opts.serviceCustomQrAlign, "center");
 
   const headerText = (opts.headerText || "").replace(/<[^>]*>/g, "").trim() || "SERVICE JOB";
   const footerText = (opts.footerText || "").replace(/<[^>]*>/g, "").trim();
@@ -288,7 +289,7 @@ export function ServiceJobDocket({
       {qr && (
         <>
           <div style={dividerStyle} />
-          <div style={{ textAlign: qrAlign }}>
+          <div style={{ textAlign: jobQrAlign }}>
             <svg
               width={m.qr}
               height={m.qr}
@@ -310,11 +311,11 @@ export function ServiceJobDocket({
       {customQrSrc && (
         <>
           <div style={dividerStyle} />
-          <div style={{ textAlign: qrAlign }}>
+          <div style={{ textAlign: customQrAlign }}>
             <img
               src={customQrSrc}
               alt="custom qr"
-              style={{ width: m.qr, height: m.qr, objectFit: "contain", display: "block", margin: QR_BLOCK_MARGIN[qrAlign] }}
+              style={{ width: m.qr, height: m.qr, objectFit: "contain", display: "block", margin: QR_BLOCK_MARGIN[customQrAlign] }}
             />
             {opts.customQrCaption && <div style={{ fontSize: "10px" }}>{opts.customQrCaption}</div>}
           </div>

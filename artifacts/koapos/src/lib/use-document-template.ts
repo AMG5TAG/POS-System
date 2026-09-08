@@ -95,6 +95,7 @@ function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra)
     warrantyText: opts.warrantyText,
     showServiceQr: opts.showServiceQr,
     serviceQrAlign: opts.serviceQrAlign,
+    serviceCustomQrAlign: opts.serviceCustomQrAlign,
   };
 }
 

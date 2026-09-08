@@ -134,10 +134,13 @@ export interface TplOpts {
   showLogins:           boolean;
   showFormsFiles:       boolean;
   showServiceQr:        boolean;
-  /** Where both service-ticket QR blocks sit: "left" | "center" | "right".
-   *  "" keeps each paper's own default — the A4 sheet corners its code left,
-   *  the 80mm roll centres it. Resolved by `serviceQrAlign`. */
+  /** Where the job QR sits: "left" | "center" | "right". "" keeps each paper's
+   *  own default — the A4 sheet corners its code left, the 80mm roll centres it.
+   *  Resolved by `serviceQrAlign`. */
   serviceQrAlign:       string;
+  /** Same, for the custom QR. Separate from the job QR because the two codes
+   *  are separate blocks and a merchant may well want them on opposite sides. */
+  serviceCustomQrAlign: string;
   defaultPrintCopies:   string;
   /** Paper the service job prints on by default: "a4" sheet or "80mm" docket. */
   serviceSheetPaper:    string;
@@ -175,7 +178,8 @@ export const DEFAULT_OPTS: TplOpts = {
   showCustomerDetails: true, showDeviceDetails: true, showWorkDescription: true,
   showPhotos: true, showSignature: true, showCallHistory: true,
   callHistoryRows: "6", warrantyText: "", jobNoFontSize: "normal",
-  showLogins: false, showFormsFiles: false, showServiceQr: true, serviceQrAlign: "", defaultPrintCopies: "1",
+  showLogins: false, showFormsFiles: false, showServiceQr: true,
+  serviceQrAlign: "", serviceCustomQrAlign: "", defaultPrintCopies: "1",
   serviceSheetPaper: "a4",
   showTransactions: true, showAppointments: true, showServiceJobs: true,
   showNotes: true, showFormSubmissions: true, showWarningNote: true, showInternalNotes: true,
@@ -286,6 +290,15 @@ function getOptionsConfig(category: Category, templateId?: string): FieldDef[] {
     .map((f) => (a4Only.has(f.key) ? { ...f, hint: `A4 sheet only — the 80mm docket ignores this.${f.hint ? ` ${f.hint}` : ""}` } : f));
 }
 
+/** The alignment choices offered for each service-ticket QR. "" is first so an
+ *  unset option shows as the default the renderers actually apply. */
+const QR_ALIGN_OPTIONS = [
+  { value: "",       label: "Default (A4 left \u00b7 80mm centred)" },
+  { value: "left",   label: "Left" },
+  { value: "center", label: "Centre" },
+  { value: "right",  label: "Right" },
+];
+
 function optionsConfig(category: Category): FieldDef[] {
   switch (category) {
     case "Thermal_Receipt": return [
@@ -383,18 +396,16 @@ function optionsConfig(category: Category): FieldDef[] {
       { section: "Sections", key: "showLogins",           label: "Show Logins / Accounts",   type: "toggle", hint: "Print customer logins and linked accounts" },
       { section: "Sections", key: "showFormsFiles",       label: "Show Forms and Files",     type: "toggle", hint: "Print attached documents and consent forms" },
       { section: "Sections", key: "showServiceQr",      label: "Show job QR",              type: "toggle", hint: "Adds a QR that opens the job when scanned — the Tech App while it is open, the customer\u2019s portal once completed" },
-      { section: "Sections", key: "serviceQrAlign",     label: "QR Alignment",             type: "select",
-        options: [
-          { value: "",       label: "Default (A4 left \u00b7 80mm centred)" },
-          { value: "left",   label: "Left" },
-          { value: "center", label: "Centre" },
-          { value: "right",  label: "Right" },
-        ],
-        hint: "Aligns both the job QR and the custom QR, on the A4 sheet and the 80mm docket alike." },
+      { section: "Sections", key: "serviceQrAlign",     label: "Job QR Alignment",         type: "select",
+        options: QR_ALIGN_OPTIONS,
+        hint: "Where the job QR sits on the A4 sheet and the 80mm docket." },
       { section: "Custom QR", key: "showCustomQr",         label: "Show Custom QR Code",      type: "toggle", hint: "Attach your own QR (booking, payment, review link…)" },
       { section: "Custom QR", key: "customQrCodeId",       label: "Use a Saved QR Code",      type: "qrpicker", hint: "Pick one of the codes you designed in Marketing → QR Codes" },
       { section: "Custom QR", key: "customQrImage",        label: "Custom QR Image",          type: "image",  hint: "Upload a QR image or paste an image URL" },
       { section: "Custom QR", key: "customQrCaption",      label: "QR Caption",               type: "text",   placeholder: "e.g. Scan to book your next service" },
+      { section: "Custom QR", key: "serviceCustomQrAlign",  label: "Custom QR Alignment",      type: "select",
+        options: QR_ALIGN_OPTIONS,
+        hint: "Set independently of the job QR, so the two codes can sit on opposite sides." },
       { section: "Footer",   key: "showSocialLinks",      label: "Show Business Socials",    type: "toggle", hint: "Pulls social links from Business Info" },
       { section: "Footer",   key: "socialIconBrandColors", label: "Social Icon Brand Colors", type: "toggle", hint: "Renders each platform icon in its official brand color" },
       { section: "Footer",   key: "warrantyText",         label: "Warranty / Terms",         type: "textarea", placeholder: "e.g. Warranty: 90 days on parts and labour. No liability for pre-existing data loss.", quickCodes: true },
@@ -1727,14 +1738,15 @@ function printDocketPreview(): void {
 
 /* ─── Service Sheet Preview ─────────────────────────────────────────────── */
 
-function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, referralCode, referralUrl, opts }: PreviewProps) {
+export function ServiceSheetPreview({ templateId, businessName, abn, website, email, address, brandColor, logo, socialLinks, referralCode, referralUrl, opts }: PreviewProps) {
   const callRows = Math.max(2, Math.min(8, parseInt(opts.callHistoryRows || "6", 10)));
   const compact = templateId === "ss-compact";
   const socialEntries = formatSocialEntries(socialLinks);
   const jobFontSize = opts.jobNoFontSize?.toLowerCase();
   const jobNoClass = jobFontSize === "xlarge" ? "text-base font-black" : jobFontSize === "large" ? "text-sm font-bold" : "text-[9px] font-normal";
-  // Same fallback the A4 renderers use, so the preview shows what will print.
-  const qrJustify = QR_JUSTIFY[serviceQrAlign(opts.serviceQrAlign, "left")];
+  // Same fallbacks the A4 renderers use, so the preview shows what will print.
+  const jobQrJustify = QR_JUSTIFY[serviceQrAlign(opts.serviceQrAlign, "left")];
+  const customQrJustify = QR_JUSTIFY[serviceQrAlign(opts.serviceCustomQrAlign, "left")];
   return (
     <div className="text-[9px] text-gray-800 font-sans space-y-2">
       {/* Header */}
@@ -1863,19 +1875,25 @@ function ServiceSheetPreview({ templateId, businessName, abn, website, email, ad
         </div>
       )}
 
-      {/* Tech App QR */}
+      {/* Tech App QR. The inner inline-flex is what makes the alignment visible:
+          the caption is a flex sibling, so left to itself the row can fill the
+          narrow preview column and justify-content has no slack to distribute. */}
       {opts.showServiceQr && (
-        <div className="flex items-center gap-2 pt-1" style={{ justifyContent: qrJustify }}>
-          <QRCodeVisual label="Tech App" size={40} />
-          <p className="text-[8px] text-gray-500 leading-tight">Scan to open in the<br /><strong>Tech App</strong> — SVC-0001</p>
+        <div className="flex pt-1" style={{ justifyContent: jobQrJustify }}>
+          <div className="inline-flex items-center gap-2 max-w-full">
+            <QRCodeVisual label="Tech App" size={40} />
+            <p className="text-[8px] text-gray-500 leading-tight">Scan to open in the<br /><strong>Tech App</strong> — SVC-0001</p>
+          </div>
         </div>
       )}
 
-      {/* Custom QR */}
+      {/* Custom QR — aligned independently of the job QR. */}
       {opts.showCustomQr && opts.customQrImage && (
-        <div className="flex items-center gap-2 pt-1" style={{ justifyContent: qrJustify }}>
-          <img src={opts.customQrImage} alt="Custom QR" className="w-10 h-10 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
-          {opts.customQrCaption && <p className="text-[8px] text-gray-500 leading-tight">{opts.customQrCaption}</p>}
+        <div className="flex pt-1" style={{ justifyContent: customQrJustify }}>
+          <div className="inline-flex items-center gap-2 max-w-full">
+            <img src={opts.customQrImage} alt="Custom QR" className="w-10 h-10 object-contain border border-gray-300 rounded-sm bg-white p-0.5" />
+            {opts.customQrCaption && <p className="text-[8px] text-gray-500 leading-tight">{opts.customQrCaption}</p>}
+          </div>
         </div>
       )}
 
@@ -2183,6 +2201,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
       warrantyText: opts.warrantyText,
       showServiceQr: opts.showServiceQr,
       serviceQrAlign: opts.serviceQrAlign,
+      serviceCustomQrAlign: opts.serviceCustomQrAlign,
     };
     const baseDate = new Date().toISOString();
     const demoTx: import("@workspace/api-client-react").Transaction = {

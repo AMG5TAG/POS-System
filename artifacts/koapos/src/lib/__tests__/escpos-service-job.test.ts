@@ -331,6 +331,12 @@ function alignAtFirstQr(bytes: Uint8Array): number | null {
 }
 
 describe("serviceQrAlign", () => {
+  it("resolves each code's own saved value, not one shared setting", () => {
+    // The job QR and the custom QR are separate blocks with separate options.
+    expect(serviceQrAlign("left", "center")).toBe("left");
+    expect(serviceQrAlign("right", "center")).toBe("right");
+  });
+
   it("falls back to the paper's own default rather than a single global one", () => {
     // The A4 sheet has always cornered its code left and the roll has always
     // centred it. One shared default would silently re-align one of them for
@@ -364,8 +370,16 @@ describe("serviceQrAlign", () => {
 });
 
 describe("thermal docket QR alignment", () => {
-  const build = (align: string) =>
-    buildServiceJobDocketBytes(data, branding, { ...DEFAULT_OPTS, serviceQrAlign: align }, "80mm");
+  const build = (job: string, custom = "") =>
+    buildServiceJobDocketBytes(
+      data, branding,
+      {
+        ...DEFAULT_OPTS,
+        serviceQrAlign: job, serviceCustomQrAlign: custom,
+        showCustomQr: true, customQrData: "https://example.com/book",
+      },
+      "80mm",
+    );
 
   it("centres the code when the template says nothing", () => {
     expect(alignAtFirstQr(build(""))).toBe(1); // ESC a 1 = centre
@@ -376,9 +390,18 @@ describe("thermal docket QR alignment", () => {
     expect(alignAtFirstQr(build("right"))).toBe(2);
   });
 
+  it("justifies the custom QR independently of the job QR", () => {
+    // ESC a is emitted again between the two codes, so the printer is holding
+    // the second alignment by the time the custom QR is stored.
+    const js = justifications(build("left", "right"));
+    expect(js).toContain(0);
+    expect(js).toContain(2);
+    expect(js.indexOf(0)).toBeLessThan(js.lastIndexOf(2));
+  });
+
   it("returns to centre after the codes so the footer is unmoved", () => {
     // The option aligns the QR blocks, not the closing message under them.
-    expect(justifications(build("right")).at(-1)).toBe(1);
-    expect(justifications(build("left")).at(-1)).toBe(1);
+    expect(justifications(build("right", "left")).at(-1)).toBe(1);
+    expect(justifications(build("left", "right")).at(-1)).toBe(1);
   });
 });

@@ -96,9 +96,11 @@ export interface ReceiptTemplateOpts {
   warrantyText?: string;
   /** Print the Tech App QR (deep-links into the job) on the A4 service report. */
   showServiceQr?: boolean;
-  /** Where both QR blocks sit on a service ticket: "left" | "center" | "right".
+  /** Where the job QR sits on a service ticket: "left" | "center" | "right".
    *  Empty/absent keeps each paper's own default — see `serviceQrAlign`. */
   serviceQrAlign?: string;
+  /** Same, for the custom QR — aligned independently of the job QR. */
+  serviceCustomQrAlign?: string;
 }
 
 /* ─── shared helpers ────────────────────────────────────────────────────── */
@@ -1051,13 +1053,19 @@ export interface ServiceJobPrintData {
   customerPhone?: string | null;
 }
 
-export function printA4ServiceJob(
+/**
+ * The A4 service report as a standalone HTML document.
+ *
+ * Split out from `printA4ServiceJob` so the markup can be asserted directly —
+ * the QR alignment rules in particular, which are easy to get right in the
+ * helper and wrong in the document.
+ */
+export function buildServiceJobPrintHtml(
   job: ServiceJobPrintData,
   businessInfo?: ReceiptBusinessInfo,
-  customerOverride?: { name?: string; email?: string; phone?: string },
   opts?: ReceiptTemplateOpts,
-  route?: PrintRoute,
-): void {
+  customerOverride?: { name?: string; email?: string; phone?: string },
+): string {
   const rawBusinessName = businessInfo?.businessName ?? "Your Store";
   const rawAbn = businessInfo?.abn ?? "";
   const rawWebsite = businessInfo?.website ?? "";
@@ -1127,9 +1135,10 @@ export function printA4ServiceJob(
     isPartner   ? `<span class="badge badge-purple">Partner Repair</span>` : "",
   ].filter(Boolean).join(" ");
 
-  // Both QR blocks sit where the template says. The A4 report has always
-  // cornered them left, so that is the fallback when nothing is chosen.
-  const qrJustify = QR_JUSTIFY[serviceQrAlign(tpl.serviceQrAlign, "left")];
+  // Each QR block sits where the template says, independently. The A4 report has
+  // always cornered them left, so that is the fallback when nothing is chosen.
+  const jobQrJustify    = QR_JUSTIFY[serviceQrAlign(tpl.serviceQrAlign, "left")];
+  const customQrJustify = QR_JUSTIFY[serviceQrAlign(tpl.serviceCustomQrAlign, "left")];
 
   // Service job QR — encodes the job's stable resolver; the server decides at
   // scan time whether that is the Tech App or the customer portal.
@@ -1140,7 +1149,7 @@ export function printA4ServiceJob(
   // Merchant-supplied custom QR image.
   const customQrSrcSvc = tpl.customQrImage && /^(https?:|data:image\/)/.test(tpl.customQrImage) ? tpl.customQrImage : "";
   const customQrMarkupSvc = (tpl.showCustomQr && customQrSrcSvc)
-    ? `<div class="qr-block">
+    ? `<div class="qr-block qr-custom">
         <div class="qr-box"><img src="${esc(customQrSrcSvc)}" alt="custom qr" style="width:96px;height:96px;object-fit:contain;display:block"></div>
         ${tpl.customQrCaption ? `<div class="qr-caption">${esc(tpl.customQrCaption)}</div>` : ""}
       </div>`
@@ -1185,7 +1194,9 @@ export function printA4ServiceJob(
 
     .status-pill { display: inline-block; padding: 3px 12px; border-radius: 99px; font-size: 12px; font-weight: 600; background: #f0fdf4; color: #15803d; border: 1px solid #bbf7d0; }
 
-    .qr-block { display: flex; align-items: center; gap: 14px; margin: 8px 0 24px; justify-content: ${qrJustify}; }
+    .qr-block { display: flex; align-items: center; gap: 14px; margin: 8px 0 24px; }
+    .qr-block.qr-job    { justify-content: ${jobQrJustify}; }
+    .qr-block.qr-custom { justify-content: ${customQrJustify}; }
     .qr-box { border: 1px solid #e5e7eb; border-radius: 6px; padding: 6px; background: #fff; line-height: 0; }
     .qr-caption { font-size: 11px; color: #6b7280; line-height: 1.6; }
 
@@ -1289,7 +1300,7 @@ export function printA4ServiceJob(
   ${warrantyText ? `<div class="warranty-note">${esc(warrantyText)}</div>` : ""}
 
   ${qrMarkup ? `
-  <div class="qr-block">
+  <div class="qr-block qr-job">
     <div class="qr-box">${qrMarkup}</div>
     <div class="qr-caption">Scan to open in the <strong>Tech App</strong><br>Job ${escJobNum}</div>
   </div>` : ""}
@@ -1305,5 +1316,20 @@ export function printA4ServiceJob(
 </div>
 </body></html>`;
 
-  openPrintWindow(html, `Service Report ${escJobNum}`, route);
+  return html;
+}
+
+export function printA4ServiceJob(
+  job: ServiceJobPrintData,
+  businessInfo?: ReceiptBusinessInfo,
+  customerOverride?: { name?: string; email?: string; phone?: string },
+  opts?: ReceiptTemplateOpts,
+  route?: PrintRoute,
+): void {
+  const escJobNum = esc(job.jobNumber ?? "");
+  openPrintWindow(
+    buildServiceJobPrintHtml(job, businessInfo, opts, customerOverride),
+    `Service Report ${escJobNum}`,
+    route,
+  );
 }
