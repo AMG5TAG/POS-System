@@ -29,6 +29,7 @@ import {
 } from "./management-hubs";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
+import { usePersistentScroll } from "@/lib/use-persistent-scroll";
 import { useIsMobile } from "@/hooks/use-mobile";
 import {
   useLogout,
@@ -1626,6 +1627,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
   const [searchOpen, setSearchOpen] = useState(false);
   const isMobile = useIsMobile();
+
   const headerRef = useRef<HTMLElement>(null);
   const headerScrolled = useHeaderScrollShadow();
 
@@ -1974,6 +1976,14 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const [searchOpen, setSearchOpen] = useState(false);
   const isMobile = useIsMobile();
 
+  /* The sidebar is remounted by every navigation (each page renders its own
+     AppLayout), so its scroll offset has to be carried across by hand —
+     otherwise picking an item from the bottom of the Management menu scrolls
+     that whole part of the menu off screen. */
+  const sidebarScrollRef = usePersistentScroll<HTMLDivElement>("sidebar", {
+    activeSelector: '[data-active="true"]',
+  });
+
   // Management menus & routes are restricted to Owner and Manager staff roles.
   const canManage = ["owner", "manager"].includes(user?.staffRole ?? "");
 
@@ -2093,7 +2103,7 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
         </Link>
       </SidebarHeader>
 
-      <SidebarContent className="px-2 py-4">
+      <SidebarContent ref={sidebarScrollRef} className="px-2 py-4">
         <SidebarMenu>
           <NavLink href="/dashboard"  icon={LayoutDashboard} name="Dashboard" />
           <CollapsibleSection
