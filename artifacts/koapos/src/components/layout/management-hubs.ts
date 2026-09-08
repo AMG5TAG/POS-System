@@ -6,7 +6,7 @@ import {
   Boxes, Tag, Layers, LayoutTemplate, Printer, Cpu, HardDrive, Smartphone, Puzzle, Recycle, Calculator,
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, FolderSync, MessageSquare, Palette,
   LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon, Store, Paintbrush, KeyRound,
-  FolderOpen, ClipboardList,
+  FolderOpen, ClipboardList, CalendarRange,
 } from "lucide-react";
 
 /**
@@ -103,6 +103,7 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
           "/management/marketing-reports/reports/staff-leaderboard",
           "/management/marketing-reports/reports/product-performance",
         ] },
+      { name: "End of Week",    href: "/management/marketing-reports/end-of-week",    icon: CalendarRange },
       { name: "Analytics",      href: "/management/marketing-reports/analytics",      icon: Activity  },
       { name: "Referrals",      href: "/management/marketing-reports/referrals",      icon: UserPlus  },
       {

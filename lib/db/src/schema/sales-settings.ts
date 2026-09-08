@@ -57,6 +57,15 @@ export const salesSettingsTable = pgTable("sales_settings", {
   // (financial | rolling365)
   overviewYearMode:              text("overview_year_mode").notNull().default("financial"),
 
+  // ── End of Week defaults (Management → Marketing & Reports → End of Week) ──
+  // Whether PAYG withheld counts toward "cost to business" in the weekly
+  // employee-cost total. Default "false" — PAYG is withheld out of the wage, so
+  // adding it on top double-counts the same dollars. Merchants who budget on
+  // the gross figure (or who remit PAYG as a separate outgoing they want to see
+  // in the week) turn it on. An accounting convention, so it is per merchant
+  // rather than per week — weeks that disagree cannot be compared.
+  eowIncludeTaxInStaffCost:      text("eow_include_tax_in_staff_cost").notNull().default("false"),
+
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 });

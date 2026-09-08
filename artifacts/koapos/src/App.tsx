@@ -180,6 +180,7 @@ const ManagementReportsBasPage = lazyWithRetry(() => import("@/pages/app/managem
 const ManagementReportsVoidAuditPage = lazyWithRetry(() => import("@/pages/app/management-reports-void-audit"));
 const ManagementReportsMarginPage = lazyWithRetry(() => import("@/pages/app/management-reports-margin"));
 const ManagementDailyReportsPage = lazyWithRetry(() => import("@/pages/app/management-daily-reports"));
+const ManagementEndOfWeekPage = lazyWithRetry(() => import("@/pages/app/management-end-of-week"));
 const ManagementReportsZReportPage = lazyWithRetry(() => import("@/pages/app/management-reports-z-report"));
 const ManagementReportsStaffLeaderboardPage = lazyWithRetry(() => import("@/pages/app/management-reports-staff-leaderboard"));
 const ManagementReportsProductPerformancePage = lazyWithRetry(() => import("@/pages/app/management-reports-product-performance"));
@@ -645,6 +646,9 @@ function Router() {
       {/* Marketing & Reports */}
       <Route path="/management/marketing-reports/sales-overview">
         <ManagementProtectedRoute component={ManagementSalesPage} />
+      </Route>
+      <Route path="/management/marketing-reports/end-of-week">
+        <ManagementProtectedRoute component={ManagementEndOfWeekPage} />
       </Route>
       <Route path="/management/marketing-reports/analytics">
         <ManagementProtectedRoute component={ManagementMarketingAnalyticsPage} />

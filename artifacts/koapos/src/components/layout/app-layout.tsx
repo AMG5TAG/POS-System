@@ -10,7 +10,7 @@ import { useAppTheme } from "@/lib/app-theme";
 import { Button } from "@/components/ui/button";
 import {
   LayoutDashboard, ShoppingCart, Package, Users, Receipt,
-  Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock, Wallet,
+  Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock, CalendarRange, Wallet,
   Wrench, ChevronDown, LayoutGrid, Layers, ClipboardList, Clock,
   RotateCcw, Truck, Bookmark, Tag, Hash, AlertTriangle, History,
   FileText, Package2, ParkingCircle, Coins, TrendingUp,
@@ -280,6 +280,7 @@ const SEARCH_INDEX = [
   { label: "Reports · Profit & Loss",     href: "/management/marketing-reports/sales-overview#profit-loss",        icon: TrendingUp,    group: "Reports"    },
   { label: "Reports · Top Products",      href: "/management/marketing-reports/sales-overview#top-products",       icon: Boxes,         group: "Reports"    },
   { label: "Reports · Register Closures", href: "/management/marketing-reports/sales-overview#register-closures",  icon: Monitor,       group: "Reports"    },
+  { label: "Reports · End of Week",       href: "/management/marketing-reports/end-of-week",                     icon: CalendarRange, group: "Reports"    },
   { label: "Reports · BAS / GST",         href: "/management/marketing-reports/reports",                        icon: Receipt,       group: "Reports"    },
   { label: "Reports · Margin & Profit",   href: "/management/marketing-reports/reports/margin",                     icon: TrendingUp,    group: "Reports"    },
   { label: "Reports · Daily Closes",      href: "/management/marketing-reports/reports/daily",                        icon: ReceiptText,   group: "Reports"    },

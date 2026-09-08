@@ -338,6 +338,84 @@ the database are only rewritten by `scripts/backfill-phone-e164.ts`
 (dry-run by default, `--commit` to write, idempotent) — **not reversible**, the
 pre-backfill string is kept nowhere.
 
+### End of Week (banking & budgeting)
+
+Management › Marketing & Reports › End of Week is the weekly banking sheet:
+what was sold, what has to go to the bank, and what the week's staff cost.
+Default window is **Friday → Thursday**, and it is the last week that has
+*finished* — a merchant banking on Friday morning wants last week, not the
+half-week they are standing in. The range is editable (capped at 62 days).
+
+The computed half reads the **same report views the rest of Management does**
+(`view_daily_sales_summary`, `view_payment_method_breakdown`,
+`view_product_performance_ledger`), so a week here can never disagree with the
+Sales Overview or a Z-report over the same days — those views already span POS
+sales + paid invoices + completed laybys.
+
+`artifacts/api-server/src/lib/end-of-week.ts` holds the money rules with no `db`
+or `req` in sight, and `src/__tests__/end-of-week.test.ts` pins them. The route
+queries; the lib decides what the numbers mean. Four of those rules are
+load-bearing:
+
+- **The deposit is `cash counted − float`, and the count wins.** A counted drawer
+  is a fact; the ledger figure is a prediction of it. With no count the ledger
+  figure stands in and `countVariance` stays **null** — a `0` there would read as
+  "counted, and it balanced", which is a lie about a drawer nobody opened.
+- **Till purchases are deducted from the *expected* figure only.** Cash already
+  taken out of the drawer is cash the count will not see, so subtracting it from
+  a counted total would deduct it twice.
+- **`split` is never a banking bucket.** The POS records a split sale's legs
+  individually, so bucketing the parent as well banks the same money twice. Gift
+  cards, vouchers, store credit and loyalty are grouped as `nonBanking` — they
+  redeem a liability that was already paid for and move no new money.
+- **PAYG is shown but not added, unless the merchant says otherwise.** It is
+  withheld from wages, not paid on top, so counting it by default would inflate
+  the wage bill by the withheld amount every week. `staffCostTotal(row,
+  includeTax)` / `sumStaffCosts(rows, includeTax)` take the merchant's
+  convention from `sales_settings.eowIncludeTaxInStaffCost` (default `"false"` —
+  what the report did before the option existed), toggled on the Employee Costs
+  card. It is a **merchant** setting, not a field on the week: an accounting
+  convention that varied week to week would make weeks incomparable. The tax
+  column is reported either way; the option only moves whether it lands in
+  `total`. A finalised week keeps the total frozen in its snapshot, so flipping
+  it cannot restate anything already banked — reopening the week picks up the
+  new convention.
+
+Employee costs pre-fill from timesheet hours × the staff member's pay rate
+(with `loadingRate` on top), super at their own `superRate`, and dollar-value
+KPI rewards from `kpi_history` periods that **closed inside the week and were
+hit** — a KPI still running is not earned yet. Every cell is then editable, and
+`mergeStaffCosts` lets a saved row win outright over a later recompute; only
+`hours` refreshes, since it is read-only timesheet information. A saved row for
+a since-deactivated employee is kept — their wage was still a cost of that week.
+
+`end_of_week_reports` stores **only** the merchant-entered half (float retained,
+cash purchases, employee costs, counted/banked amounts, notes). The computed
+half is deliberately not stored: a stored copy would drift the moment a refund
+or backdated invoice landed. **Finalising** is the exception and the whole point
+— it writes a `snapshot` once, and a finalised week renders that instead of live
+figures, so a refund processed next Tuesday cannot change a week whose cash is
+already at the bank. Reopening drops the snapshot and keeps every input.
+
+Two subtleties worth keeping:
+
+- Drawer `cash_out` entries are pulled in as purchase lines **only on the first
+  open of a week** (`mergeCashPurchases`), because after that the saved row is
+  the record of what the merchant chose to keep — re-pulling would resurrect
+  deletions on every page load. The first save of *any* field is what creates
+  that row, so `PUT /end-of-week` seeds `cashPurchases` with the merged list
+  when the caller did not send one; otherwise editing the float would silently
+  drop the lines the page was already showing.
+- The float defaults to the **last** session opened per register in the week
+  (`DISTINCT ON (register_id) … ORDER BY opened_at DESC`), not the sum of every
+  session — the same physical float is counted into the drawer again each
+  morning, and summing it would inflate the float by a factor of the days traded.
+
+Adding the table is the standalone idempotent script
+`scripts/src/add-end-of-week-reports-table.ts` in the `db:push` chain, not
+`drizzle-kit push`, for the same reason every other `add-*-table` script exists:
+push would try to reconcile (and drop) the report views.
+
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.
 - Boolean fields are stored as text `"true"`/`"false"` (a Drizzle text-column limitation) — compare/serialize accordingly.
