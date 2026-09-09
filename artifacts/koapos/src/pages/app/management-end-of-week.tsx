@@ -197,22 +197,99 @@ function Kpi({ label, value, sub, icon: Icon, tone = "default", loading }: {
   );
 }
 
+/**
+ * A headline money panel — bigger and louder than a `Kpi` tile.
+ *
+ * Total GST collected and cost of goods sold are the two figures a merchant
+ * actually acts on at end of week (one is set aside for the BAS, the other is
+ * what the week's stock cost), so they get a panel each rather than a tile in
+ * the row: the number in display type, and the short sum that produced it
+ * underneath, so nobody has to reconcile it against the Trading Summary.
+ */
+function HeadlineFigure({ label, value, caption, icon: Icon, accent, rows, foot, loading }: {
+  label: string; value: string; caption: string;
+  icon: React.ComponentType<{ className?: string }>;
+  accent: "gst" | "cogs";
+  rows: { label: string; value: number; sign?: "minus"; strong?: boolean }[];
+  foot?: React.ReactNode;
+  loading?: boolean;
+}) {
+  const a = {
+    gst:  { card: "border-amber-300/70 dark:border-amber-800/70 bg-amber-50/60 dark:bg-amber-950/25",
+            chip: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
+            value: "text-amber-700 dark:text-amber-300" },
+    cogs: { card: "border-indigo-300/70 dark:border-indigo-800/70 bg-indigo-50/60 dark:bg-indigo-950/25",
+            chip: "bg-indigo-100 dark:bg-indigo-900/40 text-indigo-700 dark:text-indigo-300",
+            value: "text-indigo-700 dark:text-indigo-300" },
+  }[accent];
+  return (
+    <Card className={cn("border-2", a.card)}>
+      <CardContent className="pt-5 pb-4">
+        <div className="flex items-start gap-3">
+          <div className={cn("p-2 rounded-lg shrink-0", a.chip)}>
+            <Icon className="w-5 h-5" />
+          </div>
+          <div className="min-w-0 flex-1">
+            <p className="text-sm font-semibold uppercase tracking-wide text-muted-foreground">{label}</p>
+            {loading
+              ? <Skeleton className="h-9 w-40 mt-1" />
+              : <p className={cn("text-3xl sm:text-4xl font-bold tracking-tight tabular-nums mt-0.5", a.value)}>{value}</p>}
+            <p className="text-xs text-muted-foreground mt-1 leading-snug">{caption}</p>
+          </div>
+        </div>
+        <div className="mt-4 pt-3 border-t border-current/10 space-y-1">
+          {rows.map((r) => (
+            <div key={r.label} className="flex items-baseline justify-between gap-4">
+              <span className={cn("text-sm", r.strong ? "font-semibold" : "text-muted-foreground")}>
+                {r.sign === "minus" && <span className="mr-1">−</span>}{r.label}
+              </span>
+              <span className={cn("text-sm tabular-nums", r.strong ? "font-bold" : "text-muted-foreground")}>
+                {money(r.value)}
+              </span>
+            </div>
+          ))}
+        </div>
+        {foot && <p className="text-[11px] text-muted-foreground mt-3">{foot}</p>}
+      </CardContent>
+    </Card>
+  );
+}
+
 /** A labelled money row in the deposit calculation. */
-function CalcRow({ label, value, hint, sign, strong, muted }: {
+function CalcRow({ label, value, hint, sign, strong, muted, accent }: {
   label: string; value: number; hint?: string;
   sign?: "plus" | "minus"; strong?: boolean; muted?: boolean;
+  /** Tints the row so GST and COGS stand out of the running total they sit in. */
+  accent?: "gst" | "cogs";
 }) {
+  const accentClass = accent === "gst"
+    ? "text-amber-700 dark:text-amber-300"
+    : accent === "cogs" ? "text-indigo-700 dark:text-indigo-300" : "";
   return (
-    <div className={cn("flex items-baseline justify-between gap-4 py-1.5", strong && "border-t pt-2.5 mt-1")}>
+    <div className={cn(
+      "flex items-baseline justify-between gap-4 py-1.5",
+      strong && "border-t pt-2.5 mt-1",
+      accent && "-mx-2 px-2 rounded",
+      accent === "gst" && "bg-amber-50/70 dark:bg-amber-950/25",
+      accent === "cogs" && "bg-indigo-50/70 dark:bg-indigo-950/25",
+    )}>
       <div className="min-w-0">
-        <span className={cn("text-sm", strong ? "font-semibold" : muted ? "text-muted-foreground" : "")}>
-          {sign === "minus" && <span className="text-muted-foreground mr-1">−</span>}
-          {sign === "plus" && <span className="text-muted-foreground mr-1">+</span>}
+        <span className={cn(
+          "text-sm",
+          strong ? "font-semibold" : muted ? "text-muted-foreground" : "",
+          accent && cn("font-semibold", accentClass),
+        )}>
+          {sign === "minus" && <span className={cn("mr-1", !accent && "text-muted-foreground")}>−</span>}
+          {sign === "plus" && <span className={cn("mr-1", !accent && "text-muted-foreground")}>+</span>}
           {label}
         </span>
         {hint && <p className="text-[11px] text-muted-foreground leading-tight">{hint}</p>}
       </div>
-      <span className={cn("tabular-nums whitespace-nowrap", strong ? "text-lg font-bold" : "text-sm font-medium")}>
+      <span className={cn(
+        "tabular-nums whitespace-nowrap",
+        strong ? "text-lg font-bold" : "text-sm font-medium",
+        accent && cn("font-bold", accentClass),
+      )}>
         {money(value)}
       </span>
     </div>
@@ -405,6 +482,13 @@ export default function ManagementEndOfWeekPage() {
     setEndDate(w.endDate);
   };
 
+  /* GST charged on the week's sales excludes refunds — `tax_collected` in
+   * `view_daily_sales_summary` counts completed sales only — so the figure to
+   * set aside is that less the GST handed back on the week's refunds, which the
+   * refund breakdown carries per method. */
+  const gstRefunded = r2((data?.refunds.byMethod ?? []).reduce((t, m) => t + (Number(m.tax) || 0), 0));
+  const netGst = r2((data?.sales.taxCollected ?? 0) - gstRefunded);
+
   /* ── CSV export ───────────────────────────────────────────────────────── */
   const exportCsv = () => {
     if (!data) return;
@@ -421,9 +505,12 @@ export default function ManagementEndOfWeekPage() {
       ["Refunds", data.sales.refundTotal],
       ["Net Sales", data.sales.netSales],
       ["Sales ex GST", data.sales.exGstRevenue],
-      ["Total Tax (GST)", data.sales.taxCollected],
-      ["Cost of Goods Sold", data.sales.totalCogs],
+      ["TOTAL GST COLLECTED", data.sales.taxCollected],
+      ["Less GST refunded", -gstRefunded],
+      ["Net GST to set aside", netGst],
+      ["COST OF GOODS SOLD", data.sales.totalCogs],
       ["Gross Profit", data.sales.grossProfit],
+      ["Gross Margin %", data.sales.grossMarginPct],
       ["Payment surcharges absorbed", data.sales.surchargeCost],
       ["Net Profit", data.sales.netProfit],
       ["Transactions", data.sales.transactionCount],
@@ -580,11 +667,10 @@ export default function ManagementEndOfWeekPage() {
           </div>
         )}
 
-        {/* Headline figures */}
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-4">
+        {/* Headline figures. GST and COGS are deliberately not tiles here — they
+            get their own panels below, where the sum behind each one fits. */}
+        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
           <Kpi label="Total Sold" value={money(s?.grossRevenue)} sub={`${s?.transactionCount ?? 0} sales · avg ${money(s?.avgSale)}`} icon={TrendingUp} loading={isLoading} />
-          <Kpi label="Total Tax (GST)" value={money(s?.taxCollected)} sub={`Ex GST ${money(s?.exGstRevenue)}`} icon={Receipt} loading={isLoading} />
-          <Kpi label="Cost of Goods" value={money(s?.totalCogs)} sub={`Margin ${(s?.grossMarginPct ?? 0).toFixed(1)}%`} icon={Package} loading={isLoading} />
           <Kpi label="Net Profit" value={money(s?.netProfit)} sub="Ex GST less COGS & fees" icon={TrendingUp} tone={(s?.netProfit ?? 0) >= 0 ? "good" : "bad"} loading={isLoading} />
           <Kpi
             label="Employee Costs"
@@ -600,6 +686,39 @@ export default function ManagementEndOfWeekPage() {
             icon={Coins}
             tone={(data?.profitAfterStaff ?? 0) >= 0 ? "good" : "bad"}
             loading={isLoading}
+          />
+        </div>
+
+        {/* The two figures the week is actually acted on: what is owed to the
+            ATO, and what the stock sold this week cost to buy. */}
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+          <HeadlineFigure
+            label="Total GST Collected"
+            value={money(s?.taxCollected)}
+            caption="GST charged across POS sales, paid invoices and completed laybys this week. Set it aside for the BAS."
+            icon={Receipt}
+            accent="gst"
+            loading={isLoading}
+            rows={[
+              { label: "GST on sales", value: s?.taxCollected ?? 0 },
+              { label: "GST refunded", value: gstRefunded, sign: "minus" },
+              { label: "Net GST to set aside", value: netGst, strong: true },
+            ]}
+            foot={`Sales ex GST ${money(s?.exGstRevenue)} of ${money(s?.grossRevenue)} taken`}
+          />
+          <HeadlineFigure
+            label="Cost of Goods Sold"
+            value={money(s?.totalCogs)}
+            caption="What the stock sold this week cost to buy — the cost price on every POS, invoice and layby line."
+            icon={Package}
+            accent="cogs"
+            loading={isLoading}
+            rows={[
+              { label: "Sales ex GST", value: s?.exGstRevenue ?? 0 },
+              { label: "Cost of goods sold", value: s?.totalCogs ?? 0, sign: "minus" },
+              { label: "Gross profit", value: s?.grossProfit ?? 0, strong: true },
+            ]}
+            foot={`Gross margin ${(s?.grossMarginPct ?? 0).toFixed(1)}% · before payment fees and employee costs`}
           />
         </div>
 
@@ -986,9 +1105,11 @@ export default function ManagementEndOfWeekPage() {
               <CalcRow label="Discounts given" value={s?.discountTotal ?? 0} sign="minus" muted />
               <CalcRow label="Refunds" value={s?.refundTotal ?? 0} sign="minus" muted hint={`${s?.refundCount ?? 0} refunded sale${s?.refundCount === 1 ? "" : "s"}`} />
               <CalcRow label="Net sales" value={s?.netSales ?? 0} />
-              <CalcRow label="GST collected" value={s?.taxCollected ?? 0} sign="minus" muted />
+              <CalcRow label="Total GST collected" value={s?.taxCollected ?? 0} sign="minus" accent="gst"
+                       hint={gstRefunded > 0 ? `${money(netGst)} net of ${money(gstRefunded)} refunded` : undefined} />
               <CalcRow label="Sales ex GST" value={s?.exGstRevenue ?? 0} />
-              <CalcRow label="Cost of goods sold" value={s?.totalCogs ?? 0} sign="minus" muted />
+              <CalcRow label="Cost of goods sold" value={s?.totalCogs ?? 0} sign="minus" accent="cogs"
+                       hint={`Gross margin ${(s?.grossMarginPct ?? 0).toFixed(1)}%`} />
               <CalcRow label="Gross profit" value={s?.grossProfit ?? 0} />
               {(s?.surchargeCost ?? 0) > 0 && (
                 <CalcRow label="Payment fees absorbed" value={s?.surchargeCost ?? 0} sign="minus" muted />
@@ -1056,8 +1177,8 @@ export default function ManagementEndOfWeekPage() {
                   <TableRow>
                     <TableHead>Day</TableHead>
                     <TableHead className="text-right">Sales</TableHead>
-                    <TableHead className="text-right">GST</TableHead>
-                    <TableHead className="text-right">COGS</TableHead>
+                    <TableHead className="text-right text-amber-700 dark:text-amber-300">GST</TableHead>
+                    <TableHead className="text-right text-indigo-700 dark:text-indigo-300">COGS</TableHead>
                     <TableHead className="text-right">Refunds</TableHead>
                     <TableHead className="text-right">Net profit</TableHead>
                     <TableHead className="text-right">Sales #</TableHead>
@@ -1071,13 +1192,24 @@ export default function ManagementEndOfWeekPage() {
                     <TableRow key={d.date}>
                       <TableCell className="font-medium whitespace-nowrap">{dayLabel(d.date)}</TableCell>
                       <TableCell className="text-right tabular-nums">{money(d.grossRevenue)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{money(d.taxCollected)}</TableCell>
-                      <TableCell className="text-right tabular-nums text-muted-foreground">{money(d.totalCogs)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium text-amber-700 dark:text-amber-300">{money(d.taxCollected)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-medium text-indigo-700 dark:text-indigo-300">{money(d.totalCogs)}</TableCell>
                       <TableCell className="text-right tabular-nums text-muted-foreground">{d.refundTotal ? money(d.refundTotal) : "—"}</TableCell>
                       <TableCell className={cn("text-right tabular-nums font-medium", d.netProfit < 0 && "text-red-600 dark:text-red-400")}>{money(d.netProfit)}</TableCell>
                       <TableCell className="text-right tabular-nums">{d.transactionCount}</TableCell>
                     </TableRow>
                   ))}
+                  {(s?.dailyBreakdown.length ?? 0) > 0 && (
+                    <TableRow className="border-t-2 bg-muted/40">
+                      <TableCell className="font-semibold">Week</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{money(s?.grossRevenue)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-bold text-amber-700 dark:text-amber-300">{money(s?.taxCollected)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-bold text-indigo-700 dark:text-indigo-300">{money(s?.totalCogs)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{s?.refundTotal ? money(s?.refundTotal) : "—"}</TableCell>
+                      <TableCell className={cn("text-right tabular-nums font-bold", (s?.netProfit ?? 0) < 0 && "text-red-600 dark:text-red-400")}>{money(s?.netProfit)}</TableCell>
+                      <TableCell className="text-right tabular-nums font-semibold">{s?.transactionCount ?? 0}</TableCell>
+                    </TableRow>
+                  )}
                 </TableBody>
               </Table>
             </CardContent>
