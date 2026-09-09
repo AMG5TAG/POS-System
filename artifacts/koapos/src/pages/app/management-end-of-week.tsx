@@ -200,8 +200,8 @@ function HeadlineFigure({ label, value, caption, icon: Icon, accent, rows, foot,
             value: "text-indigo-700 dark:text-indigo-300" },
   }[accent];
   return (
-    <Card className={cn("border-2", a.card)}>
-      <CardContent className="pt-5 pb-4">
+    <Card className={cn("border-2 h-full flex flex-col", a.card)}>
+      <CardContent className="pt-5 pb-4 flex-1 flex flex-col">
         <div className="flex items-start gap-3">
           <div className={cn("p-2 rounded-lg shrink-0", a.chip)}>
             <Icon className="w-5 h-5" />
@@ -214,7 +214,8 @@ function HeadlineFigure({ label, value, caption, icon: Icon, accent, rows, foot,
             <p className="text-xs text-muted-foreground mt-1 leading-snug">{caption}</p>
           </div>
         </div>
-        <div className="mt-4 pt-3 border-t border-current/10 space-y-1">
+        <div className="mt-4 flex-1" />
+        <div className="pt-3 border-t border-current/10 space-y-1">
           {rows.map((r) => (
             <div key={r.label} className="flex items-baseline justify-between gap-4">
               <span className={cn("text-sm", r.strong ? "font-semibold" : "text-muted-foreground")}>
@@ -647,7 +648,7 @@ export default function ManagementEndOfWeekPage() {
         {/* The three figures the week is actually acted on: what the staff cost,
             what is owed to the ATO, and what the stock sold this week cost to
             buy. Everything else is a row further down the page. */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           <HeadlineFigure
             label="Employee Costs"
             value={money(totals?.total)}

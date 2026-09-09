@@ -817,8 +817,8 @@ export default function ServiceJobsPage() {
                             </td>
 
                             {/* Blank unless the job is awaiting pickup: elsewhere
-                                "not called" is not outstanding work, and a dash on
-                                every other row would read as one. An empty box on a
+                                "not called" is not outstanding work, and a cross on
+                                every other row would read as one. A cross on a
                                 waiting job is the whole point — it is the customer
                                 nobody has rung yet. */}
                             <td className="px-3 py-3 whitespace-nowrap">
@@ -834,8 +834,10 @@ export default function ServiceJobsPage() {
                                 <span
                                   title="Customer not called yet"
                                   aria-label="Customer not called yet"
-                                  className="inline-block h-4 w-4 rounded-sm border border-muted-foreground/40"
-                                />
+                                  className="inline-flex"
+                                >
+                                  <X className="w-4 h-4 text-muted-foreground/60" />
+                                </span>
                               )}
                             </td>
 
