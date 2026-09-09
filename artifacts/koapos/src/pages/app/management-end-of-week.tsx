@@ -170,51 +170,28 @@ const money = (v: number | null | undefined) => formatCurrency(Number(v ?? 0));
 
 /* ─── Small building blocks ──────────────────────────────────────────────── */
 
-function Kpi({ label, value, sub, icon: Icon, tone = "default", loading }: {
-  label: string; value: string; sub?: string;
-  icon: React.ComponentType<{ className?: string }>;
-  tone?: "default" | "good" | "warn" | "bad"; loading?: boolean;
-}) {
-  const toneClass = {
-    default: "text-foreground",
-    good: "text-emerald-600 dark:text-emerald-400",
-    warn: "text-amber-600 dark:text-amber-400",
-    bad: "text-red-600 dark:text-red-400",
-  }[tone];
-  return (
-    <Card>
-      <CardContent className="pt-4 pb-3">
-        <div className="flex items-center justify-between mb-1">
-          <p className="text-xs text-muted-foreground font-medium">{label}</p>
-          <Icon className="w-3.5 h-3.5 text-muted-foreground" />
-        </div>
-        {loading
-          ? <Skeleton className="h-6 w-24" />
-          : <p className={cn("text-lg font-bold tracking-tight", toneClass)}>{value}</p>}
-        {sub && <p className="text-[11px] text-muted-foreground mt-0.5">{sub}</p>}
-      </CardContent>
-    </Card>
-  );
-}
-
 /**
- * A headline money panel — bigger and louder than a `Kpi` tile.
+ * A headline money panel — the page's only summary tile, and deliberately loud.
  *
- * Total GST collected and cost of goods sold are the two figures a merchant
- * actually acts on at end of week (one is set aside for the BAS, the other is
- * what the week's stock cost), so they get a panel each rather than a tile in
- * the row: the number in display type, and the short sum that produced it
+ * Employee costs, total GST collected and cost of goods sold are the three
+ * figures a merchant actually acts on at end of week: one is a bill to pay, one
+ * is set aside for the BAS, one is what the week's stock cost. A row of small
+ * KPI tiles gave them the same weight as the average sale, so they get a panel
+ * each instead — the number in display type, and the short sum that produced it
  * underneath, so nobody has to reconcile it against the Trading Summary.
  */
 function HeadlineFigure({ label, value, caption, icon: Icon, accent, rows, foot, loading }: {
   label: string; value: string; caption: string;
   icon: React.ComponentType<{ className?: string }>;
-  accent: "gst" | "cogs";
+  accent: "staff" | "gst" | "cogs";
   rows: { label: string; value: number; sign?: "minus"; strong?: boolean }[];
   foot?: React.ReactNode;
   loading?: boolean;
 }) {
   const a = {
+    staff: { card: "border-pink-300/70 dark:border-pink-800/70 bg-pink-50/60 dark:bg-pink-950/25",
+             chip: "bg-pink-100 dark:bg-pink-900/40 text-pink-700 dark:text-pink-300",
+             value: "text-pink-700 dark:text-pink-300" },
     gst:  { card: "border-amber-300/70 dark:border-amber-800/70 bg-amber-50/60 dark:bg-amber-950/25",
             chip: "bg-amber-100 dark:bg-amber-900/40 text-amber-700 dark:text-amber-300",
             value: "text-amber-700 dark:text-amber-300" },
@@ -667,31 +644,24 @@ export default function ManagementEndOfWeekPage() {
           </div>
         )}
 
-        {/* Headline figures. GST and COGS are deliberately not tiles here — they
-            get their own panels below, where the sum behind each one fits. */}
-        <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-4 gap-4">
-          <Kpi label="Total Sold" value={money(s?.grossRevenue)} sub={`${s?.transactionCount ?? 0} sales · avg ${money(s?.avgSale)}`} icon={TrendingUp} loading={isLoading} />
-          <Kpi label="Net Profit" value={money(s?.netProfit)} sub="Ex GST less COGS & fees" icon={TrendingUp} tone={(s?.netProfit ?? 0) >= 0 ? "good" : "bad"} loading={isLoading} />
-          <Kpi
+        {/* The three figures the week is actually acted on: what the staff cost,
+            what is owed to the ATO, and what the stock sold this week cost to
+            buy. Everything else is a row further down the page. */}
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 items-start">
+          <HeadlineFigure
             label="Employee Costs"
             value={money(totals?.total)}
-            sub={`${(totals?.hours ?? 0).toFixed(1)} hrs · ${includeTax ? "incl. PAYG" : "excl. PAYG"}`}
+            caption={`What the week's staff cost the business — timesheet hours at each person's rate, ${includeTax ? "PAYG included" : "PAYG excluded, since it is withheld from the wage"}.`}
             icon={Users}
+            accent="staff"
             loading={isLoading}
+            rows={[
+              { label: "Wages", value: totals?.wages ?? 0 },
+              { label: "Super, bonuses & KPI", value: r2((totals?.superannuation ?? 0) + (totals?.bonus ?? 0) + (totals?.extras ?? 0) + (totals?.kpi ?? 0)) },
+              { label: "Cost to business", value: totals?.total ?? 0, strong: true },
+            ]}
+            foot={`${(totals?.hours ?? 0).toFixed(1)} hrs · PAYG ${money(totals?.tax)} ${includeTax ? "included above" : "withheld, not added"} · profit after staff ${money(data?.profitAfterStaff)}`}
           />
-          <Kpi
-            label="Profit After Staff"
-            value={money(data?.profitAfterStaff)}
-            sub="Net profit less employee costs"
-            icon={Coins}
-            tone={(data?.profitAfterStaff ?? 0) >= 0 ? "good" : "bad"}
-            loading={isLoading}
-          />
-        </div>
-
-        {/* The two figures the week is actually acted on: what is owed to the
-            ATO, and what the stock sold this week cost to buy. */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
           <HeadlineFigure
             label="Total GST Collected"
             value={money(s?.taxCollected)}

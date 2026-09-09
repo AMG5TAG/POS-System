@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, serviceJobsTable, customersTable, merchantsTable } from "@workspace/db";
-import { eq, and, desc, inArray } from "drizzle-orm";
+import { db, serviceJobsTable, customersTable, merchantsTable, quotesTable } from "@workspace/db";
+import { eq, and, desc, inArray, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
@@ -16,8 +16,19 @@ const router: IRouter = Router();
 
 interface CustomerInfo { name: string | null; phone: string | null; email: string | null; portalToken: string | null; }
 
-function formatJob(job: typeof serviceJobsTable.$inferSelect, customer: CustomerInfo | null) {
+/**
+ * `hasQuote` is only passed by the list handler, which is the one screen that
+ * shows a quoted / not-quoted column and can answer it for every job in a
+ * single grouped query. Everywhere else the field is left off rather than
+ * charge each single-job response a query nothing reads.
+ */
+function formatJob(
+  job: typeof serviceJobsTable.$inferSelect,
+  customer: CustomerInfo | null,
+  hasQuote?: boolean,
+) {
   return {
+    ...(hasQuote !== undefined && { hasQuote }),
     id: job.id,
     merchantId: job.merchantId,
     customerId: job.customerId ?? null,
@@ -94,7 +105,22 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
     }])
   );
 
-  res.json(jobs.map((j) => formatJob(j, j.customerId ? (customerMap.get(j.customerId) ?? null) : null)));
+  // Which jobs have been quoted. Any quote counts, whatever its status — a
+  // declined or expired quote still means the customer was given a price, and
+  // the column answers "has this been quoted yet", not "is a quote live".
+  const quotedJobIds = new Set<number>(
+    (await db
+      .selectDistinct({ serviceJobId: quotesTable.serviceJobId })
+      .from(quotesTable)
+      .where(and(eq(quotesTable.merchantId, merchantId), isNotNull(quotesTable.serviceJobId))))
+      .flatMap((q) => (q.serviceJobId == null ? [] : [q.serviceJobId])),
+  );
+
+  res.json(jobs.map((j) => formatJob(
+    j,
+    j.customerId ? (customerMap.get(j.customerId) ?? null) : null,
+    quotedJobIds.has(j.id),
+  )));
 });
 
 router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {

@@ -35,6 +35,7 @@ import {
   History,
   Search,
   Check,
+  X,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -85,7 +86,7 @@ function formatDate(d: string) {
 
 /* ─── Sorting ────────────────────────────────────────────────────────────── */
 
-type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "status" | "deviceType" | "description";
+type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "status" | "deviceType" | "description" | "quoted";
 type SortDir = "asc" | "desc";
 
 function getValue(job: ServiceJob, key: SortKey): string {
@@ -97,6 +98,7 @@ function getValue(job: ServiceJob, key: SortKey): string {
     case "status":       return job.status ?? "";
     case "deviceType":   return (job.deviceType ?? "").toLowerCase();
     case "description":  return (job.workDescription ?? job.deviceDescription ?? "").toLowerCase();
+    case "quoted":       return job.hasQuote ? "1" : "0"; // quoted jobs sort first when desc
   }
 }
 
@@ -732,6 +734,7 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Status",      "status")} />
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
+                        <SortableHeader {...sh("Quoted",      "quoted")} />
                         <th className="px-3 py-3 text-left font-medium select-none">Called</th>
                         <th className="px-3 py-3" />
                       </tr>
@@ -796,6 +799,21 @@ export default function ServiceJobsPage() {
                               <span className="text-xs text-foreground line-clamp-1">
                                 {job.workDescription || job.deviceDescription || "—"}
                               </span>
+                            </td>
+
+                            {/* Whether the customer has been given a price. Any
+                                quote counts, whatever its status — a declined or
+                                expired quote still means they were quoted. */}
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              {job.hasQuote ? (
+                                <span title="Quoted" aria-label="Quoted" className="inline-flex">
+                                  <Check className="w-4 h-4 text-emerald-600" />
+                                </span>
+                              ) : (
+                                <span title="Not quoted" aria-label="Not quoted" className="inline-flex">
+                                  <X className="w-4 h-4 text-muted-foreground/60" />
+                                </span>
+                              )}
                             </td>
 
                             {/* Blank unless the job is awaiting pickup: elsewhere

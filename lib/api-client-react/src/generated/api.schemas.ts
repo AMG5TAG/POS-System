@@ -1844,6 +1844,8 @@ export interface ServiceJob {
   returnAddress?: string | null;
   /** @nullable */
   notes?: string | null;
+  /** True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET /service-jobs), which is the one screen that shows a quoted/not-quoted column; absent elsewhere rather than run a per-job query nothing reads. */
+  hasQuote?: boolean;
   createdAt: string;
   updatedAt: string;
 }

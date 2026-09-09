@@ -1460,6 +1460,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "returnTracking": zod.string().nullish(),
   "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -3732,6 +3733,7 @@ export const ListServiceJobsResponseItem = zod.object({
   "returnTracking": zod.string().nullish(),
   "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -3859,6 +3861,7 @@ export const UpdateServiceJobResponse = zod.object({
   "returnTracking": zod.string().nullish(),
   "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
+  "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

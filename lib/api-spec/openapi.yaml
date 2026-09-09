@@ -12346,6 +12346,13 @@ components:
           type: ["string", "null"]
         notes:
           type: ["string", "null"]
+        hasQuote:
+          type: boolean
+          description: >-
+            True when at least one quote has been raised against this job, in any
+            status. Computed only on the list endpoint (GET /service-jobs), which
+            is the one screen that shows a quoted/not-quoted column; absent
+            elsewhere rather than run a per-job query nothing reads.
         createdAt:
           type: string
           format: date-time
