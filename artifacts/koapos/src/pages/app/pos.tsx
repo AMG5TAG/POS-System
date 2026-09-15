@@ -162,6 +162,13 @@ type ModifierGroup = { id: number; name: string; isRequired: boolean; minSelecti
    invites double-billing or ringing up a price the customer refused. */
 const IMPORTABLE_QUOTE_STATUSES = new Set(["draft", "sent", "accepted"]);
 
+/* A completed service job or appointment is treated as already paid, so the till
+   never offers one for linking — ringing it up again is charging the customer a
+   second time for work that was settled when it was closed. Every other status
+   is still in flight and therefore linkable. This filters the picker only: a
+   held sale that was linked before the job closed keeps its link on resume. */
+const LINKABLE_SERVICE_STATUS = (status?: string | null) => status !== "completed";
+
 type CartItem = {
   product: Product;
   quantity: number;
@@ -977,7 +984,7 @@ export default function POSPage() {
   /* Filter the full service-job / appointment lists by the link-dialog search. */
   const linkQuery = linkSearch.trim().toLowerCase();
   const filteredServiceJobs = useMemo(() => {
-    const all = (serviceJobs as ServiceJob[] | undefined) ?? [];
+    const all = ((serviceJobs as ServiceJob[] | undefined) ?? []).filter((sj) => LINKABLE_SERVICE_STATUS(sj.status));
     if (!linkQuery) return all;
     return all.filter((sj) =>
       [sj.jobNumber, sj.deviceType, sj.deviceDescription, sj.status, sj.customerName]
@@ -985,7 +992,7 @@ export default function POSPage() {
     );
   }, [serviceJobs, linkQuery]);
   const filteredAppointments = useMemo(() => {
-    const all = (appointments as Appointment[] | undefined) ?? [];
+    const all = ((appointments as Appointment[] | undefined) ?? []).filter((apt) => LINKABLE_SERVICE_STATUS(apt.status));
     if (!linkQuery) return all;
     return all.filter((apt) =>
       [apt.id, apt.title, apt.customerName, apt.scheduledAt && new Date(apt.scheduledAt).toLocaleString()]
@@ -5137,7 +5144,7 @@ export default function POSPage() {
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Service Jobs</p>
               <ScrollArea className={cn("max-h-44 border rounded-lg", SCROLL_AREA_TRUNCATE_FIX)}>
                 {filteredServiceJobs.length === 0
-                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No service jobs match your search." : "No service jobs found."}</div>
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No open service jobs match your search." : "No open service jobs. Completed jobs are already paid and can\u2019t be linked."}</div>
                   : <div className="divide-y">{filteredServiceJobs.map(sj => (
                       <button key={sj.id} onClick={() => linkService(sj)}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedService?.id === sj.id && "bg-primary/10 text-primary")}>
@@ -5155,7 +5162,7 @@ export default function POSPage() {
               <p className="text-xs font-semibold text-muted-foreground mb-2 uppercase tracking-wide">Appointments</p>
               <ScrollArea className={cn("max-h-44 border rounded-lg", SCROLL_AREA_TRUNCATE_FIX)}>
                 {filteredAppointments.length === 0
-                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No appointments match your search." : "No appointments found."}</div>
+                  ? <div className="text-center py-6 text-muted-foreground text-sm">{linkQuery ? "No open appointments match your search." : "No open appointments. Completed appointments are already paid and can\u2019t be linked."}</div>
                   : <div className="divide-y">{filteredAppointments.map(apt => (
                       <button key={apt.id} onClick={() => linkAppointment(apt)}
                         className={cn("w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors", linkedAppointment?.id === apt.id && "bg-primary/10 text-primary")}>
