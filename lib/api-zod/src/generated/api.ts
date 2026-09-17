@@ -1461,6 +1461,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
+  "quoteTotal": zod.number().nullish().describe('What the job\'s most recent quote came to, or null when it has never been quoted. The latest quote rather than the sum of every quote on the job: a job\'s quote is revised in place and re-raised once one is converted or declined, so summing them would add a superseded price to the one that replaced it. Computed only on the list endpoint, alongside hasQuote.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })),
@@ -3735,6 +3736,7 @@ export const ListServiceJobsResponseItem = zod.object({
   "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
+  "quoteTotal": zod.number().nullish().describe('What the job\'s most recent quote came to, or null when it has never been quoted. The latest quote rather than the sum of every quote on the job: a job\'s quote is revised in place and re-raised once one is converted or declined, so summing them would add a superseded price to the one that replaced it. Computed only on the list endpoint, alongside hasQuote.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })
@@ -3863,6 +3865,7 @@ export const UpdateServiceJobResponse = zod.object({
   "returnAddress": zod.string().nullish(),
   "notes": zod.string().nullish(),
   "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
+  "quoteTotal": zod.number().nullish().describe('What the job\'s most recent quote came to, or null when it has never been quoted. The latest quote rather than the sum of every quote on the job: a job\'s quote is revised in place and re-raised once one is converted or declined, so summing them would add a superseded price to the one that replaced it. Computed only on the list endpoint, alongside hasQuote.'),
   "createdAt": zod.coerce.date(),
   "updatedAt": zod.coerce.date()
 })

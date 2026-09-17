@@ -11,24 +11,25 @@ import { sendSms } from "../services/sms";
 import { customerPortalUrl } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
 import { getServiceWarrantyDefaults } from "./service-settings";
+import { summariseJobQuotes, NO_QUOTE } from "../lib/service-job-quotes";
 
 const router: IRouter = Router();
 
 interface CustomerInfo { name: string | null; phone: string | null; email: string | null; portalToken: string | null; }
 
 /**
- * `hasQuote` is only passed by the list handler, which is the one screen that
- * shows a quoted / not-quoted column and can answer it for every job in a
- * single grouped query. Everywhere else the field is left off rather than
- * charge each single-job response a query nothing reads.
+ * `hasQuote` / `quoteTotal` are only passed by the list handler, which is the
+ * one screen that shows a quoted column and its money, and can answer both for
+ * every job in a single query. Everywhere else the fields are left off rather
+ * than charge each single-job response a query nothing reads.
  */
 function formatJob(
   job: typeof serviceJobsTable.$inferSelect,
   customer: CustomerInfo | null,
-  hasQuote?: boolean,
+  quote?: { hasQuote: boolean; quoteTotal: number | null },
 ) {
   return {
-    ...(hasQuote !== undefined && { hasQuote }),
+    ...(quote !== undefined && { hasQuote: quote.hasQuote, quoteTotal: quote.quoteTotal }),
     id: job.id,
     merchantId: job.merchantId,
     customerId: job.customerId ?? null,
@@ -105,21 +106,28 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
     }])
   );
 
-  // Which jobs have been quoted. Any quote counts, whatever its status — a
-  // declined or expired quote still means the customer was given a price, and
-  // the column answers "has this been quoted yet", not "is a quote live".
-  const quotedJobIds = new Set<number>(
-    (await db
-      .selectDistinct({ serviceJobId: quotesTable.serviceJobId })
+  // Which jobs have been quoted, and for how much. Any quote counts, whatever
+  // its status — a declined or expired quote still means the customer was given
+  // a price, and the column answers "has this been quoted yet", not "is a quote
+  // live".
+  //
+  // The money shown is the MOST RECENT quote's total, not the sum of every
+  // quote on the job: the panel revises a job's quote in place and raises a new
+  // row once the last one is converted or declined, so summing them would add a
+  // superseded price to the one that replaced it. Newest first, keep the first
+  // one seen per job.
+  const jobQuotes = summariseJobQuotes(
+    await db
+      .select({ serviceJobId: quotesTable.serviceJobId, total: quotesTable.total })
       .from(quotesTable)
-      .where(and(eq(quotesTable.merchantId, merchantId), isNotNull(quotesTable.serviceJobId))))
-      .flatMap((q) => (q.serviceJobId == null ? [] : [q.serviceJobId])),
+      .where(and(eq(quotesTable.merchantId, merchantId), isNotNull(quotesTable.serviceJobId)))
+      .orderBy(desc(quotesTable.createdAt), desc(quotesTable.id)),
   );
 
   res.json(jobs.map((j) => formatJob(
     j,
     j.customerId ? (customerMap.get(j.customerId) ?? null) : null,
-    quotedJobIds.has(j.id),
+    jobQuotes.get(j.id) ?? NO_QUOTE,
   )));
 });
 

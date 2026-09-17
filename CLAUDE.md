@@ -312,6 +312,17 @@ pins that.
 The section is gated by `showQuote` in `service_settings`, like every other
 service job section (Management › Invoices & Services › Service Options).
 
+The jobs list shows what each job was quoted (`quoteTotal`, beside the
+quoted/not-quoted tick) and totals the column in a footer row. Both come from
+`GET /service-jobs` only — one query for every job, rather than a per-job query
+on responses nothing reads. The rule is in `lib/service-job-quotes.ts`, away
+from `db` like the End of Week money rules, and pinned by
+`service-job-quotes.test.ts`: the figure is the **most recent** quote's total,
+never the sum of the job's quotes. The panel revises a job's quote in place and
+only raises a new row once the last is converted or declined, so summing them
+would add a superseded price to the one that replaced it. The footer sums the
+rows actually on screen, so it follows the tab and the filters.
+
 ### Phone numbers
 
 Phone numbers are stored in **E.164** — `+61412345678` — whatever was typed.

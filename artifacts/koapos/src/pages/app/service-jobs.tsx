@@ -39,7 +39,7 @@ import {
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
-import { cn } from "@/lib/utils";
+import { cn, formatCurrency } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
@@ -86,10 +86,10 @@ function formatDate(d: string) {
 
 /* ─── Sorting ────────────────────────────────────────────────────────────── */
 
-type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "status" | "deviceType" | "description" | "quoted";
+type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "status" | "deviceType" | "description" | "quoted" | "quoteTotal";
 type SortDir = "asc" | "desc";
 
-function getValue(job: ServiceJob, key: SortKey): string {
+function getValue(job: ServiceJob, key: SortKey): string | number {
   switch (key) {
     case "jobNumber":    return job.jobNumber ?? "";
     case "priority":     return job.isCritical ? "1" : "0"; // critical sorts first when desc
@@ -99,6 +99,9 @@ function getValue(job: ServiceJob, key: SortKey): string {
     case "deviceType":   return (job.deviceType ?? "").toLowerCase();
     case "description":  return (job.workDescription ?? job.deviceDescription ?? "").toLowerCase();
     case "quoted":       return job.hasQuote ? "1" : "0"; // quoted jobs sort first when desc
+    // Money sorts numerically, or $370 would come before $90. An unquoted job
+    // is -1 so it sits below every quoted one, including a $0 quote.
+    case "quoteTotal":   return job.quoteTotal ?? -1;
   }
 }
 
@@ -108,7 +111,9 @@ function sortJobs(jobs: ServiceJob[], key: SortKey, dir: SortDir): ServiceJob[] 
   const compare = (a: ServiceJob, b: ServiceJob) => {
     const av = getValue(a, key);
     const bv = getValue(b, key);
-    const result = av < bv ? -1 : av > bv ? 1 : 0;
+    const result = typeof av === "number" && typeof bv === "number"
+      ? av - bv
+      : String(av) < String(bv) ? -1 : String(av) > String(bv) ? 1 : 0;
     return dir === "asc" ? result : -result;
   };
   return [...jobs].sort(compare);
@@ -520,6 +525,14 @@ export default function ServiceJobsPage() {
   /* Sort */
   const sorted = sortJobs(filtered, activeSortKey, sortDir);
 
+  /* The quote column's footer. Summed over the rows actually on screen, so the
+     figure always matches the column above it — change the tab or the filters
+     and the total follows. Jobs that were never quoted contribute nothing and
+     are not counted. */
+  const quotedJobs = sorted.filter((j) => j.quoteTotal != null);
+  const quotedCount = quotedJobs.length;
+  const quotedSum = quotedJobs.reduce((s, j) => s + (j.quoteTotal ?? 0), 0);
+
   /* Column header click handler */
   const handleSort = useCallback((key: SortKey) => {
     setSortKey((prev) => {
@@ -735,6 +748,7 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
                         <SortableHeader {...sh("Quoted",      "quoted")} />
+                        <SortableHeader {...sh("Quote",       "quoteTotal", "text-right")} />
                         <th className="px-3 py-3 text-left font-medium select-none">Called</th>
                         <th className="px-3 py-3" />
                       </tr>
@@ -816,6 +830,15 @@ export default function ServiceJobsPage() {
                               )}
                             </td>
 
+                            {/* What the customer was quoted. Blank rather than
+                                $0.00 when there is no quote — a dash reads as
+                                "not priced", a zero as "priced at nothing". */}
+                            <td className="px-3 py-3 whitespace-nowrap text-right tabular-nums text-xs">
+                              {job.quoteTotal != null
+                                ? <span className="text-foreground font-medium">{formatCurrency(job.quoteTotal)}</span>
+                                : <span className="text-muted-foreground">—</span>}
+                            </td>
+
                             {/* Blank unless the job is awaiting pickup: elsewhere
                                 "not called" is not outstanding work, and a cross on
                                 every other row would read as one. A cross on a
@@ -887,6 +910,21 @@ export default function ServiceJobsPage() {
                         );
                       })}
                     </tbody>
+                    {/* What the jobs on screen have been quoted, added up. It
+                        follows the filters and the tab deliberately: on Active
+                        it is the work priced but not yet paid for, on History
+                        what was quoted over the period being looked at. */}
+                    <tfoot>
+                      <tr className="border-t-2 border-border bg-muted/30 text-xs">
+                        <td colSpan={9} className="px-4 py-3 text-right font-medium text-muted-foreground">
+                          {quotedCount === 1 ? "Total of 1 quote" : `Total of ${quotedCount} quotes`}
+                        </td>
+                        <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
+                          {formatCurrency(quotedSum)}
+                        </td>
+                        <td colSpan={2} />
+                      </tr>
+                    </tfoot>
                   </table>
                 </div>
               )}
