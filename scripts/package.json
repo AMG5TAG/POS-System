@@ -53,6 +53,7 @@
     "seed-email-template-from-invoice": "tsx ./src/seed-email-template-from-invoice.ts",
     "add-service-job-device-colour": "tsx ./src/add-service-job-device-colour.ts",
     "add-service-job-device-quantity": "tsx ./src/add-service-job-device-quantity.ts",
+    "add-parked-sale-links": "tsx ./src/add-parked-sale-links.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },
   "dependencies": {

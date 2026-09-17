@@ -1387,6 +1387,11 @@ export interface TransactionInput {
      */
   serviceJobId?: number | null;
   /**
+     * The quote whose lines were imported into this sale. A quoted line may carry a price the merchant agreed below (or above) the current catalogue price, so the server re-reads this quote — scoped to the merchant, and only while it is still draft/sent/accepted — and accepts those unit prices for the products they were quoted on. Without it the sale is repriced from the catalogue and rejected as a totals mismatch. The client is trusted for nothing but which quote; a price that matches no line on it is still repriced.
+     * @nullable
+     */
+  quoteId?: number | null;
+  /**
      * The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.
      * @nullable
      */
@@ -3413,6 +3418,9 @@ export interface ParkedSaleItem {
   name?: string;
   quantity?: number;
   price?: number;
+  itemDiscount?: number;
+  customPrice?: number | null;
+  itemNote?: string | null;
 }
 
 export interface ParkedSale {
@@ -3423,6 +3431,8 @@ export interface ParkedSale {
   customerId?: number | null;
   items: ParkedSaleItem[];
   total: number;
+  quoteId?: number | null;
+  serviceJobId?: number | null;
   createdAt: string;
 }
 
@@ -3433,6 +3443,16 @@ export interface ParkedSaleInput {
   customerId?: number;
   items: ParkedSaleItem[];
   total: number;
+  /**
+     * The quote whose lines this cart was built from, kept so a retrieved sale still charges what was quoted — the transaction the till finally records needs it to accept those prices.
+     * @nullable
+     */
+  quoteId?: number | null;
+  /**
+     * The service job this cart is billing, kept so retrieving the sale re-links the job rather than leaving it open when the sale is paid.
+     * @nullable
+     */
+  serviceJobId?: number | null;
 }
 
 export interface POReceiptLog {

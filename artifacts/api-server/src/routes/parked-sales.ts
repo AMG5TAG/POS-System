@@ -19,6 +19,11 @@ function fmt(s: typeof parkedSalesTable.$inferSelect) {
     customerId: s.customerId ?? null,
     items: Array.isArray(s.items) ? s.items : [],
     total: parseFloat(String(s.total)),
+    /* Returned so a retrieved cart goes back to the till whole: the quote
+       authorises its prices when the sale is finally recorded, and the job is
+       re-linked so paying it still closes the work. */
+    quoteId: s.quoteId ?? null,
+    serviceJobId: s.serviceJobId ?? null,
     createdAt: s.createdAt.toISOString(),
   };
 }
@@ -45,6 +50,8 @@ router.post("/parked-sales", requireAuth, async (req, res) => {
     customerId: body.customerId ?? null,
     items: body.items ?? [],
     total: String(body.total ?? 0),
+    quoteId: body.quoteId ?? null,
+    serviceJobId: body.serviceJobId ?? null,
   }).returning();
   res.status(201).json(fmt(row));
 });

@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, paymentMethodSurchargesTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, paymentMethodSurchargesTable, quotesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -20,6 +20,12 @@ import { reconcileOversellLedger } from "../lib/oversellLedger";
 import { completeLinkedWork, mergeLinkedWork } from "../lib/linked-work";
 
 const router: IRouter = Router();
+
+/* Quote statuses whose prices may still be charged. Mirrors
+   IMPORTABLE_QUOTE_STATUSES in the POS: a converted quote has already been
+   paid and a declined/expired one was never agreed, so neither may authorise
+   what a sale charges. */
+const QUOTE_PRICING_STATUSES = new Set(["draft", "sent", "accepted"]);
 
 /** Error carrying an HTTP status, thrown inside a db.transaction to roll it
  *  back and map cleanly to a response after the transaction unwinds. */
@@ -179,6 +185,7 @@ export async function finalizeSale(
     paidAt: rawPaidAt,
     serviceJobId: linkedServiceJobId,
     appointmentId: linkedAppointmentId,
+    quoteId: importedQuoteId,
   } = body;
 
   const idempotencyKey =
@@ -273,6 +280,43 @@ export async function finalizeSale(
   const productTypeMap = new Map(dbProductTypes.map((pt) => [pt.id, pt]));
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  /* ── Prices a quote already agreed ──────────────────────────────────────
+     A quoted line carries the price the customer was offered, which is often
+     NOT the catalogue price — a shop quotes "$370 screen repair" against a
+     $420 part. Repricing such a line from the catalogue makes the sale the
+     till is trying to record disagree with the total the cashier is looking
+     at, and it is rejected below as a totals mismatch. So the quote is
+     re-read here and its unit prices are accepted for the products they were
+     quoted on.
+
+     The quote row is the authorisation, not the request: it is fetched
+     scoped to this merchant, and only while it is one the till would still
+     offer (draft / sent / accepted — a converted quote has already been paid
+     and must not license a second sale's pricing). The client is therefore
+     trusted for nothing but *which* quote; a line whose price matches no
+     line on it is still repriced from the catalogue.
+
+     Keyed in whole cents so a float that survived a JSON round trip still
+     compares equal. */
+  const quotedCents = new Map<number, Set<number>>();
+  if (importedQuoteId != null) {
+    const [quote] = await db
+      .select()
+      .from(quotesTable)
+      .where(and(eq(quotesTable.id, importedQuoteId), eq(quotesTable.merchantId, merchantId)));
+    if (quote && QUOTE_PRICING_STATUSES.has(quote.status)) {
+      for (const raw of (Array.isArray(quote.items) ? quote.items : []) as Array<Record<string, unknown>>) {
+        const pid = Number(raw.productId);
+        const price = Number(raw.unitPrice);
+        if (!Number.isInteger(pid) || pid <= 0 || !Number.isFinite(price) || price < 0) continue;
+        const cents = quotedCents.get(pid) ?? new Set<number>();
+        cents.add(Math.round(price * 100));
+        quotedCents.set(pid, cents);
+      }
+    }
+  }
+
   const computedItems: {
     productId: number; productName: string; quantity: number;
     unitPrice: number; totalPrice: number; taxAmount: number;
@@ -316,7 +360,11 @@ export async function finalizeSale(
       // price here opens no tampering hole: a product with a real price on file
       // is still charged that price, whatever the client asks for.
       const openPriced = !Number.isFinite(catalogPrice) || catalogPrice === 0;
-      unitPrice  = openPriced ? Math.max(0, i.unitPrice ?? 0) : catalogPrice;
+      // A price this sale's quote already agreed on for this product is
+      // honoured for the same reason: the quote row on file authorises it.
+      const askedPrice = Math.max(0, i.unitPrice ?? 0);
+      const quotedPrice = quotedCents.get(i.productId)?.has(Math.round(askedPrice * 100)) ?? false;
+      unitPrice  = (openPriced || quotedPrice) ? askedPrice : catalogPrice;
       taxRatePct = product.taxRate != null ? parseFloat(product.taxRate) : 10;
       itemName   = product.name;
     }

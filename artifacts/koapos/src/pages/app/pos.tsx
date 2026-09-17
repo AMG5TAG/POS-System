@@ -4,6 +4,7 @@ import { useCustomerSettings } from "@/lib/customer-settings";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
 import { computeGroupPrice } from "@/lib/group-pricing";
 import { takePendingCart } from "@/lib/pending-cart";
+import { distributeQuoteDiscount } from "@/lib/quote-import";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { useOfflineQueue } from "@/hooks/use-offline-queue";
@@ -222,6 +223,10 @@ type RecoveryDraft = {
   walkIn: WalkIn | null;
   overallDiscount: string;
   saleNotes: string;
+  /* What the cart was built from — a restored draft priced from a quote has to
+     carry it, or the sale is repriced from the catalogue when it is recorded. */
+  quoteId?: number | null;
+  serviceJobId?: number | null;
   savedAt: number;
 };
 
@@ -1401,6 +1406,7 @@ export default function POSPage() {
         total: number;
         createdAt: string;
         serviceJobId?: number | null;
+        quoteId?: number | null;
       };
 
       /* Build CartItem[] — fall back to a minimal Product stub if the full
@@ -1419,6 +1425,9 @@ export default function POSPage() {
       });
 
       setCart(restoredCart);
+      /* Set the quote before the job link: linking a job offers its quote, and
+         a sale that already carries one must not be asked to import it twice. */
+      if (sale.quoteId != null) setImportedQuoteId(sale.quoteId);
       if (sale.serviceJobId != null) setPendingLinkServiceJobId(sale.serviceJobId);
       setOverallDiscount("");
       setSaleNotes("");
@@ -1495,6 +1504,12 @@ export default function POSPage() {
   /* ── Keep cart/customer refs in sync for stale-closure-safe beacon calls ─── */
   useEffect(() => { cartRef.current = cart; }, [cart]);
   useEffect(() => { selectedCustomerRef.current = selectedCustomer; }, [selectedCustomer]);
+  /* The beacon below is mount-only, so what the cart was built from reaches it
+     the same way the cart does — through a ref. */
+  const importedQuoteIdRef = useRef<number | null>(null);
+  importedQuoteIdRef.current = importedQuoteId;
+  const linkedServiceIdRef = useRef<number | null>(null);
+  linkedServiceIdRef.current = linkedService?.id ?? null;
 
   /* ── Recovery draft: show restore toast on next POS load ─────────────────── *
    * IMPORTANT: this effect must be defined BEFORE the localStorage sync effect  *
@@ -1530,6 +1545,10 @@ export default function POSPage() {
         label: "Restore",
         onClick: () => {
           setCart(capturedDraft.cart);
+          /* Quote first, then the job — linking a job offers its quote, and a
+             restored sale already carrying one must not be asked twice. */
+          setImportedQuoteId(capturedDraft.quoteId ?? null);
+          setPendingLinkServiceJobId(capturedDraft.serviceJobId ?? null);
           setOverallDiscount(capturedDraft.overallDiscount ?? "");
           setSaleNotes(capturedDraft.saleNotes ?? "");
           setWalkIn(capturedDraft.walkIn ?? null);
@@ -1564,12 +1583,14 @@ export default function POSPage() {
       walkIn,
       overallDiscount,
       saleNotes,
+      quoteId: importedQuoteId,
+      serviceJobId: linkedService?.id ?? null,
       savedAt: Date.now(),
     };
     try {
       localStorage.setItem(RECOVERY_DRAFT_KEY, JSON.stringify(draft));
     } catch { /* storage quota exceeded — ignore */ }
-  }, [cart, selectedCustomer, walkIn, overallDiscount, saleNotes]);
+  }, [cart, selectedCustomer, walkIn, overallDiscount, saleNotes, importedQuoteId, linkedService]);
 
   /* ── Auto-park as a named "Recovered sale" entry on page unload / unmount ───
      Two triggers cover the main mobile-kill scenarios:
@@ -1592,15 +1613,20 @@ export default function POSPage() {
         customPrice: i.customPrice ?? null,
         itemNote: i.itemNote ?? null,
       }));
-      const rawTotal = c.reduce((sum, i) => {
-        const price = unitPriceFor(i);
-        return sum + price * i.quantity * (1 - (i.itemDiscount ?? 0) / 100);
-      }, 0);
+      /* itemDiscount is a dollar amount everywhere else in the POS — treating
+         it as a percentage here priced the recovered sale wrongly in the parked
+         list the moment any line carried a discount. */
+      const rawTotal = c.reduce(
+        (sum, i) => sum + Math.max(0, unitPriceFor(i) * i.quantity - (i.itemDiscount ?? 0)),
+        0,
+      );
       const payload = {
         items,
         total: rawTotal,
         customerId: selectedCustomerRef.current?.id ?? undefined,
         note: "Recovered sale",
+        quoteId: importedQuoteIdRef.current ?? undefined,
+        serviceJobId: linkedServiceIdRef.current ?? undefined,
       };
       try {
         navigator.sendBeacon(
@@ -2101,6 +2127,11 @@ export default function POSPage() {
           total,
           note: noteParts.join(" | ") || undefined,
           saleNote: saleNotes || undefined,
+          /* Park what the cart was built FROM, not just what is in it: without
+             the quote the retrieved sale is repriced from the catalogue, and
+             without the job it leaves the work open when it is finally paid. */
+          quoteId: importedQuoteId ?? undefined,
+          serviceJobId: linkedService?.id ?? undefined,
         },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/parked-sales"] });
@@ -2109,6 +2140,10 @@ export default function POSPage() {
       setCart([]); setOverallDiscount(""); setSaleNotes("");
       setSelectedCustomer(null); setWalkIn(null);
       setDiscountExcessAmount(0);
+      /* Both links went with the parked sale, so they leave the live cart too —
+         left behind they would settle that quote and close that job against
+         whatever the till rings up next. */
+      setImportedQuoteId(null); setLinkedService(null);
       setSaleStaff(null); /* parked — revert any one-sale staff switch */
       toast.success("Sale parked");
     } catch {
@@ -2126,6 +2161,8 @@ export default function POSPage() {
     const saleNote = sale.note ?? null;
     const saleSaleNote = sale.saleNote ?? null;
     const saleCustomerId = sale.customerId ?? null;
+    const saleQuoteId = sale.quoteId ?? null;
+    const saleServiceJobId = sale.serviceJobId ?? null;
 
     try {
       if (cart.length > 0) {
@@ -2151,6 +2188,8 @@ export default function POSPage() {
             total,
             note: currentLabel,
             saleNote: saleNotes || undefined,
+            quoteId: importedQuoteId ?? undefined,
+            serviceJobId: linkedService?.id ?? undefined,
           },
         });
       }
@@ -2174,6 +2213,13 @@ export default function POSPage() {
 
       /* Batch all state updates together */
       setCart(restoredCart);
+      /* The sale comes back with what it was built from. The quote is what
+         authorises its prices when the sale is recorded, and is settled by it;
+         the job is re-linked once the job list has loaded, exactly as the
+         picker would. The quote id is set first, so re-linking the job doesn't
+         prompt to import the quote a second time. */
+      setImportedQuoteId(saleQuoteId);
+      setPendingLinkServiceJobId(saleServiceJobId);
       setOverallDiscount("");
       setSaleNotes("");
       setSelectedCustomer(null);
@@ -2522,7 +2568,16 @@ export default function POSPage() {
      `replace` is the destructive answer and is never the default when the cart
      already holds something — see the prompt below. */
   const importQuoteToCart = (quote: Quote, replace: boolean) => {
-    const imported: CartItem[] = (quote.items ?? []).map((l) => {
+    const lines = quote.items ?? [];
+    /* A discount taken off the whole quote is part of the agreed price, so it
+       has to come across with the lines — importing the lines alone charges the
+       customer more than the quote they accepted. It is spread over the
+       imported lines as line discounts: see lib/quote-import.ts. */
+    const lineDiscounts = distributeQuoteDiscount(
+      lines.map((l) => l.unitPrice * l.quantity),
+      quote.discountTotal ?? 0,
+    );
+    const imported: CartItem[] = lines.map((l, idx) => {
       const product = (l.productId != null
         ? allProducts.find((p) => p.id === l.productId)
         : undefined) ?? ({
@@ -2533,7 +2588,7 @@ export default function POSPage() {
       return {
         product,
         quantity: l.quantity,
-        itemDiscount: 0,
+        itemDiscount: lineDiscounts[idx] ?? 0,
         /* The quote's price is what the customer agreed to, so it overrides the
            product's current price — a catalogue rise after quoting is not the
            customer's problem. */
@@ -2545,7 +2600,12 @@ export default function POSPage() {
     setCart((prev) => (replace ? imported : [...prev, ...imported]));
     setImportedQuoteId(quote.id);
     setQuoteImport(null);
-    toast.success(`Quote ${quote.quoteNumber} imported`);
+    const discounted = (quote.discountTotal ?? 0) > 0;
+    toast.success(
+      discounted
+        ? `Quote ${quote.quoteNumber} imported — includes ${formatCurrency(quote.discountTotal!)} discount`
+        : `Quote ${quote.quoteNumber} imported`,
+    );
   };
 
   const linkAppointment = (apt: Appointment) => {
@@ -3085,6 +3145,12 @@ export default function POSPage() {
          from, so an edited note or a renamed job can't quietly leave the work open. */
       serviceJobId: linkedService?.id ?? undefined,
       appointmentId: linkedAppointment?.id ?? undefined,
+      /* An imported quote's lines are priced at what was agreed, not at the
+         catalogue price. The server reprices every line it is not shown an
+         authorisation for, so without this the sale is rejected as a totals
+         mismatch the moment a quote reduced (or raised) a line. Sending the id
+         — never the prices — is what lets it read the quote and agree. */
+      quoteId: importedQuoteId ?? undefined,
       receiptNumber,
       idempotencyKey,
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),

@@ -46,6 +46,7 @@ vi.mock("@workspace/db", () => {
     productTypesTable: mkTable("productTypes"),
     productSerialsTable: mkTable("productSerials"),
     paymentMethodSurchargesTable: mkTable("paymentMethodSurcharges"),
+    quotesTable: mkTable("quotes"),
   };
 });
 

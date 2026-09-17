@@ -11745,6 +11745,17 @@ components:
             when the sale is recorded. Authoritative — when omitted the server
             falls back to the `[Service #...]` marker in notes, which is how
             older clients and parked BNPL sales carry the link.
+        quoteId:
+          type: ["integer", "null"]
+          description: >-
+            The quote whose lines were imported into this sale. A quoted line
+            may carry a price the merchant agreed below (or above) the current
+            catalogue price, so the server re-reads this quote — scoped to the
+            merchant, and only while it is still draft/sent/accepted — and
+            accepts those unit prices for the products they were quoted on.
+            Without it the sale is repriced from the catalogue and rejected as
+            a totals mismatch. The client is trusted for nothing but which
+            quote; a price that matches no line on it is still repriced.
         appointmentId:
           type: ["integer", "null"]
           description: >-
@@ -13997,6 +14008,13 @@ components:
         name: { type: string }
         quantity: { type: number }
         price: { type: number }
+        # A parked line has to come back priced the way it was parked. These
+        # three were sent by the POS but absent here, so the request validator
+        # stripped them: a line the cashier had discounted, priced by hand, or
+        # imported from a quote was silently restored at catalogue price.
+        itemDiscount: { type: number }
+        customPrice: { type: number, nullable: true }
+        itemNote: { type: string, nullable: true }
     ParkedSale:
       type: object
       required: [id, reference, items, total, createdAt]
@@ -14011,6 +14029,8 @@ components:
           items:
             $ref: "#/components/schemas/ParkedSaleItem"
         total: { type: number }
+        quoteId: { type: integer, nullable: true }
+        serviceJobId: { type: integer, nullable: true }
         createdAt: { type: string }
     ParkedSaleInput:
       type: object
@@ -14025,6 +14045,17 @@ components:
           items:
             $ref: "#/components/schemas/ParkedSaleItem"
         total: { type: number }
+        quoteId:
+          type: ["integer", "null"]
+          description: >-
+            The quote whose lines this cart was built from, kept so a retrieved
+            sale still charges what was quoted — the transaction the till
+            finally records needs it to accept those prices.
+        serviceJobId:
+          type: ["integer", "null"]
+          description: >-
+            The service job this cart is billing, kept so retrieving the sale
+            re-links the job rather than leaving it open when the sale is paid.
 
     # ── Purchase Orders ───────────────────────────────────────────────────────
     POReceiptLog:

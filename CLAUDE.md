@@ -267,6 +267,35 @@ that safe:
 - An imported line sets `customPrice` to the quoted unit price. That override
   beats catalogue price *and* customer group pricing, which is the point: a price
   rise after quoting is not the customer's problem.
+- **The server has to be told the sale came from a quote, or it reprices it.**
+  `finalizeSale` recomputes every line from `product.price`, so a quoted price
+  that is not the catalogue price (the whole reason a quote exists) came back as
+  a 409 "Sale total does not match current product pricing". The sale therefore
+  carries `quoteId`, and the server re-reads that quote — scoped to the merchant,
+  and only while it is still draft/sent/accepted — and accepts its unit prices
+  for the products it named. The quote row is the authorisation, so the client is
+  trusted for nothing but *which* quote: a price matching no line on it is still
+  repriced, and `QUOTE_PRICING_STATUSES` (mirroring `IMPORTABLE_QUOTE_STATUSES`)
+  stops a converted quote licensing a second sale. `transactions-quote-price.test.ts`
+  pins it.
+- **A quote's own discount comes across with its lines.** A quote may carry a
+  discount off the whole job, and importing the lines alone rings up more than
+  the customer accepted. `distributeQuoteDiscount` (`lib/quote-import.ts`,
+  pinned by `quote-import.test.ts`) spreads it over the imported lines as line
+  discounts — not as the cart's overall discount, because the cart may hold
+  items that were never on the quote, and a line discount is both what survives
+  parking and what the server already honours per line. The last line absorbs
+  the rounding remainder so the parts sum to the whole.
+- **A parked cart keeps what it was built from.** `parked_sales.quote_id` /
+  `service_job_id` (added by `scripts/src/add-parked-sale-links.ts`) are what let
+  a retrieved sale still charge the quoted price and still close its job; both
+  leave the live cart when it is parked, or they would settle that quote and
+  close that job against whatever the till rings up next. The same two ride in
+  the localStorage recovery draft and the unload beacon. Note the line fields
+  they depend on — `itemDiscount`, `customPrice`, `itemNote` — were being
+  stripped by the request validator until they were declared on
+  `ParkedSaleItem`: a parked line silently came back at catalogue price.
+  `parked-sale-fields.test.ts` pins the contract.
 - **Importing is not committing.** The quote is marked converted in
   `completeSaleUi`, once the sale is actually paid, with the transaction id — so
   a cashier who abandons the sale leaves the quote open for the next attempt.

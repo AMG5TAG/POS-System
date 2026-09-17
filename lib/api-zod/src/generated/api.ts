@@ -2148,6 +2148,7 @@ export const CreateTransactionBody = zod.object({
   "amount": zod.number()
 }).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.'),
   "serviceJobId": zod.number().nullish().describe('The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.'),
+  "quoteId": zod.number().nullish().describe('The quote whose lines were imported into this sale. A quoted line may carry a price the merchant agreed below (or above) the current catalogue price, so the server re-reads this quote — scoped to the merchant, and only while it is still draft\/sent\/accepted — and accepts those unit prices for the products they were quoted on. Without it the sale is repriced from the catalogue and rejected as a totals mismatch. The client is trusted for nothing but which quote; a price that matches no line on it is still repriced.'),
   "appointmentId": zod.number().nullish().describe('The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.'),
   "paidAt": zod.string().optional().describe('Optional accounting date for the sale. The transaction\'s createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of \"now\". Used for tenders that actually landed on an earlier day, e.g. a direct deposit \/ bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future.')
 })
@@ -5273,9 +5274,14 @@ export const ListParkedSalesResponseItem = zod.object({
   "productId": zod.number().optional(),
   "name": zod.string().optional(),
   "quantity": zod.number().optional(),
-  "price": zod.number().optional()
+  "price": zod.number().optional(),
+  "itemDiscount": zod.number().optional(),
+  "customPrice": zod.number().nullish(),
+  "itemNote": zod.string().nullish()
 })),
   "total": zod.number(),
+  "quoteId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 export const ListParkedSalesResponse = zod.array(ListParkedSalesResponseItem)
@@ -5293,9 +5299,14 @@ export const CreateParkedSaleBody = zod.object({
   "productId": zod.number().optional(),
   "name": zod.string().optional(),
   "quantity": zod.number().optional(),
-  "price": zod.number().optional()
+  "price": zod.number().optional(),
+  "itemDiscount": zod.number().optional(),
+  "customPrice": zod.number().nullish(),
+  "itemNote": zod.string().nullish()
 })),
-  "total": zod.number()
+  "total": zod.number(),
+  "quoteId": zod.number().nullish().describe('The quote whose lines this cart was built from, kept so a retrieved sale still charges what was quoted — the transaction the till finally records needs it to accept those prices.'),
+  "serviceJobId": zod.number().nullish().describe('The service job this cart is billing, kept so retrieving the sale re-links the job rather than leaving it open when the sale is paid.')
 })
 
 
@@ -5328,9 +5339,14 @@ export const RestoreParkedSaleResponse = zod.object({
   "productId": zod.number().optional(),
   "name": zod.string().optional(),
   "quantity": zod.number().optional(),
-  "price": zod.number().optional()
+  "price": zod.number().optional(),
+  "itemDiscount": zod.number().optional(),
+  "customPrice": zod.number().nullish(),
+  "itemNote": zod.string().nullish()
 })),
   "total": zod.number(),
+  "quoteId": zod.number().nullish(),
+  "serviceJobId": zod.number().nullish(),
   "createdAt": zod.string()
 })
 
