@@ -142,6 +142,15 @@ export function ServiceJobDocket({
       id={id}
       style={{
         width: `${widthMm}mm`,
+        // The body is the printable strip, not the paper: 72mm inside an 80mm
+        // roll, 48mm inside 58mm. The browser surfaces render it on a full-width
+        // page (`@page { size: 80mm auto; margin: 0 }` in service-jobs.tsx,
+        // service-jobs-new.tsx and the Templates print preview), so without auto
+        // margins the 8mm difference all lands on one side instead of the 4mm
+        // either side a thermal head actually leaves. Matches what the thermal
+        // receipt already does; a no-op on the Print Bridge, which renders the
+        // page at 72mm to begin with.
+        margin: "0 auto",
         background: "white",
         color: "#000",
         boxSizing: "border-box",
@@ -290,11 +299,18 @@ export function ServiceJobDocket({
         <>
           <div style={dividerStyle} />
           <div style={{ textAlign: jobQrAlign }}>
+            {/* Auto margins, not the parent's text-align: Tailwind's preflight gives
+                `svg` display:block, and text-align cannot move a block-level box —
+                so the code sat hard left while its caption centred underneath it.
+                The standalone HTML the Print Bridge renders carries no preflight,
+                which made the two transports disagree as well. Same treatment the
+                custom QR below already has. */}
             <svg
               width={m.qr}
               height={m.qr}
               viewBox={`0 0 ${qr.size} ${qr.size}`}
               shapeRendering="crispEdges"
+              style={{ display: "block", margin: QR_BLOCK_MARGIN[jobQrAlign] }}
               role="img"
               aria-label={`QR code for job ${data.jobNumber}`}
             >

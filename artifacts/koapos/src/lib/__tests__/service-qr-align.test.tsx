@@ -69,9 +69,22 @@ describe("ServiceJobDocket (80mm)", () => {
     expect(qrBlocks(render({ serviceQrAlign: "right", serviceCustomQrAlign: "left" }))).toEqual(["right", "left"]);
   });
 
-  it("pushes the custom QR image with a margin, since text-align cannot move a block", () => {
-    expect(render({ serviceCustomQrAlign: "right" })).toContain("margin:0 0 0 auto");
-    expect(render({ serviceCustomQrAlign: "left" })).toContain("margin:0 auto 0 0");
+  /* text-align cannot move a block-level box, and Tailwind's preflight makes
+     both `svg` and `img` display:block — so each code needs its own auto
+     margins. The job QR relied on the parent's text-align and printed hard
+     left under a centred caption; asserting both keeps that symmetrical. */
+  it("pushes each QR with a margin, since text-align cannot move a block", () => {
+    const both = render({ serviceQrAlign: "right", serviceCustomQrAlign: "right" });
+    expect(both.match(/margin:0 0 0 auto/g)).toHaveLength(2);
+
+    const left = render({ serviceQrAlign: "left", serviceCustomQrAlign: "left" });
+    expect(left.match(/margin:0 auto 0 0/g)).toHaveLength(2);
+  });
+
+  it("centres each QR with auto margins by default, not just its caption", () => {
+    // The docket root also centres itself on the roll, so the default render
+    // carries three `margin:0 auto` — the body, the job QR and the custom QR.
+    expect(render({}).match(/margin:0 auto(?![ 0])/g)).toHaveLength(3);
   });
 });
 
