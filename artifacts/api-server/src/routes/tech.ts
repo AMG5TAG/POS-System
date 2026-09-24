@@ -470,7 +470,15 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
   const logEntry = `${buildNoteTimestamp()} Status: ${fromLabel} → ${toLabel}`;
   const notes = job.notes ? `${job.notes}\n${logEntry}` : logEntry;
 
-  await db.update(serviceJobsTable).set({ status, notes }).where(eq(serviceJobsTable.id, job.id));
+  /* Stamp completion time on the transition into "completed", exactly as the
+     admin status editor and the linked-work helper do. Without it a job
+     finished from the Tech App has no completion date at all: nothing anchors
+     its repair-warranty window and Service History shows it with a blank
+     Completed column. Only ever set on the way in, never cleared. */
+  const completion = status === "completed" && job.status !== "completed"
+    ? { completedAt: new Date() }
+    : {};
+  await db.update(serviceJobsTable).set({ status, notes, ...completion }).where(eq(serviceJobsTable.id, job.id));
   logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "status_changed", `Changed service job ${job.jobNumber} status to ${toLabel}`);
 
   /* Auto-send SMS on key status transitions — mirrors the admin endpoint */

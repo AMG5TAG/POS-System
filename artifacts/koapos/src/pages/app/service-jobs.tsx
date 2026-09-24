@@ -84,9 +84,21 @@ function formatDate(d: string) {
   return `${day}/${m}/${y}`;
 }
 
+/* completedAt is a full ISO timestamp, not bookInDate's plain YYYY-MM-DD, so
+   splitting it on "-" the way formatDate does would mangle it. The cell shows
+   just the date, to read alongside the book-in date; the time it was actually
+   marked rides in the tooltip. */
+function formatCompletedDate(iso: string) {
+  return new Intl.DateTimeFormat("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }).format(new Date(iso));
+}
+
+function formatCompletedDateTime(iso: string) {
+  return new Intl.DateTimeFormat("en-AU", { dateStyle: "medium", timeStyle: "short" }).format(new Date(iso));
+}
+
 /* ─── Sorting ────────────────────────────────────────────────────────────── */
 
-type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "status" | "deviceType" | "description" | "quoted" | "quoteTotal";
+type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "completedAt" | "status" | "deviceType" | "description" | "quoted" | "quoteTotal";
 type SortDir = "asc" | "desc";
 
 function getValue(job: ServiceJob, key: SortKey): string | number {
@@ -95,6 +107,10 @@ function getValue(job: ServiceJob, key: SortKey): string | number {
     case "priority":     return job.isCritical ? "1" : "0"; // critical sorts first when desc
     case "customerName": return (job.customerName ?? "").toLowerCase();
     case "bookInDate":   return job.bookInDate ?? "";
+    // ISO timestamps sort correctly as plain strings. A job with no completion
+    // date (every cancelled one) sorts to the bottom descending, which is where
+    // "never completed" belongs in a list ordered by most recently finished.
+    case "completedAt":  return job.completedAt ?? "";
     case "status":       return job.status ?? "";
     case "deviceType":   return (job.deviceType ?? "").toLowerCase();
     case "description":  return (job.workDescription ?? job.deviceDescription ?? "").toLowerCase();
@@ -744,6 +760,10 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Priority",    "priority")} />
                         <SortableHeader {...sh("Contact",     "customerName")} />
                         <SortableHeader {...sh("Date",        "bookInDate")} />
+                        {/* Only on History: every active job is by definition
+                            not completed, so on that tab the column would be a
+                            full column of dashes. */}
+                        {tab === "history" && <SortableHeader {...sh("Completed", "completedAt")} />}
                         <SortableHeader {...sh("Status",      "status")} />
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
@@ -796,6 +816,18 @@ export default function ServiceJobsPage() {
                             <td className="px-3 py-3 whitespace-nowrap text-muted-foreground text-xs">
                               {formatDate(job.bookInDate)}
                             </td>
+
+                            {/* A cancelled job was never completed, so it has no
+                                date to show — a dash, not today's date. */}
+                            {tab === "history" && (
+                              <td className="px-3 py-3 whitespace-nowrap text-muted-foreground text-xs">
+                                {job.completedAt ? (
+                                  <span title={`Marked completed ${formatCompletedDateTime(job.completedAt)}`}>
+                                    {formatCompletedDate(job.completedAt)}
+                                  </span>
+                                ) : "—"}
+                              </td>
+                            )}
 
                             <td className="px-3 py-3 whitespace-nowrap">
                               <span className={cn("inline-flex items-center px-2.5 py-0.5 rounded-md text-[11px] font-medium border", className)}>
@@ -916,7 +948,7 @@ export default function ServiceJobsPage() {
                         what was quoted over the period being looked at. */}
                     <tfoot>
                       <tr className="border-t-2 border-border bg-muted/30 text-xs">
-                        <td colSpan={9} className="px-4 py-3 text-right font-medium text-muted-foreground">
+                        <td colSpan={tab === "history" ? 10 : 9} className="px-4 py-3 text-right font-medium text-muted-foreground">
                           {quotedCount === 1 ? "Total of 1 quote" : `Total of ${quotedCount} quotes`}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
