@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
-import { cn } from "@/lib/utils";
+import { cn, formatDate } from "@/lib/utils";
 import { Plus, Trash2, Bell, Circle, AlertTriangle, Wrench, User, AlertCircle } from "lucide-react";
 import { toast } from "sonner";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
@@ -250,9 +250,14 @@ function NotificationsPanel() {
             {n.isCritical && (
               <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
             )}
-            <span className={cn("flex-1", n.isCritical ? "text-red-800 font-medium" : "text-foreground")}>
-              {n.text}
-            </span>
+            <div className="flex-1 min-w-0">
+              <p className={cn("whitespace-pre-wrap break-words", n.isCritical ? "text-red-800 font-medium" : "text-foreground")}>
+                {n.text}
+              </p>
+              <p className={cn("text-[11px] mt-1", n.isCritical ? "text-red-600/80" : "text-muted-foreground")}>
+                {formatDate(n.createdAt)}
+              </p>
+            </div>
             <button onClick={() => remove(n.id)} className="text-muted-foreground hover:text-destructive shrink-0 mt-0.5">
               <Trash2 className="w-3.5 h-3.5" />
             </button>

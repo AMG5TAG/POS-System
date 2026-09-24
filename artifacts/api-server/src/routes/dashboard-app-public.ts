@@ -144,12 +144,12 @@ router.get("/public/dashboard/:token", async (req, res): Promise<void> => {
   // ── Notifications (sticky notes) ──
   if (flags.notifications) {
     const notes = await db
-      .select({ text: dashboardNotesTable.text, isCritical: dashboardNotesTable.isCritical })
+      .select({ text: dashboardNotesTable.text, isCritical: dashboardNotesTable.isCritical, createdAt: dashboardNotesTable.createdAt })
       .from(dashboardNotesTable)
       .where(eq(dashboardNotesTable.merchantId, merchantId))
       .orderBy(desc(dashboardNotesTable.isCritical), desc(dashboardNotesTable.createdAt))
       .limit(30);
-    data.notifications = notes;
+    data.notifications = notes.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }));
   }
 
   // ── Calendar (upcoming appointments, next 14 days) ──

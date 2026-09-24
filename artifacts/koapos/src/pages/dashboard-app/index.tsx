@@ -4,7 +4,7 @@ import {
   LayoutDashboard, Loader2, RefreshCw, AlertTriangle, Clock, AlertCircle,
   Wrench, CalendarClock, FileText, StickyNote, TrendingUp,
 } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { setHomeScreenApp } from "@/lib/home-screen";
 
 /**
@@ -25,7 +25,7 @@ interface Snapshot {
     metricTiles?: { todaySales: number; pendingInvoices: number; activeJobs: number; upcomingAppointments: number };
     overdueJobs?: { jobNumber: string; title: string; customerName: string | null; since: string }[];
     serviceJobs?: { jobNumber: string; title: string; status: string; customerName: string | null }[];
-    notifications?: { text: string; isCritical: boolean }[];
+    notifications?: { text: string; isCritical: boolean; createdAt: string }[];
     calendar?: { title: string; scheduledAt: string; customerName: string | null }[];
     referralChannels?: { channel: string; count: number }[];
   };
@@ -226,7 +226,10 @@ export default function DashboardAppPage() {
               <ul className="space-y-2">
                 {d.notifications.map((n, i) => (
                   <li key={i} className={`rounded-lg border px-3 py-2 text-sm ${n.isCritical ? "border-red-300 bg-red-50 dark:bg-red-900/10 text-red-800 dark:text-red-300" : "bg-background"}`}>
-                    {n.text}
+                    <p className="whitespace-pre-wrap break-words">{n.text}</p>
+                    <p className={`text-[11px] mt-1 ${n.isCritical ? "text-red-600/80 dark:text-red-400/80" : "text-muted-foreground"}`}>
+                      {formatDate(n.createdAt)}
+                    </p>
                   </li>
                 ))}
               </ul>
