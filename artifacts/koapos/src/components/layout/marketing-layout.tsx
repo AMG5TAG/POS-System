@@ -49,14 +49,14 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
             &copy; {new Date().getFullYear()} KoaPOS. All rights reserved.
           </p>
           <p className="text-xs">
-            Proudly Australian. 🇦🇺 Designed and Hosted by{" "}
+            Proudly Australian. 🇦🇺 Designed, Hosted and Maintained by{" "}
             <a
               href="https://www.koastal.com.au"
               target="_blank"
               rel="noopener noreferrer"
               className="underline hover:text-foreground transition-colors"
             >
-              Koastal – Web Design, Software and App Development
+              Koastal Kollective – Website Design, Software and App Development
             </a>
           </p>
         </div>
