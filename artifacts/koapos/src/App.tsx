@@ -193,7 +193,12 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/", "/login", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
+/* "/" is deliberately NOT public: it only redirects (dashboard or login), and it
+   decides which by waiting on /auth/me. Treated as public, a signed-out visit
+   let the first 401 clear the query cache — cancelling that very /auth/me — and
+   stay on "/" with nothing left to resolve the spinner. As a protected path, the
+   first 401 simply goes to /login. */
+const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
 
 setOnUnauthorized(() => {
   queryClient.clear();
