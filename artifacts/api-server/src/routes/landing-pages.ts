@@ -47,9 +47,7 @@ router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
   const [row] = await db.select().from(landingPagesTable).where(eq(landingPagesTable.slug, slug)).limit(1);
   if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
   recordMarketingEvent(req, { merchantId: row.merchantId, kind: "landing", targetId: row.id, targetSlug: row.slug });
-  const [merchant] = await db.select({ partnerReferralCode: merchantsTable.partnerReferralCode })
-    .from(merchantsTable).where(eq(merchantsTable.id, row.merchantId)).limit(1);
-  res.json({ ...row, partnerReferralCode: merchant?.partnerReferralCode ?? null });
+  res.json(row);
 });
 
 // Resolve a landing page by business username + custom name (public, no auth):
@@ -61,7 +59,7 @@ router.get(["/landing-pages/public/b/:username/l/:customName", "/landing-pages/p
   if (!username || !customName) { res.status(404).json({ error: "Not found" }); return; }
 
   const [merchant] = await db
-    .select({ id: merchantsTable.id, partnerReferralCode: merchantsTable.partnerReferralCode })
+    .select({ id: merchantsTable.id })
     .from(merchantsTable)
     .where(eq(merchantsTable.username, username))
     .limit(1);
@@ -74,7 +72,7 @@ router.get(["/landing-pages/public/b/:username/l/:customName", "/landing-pages/p
     .limit(1);
   if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
   recordMarketingEvent(req, { merchantId: row.merchantId, kind: "landing", targetId: row.id, targetSlug: row.slug });
-  res.json({ ...row, partnerReferralCode: merchant.partnerReferralCode ?? null });
+  res.json(row);
 });
 
 router.get("/landing-pages", requireAuth, async (req, res): Promise<void> => {

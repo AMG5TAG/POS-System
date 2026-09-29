@@ -7,8 +7,6 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
-import { KoaPOSReferralsContent } from "@/pages/app/management-koapos";
 import { Map, ExternalLink, Hash, Shuffle, LayoutPanelLeft, Type, LayoutTemplate } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -144,16 +142,9 @@ export default function ManagementMiscPage() {
       <div className="p-6 space-y-6">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Misc</h1>
-          <p className="text-muted-foreground mt-1">Miscellaneous preferences and your KoaPOS partner referrals.</p>
+          <p className="text-muted-foreground mt-1">Miscellaneous preferences.</p>
         </div>
 
-        <Tabs defaultValue="settings">
-          <TabsList>
-            <TabsTrigger value="settings">Settings</TabsTrigger>
-            <TabsTrigger value="referrals">Partner Referrals</TabsTrigger>
-          </TabsList>
-
-          <TabsContent value="settings" className="mt-6">
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
 
         {/* Left column: Maps Provider + POS Button Style each keep their natural
@@ -374,12 +365,6 @@ export default function ManagementMiscPage() {
         </Card>
 
         </div>
-          </TabsContent>
-
-          <TabsContent value="referrals" className="mt-6">
-            <KoaPOSReferralsContent />
-          </TabsContent>
-        </Tabs>
       </div>
     </AppLayout>
   );

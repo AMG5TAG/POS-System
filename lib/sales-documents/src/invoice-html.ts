@@ -359,15 +359,6 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
       </div>`
     : "";
 
-  // ── Referral ──
-  const referralHtml = opts.showReferralLink
-    ? `<div class="referral">
-        ${opts.referralLinkText ? `<p>${esc(opts.referralLinkText)}</p>` : ""}
-        ${input.referralUrl ? `<p class="mono">${esc(input.referralUrl)}</p>` : ""}
-        ${input.referralCode ? `<p>Code: <strong>${esc(input.referralCode)}</strong></p>` : ""}
-      </div>`
-    : "";
-
   const css = `
     * { margin: 0; padding: 0; box-sizing: border-box; }
     body { font-family: ${fontFamily}; font-size: 12px; color: #1f2937; background: #fff; }
@@ -497,7 +488,6 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
   ${footerHtml}
   ${barcodeHtml}
   ${customQrHtml}
-  ${referralHtml}
 
 </div></div>
 </body></html>`;

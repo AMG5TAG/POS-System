@@ -9,7 +9,6 @@ import { publicOrigin } from "@/lib/public-url";
 // referral code and the show/hide flag (both absent from the generated type).
 type PublicLandingPage = LandingPage & {
   showPoweredBy?: string;
-  partnerReferralCode?: string | null;
 };
 
 export default function LandingPagePublicView() {
@@ -192,20 +191,13 @@ export default function LandingPagePublicView() {
           </div>
         )}
 
-        {/* KoaPOS referral footer (opt-out via the page's "Powered by" setting) */}
+        {/* "Powered by" footer (opt-out via the page's setting). Plain text: there is
+            no public sign-up to refer anyone to in a single-business install. */}
         {row.showPoweredBy !== "false" && (
           <div className={`text-center ${bottomLinks.length > 0 ? "mt-6" : "mt-12"}`}>
-            <a
-              href={row.partnerReferralCode
-                ? `${publicOrigin()}/register?ref=${encodeURIComponent(row.partnerReferralCode)}`
-                : `${publicOrigin()}/register`}
-              target="_blank"
-              rel="noreferrer"
-              className="text-[11px] hover:underline"
-              style={{ color: row.textColor, opacity: 0.4 }}
-            >
+            <span className="text-[11px]" style={{ color: row.textColor, opacity: 0.4 }}>
               Powered by KoaPOS
-            </a>
+            </span>
           </div>
         )}
       </div>

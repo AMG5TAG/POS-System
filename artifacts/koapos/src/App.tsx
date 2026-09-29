@@ -27,10 +27,7 @@ const BookingPage = lazyWithRetry(() => import("@/pages/booking"));
 const TechAppPage = lazyWithRetry(() => import("@/pages/tech"));
 const DashboardAppPage = lazyWithRetry(() => import("@/pages/dashboard-app"));
 const MobilePosAppPage = lazyWithRetry(() => import("@/pages/mobile-pos"));
-const LandingPage = lazyWithRetry(() => import("@/pages/marketing/landing"));
 const LoginPage = lazyWithRetry(() => import("@/pages/marketing/login"));
-const RegisterPage = lazyWithRetry(() => import("@/pages/marketing/register"));
-const PricingPage = lazyWithRetry(() => import("@/pages/marketing/pricing"));
 const ForgotPasswordPage = lazyWithRetry(() => import("@/pages/marketing/forgot-password"));
 const ResetPasswordPage = lazyWithRetry(() => import("@/pages/marketing/reset-password"));
 const StaffResetPasswordPage = lazyWithRetry(() => import("@/pages/marketing/staff-reset-password"));
@@ -80,7 +77,6 @@ const StaffPayrollRunsPage = lazyWithRetry(() => import("@/pages/app/staff-payro
 const StaffPayrollPayslipsPage = lazyWithRetry(() => import("@/pages/app/staff-payroll-payslips"));
 const StaffPayrollLeavePage = lazyWithRetry(() => import("@/pages/app/staff-payroll-leave"));
 const SettingsPayrollPage = lazyWithRetry(() => import("@/pages/app/settings-payroll"));
-const ModulesPage = lazyWithRetry(() => import("@/pages/app/modules"));
 const SettingsPage = lazyWithRetry(() => import("@/pages/app/settings"));
 const SettingsBusinessPage = lazyWithRetry(() => import("@/pages/app/settings-business"));
 const SettingsRegionalPage = lazyWithRetry(() => import("@/pages/app/settings-regional"));
@@ -208,7 +204,7 @@ const queryClient = new QueryClient({
   },
 });
 
-const PUBLIC_PATHS = ["/", "/pricing", "/login", "/register", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
+const PUBLIC_PATHS = ["/", "/login", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
 
 setOnUnauthorized(() => {
   queryClient.clear();
@@ -269,6 +265,21 @@ function ManagementProtectedRoute({ component: Component }: { component: React.C
   );
 }
 
+/* KoaPOS is in-house software for one business, so there is no public
+   marketing site: the root is the app — the dashboard when signed in,
+   otherwise the login page. */
+function HomeRedirect() {
+  const { user, isLoading } = useAuth();
+  if (isLoading) {
+    return (
+      <div className="h-screen w-screen flex items-center justify-center">
+        <Spinner size="lg" />
+      </div>
+    );
+  }
+  return <Redirect to={user ? "/dashboard" : "/login"} />;
+}
+
 function PublicRoute({ component: Component }: { component: React.ComponentType }) {
   const [path] = useLocation();
   return (
@@ -289,16 +300,13 @@ function Router() {
     <Suspense fallback={<div className="min-h-screen flex items-center justify-center"><Spinner /></div>}>
     <Switch location={deferredLocation}>
       <Route path="/">
-        <PublicRoute component={LandingPage} />
+        <HomeRedirect />
       </Route>
-      <Route path="/pricing">
-        <PublicRoute component={PricingPage} />
-      </Route>
+      {/* Old sign-up links: there is no sign-up in a single-business install */}
+      <Route path="/pricing"><Redirect to="/login" /></Route>
+      <Route path="/register"><Redirect to="/login" /></Route>
       <Route path="/login">
         <PublicRoute component={LoginPage} />
-      </Route>
-      <Route path="/register">
-        <PublicRoute component={RegisterPage} />
       </Route>
       <Route path="/forgot-password">
         <PublicRoute component={ForgotPasswordPage} />
@@ -785,9 +793,6 @@ function Router() {
         <ProtectedRoute component={InventoryWastagePage} />
       </Route>
 
-      <Route path="/management/settings-integrations/account/modules">
-        <ProtectedRoute component={ModulesPage} />
-      </Route>
       <Route path="/settings/pos">
         <ProtectedRoute component={SettingsPOSPage} />
       </Route>
@@ -957,9 +962,8 @@ function Router() {
       <Route path="/management/tyro-eftpos"><Redirect to="/management/settings-integrations/integrations/tyro-eftpos" /></Route>
       <Route path="/management/import-export"><Redirect to="/management/settings-integrations/import-export" /></Route>
       <Route path="/management/sync"><Redirect to="/management/settings-integrations/sync" /></Route>
-      <Route path="/management/koapos"><Redirect to="/management/settings-integrations/system/misc" /></Route>
+      <Route path="/management/koapos"><Redirect to="/dashboard" /></Route>
       <Route path="/management/misc"><Redirect to="/management/settings-integrations/system/misc" /></Route>
-      <Route path="/modules"><Redirect to="/management/settings-integrations/account/modules" /></Route>
       <Route path="/marketing"><Redirect to="/marketing/overview" /></Route>
       <Route path="/management/marketing/landing-pages"><Redirect to="/management/marketing-reports/landing-pages/pages" /></Route>
       <Route path="/management/marketing/landing-page-templates"><Redirect to="/management/marketing-reports/landing-pages/templates" /></Route>

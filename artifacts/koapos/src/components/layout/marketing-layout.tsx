@@ -16,11 +16,6 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
                 KoaPOS
               </span>
             </Link>
-            <nav className="hidden md:flex gap-6">
-              <Link href="/pricing" className="text-sm font-medium text-muted-foreground hover:text-foreground transition-colors">
-                Pricing
-              </Link>
-            </nav>
           </div>
           <div className="flex items-center gap-4">
             {user ? (
@@ -28,14 +23,9 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
                 <Button>Go to Dashboard</Button>
               </Link>
             ) : (
-              <>
-                <Link href="/login" className="text-sm font-medium hover:underline">
-                  Log in
-                </Link>
-                <Link href="/register">
-                  <Button>Get Started</Button>
-                </Link>
-              </>
+              <Link href="/login" className="text-sm font-medium hover:underline">
+                Log in
+              </Link>
             )}
           </div>
         </div>

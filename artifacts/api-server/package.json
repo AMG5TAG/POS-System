@@ -12,7 +12,8 @@
     "transfer-merchant": "tsx scripts/transfer-merchant.ts",
     "db-fingerprint": "tsx scripts/db-fingerprint.ts",
     "migrate-ai-keys-to-vault": "tsx scripts/migrate-ai-keys-to-vault.ts",
-    "backfill-phone-e164": "tsx scripts/backfill-phone-e164.ts"
+    "backfill-phone-e164": "tsx scripts/backfill-phone-e164.ts",
+    "purge-other-merchants": "tsx scripts/purge-other-merchants.ts"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1057.0",

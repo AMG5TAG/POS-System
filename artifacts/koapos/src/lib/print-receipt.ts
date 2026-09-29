@@ -151,8 +151,6 @@ function svgToDataUrl(svg: string): string | null {
 
 function businessTemplateVars(biz?: ReceiptBusinessInfo): Record<string, string> {
   const b = biz ?? {};
-  const refCode = b.partnerReferralCode ?? "";
-  const refUrl = refCode ? `${publicOrigin()}/register?ref=${encodeURIComponent(refCode)}` : "";
   const now = new Date();
   return {
     // Always-available date/time tags (resolve on every document type).
@@ -165,8 +163,10 @@ function businessTemplateVars(biz?: ReceiptBusinessInfo): Record<string, string>
     "business.website": b.website ?? "",
     "business.tagline": b.tagline ?? "",
     "business.address": b.address ?? "",
-    "business.partner_referral_code": refCode,
-    "business.partner_referral_url": refUrl,
+    // The KoaPOS partner program is gone (single-business install); a template
+    // saved with these tags prints nothing rather than a literal {{…}}.
+    "business.partner_referral_code": "",
+    "business.partner_referral_url": "",
   };
 }
 

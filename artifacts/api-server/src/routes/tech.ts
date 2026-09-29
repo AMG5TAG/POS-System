@@ -8,6 +8,8 @@ import { sendSms } from "../services/sms";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { customerPortalUrl } from "../lib/publicUrl";
 import { NOTE_SEP, parseNotes, buildNoteTimestamp } from "../lib/service-job-notes";
+import { isSoleMerchantEmail } from "../lib/sole-merchant";
+import { isMerchantActive } from "../middlewares/requireAuth";
 
 /**
  * Technician web app ("Tech App") API.
@@ -85,10 +87,11 @@ async function findMerchantByUsername(username: string) {
       businessName: merchantsTable.businessName,
       logoUrl: merchantsTable.logoUrl,
       status: merchantsTable.status,
+      email: merchantsTable.email,
     })
     .from(merchantsTable)
     .where(eq(merchantsTable.username, username.toLowerCase()));
-  return m && m.status === "active" ? m : null;
+  return m && m.status === "active" && isSoleMerchantEmail(m.email) ? m : null;
 }
 
 /** Compact job shape for the tech list — heavy fields (photos, signature)
@@ -167,6 +170,8 @@ async function requireTech(
     res.status(401).json({ error: "Not signed in" });
     return null;
   }
+  /* A session opened for any business but the one this install runs is dead */
+  if (!(await isMerchantActive(tech.merchantId))) { res.status(401).json({ error: "Not signed in" }); return null; }
   /* Disabling the Tech App in Management cuts off existing sessions too */
   const settings = await getTechSettings(tech.merchantId);
   if (!settings.enabled) {

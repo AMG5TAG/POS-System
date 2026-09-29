@@ -642,17 +642,6 @@ export interface UpdateAuthEventStatus {
   status: UpdateAuthEventStatusStatus;
 }
 
-export interface RegisterInput {
-  email: string;
-  /** @minLength 8 */
-  password: string;
-  /** @minLength 1 */
-  businessName: string;
-  ownerName?: string;
-  phone?: string;
-  planId?: number;
-}
-
 export interface LoginInput {
   email: string;
   password: string;
@@ -754,55 +743,6 @@ export interface MerchantUpdate {
   securityAlertEmail?: boolean;
   passwordChangeAlertEmail?: boolean;
   requirePortalPassword?: boolean;
-}
-
-export interface Plan {
-  id: number;
-  name: string;
-  slug: string;
-  /** @nullable */
-  description?: string | null;
-  priceMonthly: number;
-  priceYearly: number;
-  /** @nullable */
-  maxRegisters: number | null;
-  /** @nullable */
-  maxStaff: number | null;
-  features: string[];
-  isPopular?: boolean;
-  sortOrder?: number;
-}
-
-export interface Module {
-  id: number;
-  name: string;
-  slug: string;
-  description: string;
-  priceMonthly: number;
-  category: string;
-  icon: string;
-  isEnabled?: boolean;
-}
-
-export type SubscriptionStatus = typeof SubscriptionStatus[keyof typeof SubscriptionStatus];
-
-
-export const SubscriptionStatus = {
-  active: 'active',
-  trialing: 'trialing',
-  past_due: 'past_due',
-  cancelled: 'cancelled',
-} as const;
-
-export interface Subscription {
-  id: number;
-  merchantId: number;
-  planId: number;
-  plan?: Plan;
-  status: SubscriptionStatus;
-  currentPeriodStart: string;
-  currentPeriodEnd: string;
-  cancelAtPeriodEnd?: boolean;
 }
 
 export interface ProductPriceHistoryEntry {
@@ -6946,41 +6886,6 @@ export interface SecuritySettingsUpdate {
      * @maximum 720
      */
   anomalyHoldHours?: number;
-}
-
-export type PartnerReferralStatus = typeof PartnerReferralStatus[keyof typeof PartnerReferralStatus];
-
-
-export const PartnerReferralStatus = {
-  pending: 'pending',
-  trial: 'trial',
-  active: 'active',
-  churned: 'churned',
-} as const;
-
-export interface PartnerReferral {
-  id: number;
-  referredBusinessName: string;
-  contactName: string;
-  contactEmail: string;
-  referredAt: string;
-  status: PartnerReferralStatus;
-  plan?: string | null;
-  bonusEarned: number;
-}
-
-export interface PartnerReferralListResponse {
-  referralCode: string;
-  referralUrl: string;
-  referrals: PartnerReferral[];
-}
-
-export interface CreatePartnerReferralBody {
-  /** @minLength 1 */
-  businessName: string;
-  /** @minLength 1 */
-  contactName: string;
-  contactEmail: string;
 }
 
 export type GetAuthEventsFlaggedCount200 = {

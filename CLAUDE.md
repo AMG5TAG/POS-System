@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-KoaPOS — a subscription-based Point of Sale system for Australian retail merchants. Clean, tablet/mobile-ready UI with a modular add-on marketplace. A pnpm monorepo (Node 24, TypeScript 5.9) with a React/Vite frontend, an Express 5 API server, PostgreSQL + Drizzle ORM, and a contract-first OpenAPI codegen pipeline.
+KoaPOS — an in-house Point of Sale system run for a **single business** (Koastal). It began as a multi-tenant SaaS; see "Single-business install" below for what that left behind. Clean, tablet/mobile-ready UI. A pnpm monorepo (Node 24, TypeScript 5.9) with a React/Vite frontend, an Express 5 API server, PostgreSQL + Drizzle ORM, and a contract-first OpenAPI codegen pipeline.
 
 ## Run & Operate
 
@@ -56,6 +56,41 @@ Workflow to change an endpoint: edit `openapi.yaml` → run codegen → implemen
 
 ### Auth
 Session-based (not JWT): `express-session` + `bcryptjs`, signed with `SESSION_SECRET`. The frontend's custom fetch (`lib/api-client-react/src/custom-fetch.ts`) sends `credentials: 'include'` so cookies flow through the Replit proxy. CORS is `origin: true, credentials: true` — both are required for session cookies to work.
+
+### Single-business install
+
+KoaPOS was built as a subscription SaaS with one `merchants` row per business,
+and every table is still scoped by `merchantId`. It now runs for one business,
+and the change was made **in code only — no rows were deleted or rewritten**.
+The other merchant accounts (the seeded demo, a second Koastal account, test
+accounts) and all of their data are still in the database.
+
+- **Who can sign in** is `SOLE_MERCHANT_EMAIL` (default `admin@koastal.com.au`),
+  checked by `isSoleMerchantEmail` in `api-server/src/lib/sole-merchant.ts`.
+  It is matched on email because row ids differ between dev and production.
+  The check is in every login route: owner login (`/auth/login`), staff email
+  login (`/staff-auth/login`), and the Tech App and Mobile POS PIN logins
+  (`findMerchantByUsername`). It is also in the session gates (`requireAuth`,
+  `requireTech`, `requireMpos`, via the cached `isMerchantActive`), so a session
+  opened before the switch dies too. Any other account answers exactly like an
+  unknown email. `sole-merchant.test.ts` pins this.
+- **The login email is fixed.** `/auth/change-email` refuses any address that is
+  not `SOLE_MERCHANT_EMAIL`, since changing it would lock the owner out on the
+  next request. To change it, update the row and the env var together.
+- **Staff are unaffected.** Staff PINs, owner/manager/cashier roles, staff email
+  logins and multi-location all still work *within* the one business.
+- **Removed:** sign-up (`/auth/register`), the landing and pricing pages (`/`
+  now redirects to `/dashboard` or `/login`), the plans/modules/subscriptions
+  API and the Modules page, the KoaPOS partner-referral program (its API, page,
+  template quick codes and the "platform referral link" document block), and
+  self-serve account deletion. None of it was enforced: billing never gated a
+  feature, so everything was and remains unlocked.
+- **Tables left in place, unused:** `plans`, `modules`, `subscriptions`,
+  `merchant_modules`, `partner_referrals`. Dropping them would be data loss for
+  no gain. Backup/restore still knows about them.
+- **Not blocked:** public customer-facing pages of the other accounts (portal,
+  booking, storefront, storefront API keys) and their background schedulers
+  still run, as they did before. Only signing in was closed off.
 
 ### Printing
 
@@ -799,11 +834,11 @@ are preferred over image blocks.
 
 ## Product surface
 
-Public marketing (Landing / Pricing / Register / Login); Dashboard (analytics, sales chart, KPIs); POS Register (product grid + cart + payment modal card/cash/split); Products (CRUD, categories, inventory, SKU, pricing); Customers (CRM, loyalty, spend, visits); Transactions (history, receipts, refunds); Inventory (stock levels, low-stock alerts); Staff (roles, PIN); Modules (enable/disable add-ons); Settings (business + regional).
+Login; Dashboard (analytics, sales chart, KPIs); POS Register (product grid + cart + payment modal card/cash/split); Products (CRUD, categories, inventory, SKU, pricing); Customers (CRM, loyalty, spend, visits); Transactions (history, receipts, refunds); Inventory (stock levels, low-stock alerts); Staff (roles, PIN); Settings (business + regional).
 
 ## Seeded demo data
 
-- Merchant: `demo@koapos.com` / `password123` (Growth plan)
+- Merchant: `demo@koapos.com` / `password123` — **cannot sign in** unless you run the API with `SOLE_MERCHANT_EMAIL=demo@koapos.com` (see "Single-business install")
 - Products: 7 across 3 categories (Beverages, Snacks, Electronics)
 - Customers: 2 (Sarah Johnson, Mike Chen)
 - Staff: 2 (Alex Taylor — owner, Jamie Nguyen — cashier)

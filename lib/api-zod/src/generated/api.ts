@@ -49,24 +49,6 @@ export const GetMeResponse = zod.object({
 
 
 /**
- * @summary Register a new merchant account
- */
-export const registerBodyPasswordMin = 8;
-
-
-
-
-export const RegisterBody = zod.object({
-  "email": zod.string().email(),
-  "password": zod.string().min(registerBodyPasswordMin),
-  "businessName": zod.string().min(1),
-  "ownerName": zod.string().optional(),
-  "phone": zod.string().optional(),
-  "planId": zod.number().optional()
-})
-
-
-/**
  * @summary Login with email and password
  */
 export const LoginBody = zod.object({
@@ -255,133 +237,6 @@ export const UpdateMerchantResponse = zod.object({
   "emailVerified": zod.boolean().optional(),
   "onboardingCompleted": zod.boolean().optional(),
   "isDemoAccount": zod.boolean().optional()
-})
-
-
-/**
- * @summary List all subscription plans
- */
-export const ListPlansResponseItem = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "description": zod.string().nullish(),
-  "priceMonthly": zod.number(),
-  "priceYearly": zod.number(),
-  "maxRegisters": zod.number().nullable(),
-  "maxStaff": zod.number().nullable(),
-  "features": zod.array(zod.string()),
-  "isPopular": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
-})
-export const ListPlansResponse = zod.array(ListPlansResponseItem)
-
-
-/**
- * @summary Get a single plan
- */
-export const GetPlanParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const GetPlanResponse = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "description": zod.string().nullish(),
-  "priceMonthly": zod.number(),
-  "priceYearly": zod.number(),
-  "maxRegisters": zod.number().nullable(),
-  "maxStaff": zod.number().nullable(),
-  "features": zod.array(zod.string()),
-  "isPopular": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
-})
-
-
-/**
- * @summary List all available add-on modules
- */
-export const ListModulesResponseItem = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "description": zod.string(),
-  "priceMonthly": zod.number(),
-  "category": zod.string(),
-  "icon": zod.string(),
-  "isEnabled": zod.boolean().optional()
-})
-export const ListModulesResponse = zod.array(ListModulesResponseItem)
-
-
-/**
- * @summary Get current merchant subscription
- */
-export const GetMySubscriptionResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "planId": zod.number(),
-  "plan": zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "description": zod.string().nullish(),
-  "priceMonthly": zod.number(),
-  "priceYearly": zod.number(),
-  "maxRegisters": zod.number().nullable(),
-  "maxStaff": zod.number().nullable(),
-  "features": zod.array(zod.string()),
-  "isPopular": zod.boolean().optional(),
-  "sortOrder": zod.number().optional()
-}).optional(),
-  "status": zod.enum(['active', 'trialing', 'past_due', 'cancelled']),
-  "currentPeriodStart": zod.coerce.date(),
-  "currentPeriodEnd": zod.coerce.date(),
-  "cancelAtPeriodEnd": zod.boolean().optional()
-})
-
-
-/**
- * @summary Get enabled modules for current merchant
- */
-export const GetMyModulesResponseItem = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "description": zod.string(),
-  "priceMonthly": zod.number(),
-  "category": zod.string(),
-  "icon": zod.string(),
-  "isEnabled": zod.boolean().optional()
-})
-export const GetMyModulesResponse = zod.array(GetMyModulesResponseItem)
-
-
-/**
- * @summary Enable a module for current merchant
- */
-export const EnableModuleParams = zod.object({
-  "moduleId": zod.coerce.number()
-})
-
-export const EnableModuleResponse = zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "description": zod.string(),
-  "priceMonthly": zod.number(),
-  "category": zod.string(),
-  "icon": zod.string(),
-  "isEnabled": zod.boolean().optional()
-})
-
-
-/**
- * @summary Disable a module for current merchant
- */
-export const DisableModuleParams = zod.object({
-  "moduleId": zod.coerce.number()
 })
 
 
@@ -12888,39 +12743,6 @@ export const RestoreBackupBody = zod.object({
 
 export const RestoreBackupResponse = zod.object({
   "ok": zod.boolean()
-})
-
-
-/**
- * @summary Get the authenticated merchant's referral code and list of referred businesses
- */
-export const ListPartnerReferralsResponse = zod.object({
-  "referralCode": zod.string(),
-  "referralUrl": zod.string(),
-  "referrals": zod.array(zod.object({
-  "id": zod.number(),
-  "referredBusinessName": zod.string(),
-  "contactName": zod.string(),
-  "contactEmail": zod.string().email(),
-  "referredAt": zod.coerce.date(),
-  "status": zod.enum(['pending', 'trial', 'active', 'churned']),
-  "plan": zod.string().nullish(),
-  "bonusEarned": zod.number()
-}))
-})
-
-
-/**
- * @summary Create a new partner referral for the authenticated merchant
- */
-
-
-
-
-export const CreatePartnerReferralBody = zod.object({
-  "businessName": zod.string().min(1),
-  "contactName": zod.string().min(1),
-  "contactEmail": zod.string().email()
 })
 
 

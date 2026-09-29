@@ -135,27 +135,6 @@ paths:
         "401":
           description: Unauthorized
 
-  /auth/register:
-    post:
-      operationId: register
-      tags: [auth]
-      summary: Register a new merchant account
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/RegisterInput"
-      responses:
-        "201":
-          description: Registered
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Merchant"
-        "400":
-          description: Validation error
-
   /auth/login:
     post:
       operationId: login
@@ -323,117 +302,6 @@ paths:
                 $ref: "#/components/schemas/Merchant"
 
   # ── Plans ─────────────────────────────────────────────────────────────────
-  /plans:
-    get:
-      operationId: listPlans
-      tags: [plans]
-      summary: List all subscription plans
-      responses:
-        "200":
-          description: List of plans
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Plan"
-
-  /plans/{id}:
-    get:
-      operationId: getPlan
-      tags: [plans]
-      summary: Get a single plan
-      parameters:
-        - name: id
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Plan
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Plan"
-
-  /modules:
-    get:
-      operationId: listModules
-      tags: [plans]
-      summary: List all available add-on modules
-      responses:
-        "200":
-          description: List of modules
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Module"
-
-  # ── Subscriptions ─────────────────────────────────────────────────────────
-  /subscriptions/me:
-    get:
-      operationId: getMySubscription
-      tags: [subscriptions]
-      summary: Get current merchant subscription
-      responses:
-        "200":
-          description: Subscription
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Subscription"
-
-  /subscriptions/me/modules:
-    get:
-      operationId: getMyModules
-      tags: [subscriptions]
-      summary: Get enabled modules for current merchant
-      responses:
-        "200":
-          description: Enabled modules
-          content:
-            application/json:
-              schema:
-                type: array
-                items:
-                  $ref: "#/components/schemas/Module"
-
-  /subscriptions/me/modules/{moduleId}:
-    post:
-      operationId: enableModule
-      tags: [subscriptions]
-      summary: Enable a module for current merchant
-      parameters:
-        - name: moduleId
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "200":
-          description: Module enabled
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/Module"
-    delete:
-      operationId: disableModule
-      tags: [subscriptions]
-      summary: Disable a module for current merchant
-      parameters:
-        - name: moduleId
-          in: path
-          required: true
-          schema:
-            type: integer
-      responses:
-        "204":
-          description: Module disabled
-
-  # ── Products ──────────────────────────────────────────────────────────────
   /products:
     get:
       operationId: listProducts
@@ -9555,42 +9423,6 @@ paths:
           description: Backup not found
 
   # ── Partner Referrals ─────────────────────────────────────────────────────
-  /partner-referrals:
-    get:
-      operationId: listPartnerReferrals
-      tags: [partner-referrals]
-      summary: Get the authenticated merchant's referral code and list of referred businesses
-      responses:
-        "200":
-          description: Partner referral data
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PartnerReferralListResponse"
-        "401":
-          description: Unauthorized
-    post:
-      operationId: createPartnerReferral
-      tags: [partner-referrals]
-      summary: Create a new partner referral for the authenticated merchant
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/CreatePartnerReferralBody"
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/PartnerReferral"
-        "400":
-          description: Validation error
-        "401":
-          description: Unauthorized
-
   /sms-templates:
     get:
       operationId: listSmsTemplates
@@ -10660,26 +10492,6 @@ components:
           type: string
           enum: [new, acknowledged, flagged]
 
-    RegisterInput:
-      type: object
-      required: [email, password, businessName]
-      properties:
-        email:
-          type: string
-          format: email
-        password:
-          type: string
-          minLength: 8
-        businessName:
-          type: string
-          minLength: 1
-        ownerName:
-          type: string
-        phone:
-          type: string
-        planId:
-          type: integer
-
     LoginInput:
       type: object
       required: [email, password]
@@ -10811,81 +10623,6 @@ components:
           type: boolean
 
     # ── Plans ────────────────────────────────────────────────────────────────
-    Plan:
-      type: object
-      required: [id, name, slug, priceMonthly, priceYearly, maxRegisters, maxStaff, features]
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-        slug:
-          type: string
-        description:
-          type: ["string", "null"]
-        priceMonthly:
-          type: number
-        priceYearly:
-          type: number
-        maxRegisters:
-          type: ["integer", "null"]
-        maxStaff:
-          type: ["integer", "null"]
-        features:
-          type: array
-          items:
-            type: string
-        isPopular:
-          type: boolean
-        sortOrder:
-          type: integer
-
-    Module:
-      type: object
-      required: [id, name, slug, description, priceMonthly, category, icon]
-      properties:
-        id:
-          type: integer
-        name:
-          type: string
-        slug:
-          type: string
-        description:
-          type: string
-        priceMonthly:
-          type: number
-        category:
-          type: string
-        icon:
-          type: string
-        isEnabled:
-          type: boolean
-
-    Subscription:
-      type: object
-      required: [id, merchantId, planId, status, currentPeriodStart, currentPeriodEnd]
-      properties:
-        id:
-          type: integer
-        merchantId:
-          type: integer
-        planId:
-          type: integer
-        plan:
-          $ref: "#/components/schemas/Plan"
-        status:
-          type: string
-          enum: [active, trialing, past_due, cancelled]
-        currentPeriodStart:
-          type: string
-          format: date-time
-        currentPeriodEnd:
-          type: string
-          format: date-time
-        cancelAtPeriodEnd:
-          type: boolean
-
-    # ── Products ─────────────────────────────────────────────────────────────
     ProductPriceHistoryEntry:
       type: object
       required: [id, productId, costPrice, changedAt]
@@ -18069,34 +17806,3 @@ components:
         anomalyHoldHours:     { type: integer, minimum: 1, maximum: 720 }
 
     # ── Partner Referrals ─────────────────────────────────────────────────────
-    PartnerReferral:
-      type: object
-      required: [id, referredBusinessName, contactName, contactEmail, referredAt, status, bonusEarned]
-      properties:
-        id:                   { type: integer }
-        referredBusinessName: { type: string }
-        contactName:          { type: string }
-        contactEmail:         { type: string, format: email }
-        referredAt:           { type: string, format: date-time }
-        status:               { type: string, enum: [pending, trial, active, churned] }
-        plan:                 { type: string, nullable: true }
-        bonusEarned:          { type: integer }
-
-    PartnerReferralListResponse:
-      type: object
-      required: [referralCode, referralUrl, referrals]
-      properties:
-        referralCode: { type: string }
-        referralUrl:  { type: string }
-        referrals:
-          type: array
-          items:
-            $ref: "#/components/schemas/PartnerReferral"
-
-    CreatePartnerReferralBody:
-      type: object
-      required: [businessName, contactName, contactEmail]
-      properties:
-        businessName:  { type: string, minLength: 1 }
-        contactName:   { type: string, minLength: 1 }
-        contactEmail:  { type: string, format: email }

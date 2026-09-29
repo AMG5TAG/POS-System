@@ -1,7 +1,7 @@
 import { useState, useEffect } from "react";
 import { useUnsavedChangesGuard } from "@/hooks/use-unsaved-changes-guard";
 import { AppLayout } from "@/components/layout/app-layout";
-import { useGetMerchant, useUpdateMerchant, useChangeEmail, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent, useMarkAuthEventsRead, useGetSecuritySettings, useUpdateSecuritySettings } from "@workspace/api-client-react";
+import { useGetMerchant, useUpdateMerchant, useChangePassword, useListAuthEvents, useGetAccountLockStatus, useUnlockAccount, useUpdateAuthEvent, useMarkAuthEventsRead, useGetSecuritySettings, useUpdateSecuritySettings } from "@workspace/api-client-react";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
@@ -670,43 +670,11 @@ export default function SettingsAccountPage() {
   const [showConfirm, setShowConfirm] = useState(false);
   const [pwSaving,   setPwSaving]   = useState(false);
 
-  // Email change state
-  const [newEmail,      setNewEmail]      = useState("");
-  const [confirmEmail,  setConfirmEmail]  = useState("");
-  const [emailPw,       setEmailPw]       = useState("");
-  const [showEmailPw,   setShowEmailPw]   = useState(false);
-  const [emailSaving,   setEmailSaving]   = useState(false);
-
   const pwMismatch  = confirmPw.length > 0 && newPw !== confirmPw;
   const pwTooShort  = newPw.length > 0 && newPw.length < 8;
   const canChangePw = currentPw.length > 0 && newPw.length >= 8 && newPw === confirmPw;
 
-  const emailMismatch  = confirmEmail.length > 0 && newEmail !== confirmEmail;
-  const emailInvalid   = newEmail.length > 0 && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail);
-  const canChangeEmail = newEmail.length > 0 && !emailInvalid && newEmail === confirmEmail && emailPw.length > 0;
-
-  const changeEmailMutation = useChangeEmail();
   const changePasswordMutation = useChangePassword();
-
-  const handleChangeEmail = () => {
-    if (!canChangeEmail) return;
-    setEmailSaving(true);
-    changeEmailMutation.mutate(
-      { data: { currentPassword: emailPw, newEmail } },
-      {
-        onSuccess: () => {
-          toast.success("Email updated successfully");
-          qc.invalidateQueries({ queryKey: ["merchant"] });
-          setNewEmail(""); setConfirmEmail(""); setEmailPw("");
-        },
-        onError: (err: unknown) => {
-          const msg = (err as { response?: { data?: { error?: string } } })?.response?.data?.error;
-          toast.error(msg ?? "Email change failed");
-        },
-        onSettled: () => setEmailSaving(false),
-      }
-    );
-  };
 
   const handleChangePassword = () => {
     if (!canChangePw) return;
@@ -745,8 +713,7 @@ export default function SettingsAccountPage() {
   const isAccountDirty =
     hasChanged ||
     currentPw.length > 0 ||
-    newPw.length > 0 ||
-    newEmail.length > 0;
+    newPw.length > 0;
 
   const { ConfirmDialog: AccountFormGuard } = useUnsavedChangesGuard(isAccountDirty, {
     title: "Unsaved account changes",
@@ -795,7 +762,7 @@ export default function SettingsAccountPage() {
     <AppLayout>
       <div className="p-6 md:p-8 space-y-8">
         <h1 className="text-2xl font-bold">Account</h1>
-        <p className="text-sm text-muted-foreground">Manage your login credentials, profile details, and subscription plan.</p>
+        <p className="text-sm text-muted-foreground">Manage your login credentials and profile details.</p>
 
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
@@ -814,14 +781,9 @@ export default function SettingsAccountPage() {
               <Label>Email Address</Label>
               <Input value={merchant?.email ?? ""} disabled className="bg-muted" />
               <p className="text-xs text-muted-foreground mt-1">
-                To change your email, use the <strong>Update Email</strong> card below.
+                This is the one login for this business and is fixed on the server
+                (<code>SOLE_MERCHANT_EMAIL</code>), so it can't be changed here.
               </p>
-            </div>
-            <div>
-              <Label>Plan</Label>
-              <div className="flex items-center gap-2 mt-1">
-                <Input value={(merchant as any)?.plan ?? "—"} disabled className="bg-muted capitalize" />
-              </div>
             </div>
           </CardContent>
         </Card>
@@ -914,76 +876,6 @@ export default function SettingsAccountPage() {
                 <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</>
               ) : (
                 "Update Password"
-              )}
-            </Button>
-          </CardContent>
-        </Card>
-
-        {/* Update Email */}
-        <Card id="update-email">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AtSign className="w-4 h-4" /> Update Email Address
-            </CardTitle>
-            <CardDescription>
-              Change the email address you use to log in to KoaPOS. Your current password is required for security.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="new-email">New Email Address</Label>
-              <Input
-                id="new-email"
-                type="email"
-                value={newEmail}
-                onChange={e => setNewEmail(e.target.value.trim())}
-                placeholder="new@example.com"
-                className={emailInvalid ? "border-destructive focus-visible:ring-destructive" : ""}
-              />
-              {emailInvalid && (
-                <p className="text-xs text-destructive">Please enter a valid email address</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="confirm-email">Confirm New Email</Label>
-              <Input
-                id="confirm-email"
-                type="email"
-                value={confirmEmail}
-                onChange={e => setConfirmEmail(e.target.value.trim())}
-                placeholder="Re-enter new email"
-                className={emailMismatch ? "border-destructive focus-visible:ring-destructive" : ""}
-              />
-              {emailMismatch && (
-                <p className="text-xs text-destructive">Email addresses do not match</p>
-              )}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="email-pw">Current Password</Label>
-              <div className="relative">
-                <Input
-                  id="email-pw"
-                  type={showEmailPw ? "text" : "password"}
-                  value={emailPw}
-                  onChange={e => setEmailPw(e.target.value)}
-                  placeholder="Confirm with your current password"
-                  className="pr-10"
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowEmailPw(v => !v)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  tabIndex={-1}
-                >
-                  {showEmailPw ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                </button>
-              </div>
-            </div>
-            <Button onClick={handleChangeEmail} disabled={!canChangeEmail || emailSaving}>
-              {emailSaving ? (
-                <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Updating…</>
-              ) : (
-                "Update Email"
               )}
             </Button>
           </CardContent>
@@ -1186,9 +1078,6 @@ export default function SettingsAccountPage() {
         {/* ── Demo Data Clear ─────────────────────────────────────────── */}
         <DemoDataCard />
 
-        {/* ── Close Account ──────────────────────────────────────────── */}
-        <CloseAccountCard />
-
         </div>{/* end right column */}
 
         </div>
@@ -1264,102 +1153,3 @@ function DemoDataCard() {
   );
 }
 
-/* ── Close Account Card ─────────────────────────────────────────────────── */
-
-function CloseAccountCard() {
-  const [confirmText, setConfirmText] = useState("");
-  const [password, setPassword] = useState("");
-  const [showPassword, setShowPassword] = useState(false);
-  const [loading, setLoading] = useState(false);
-  const [open, setOpen] = useState(false);
-
-  const canConfirm = confirmText === "DELETE" && password.length >= 8;
-
-  const handleClose = async () => {
-    if (!canConfirm) return;
-    setLoading(true);
-    try {
-      const res = await fetch("/api/auth/account", {
-        method: "DELETE",
-        credentials: "include",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ currentPassword: password }),
-      });
-      const data = await res.json().catch(() => ({})) as { ok?: boolean; error?: string };
-      if (!res.ok) { toast.error(data.error ?? "Failed to close account"); setLoading(false); return; }
-      toast.success("Your account has been closed.");
-      window.location.replace("/login");
-    } catch { toast.error("Failed to close account"); setLoading(false); }
-  };
-
-  return (
-    <Card className="border-destructive/30">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-destructive">
-          <UserX className="w-4 h-4" /> Close Account
-        </CardTitle>
-        <CardDescription>
-          Permanently delete your KoaPOS account and all associated data. This action is irreversible.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AlertDialog open={open} onOpenChange={setOpen}>
-          <AlertDialogTrigger asChild>
-            <Button variant="outline" className="border-destructive/40 text-destructive hover:bg-destructive/5">
-              <UserX className="w-4 h-4 mr-2" /> Close my account
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle className="text-destructive">Permanently close account?</AlertDialogTitle>
-              <AlertDialogDescription asChild>
-                <div className="space-y-4">
-                  <p>This will <strong>permanently delete</strong> your KoaPOS account, all products, customers, transactions, staff, settings, and every other record. There is no recovery.</p>
-                  <div className="space-y-2">
-                    <Label>Type <strong>DELETE</strong> to confirm</Label>
-                    <Input
-                      value={confirmText}
-                      onChange={(e) => setConfirmText(e.target.value)}
-                      placeholder="DELETE"
-                      className={confirmText && confirmText !== "DELETE" ? "border-destructive" : ""}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label>Confirm with your password</Label>
-                    <div className="relative">
-                      <Input
-                        type={showPassword ? "text" : "password"}
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
-                        placeholder="Current password"
-                        className="pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword((v) => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                        tabIndex={-1}
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel onClick={() => { setConfirmText(""); setPassword(""); }}>Cancel</AlertDialogCancel>
-              <Button
-                variant="destructive"
-                onClick={handleClose}
-                disabled={!canConfirm || loading}
-              >
-                {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Closing…</> : "Permanently close account"}
-              </Button>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </CardContent>
-    </Card>
-  );
-}

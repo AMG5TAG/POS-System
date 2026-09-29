@@ -9,6 +9,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
+import { isSoleMerchantEmail } from "../lib/sole-merchant";
 
 /**
  * Staff email + password sign-in (the "hybrid" auth model).
@@ -75,7 +76,7 @@ router.post("/staff-auth/login", loginLimiter, async (req, res): Promise<void> =
   if (!matched) { res.status(401).json({ error: "Invalid email or password" }); return; }
 
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, matched.merchantId));
-  if (!merchant || merchant.status !== "active") {
+  if (!merchant || merchant.status !== "active" || !isSoleMerchantEmail(merchant.email)) {
     res.status(403).json({ error: "This business account is not active. Please contact your manager." });
     return;
   }

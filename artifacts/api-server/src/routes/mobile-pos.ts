@@ -6,6 +6,8 @@ import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { completeLinkedWork } from "../lib/linked-work";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
+import { isSoleMerchantEmail } from "../lib/sole-merchant";
+import { isMerchantActive } from "../middlewares/requireAuth";
 
 /**
  * Mobile POS web app API.
@@ -61,10 +63,10 @@ async function getMobilePosSettings(merchantId: number) {
 
 async function findMerchantByUsername(username: string) {
   const [m] = await db
-    .select({ id: merchantsTable.id, businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl, status: merchantsTable.status })
+    .select({ id: merchantsTable.id, businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl, status: merchantsTable.status, email: merchantsTable.email })
     .from(merchantsTable)
     .where(eq(merchantsTable.username, username.toLowerCase()));
-  return m && m.status === "active" ? m : null;
+  return m && m.status === "active" && isSoleMerchantEmail(m.email) ? m : null;
 }
 
 /** Auth gate — verifies the session staff member still exists, is active, and
@@ -80,6 +82,8 @@ async function requireMpos(req: Request, res: Response): Promise<{
     .from(staffTable)
     .where(and(eq(staffTable.id, mpos.staffId), eq(staffTable.merchantId, mpos.merchantId)));
   if (!staff || staff.isActive !== "true") { res.status(401).json({ error: "Not signed in" }); return null; }
+  /* A session opened for any business but the one this install runs is dead */
+  if (!(await isMerchantActive(mpos.merchantId))) { res.status(401).json({ error: "Not signed in" }); return null; }
   const settings = await getMobilePosSettings(mpos.merchantId);
   if (!settings.enabled) { res.status(403).json({ error: "The Mobile POS app is currently disabled for this business" }); return null; }
   return { staffId: staff.id, merchantId: staff.merchantId, staffName: staff.name, role: staff.role, settings };

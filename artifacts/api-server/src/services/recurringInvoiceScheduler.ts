@@ -5,6 +5,7 @@ import { jitteredStart } from "../lib/scheduler-jitter";
 import { sendEmail } from "./email";
 import { getInvoiceSettings } from "../routes/invoice-settings";
 import type { Logger } from "pino";
+import { isMerchantActive } from "../middlewares/requireAuth";
 
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
@@ -140,6 +141,10 @@ export async function processRecurringInvoices(logger: Logger): Promise<void> {
 
   for (const row of due) {
     const inv = row.invoice;
+    // Only the one business this install runs bills anyone. Other accounts are
+    // kept in the database but locked out (lib/sole-merchant.ts); their templates
+    // must not keep generating and emailing invoices nobody can open.
+    if (!(await isMerchantActive(inv.merchantId))) continue;
     const customerEmail = row.customerEmail ?? null;
     const customerName = [row.customerFirstName, row.customerLastName].filter(Boolean).join(" ") || null;
     const merchantName = row.merchantName ?? "Your Merchant";

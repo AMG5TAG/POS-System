@@ -5,6 +5,7 @@ import type { Logger } from "pino";
 import { getInvoiceSettings } from "../routes/invoice-settings";
 import { sendInvoiceEmailInternal } from "../routes/invoices";
 import { sendInvoiceSms } from "./invoiceSms";
+import { isMerchantActive } from "../middlewares/requireAuth";
 
 type InvoiceEvent = { type: string; timestamp: string; detail?: string };
 type LineItem = { description: string; quantity: number; unitPrice: number; taxRate: number };
@@ -274,6 +275,8 @@ async function processMerchant(merchantId: number, settings: Settings, logger: L
 export async function processInvoiceNotifications(logger: Logger): Promise<void> {
   const merchants = await db.select({ merchantId: invoiceSettingsTable.merchantId }).from(invoiceSettingsTable);
   for (const { merchantId } of merchants) {
+    // Locked-out accounts (anything but the single business) chase no one.
+    if (!(await isMerchantActive(merchantId))) continue;
     try {
       const settings = await getInvoiceSettings(merchantId);
       if (

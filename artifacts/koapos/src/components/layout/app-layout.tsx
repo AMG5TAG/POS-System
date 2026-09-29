@@ -198,7 +198,6 @@ const SEARCH_INDEX = [
   { label: "Overview",            href: "/management/overview",         icon: LayoutDashboard, group: "Management" },
   { label: "Account",            href: "/management/settings-integrations/account",          icon: UserCircle,      group: "Management" },
   { label: "Themes",             href: "/management/customisation/themes",                   icon: Palette,         group: "Management" },
-  { label: "Modules",            href: "/management/settings-integrations/account/modules",                     icon: Blocks,          group: "Management" },
   { label: "AI Assistant",       href: "/management/marketing-reports/ai-assistant",             icon: Brain,          group: "Management" },
   { label: "Business Details",   href: "/management/settings-integrations/business-details",         icon: Building2,       group: "Management" },
   { label: "Regional Settings",  href: "/management/settings-integrations/business-details/regional",         icon: Globe,           group: "Management" },
@@ -232,7 +231,6 @@ const SEARCH_INDEX = [
   { label: "Inventory · Modifier Groups", href: "/management/products-inventory/modifier-groups",   icon: Layers,          group: "Management" },
   { label: "Inventory · Product Types",   href: "/management/products-inventory/product-types",     icon: Tag,             group: "Management" },
   { label: "KPIs & Targets",     href: "/management/staff-operations/kpis-targets",             icon: Target,          group: "Management" },
-  { label: "KoaPOS Partner Referrals",     href: "/management/settings-integrations/system/misc",                    icon: Sparkles,  group: "Management" },
   { label: "Layby",              href: "/management/customers/discounts-pricing/layby",            icon: Package2,        group: "Management" },
   { label: "Labels",             href: "/management/customisation/templates/labels",       icon: Tag,             group: "Management" },
   { label: "Label Templates",    href: "/management/customisation/templates/labels",       icon: LayoutTemplate,  group: "Management" },
@@ -325,7 +323,7 @@ function inMarketingSection(loc: string): boolean {
   return loc === "/marketing" || loc.startsWith("/marketing/");
 }
 function inManagementSection(loc: string): boolean {
-  return loc.startsWith("/management/") || loc === "/modules" || loc.startsWith("/settings/");
+  return loc.startsWith("/management/") || loc.startsWith("/settings/");
 }
 
 

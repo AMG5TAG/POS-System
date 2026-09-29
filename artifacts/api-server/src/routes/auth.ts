@@ -1,12 +1,12 @@
 import { Router, type IRouter } from "express";
 import rateLimit from "express-rate-limit";
 import { randomBytes, createHash, createHmac } from "crypto";
-import { db, merchantsTable, plansTable, subscriptionsTable, productTypesTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, posRegistersTable, partnerReferralsTable } from "@workspace/db";
+import { db, merchantsTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable } from "@workspace/db";
 import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { hashPassword, verifyPassword } from "../lib/auth";
-import { RegisterBody, LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
+import { LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requireAuth";
-import { getDeleteOrderedTables } from "../lib/backup-tables";
+import { isSoleMerchantEmail } from "../lib/sole-merchant";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
 import { sendEmail, sendSystemEmail } from "../services/email";
 import { validateABN } from "../lib/abn";
@@ -49,54 +49,6 @@ function parseUserAgent(ua: string): string {
   if (/Safari\//.test(ua) && !/Chrome/.test(ua)) return "Safari";
   if (/OPR\//.test(ua)) return "Opera";
   return "Browser";
-}
-
-const DEFAULT_PRODUCT_TYPES: Array<{
-  name: string; slug: string; sortOrder: number;
-  description: string; trackStock: boolean; printCode: boolean;
-  requiresShipping: boolean; hasVariants: boolean; isDigital: boolean; isService: boolean; isComposite: boolean;
-}> = [
-  { name: "Standard", slug: "standard", sortOrder: 0, description: "Physical, basic inventory tracking", trackStock: true, printCode: false, requiresShipping: true, hasVariants: false, isDigital: false, isService: false, isComposite: false },
-  { name: "Variable", slug: "variable", sortOrder: 1, description: "Parent with child variants for sizes, colours, attributes", trackStock: true, printCode: false, requiresShipping: true, hasVariants: true, isDigital: false, isService: false, isComposite: false },
-  { name: "Digital",  slug: "digital",  sortOrder: 2, description: "Downloadable files, no physical shipping", trackStock: false, printCode: false, requiresShipping: false, hasVariants: false, isDigital: true, isService: false, isComposite: false },
-  { name: "Service",  slug: "service",  sortOrder: 3, description: "Time-based or labour-based, non-shippable", trackStock: false, printCode: false, requiresShipping: false, hasVariants: false, isDigital: false, isService: true, isComposite: false },
-  { name: "Composite", slug: "composite", sortOrder: 4, description: "Bundles or kits made from existing items, adjusting constituent stock", trackStock: true, printCode: false, requiresShipping: true, hasVariants: false, isDigital: false, isService: false, isComposite: true },
-  { name: "Digital Code", slug: "digital_code", sortOrder: 5, description: "Digital product keys (game keys, software licences)", trackStock: true, printCode: true, requiresShipping: false, hasVariants: false, isDigital: true, isService: false, isComposite: false },
-];
-
-async function seedProductTypes(merchantId: number): Promise<void> {
-  await db.insert(productTypesTable).values(
-    DEFAULT_PRODUCT_TYPES.map((t) => ({
-      merchantId,
-      name: t.name,
-      slug: t.slug,
-      description: t.description,
-      trackStock: t.trackStock,
-      printCode: t.printCode,
-      requiresShipping: t.requiresShipping,
-      hasVariants: t.hasVariants,
-      isDigital: t.isDigital,
-      isService: t.isService,
-      isComposite: t.isComposite,
-      sortOrder: t.sortOrder,
-    }))
-  );
-}
-
-async function seedDefaultRegister(merchantId: number): Promise<void> {
-  const existing = await db
-    .select({ id: posRegistersTable.id })
-    .from(posRegistersTable)
-    .where(eq(posRegistersTable.merchantId, merchantId))
-    .limit(1);
-  if (existing.length === 0) {
-    await db.insert(posRegistersTable).values({
-      merchantId,
-      registerId: "MAIN",
-      name: "Main Register",
-      type: "Cash",
-    });
-  }
 }
 
 const router: IRouter = Router();
@@ -153,125 +105,6 @@ router.get("/auth/me", async (req, res): Promise<void> => {
   }
 
   res.json(formatMerchant(merchant, req.session.staffRole ?? "owner"));
-});
-
-router.post("/auth/register", authLimiter, async (req, res): Promise<void> => {
-  const parsed = RegisterBody.safeParse(req.body);
-  if (!parsed.success) {
-    res.status(400).json({ error: parsed.error.message });
-    return;
-  }
-
-  const { email: rawEmail, password, businessName, ownerName, phone, planId } = parsed.data;
-  const email = rawEmail.trim().toLowerCase();
-
-  const [existing] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
-  if (existing) {
-    res.status(400).json({ error: "Email already registered" });
-    return;
-  }
-
-  const passwordHash = await hashPassword(password);
-  const [merchant] = await db
-    .insert(merchantsTable)
-    .values({
-      email, passwordHash, businessName, ownerName, phone,
-      tosAcceptedAt: new Date(),
-      tosAcceptedIp: req.ip ?? null,
-      isDemoAccount: "true",
-    })
-    .returning();
-
-  // Get the plan (use planId if provided, else default to Starter = id 1)
-  const targetPlanId = planId ?? 1;
-  const [plan] = await db.select().from(plansTable).where(eq(plansTable.id, targetPlanId));
-  if (plan) {
-    const periodEnd = new Date();
-    periodEnd.setDate(periodEnd.getDate() + 30);
-    await db.insert(subscriptionsTable).values({
-      merchantId: merchant.id,
-      planId: plan.id,
-      status: "active",
-      currentPeriodEnd: periodEnd,
-    });
-  }
-
-  // Partner referral attribution: if the signup arrived via a "Powered by KoaPOS"
-  // landing-page footer (?ref=CODE), credit the referring merchant. Read from the
-  // raw body since RegisterBody strips unknown keys.
-  const referralCode = typeof (req.body as { referralCode?: unknown })?.referralCode === "string"
-    ? (req.body as { referralCode: string }).referralCode.trim()
-    : "";
-  if (referralCode) {
-    const [referrer] = await db.select({ id: merchantsTable.id })
-      .from(merchantsTable).where(eq(merchantsTable.partnerReferralCode, referralCode)).limit(1);
-    if (referrer && referrer.id !== merchant.id) {
-      await db.insert(partnerReferralsTable).values({
-        referrerMerchantId: referrer.id,
-        referredBusinessName: businessName,
-        contactName: ownerName ?? businessName,
-        contactEmail: email,
-        plan: plan?.name ?? null,
-        status: "pending",
-      });
-    }
-  }
-
-  await seedProductTypes(merchant.id);
-  await seedDefaultRegister(merchant.id);
-
-  // Verification + welcome emails — fire-and-forget, do not block registration
-  const appBase = process.env.APP_BASE_URL ?? `${req.protocol}://${req.get("host")}`;
-
-  const verifySecret = process.env.EMAIL_VERIFY_SECRET ?? "koapos-dev-verify";
-  const verifyHmac = createHmac("sha256", verifySecret).update(String(merchant.id)).digest("hex");
-  const verifyToken = `${merchant.id}.${verifyHmac}`;
-  const verifyUrl = `${appBase}/api/auth/verify-email?token=${verifyToken}`;
-
-  void sendSystemEmail({
-    to: merchant.email,
-    subject: "Verify your KoaPOS email address",
-    html: `
-      <div style="font-family:sans-serif;max-width:540px;margin:0 auto;color:#111">
-        <h2 style="margin-top:0;color:#16a34a">Verify your email address</h2>
-        <p>Click the button below to verify your email and activate your KoaPOS account.</p>
-        <p style="margin-top:24px">
-          <a href="${verifyUrl}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Verify email address →</a>
-        </p>
-        <p style="color:#666;font-size:13px;margin-top:24px">This link expires after 7 days. If you didn't create a KoaPOS account, you can ignore this email.</p>
-      </div>
-    `,
-    text: `Verify your KoaPOS email address\n\nClick here to verify: ${verifyUrl}\n\nIf you didn't create a KoaPOS account, ignore this email.`,
-  });
-  void sendSystemEmail({
-    to: merchant.email,
-    subject: "Welcome to KoaPOS 🎉",
-    html: `
-      <div style="font-family:sans-serif;max-width:560px;margin:0 auto;color:#111">
-        <h2 style="margin-top:0;color:#16a34a">Welcome to KoaPOS, ${businessName}!</h2>
-        <p>Your account is ready. Here are three things to do first:</p>
-        <ol style="padding-left:20px;line-height:1.8">
-          <li><a href="${appBase}/products" style="color:#16a34a;font-weight:600">Add your first product</a> — set up your catalogue before your first sale.</li>
-          <li><a href="${appBase}/staff" style="color:#16a34a;font-weight:600">Invite your team</a> — add staff members and assign roles.</li>
-          <li><a href="${appBase}/management/registers" style="color:#16a34a;font-weight:600">Configure your receipt</a> — add your logo, ABN, and contact details.</li>
-        </ol>
-        <p style="margin-top:24px">
-          <a href="${appBase}/dashboard" style="background:#16a34a;color:#fff;padding:10px 20px;border-radius:6px;text-decoration:none;font-weight:600">Go to your dashboard →</a>
-        </p>
-        <p style="color:#666;font-size:13px;margin-top:32px">
-          Need help? Reply to this email or visit your dashboard at any time.
-        </p>
-      </div>
-    `,
-    text: `Welcome to KoaPOS, ${businessName}!\n\n1. Add your first product: ${appBase}/products\n2. Invite your team: ${appBase}/staff\n3. Configure your receipt: ${appBase}/management/registers\n\nGo to your dashboard: ${appBase}/dashboard`,
-  });
-
-  await new Promise<void>((resolve, reject) => {
-    req.session.regenerate((err) => (err ? reject(err) : resolve()));
-  });
-  req.session.merchantId = merchant.id;
-  req.session.staffRole = "owner";
-  res.status(201).json(formatMerchant(merchant, "owner"));
 });
 
 router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
@@ -345,7 +178,9 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.email, email));
 
-  if (!merchant || merchant.status !== "active") {
+  // Only the one business this install runs may sign in; every other account is
+  // kept but answers exactly like an unknown email.
+  if (!merchant || merchant.status !== "active" || !isSoleMerchantEmail(merchant.email)) {
     const { attemptsRemaining } = await recordFailedAttempt(email);
     await db.insert(authEventsTable).values({ merchantId: merchant?.id ?? null, ipAddress: ip, userAgent: ua, outcome: "not_found" });
     res.status(401).json({ error: "Invalid email or password", attemptsRemaining });
@@ -990,6 +825,12 @@ router.post("/auth/change-email", requireAuth, async (req, res): Promise<void> =
   const { currentPassword, newEmail: rawEmail } = parsed.data;
   const trimmedEmail = rawEmail.trim().toLowerCase();
   const merchantId = req.session.merchantId!;
+  // The login email is what identifies the single business (SOLE_MERCHANT_EMAIL);
+  // changing it here would lock the owner out on the very next request.
+  if (!isSoleMerchantEmail(trimmedEmail)) {
+    res.status(409).json({ error: "The business login email is fixed for this installation. Changing it needs SOLE_MERCHANT_EMAIL updated on the server at the same time." });
+    return;
+  }
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
   if (!merchant || !(await verifyPassword(currentPassword, merchant.passwordHash))) {
     res.status(401).json({ error: "Current password is incorrect" });
@@ -1221,53 +1062,6 @@ router.patch("/auth/onboarding/complete", requireAuth, async (req, res): Promise
     .where(eq(merchantsTable.id, req.session.merchantId!));
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, req.session.merchantId!));
   res.json(formatMerchant(merchant!, req.session.staffRole ?? "owner"));
-});
-
-/* ── Account deletion ────────────────────────────────────────────────────── */
-
-router.delete("/auth/account", requireAuth, async (req, res): Promise<void> => {
-  const merchantId = req.session.merchantId!;
-  const { currentPassword } = req.body as { currentPassword?: string };
-  if (!currentPassword) {
-    res.status(400).json({ error: "Current password is required." });
-    return;
-  }
-
-  const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
-  if (!merchant) { res.status(404).json({ error: "Not found" }); return; }
-
-  if (!(await verifyPassword(currentPassword, merchant.passwordHash))) {
-    res.status(401).json({ error: "Incorrect password." });
-    return;
-  }
-
-  // Closing an account purges all of the merchant's business data, then
-  // SUSPENDS the merchant row rather than hard-deleting it: a database trigger
-  // (prevent_merchant_delete) intentionally forbids DELETEs on `merchants`, and
-  // requireAuth/login already reject any account whose status is not "active",
-  // so suspension fully and irreversibly locks out access.
-  //
-  // Reuse the shared merchant-scoped-table discovery (the same set backup/restore
-  // operate on) so every owned table — including ones keyed by a non-`merchantId`
-  // column such as partner_referrals (referrerMerchantId) — is purged child-first.
-  const deleteOrder = getDeleteOrderedTables();
-
-  await db.transaction(async (tx) => {
-    for (const { table, merchantColKey } of deleteOrder) {
-      const col = (table as unknown as Record<string, unknown>)[merchantColKey] as Parameters<typeof eq>[0];
-      await tx.delete(table).where(eq(col, merchantId));
-    }
-    // Suspend (not DELETE) the merchant: hard deletes are blocked by the
-    // prevent_merchant_delete trigger; suspension locks out all access.
-    await tx.update(merchantsTable).set({ status: "suspended" }).where(eq(merchantsTable.id, merchantId));
-  });
-
-  // Evict the cached "active" status immediately so any other open sessions for
-  // this account lose API access on their very next request (not up to 60s later).
-  invalidateMerchantStatusCache(merchantId);
-
-  req.session.destroy(() => {});
-  res.json({ ok: true });
 });
 
 export default router;

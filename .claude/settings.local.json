@@ -205,6 +205,9 @@
       "Bash(ps -eo pid,ppid,etime,cmd)",
       "Bash(curl -s https://api.resend.com/*)",
       "Bash(curl -sS https://api.resend.com/*)"
+    ],
+    "ask": [
+      "Bash(PGOPTIONS=\"-c default_transaction_read_only=on\" psql \"$PROD_DATABASE_URL\":*)"
     ]
   }
 }
