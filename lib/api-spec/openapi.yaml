@@ -36,8 +36,6 @@ tags:
     description: Loyalty program settings
   - name: service-jobs
     description: Service job management
-  - name: service-settings
-    description: Per-merchant service job menu options
   - name: invoice-settings
     description: Per-merchant invoicing defaults, reminders and sending options
   - name: Storage
@@ -45,7 +43,7 @@ tags:
   - name: cameras
     description: IP camera management and snapshots
   - name: openai
-    description: AI assistant. Served by Claude where configured, OpenAI as fallback.
+    description: AI assistant, served by Claude. (Path name is historical.)
   - name: ai
     description: AI feature settings and kill-switch
   - name: brands
@@ -95,7 +93,7 @@ tags:
   - name: Marketing
     description: QR codes, email templates, campaigns, landing pages, and shortlinks
   - name: OnlineStore
-    description: Online store, shipping carriers, marketplace connections, and delivery orders
+    description: Shipping carriers and delivery orders
   - name: invoices
     description: Invoice management and payment collection
   - name: xero
@@ -1900,36 +1898,6 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/LoyaltySettings"
-
-  /service-settings:
-    get:
-      operationId: getServiceSettings
-      tags: [service-settings]
-      summary: Get merchant service job menu options
-      responses:
-        "200":
-          description: Service settings
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServiceSettings"
-    put:
-      operationId: updateServiceSettings
-      tags: [service-settings]
-      summary: Update merchant service job menu options
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/ServiceSettingsInput"
-      responses:
-        "200":
-          description: Updated service settings
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/ServiceSettings"
 
   /invoice-settings:
     get:
@@ -5477,35 +5445,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/PosSettings" }
 
-  /payment-surcharges:
-    get:
-      operationId: getPaymentSurcharges
-      summary: Get per-payment-method surcharge config
-      tags: [POS]
-      security: [{ session: [] }]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/PaymentSurchargeListResponse" }
-    put:
-      operationId: updatePaymentSurcharges
-      summary: Bulk upsert per-payment-method surcharge config
-      tags: [POS]
-      security: [{ session: [] }]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/PaymentSurchargesInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/PaymentSurchargeListResponse" }
-
   /layby-settings:
     get:
       operationId: getLaybySettings
@@ -6161,160 +6100,6 @@ paths:
             application/json:
               schema: { $ref: "#/components/schemas/ShortlinkSettings" }
 
-  /online-store-settings:
-    get:
-      operationId: getOnlineStoreSettings
-      summary: Get online store settings
-      tags: [OnlineStore]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnlineStoreSettings" }
-    put:
-      operationId: upsertOnlineStoreSettings
-      summary: Upsert online store settings
-      tags: [OnlineStore]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/OnlineStoreSettingsInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnlineStoreSettings" }
-
-  /online-store/ai/status:
-    get:
-      operationId: getOnlineStoreAiStatus
-      summary: Whether AI store generation is available, and which provider serves it
-      tags: [OnlineStore]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnlineStoreAiStatus" }
-
-  /online-store/ai/generate:
-    post:
-      operationId: generateOnlineStoreDesign
-      summary: Generate a storefront design from the merchant's business details and catalogue
-      description: >-
-        Returns a draft only — theme and pages the editor previews. Nothing is
-        saved; the merchant applies the draft through the normal settings upsert.
-      tags: [OnlineStore]
-      requestBody:
-        required: false
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/OnlineStoreAiGenerateInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnlineStoreAiDraft" }
-        "429":
-          description: Too many generations
-        "502":
-          description: The AI service failed or returned an unusable design
-        "503":
-          description: No AI provider is configured
-
-  /online-store-thirdparty:
-    get:
-      operationId: getOnlineStoreThirdparty
-      summary: Get third-party store connection
-      tags: [OnlineStore]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnlineStoreThirdparty" }
-    put:
-      operationId: upsertOnlineStoreThirdparty
-      summary: Upsert third-party store connection
-      tags: [OnlineStore]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/OnlineStoreThirdpartyInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/OnlineStoreThirdparty" }
-
-  /storefront-api-keys:
-    get:
-      operationId: listStorefrontApiKeys
-      summary: List Storefront Data API keys, with the scope catalogue
-      tags: [OnlineStore]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/StorefrontApiKeyListResponse" }
-    post:
-      operationId: createStorefrontApiKey
-      summary: Issue a Storefront Data API key (returns the secret once)
-      tags: [OnlineStore]
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/StorefrontApiKeyInput" }
-      responses:
-        "201":
-          description: Created
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/StorefrontApiKeyCreated" }
-        "400":
-          description: Too many active keys
-
-  /storefront-api-keys/{id}:
-    delete:
-      operationId: revokeStorefrontApiKey
-      summary: Revoke a Storefront Data API key
-      tags: [OnlineStore]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
-      responses:
-        "204":
-          description: Revoked
-
-  /storefront-api-keys/{id}/manifest:
-    get:
-      operationId: getStorefrontApiManifest
-      summary: Connection brief for a key, for the merchant's AI or developer
-      tags: [OnlineStore]
-      parameters:
-        - in: path
-          name: id
-          required: true
-          schema: { type: integer }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/StorefrontApiManifest" }
-        "404":
-          description: Not found
-
   /shipping-carriers:
     get:
       operationId: listShippingCarriers
@@ -6403,69 +6188,6 @@ paths:
           content:
             application/json:
               schema: { $ref: "#/components/schemas/ShippingCarrier" }
-
-  /marketplace-connections:
-    get:
-      operationId: listMarketplaceConnections
-      summary: List marketplace connections
-      tags: [OnlineStore]
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MarketplaceConnectionListResponse" }
-
-  /marketplace-connections/{marketplaceId}:
-    get:
-      operationId: getMarketplaceConnection
-      summary: Get marketplace connection
-      tags: [OnlineStore]
-      parameters:
-        - in: path
-          name: marketplaceId
-          required: true
-          schema: { type: string }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MarketplaceConnection" }
-        "404":
-          description: Not found
-    put:
-      operationId: upsertMarketplaceConnection
-      summary: Upsert marketplace connection
-      tags: [OnlineStore]
-      parameters:
-        - in: path
-          name: marketplaceId
-          required: true
-          schema: { type: string }
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema: { $ref: "#/components/schemas/MarketplaceConnectionInput" }
-      responses:
-        "200":
-          description: OK
-          content:
-            application/json:
-              schema: { $ref: "#/components/schemas/MarketplaceConnection" }
-    delete:
-      operationId: deleteMarketplaceConnection
-      summary: Delete marketplace connection
-      tags: [OnlineStore]
-      parameters:
-        - in: path
-          name: marketplaceId
-          required: true
-          schema: { type: string }
-      responses:
-        "204":
-          description: Deleted
 
   /delivery-orders:
     get:
@@ -8169,28 +7891,6 @@ paths:
           description: Validation error
 
   # ── Feedback ──────────────────────────────────────────────────────────────
-  /feedback:
-    post:
-      operationId: submitFeedback
-      tags: [auth]
-      summary: Submit a bug report or feature request
-      requestBody:
-        required: true
-        content:
-          application/json:
-            schema:
-              $ref: "#/components/schemas/FeedbackInput"
-      responses:
-        "200":
-          description: Feedback submitted
-          content:
-            application/json:
-              schema:
-                $ref: "#/components/schemas/OkResult"
-        "400":
-          description: Validation error
-
-  # ── Vault ─────────────────────────────────────────────────────────────────
   /vault/status:
     get:
       operationId: getVaultStatus
@@ -10359,15 +10059,8 @@ components:
       required: [id, type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp, onedrive, nextcloud] }
+        type: { type: string, enum: [local, sftp, nextcloud] }
         directory: { type: string, nullable: true }
-        bucket: { type: string, nullable: true }
-        region: { type: string, nullable: true }
-        accessKeyId: { type: string, nullable: true }
-        secretAccessKeySet: { type: boolean }
-        projectId: { type: string, nullable: true }
-        gcsBucket: { type: string, nullable: true }
-        serviceAccountJsonSet: { type: boolean }
         host: { type: string, nullable: true }
         port: { type: integer, nullable: true }
         username: { type: string, nullable: true }
@@ -10392,15 +10085,8 @@ components:
       required: [type]
       properties:
         id: { type: string }
-        type: { type: string, enum: [local, s3, gcs, sftp, onedrive, nextcloud] }
+        type: { type: string, enum: [local, sftp, nextcloud] }
         directory: { type: string }
-        bucket: { type: string }
-        region: { type: string }
-        accessKeyId: { type: string }
-        secretAccessKey: { type: string }
-        projectId: { type: string }
-        gcsBucket: { type: string }
-        serviceAccountJson: { type: string }
         host: { type: string }
         port: { type: integer }
         username: { type: string }
@@ -13615,54 +13301,6 @@ components:
     # ── Service Settings ──────────────────────────────────────────────────────
     # Booleans toggling each section of the service job menu. All optional;
     # an omitted key defaults to true (section visible).
-    ServiceSettings:
-      type: object
-      required:
-        [showQuote, showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
-         showTechnicianTime, showSignOff, showShipping, showNotes,
-         repairWarrantyDays, reworkWarrantyDays, defaultPrint]
-      properties:
-        showQuote:          { type: boolean }
-        showPartsLabour:    { type: boolean }
-        showApprovalDeposit: { type: boolean }
-        showDiagnostics:    { type: boolean }
-        showWarranty:       { type: boolean }
-        showTechnicianTime: { type: boolean }
-        showSignOff:        { type: boolean }
-        showShipping:       { type: boolean }
-        showNotes:          { type: boolean }
-        repairWarrantyDays: { type: integer, minimum: 0, description: "Default repair warranty period (days) pre-filled on new service jobs." }
-        reworkWarrantyDays: { type: integer, minimum: 0, description: "Default warranty period (days) applied to no-charge rework jobs." }
-        defaultPrint:
-          type: string
-          enum: [ask, a4, "80mm", sticker]
-          description: >-
-            What the Print button on a service job produces. "ask" (the default)
-            keeps the chooser; the others print that document straight away.
-    ServiceSettingsInput:
-      type: object
-      required:
-        [showPartsLabour, showApprovalDeposit, showDiagnostics, showWarranty,
-         showTechnicianTime, showSignOff, showShipping, showNotes]
-      properties:
-        showQuote:          { type: boolean }
-        showPartsLabour:    { type: boolean }
-        showApprovalDeposit: { type: boolean }
-        showDiagnostics:    { type: boolean }
-        showWarranty:       { type: boolean }
-        showTechnicianTime: { type: boolean }
-        showSignOff:        { type: boolean }
-        showShipping:       { type: boolean }
-        showNotes:          { type: boolean }
-        repairWarrantyDays: { type: integer, minimum: 0 }
-        reworkWarrantyDays: { type: integer, minimum: 0 }
-        defaultPrint:
-          type: string
-          enum: [ask, a4, "80mm", sticker]
-          description: >-
-            What the Print button on a service job produces. "ask" (the default)
-            keeps the chooser; the others print that document straight away.
-
     InvoiceSettings:
       type: object
       required:
@@ -14859,32 +14497,6 @@ components:
         roleDiscountLimits:          { type: string }
         buttonStyle:                 { type: string }
 
-    PaymentSurcharge:
-      type: object
-      required: [paymentMethod, percent, fixed, passOn, enabled]
-      properties:
-        paymentMethod: { type: string }
-        percent:       { type: number, description: "Surcharge as a percentage of the sale total (0–100)." }
-        fixed:         { type: number, description: "Fixed surcharge amount added per transaction." }
-        passOn:        { type: boolean, description: "When true the cost is added to the customer's bill; when false the merchant absorbs it as a cost of business in reports." }
-        enabled:       { type: boolean, description: "Whether this method's surcharge is active." }
-
-    PaymentSurchargeListResponse:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/PaymentSurcharge" }
-
-    PaymentSurchargesInput:
-      type: object
-      required: [items]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/PaymentSurcharge" }
-
     LaybySettings:
       type: object
       required: [id, merchantId, durationValue, durationUnit, paymentFrequency, minimumDepositType, minimumDepositValue, allowPartialPayments, autoEmailOnCreation, printTermsOnReceipt, termsAndConditions, updatedAt]
@@ -15386,189 +14998,6 @@ components:
         baseDomain:  { type: string }
         prefix:      { type: string }
 
-    OnlineStoreSettings:
-      type: object
-      required: [id, merchantId, mode, storeName, tagline, logoUrl, faviconUrl, domain, published, theme, payments, features, pages, quickCodes, updatedAt]
-      properties:
-        id:          { type: integer }
-        merchantId:  { type: integer }
-        mode:        { type: string }
-        storeName:   { type: string }
-        tagline:     { type: string }
-        logoUrl:     { type: string }
-        faviconUrl:  { type: string }
-        domain:      { type: string }
-        published:   { type: string }
-        theme:       { type: string }
-        payments:    { type: string }
-        features:    { type: string }
-        pages:       { type: string }
-        quickCodes:  { type: string }
-        updatedAt:   { type: string, format: date-time }
-
-    OnlineStoreSettingsInput:
-      type: object
-      properties:
-        mode:        { type: string }
-        storeName:   { type: string }
-        tagline:     { type: string }
-        logoUrl:     { type: string }
-        faviconUrl:  { type: string }
-        domain:      { type: string }
-        published:   { type: string }
-        theme:       { type: string }
-        payments:    { type: string }
-        features:    { type: string }
-        pages:       { type: string }
-        quickCodes:  { type: string }
-
-    OnlineStoreAiStatus:
-      type: object
-      required: [available]
-      properties:
-        available: { type: boolean }
-        provider:
-          type: string
-          nullable: true
-          enum: [claude, openai]
-          description: The provider that would serve a generation right now.
-
-    OnlineStoreAiGenerateInput:
-      type: object
-      properties:
-        brief:
-          type: string
-          maxLength: 2000
-          description: >-
-            What the merchant wants from the store. Optional — their business
-            details and product catalogue are used either way.
-
-    OnlineStoreAiBlock:
-      type: object
-      required: [id, type, data]
-      properties:
-        id: { type: string }
-        type: { type: string }
-        data:
-          type: object
-          additionalProperties: true
-
-    OnlineStoreAiPage:
-      type: object
-      required: [id, name, slug, visible, blocks]
-      properties:
-        id: { type: string }
-        name: { type: string }
-        slug: { type: string }
-        visible: { type: boolean }
-        seoTitle: { type: string }
-        seoDescription: { type: string }
-        blocks:
-          type: array
-          items: { $ref: "#/components/schemas/OnlineStoreAiBlock" }
-
-    OnlineStoreAiTheme:
-      type: object
-      required: [primary, accent, bg, text, font, radius]
-      properties:
-        primary: { type: string }
-        accent: { type: string }
-        bg: { type: string }
-        text: { type: string }
-        font: { type: string, enum: [sans, serif, mono] }
-        radius: { type: string, enum: [none, sm, md, lg] }
-
-    OnlineStoreAiDraft:
-      type: object
-      required: [provider, theme, pages]
-      properties:
-        provider: { type: string, enum: [claude, openai] }
-        theme: { $ref: "#/components/schemas/OnlineStoreAiTheme" }
-        pages:
-          type: array
-          items: { $ref: "#/components/schemas/OnlineStoreAiPage" }
-
-    OnlineStoreThirdparty:
-      type: object
-      required: [id, merchantId, providerId, storeUrl, apiKey, connected, connectedAt, updatedAt]
-      properties:
-        id:           { type: integer }
-        merchantId:   { type: integer }
-        providerId:   { type: string }
-        storeUrl:     { type: string }
-        apiKey:       { type: string }
-        connected:    { type: string }
-        connectedAt:  { type: string }
-        updatedAt:    { type: string, format: date-time }
-
-    OnlineStoreThirdpartyInput:
-      type: object
-      properties:
-        providerId:   { type: string }
-        storeUrl:     { type: string }
-        apiKey:       { type: string }
-        connected:    { type: string }
-        connectedAt:  { type: string }
-
-    StorefrontApiScope:
-      type: object
-      required: [id, label, description, sensitive]
-      properties:
-        id:          { type: string }
-        label:       { type: string }
-        description: { type: string }
-        sensitive:   { type: boolean }
-        write:
-          type: boolean
-          description: >-
-            True when the scope lets a key change the merchant's data rather than
-            only read it, so the UI can warn before it is granted.
-
-    StorefrontApiKey:
-      type: object
-      required: [id, name, keyPrefix, scopes, requestCount, createdAt]
-      properties:
-        id:           { type: integer }
-        name:         { type: string }
-        keyPrefix:    { type: string }
-        scopes:       { type: array, items: { type: string } }
-        lastUsedAt:   { type: string, nullable: true }
-        requestCount: { type: integer }
-        expiresAt:    { type: string, nullable: true }
-        revokedAt:    { type: string, nullable: true }
-        createdAt:    { type: string }
-
-    StorefrontApiKeyListResponse:
-      type: object
-      required: [items, scopes, baseUrl]
-      properties:
-        items:   { type: array, items: { $ref: "#/components/schemas/StorefrontApiKey" } }
-        scopes:  { type: array, items: { $ref: "#/components/schemas/StorefrontApiScope" } }
-        baseUrl: { type: string }
-
-    StorefrontApiKeyInput:
-      type: object
-      properties:
-        name:          { type: string }
-        scopes:        { type: array, items: { type: string } }
-        expiresInDays: { type: integer, nullable: true }
-
-    StorefrontApiManifest:
-      type: object
-      required: [filename, content]
-      properties:
-        filename: { type: string }
-        content:  { type: string }
-
-    StorefrontApiKeyCreated:
-      allOf:
-        - $ref: "#/components/schemas/StorefrontApiKey"
-        - type: object
-          required: [key, manifest]
-          properties:
-            key:      { type: string, description: "The secret. Returned once, never stored in plaintext." }
-            manifest: { $ref: "#/components/schemas/StorefrontApiManifest" }
-
     ShippingCarrier:
       type: object
       required: [id, merchantId, carrierId, connected, connectedAt, config, updatedAt]
@@ -15596,39 +15025,6 @@ components:
         items:
           type: array
           items: { $ref: "#/components/schemas/ShippingCarrier" }
-        total: { type: integer }
-
-    MarketplaceConnection:
-      type: object
-      required: [id, merchantId, marketplaceId, connected, connectedAt, lastSync, productsCount, ordersCount, config]
-      properties:
-        id:             { type: integer }
-        merchantId:     { type: integer }
-        marketplaceId:  { type: string }
-        connected:      { type: string }
-        connectedAt:    { type: string }
-        lastSync:       { type: string }
-        productsCount:  { type: integer }
-        ordersCount:    { type: integer }
-        config:         { type: string }
-
-    MarketplaceConnectionInput:
-      type: object
-      properties:
-        connected:      { type: string }
-        connectedAt:    { type: string }
-        lastSync:       { type: string }
-        productsCount:  { type: integer }
-        ordersCount:    { type: integer }
-        config:         { type: string }
-
-    MarketplaceConnectionListResponse:
-      type: object
-      required: [items, total]
-      properties:
-        items:
-          type: array
-          items: { $ref: "#/components/schemas/MarketplaceConnection" }
         total: { type: integer }
 
     DeliveryOrder:
@@ -16988,28 +16384,6 @@ components:
         currentPassword: { type: string }
         newEmail:        { type: string, format: email }
 
-    FeedbackAttachment:
-      type: object
-      required: [name, data, mimeType]
-      properties:
-        name:     { type: string }
-        data:     { type: string, description: Base64-encoded file content }
-        mimeType: { type: string }
-
-    FeedbackInput:
-      type: object
-      required: [type, title, description]
-      properties:
-        type:        { type: string, enum: [bug, feature] }
-        title:       { type: string }
-        description: { type: string }
-        steps:       { type: string }
-        appVersion:  { type: string }
-        attachments:
-          type: array
-          items:
-            $ref: "#/components/schemas/FeedbackAttachment"
-
     OkResult:
       type: object
       required: [ok]
@@ -17682,7 +17056,7 @@ components:
       properties:
         provider:
           type: string
-          enum: [google_contacts, microsoft_contacts]
+          enum: [apple_icloud]
           description: Target contact platform
         includeNotes:
           type: boolean
@@ -17716,7 +17090,7 @@ components:
           description: When true, customer file uploads are mirrored to the cloud
         storageKey:
           type: string
-          enum: [onedrive, google_drive, dropbox, nextcloud]
+          enum: [nextcloud]
           description: Connected cloud storage provider to mirror files to
         folder:
           type: string

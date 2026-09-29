@@ -489,7 +489,6 @@ export default function ManagementEndOfWeekPage() {
       ["COST OF GOODS SOLD", data.sales.totalCogs],
       ["Gross Profit", data.sales.grossProfit],
       ["Gross Margin %", data.sales.grossMarginPct],
-      ["Payment surcharges absorbed", data.sales.surchargeCost],
       ["Net Profit", data.sales.netProfit],
       ["Transactions", data.sales.transactionCount],
       ["Average Sale", data.sales.avgSale],

@@ -2,14 +2,14 @@
  * The one place KoaPOS decides which AI provider serves a request.
  *
  * KoaPOS is **bring-your-own-key**: a merchant connects their own Anthropic
- * account (and optionally their own OpenAI account) under Management ›
- * Integrations, the key is encrypted at rest in the OAuth token vault, and
+ * account under Management › Integrations, the key is encrypted at rest in the OAuth token vault, and
  * their usage is billed to them. The platform holds no production key, so
  * every entry point here takes a `merchantId` — there is no such thing as an
  * AI request that is not on behalf of a merchant.
  *
- * **Claude is preferred.** A merchant with both keys connected is served by
- * Claude and falls back to their OpenAI key only if Claude fails.
+ * **Claude is the only provider.** An OpenAI fallback used to sit behind it and
+ * was removed; `withFallback` and the `onFallback` hooks are kept so a second
+ * provider can slot back in without touching any caller.
  *
  * Four rules hold this together:
  *
@@ -19,14 +19,14 @@
  *    on the next request rather than whenever a cache happens to expire.
  *
  * 2. **Fallback happens before the first byte, never after.** A non-streaming
- *    call that fails on Claude is retried on OpenAI. A *stream* falls back only
+ *    call that fails is retried on the next provider. A *stream* falls back only
  *    if it fails to open: once a delta has reached the client, switching
  *    provider mid-answer would splice two different completions together, so a
  *    mid-stream failure is surfaced to the caller instead.
  *
  * 3. **The model never decides what is safe.** `aiJson` returns `unknown` on
  *    purpose. Every caller validates with Zod before the value goes anywhere
- *    near the database — see `routes/ai-store.ts` for the pattern.
+ *    near the database.
  *
  * 4. **`ANTHROPIC_API_KEY` is a development convenience only.** It stands in for
  *    a merchant's key when `NODE_ENV` is `development` or blank, so the feature
@@ -39,12 +39,11 @@ import {
   anthropicWithKey,
   claudeModel,
 } from "@workspace/integrations-anthropic-ai-server";
-import { openaiWithKey } from "@workspace/integrations-openai-ai-server/factory";
 import { readCredentialVault } from "./tokenVault";
 
-export type AiProvider = "claude" | "openai";
+export type AiProvider = "claude";
 
-/** How hard the model should work. Maps to Claude effort / OpenAI model choice. */
+/** How hard the model should work. Maps to Claude's effort setting. */
 export type AiEffort = "low" | "medium" | "high";
 
 export interface AiMessage {
@@ -73,7 +72,6 @@ export class NoAiProviderError extends Error {
 
 /** Vault provider keys. These match the integration catalogue keys exactly. */
 const ANTHROPIC_PROVIDER = "anthropic";
-const OPENAI_PROVIDER = "openai";
 
 interface StoredKey {
   apiKey?: unknown;
@@ -112,10 +110,7 @@ async function readKey(
  * gets an empty list rather than somebody else's key.
  */
 export async function providersFor(merchantId: number): Promise<ResolvedProvider[]> {
-  const [claude, openai] = await Promise.all([
-    readKey(merchantId, ANTHROPIC_PROVIDER),
-    readKey(merchantId, OPENAI_PROVIDER),
-  ]);
+  const claude = await readKey(merchantId, ANTHROPIC_PROVIDER);
 
   const resolved: ResolvedProvider[] = [];
 
@@ -132,10 +127,6 @@ export async function providersFor(merchantId: number): Promise<ResolvedProvider
     });
   }
 
-  if (openai) {
-    resolved.push({ provider: "openai", ...openai, isDevFallback: false });
-  }
-
   return resolved;
 }
 
@@ -145,18 +136,6 @@ export async function isAiAvailable(merchantId: number): Promise<boolean> {
 }
 
 /* ─── Per-provider calls ─────────────────────────────────────────────────── */
-
-/** OpenAI has no effort dial, so effort picks the model instead. */
-function openAiModel(effort: AiEffort): string {
-  return effort === "low" ? "gpt-5-mini" : "gpt-5.4";
-}
-
-function toOpenAiMessages(req: AiRequest) {
-  return [
-    { role: "system" as const, content: req.system },
-    ...req.messages.map((m) => ({ role: m.role, content: m.content })),
-  ];
-}
 
 function claudeTextOf(content: Array<{ type: string; text?: string }>): string {
   return content
@@ -212,15 +191,6 @@ async function claudeText(p: ResolvedProvider, req: AiRequest): Promise<string> 
   return claudeTextOf(res.content);
 }
 
-async function openAiText(p: ResolvedProvider, req: AiRequest): Promise<string> {
-  const completion = await openaiWithKey(p.apiKey, p.baseURL).chat.completions.create({
-    model: openAiModel(req.effort ?? "high"),
-    max_completion_tokens: req.maxTokens ?? 16000,
-    messages: toOpenAiMessages(req),
-  });
-  return completion.choices[0]?.message?.content ?? "";
-}
-
 export async function aiText(
   merchantId: number,
   req: AiRequest,
@@ -228,7 +198,7 @@ export async function aiText(
 ): Promise<AiTextResult> {
   const { value, provider } = await withFallback(
     merchantId,
-    (p) => (p.provider === "claude" ? claudeText(p, req) : openAiText(p, req)),
+    (p) => claudeText(p, req),
     onFallback,
   );
   return { text: value, provider };
@@ -274,21 +244,6 @@ async function claudeStream(p: ResolvedProvider, req: AiRequest): Promise<AsyncI
   })();
 }
 
-async function openAiStream(p: ResolvedProvider, req: AiRequest): Promise<AsyncIterable<string>> {
-  const stream = await openaiWithKey(p.apiKey, p.baseURL).chat.completions.create({
-    model: openAiModel(req.effort ?? "high"),
-    max_completion_tokens: req.maxTokens ?? 32000,
-    messages: toOpenAiMessages(req),
-    stream: true,
-  });
-  return (async function* () {
-    for await (const chunk of stream) {
-      const delta = chunk.choices[0]?.delta?.content;
-      if (delta) yield delta;
-    }
-  })();
-}
-
 /**
  * Open a streaming completion.
  *
@@ -303,7 +258,7 @@ export async function aiStream(
 ): Promise<AiStream> {
   const { value, provider } = await withFallback(
     merchantId,
-    (p) => (p.provider === "claude" ? claudeStream(p, req) : openAiStream(p, req)),
+    (p) => claudeStream(p, req),
     onFallback,
   );
   return { provider, deltas: value };
@@ -312,7 +267,7 @@ export async function aiStream(
 /* ─── JSON completion ────────────────────────────────────────────────────── */
 
 export interface AiJsonRequest extends AiRequest {
-  /** JSON Schema the response must satisfy. Enforced by Claude, prompted on OpenAI. */
+  /** JSON Schema the response must satisfy. Enforced by Claude's structured outputs. */
   schema: Record<string, unknown>;
 }
 
@@ -338,26 +293,6 @@ async function claudeJson(p: ResolvedProvider, req: AiJsonRequest): Promise<unkn
   return JSON.parse(claudeTextOf(res.content));
 }
 
-async function openAiJson(p: ResolvedProvider, req: AiJsonRequest): Promise<unknown> {
-  // OpenAI is the fallback path, so the schema is described rather than
-  // enforced — the Zod validation every caller runs is what actually protects
-  // the database, and it runs identically for both providers.
-  const completion = await openaiWithKey(p.apiKey, p.baseURL).chat.completions.create({
-    model: openAiModel(req.effort ?? "high"),
-    max_completion_tokens: req.maxTokens ?? 16000,
-    response_format: { type: "json_object" },
-    messages: [
-      { role: "system" as const, content: req.system },
-      {
-        role: "system" as const,
-        content: `Reply with a single JSON object matching this JSON Schema exactly:\n${JSON.stringify(req.schema)}`,
-      },
-      ...req.messages.map((m) => ({ role: m.role, content: m.content })),
-    ],
-  });
-  return JSON.parse(completion.choices[0]?.message?.content ?? "null");
-}
-
 export async function aiJson(
   merchantId: number,
   req: AiJsonRequest,
@@ -365,7 +300,7 @@ export async function aiJson(
 ): Promise<AiJsonResult> {
   const { value, provider } = await withFallback(
     merchantId,
-    (p) => (p.provider === "claude" ? claudeJson(p, req) : openAiJson(p, req)),
+    (p) => claudeJson(p, req),
     onFallback,
   );
   return { data: value, provider };

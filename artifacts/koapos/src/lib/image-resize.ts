@@ -1,7 +1,7 @@
 /* Shared client-side image downscaler for uploaded logos / branding images.
 
    Logos are stored inline as base64 `data:` URIs in text columns (business_profile
-   .logo, online-store logo/favicon, …) and shipped whole in JSON PUTs, bounded only
+   .logo, …) and shipped whole in JSON PUTs, bounded only
    by the API's 10 MB body limit. A phone photo or a 4000×4000 export therefore bloats
    the DB, slows every page that renders it, and can 413 the save. This resizes such
    uploads down to a sane longest-edge before they are ever stored — preserving aspect

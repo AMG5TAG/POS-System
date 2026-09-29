@@ -14,7 +14,6 @@ import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 import { getInvoiceSettings } from "./invoice-settings";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { sendInvoiceSms } from "../services/invoiceSms";
-import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import crypto from "node:crypto";
 import {
   RecordInvoicePaymentBody,
@@ -853,9 +852,6 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   // Captured for after-commit completion of any linked service job / appointment.
   let settledServiceJobId: number | null = null;
   let settledAppointmentId: number | null = null;
-  // Pass-on surcharges for the chosen method(s), collected on top of each leg's
-  // amount. Config is merchant-global, so it's read once outside the lock.
-  const surchargeMap = await getPassOnSurchargeMap(merchantId);
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -938,17 +934,12 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       : `— balance $${balance.toFixed(2)} remaining`;
     const noteSuffix = note ? ` — ${note}` : "";
     const legEvents: InvoiceEvent[] = legs.map((leg, i) => {
-      // Surcharge applies to single-method payments only (a split's legs aren't
-      // surcharged, matching the POS terminal), so the amount collected stays in
-      // sync with what the UI shows.
-      const legSurcharge = isSplit ? 0 : surchargeForLeg(surchargeMap, leg.method, leg.amount);
       return {
         id: crypto.randomUUID(),
         type: "payment",
         timestamp: ts,
-        detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${legSurcharge > 0 ? ` + $${legSurcharge.toFixed(2)} surcharge` : ""}${i === 0 ? noteSuffix : ""}`,
+        detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${i === 0 ? noteSuffix : ""}`,
         amount: leg.amount,
-        ...(legSurcharge > 0 ? { surchargeAmount: legSurcharge } : {}),
         ...(leg.method ? { method: leg.method } : {}),
         ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
       };

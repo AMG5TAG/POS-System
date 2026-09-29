@@ -1,6 +1,12 @@
 import { pgTable, serial, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
+/*
+ * RETAINED, UNUSED: Management › Service Options was removed from the
+ * single-business install (its choices are now fixed in code), but this
+ * table still holds data, so its definition stays — dropping it here
+ * would make `drizzle-kit push` offer to delete those rows. No code reads it.
+ */
 /**
  * Per-merchant toggles for which sections appear in the service job menu
  * (ServiceJobDetailDialog). One row per merchant; the JSON `config` holds the

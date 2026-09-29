@@ -2,7 +2,7 @@
  * Cloud Files & Folders — platform-user settings.
  *
  * Controls whether every file uploaded to a customer is also pushed to a folder
- * on a connected cloud storage provider (OneDrive, Google Drive, Dropbox, …).
+ * on the connected cloud storage provider (Nextcloud).
  * Configured once by the platform user on Management → Sync; read by the
  * customer file-upload flow so each upload is routed to the chosen destination.
  *
@@ -17,7 +17,7 @@ const LAST_CUSTOMER_SYNC_KEY = "koapos_last_customer_sync";
 export interface CustomerFilesCloudSettings {
   /** When true, every file uploaded to a customer is also sent to the cloud. */
   enabled: boolean;
-  /** Integration key of the chosen storage, e.g. "onedrive" | "google_drive" | "dropbox". */
+  /** Integration key of the chosen storage — currently only "nextcloud". */
   storageKey: string;
   /** Destination folder path inside that storage, set by the platform user. */
   folder: string;

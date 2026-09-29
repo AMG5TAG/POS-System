@@ -38,15 +38,9 @@ function parseUserAgent(ua: string | null | undefined): string {
 
 const ACCOUNT_TABS = [
   { href: "#login-details",     label: "Login Details" },
-  { href: "#business-username", label: "Business Username", icon: AtSign },
 ];
 import { cn } from "@/lib/utils";
 
-const USERNAME_RE = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
-
-function formatUsernameInput(raw: string) {
-  return raw.toLowerCase().replace(/[^a-z0-9-]/g, "").slice(0, 30);
-}
 
 function SecuritySettingsCard() {
   const qc = useQueryClient();
@@ -657,9 +651,6 @@ export default function SettingsAccountPage() {
     );
   };
 
-  const [username, setUsername] = useState("");
-  const [savedUsername, setSavedUsername] = useState<string | null>(null);
-  const [saving, setSaving] = useState(false);
 
   // Password change state
   const [currentPw,  setCurrentPw]  = useState("");
@@ -695,23 +686,7 @@ export default function SettingsAccountPage() {
     );
   };
 
-  useEffect(() => {
-    if (merchant?.username !== undefined) {
-      setUsername(merchant.username ?? "");
-      setSavedUsername(merchant.username ?? null);
-    }
-  }, [merchant?.username]);
-
-  const hostname = window.location.hostname;
-  const PORTAL_BASE = `${hostname}/b/`;
-
-  const isValid = username.length === 0 || USERNAME_RE.test(username);
-  const hasChanged = username !== (savedUsername ?? "");
-  const isLongEnough = username.length >= 3;
-  const canSave = hasChanged && isValid && isLongEnough;
-
   const isAccountDirty =
-    hasChanged ||
     currentPw.length > 0 ||
     newPw.length > 0;
 
@@ -722,41 +697,6 @@ export default function SettingsAccountPage() {
     actionLabel: "Leave anyway",
   });
 
-  const updateMerchant = useUpdateMerchant();
-
-  const handleSave = () => {
-    if (!canSave) return;
-    setSaving(true);
-    updateMerchant.mutate(
-      { data: { username } },
-      {
-        onSuccess: (updated) => {
-          const u = (updated as { username?: string }).username;
-          setSavedUsername(u ?? null);
-          qc.invalidateQueries({ queryKey: ["merchant"] });
-          toast.success("Username saved!", {
-            description: `Your page is now at ${PORTAL_BASE}${u}`,
-          });
-        },
-        onError: (err: unknown) => {
-          const resp = err as { response?: { status?: number; data?: { error?: string } } };
-          if (resp?.response?.status === 409) {
-            toast.error("Username already taken", { description: resp.response.data?.error });
-          } else {
-            toast.error("Could not update username", { description: resp?.response?.data?.error ?? "Update failed" });
-          }
-        },
-        onSettled: () => setSaving(false),
-      }
-    );
-  };
-
-  const fieldError =
-    username.length > 0 && username.length < 3
-      ? "Username must be at least 3 characters"
-      : username.length > 0 && !isValid
-      ? "Only lowercase letters, numbers, and hyphens. Must start and end with a letter or number."
-      : null;
 
   return (
     <AppLayout>
@@ -886,106 +826,9 @@ export default function SettingsAccountPage() {
 
         </div>{/* end left column */}
 
-        {/* Right column: Business Username */}
+        {/* Right column */}
         <div className="space-y-6">
 
-        <Card id="business-username">
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <AtSign className="w-4 h-4" /> Business Username
-            </CardTitle>
-            <CardDescription>
-              Your unique handle on KoaPOS. This sets your public page URL.
-            </CardDescription>
-          </CardHeader>
-          <CardContent className="space-y-4">
-            {/* Input row */}
-            <div className="space-y-1.5">
-              <Label htmlFor="username">Username</Label>
-              <div className="flex gap-0">
-                <div className="flex items-center rounded-l-md border border-r-0 bg-muted px-3 text-sm text-muted-foreground whitespace-nowrap select-none">
-                  {PORTAL_BASE}
-                </div>
-                <Input
-                  id="username"
-                  value={username}
-                  onChange={e => setUsername(formatUsernameInput(e.target.value))}
-                  placeholder="your-business"
-                  className={cn(
-                    "rounded-l-none",
-                    fieldError && "border-destructive focus-visible:ring-destructive",
-                  )}
-                  maxLength={30}
-                />
-              </div>
-              {fieldError ? (
-                <p className="text-xs text-destructive">{fieldError}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">
-                  3–30 characters. Lowercase letters, numbers, and hyphens only.
-                </p>
-              )}
-            </div>
-
-            {/* URL preview */}
-            {username.length >= 3 && isValid && (
-              <div className="rounded-lg border bg-muted/40 px-3 py-2.5 flex items-center gap-2">
-                <Globe className="w-4 h-4 text-muted-foreground shrink-0" />
-                <span className="text-sm font-mono break-all">
-                  <span className="text-muted-foreground">{PORTAL_BASE}</span>
-                  <span className="font-semibold text-foreground">{username}</span>
-                </span>
-              </div>
-            )}
-
-            {/* Change warning */}
-            {hasChanged && savedUsername && isValid && isLongEnough && (
-              <div className="rounded-lg border border-amber-200 bg-amber-50 p-3 flex gap-2.5">
-                <AlertTriangle className="w-4 h-4 text-amber-600 mt-0.5 shrink-0" />
-                <div className="text-sm text-amber-800 space-y-1">
-                  <p className="font-medium">Your public URL will change</p>
-                  <p>
-                    Any existing links, QR codes, or integrations pointing to{" "}
-                    <span className="font-mono">{PORTAL_BASE}{savedUsername}</span> will stop working.
-                    You will need to update them after saving.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="flex items-center gap-3">
-              <Button onClick={handleSave} disabled={!canSave || saving}>
-                {saving ? (
-                  <><Loader2 className="w-4 h-4 mr-2 animate-spin" />Saving…</>
-                ) : (
-                  "Save Username"
-                )}
-              </Button>
-              {savedUsername && !hasChanged && (
-                <span className="flex items-center gap-1.5 text-sm text-muted-foreground">
-                  <Check className="w-3.5 h-3.5 text-green-500" />
-                  Saved
-                </span>
-              )}
-            </div>
-
-            {/* Current live URL */}
-            {savedUsername && (
-              <div className="pt-2 border-t">
-                <p className="text-xs text-muted-foreground mb-2">Your current public page</p>
-                <a
-                  href={`https://${PORTAL_BASE}${savedUsername}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1.5 text-sm text-primary hover:underline font-mono"
-                >
-                  <ExternalLink className="w-3.5 h-3.5 shrink-0" />
-                  {PORTAL_BASE}{savedUsername}
-                </a>
-              </div>
-            )}
-          </CardContent>
-        </Card>
 
         {/* Anomaly Detection Sensitivity */}
         <SecuritySettingsCard />
@@ -1075,8 +918,6 @@ export default function SettingsAccountPage() {
           </CardContent>
         </Card>
 
-        {/* ── Demo Data Clear ─────────────────────────────────────────── */}
-        <DemoDataCard />
 
         </div>{/* end right column */}
 
@@ -1088,68 +929,5 @@ export default function SettingsAccountPage() {
   );
 }
 
-/* ── Demo Data Clear Card ───────────────────────────────────────────────── */
 
-function DemoDataCard() {
-  const { data: merchant } = useGetMerchant({ query: { queryKey: ["merchant"] } });
-  const qc = useQueryClient();
-  const [loading, setLoading] = useState(false);
-
-  if (!merchant) return null;
-
-  const createdAt = new Date(merchant.createdAt);
-  const ageMs = Date.now() - createdAt.getTime();
-  const isEligible = merchant.isDemoAccount || ageMs < 30 * 24 * 60 * 60 * 1000;
-  if (!isEligible) return null;
-
-  const handleClear = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch("/api/demo-data", { method: "DELETE", credentials: "include" });
-      const data = await res.json().catch(() => ({})) as { ok?: boolean; deleted?: Record<string, number>; error?: string };
-      if (!res.ok) { toast.error(data.error ?? "Failed to clear demo data"); return; }
-      const d = data.deleted ?? {};
-      toast.success(`Demo data cleared — removed ${d.transactions ?? 0} transactions, ${d.products ?? 0} products, ${d.customers ?? 0} customers, ${d.staff ?? 0} staff.`);
-      qc.invalidateQueries();
-    } catch { toast.error("Failed to clear demo data"); }
-    finally { setLoading(false); }
-  };
-
-  return (
-    <Card className="border-amber-200 dark:border-amber-800/50">
-      <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-amber-700 dark:text-amber-400">
-          <Trash2 className="w-4 h-4" /> Clear Demo Data
-        </CardTitle>
-        <CardDescription>
-          Remove all sample products, customers, transactions, and non-owner staff so you can start fresh.
-          Available for the first 30 days after account creation.
-        </CardDescription>
-      </CardHeader>
-      <CardContent>
-        <AlertDialog>
-          <AlertDialogTrigger asChild>
-            <Button variant="outline" className="border-amber-300 text-amber-700 hover:bg-amber-50 dark:border-amber-700 dark:text-amber-400 dark:hover:bg-amber-950/30" disabled={loading}>
-              {loading ? <><Loader2 className="w-4 h-4 mr-2 animate-spin" /> Clearing…</> : <><Trash2 className="w-4 h-4 mr-2" /> Clear demo data</>}
-            </Button>
-          </AlertDialogTrigger>
-          <AlertDialogContent>
-            <AlertDialogHeader>
-              <AlertDialogTitle>Clear all demo data?</AlertDialogTitle>
-              <AlertDialogDescription>
-                This will permanently delete all sample products, customers, transactions, and non-owner staff from your account. This cannot be undone.
-              </AlertDialogDescription>
-            </AlertDialogHeader>
-            <AlertDialogFooter>
-              <AlertDialogCancel>Cancel</AlertDialogCancel>
-              <AlertDialogAction onClick={handleClear} className="bg-amber-600 hover:bg-amber-700 text-white">
-                Yes, clear demo data
-              </AlertDialogAction>
-            </AlertDialogFooter>
-          </AlertDialogContent>
-        </AlertDialog>
-      </CardContent>
-    </Card>
-  );
-}
 

@@ -126,24 +126,6 @@ const REG_TIMEZONES: { group: string; zones: { value: string; label: string }[] 
   ]},
 ];
 
-const REG_TAX_LABELS = [
-  { value: "GST", label: "GST — Goods & Services Tax (AU, NZ, SG, IN)" },
-  { value: "VAT", label: "VAT — Value Added Tax (EU, UAE, UK)" },
-  { value: "HST", label: "HST — Harmonised Sales Tax (Canada)" },
-  { value: "Sales Tax", label: "Sales Tax (United States)" },
-  { value: "Custom", label: "Custom — Enter your own" },
-];
-
-const REG_TAX_NUMBER_LABELS = [
-  { value: "ABN", label: "ABN — Australian Business Number" },
-  { value: "NZBN", label: "NZBN — New Zealand Business Number" },
-  { value: "VAT No.", label: "VAT No. (Europe / UK)" },
-  { value: "GST No.", label: "GST No. (Canada / Singapore)" },
-  { value: "TIN", label: "TIN — Taxpayer Identification Number (US)" },
-  { value: "GSTIN", label: "GSTIN — GST Identification Number (India)" },
-  { value: "Business No.", label: "Business No. (Generic)" },
-];
-
 const REG_MONTHS = [
   "January","February","March","April","May","June",
   "July","August","September","October","November","December",

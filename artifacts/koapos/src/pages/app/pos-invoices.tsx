@@ -2094,7 +2094,7 @@ export default function POSInvoicesPage() {
                   </Button>
                 </div>
                 <p className="text-[11px] text-muted-foreground text-center">
-                  Use the terminal for card payments so surcharges and receipts apply.
+                  Use the terminal for card payments so receipts apply.
                 </p>
               </div>
             );

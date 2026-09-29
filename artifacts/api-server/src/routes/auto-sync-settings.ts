@@ -67,7 +67,7 @@ router.put("/integrations/auto-sync", async (req, res): Promise<void> => {
       return;
     }
     if (freq !== "disabled" && !isSyncProvider(provider)) {
-      res.status(400).json({ error: `${label} sync requires a connected account (Google, Microsoft or Apple iCloud)` });
+      res.status(400).json({ error: `${label} sync requires a connected Apple iCloud account` });
       return;
     }
     // The target account must still be connected. Without this a merchant who

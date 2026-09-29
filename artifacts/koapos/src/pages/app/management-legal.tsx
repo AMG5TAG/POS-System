@@ -9,8 +9,6 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
-type CountryCode = "AU" | "NZ" | "UK" | "US" | "CA";
-
 interface Resource {
   name: string;
   url: string;
@@ -71,57 +69,6 @@ const AU_OTHER: Resource[] = [
 ];
 
 /* ─── New Zealand ─────────────────────────────────────────────────────────── */
-
-const NZ_GOV: Resource[] = [
-  { name: "business.govt.nz", url: "https://business.govt.nz", description: "NZ Government business portal — permits, regulations, and support" },
-  { name: "Inland Revenue (IRD)", url: "https://ird.govt.nz", description: "Tax, GST, KiwiSaver, PAYE, and employer obligations" },
-  { name: "Companies Office (NZCO)", url: "https://companiesoffice.govt.nz", description: "Company registration, annual returns, and compliance" },
-  { name: "Employment New Zealand", url: "https://employment.govt.nz", description: "Employment laws, minimum wage, leave entitlements, and employer guides" },
-  { name: "WorkSafe New Zealand", url: "https://worksafe.govt.nz", description: "Health and safety laws, duties, and enforcement" },
-  { name: "NZ Business Funding", url: "https://business.govt.nz/funding-and-investment/", description: "Grants, loans, and investment options for NZ businesses" },
-];
-
-const NZ_KIWISAVER: SuperRate[] = [
-  { period: "Employee minimum", rate: "3%" },
-  { period: "Employer minimum", rate: "3%" },
-  { period: "Employee optional tiers", rate: "4%, 6%, 8%, 10%" },
-];
-
-/* ─── United Kingdom ──────────────────────────────────────────────────────── */
-
-const UK_GOV: Resource[] = [
-  { name: "GOV.UK Business", url: "https://gov.uk/browse/business", description: "HMRC, Companies House, employer duties, and business guidance" },
-  { name: "HMRC", url: "https://hmrc.gov.uk", description: "Corporation tax, VAT, PAYE, and business tax registration" },
-  { name: "Companies House", url: "https://companieshouse.gov.uk", description: "Company registration, annual filings, and director information" },
-  { name: "Acas", url: "https://acas.org.uk", description: "Employment law, contracts, disciplinaries, and workplace advice" },
-  { name: "Health & Safety Executive (HSE)", url: "https://hse.gov.uk", description: "Health and safety regulations and employer responsibilities" },
-  { name: "UK Business Finance Guide", url: "https://businessfinanceguide.co.uk", description: "Grants, loans, and government-backed finance for UK businesses" },
-  { name: "British Business Bank", url: "https://british-business-bank.co.uk", description: "Government-backed loans and investment programs for SMEs" },
-];
-
-/* ─── United States ───────────────────────────────────────────────────────── */
-
-const US_GOV: Resource[] = [
-  { name: "SBA (Small Business Administration)", url: "https://sba.gov", description: "Loans, grants, counselling, and resources for US small businesses", badge: "Start here" },
-  { name: "IRS Business Tax Center", url: "https://irs.gov/businesses", description: "Federal tax filings, EIN application, and employer tax obligations" },
-  { name: "Dept. of Labor", url: "https://dol.gov", description: "Federal minimum wage, employee rights, and labor regulations" },
-  { name: "Grants.gov", url: "https://grants.gov", description: "Federal grants database — search by agency, category, and eligibility" },
-  { name: "OSHA", url: "https://osha.gov", description: "Occupational health and safety regulations and employer obligations" },
-  { name: "USA Business Portal", url: "https://business.usa.gov", description: "Licenses, permits, registration, and federal resources in one place" },
-];
-
-/* ─── Canada ──────────────────────────────────────────────────────────────── */
-
-const CA_GOV: Resource[] = [
-  { name: "Canada Business Network", url: "https://canadabusiness.ca", description: "Government programs, permits, financing, and hiring guides" },
-  { name: "CRA Business", url: "https://canada.ca/en/revenue-agency/services/tax/businesses.html", description: "GST/HST, payroll deductions, corporate tax, and CRA accounts" },
-  { name: "ESDC (Employment)", url: "https://canada.ca/en/employment-social-development.html", description: "Labour standards, EI, and employment programs" },
-  { name: "Innovation Canada Funding Finder", url: "https://innovation.canada.ca/en/funding-finder", description: "Federal and provincial business funding, grants, and tax credits" },
-  { name: "BDC", url: "https://bdc.ca", description: "Business Development Bank — loans, capital, and advisory services" },
-  { name: "WSIB (Ontario Workers Comp.)", url: "https://wsib.ca", description: "Workers compensation and workplace insurance (Ontario; other provinces vary)" },
-];
-
-/* ─── Shared helpers ──────────────────────────────────────────────────────── */
 
 function ResourceCard({ resources }: { resources: Resource[] }) {
   return (
@@ -278,111 +225,9 @@ function AustraliaContent() {
   );
 }
 
-function NewZealandContent() {
-  return (
-    <div className="space-y-5">
-      <SectionCard
-        icon={Percent}
-        title="KiwiSaver Contribution Rates"
-        description="Minimum contribution rates for employees and employers under KiwiSaver."
-      >
-        <div className="overflow-hidden rounded-md border">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b bg-muted/50">
-                <th className="px-3 py-2 text-left font-medium text-muted-foreground">Contributor</th>
-                <th className="px-3 py-2 text-right font-medium text-muted-foreground">Rate</th>
-              </tr>
-            </thead>
-            <tbody>
-              {NZ_KIWISAVER.map((row) => (
-                <tr key={row.period} className="border-b last:border-0">
-                  <td className="px-3 py-2">{row.period}</td>
-                  <td className="px-3 py-2 text-right font-medium tabular-nums">{row.rate}</td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
-        <p className="mt-2 text-xs text-muted-foreground">
-          Source: Inland Revenue NZ.{" "}
-          <a
-            href="https://ird.govt.nz/kiwisaver/employer-contributions-for-kiwisaver/what-you-contribute-as-an-employer"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline hover:text-foreground"
-          >
-            Verify on IRD
-          </a>
-        </p>
-      </SectionCard>
-
-      <SectionCard
-        icon={Building2}
-        title="Government Business Resources"
-        description="Key New Zealand government portals for business compliance and support."
-      >
-        <ResourceCard resources={NZ_GOV} />
-      </SectionCard>
-    </div>
-  );
-}
-
-function UKContent() {
-  return (
-    <div className="space-y-5">
-      <SectionCard
-        icon={Building2}
-        title="Government Business Resources"
-        description="Key UK government portals for employer compliance, tax, and support."
-      >
-        <ResourceCard resources={UK_GOV} />
-      </SectionCard>
-    </div>
-  );
-}
-
-function USContent() {
-  return (
-    <div className="space-y-5">
-      <SectionCard
-        icon={Building2}
-        title="Government Business Resources"
-        description="Key US federal government portals for business compliance and support."
-      >
-        <ResourceCard resources={US_GOV} />
-      </SectionCard>
-    </div>
-  );
-}
-
-function CanadaContent() {
-  return (
-    <div className="space-y-5">
-      <SectionCard
-        icon={Building2}
-        title="Government Business Resources"
-        description="Key Canadian government portals for business compliance and support."
-      >
-        <ResourceCard resources={CA_GOV} />
-      </SectionCard>
-    </div>
-  );
-}
-
 /* ─── Page ────────────────────────────────────────────────────────────────── */
 
-const COUNTRIES: { code: CountryCode; label: string }[] = [
-  { code: "AU", label: "Australia" },
-  { code: "NZ", label: "New Zealand" },
-  { code: "UK", label: "United Kingdom" },
-  { code: "US", label: "United States" },
-  { code: "CA", label: "Canada" },
-];
-
 export default function ManagementLegalPage() {
-  const [country, setCountry] = useState<CountryCode>("AU");
-
   return (
     <AppLayout>
       <div className="p-6 md:p-8 space-y-6">
@@ -397,27 +242,9 @@ export default function ManagementLegalPage() {
               </p>
             </div>
           </div>
-          <div className="flex items-center gap-2">
-            <Globe className="h-4 w-4 text-muted-foreground" />
-            <Select value={country} onValueChange={(v) => setCountry(v as CountryCode)}>
-              <SelectTrigger className="w-44">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                {COUNTRIES.map((c) => (
-                  <SelectItem key={c.code} value={c.code}>{c.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
         </div>
 
-        {/* Country-specific content */}
-        {country === "AU" && <AustraliaContent />}
-        {country === "NZ" && <NewZealandContent />}
-        {country === "UK" && <UKContent />}
-        {country === "US" && <USContent />}
-        {country === "CA" && <CanadaContent />}
+        <AustraliaContent />
 
         <p className="text-xs text-muted-foreground border-t pt-4">
           Links open official government websites in a new tab. Rates and legislation may change — always verify

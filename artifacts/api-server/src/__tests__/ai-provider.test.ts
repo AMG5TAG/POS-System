@@ -1,5 +1,5 @@
 /**
- * Provider selection and fallback under bring-your-own-key.
+ * Provider selection under bring-your-own-key.
  *
  * KoaPOS holds no platform AI key: a merchant connects their own Anthropic
  * account and their own key pays for their own usage. That makes three things
@@ -9,29 +9,24 @@
  * another merchant's, and a merchant with nothing connected must get an error
  * rather than somebody else's billing account.
  *
- * The second is preference: Claude is tried first, and a merchant's OpenAI key
- * is only a fallback for their own Claude key.
+ * The second is that Claude is the only provider. An OpenAI fallback was
+ * removed; a leftover OpenAI key in the vault must not bring it back.
  *
- * The third is that fallback never fires at a moment where switching provider
- * would corrupt the answer. A stream that has already written a delta is
- * committed — resuming it on the other provider would splice two different
- * completions together and the merchant would read the seam.
+ * The third is that a stream fails *before* the route commits to SSE headers
+ * when it can: an open failure surfaces from `aiStream` itself, while a failure
+ * after the first delta is the caller's to report.
  */
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 const anthropicCreate = vi.hoisted(() => vi.fn());
 const anthropicStream = vi.hoisted(() => vi.fn());
-const openAiCreate = vi.hoisted(() => vi.fn());
 const anthropicWithKey = vi.hoisted(() => vi.fn());
-const openaiWithKey = vi.hoisted(() => vi.fn());
 const readCredentialVault = vi.hoisted(() => vi.fn());
 
 vi.mock("@workspace/integrations-anthropic-ai-server", () => ({
   claudeModel: () => "claude-opus-5",
   anthropicWithKey,
 }));
-
-vi.mock("@workspace/integrations-openai-ai-server/factory", () => ({ openaiWithKey }));
 
 vi.mock("../services/tokenVault", () => ({ readCredentialVault }));
 
@@ -49,7 +44,7 @@ const REQ = { system: "s", messages: [{ role: "user" as const, content: "hi" }] 
 /** Stand in for a merchant's connected accounts. */
 function connected(keys: { anthropic?: string; openai?: string }) {
   readCredentialVault.mockImplementation(async (_merchantId: number, provider: string) => {
-    const apiKey = keys[provider as "anthropic" | "openai"];
+    const apiKey = keys[provider as keyof typeof keys];
     return apiKey ? { apiKey } : null;
   });
 }
@@ -71,8 +66,7 @@ beforeEach(() => {
   anthropicWithKey.mockReturnValue({
     messages: { create: anthropicCreate, stream: anthropicStream },
   });
-  openaiWithKey.mockReturnValue({ chat: { completions: { create: openAiCreate } } });
-  connected({ anthropic: "sk-ant-merchant", openai: "sk-oa-merchant" });
+  connected({ anthropic: "sk-ant-merchant" });
 });
 
 afterEach(() => {
@@ -80,16 +74,16 @@ afterEach(() => {
 });
 
 describe("providersFor", () => {
-  it("puts Claude first when the merchant has connected both accounts", async () => {
+  it("serves a merchant from their own Claude key", async () => {
     const providers = await providersFor(MERCHANT);
-    expect(providers.map((p) => p.provider)).toEqual(["claude", "openai"]);
+    expect(providers.map((p) => p.provider)).toEqual(["claude"]);
+    expect(providers[0]!.apiKey).toBe("sk-ant-merchant");
   });
 
-  it("serves a merchant with only OpenAI connected", async () => {
+  it("ignores a leftover OpenAI key — that provider has been removed", async () => {
     connected({ openai: "sk-oa-merchant" });
-    const providers = await providersFor(MERCHANT);
-    expect(providers.map((p) => p.provider)).toEqual(["openai"]);
-    expect(await isAiAvailable(MERCHANT)).toBe(true);
+    expect(await providersFor(MERCHANT)).toEqual([]);
+    expect(await isAiAvailable(MERCHANT)).toBe(false);
   });
 
   it("returns nothing for a merchant who has connected no account", async () => {
@@ -109,7 +103,7 @@ describe("providersFor", () => {
       expect(call[0]).toBe(MERCHANT);
     }
     expect(readCredentialVault).toHaveBeenCalledWith(MERCHANT, "anthropic");
-    expect(readCredentialVault).toHaveBeenCalledWith(MERCHANT, "openai");
+    expect(readCredentialVault).not.toHaveBeenCalledWith(MERCHANT, "openai");
   });
 });
 
@@ -141,12 +135,11 @@ describe("the ANTHROPIC_API_KEY development fallback", () => {
 });
 
 describe("aiText", () => {
-  it("serves from Claude on the merchant's own key and never touches OpenAI", async () => {
+  it("serves from Claude on the merchant's own key", async () => {
     anthropicCreate.mockResolvedValue(textReply("from claude"));
     const result = await aiText(MERCHANT, REQ);
     expect(result).toEqual({ text: "from claude", provider: "claude" });
     expect(anthropicWithKey).toHaveBeenCalledWith("sk-ant-merchant", undefined);
-    expect(openAiCreate).not.toHaveBeenCalled();
   });
 
   it("asks Claude for adaptive thinking rather than a token budget", async () => {
@@ -158,27 +151,16 @@ describe("aiText", () => {
     expect(params.model).toBe("claude-opus-5");
   });
 
-  it("falls back to the merchant's own OpenAI key when Claude fails", async () => {
-    anthropicCreate.mockRejectedValue(new Error("503"));
-    openAiCreate.mockResolvedValue({ choices: [{ message: { content: "from openai" } }] });
-    const onFallback = vi.fn();
-    const result = await aiText(MERCHANT, REQ, onFallback);
-    expect(result).toEqual({ text: "from openai", provider: "openai" });
-    expect(openaiWithKey).toHaveBeenCalledWith("sk-oa-merchant", undefined);
-    expect(onFallback).toHaveBeenCalledWith(expect.any(Error), "claude");
-  });
-
-  it("does not fall back to another merchant when this one has only Claude", async () => {
-    connected({ anthropic: "sk-ant-merchant" });
+  it("surfaces a Claude failure instead of trying anyone else's key", async () => {
     anthropicCreate.mockRejectedValue(new Error("claude down"));
-    await expect(aiText(MERCHANT, REQ)).rejects.toThrow("claude down");
-    expect(openAiCreate).not.toHaveBeenCalled();
+    const onFallback = vi.fn();
+    await expect(aiText(MERCHANT, REQ, onFallback)).rejects.toThrow("claude down");
+    expect(onFallback).not.toHaveBeenCalled();
   });
 
-  it("treats a Claude refusal as a failure worth falling back from", async () => {
+  it("treats a Claude refusal as a failure", async () => {
     anthropicCreate.mockResolvedValue({ stop_reason: "refusal", content: [] });
-    openAiCreate.mockResolvedValue({ choices: [{ message: { content: "second opinion" } }] });
-    expect((await aiText(MERCHANT, REQ)).provider).toBe("openai");
+    await expect(aiText(MERCHANT, REQ)).rejects.toThrow("Claude declined");
   });
 
   it("throws NoAiProviderError rather than guessing when nothing is connected", async () => {
@@ -216,37 +198,22 @@ describe("aiStream", () => {
     expect(await collect(stream.deltas)).toBe("answer");
   });
 
-  it("falls back when Claude cannot open the stream", async () => {
+  it("rejects from aiStream itself when Claude cannot open the stream", async () => {
     anthropicStream.mockImplementation(() => { throw new Error("rate limited"); });
-    openAiCreate.mockResolvedValue({
-      async *[Symbol.asyncIterator]() {
-        yield { choices: [{ delta: { content: "backup" } }] };
-      },
-    });
-    const stream = await aiStream(MERCHANT, REQ);
-    expect(stream.provider).toBe("openai");
-    expect(await collect(stream.deltas)).toBe("backup");
+    await expect(aiStream(MERCHANT, REQ)).rejects.toThrow("rate limited");
   });
 
   // The SDK's `messages.stream()` returns synchronously and does not touch the
   // network until it is read, so a revoked key does NOT throw from the call
-  // itself — it surfaces on the first read. That is the shape a real auth
-  // failure takes, and it must still fall back: the route has not written SSE
-  // headers yet, so switching provider here splices nothing.
-  it("falls back when Claude's stream fails on the first read", async () => {
+  // itself — it surfaces on the first read. aiStream primes that read, so the
+  // route still sees the failure before it has written SSE headers.
+  it("rejects from aiStream itself when the stream fails on the first read", async () => {
     anthropicStream.mockReturnValue({
       [Symbol.asyncIterator]: () => ({
         next: () => Promise.reject(new Error("401 invalid x-api-key")),
       }),
     });
-    openAiCreate.mockResolvedValue({
-      async *[Symbol.asyncIterator]() {
-        yield { choices: [{ delta: { content: "backup" } }] };
-      },
-    });
-    const stream = await aiStream(MERCHANT, REQ);
-    expect(stream.provider).toBe("openai");
-    expect(await collect(stream.deltas)).toBe("backup");
+    await expect(aiStream(MERCHANT, REQ)).rejects.toThrow("401 invalid x-api-key");
   });
 
   it("opens on the first event rather than waiting for the first text delta", async () => {
@@ -269,7 +236,7 @@ describe("aiStream", () => {
     expect(await collect(stream.deltas)).toBe("hi");
   });
 
-  it("does NOT switch provider once the stream has started producing", async () => {
+  it("reports a failure after the stream has started producing to the caller", async () => {
     anthropicStream.mockReturnValue({
       async *[Symbol.asyncIterator]() {
         yield { type: "content_block_delta", delta: { type: "text_delta", text: "half " } };
@@ -279,8 +246,5 @@ describe("aiStream", () => {
     const stream = await aiStream(MERCHANT, REQ);
     expect(stream.provider).toBe("claude");
     await expect(collect(stream.deltas)).rejects.toThrow("connection dropped");
-    // Splicing a second provider's completion onto a partial answer would be
-    // worse than the error the route already reports.
-    expect(openAiCreate).not.toHaveBeenCalled();
   });
 });

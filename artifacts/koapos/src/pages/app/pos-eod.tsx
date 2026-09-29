@@ -216,7 +216,7 @@ export default function PosEodPage() {
         data: {
           closedAt: new Date().toISOString(),
           cashCounted: String(totals["cash"] ?? 0),
-          eftposDeclared: String(totals["eftpos"] ?? totals["tyro_eftpos"] ?? totals["commbank_eftpos"] ?? 0),
+          eftposDeclared: String(totals["eftpos"] ?? totals["commbank_eftpos"] ?? 0),
           paymentTotals: paymentTotalsJson,
           closingNotes,
         },

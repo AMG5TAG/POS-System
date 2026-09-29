@@ -4,7 +4,7 @@ import { customersTable } from "./customers";
 
 /**
  * contact_sync_links — persistent map of a KoaPOS customer → the contact it
- * created on a connected account (Google / Microsoft).
+ * created on the connected iCloud account.
  *
  * This is what makes contact sync a *true* sync instead of a blind re-push.
  * Without it, sync only matches existing contacts by email, so any customer
@@ -12,10 +12,9 @@ import { customersTable } from "./customers";
  * Once a customer has a link for a provider we update that exact remote contact
  * by its id, never re-creating it.
  *
- * `provider` is "google_contacts" | "microsoft_contacts".
- * `remoteContactId` is the Microsoft contact id, or the Google resourceName
- * ("people/c123…"). `remoteEtag` caches Google's etag (required to update a
- * contact); it is refreshed on each successful sync.
+ * `provider` is "apple_icloud". Rows with "google_contacts" /
+ * "microsoft_contacts" are left over from before those providers were removed
+ * and are no longer read. `remoteEtag` is refreshed on each successful sync.
  */
 export const contactSyncLinksTable = pgTable("contact_sync_links", {
   id:              serial("id").primaryKey(),

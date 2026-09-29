@@ -88,8 +88,36 @@ accounts) and all of their data are still in the database.
 - **Tables left in place, unused:** `plans`, `modules`, `subscriptions`,
   `merchant_modules`, `partner_referrals`. Dropping them would be data loss for
   no gain. Backup/restore still knows about them.
+- **Removed providers.** Square, Tyro (its `/tyro-settings` API, setup page and
+  `tyro_settings` Drizzle schema), WeChat Pay/Alipay, OpenAI (the AI fallback and
+  the `integrations-openai-ai-*` libs), and Google Workspace/Drive, OneDrive and
+  Dropbox (backup destination, customer-file mirror, OAuth flows) are gone from
+  the code, not just hidden. Data was left alone: the empty `tyro_settings`
+  table still exists in the database (so `drizzle-kit push` would now offer to
+  drop it), and production backups taken while OneDrive was a destination still
+  list `onedrive` among their locations — which is why `BackupLocation.type`
+  keeps it as a historical value. Those backups also have a `server` copy.
+- **Also removed:** the Online Store (builder, public store and checkout, AI
+  store designer, Storefront Data API, product reviews) and Online › Marketplace;
+  payment-method Surcharges (never charged — every rule was disabled; past
+  sales keep their `surcharge_amount` columns); SendGrid; Google/Microsoft
+  account sync (Apple iCloud is the only contacts/calendar sync); S3 and Google
+  Cloud Storage backup destinations (Nextcloud, SFTP and local remain, plus the
+  always-on `server` copy); the Feedback form; Service Options (see "Service job
+  quotes"); the onboarding wizard; Clear Demo Data; and the tax labels for other
+  countries — tax is Australian GST with an ABN. The overdue-invoice surcharge
+  under Invoice Settings is a different feature and stays.
+- **Business username is fixed** at `koastal` (`/b/koastal/...` for the portal,
+  Tech App, Mobile POS, booking and product QR pages). `PATCH /merchants/me`
+  rejects a username change, because every printed sticker and sent portal
+  link carries it.
+- **Retained tables.** `online_store_settings`, `online_store_thirdparty`,
+  `storefront_api_keys`, `product_reviews`, `marketplace_connections`,
+  `service_settings` and `payment_method_surcharges` still hold data, so their
+  Drizzle definitions stay (each marked RETAINED, UNUSED) — removing them would
+  make `drizzle-kit push` offer to drop the rows. No code reads them.
 - **Not blocked:** public customer-facing pages of the other accounts (portal,
-  booking, storefront, storefront API keys) and their background schedulers
+  booking) and their background schedulers
   still run, as they did before. Only signing in was closed off.
 
 ### Printing
@@ -344,8 +372,12 @@ list would return every quote the merchant has and the POS would offer a
 different customer's quote against this job. `quotes-by-service-job.test.ts`
 pins that.
 
-The section is gated by `showQuote` in `service_settings`, like every other
-service job section (Management › Invoices & Services › Service Options).
+Which service-job sections show is fixed in `SERVICE_JOB_SECTIONS`
+(`ServiceJobDetailDialog.tsx`): the layout the business had chosen on the former
+Service Options page — Quote, Warranty and Notes on; Parts & Labour, Approval &
+Deposit, Diagnostics, Technician Time, Sign-off and Shipping off. Warranty
+windows are `SERVICE_WARRANTY_DEFAULTS` (14 days) and Print always opens the
+chooser.
 
 The jobs list shows what each job was quoted (`quoteTotal`, beside the
 quoted/not-quoted tick) and totals the column in a footer row. Both come from
@@ -386,9 +418,8 @@ habit is one the next router won't have. Three things keep that safe:
   Dave", too short, too long, already `+`. A number left as typed is an
   annoyance; a mangled one is a customer the shop can no longer reach.
 - It runs only for a request with a merchant session, since that is what says
-  which country to assume. The public write paths — `public-booking.ts`,
-  `services/storefrontOrder.ts` (the storefront checkout *and* the Data API's
-  `orders:write`), and the portal's profile update — know their merchant another
+  which country to assume. The public write paths — `public-booking.ts` and the
+  portal's profile update — know their merchant another
   way and call `normalisePhoneFor` in the handler. **A new public write path that
   takes a phone number must do the same.**
 
@@ -669,10 +700,8 @@ If neither is configured, auth emails are silently dropped and a warning is logg
 ### Integration env vars
 Each integration is "feature disabled if missing" — the API hides the connect button and the OAuth callback returns an error. Set client id and secret together.
 
-- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google (Ads, Calendar, etc.).
+- `GOOGLE_CLIENT_ID` / `GOOGLE_CLIENT_SECRET` — Google Ads and Google Business Profile.
 - `GOOGLE_ADS_DEVELOPER_TOKEN` — Google Ads account listing; discovery disabled if missing.
-- `MICROSOFT_CLIENT_ID` / `MICROSOFT_CLIENT_SECRET` — Microsoft 365 / Outlook.
-- `DROPBOX_APP_KEY` / `DROPBOX_APP_SECRET` — Dropbox file sync.
 - `STRIPE_CONNECT_CLIENT_ID` / `STRIPE_SECRET_KEY` — Stripe Connect onboarding & charges.
 - `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` — Xero accounting sync.
 - `APPLE_WALLET_CERT_PEM` / `APPLE_WALLET_KEY_PEM` / `APPLE_WALLET_TEAM_ID` / `APPLE_WALLET_PASS_TYPE_ID` — Apple Wallet loyalty passes.
@@ -689,60 +718,9 @@ Nextcloud is the one cloud-storage integration with no platform OAuth app: each 
 - **SSRF guard**: the server URL is merchant-supplied, so `assertSafeNextcloudUrl` resolves the host and rejects loopback/RFC1918/link-local/CGNAT/multicast answers before every request. Do not add a Nextcloud request path that skips it. `normaliseServerUrl` rejects non-http(s) schemes and rejects plain http under `NODE_ENV=production`. Covered by `src/__tests__/nextcloud-url.test.ts`.
 - **Surfaces**: a backup destination (`lib/backup-storage/nextcloud.ts`, folder defaults to `KoaPOS/Backups`), a customer-file mirror target (`services/cloudFileMirror.ts`), and a restore/download source — `retrieveArchive` in `lib/backup-storage/index.ts` tries the platform `server` copy first, then Nextcloud.
 
-Adding another storage provider means touching the same five places `StorageType` is declared: `lib/backup-storage/types.ts`, `BackupStorageDestination` + `BackupLocation` in `lib/db/src/schema/merchant-backups.ts`, both enums in `openapi.yaml`, and `StorageType`/`STORAGE_META` in `management-backup.tsx`. The `destinations`/`locations` columns are JSONB with TypeScript-only typing, so **no SQL migration is needed** to widen them.
-
-### Storefront Data API (merchants' own sites / AI-built stores)
-
-Every other integration points KoaPOS *at* somebody else's platform. This one
-runs the other way: KoaPOS issues a credential and a website the merchant built
-elsewhere — increasingly by an AI agent — reads their data through it. It is
-offered as a provider (`headless`, "Build your own (AI)") in the Online Store
-third-party grid, and managed at Management › Online Store › Data API.
-
-- **Keys** live in `storefront_api_keys`. Only a SHA-256 hash is stored, so the
-  plaintext exists in exactly one response — the create call — and can never be
-  shown again. `keyPrefix` is what the UI displays. Revocation and expiry are
-  nullable timestamps; a revoked, expired or unknown key all return the same
-  401, so a caller cannot learn which.
-- **`lib/storefront-api.ts` describes the API once**: scopes, endpoints, limits,
-  and `buildConnectionManifest` — the Markdown brief the merchant downloads and
-  hands to their AI (base URL, auth, every endpoint, paging, errors, security
-  and privacy rules, plus a JSON block for tools that parse rather than read).
-  `routes/storefront-api.ts` implements exactly those paths and
-  `storefront-api.test.ts` asserts the two lists match — on **method and path**,
-  so a brief promising `POST /orders` cannot be satisfied by a GET — and the
-  brief cannot promise an endpoint that does not exist. **Add an endpoint in
-  both places.**
-- **Scopes** are `products:read`, `inventory:read`, `customers:read`,
-  `sales:read` and `orders:write`. `customers:read`/`sales:read` expose real
-  customer PII and are never defaults; granting one adds a privacy section to
-  the brief. Scopes are fixed for a key's life — changing them means issuing a
-  new key.
-- **Merchant-scoped always**: `merchantId` comes from the key, never from the
-  request, so no parameter reaches another merchant's data.
-- **One endpoint writes — `POST /orders`, behind `orders:write`.** It is not a
-  default, it is flagged `write: true` so the brief and the key-issuing UI warn
-  before it is granted, and it has its own much tighter rate limit (20/min
-  against the read budget's 120/min) because a storefront reads constantly and
-  orders rarely. Two properties keep a leaked write key survivable, and both are
-  pinned by `storefront-order.test.ts`: **a caller cannot name its own price**
-  (`placeStorefrontOrder` recomputes every line, discount and total from the
-  merchant's own catalogue — anything monetary in the request body is ignored),
-  and **an order is never money** (written `paymentStatus: "pending"`; only a
-  human marking it paid books the sale). So the worst a stolen key does is
-  reserve stock and create junk orders — recoverable, unlike a refund or a
-  price change.
-- **`services/storefrontOrder.ts` is the single implementation of taking an
-  order.** The merchant's own storefront checkout and the API endpoint both call
-  it. Two implementations would be two implementations of stock validation and
-  price computation, and the one that drifted would be the one holding the
-  money. Order placement changes go there, not in either route.
-- Two rate limiters, and the order matters: an IP-keyed one *before*
-  authentication counting only failures (key guessing), and a per-key one after.
-  A per-key limiter alone cannot bound requests that never authenticate.
-- The router is mounted before the blanket-`requireAuth` routers in
-  `routes/index.ts`, for the same reason `qrRouter` is: its callers have no
-  session cookie and never will.
+Nextcloud is now the **only** cloud storage provider (backup destination and
+customer-file mirror) — Google Drive/Workspace, OneDrive and Dropbox were
+removed; see "Removed providers" under Single-business install. Adding one back means touching the same five places `StorageType` is declared: `lib/backup-storage/types.ts`, `BackupStorageDestination` + `BackupLocation` in `lib/db/src/schema/merchant-backups.ts`, both enums in `openapi.yaml`, and `StorageType`/`STORAGE_META` in `management-backup.tsx`. The `destinations`/`locations` columns are JSONB with TypeScript-only typing, so **no SQL migration is needed** to widen them.
 
 ### AI providers (bring-your-own-key, Claude preferred)
 
@@ -759,26 +737,28 @@ route talks to a vendor SDK directly, and nothing but that module names a model.
   `merchantId` first**. There is no such thing here as an AI request that is not
   on behalf of a merchant; that signature is what makes tenancy impossible to
   forget.
-- `providersFor(merchantId)` resolves the merchant's connected accounts, Claude
-  first, their own OpenAI key as a fallback. Credentials are read per request:
+- `providersFor(merchantId)` resolves the merchant's connected Claude account.
+  **Claude is the only provider** — the OpenAI fallback was removed (see
+  "Removed providers" under Single-business install); a leftover `openai` vault entry is ignored, which
+  `ai-provider.test.ts` pins. Credentials are read per request:
   the HTTP clients are pooled by key inside the integration libs, but the
   *merchant → key* mapping is not, so disconnecting takes effect immediately.
-- **Both AI integrations are `useVault: true`.** An API key is a bearer
-  credential with a live billing account behind it. The `openai` entry shipped
-  as `useVault: false` (plaintext in `merchant_integrations.credentials`);
-  `artifacts/api-server/scripts/migrate-ai-keys-to-vault.ts` moves any such rows
-  across — dry-run by default, `--commit` to write.
+- **The AI integration is `useVault: true`.** An API key is a bearer
+  credential with a live billing account behind it.
+  `artifacts/api-server/scripts/migrate-ai-keys-to-vault.ts` moves any plaintext
+  key rows into the vault — dry-run by default, `--commit` to write.
 - **`ANTHROPIC_API_KEY` is a dev convenience only.** It stands in for a
   merchant's key when `NODE_ENV` is `development` or blank, and is ignored in
   production/staging/test — same rule as the token vault's dev fallback, for the
   same reason: a platform key quietly serving production is a bill nobody agreed
   to. It never displaces a key a merchant actually connected.
-- **Streams fall back only before the first byte.** Once a delta has reached the
-  client the provider is committed; retrying on the other one would splice two
-  completions together. `routes/openai.ts` therefore opens the stream *before*
-  writing SSE headers.
+- **Streams fail before the first byte where they can.** `aiStream` primes the
+  first event, so an open failure (revoked key, rate limit) surfaces before
+  `routes/openai.ts` writes SSE headers. `withFallback` is kept so a second
+  provider could slot back in; once a delta has reached the client the provider
+  is committed, since retrying elsewhere would splice two completions together.
 - **`aiJson` returns `unknown` on purpose.** Claude enforces the JSON Schema
-  server-side; the OpenAI fallback only has it described. Every caller validates
+  server-side, but model output is untrusted until checked. Every caller validates
   with Zod before the value goes anywhere — the schema is guidance, Zod is the
   guarantee.
 - Claude uses `thinking: {type: "adaptive"}` and `output_config.effort`. Effort
@@ -786,51 +766,6 @@ route talks to a vendor SDK directly, and nothing but that module names a model.
   cheaper model. `budget_tokens` is removed on current models — do not add it.
 - `routes/openai.ts` keeps its `/openai/...` paths for compatibility with the
   frontend and the OpenAPI spec. The name is historical; the provider is not.
-
-### AI store designer (Online Store › Design)
-
-Claude designs a storefront from the merchant's own business details, categories
-and live product catalogue. It generates **no code and no markup**: the output is
-a `theme` + `pages` JSON document of exactly the shape the Design editor already
-saves and the public storefront already renders, so a generated store goes
-through the same `BlockPreview` as a hand-built one.
-
-The block catalogue lives in **`lib/online-store-blocks`** so the editor and the
-API server cannot drift: `shared.tsx` builds `BLOCK_LIBRARY` from
-`BLOCK_DEFAULTS`, and `lib/ai-store.ts` builds the JSON Schema and the prompt's
-catalogue brief from the same constant. **Add a block there, not in the editor.**
-
-Three layers stand between the model and the database, in order:
-
-1. `storeOutputSchema()` — enum-constrains block `type` to `AI_BLOCK_TYPES` and
-   the theme to hex colours and known enums. Enforced by Claude's structured
-   outputs.
-2. `generatedSiteSchema` (Zod) — re-checks the parsed value, because the OpenAI
-   fallback is only *told* the schema, and because a schema-valid document can
-   still be unreviewable (30 pages, 500 blocks).
-3. `coerceBlockData` — reduces each block's `data` to the exact fields that block
-   declares, coercing each to the type its default has. This is why `data` can be
-   a permissive object in the schema: invented keys are dropped, not trusted.
-
-`AI_FORBIDDEN_BLOCKS` (`html`, `iframe`) are raw-markup escape hatches. A
-merchant may still add them by hand; generation cannot, and they are absent from
-the catalogue brief so the model is never invited to try.
-
-Generation runs on the merchant's own Claude key, so a merchant who has not
-connected an account gets a 503 and the dialog explains the one step rather than
-failing on submit. The "Design with AI" button is shown regardless — hiding it
-would make the feature undiscoverable for exactly the merchants who need to be
-told about it.
-
-**`POST /online-store/ai/generate` never writes.** It returns a draft; the
-merchant applies it in the editor through the normal settings upsert. So the
-data-loss surface is a UI decision, not a server one — and the dialog makes
-"Add as new pages" the default while spelling out exactly which pages a
-"Replace everything" would destroy. Keep it that way.
-
-Images are the known gap: the model cannot produce artwork, so every image URL
-field is generated empty and product blocks (which pull real catalogue photos)
-are preferred over image blocks.
 
 ## Product surface
 

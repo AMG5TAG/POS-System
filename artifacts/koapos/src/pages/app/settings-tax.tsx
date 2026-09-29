@@ -25,50 +25,13 @@ const MONTHS = [
   "July","August","September","October","November","December",
 ];
 
-const TAX_LABELS = [
-  { value: "GST",       label: "GST — Goods & Services Tax (Australia, NZ, Singapore, India)" },
-  { value: "VAT",       label: "VAT — Value Added Tax (Europe, UAE, UK)" },
-  { value: "HST",       label: "HST — Harmonised Sales Tax (Canada)" },
-  { value: "PST",       label: "PST — Provincial Sales Tax (Canada)" },
-  { value: "SST",       label: "SST — Sales & Service Tax (Malaysia)" },
-  { value: "Sales Tax", label: "Sales Tax (United States)" },
-  { value: "JCT",       label: "JCT — Japan Consumption Tax" },
-  { value: "TVA",       label: "TVA — Taxe sur la Valeur Ajoutée (France)" },
-  { value: "IVA",       label: "IVA — Impuesto al Valor Agregado (Spain / Latin America)" },
-  { value: "BTW",       label: "BTW — Belasting over de Toegevoegde Waarde (Netherlands)" },
-  { value: "Custom",    label: "Custom — Enter your own" },
-];
-
-const TAX_NUMBER_LABELS = [
-  { value: "ABN",          label: "ABN — Australian Business Number" },
-  { value: "ACN",          label: "ACN — Australian Company Number" },
-  { value: "NZBN",         label: "NZBN — New Zealand Business Number" },
-  { value: "VAT No.",      label: "VAT No. (Europe / UK)" },
-  { value: "GST No.",      label: "GST No. (Canada / Singapore)" },
-  { value: "TIN",          label: "TIN — Taxpayer Identification Number (US)" },
-  { value: "EIN",          label: "EIN — Employer Identification Number (US)" },
-  { value: "GSTIN",        label: "GSTIN — GST Identification Number (India)" },
-  { value: "CRN",          label: "CRN — Company Registration Number (UK)" },
-  { value: "SIRET",        label: "SIRET / SIREN (France)" },
-  { value: "NIF",          label: "NIF / CIF (Spain)" },
-  { value: "SSM No.",      label: "SSM No. (Malaysia)" },
-  { value: "TRN",          label: "TRN — Tax Registration Number (UAE)" },
-  { value: "Business No.", label: "Business No. (Generic)" },
-];
-
 interface ExtSettings {
   fiscalYearStart:  number;
-  taxLabel:         string;
-  customTaxLabel:   string;
-  taxNumberLabel:   string;
   defaultTaxRate:   string;
 }
 
 const EXT_DEFAULTS: ExtSettings = {
   fiscalYearStart:  7,
-  taxLabel:         "GST",
-  customTaxLabel:   "",
-  taxNumberLabel:   "ABN",
   defaultTaxRate:   "10",
 };
 
@@ -90,7 +53,6 @@ export default function SettingsTaxPage() {
     setExt(prev => ({ ...prev, ...patch }));
     setDirtyExt(true);
   }, []);
-  const activeTaxLabel = ext.taxLabel === "Custom" ? ext.customTaxLabel || "Tax" : ext.taxLabel;
   const fiscalEnd = MONTHS[((ext.fiscalYearStart - 1 + 11) % 12)];
 
   useEffect(() => {
@@ -98,9 +60,6 @@ export default function SettingsTaxPage() {
       const anyExt = dbExt as any;
       setExt({
         fiscalYearStart: Number(anyExt.fiscalYearStart) || EXT_DEFAULTS.fiscalYearStart,
-        taxLabel: anyExt.taxLabel || EXT_DEFAULTS.taxLabel,
-        customTaxLabel: anyExt.customTaxLabel || EXT_DEFAULTS.customTaxLabel,
-        taxNumberLabel: anyExt.taxNumberLabel || EXT_DEFAULTS.taxNumberLabel,
         defaultTaxRate: anyExt.defaultTaxRate ?? EXT_DEFAULTS.defaultTaxRate,
       });
     }
@@ -131,7 +90,7 @@ export default function SettingsTaxPage() {
         gstNumber: savedNumber || (merchant as any)?.abn || "",
         taxInclusive: settings.taxInclusive ?? "true",
         showTaxOnReceipt: settings.showTaxOnReceipt ?? "true",
-        taxName: settings.taxName ?? "GST",
+        taxName: "GST", // Australia only — the tax is always GST
         receiptHeader: settings.receiptHeader ?? "",
         receiptFooter: settings.receiptFooter ?? "",
       });
@@ -153,9 +112,10 @@ export default function SettingsTaxPage() {
         updateExt.mutateAsync({
           data: {
             fiscalYearStart: String(ext.fiscalYearStart),
-            taxLabel: ext.taxLabel,
-            customTaxLabel: ext.customTaxLabel,
-            taxNumberLabel: ext.taxNumberLabel,
+            // Australia only: the tax is always GST and the number an ABN.
+            taxLabel: "GST",
+            customTaxLabel: "",
+            taxNumberLabel: "ABN",
             defaultTaxRate: ext.defaultTaxRate,
           } as any,
         }),
@@ -219,11 +179,6 @@ export default function SettingsTaxPage() {
               <>
                 <Separator />
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-1.5">
-                    <Label>Tax Name</Label>
-                    <Input value={form.taxName} onChange={(e) => patchForm({ taxName: e.target.value })}
-                      placeholder="GST" />
-                  </div>
                   <div className="space-y-1.5">
                     <Label>GST Rate (%)</Label>
                     <Input type="number" step="0.1" value={form.gstRate}
@@ -326,7 +281,7 @@ export default function SettingsTaxPage() {
                     <SelectContent>
                       {MONTHS.map((m, i) => (
                         <SelectItem key={i + 1} value={String(i + 1)}>
-                          {m}  ({i === 0 ? "Jan" : i === 6 ? "Jul (AU/NZ standard)" : i === 3 ? "Apr (UK standard)" : m.slice(0, 3)})
+                          {m}{i === 6 ? "  (Australian standard)" : ""}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -341,71 +296,26 @@ export default function SettingsTaxPage() {
               </div>
               <p className="text-xs text-muted-foreground">
                 Your fiscal year runs from <strong>{MONTHS[ext.fiscalYearStart - 1]}</strong> to <strong>{fiscalEnd}</strong>.
-                Australia &amp; NZ standard is 1 July — 30 June. US standard is January — December.
+                The Australian financial year runs 1 July — 30 June.
               </p>
             </CardContent>
           </Card>
 
         </div>{/* end 2-col grid */}
 
-        {/* Tax & Compliance */}
+        {/* Invoice default */}
         <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <DollarSign className="h-5 w-5 text-primary" />
-              Tax &amp; Compliance
+              Invoices
             </CardTitle>
-            <CardDescription>
-              Customise tax terminology for your region. These labels appear on receipts, invoices, and reports.
-            </CardDescription>
           </CardHeader>
           <CardContent className="space-y-5">
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label>Tax Label</Label>
-                <Select value={ext.taxLabel} onValueChange={v => patchExt({ taxLabel: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-64">
-                    {TAX_LABELS.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              {ext.taxLabel === "Custom" && (
-                <div className="space-y-1.5">
-                  <Label>Custom Tax Name</Label>
-                  <Input
-                    value={ext.customTaxLabel}
-                    onChange={e => patchExt({ customTaxLabel: e.target.value })}
-                    placeholder="e.g. Consumption Tax"
-                  />
-                </div>
-              )}
-            </div>
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-5">
-              <div className="space-y-1.5">
-                <Label>Business Registration Number Label</Label>
-                <Select value={ext.taxNumberLabel} onValueChange={v => patchExt({ taxNumberLabel: v })}>
-                  <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent className="max-h-64">
-                    {TAX_NUMBER_LABELS.map(t => (
-                      <SelectItem key={t.value} value={t.value}>{t.label}</SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-1.5">
-                <Label>Preview</Label>
-                <div className="h-10 flex items-center px-3 rounded-md border bg-muted/50 text-sm font-mono text-muted-foreground">
-                  {activeTaxLabel} incl. · {ext.taxNumberLabel}: 12 345 678 901
-                </div>
-              </div>
-            </div>
             <div className="space-y-1.5">
               <Label>Default Invoice Line Tax Rate (%)</Label>
               <p className="text-xs text-muted-foreground">
-                Pre-filled {activeTaxLabel} rate for new invoice line items. Set to 0 for {activeTaxLabel}-free goods.
+                Pre-filled GST rate for new invoice line items. Set to 0 for GST-free goods.
               </p>
               <Input
                 type="number"

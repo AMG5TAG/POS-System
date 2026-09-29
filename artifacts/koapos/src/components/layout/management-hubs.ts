@@ -46,7 +46,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
     name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/invoices",
     children: [
       { name: "Invoices",        href: "/management/invoices-services/invoices",        icon: FileText },
-      { name: "Service Options", href: "/management/invoices-services/service-options", icon: Wrench   },
     ],
   },
   {
@@ -125,16 +124,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   {
-    name: "Online Store", icon: Store, defaultHref: "/management/online-store/storefront",
-    children: [
-      { name: "Storefront", href: "/management/online-store/storefront", icon: Store   },
-      { name: "Design",     href: "/management/online-store/design",     icon: Palette },
-      { name: "Features",   href: "/management/online-store/features",   icon: Layers  },
-      { name: "Domain",     href: "/management/online-store/domain",     icon: Link2   },
-      { name: "Data API",   href: "/management/online-store/data-api",   icon: KeyRound },
-    ],
-  },
-  {
     name: "Forms & Files", icon: FolderOpen, defaultHref: "/management/forms-files/forms",
     children: [
       { name: "Forms",         href: "/management/forms-files/forms",   icon: ClipboardList },
@@ -174,12 +163,10 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
       // or the command palette.
       { name: "Regional",         href: "/management/settings-integrations/business-details/regional", icon: Globe },
       { name: "Tax",              href: "/management/settings-integrations/tax",              icon: Receipt        },
-      { name: "Surcharges",       href: "/management/settings-integrations/surcharges",       icon: Percent        },
       { name: "SMS",              href: "/management/settings-integrations/sms",              icon: MessageSquare  },
       { name: "Emails",           href: "/management/marketing-reports/email",                icon: Mail           },
       { name: "Integrations",     href: "/management/settings-integrations/integrations",     icon: Plug,
         matchPaths: [
-          "/management/settings-integrations/integrations/tyro-eftpos",
           "/management/settings-integrations/integrations/xero",
           "/management/settings-integrations/integrations/help",
         ] },
@@ -187,7 +174,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Import / Export",  href: "/management/settings-integrations/import-export",    icon: ArrowLeftRight },
       { name: "Misc",             href: "/management/settings-integrations/system/misc",      icon: MoreHorizontal,
         matchPaths: ["/management/settings-integrations/system"] },
-      { name: "Feedback",         href: "/management/settings-integrations/feedback",         icon: MessageSquare  },
     ],
   },
 ];

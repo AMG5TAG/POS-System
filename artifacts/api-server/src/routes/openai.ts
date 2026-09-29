@@ -8,8 +8,8 @@ import { aiText, aiStream, aiJson, NoAiProviderError, type AiMessage } from "../
 /*
  * Historical name: these paths were built when OpenAI was the only provider,
  * and the frontend and OpenAPI spec still address them as `/openai/...`. The
- * provider is now chosen by `services/ai` — Claude first, OpenAI as fallback —
- * so nothing here names a vendor beyond the URL it cannot change without a
+ * provider is now chosen by `services/ai` — Claude; the OpenAI provider itself
+ * has been removed — so nothing here names a vendor beyond the URL it cannot change without a
  * breaking API change.
  */
 

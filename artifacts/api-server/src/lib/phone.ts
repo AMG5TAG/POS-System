@@ -1,8 +1,8 @@
 /* ─── Phone normalisation, server side ────────────────────────────────────────
  *
  * The browser rewrites a phone field as soon as the operator leaves it, but the
- * browser is not the guarantee: an import, the public booking form, a storefront
- * order and the API all write phone numbers without ever touching that code.
+ * browser is not the guarantee: an import, the public booking form and the
+ * customer portal all write phone numbers without ever touching that code.
  * This module — and the middleware built on it — is where "a stored phone number
  * carries its country code" is actually true.
  *

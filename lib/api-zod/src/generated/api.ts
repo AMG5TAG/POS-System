@@ -2771,77 +2771,6 @@ export const UpdateLoyaltySettingsResponse = zod.object({
 
 
 /**
- * @summary Get merchant service job menu options
- */
-export const getServiceSettingsResponseRepairWarrantyDaysMin = 0;
-
-export const getServiceSettingsResponseReworkWarrantyDaysMin = 0;
-
-
-
-export const GetServiceSettingsResponse = zod.object({
-  "showQuote": zod.boolean(),
-  "showPartsLabour": zod.boolean(),
-  "showApprovalDeposit": zod.boolean(),
-  "showDiagnostics": zod.boolean(),
-  "showWarranty": zod.boolean(),
-  "showTechnicianTime": zod.boolean(),
-  "showSignOff": zod.boolean(),
-  "showShipping": zod.boolean(),
-  "showNotes": zod.boolean(),
-  "repairWarrantyDays": zod.number().min(getServiceSettingsResponseRepairWarrantyDaysMin).describe('Default repair warranty period (days) pre-filled on new service jobs.'),
-  "reworkWarrantyDays": zod.number().min(getServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.'),
-  "defaultPrint": zod.enum(['ask', 'a4', '80mm', 'sticker']).describe('What the Print button on a service job produces. \"ask\" (the default) keeps the chooser; the others print that document straight away.')
-})
-
-
-/**
- * @summary Update merchant service job menu options
- */
-export const updateServiceSettingsBodyRepairWarrantyDaysMin = 0;
-
-export const updateServiceSettingsBodyReworkWarrantyDaysMin = 0;
-
-
-
-export const UpdateServiceSettingsBody = zod.object({
-  "showQuote": zod.boolean().optional(),
-  "showPartsLabour": zod.boolean(),
-  "showApprovalDeposit": zod.boolean(),
-  "showDiagnostics": zod.boolean(),
-  "showWarranty": zod.boolean(),
-  "showTechnicianTime": zod.boolean(),
-  "showSignOff": zod.boolean(),
-  "showShipping": zod.boolean(),
-  "showNotes": zod.boolean(),
-  "repairWarrantyDays": zod.number().min(updateServiceSettingsBodyRepairWarrantyDaysMin).optional(),
-  "reworkWarrantyDays": zod.number().min(updateServiceSettingsBodyReworkWarrantyDaysMin).optional(),
-  "defaultPrint": zod.enum(['ask', 'a4', '80mm', 'sticker']).optional().describe('What the Print button on a service job produces. \"ask\" (the default) keeps the chooser; the others print that document straight away.')
-})
-
-export const updateServiceSettingsResponseRepairWarrantyDaysMin = 0;
-
-export const updateServiceSettingsResponseReworkWarrantyDaysMin = 0;
-
-
-
-export const UpdateServiceSettingsResponse = zod.object({
-  "showQuote": zod.boolean(),
-  "showPartsLabour": zod.boolean(),
-  "showApprovalDeposit": zod.boolean(),
-  "showDiagnostics": zod.boolean(),
-  "showWarranty": zod.boolean(),
-  "showTechnicianTime": zod.boolean(),
-  "showSignOff": zod.boolean(),
-  "showShipping": zod.boolean(),
-  "showNotes": zod.boolean(),
-  "repairWarrantyDays": zod.number().min(updateServiceSettingsResponseRepairWarrantyDaysMin).describe('Default repair warranty period (days) pre-filled on new service jobs.'),
-  "reworkWarrantyDays": zod.number().min(updateServiceSettingsResponseReworkWarrantyDaysMin).describe('Default warranty period (days) applied to no-charge rework jobs.'),
-  "defaultPrint": zod.enum(['ask', 'a4', '80mm', 'sticker']).describe('What the Print button on a service job produces. \"ask\" (the default) keeps the chooser; the others print that document straight away.')
-})
-
-
-/**
  * @summary Get merchant invoicing settings
  */
 export const getInvoiceSettingsResponseDefaultDueDaysMin = 0;
@@ -7443,44 +7372,6 @@ export const UpsertPosSettingsResponse = zod.object({
 
 
 /**
- * @summary Get per-payment-method surcharge config
- */
-export const GetPaymentSurchargesResponse = zod.object({
-  "items": zod.array(zod.object({
-  "paymentMethod": zod.string(),
-  "percent": zod.number().describe('Surcharge as a percentage of the sale total (0–100).'),
-  "fixed": zod.number().describe('Fixed surcharge amount added per transaction.'),
-  "passOn": zod.boolean().describe('When true the cost is added to the customer\'s bill; when false the merchant absorbs it as a cost of business in reports.'),
-  "enabled": zod.boolean().describe('Whether this method\'s surcharge is active.')
-}))
-})
-
-
-/**
- * @summary Bulk upsert per-payment-method surcharge config
- */
-export const UpdatePaymentSurchargesBody = zod.object({
-  "items": zod.array(zod.object({
-  "paymentMethod": zod.string(),
-  "percent": zod.number().describe('Surcharge as a percentage of the sale total (0–100).'),
-  "fixed": zod.number().describe('Fixed surcharge amount added per transaction.'),
-  "passOn": zod.boolean().describe('When true the cost is added to the customer\'s bill; when false the merchant absorbs it as a cost of business in reports.'),
-  "enabled": zod.boolean().describe('Whether this method\'s surcharge is active.')
-}))
-})
-
-export const UpdatePaymentSurchargesResponse = zod.object({
-  "items": zod.array(zod.object({
-  "paymentMethod": zod.string(),
-  "percent": zod.number().describe('Surcharge as a percentage of the sale total (0–100).'),
-  "fixed": zod.number().describe('Fixed surcharge amount added per transaction.'),
-  "passOn": zod.boolean().describe('When true the cost is added to the customer\'s bill; when false the merchant absorbs it as a cost of business in reports.'),
-  "enabled": zod.boolean().describe('Whether this method\'s surcharge is active.')
-}))
-})
-
-
-/**
  * @summary Get layby settings
  */
 export const GetLaybySettingsResponse = zod.object({
@@ -8493,207 +8384,6 @@ export const UpsertShortlinkSettingsResponse = zod.object({
 
 
 /**
- * @summary Get online store settings
- */
-export const GetOnlineStoreSettingsResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "mode": zod.string(),
-  "storeName": zod.string(),
-  "tagline": zod.string(),
-  "logoUrl": zod.string(),
-  "faviconUrl": zod.string(),
-  "domain": zod.string(),
-  "published": zod.string(),
-  "theme": zod.string(),
-  "payments": zod.string(),
-  "features": zod.string(),
-  "pages": zod.string(),
-  "quickCodes": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Upsert online store settings
- */
-export const UpsertOnlineStoreSettingsBody = zod.object({
-  "mode": zod.string().optional(),
-  "storeName": zod.string().optional(),
-  "tagline": zod.string().optional(),
-  "logoUrl": zod.string().optional(),
-  "faviconUrl": zod.string().optional(),
-  "domain": zod.string().optional(),
-  "published": zod.string().optional(),
-  "theme": zod.string().optional(),
-  "payments": zod.string().optional(),
-  "features": zod.string().optional(),
-  "pages": zod.string().optional(),
-  "quickCodes": zod.string().optional()
-})
-
-export const UpsertOnlineStoreSettingsResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "mode": zod.string(),
-  "storeName": zod.string(),
-  "tagline": zod.string(),
-  "logoUrl": zod.string(),
-  "faviconUrl": zod.string(),
-  "domain": zod.string(),
-  "published": zod.string(),
-  "theme": zod.string(),
-  "payments": zod.string(),
-  "features": zod.string(),
-  "pages": zod.string(),
-  "quickCodes": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Whether AI store generation is available, and which provider serves it
- */
-export const GetOnlineStoreAiStatusResponse = zod.object({
-  "available": zod.boolean(),
-  "provider": zod.enum(['claude', 'openai']).nullish().describe('The provider that would serve a generation right now.')
-})
-
-
-/**
- * Returns a draft only — theme and pages the editor previews. Nothing is saved; the merchant applies the draft through the normal settings upsert.
- * @summary Generate a storefront design from the merchant's business details and catalogue
- */
-export const generateOnlineStoreDesignBodyBriefMax = 2000;
-
-
-
-export const GenerateOnlineStoreDesignBody = zod.object({
-  "brief": zod.string().max(generateOnlineStoreDesignBodyBriefMax).optional().describe('What the merchant wants from the store. Optional — their business details and product catalogue are used either way.')
-})
-
-export const GenerateOnlineStoreDesignResponse = zod.object({
-  "provider": zod.enum(['claude', 'openai']),
-  "theme": zod.object({
-  "primary": zod.string(),
-  "accent": zod.string(),
-  "bg": zod.string(),
-  "text": zod.string(),
-  "font": zod.enum(['sans', 'serif', 'mono']),
-  "radius": zod.enum(['none', 'sm', 'md', 'lg'])
-}),
-  "pages": zod.array(zod.object({
-  "id": zod.string(),
-  "name": zod.string(),
-  "slug": zod.string(),
-  "visible": zod.boolean(),
-  "seoTitle": zod.string().optional(),
-  "seoDescription": zod.string().optional(),
-  "blocks": zod.array(zod.object({
-  "id": zod.string(),
-  "type": zod.string(),
-  "data": zod.record(zod.string(), zod.unknown())
-}))
-}))
-})
-
-
-/**
- * @summary Get third-party store connection
- */
-export const GetOnlineStoreThirdpartyResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "providerId": zod.string(),
-  "storeUrl": zod.string(),
-  "apiKey": zod.string(),
-  "connected": zod.string(),
-  "connectedAt": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary Upsert third-party store connection
- */
-export const UpsertOnlineStoreThirdpartyBody = zod.object({
-  "providerId": zod.string().optional(),
-  "storeUrl": zod.string().optional(),
-  "apiKey": zod.string().optional(),
-  "connected": zod.string().optional(),
-  "connectedAt": zod.string().optional()
-})
-
-export const UpsertOnlineStoreThirdpartyResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "providerId": zod.string(),
-  "storeUrl": zod.string(),
-  "apiKey": zod.string(),
-  "connected": zod.string(),
-  "connectedAt": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary List Storefront Data API keys, with the scope catalogue
- */
-export const ListStorefrontApiKeysResponse = zod.object({
-  "items": zod.array(zod.object({
-  "id": zod.number(),
-  "name": zod.string(),
-  "keyPrefix": zod.string(),
-  "scopes": zod.array(zod.string()),
-  "lastUsedAt": zod.string().nullish(),
-  "requestCount": zod.number(),
-  "expiresAt": zod.string().nullish(),
-  "revokedAt": zod.string().nullish(),
-  "createdAt": zod.string()
-})),
-  "scopes": zod.array(zod.object({
-  "id": zod.string(),
-  "label": zod.string(),
-  "description": zod.string(),
-  "sensitive": zod.boolean(),
-  "write": zod.boolean().optional().describe('True when the scope lets a key change the merchant\'s data rather than only read it, so the UI can warn before it is granted.')
-})),
-  "baseUrl": zod.string()
-})
-
-
-/**
- * @summary Issue a Storefront Data API key (returns the secret once)
- */
-export const CreateStorefrontApiKeyBody = zod.object({
-  "name": zod.string().optional(),
-  "scopes": zod.array(zod.string()).optional(),
-  "expiresInDays": zod.number().nullish()
-})
-
-
-/**
- * @summary Revoke a Storefront Data API key
- */
-export const RevokeStorefrontApiKeyParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-
-/**
- * @summary Connection brief for a key, for the merchant's AI or developer
- */
-export const GetStorefrontApiManifestParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-export const GetStorefrontApiManifestResponse = zod.object({
-  "filename": zod.string(),
-  "content": zod.string()
-})
-
-
-/**
  * @summary List shipping carriers with connection state
  */
 export const ListShippingCarriersResponse = zod.object({
@@ -8779,82 +8469,6 @@ export const UpdateShippingCarrierResponse = zod.object({
   "connectedAt": zod.string(),
   "config": zod.string(),
   "updatedAt": zod.coerce.date()
-})
-
-
-/**
- * @summary List marketplace connections
- */
-export const ListMarketplaceConnectionsResponse = zod.object({
-  "items": zod.array(zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "marketplaceId": zod.string(),
-  "connected": zod.string(),
-  "connectedAt": zod.string(),
-  "lastSync": zod.string(),
-  "productsCount": zod.number(),
-  "ordersCount": zod.number(),
-  "config": zod.string()
-})),
-  "total": zod.number()
-})
-
-
-/**
- * @summary Get marketplace connection
- */
-export const GetMarketplaceConnectionParams = zod.object({
-  "marketplaceId": zod.coerce.string()
-})
-
-export const GetMarketplaceConnectionResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "marketplaceId": zod.string(),
-  "connected": zod.string(),
-  "connectedAt": zod.string(),
-  "lastSync": zod.string(),
-  "productsCount": zod.number(),
-  "ordersCount": zod.number(),
-  "config": zod.string()
-})
-
-
-/**
- * @summary Upsert marketplace connection
- */
-export const UpsertMarketplaceConnectionParams = zod.object({
-  "marketplaceId": zod.coerce.string()
-})
-
-export const UpsertMarketplaceConnectionBody = zod.object({
-  "connected": zod.string().optional(),
-  "connectedAt": zod.string().optional(),
-  "lastSync": zod.string().optional(),
-  "productsCount": zod.number().optional(),
-  "ordersCount": zod.number().optional(),
-  "config": zod.string().optional()
-})
-
-export const UpsertMarketplaceConnectionResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "marketplaceId": zod.string(),
-  "connected": zod.string(),
-  "connectedAt": zod.string(),
-  "lastSync": zod.string(),
-  "productsCount": zod.number(),
-  "ordersCount": zod.number(),
-  "config": zod.string()
-})
-
-
-/**
- * @summary Delete marketplace connection
- */
-export const DeleteMarketplaceConnectionParams = zod.object({
-  "marketplaceId": zod.coerce.string()
 })
 
 
@@ -10923,27 +10537,6 @@ export const UpdateSecuritySettingsResponse = zod.object({
 
 
 /**
- * @summary Submit a bug report or feature request
- */
-export const SubmitFeedbackBody = zod.object({
-  "type": zod.enum(['bug', 'feature']),
-  "title": zod.string(),
-  "description": zod.string(),
-  "steps": zod.string().optional(),
-  "appVersion": zod.string().optional(),
-  "attachments": zod.array(zod.object({
-  "name": zod.string(),
-  "data": zod.string().describe('Base64-encoded file content'),
-  "mimeType": zod.string()
-})).optional()
-})
-
-export const SubmitFeedbackResponse = zod.object({
-  "ok": zod.boolean()
-})
-
-
-/**
  * @summary Get encryption health of this merchant's OAuth token vault
  */
 export const GetVaultStatusResponse = zod.object({
@@ -12480,7 +12073,7 @@ export const syncIntegrationContactsBodyIncludeNotesDefault = false;
 export const syncIntegrationContactsBodyNotesConflictDefault = `append`;
 
 export const SyncIntegrationContactsBody = zod.object({
-  "provider": zod.enum(['google_contacts', 'microsoft_contacts']).describe('Target contact platform'),
+  "provider": zod.enum(['apple_icloud']).describe('Target contact platform'),
   "includeNotes": zod.boolean().default(syncIntegrationContactsBodyIncludeNotesDefault).describe('When true, CRM notes are mapped to the platform\'s native notes field'),
   "notesConflict": zod.enum(['append', 'overwrite']).default(syncIntegrationContactsBodyNotesConflictDefault).describe('\"append\" — all notes concatenated newest-first;\n\"overwrite\" — only the most-recent note is sent\n')
 })
@@ -12503,7 +12096,7 @@ connected cloud storage provider, along with the supported providers.
  */
 export const GetCustomerFilesCloudSettingsResponse = zod.object({
   "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
-  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox', 'nextcloud']).describe('Connected cloud storage provider to mirror files to'),
+  "storageKey": zod.enum(['nextcloud']).describe('Connected cloud storage provider to mirror files to'),
   "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
 }).and(zod.object({
   "supportedStorageKeys": zod.array(zod.string()).describe('Storage providers that can receive mirrored customer files')
@@ -12519,13 +12112,13 @@ pushed to that folder on the chosen cloud storage.
  */
 export const UpdateCustomerFilesCloudSettingsBody = zod.object({
   "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
-  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox', 'nextcloud']).describe('Connected cloud storage provider to mirror files to'),
+  "storageKey": zod.enum(['nextcloud']).describe('Connected cloud storage provider to mirror files to'),
   "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
 })
 
 export const UpdateCustomerFilesCloudSettingsResponse = zod.object({
   "enabled": zod.boolean().describe('When true, customer file uploads are mirrored to the cloud'),
-  "storageKey": zod.enum(['onedrive', 'google_drive', 'dropbox', 'nextcloud']).describe('Connected cloud storage provider to mirror files to'),
+  "storageKey": zod.enum(['nextcloud']).describe('Connected cloud storage provider to mirror files to'),
   "folder": zod.string().describe('Destination folder path on that provider (set by the platform user)')
 })
 
@@ -12660,15 +12253,8 @@ export const GetBackupConfigResponse = zod.object({
   "lastBackupAt": zod.coerce.date().nullish(),
   "destinations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive', 'nextcloud']),
+  "type": zod.enum(['local', 'sftp', 'nextcloud']),
   "directory": zod.string().nullish(),
-  "bucket": zod.string().nullish(),
-  "region": zod.string().nullish(),
-  "accessKeyId": zod.string().nullish(),
-  "secretAccessKeySet": zod.boolean().optional(),
-  "projectId": zod.string().nullish(),
-  "gcsBucket": zod.string().nullish(),
-  "serviceAccountJsonSet": zod.boolean().optional(),
   "host": zod.string().nullish(),
   "port": zod.number().nullish(),
   "username": zod.string().nullish(),
@@ -12687,15 +12273,8 @@ export const UpdateBackupConfigBody = zod.object({
   "password": zod.string().optional(),
   "destinations": zod.array(zod.object({
   "id": zod.string().optional(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive', 'nextcloud']),
+  "type": zod.enum(['local', 'sftp', 'nextcloud']),
   "directory": zod.string().optional(),
-  "bucket": zod.string().optional(),
-  "region": zod.string().optional(),
-  "accessKeyId": zod.string().optional(),
-  "secretAccessKey": zod.string().optional(),
-  "projectId": zod.string().optional(),
-  "gcsBucket": zod.string().optional(),
-  "serviceAccountJson": zod.string().optional(),
   "host": zod.string().optional(),
   "port": zod.number().optional(),
   "username": zod.string().optional(),
@@ -12711,15 +12290,8 @@ export const UpdateBackupConfigResponse = zod.object({
   "lastBackupAt": zod.coerce.date().nullish(),
   "destinations": zod.array(zod.object({
   "id": zod.string(),
-  "type": zod.enum(['local', 's3', 'gcs', 'sftp', 'onedrive', 'nextcloud']),
+  "type": zod.enum(['local', 'sftp', 'nextcloud']),
   "directory": zod.string().nullish(),
-  "bucket": zod.string().nullish(),
-  "region": zod.string().nullish(),
-  "accessKeyId": zod.string().nullish(),
-  "secretAccessKeySet": zod.boolean().optional(),
-  "projectId": zod.string().nullish(),
-  "gcsBucket": zod.string().nullish(),
-  "serviceAccountJsonSet": zod.boolean().optional(),
   "host": zod.string().nullish(),
   "port": zod.number().nullish(),
   "username": zod.string().nullish(),

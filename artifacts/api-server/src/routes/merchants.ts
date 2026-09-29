@@ -8,7 +8,6 @@ import { isPhoneDisplayMode } from "@workspace/phone-shared";
 
 const router: IRouter = Router();
 
-const USERNAME_RE    = /^[a-z0-9][a-z0-9-]{1,28}[a-z0-9]$/;
 const DOMAIN_RE      = /^(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$/i;
 
 function formatMerchant(m: typeof merchantsTable.$inferSelect) {
@@ -68,23 +67,12 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
     ? (body.portalDomain.trim() || null)
     : body.portalDomain === null ? null : undefined;
 
-  // Validate username format if provided
+  // The business username is fixed: it is the /b/<username> segment of every
+  // customer-portal link, QR sticker and app address already handed out, so
+  // changing it would break them all. Set it in the database if it must move.
   if (username !== undefined) {
-    if (!USERNAME_RE.test(username)) {
-      res.status(400).json({ error: "Invalid username format. Use 3–30 lowercase letters, numbers, and hyphens (must start and end with a letter or number)." });
-      return;
-    }
-
-    // Check uniqueness (excluding self)
-    const [existing] = await db
-      .select({ id: merchantsTable.id })
-      .from(merchantsTable)
-      .where(and(eq(merchantsTable.username, username), ne(merchantsTable.id, req.session.merchantId!)));
-
-    if (existing) {
-      res.status(409).json({ error: "This username is already taken. Please choose another." });
-      return;
-    }
+    res.status(409).json({ error: "The business username is fixed for this installation." });
+    return;
   }
 
   // A default we can't resolve to a dialling code would silently switch phone
@@ -121,7 +109,6 @@ router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
 
   const updateData = {
     ...rest,
-    ...(username !== undefined && { username }),
     ...(portalDomain !== undefined && { portalDomain: portalDomain === null ? null : portalDomain.toLowerCase().replace(/^https?:\/\//i, "").replace(/\/.*$/, "") }),
     ...(loginNotifyEmail !== undefined && { loginNotifyEmail: loginNotifyEmail ? "true" : "false" }),
     ...(loginNotifyEmailFailed !== undefined && { loginNotifyEmailFailed: loginNotifyEmailFailed ? "true" : "false" }),

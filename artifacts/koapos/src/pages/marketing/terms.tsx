@@ -54,7 +54,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold mb-2">8. Termination</h2>
-            <p>You may close your account at any time via Settings → Account. We reserve the right to suspend or terminate accounts that violate these Terms. Upon termination, your data will be deleted in accordance with our Privacy Policy.</p>
+            <p>We reserve the right to suspend or terminate accounts that violate these Terms. Upon termination, your data will be deleted in accordance with our Privacy Policy.</p>
           </section>
 
           <section>

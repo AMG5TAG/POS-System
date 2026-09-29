@@ -3,10 +3,9 @@
  *
  * The server address and app password come from the merchant's connected
  * Nextcloud integration (resolved by the caller), not from the destination
- * record — the destination only carries the target folder, the same way the
- * OneDrive destination does.
+ * record — the destination only carries the target folder.
  *
- * Unlike OneDrive there is no app-scoped root on Nextcloud, so an unset folder
+ * There is no app-scoped root on Nextcloud, so an unset folder
  * would drop archives straight into the account's home directory. We use a
  * clearly-named default instead.
  */

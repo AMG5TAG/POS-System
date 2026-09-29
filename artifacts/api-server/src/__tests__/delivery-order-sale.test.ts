@@ -4,7 +4,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
  * Booking a paid online order as a sale.
  *
  * The order was already paid for in stock terms when the shopper checked out —
- * `online-store-checkout` decrements stock and bumps the customer's totals in
+ * the (since removed) online-store checkout decremented stock and bumped the customer's totals in
  * the same transaction that writes the order. So the thing that can go wrong
  * here is doing any of it a second time: a merchant double-clicking "Mark paid",
  * a retried request, or toggling pending → paid → pending → paid. Each of those

@@ -16,7 +16,6 @@
     "purge-other-merchants": "tsx scripts/purge-other-merchants.ts"
   },
   "dependencies": {
-    "@aws-sdk/client-s3": "^3.1057.0",
     "@google-cloud/storage": "^7.19.0",
     "@types/bcryptjs": "^3.0.0",
     "@types/express-session": "^1.19.0",
@@ -24,8 +23,6 @@
     "@workspace/api-zod": "workspace:*",
     "@workspace/db": "workspace:*",
     "@workspace/integrations-anthropic-ai-server": "workspace:*",
-    "@workspace/integrations-openai-ai-server": "workspace:*",
-    "@workspace/online-store-blocks": "workspace:*",
     "@workspace/phone-shared": "workspace:*",
     "@workspace/sales-documents": "workspace:*",
     "@workspace/shortlinks-shared": "workspace:*",

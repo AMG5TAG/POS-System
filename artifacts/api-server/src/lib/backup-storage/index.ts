@@ -3,13 +3,9 @@
  * configured destinations and returns a location ref for each.
  */
 import { uploadLocal } from "./local";
-import { uploadS3 } from "./s3";
-import { uploadGcs } from "./gcs";
 import { uploadSftp } from "./sftp";
-import { uploadOneDrive } from "./onedrive";
 import { downloadNextcloud, uploadNextcloud } from "./nextcloud";
 import { downloadServerCopy } from "./server";
-import { getValidOneDriveToken } from "../../services/microsoftToken";
 import { getNextcloudCredentials } from "../../services/nextcloudAuth";
 import { parseNextcloudRef } from "../nextcloud";
 import os from "os";
@@ -53,21 +49,9 @@ export async function uploadToDestinations(
         case "local":
           ref = await uploadLocal(dest, sourcePath, fileName);
           break;
-        case "s3":
-          ref = await uploadS3(dest, sourcePath, fileName);
-          break;
-        case "gcs":
-          ref = await uploadGcs(dest, sourcePath, fileName);
-          break;
         case "sftp":
           ref = await uploadSftp(dest, sourcePath, fileName);
           break;
-        case "onedrive": {
-          // Reuse the merchant's connected OneDrive integration (refreshed).
-          const token = await getValidOneDriveToken(merchantId);
-          ref = await uploadOneDrive(dest, token, sourcePath, fileName);
-          break;
-        }
         case "nextcloud": {
           // Reuse the merchant's connected Nextcloud integration. App passwords
           // do not expire, so there is nothing to refresh.

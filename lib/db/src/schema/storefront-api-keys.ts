@@ -1,6 +1,11 @@
 import { pgTable, serial, integer, text, timestamp, index, uniqueIndex } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
+/*
+ * RETAINED, UNUSED: the Storefront Data API (Online Store) was removed from the single-business install, but
+ * this table still holds data, so its definition stays — dropping it here
+ * would make `drizzle-kit push` offer to delete those rows. No code reads it.
+ */
 /**
  * Keys that let a merchant's own website (or the AI agent building it) read
  * their KoaPOS data through the Storefront Data API.

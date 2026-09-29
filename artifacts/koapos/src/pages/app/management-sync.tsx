@@ -19,7 +19,7 @@ import {
   Clock, FolderUp, ShieldCheck, Lightbulb, Save, CalendarClock, AlertTriangle,
 } from "lucide-react";
 import { useListIntegrations, useDisconnectIntegration } from "@workspace/api-client-react";
-import { MicrosoftIcon, OneDriveIcon, NextcloudIcon } from "@/components/provider-icons";
+import { NextcloudIcon } from "@/components/provider-icons";
 import { NextcloudConnectModal } from "@/components/nextcloud-connect-modal";
 import { BackupSettingsPanel } from "./management-backup";
 import {
@@ -40,31 +40,24 @@ interface SyncIntegration {
 
 /* ── Brand logos (simple-icons CDN) ──────────────────────────────────────── */
 const SI = (slug: string, hex: string) => `https://cdn.simpleicons.org/${slug}/${hex}`;
-// `src` => simple-icons CDN <img>; `node` => inline SVG (used where the CDN slug 404s, e.g. Microsoft).
+// `src` => simple-icons CDN <img>; `node` => inline SVG (used where no CDN slug exists).
 const LOGOS: Record<string, { bg: string; src?: string; node?: React.ReactNode }> = {
-  google_drive:       { bg: "bg-white border", src: SI("googledrive", "4285F4") },
-  onedrive:           { bg: "bg-white border", node: <OneDriveIcon className="w-5 h-5" /> },
-  dropbox:            { bg: "bg-[#0061FF]",     src: SI("dropbox",     "ffffff") },
   nextcloud:          { bg: "bg-white border", node: <NextcloudIcon className="w-5 h-5" /> },
-  google_contacts:    { bg: "bg-white border", src: SI("google",      "4285F4") },
-  microsoft_contacts: { bg: "bg-white border", node: <MicrosoftIcon className="w-5 h-5" /> },
   apple_icloud:       { bg: "bg-black",         src: SI("apple",       "ffffff") },
 };
 
-const ACCOUNT_KEYS = ["google_contacts", "microsoft_contacts", "apple_icloud"];
-const STORAGE_KEYS = ["google_drive", "onedrive", "dropbox", "nextcloud"];
-// Customer (contacts) + calendar sync — Google & Microsoft (OAuth) and Apple iCloud (CalDAV/CardDAV).
-const CONTACT_SYNC_KEYS = new Set(["google_contacts", "microsoft_contacts", "apple_icloud"]);
+const ACCOUNT_KEYS = ["apple_icloud"];
+const STORAGE_KEYS = ["nextcloud"];
+// Customer (contacts) + calendar sync — Apple iCloud (CalDAV/CardDAV).
+const CONTACT_SYNC_KEYS = new Set(["apple_icloud"]);
 // Apple connects via an Apple ID + app-specific password form, not an OAuth redirect.
 const CREDENTIALS_KEYS = new Set(["apple_icloud"]);
 // Nextcloud is self-hosted: the merchant's own server issues the credential via
 // Login Flow v2, so it uses its own dialog rather than an OAuth redirect.
 const LOGIN_FLOW_KEYS = new Set(["nextcloud"]);
 /* Fallback names for sync accounts, so a saved-but-now-disconnected provider is
-   still described in words rather than as a raw key like "microsoft_contacts". */
+   still described in words rather than as a raw key like "apple_icloud". */
 const ACCOUNT_LABELS: Record<string, string> = {
-  google_contacts:    "Google Account",
-  microsoft_contacts: "Microsoft Account",
   apple_icloud:       "Apple iCloud",
 };
 
@@ -441,7 +434,7 @@ function AutoSyncPanel({ accounts }: { accounts: SyncIntegration[] }) {
       </div>
 
       {!hasAccounts && (
-        <p className="text-xs text-amber-600 dark:text-amber-400">Connect a Google, Microsoft, or Apple account above to enable automatic sync.</p>
+        <p className="text-xs text-amber-600 dark:text-amber-400">Connect your Apple iCloud account above to enable automatic sync.</p>
       )}
 
       {/* Contacts row */}
@@ -653,7 +646,7 @@ export default function ManagementSyncPage() {
         {/* ── Cloud Files & Folders ── */}
         <section>
           <SectionHeader icon={Cloud} title="Cloud Files & Folders"
-            desc="Connect cloud storage to send files, reports and backups to OneDrive, Google Drive, Dropbox or your own Nextcloud." />
+            desc="Connect your own Nextcloud to send files, reports and backups to it." />
           <CustomerFilesCloudPanel storages={storage} />
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4 mt-4">
             {storage.map((i) => (
@@ -670,15 +663,7 @@ export default function ManagementSyncPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Users className="w-4 h-4" /> Sync Contacts to {syncTarget?.label}</DialogTitle>
             <DialogDescription>
-              {(() => {
-                const dest = syncTarget?.key === "google_contacts" ? "Google Contacts"
-                  : syncTarget?.key === "apple_icloud" ? "iCloud Contacts"
-                  : "Microsoft Contacts";
-                const isApple = syncTarget?.key === "apple_icloud";
-                return `Push your KoaPOS customers to ${dest}. ${isApple
-                  ? "Re-syncing updates the same contacts instead of creating duplicates."
-                  : "Contacts that already exist (matched by email) are detected — you'll be warned before any are overwritten."}`;
-              })()}
+              Push your KoaPOS customers to iCloud Contacts. Re-syncing updates the same contacts instead of creating duplicates.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1">
@@ -686,9 +671,7 @@ export default function ManagementSyncPage() {
               <div>
                 <p className="text-sm font-medium">Include customer notes</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  {syncTarget?.key === "google_contacts" ? "Maps to Google Contacts → About"
-                    : syncTarget?.key === "apple_icloud" ? "Maps to the contact’s Notes field in iCloud"
-                    : "Maps to Outlook Contact → Notes"}
+                  Maps to the contact’s Notes field in iCloud
                 </p>
               </div>
               <Switch checked={includeNotes} onCheckedChange={setIncludeNotes} />

@@ -1,7 +1,6 @@
 import { useState, useEffect, useRef } from "react";
 import {
   useUpdateServiceJob,
-  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -105,6 +104,21 @@ export interface ServiceJobDetailDialogProps {
   queryKeys?: string[][];
 }
 
+
+/* Service-job sections shown in the job dialog — the layout the business set
+   under the former Management › Service Options page. */
+const SERVICE_JOB_SECTIONS = {
+  showQuote: true,
+  showPartsLabour: false,
+  showApprovalDeposit: false,
+  showDiagnostics: false,
+  showWarranty: true,
+  showTechnicianTime: false,
+  showSignOff: false,
+  showShipping: false,
+  showNotes: true,
+} as const;
+
 export function ServiceJobDetailDialog({
   job,
   onClose,
@@ -118,11 +132,10 @@ export function ServiceJobDetailDialog({
   const updateMutation = useUpdateServiceJob();
   const fileInputRef   = useRef<HTMLInputElement>(null);
 
-  /* Which menu sections this merchant has enabled (Management → Invoices &
-     Services → Service Options). Until loaded, every section shows — matching
-     the all-on default so nothing flickers away on open. */
-  const { data: serviceSettings } = useGetServiceSettings();
-  const show = (key: keyof NonNullable<typeof serviceSettings>) => serviceSettings?.[key] ?? true;
+  /* Which job sections show. These were per-merchant toggles under Service
+     Options; that page is gone, and the layout the business had chosen is
+     fixed here. */
+  const show = (key: keyof typeof SERVICE_JOB_SECTIONS) => SERVICE_JOB_SECTIONS[key];
 
   const [localStatus, setLocalStatus] = useState<string>(job?.status ?? "pending");
   const [newNoteText, setNewNoteText] = useState("");
@@ -207,8 +220,7 @@ export function ServiceJobDetailDialog({
     setTab("details");
   }, [job?.id]);
 
-  /* Service Options can switch a section off while the dialog is open, taking
-     its tab with it — don't strand the user on a tab that no longer exists. */
+  /* Never strand the user on a tab that no longer exists. */
   useEffect(() => {
     if (tabIndex === -1) setTab("details");
   }, [tabIndex]);

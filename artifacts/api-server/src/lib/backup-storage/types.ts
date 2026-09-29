@@ -10,20 +10,13 @@
  */
 import { encryptToken, decryptToken } from "../../services/tokenVault";
 
-export type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
+export type StorageType = "local" | "sftp" | "nextcloud";
 
 /** Sanitised destination returned to the client (no secrets, only `*Set` flags). */
 export interface PublicDestination {
   id: string;
   type: StorageType;
   directory: string | null;
-  bucket: string | null;
-  region: string | null;
-  accessKeyId: string | null;
-  secretAccessKeySet: boolean;
-  projectId: string | null;
-  gcsBucket: string | null;
-  serviceAccountJsonSet: boolean;
   host: string | null;
   port: number | null;
   username: string | null;
@@ -37,23 +30,14 @@ export interface StoredDestination {
   type: StorageType;
   // local
   directory?: string;
-  // s3
-  bucket?: string;
-  region?: string;
-  accessKeyId?: string;
-  secretAccessKeyEnc?: string;
-  // gcs
-  projectId?: string;
-  gcsBucket?: string;
-  serviceAccountJsonEnc?: string;
   // sftp
   host?: string;
   port?: number;
   username?: string;
   remotePath?: string;
   passwordEnc?: string;
-  // onedrive / nextcloud (credentials come from the connected integration,
-  // not stored here — only the target folder is per-destination)
+  // nextcloud (credentials come from the connected integration, not stored
+  // here — only the target folder is per-destination)
   folder?: string;
 }
 
@@ -61,13 +45,6 @@ export interface ResolvedDestination {
   id: string;
   type: StorageType;
   directory?: string;
-  bucket?: string;
-  region?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  projectId?: string;
-  gcsBucket?: string;
-  serviceAccountJson?: string;
   host?: string;
   port?: number;
   username?: string;
@@ -102,21 +79,6 @@ export function mergeDestination(
 
   if (type === "local") {
     base.directory = str(input.directory) ?? existing?.directory;
-  } else if (type === "s3") {
-    base.bucket = str(input.bucket) ?? existing?.bucket;
-    base.region = str(input.region) ?? existing?.region;
-    base.accessKeyId = str(input.accessKeyId) ?? existing?.accessKeyId;
-    const secret = str(input.secretAccessKey);
-    base.secretAccessKeyEnc = secret
-      ? encryptToken(secret)
-      : existing?.secretAccessKeyEnc;
-  } else if (type === "gcs") {
-    base.projectId = str(input.projectId) ?? existing?.projectId;
-    base.gcsBucket = str(input.gcsBucket) ?? existing?.gcsBucket;
-    const sa = str(input.serviceAccountJson);
-    base.serviceAccountJsonEnc = sa
-      ? encryptToken(sa)
-      : existing?.serviceAccountJsonEnc;
   } else if (type === "sftp") {
     base.host = str(input.host) ?? existing?.host;
     base.port =
@@ -125,7 +87,7 @@ export function mergeDestination(
     base.remotePath = str(input.remotePath) ?? existing?.remotePath;
     const pw = str(input.password);
     base.passwordEnc = pw ? encryptToken(pw) : existing?.passwordEnc;
-  } else if (type === "onedrive" || type === "nextcloud") {
+  } else if (type === "nextcloud") {
     base.folder = str(input.folder) ?? existing?.folder;
   }
   return base;
@@ -137,17 +99,6 @@ export function resolveDestination(d: StoredDestination): ResolvedDestination {
     id: d.id,
     type: d.type,
     directory: d.directory,
-    bucket: d.bucket,
-    region: d.region,
-    accessKeyId: d.accessKeyId,
-    secretAccessKey: d.secretAccessKeyEnc
-      ? decryptToken(d.secretAccessKeyEnc)
-      : undefined,
-    projectId: d.projectId,
-    gcsBucket: d.gcsBucket,
-    serviceAccountJson: d.serviceAccountJsonEnc
-      ? decryptToken(d.serviceAccountJsonEnc)
-      : undefined,
     host: d.host,
     port: d.port,
     username: d.username,
@@ -163,13 +114,6 @@ export function publicDestination(d: StoredDestination): PublicDestination {
     id: d.id,
     type: d.type,
     directory: d.directory ?? null,
-    bucket: d.bucket ?? null,
-    region: d.region ?? null,
-    accessKeyId: d.accessKeyId ?? null,
-    secretAccessKeySet: Boolean(d.secretAccessKeyEnc),
-    projectId: d.projectId ?? null,
-    gcsBucket: d.gcsBucket ?? null,
-    serviceAccountJsonSet: Boolean(d.serviceAccountJsonEnc),
     host: d.host ?? null,
     port: d.port ?? null,
     username: d.username ?? null,

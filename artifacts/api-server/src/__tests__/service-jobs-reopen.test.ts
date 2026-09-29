@@ -114,9 +114,6 @@ vi.mock("../services/entityQr", () => ({
   registerQrBestEffort: vi.fn(),
 }));
 vi.mock("../lib/publicUrl", () => ({ publicDomain: () => "example.com" }));
-vi.mock("../routes/service-settings", () => ({
-  getServiceWarrantyDefaults: () => Promise.resolve({ repairWarrantyDays: 30, reworkWarrantyDays: 14 }),
-}));
 vi.mock("@workspace/api-zod", () => {
   const ok = (params: any) => ({ success: true, data: { id: Number(params.id) } });
   return { UpdateServiceJobParams: { safeParse: ok }, DeleteServiceJobParams: { safeParse: ok }, SendServiceJobEmailParams: { safeParse: ok } };
@@ -221,7 +218,7 @@ describe("POST /api/service-jobs/:id/reopen", () => {
     // The same physical device comes back over the counter, colour and all.
     expect(res.body.deviceDescription).toBe("iPhone 13");
     expect(res.body.deviceColour).toBe("Midnight");
-    expect(res.body.repairWarrantyDays).toBe(30);
+    expect(res.body.repairWarrantyDays).toBe(14); // the fixed repair warranty
     // Original untouched.
     expect(jobRow(42).status).toBe("completed");
     // A new row now exists.

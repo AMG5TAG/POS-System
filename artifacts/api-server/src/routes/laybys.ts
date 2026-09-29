@@ -3,7 +3,6 @@ import { db, laybysTable, laybyPaymentsTable, customersTable, productsTable } fr
 import { eq, and, desc, ilike, or, sql, count, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
-import { getPassOnSurchargeMap, surchargeForLeg } from "../services/surcharges";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import {
   GetLaybyParams,
@@ -212,10 +211,6 @@ router.post("/laybys", requireAuth, async (req, res) => {
   // (like a POS sale) deducts stock and rolls into the customer's spend.
   const completedOnCreate = depositAmount >= totalAmount;
   const itemsWithCost = await snapshotLaybyItemCosts(merchantId, items);
-  // Pass-on surcharge on the deposit, collected on top of it, when the deposit's
-  // payment method passes its acceptance cost to the customer.
-  const depositSurchargeMap = await getPassOnSurchargeMap(merchantId);
-  const depositSurcharge = surchargeForLeg(depositSurchargeMap, paymentMethod ?? "cash", depositAmount);
 
   // Derive the reference inside the retry so a concurrent create can't claim the
   // same LB-#### (the unique index enforces it; the retry bumps the suffix).
@@ -244,7 +239,6 @@ router.post("/laybys", requireAuth, async (req, res) => {
         laybyId: created.id,
         amount: String(depositAmount),
         paymentMethod: paymentMethod ?? "cash",
-        surchargeAmount: String(depositSurcharge),
         note: "Initial deposit",
       });
     }
@@ -400,9 +394,6 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
   }
   const payTotal = round2(legs.reduce((s, l) => s + l.amount, 0));
 
-  // Pass-on surcharge per leg, collected on top of the amount applied to the
-  // balance. Config is merchant-global, so read once outside the lock.
-  const surchargeMap = await getPassOnSurchargeMap(merchantId);
 
   // Lock the row, record the payment leg(s), and — if this payment settles the
   // layby in full — complete it (deducting stock + crediting customer spend),
@@ -434,9 +425,6 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
         laybyId: id,
         amount: String(l.amount),
         paymentMethod: l.paymentMethod,
-        // Single-method payments only (split legs aren't surcharged), matching
-        // the POS terminal and what the payment UI collects.
-        surchargeAmount: String(isSplit ? 0 : surchargeForLeg(surchargeMap, l.paymentMethod, l.amount)),
         note: note ?? null,
         // Stamp the key on the first leg only — the unique (laybyId, key) index
         // permits the remaining split legs to carry null.

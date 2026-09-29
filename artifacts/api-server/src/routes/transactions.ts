@@ -1,5 +1,5 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, paymentMethodSurchargesTable, quotesTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
@@ -448,28 +448,6 @@ export async function finalizeSale(
   }
   void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
 
-  // Per-payment-method surcharge. When the chosen method is configured to pass
-  // its acceptance cost on to the customer, record the surcharge that was added
-  // to the bill at checkout. Computed server-side from the merchant's config so
-  // a forged client value can't inflate it. `subtotal`/`total` deliberately stay
-  // the sale value (the surcharge is collected on top and is revenue-neutral —
-  // it offsets the processor fee); absorbed surcharges (passOn=false) are 0 here
-  // and surface only as a cost of business in reports.
-  let surchargeAmount = 0;
-  {
-    const [sc] = await db
-      .select()
-      .from(paymentMethodSurchargesTable)
-      .where(and(
-        eq(paymentMethodSurchargesTable.merchantId, merchantId),
-        eq(paymentMethodSurchargesTable.paymentMethod, paymentMethod),
-      ))
-      .limit(1);
-    if (sc && sc.enabled === "true" && sc.passOn === "true") {
-      surchargeAmount = round2((parseFloat(sc.percent) / 100) * total + parseFloat(sc.fixed));
-    }
-  }
-
   // Loyalty redemption — enforced server-side, not just in the UI.
   // The conversion from "balance units" to "dollars covered" depends on the
   // program type:
@@ -645,8 +623,9 @@ export async function finalizeSale(
   //     amount (no upper cap) and derive change ourselves. Reject under-tender.
   //   - Loyalty: tender equals the required points (in dollars), change = 0.
   //   - All other methods: force tendered = total, change = 0.
-  // What the customer actually pays = sale total plus any passed-on surcharge.
-  const payable = round2(total + surchargeAmount);
+  // What the customer actually pays. (Payment-method surcharges were removed;
+  // `surcharge_amount` is left at its 0 default on new sales.)
+  const payable = round2(total);
   let persistedTendered: number;
   let persistedChange: number;
   if (paymentMethod === "cash") {
@@ -701,7 +680,6 @@ export async function finalizeSale(
         discountTotal: discountTotal.toString(),
         total: total.toString(),
         paymentMethod,
-        surchargeAmount: surchargeAmount.toString(),
         amountTendered: persistedTendered.toString(),
         changeDue: persistedChange.toString(),
         notes: notes ?? null,

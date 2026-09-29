@@ -27,9 +27,9 @@ vi.mock("../middlewares/requireAuth", () => ({
 const isAccountConnected = vi.fn<(merchantId: number, provider: string) => Promise<boolean>>();
 
 vi.mock("../services/accountSync", () => ({
-  isSyncProvider: (v: unknown) => v === "google_contacts" || v === "microsoft_contacts" || v === "apple_icloud",
+  isSyncProvider: (v: unknown) => v === "apple_icloud",
   isAccountConnected: (m: number, p: string) => isAccountConnected(m, p),
-  syncProviderLabel: (p: string) => ({ microsoft_contacts: "Microsoft Account", apple_icloud: "Apple iCloud" }[p] ?? p),
+  syncProviderLabel: (p: string) => ({ apple_icloud: "Apple iCloud" }[p] ?? p),
 }));
 
 let app: express.Express;
@@ -48,16 +48,16 @@ beforeEach(() => { isAccountConnected.mockReset(); });
 
 describe("PUT /api/integrations/auto-sync — target account must be connected", () => {
   it("rejects a schedule aimed at an account that isn't connected", async () => {
-    // The merchant moved to Apple, but the saved target is still Microsoft.
-    isAccountConnected.mockImplementation(async (_m, p) => p === "apple_icloud");
+    // The saved target is iCloud, but the iCloud account has been disconnected.
+    isAccountConnected.mockResolvedValue(false);
 
     const res = await request(app).put("/api/integrations/auto-sync").send({
-      contacts: { provider: "microsoft_contacts", frequency: "instant" },
+      contacts: { provider: "apple_icloud", frequency: "instant" },
       calendar: { provider: "", frequency: "disabled" },
     });
 
     expect(res.status).toBe(400);
-    expect(res.body.error).toContain("Microsoft Account");
+    expect(res.body.error).toContain("Apple iCloud");
   });
 
   it("accepts a schedule aimed at a connected account", async () => {
@@ -76,7 +76,7 @@ describe("PUT /api/integrations/auto-sync — target account must be connected",
     isAccountConnected.mockResolvedValue(false);
 
     const res = await request(app).put("/api/integrations/auto-sync").send({
-      contacts: { provider: "microsoft_contacts", frequency: "disabled" },
+      contacts: { provider: "apple_icloud", frequency: "disabled" },
       calendar: { provider: "", frequency: "disabled" },
     });
 

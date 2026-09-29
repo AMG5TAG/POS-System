@@ -1,7 +1,7 @@
 /**
  * server backup storage — the always-on durable copy in the platform's object
  * storage (Replit object store). Unlike the user-configurable destinations
- * (local/s3/gcs/sftp/onedrive), EVERY backup is uploaded here regardless of the
+ * (local/sftp/nextcloud), EVERY backup is uploaded here regardless of the
  * merchant's chosen destinations, because the canonical copy under ./backups is
  * on the deployment's ephemeral filesystem and is lost across redeploys/restarts.
  * This server copy is therefore the durable source of truth used by restore.

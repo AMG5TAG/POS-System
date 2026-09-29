@@ -3,6 +3,11 @@ import { merchantsTable } from "./merchants";
 import { productsTable } from "./products";
 
 /*
+ * RETAINED, UNUSED: Online Store product reviews was removed from the single-business install, but
+ * this table still holds data, so its definition stays — dropping it here
+ * would make `drizzle-kit push` offer to delete those rows. No code reads it.
+ */
+/*
  * Customer product reviews submitted from the online storefront. Reviews are
  * shown publicly when status = "approved"; merchants can hide spam from the
  * moderation panel. `verified` marks an author whose email matches a customer

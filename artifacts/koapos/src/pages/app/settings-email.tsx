@@ -22,7 +22,7 @@ import {
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 
-type Provider = "none" | "smtp" | "resend" | "sendgrid";
+type Provider = "none" | "smtp" | "resend";
 
 const SI = (slug: string, hex: string) => `https://cdn.simpleicons.org/${slug}/${hex}`;
 
@@ -54,13 +54,6 @@ const PROVIDERS: { id: Provider; label: string; description: string; icon: React
     label: "Resend",
     description: "Simple API-key based email delivery",
     icon: <ProviderLogo src={SI("resend", "ffffff")} bg="bg-black" alt="Resend" />,
-    usesKey: true,
-  },
-  {
-    id: "sendgrid",
-    label: "SendGrid",
-    description: "Twilio SendGrid transactional email",
-    icon: <ProviderLogo src={SI("sendgrid", "ffffff")} bg="bg-[#1A82E2]" alt="SendGrid" />,
     usesKey: true,
   },
 ];
@@ -120,7 +113,7 @@ export default function SettingsEmailPage() {
       payload.smtpUser   = smtpUser;
       if (smtpPass) payload.smtpPass = smtpPass;
     }
-    if (provider === "resend" || provider === "sendgrid") {
+    if (provider === "resend") {
       if (apiKey) payload.apiKey = apiKey;
     }
     update.mutate({ data: payload }, {
@@ -321,7 +314,7 @@ export default function SettingsEmailPage() {
             )}
 
             {/* API-key providers */}
-            {(provider === "resend" || provider === "sendgrid") && (
+            {provider === "resend" && (
               <Card>
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm flex items-center gap-2">
@@ -331,7 +324,7 @@ export default function SettingsEmailPage() {
                 <CardContent className="space-y-3">
                   <div className="space-y-1.5">
                     <Label className="text-xs">
-                      {provider === "resend" ? "Resend API Key" : "SendGrid API Key"}
+                      Resend API Key
                     </Label>
                     <Input
                       type="password"
@@ -348,10 +341,7 @@ export default function SettingsEmailPage() {
                     )}
                   </div>
                   <div className="rounded-lg bg-muted/50 border p-3 text-[11px] text-muted-foreground">
-                    {provider === "resend"
-                      ? <>Get your API key at <strong>resend.com/api-keys</strong>. Free tier allows 3,000 emails/month and 100/day.</>
-                      : <>Get your API key at <strong>app.sendgrid.com/settings/api_keys</strong>. Ensure the key has "Mail Send" permission.</>
-                    }
+                    Get your API key at <strong>resend.com/api-keys</strong>. Free tier allows 3,000 emails/month and 100/day.
                   </div>
                 </CardContent>
               </Card>

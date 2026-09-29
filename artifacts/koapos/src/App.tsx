@@ -92,7 +92,6 @@ const ManagementSalesPage = lazyWithRetry(() => import("@/pages/app/management-s
 const ManagementRegistersPage = lazyWithRetry(() => import("@/pages/app/management-registers"));
 const ManagementIntegrationsPage = lazyWithRetry(() => import("@/pages/app/management-integrations"));
 const ManagementIntegrationsHelpPage = lazyWithRetry(() => import("@/pages/app/management-integrations-help"));
-const ManagementServiceOptionsPage = lazyWithRetry(() => import("@/pages/app/management-service-options"));
 const ManagementInvoiceSettingsPage = lazyWithRetry(() => import("@/pages/app/management-invoice-settings"));
 const ManagementXeroPage = lazyWithRetry(() => import("@/pages/app/management-xero"));
 const ManagementImportExportPage = lazyWithRetry(() => import("@/pages/app/management-import-export"));
@@ -118,7 +117,6 @@ const CloudStoragePage = lazyWithRetry(() => import("@/pages/app/forms-files/clo
 const ManagementStickersPage = lazyWithRetry(() => import("@/pages/app/management-stickers"));
 const InventoryWastagePage = lazyWithRetry(() => import("@/pages/app/inventory-wastage"));
 const SettingsTaxPage = lazyWithRetry(() => import("@/pages/app/settings-tax"));
-const SettingsSurchargesPage = lazyWithRetry(() => import("@/pages/app/settings-surcharges"));
 const SettingsEmailPage = lazyWithRetry(() => import("@/pages/app/settings-email"));
 const SettingsSmsPage = lazyWithRetry(() => import("@/pages/app/settings-sms"));
 const SettingsProductTypesPage = lazyWithRetry(() => import("@/pages/app/settings-product-types"));
@@ -149,17 +147,10 @@ const MarketingFollowUpTemplatesPage = lazyWithRetry(() => import("@/pages/app/m
 const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
-const OnlineStoreStorefrontPage = lazyWithRetry(() => import("@/pages/app/online-store/storefront"));
-const OnlineStoreDesignPage = lazyWithRetry(() => import("@/pages/app/online-store/design"));
-const OnlineStoreFeaturesPage = lazyWithRetry(() => import("@/pages/app/online-store/features"));
-const OnlineStoreDomainPage = lazyWithRetry(() => import("@/pages/app/online-store/domain"));
-const OnlineStoreDataApiPage = lazyWithRetry(() => import("@/pages/app/online-store/data-api"));
 const OnlineDeliveryOrdersPage = lazyWithRetry(() => import("@/pages/app/online-delivery-orders"));
 const OnlineShippingPage = lazyWithRetry(() => import("@/pages/app/online-shipping"));
-const OnlineMarketplacePage = lazyWithRetry(() => import("@/pages/app/online-marketplace"));
 const ManagementMiscPage = lazyWithRetry(() => import("@/pages/app/management-misc"));
 const ManagementSyncPage = lazyWithRetry(() => import("@/pages/app/management-sync"));
-const ManagementFeedbackPage = lazyWithRetry(() => import("@/pages/app/management-feedback"));
 const CamerasPage = lazyWithRetry(() => import("@/pages/app/cameras"));
 const ManagementCamerasPage = lazyWithRetry(() => import("@/pages/app/management-cameras"));
 const ManagementTechAppPage = lazyWithRetry(() => import("@/pages/app/management-tech-app"));
@@ -169,7 +160,6 @@ const ManagementLegalPage = lazyWithRetry(() => import("@/pages/app/management-l
 const ManagementGiftCardsPage = lazyWithRetry(() => import("@/pages/app/management-gift-cards"));
 const MarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/marketing-referrals"));
 const LandingPagePublicView = lazyWithRetry(() => import("@/pages/marketing/landing-page-public"));
-const OnlineStorePublicView = lazyWithRetry(() => import("@/pages/marketing/online-store-public"));
 const ProductPublicView = lazyWithRetry(() => import("@/pages/marketing/product-public"));
 const PosEodPage = lazyWithRetry(() => import("@/pages/app/pos-eod"));
 const ManagementReportsBasPage = lazyWithRetry(() => import("@/pages/app/management-reports-bas"));
@@ -184,7 +174,6 @@ const ManagementCustomersHeardFromPage = lazyWithRetry(() => import("@/pages/app
 const ManagementCustomersPortalPage = lazyWithRetry(() => import("@/pages/app/management-customers-portal"));
 const SettingsPricingRulesPage = lazyWithRetry(() => import("@/pages/app/settings-pricing-rules"));
 const SettingsModifierGroupsPage = lazyWithRetry(() => import("@/pages/app/settings-modifier-groups"));
-const SettingsTyroEftposPage = lazyWithRetry(() => import("@/pages/app/settings-tyro-eftpos"));
 
 
 import { ManagementErrorBoundary } from "@/components/layout/management-error-boundary";
@@ -533,9 +522,6 @@ function Router() {
       <Route path="/management/invoices-services/invoices">
         <ManagementProtectedRoute component={ManagementInvoiceSettingsPage} />
       </Route>
-      <Route path="/management/invoices-services/service-options">
-        <ManagementProtectedRoute component={ManagementServiceOptionsPage} />
-      </Route>
       <Route path="/management/customers/gift-cards">
         <ManagementProtectedRoute component={ManagementGiftCardsPage} />
       </Route>
@@ -547,9 +533,6 @@ function Router() {
       </Route>
       <Route path="/management/customers/discounts-pricing/layby">
         <ManagementProtectedRoute component={ManagementLaybyPage} />
-      </Route>
-      <Route path="/management/settings-integrations/feedback">
-        <ManagementProtectedRoute component={ManagementFeedbackPage} />
       </Route>
 
       {/* Products & Inventory */}
@@ -691,23 +674,6 @@ function Router() {
       <Route path="/management/marketing-reports/referrals">
         <ManagementProtectedRoute component={ManagementMarketingReferralsPage} />
       </Route>
-      {/* Online Store hub — one settings record, four pages (see pages/app/online-store). */}
-      <Route path="/management/online-store/storefront">
-        <ManagementProtectedRoute component={OnlineStoreStorefrontPage} />
-      </Route>
-      <Route path="/management/online-store/design">
-        <ManagementProtectedRoute component={OnlineStoreDesignPage} />
-      </Route>
-      <Route path="/management/online-store/features">
-        <ManagementProtectedRoute component={OnlineStoreFeaturesPage} />
-      </Route>
-      <Route path="/management/online-store/domain">
-        <ManagementProtectedRoute component={OnlineStoreDomainPage} />
-      </Route>
-      <Route path="/management/online-store/data-api">
-        <ManagementProtectedRoute component={OnlineStoreDataApiPage} />
-      </Route>
-      <Route path="/management/marketing-reports/online-store"><Redirect to="/management/online-store/storefront" /></Route>
       <Route path="/management/marketing-reports/email">
         <ManagementProtectedRoute component={SettingsEmailPage} />
       </Route>
@@ -746,9 +712,6 @@ function Router() {
       <Route path="/management/settings-integrations/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
       </Route>
-      <Route path="/management/settings-integrations/surcharges">
-        <ManagementProtectedRoute component={SettingsSurchargesPage} />
-      </Route>
       <Route path="/management/settings-integrations/themes"><Redirect to="/management/customisation/themes" /></Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
@@ -758,9 +721,6 @@ function Router() {
       </Route>
       <Route path="/management/settings-integrations/integrations/xero">
         <ManagementProtectedRoute component={ManagementXeroPage} />
-      </Route>
-      <Route path="/management/settings-integrations/integrations/tyro-eftpos">
-        <ManagementProtectedRoute component={SettingsTyroEftposPage} />
       </Route>
       <Route path="/management/settings-integrations/import-export">
         <ManagementProtectedRoute component={ManagementImportExportPage} />
@@ -811,7 +771,6 @@ function Router() {
       <Route path="/p/:slug" component={LandingPagePublicView} />
 
       {/* Public online store (no auth required) */}
-      <Route path="/b/:businessUsername/o/:storeSlug" component={OnlineStorePublicView} />
 
       {/* Public product page (no auth required) — target of a product QR code */}
       <Route path="/b/:businessUsername/p/:productId" component={ProductPublicView} />
@@ -888,9 +847,6 @@ function Router() {
       <Route path="/online/shipping">
         <ProtectedRoute component={OnlineShippingPage} />
       </Route>
-      <Route path="/online/marketplace">
-        <ProtectedRoute component={OnlineMarketplacePage} />
-      </Route>
 
 
       {/* ── Legacy URL redirects (old paths → breadcrumb-aligned paths) ── */}
@@ -919,7 +875,6 @@ function Router() {
       <Route path="/management/discounts"><Redirect to="/management/customers/discounts-pricing" /></Route>
       <Route path="/management/pricing-rules"><Redirect to="/management/customers/discounts-pricing/pricing-rules" /></Route>
       <Route path="/management/layby"><Redirect to="/management/customers/discounts-pricing/layby" /></Route>
-      <Route path="/management/feedback"><Redirect to="/management/settings-integrations/feedback" /></Route>
       <Route path="/management/inventory"><Redirect to="/management/products-inventory/inventory" /></Route>
       <Route path="/management/product-types"><Redirect to="/management/products-inventory/product-types" /></Route>
       <Route path="/management/modifier-groups"><Redirect to="/management/products-inventory/modifier-groups" /></Route>
@@ -948,7 +903,6 @@ function Router() {
       <Route path="/management/kpis"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing-reports/kpis-targets"><Redirect to="/management/staff-operations/kpis-targets" /></Route>
       <Route path="/management/marketing/referrals"><Redirect to="/management/marketing-reports/referrals" /></Route>
-      <Route path="/management/online-store"><Redirect to="/management/online-store/storefront" /></Route>
       <Route path="/management/email"><Redirect to="/management/marketing-reports/email" /></Route>
       <Route path="/management/sms"><Redirect to="/management/settings-integrations/sms" /></Route>
       <Route path="/management/forms"><Redirect to="/management/forms-files/forms" /></Route>
@@ -959,7 +913,6 @@ function Router() {
       <Route path="/management/tax"><Redirect to="/management/settings-integrations/tax" /></Route>
       <Route path="/management/integrations"><Redirect to="/management/settings-integrations/integrations" /></Route>
       <Route path="/management/xero"><Redirect to="/management/settings-integrations/integrations/xero" /></Route>
-      <Route path="/management/tyro-eftpos"><Redirect to="/management/settings-integrations/integrations/tyro-eftpos" /></Route>
       <Route path="/management/import-export"><Redirect to="/management/settings-integrations/import-export" /></Route>
       <Route path="/management/sync"><Redirect to="/management/settings-integrations/sync" /></Route>
       <Route path="/management/koapos"><Redirect to="/dashboard" /></Route>

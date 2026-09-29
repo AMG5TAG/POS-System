@@ -6,7 +6,7 @@ import { merchantsTable } from "./merchants";
  * on a connected cloud storage provider (Sync → Cloud Files & Folders).
  *
  * When `enabled`, files uploaded to any customer are also pushed to `folder`
- * on the `storageKey` provider (e.g. "onedrive", "google_drive", "dropbox").
+ * on the `storageKey` provider (currently only "nextcloud").
  */
 export const customerFilesCloudSettingsTable = pgTable("customer_files_cloud_settings", {
   id: serial("id").primaryKey(),

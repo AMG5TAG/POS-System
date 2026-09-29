@@ -5,7 +5,6 @@ import { AppLayout } from "@/components/layout/app-layout";
 import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 import {
   useCreateServiceJob,
-  useGetServiceSettings,
   useGetMerchant,
   useGetPosSettings,
   useSendServiceJobEmail,
@@ -335,15 +334,6 @@ export default function ServiceJobNewPage() {
   const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   const defaultServicePaper = serviceJobPaperFromOpts(svcOpts, svcStyle);
 
-  /* Management › Service Options › Printing. "ask" is the default, so a merchant
-     who has set nothing still gets today's pick-a-document footer. */
-  const { data: serviceSettings } = useGetServiceSettings();
-  const defaultPrint = serviceSettings?.defaultPrint ?? "ask";
-  const DEFAULT_PRINT_LABEL: Record<string, string> = {
-    a4: SERVICE_PAPER_LABEL.a4.title,
-    "80mm": SERVICE_PAPER_LABEL["80mm"].title,
-    sticker: "Repair Sticker",
-  };
   /* Docket layout from the saved style — the compact thermal style prints the
      same fields on less roll. */
   const docketDensity = serviceDocketDensity(svcStyle);
@@ -519,24 +509,6 @@ export default function ServiceJobNewPage() {
     isUnderWarranty,
     isPartnerRepair,
     partnerRepairCode,
-  };
-
-  /* Print whatever Service Options nominates as the default, so booking a job
-     and hitting Print is one press instead of a choice. Never called while the
-     setting is "ask". */
-  const printDefaultDocument = () => {
-    if (defaultPrint === "sticker") {
-      const ok = printStickers({
-        typeId: "repair",
-        template: activeStickerTpl ?? undefined,
-        sizeOverride: stickerSize.id,
-        orientation: "horizontal",
-        fieldsOverride: stickerFields,
-      });
-      if (!ok) toast.error("Couldn't open the print dialog — please try again");
-      return;
-    }
-    printJobSheet(defaultPrint === "80mm" ? "80mm" : "a4");
   };
 
   /* Print the just-booked job. Goes straight to the routed printer when one is
@@ -983,15 +955,6 @@ export default function ServiceJobNewPage() {
               </a>
             </Button>
           )}
-          {/* With a default nominated, one press prints it. The explicit choices
-              stay below so the other documents are still one click away. */}
-          {defaultPrint !== "ask" && (
-            <Button className="w-full gap-2" onClick={printDefaultDocument}>
-              <Printer className="w-4 h-4" />
-              Print {DEFAULT_PRINT_LABEL[defaultPrint] ?? "Job"}
-            </Button>
-          )}
-
           {/* Job sheet — A4 or 80mm, defaulting to the saved Service Ticket
               template's paper. Both carry the same fields. */}
           <div className="grid grid-cols-2 gap-2">
@@ -999,7 +962,7 @@ export default function ServiceJobNewPage() {
               <Button
                 key={paper}
                 className="w-full gap-2"
-                variant={defaultPrint === "ask" && paper === defaultServicePaper ? "default" : "outline"}
+                variant={paper === defaultServicePaper ? "default" : "outline"}
                 onClick={() => printJobSheet(paper)}
               >
                 <Printer className="w-4 h-4" />

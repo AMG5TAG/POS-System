@@ -6,7 +6,6 @@ import {
   useDeleteServiceJob,
   useGetMerchant,
   useGetPosSettings,
-  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -325,8 +324,6 @@ export default function ServiceJobsPage() {
 
   const queryClient = useQueryClient();
   const { data: jobsData, isLoading } = useListServiceJobs();
-  /* Management › Service Options › Printing — what pressing Print produces. */
-  const { data: serviceSettings } = useGetServiceSettings();
   const deleteMutation = useDeleteServiceJob();
 
   const { data: merchant }   = useGetMerchant({ query: { queryKey: ["merchant"] } });
@@ -469,16 +466,9 @@ export default function ServiceJobsPage() {
     setPrintState({ job, copies, paper });
   };
 
-  /* Pressing Print. With a default nominated in Service Options it prints that
-     document outright; otherwise it opens the chooser, which is what every
-     merchant gets until they set one. */
+  /* Pressing Print opens the chooser (A4 sheet, 80mm docket or sticker). */
   const pressPrint = (job: ServiceJob) => {
-    switch (serviceSettings?.defaultPrint ?? "ask") {
-      case "a4":      startPrint(job, "sheet", 1, "a4");   return;
-      case "80mm":    startPrint(job, "sheet", 1, "80mm"); return;
-      case "sticker": startPrint(job, "sticker");          return;
-      default:        setPrintChoiceJob(job);
-    }
+    setPrintChoiceJob(job);
   };
 
   const jobs = Array.isArray(jobsData) ? jobsData : [];

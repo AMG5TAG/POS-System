@@ -89,14 +89,12 @@ const SECTIONS: HelpSection[] = [
         ],
       },
       {
-        q: "How do I connect a terminal (Tyro, Square, CommBank) or PayPal / digital wallets?",
+        q: "How do I connect a CommBank terminal, PayPal or a digital wallet?",
         steps: [
           "Open the integration and enter the credentials from that provider (e.g. Merchant ID, Terminal ID, API Key, or Access Token).",
           "Save — the method then appears as a tender option at checkout.",
         ],
         links: [
-          { label: "Tyro merchant portal", url: "https://merchant.tyro.com/" },
-          { label: "Square developer", url: "https://developer.squareup.com/apps" },
           { label: "PayPal developer", url: "https://developer.paypal.com/dashboard/" },
         ],
       },
@@ -153,13 +151,6 @@ const SECTIONS: HelpSection[] = [
     icon: Cloud,
     intro: "Back up reports and sync contacts/calendars. These are managed on the Sync page (Management → Settings & Integrations → Sync).",
     faqs: [
-      {
-        q: "How do I connect Google Workspace, OneDrive or Dropbox?",
-        steps: [
-          "Go to the Sync page and click Connect on the provider you want.",
-          "Sign in to the provider and approve access — backups and contact sync then run automatically.",
-        ],
-      },
       {
         q: "How do I connect my own Nextcloud server?",
         steps: [

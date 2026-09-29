@@ -82,7 +82,7 @@ export const r2 = (n: unknown): number => {
 /** Tenders that put physical cash in the drawer. */
 export const CASH_METHODS = new Set(["cash"]);
 /** Tenders settled by the terminal — banked by the acquirer, not by hand. */
-export const EFTPOS_METHODS = new Set(["eftpos", "card", "tyro", "stripe", "square", "zeller", "afterpay", "klarna"]);
+export const EFTPOS_METHODS = new Set(["eftpos", "card", "stripe", "zeller", "afterpay", "klarna"]);
 /** Tenders that arrive in the bank account directly. */
 export const DIRECT_DEPOSIT_METHODS = new Set(["direct_deposit", "bank_transfer", "invoice"]);
 /** Tenders that move no new money — a liability already paid for is redeemed. */

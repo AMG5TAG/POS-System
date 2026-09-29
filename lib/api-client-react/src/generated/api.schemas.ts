@@ -478,10 +478,7 @@ export type BackupStorageDestinationType = typeof BackupStorageDestinationType[k
 
 export const BackupStorageDestinationType = {
   local: 'local',
-  s3: 's3',
-  gcs: 'gcs',
   sftp: 'sftp',
-  onedrive: 'onedrive',
   nextcloud: 'nextcloud',
 } as const;
 
@@ -489,13 +486,6 @@ export interface BackupStorageDestination {
   id: string;
   type: BackupStorageDestinationType;
   directory?: string | null;
-  bucket?: string | null;
-  region?: string | null;
-  accessKeyId?: string | null;
-  secretAccessKeySet?: boolean;
-  projectId?: string | null;
-  gcsBucket?: string | null;
-  serviceAccountJsonSet?: boolean;
   host?: string | null;
   port?: number | null;
   username?: string | null;
@@ -526,10 +516,7 @@ export type BackupStorageDestinationInputType = typeof BackupStorageDestinationI
 
 export const BackupStorageDestinationInputType = {
   local: 'local',
-  s3: 's3',
-  gcs: 'gcs',
   sftp: 'sftp',
-  onedrive: 'onedrive',
   nextcloud: 'nextcloud',
 } as const;
 
@@ -537,13 +524,6 @@ export interface BackupStorageDestinationInput {
   id?: string;
   type: BackupStorageDestinationInputType;
   directory?: string;
-  bucket?: string;
-  region?: string;
-  accessKeyId?: string;
-  secretAccessKey?: string;
-  projectId?: string;
-  gcsBucket?: string;
-  serviceAccountJson?: string;
   host?: string;
   port?: number;
   username?: string;
@@ -3150,74 +3130,6 @@ export interface LoyaltySettingsInput {
 }
 
 /**
- * What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away.
- */
-export type ServiceSettingsDefaultPrint = typeof ServiceSettingsDefaultPrint[keyof typeof ServiceSettingsDefaultPrint];
-
-
-export const ServiceSettingsDefaultPrint = {
-  ask: 'ask',
-  a4: 'a4',
-  '80mm': '80mm',
-  sticker: 'sticker',
-} as const;
-
-export interface ServiceSettings {
-  showQuote: boolean;
-  showPartsLabour: boolean;
-  showApprovalDeposit: boolean;
-  showDiagnostics: boolean;
-  showWarranty: boolean;
-  showTechnicianTime: boolean;
-  showSignOff: boolean;
-  showShipping: boolean;
-  showNotes: boolean;
-  /**
-     * Default repair warranty period (days) pre-filled on new service jobs.
-     * @minimum 0
-     */
-  repairWarrantyDays: number;
-  /**
-     * Default warranty period (days) applied to no-charge rework jobs.
-     * @minimum 0
-     */
-  reworkWarrantyDays: number;
-  /** What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away. */
-  defaultPrint: ServiceSettingsDefaultPrint;
-}
-
-/**
- * What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away.
- */
-export type ServiceSettingsInputDefaultPrint = typeof ServiceSettingsInputDefaultPrint[keyof typeof ServiceSettingsInputDefaultPrint];
-
-
-export const ServiceSettingsInputDefaultPrint = {
-  ask: 'ask',
-  a4: 'a4',
-  '80mm': '80mm',
-  sticker: 'sticker',
-} as const;
-
-export interface ServiceSettingsInput {
-  showQuote?: boolean;
-  showPartsLabour: boolean;
-  showApprovalDeposit: boolean;
-  showDiagnostics: boolean;
-  showWarranty: boolean;
-  showTechnicianTime: boolean;
-  showSignOff: boolean;
-  showShipping: boolean;
-  showNotes: boolean;
-  /** @minimum 0 */
-  repairWarrantyDays?: number;
-  /** @minimum 0 */
-  reworkWarrantyDays?: number;
-  /** What the Print button on a service job produces. "ask" (the default) keeps the chooser; the others print that document straight away. */
-  defaultPrint?: ServiceSettingsInputDefaultPrint;
-}
-
-/**
  * Default delivery channel pre-selected when sending an invoice.
  */
 export type InvoiceSettingsDefaultSendMethod = typeof InvoiceSettingsDefaultSendMethod[keyof typeof InvoiceSettingsDefaultSendMethod];
@@ -4252,26 +4164,6 @@ export interface PosSettingsInput {
   buttonStyle?: string;
 }
 
-export interface PaymentSurcharge {
-  paymentMethod: string;
-  /** Surcharge as a percentage of the sale total (0–100). */
-  percent: number;
-  /** Fixed surcharge amount added per transaction. */
-  fixed: number;
-  /** When true the cost is added to the customer's bill; when false the merchant absorbs it as a cost of business in reports. */
-  passOn: boolean;
-  /** Whether this method's surcharge is active. */
-  enabled: boolean;
-}
-
-export interface PaymentSurchargeListResponse {
-  items: PaymentSurcharge[];
-}
-
-export interface PaymentSurchargesInput {
-  items: PaymentSurcharge[];
-}
-
 export interface LaybySettings {
   id: number;
   merchantId: number;
@@ -4748,187 +4640,6 @@ export interface ShortlinkSettingsInput {
   prefix?: string;
 }
 
-export interface OnlineStoreSettings {
-  id: number;
-  merchantId: number;
-  mode: string;
-  storeName: string;
-  tagline: string;
-  logoUrl: string;
-  faviconUrl: string;
-  domain: string;
-  published: string;
-  theme: string;
-  payments: string;
-  features: string;
-  pages: string;
-  quickCodes: string;
-  updatedAt: string;
-}
-
-export interface OnlineStoreSettingsInput {
-  mode?: string;
-  storeName?: string;
-  tagline?: string;
-  logoUrl?: string;
-  faviconUrl?: string;
-  domain?: string;
-  published?: string;
-  theme?: string;
-  payments?: string;
-  features?: string;
-  pages?: string;
-  quickCodes?: string;
-}
-
-/**
- * The provider that would serve a generation right now.
- */
-export type OnlineStoreAiStatusProvider = typeof OnlineStoreAiStatusProvider[keyof typeof OnlineStoreAiStatusProvider] | null;
-
-
-export const OnlineStoreAiStatusProvider = {
-  claude: 'claude',
-  openai: 'openai',
-} as const;
-
-export interface OnlineStoreAiStatus {
-  available: boolean;
-  /** The provider that would serve a generation right now. */
-  provider?: OnlineStoreAiStatusProvider;
-}
-
-export interface OnlineStoreAiGenerateInput {
-  /**
-     * What the merchant wants from the store. Optional — their business details and product catalogue are used either way.
-     * @maxLength 2000
-     */
-  brief?: string;
-}
-
-export type OnlineStoreAiBlockData = { [key: string]: unknown };
-
-export interface OnlineStoreAiBlock {
-  id: string;
-  type: string;
-  data: OnlineStoreAiBlockData;
-}
-
-export interface OnlineStoreAiPage {
-  id: string;
-  name: string;
-  slug: string;
-  visible: boolean;
-  seoTitle?: string;
-  seoDescription?: string;
-  blocks: OnlineStoreAiBlock[];
-}
-
-export type OnlineStoreAiThemeFont = typeof OnlineStoreAiThemeFont[keyof typeof OnlineStoreAiThemeFont];
-
-
-export const OnlineStoreAiThemeFont = {
-  sans: 'sans',
-  serif: 'serif',
-  mono: 'mono',
-} as const;
-
-export type OnlineStoreAiThemeRadius = typeof OnlineStoreAiThemeRadius[keyof typeof OnlineStoreAiThemeRadius];
-
-
-export const OnlineStoreAiThemeRadius = {
-  none: 'none',
-  sm: 'sm',
-  md: 'md',
-  lg: 'lg',
-} as const;
-
-export interface OnlineStoreAiTheme {
-  primary: string;
-  accent: string;
-  bg: string;
-  text: string;
-  font: OnlineStoreAiThemeFont;
-  radius: OnlineStoreAiThemeRadius;
-}
-
-export type OnlineStoreAiDraftProvider = typeof OnlineStoreAiDraftProvider[keyof typeof OnlineStoreAiDraftProvider];
-
-
-export const OnlineStoreAiDraftProvider = {
-  claude: 'claude',
-  openai: 'openai',
-} as const;
-
-export interface OnlineStoreAiDraft {
-  provider: OnlineStoreAiDraftProvider;
-  theme: OnlineStoreAiTheme;
-  pages: OnlineStoreAiPage[];
-}
-
-export interface OnlineStoreThirdparty {
-  id: number;
-  merchantId: number;
-  providerId: string;
-  storeUrl: string;
-  apiKey: string;
-  connected: string;
-  connectedAt: string;
-  updatedAt: string;
-}
-
-export interface OnlineStoreThirdpartyInput {
-  providerId?: string;
-  storeUrl?: string;
-  apiKey?: string;
-  connected?: string;
-  connectedAt?: string;
-}
-
-export interface StorefrontApiScope {
-  id: string;
-  label: string;
-  description: string;
-  sensitive: boolean;
-  /** True when the scope lets a key change the merchant's data rather than only read it, so the UI can warn before it is granted. */
-  write?: boolean;
-}
-
-export interface StorefrontApiKey {
-  id: number;
-  name: string;
-  keyPrefix: string;
-  scopes: string[];
-  lastUsedAt?: string | null;
-  requestCount: number;
-  expiresAt?: string | null;
-  revokedAt?: string | null;
-  createdAt: string;
-}
-
-export interface StorefrontApiKeyListResponse {
-  items: StorefrontApiKey[];
-  scopes: StorefrontApiScope[];
-  baseUrl: string;
-}
-
-export interface StorefrontApiKeyInput {
-  name?: string;
-  scopes?: string[];
-  expiresInDays?: number | null;
-}
-
-export interface StorefrontApiManifest {
-  filename: string;
-  content: string;
-}
-
-export type StorefrontApiKeyCreated = StorefrontApiKey & {
-  /** The secret. Returned once, never stored in plaintext. */
-  key: string;
-  manifest: StorefrontApiManifest;
-};
-
 export interface ShippingCarrier {
   id: number;
   merchantId: number;
@@ -4950,32 +4661,6 @@ export interface ShippingCarrierCredentialsInput {
 
 export interface ShippingCarrierListResponse {
   items: ShippingCarrier[];
-  total: number;
-}
-
-export interface MarketplaceConnection {
-  id: number;
-  merchantId: number;
-  marketplaceId: string;
-  connected: string;
-  connectedAt: string;
-  lastSync: string;
-  productsCount: number;
-  ordersCount: number;
-  config: string;
-}
-
-export interface MarketplaceConnectionInput {
-  connected?: string;
-  connectedAt?: string;
-  lastSync?: string;
-  productsCount?: number;
-  ordersCount?: number;
-  config?: string;
-}
-
-export interface MarketplaceConnectionListResponse {
-  items: MarketplaceConnection[];
   total: number;
 }
 
@@ -6210,30 +5895,6 @@ export interface ChangeEmailInput {
   newEmail: string;
 }
 
-export interface FeedbackAttachment {
-  name: string;
-  /** Base64-encoded file content */
-  data: string;
-  mimeType: string;
-}
-
-export type FeedbackInputType = typeof FeedbackInputType[keyof typeof FeedbackInputType];
-
-
-export const FeedbackInputType = {
-  bug: 'bug',
-  feature: 'feature',
-} as const;
-
-export interface FeedbackInput {
-  type: FeedbackInputType;
-  title: string;
-  description: string;
-  steps?: string;
-  appVersion?: string;
-  attachments?: FeedbackAttachment[];
-}
-
 export interface OkResult {
   ok: boolean;
 }
@@ -6758,8 +6419,7 @@ export type SyncContactsInputProvider = typeof SyncContactsInputProvider[keyof t
 
 
 export const SyncContactsInputProvider = {
-  google_contacts: 'google_contacts',
-  microsoft_contacts: 'microsoft_contacts',
+  apple_icloud: 'apple_icloud',
 } as const;
 
 /**
@@ -6805,9 +6465,6 @@ export type CustomerFilesCloudSettingsInputStorageKey = typeof CustomerFilesClou
 
 
 export const CustomerFilesCloudSettingsInputStorageKey = {
-  onedrive: 'onedrive',
-  google_drive: 'google_drive',
-  dropbox: 'dropbox',
   nextcloud: 'nextcloud',
 } as const;
 

@@ -6,7 +6,7 @@ import { merchantsTable } from "./merchants";
 export const emailSettingsTable = pgTable("email_settings", {
   id:                   serial("id").primaryKey(),
   merchantId:           integer("merchant_id").notNull().unique().references(() => merchantsTable.id),
-  provider:             text("provider").notNull().default("none"), // none | smtp | resend | sendgrid
+  provider:             text("provider").notNull().default("none"), // none | smtp | resend
   fromName:             text("from_name"),
   fromEmail:            text("from_email"),
   smtpHost:             text("smtp_host"),

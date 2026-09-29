@@ -177,37 +177,5 @@ export async function sendEmail(merchantId: number, message: EmailMessage): Prom
     return { success: true, provider: "resend" };
   }
 
-  if (settings.provider === "sendgrid") {
-    if (!settings.apiKey) {
-      return sendSystemEmail(message);
-    }
-    const res = await fetch("https://api.sendgrid.com/v3/mail/send", {
-      method: "POST",
-      headers: { Authorization: `Bearer ${settings.apiKey}`, "Content-Type": "application/json" },
-      body: JSON.stringify({
-        personalizations: [{ to: [{ email: message.to }], ...(message.bcc ? { bcc: [{ email: message.bcc }] } : {}) }],
-        from: { email: settings.fromEmail ?? "noreply@example.com", name: settings.fromName ?? undefined },
-        subject: message.subject,
-        content: [
-          { type: "text/html", value: message.html },
-          ...(message.text ? [{ type: "text/plain", value: message.text }] : []),
-        ],
-        ...(message.attachments?.length ? {
-          attachments: message.attachments.map((a) => ({
-            filename: a.filename,
-            content: a.content.toString("base64"),
-            type: a.contentType,
-            disposition: "attachment",
-          })),
-        } : {}),
-      }),
-    });
-    if (!res.ok) {
-      const err = await res.text();
-      return { success: false, provider: "sendgrid", error: err };
-    }
-    return { success: true, provider: "sendgrid" };
-  }
-
   return { success: false, provider: settings.provider, error: "Unknown provider" };
 }

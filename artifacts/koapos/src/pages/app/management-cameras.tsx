@@ -727,8 +727,8 @@ function PosCameraTab() {
               <div>
                 <p className="text-sm font-medium text-muted-foreground">Cloud Sync</p>
                 <p className="text-xs text-muted-foreground">
-                  Google Drive, OneDrive and Dropbox sync can be configured in{" "}
-                  <a href="/management/settings-integrations/integrations" className="underline hover:text-foreground">Management › Integrations</a>.
+                  Nextcloud sync can be configured in{" "}
+                  <a href="/management/settings-integrations/sync" className="underline hover:text-foreground">Management › Sync</a>.
                 </p>
               </div>
             </div>

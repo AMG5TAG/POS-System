@@ -6,7 +6,7 @@ import { withUniqueRetry, isUniqueViolation } from "../lib/document-numbers";
  * Recording an online order as a sale, once the money is actually in.
  *
  * An order placed through the storefront is not revenue — it is a claim on
- * revenue. `online-store-checkout` writes it `paymentStatus: "pending"`, and
+ * revenue. The (since removed) online store wrote it `paymentStatus: "pending"`, and
  * until someone confirms payment it must not appear in takings. Moving the
  * order to "paid" is what books it, and this is the only thing that does.
  *

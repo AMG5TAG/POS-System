@@ -25,7 +25,6 @@ import {
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
   useValidateGiftCard, useRecordInvoicePayment, useGetPosSettings, useUpsertPosSettings, useVerifyStaffPin,
-  useGetPaymentSurcharges,
   useCreatePosRegisterSession, useUpdatePosRegisterSession, useListPosRegisterSessions,
   useGetPosFavourites, useUpdatePosFavourites,
   useCreateInvoice, useSendInvoiceEmail, getInvoicePdf,
@@ -1130,29 +1129,13 @@ export default function POSPage() {
     return { cartSubtotal, itemDiscountTotal, overallDiscountAmt, discountTotal, subtotal, taxTotal, total, kodeProfit, tierDiscountAmt };
   }, [cart, overallDiscount, customerTier, customerGroupId]);
 
-  /* Per-payment-method surcharge. When the selected method is configured to pass
-     its acceptance cost on to the customer, it's added to the amount charged.
-     The server recomputes this authoritatively and stores it; here it only
-     drives the amount due / tender so the cashier collects the right amount. */
-  const { data: surchargeConfig } = useGetPaymentSurcharges({ query: { queryKey: ["payment-surcharges"] } });
-  // Applies to both ordinary sales and invoice-balance payments. "split" has no
-  // config entry, so split payments yield 0 — matching the server, which only
-  // surcharges single-method payments.
   /* In Invoice Payment Mode the amount charged is the payment amount handed over
      from the invoices page (a partial payment when less than the balance),
      capped at the outstanding balance. Falls back to the full balance. */
   const invoiceCharge = invoicePay ? Math.min(invoicePay.amount ?? invoicePay.balance, invoicePay.balance) : 0;
-  const saleSurcharge = useMemo(() => {
-    const base = invoicePay ? invoiceCharge : total;
-    const cfg = (surchargeConfig?.items ?? []).find((s) => s.paymentMethod === String(payMethod));
-    if (!cfg || !cfg.enabled || !cfg.passOn) return 0;
-    return Math.round(((cfg.percent / 100) * base + cfg.fixed) * 100) / 100;
-  }, [surchargeConfig, payMethod, total, invoicePay, invoiceCharge]);
-
   /* The amount the terminal actually charges. In Invoice Payment Mode this is
-     the (possibly partial) invoice payment amount; otherwise it's the cart total
-     — either way plus any passed-on surcharge for the chosen payment method. */
-  const effectiveTotal = Math.round(((invoicePay ? invoiceCharge : total) + saleSurcharge) * 100) / 100;
+     the (possibly partial) invoice payment amount; otherwise it's the cart total. */
+  const effectiveTotal = Math.round((invoicePay ? invoiceCharge : total) * 100) / 100;
 
   /* Cart validity — checked client-side before any network request. */
   const cartHasInvalidItems = cart.some(
@@ -4230,11 +4213,6 @@ export default function POSPage() {
               <div className="rounded-xl bg-muted/40 border px-5 py-4 text-center">
                 <p className="text-[10px] font-medium uppercase tracking-widest text-muted-foreground mb-1">Amount Due</p>
                 <p className="text-4xl font-bold tabular-nums">{formatCurrency(effectiveTotal)}</p>
-                {saleSurcharge > 0 && (
-                  <p className="text-[11px] text-muted-foreground mt-1 tabular-nums">
-                    {formatCurrency((invoicePay ? invoiceCharge : total))} + {formatCurrency(saleSurcharge)} surcharge
-                  </p>
-                )}
                 {numpadInput && parseFloat(numpadInput) > 0 && (
                   <p className="text-sm text-muted-foreground mt-1.5 tabular-nums">
                     {changeDue > 0

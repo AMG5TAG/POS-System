@@ -53,7 +53,6 @@
     "@vitejs/plugin-react": "catalog:",
     "@vitest/coverage-v8": "^4.1.7",
     "@workspace/api-client-react": "workspace:*",
-    "@workspace/online-store-blocks": "workspace:*",
     "@workspace/phone-shared": "workspace:*",
     "@workspace/sales-documents": "workspace:*",
     "@workspace/shortlinks-shared": "workspace:*",

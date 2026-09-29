@@ -22,10 +22,7 @@ export const INTEGRATIONS = [
   /* ── PAYMENTS & TERMINALS ──────────────────────────────────────────────── */
   { key: "stripe_own",      label: "Stripe",                section: "payments",   category: "Payments & Terminals", description: "Connect your own Stripe account with your API keys to accept card payments and manage payouts.",            authType: "credentials" as const, fields: [{ name: "secretKey", label: "Secret Key", type: "password" }, { name: "publishableKey", label: "Publishable Key", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true  },
   { key: "commbank_eftpos", label: "CommBank EFTPOS",       section: "payments",   category: "Payments & Terminals", description: "Integrate with CommBank Smart terminal for card-present payments.",                                       authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "terminalId", label: "Terminal ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
-  { key: "square_terminal", label: "Square",                section: "payments",   category: "Payments & Terminals", description: "Accept in-store card payments via Square Terminal or Square Reader.",                                     authType: "credentials" as const, fields: [{ name: "accessToken", label: "Access Token", type: "password" }, { name: "locationId", label: "Location ID", type: "text" }] as F[], useVault: false },
-  { key: "tyro_eftpos",     label: "Tyro EFTPOS",           section: "payments",   category: "Payments & Terminals", description: "Australia's most popular independent EFTPOS provider — contactless, Apple Pay & Google Pay.",             authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "terminalId", label: "Terminal ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: false },
   { key: "paypal",          label: "PayPal",                section: "payments",   category: "Payments & Terminals", description: "Accept PayPal in-store via QR code — customer scans with the PayPal app to pay.",                        authType: "credentials" as const, fields: [{ name: "clientId", label: "Client ID", type: "text" }, { name: "clientSecret", label: "Client Secret", type: "password" }, { name: "merchantId", label: "Merchant ID", type: "text" }] as F[], useVault: false },
-  { key: "wechat_alipay",   label: "WeChat Pay & Alipay",   section: "payments",   category: "Payments & Terminals", description: "Display merchant QR codes for WeChat Pay and Alipay in-store.",                                          authType: "credentials" as const, fields: [{ name: "wechatMerchantId", label: "WeChat Merchant ID", type: "text" }, { name: "wechatApiKey", label: "WeChat API Key", type: "password" }, { name: "alipayMerchantId", label: "Alipay Merchant ID", type: "text" }, { name: "alipayApiKey", label: "Alipay API Key", type: "password" }] as F[], useVault: false },
   { key: "afterpay",        label: "Afterpay",              section: "payments",   category: "Payments & Terminals", description: "Let customers split purchases into 4 fortnightly payments.",                                              authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "zip",             label: "Zip Pay",               section: "payments",   category: "Payments & Terminals", description: "Offer interest-free pay-later and pay-over-time options at checkout.",                                   authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }, { name: "locationId", label: "Location ID", type: "text" }, { name: "deviceRefCode", label: "Device Reference", type: "text" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
   { key: "klarna",          label: "Klarna",                section: "payments",   category: "Payments & Terminals", description: "Flexible payment options — pay in 4, pay later, or finance larger purchases.",                            authType: "credentials" as const, fields: [{ name: "merchantId", label: "Merchant ID", type: "text" }, { name: "apiKey", label: "API Key", type: "password" }, { name: "webhookSecret", label: "Webhook Signing Secret", type: "password" }] as F[], useVault: true },
@@ -36,11 +33,6 @@ export const INTEGRATIONS = [
   { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
 
   /* ── CLOUD STORAGE & PRODUCTIVITY ─────────────────────────────────────── */
-  { key: "google_drive",        label: "Google Workspace",    section: "cloud", category: "Cloud Storage & Productivity", description: "Back up reports to Google Drive and sync contacts and appointments with Google Workspace.",   authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "onedrive",            label: "Microsoft OneDrive",  section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data to Microsoft OneDrive — ideal for Microsoft 365 businesses.",       authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
-  { key: "dropbox",             label: "Dropbox",             section: "cloud", category: "Cloud Storage & Productivity", description: "Send automated backups of reports and exports directly to your Dropbox.",                    authType: "oauth" as const, oauthProvider: "dropbox"   as const, useVault: true  },
-  { key: "google_contacts",     label: "Google Account",      section: "cloud", category: "Cloud Storage & Productivity", description: "Sync your customer list with Google Contacts and push appointments to Google Calendar.",    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "microsoft_contacts",  label: "Microsoft Account",   section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to Outlook Contacts and push appointments to Microsoft Calendar.",          authType: "oauth" as const, oauthProvider: "microsoft" as const, useVault: true  },
   { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple — lets staff/customers authenticate with their Apple ID. (Contacts & Calendar sync is the separate Apple iCloud connection.)", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
   { key: "apple_icloud",        label: "Apple iCloud",        section: "cloud", category: "Cloud Storage & Productivity", description: "Sync customers to iCloud Contacts and push appointments to Apple Calendar. Connect with your Apple ID and an app-specific password.", authType: "credentials" as const, fields: [{ name: "appleId", label: "Apple ID (email)", type: "text" }, { name: "appPassword", label: "App-specific password", type: "password" }] as F[], useVault: true  },
   // Nextcloud is self-hosted, so there is no platform-registered app to OAuth
@@ -54,12 +46,10 @@ export const INTEGRATIONS = [
      unconnected merchant simply has no AI features rather than quietly
      spending someone else's budget.
 
-     Claude is tried first; OpenAI is a per-merchant fallback for merchants who
-     connect both. Both are `useVault: true` — an API key is a bearer credential
-     with a live billing account behind it and belongs encrypted at rest, not in
-     the plaintext `credentials` column. */
+     It is `useVault: true` — an API key is a bearer credential with a live
+     billing account behind it and belongs encrypted at rest, not in the
+     plaintext `credentials` column. */
   { key: "anthropic",           label: "Claude (Anthropic)",  section: "ai",    category: "AI Providers", description: "Connect your own Anthropic account to power the AI store designer, business advisor and upsell coach. Usage is billed to your Anthropic account.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: true },
-  { key: "openai",              label: "OpenAI",              section: "ai",    category: "AI Providers", description: "Optional fallback for the AI features, used only when Claude is unavailable. Usage is billed to your OpenAI account.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: true },
 ] as const;
 
 type F = { name: string; label: string; type: string };
@@ -75,8 +65,6 @@ async function getRow(merchantId: number, key: string) {
 function isOAuthConfigured(provider: string): boolean {
   switch (provider) {
     case "google":     return !!process.env.GOOGLE_CLIENT_ID;
-    case "microsoft":  return !!process.env.MICROSOFT_CLIENT_ID;
-    case "dropbox":    return !!process.env.DROPBOX_APP_KEY;
     case "xero":       return !!process.env.XERO_CLIENT_ID;
     case "apple":      return !!(process.env.APPLE_CLIENT_ID && process.env.APPLE_TEAM_ID && process.env.APPLE_KEY_ID && process.env.APPLE_PRIVATE_KEY);
     default:           return false;
@@ -116,14 +104,7 @@ function decodeAppleIdToken(idToken: string): { sub?: string; email?: string } {
 
 const GOOGLE_SCOPES: Record<string, string> = {
   google_business:  "https://www.googleapis.com/auth/business.manage",
-  google_drive:     "https://www.googleapis.com/auth/drive.file",
-  google_contacts:  "https://www.googleapis.com/auth/contacts https://www.googleapis.com/auth/calendar",
   google_ads:       "https://www.googleapis.com/auth/adwords",
-};
-
-const MICROSOFT_SCOPES: Record<string, string> = {
-  onedrive:             "Files.ReadWrite.AppFolder offline_access",
-  microsoft_contacts:   "Contacts.ReadWrite Calendars.ReadWrite offline_access",
 };
 
 function cbUrl(key: string, req: import("express").Request): string {
@@ -132,12 +113,11 @@ function cbUrl(key: string, req: import("express").Request): string {
   return `${proto}://${host}/api/integrations/oauth/${key}/callback`;
 }
 
-// Cloud-storage and account/contacts integrations are managed on the Sync page;
-// everything else on the Integrations page. OAuth redirects land the user back
-// on whichever page the integration lives.
+// Account/contacts integrations are managed on the Sync page; everything else
+// on the Integrations page. OAuth redirects land the user back on whichever
+// page the integration lives.
 const SYNC_INTEGRATION_KEYS = new Set([
-  "google_drive", "onedrive", "dropbox",
-  "google_contacts", "microsoft_contacts", "apple_account",
+  "apple_account",
 ]);
 function manageUrl(key: string): string {
   return SYNC_INTEGRATION_KEYS.has(key) ? "/management/sync" : "/management/integrations";
@@ -151,14 +131,6 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
     const cid = process.env.GOOGLE_CLIENT_ID; if (!cid) return null;
     return `https://accounts.google.com/o/oauth2/v2/auth?${new URLSearchParams({ client_id: cid, redirect_uri: cb, response_type: "code", scope: GOOGLE_SCOPES[key]!, access_type: "offline", prompt: "consent", state })}`;
   }
-  if (key in MICROSOFT_SCOPES) {
-    const cid = process.env.MICROSOFT_CLIENT_ID; if (!cid) return null;
-    return `https://login.microsoftonline.com/common/oauth2/v2.0/authorize?${new URLSearchParams({ client_id: cid, redirect_uri: cb, response_type: "code", scope: MICROSOFT_SCOPES[key]!, state })}`;
-  }
-  if (key === "dropbox") {
-    const k = process.env.DROPBOX_APP_KEY; if (!k) return null;
-    return `https://www.dropbox.com/oauth2/authorize?${new URLSearchParams({ client_id: k, redirect_uri: cb, response_type: "code", token_access_type: "offline", state })}`;
-  }
   if (key === "apple_account") {
     const cid = process.env.APPLE_CLIENT_ID;
     if (!cid || !process.env.APPLE_TEAM_ID || !process.env.APPLE_KEY_ID || !process.env.APPLE_PRIVATE_KEY) return null;
@@ -170,7 +142,7 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
 /* ── Token exchange ──────────────────────────────────────────────────────────── */
 
 async function exchangeToken(key: string, code: string, cb: string, merchantId: number, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
-  if (key === "google_drive" || key === "google_business" || key === "google_contacts" || key === "google_ads") {
+  if (key === "google_business" || key === "google_ads") {
     const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
     const accessToken = d.access_token ?? "";
     let accountId: string | undefined, accountHandle: string | undefined;
@@ -189,26 +161,6 @@ async function exchangeToken(key: string, code: string, cb: string, merchantId: 
       }
     }
     return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "onedrive" || key === "microsoft_contacts") {
-    const d = await fetch("https://login.microsoftonline.com/common/oauth2/v2.0/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.MICROSOFT_CLIENT_ID ?? "", client_secret: process.env.MICROSOFT_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
-    const accessToken = d.access_token ?? "";
-    let accountId: string | undefined, accountHandle: string | undefined;
-    if (accessToken) {
-      const profile = await fetch("https://graph.microsoft.com/v1.0/me", { headers: { Authorization: `Bearer ${accessToken}` } }).then((r) => r.json()).catch(() => ({})) as { id?: string; mail?: string; userPrincipalName?: string };
-      accountId = profile.id; accountHandle = profile.mail ?? profile.userPrincipalName;
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
-  }
-  if (key === "dropbox") {
-    const d = await fetch("https://api.dropboxapi.com/oauth2/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.DROPBOX_APP_KEY ?? "", client_secret: process.env.DROPBOX_APP_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; account_id?: string };
-    const accessToken = d.access_token ?? "";
-    let accountHandle: string | undefined;
-    if (accessToken) {
-      const profile = await fetch("https://api.dropboxapi.com/2/users/get_current_account", { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: "null" }).then((r) => r.json()).catch(() => ({})) as { email?: string };
-      accountHandle = profile.email;
-    }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: null, accountId: d.account_id, accountHandle };
   }
   throw new Error(`No token exchange handler for: ${key}`);
 }
@@ -498,12 +450,11 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
 });
 
 /* ── POST /integrations/contacts/sync ────────────────────────────────────────
-   Syncs KoaPOS customers to Google Contacts (People API) or Microsoft Contacts
-   (Graph API). Optionally includes CRM notes in each platform's native notes
-   field: Google → biographies[0].value, Microsoft → personalNotes.
+   Syncs KoaPOS customers to the connected iCloud contacts (CardDAV).
+   Optionally includes CRM notes in each contact's notes field.
 
    Body: {
-     provider:      "google_contacts" | "microsoft_contacts",
+     provider:      "apple_icloud",
      includeNotes?: boolean,           (default: false)
      notesConflict?: "append" | "overwrite"  (default: "append")
    }
@@ -529,7 +480,7 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
   };
 
   if (!isSyncProvider(provider)) {
-    res.status(400).json({ error: "provider must be 'google_contacts', 'microsoft_contacts' or 'apple_icloud'" });
+    res.status(400).json({ error: "provider must be 'apple_icloud'" });
     return;
   }
 
@@ -572,15 +523,14 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
 
 /* ── POST /integrations/calendar/sync ─────────────────────────────────────────
    Pushes the merchant's upcoming KoaPOS appointments to the connected account's
-   calendar — Microsoft (Graph /me/events) or Google (Calendar API). Idempotent
-   via stable event ids (Microsoft transactionId, Google event id).
-   Body: { provider: "microsoft_contacts" | "google_contacts" }
+   iCloud calendar (CalDAV). Idempotent via stable event uids.
+   Body: { provider: "apple_icloud" }
    ─────────────────────────────────────────────────────────────────────────── */
 router.post("/integrations/calendar/sync", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { provider } = req.body as { provider?: string };
   if (!isSyncProvider(provider)) {
-    res.status(400).json({ error: "provider must be 'google_contacts', 'microsoft_contacts' or 'apple_icloud'" });
+    res.status(400).json({ error: "provider must be 'apple_icloud'" });
     return;
   }
   try {

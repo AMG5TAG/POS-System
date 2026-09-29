@@ -11,8 +11,8 @@ import { merchantsTable } from "./merchants";
  *  - "8h" | "24h" | "monthly" are handled by the polling auto-sync scheduler,
  *    which runs a sync once the interval has elapsed since the last run.
  *
- * `*Provider` is which connected account to target
- * ("google_contacts" | "microsoft_contacts").
+ * `*Provider` is which connected account to target — "apple_icloud" (the
+ * only one since Google/Microsoft account sync were removed).
  */
 export const merchantAutoSyncSettingsTable = pgTable("merchant_auto_sync_settings", {
   id: serial("id").primaryKey(),

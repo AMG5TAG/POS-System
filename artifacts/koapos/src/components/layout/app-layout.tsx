@@ -64,7 +64,6 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
-import { OnboardingWizard } from "@/components/onboarding/OnboardingWizard";
 import { LocationSwitcher } from "@/components/layout/location-switcher";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
@@ -101,7 +100,6 @@ const STAFF_SUBNAV: NavItem[] = [
 const ONLINE_SUBNAV: NavItem[] = [
   { name: "Deliveries", href: "/online/deliveries", icon: Package2    },
   { name: "Shipping",        href: "/online/shipping",        icon: Truck       },
-  { name: "Marketplace",     href: "/online/marketplace",     icon: ShoppingBag },
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
@@ -210,7 +208,6 @@ const SEARCH_INDEX = [
   { label: "Discounts",          href: "/management/customers/discounts-pricing",        icon: Percent,         group: "Management" },
   { label: "Emails",              href: "/management/marketing-reports/email",                      icon: Mail,         group: "Management" },
   { label: "SMS Settings",        href: "/management/settings-integrations/sms",                        icon: MessageSquare, group: "Management" },
-  { label: "Feedback",                      href: "/management/settings-integrations/feedback",                   icon: MessageSquare,  group: "Management" },
   { label: "Floor Plan",         href: "/management/staff-operations/floor-plan",       icon: Map,             group: "Management" },
   { label: "Forms & Files",     href: "/management/forms-files/forms",                       icon: FileText,        group: "Management" },
   { label: "Files",             href: "/management/forms-files/files",                       icon: FolderOpen,      group: "Management" },
@@ -226,7 +223,6 @@ const SEARCH_INDEX = [
   { label: "Trade-Ins",         href: "/management/products-inventory/trade-ins",           icon: Recycle,         group: "Management" },
   { label: "Time Cards",        href: "/management/products-inventory/time-cards",          icon: Clock,           group: "Management" },
   { label: "Integrations",       href: "/management/settings-integrations/integrations",     icon: Receipt,         group: "Management" },
-  { label: "Integrations · Tyro EFTPOS", href: "/management/settings-integrations/integrations/tyro-eftpos", icon: CreditCard,   group: "Management" },
   { label: "Inventory Settings",       href: "/management/products-inventory/inventory",         icon: Boxes,           group: "Management" },
   { label: "Inventory · Modifier Groups", href: "/management/products-inventory/modifier-groups",   icon: Layers,          group: "Management" },
   { label: "Inventory · Product Types",   href: "/management/products-inventory/product-types",     icon: Tag,             group: "Management" },
@@ -237,11 +233,6 @@ const SEARCH_INDEX = [
   { label: "Loyalty",            href: "/management/customers/loyalty",          icon: Gift,            group: "Management" },
   { label: "Marketing · Referral Settings", href: "/management/marketing-reports/referrals",       icon: UserPlus, group: "Management" },
   { label: "Misc",                          href: "/management/settings-integrations/system/misc",                       icon: MoreHorizontal, group: "Management" },
-  { label: "Online Store",              href: "/management/online-store/storefront",  icon: Globe,        group: "Management" },
-  { label: "Online Store · Design",     href: "/management/online-store/design",      icon: Palette,      group: "Management" },
-  { label: "Online Store · Features",   href: "/management/online-store/features",    icon: Layers,       group: "Management" },
-  { label: "Online Store · Domain",     href: "/management/online-store/domain",      icon: Link2,        group: "Management" },
-  { label: "Online Store · Data API",   href: "/management/online-store/data-api",    icon: KeyRound,     group: "Management" },
   { label: "POS Registers",      href: "/management/staff-operations/pos-registers",        icon: Monitor,         group: "Management" },
   { label: "Sales Settings",     href: "/management/sales-settings",   icon: Receipt,         group: "Management" },
   { label: "Sales Templates",     href: "/management/customisation/templates/sales",   icon: LayoutTemplate,  group: "Management" },
@@ -270,7 +261,6 @@ const SEARCH_INDEX = [
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
   { label: "Online · Deliveries",     href: "/online/deliveries",   icon: Package2,     group: "Online"     },
   { label: "Online · Shipping",         href: "/online/shipping",          icon: Truck,        group: "Online"     },
-  { label: "Online · Marketplace",      href: "/online/marketplace",       icon: ShoppingBag,  group: "Online"     },
   { label: "Registers · POS Settings",   href: "/management/staff-operations/pos-registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/staff-operations/pos-registers#hardware",                icon: HardDrive,     group: "Registers"  },
   { label: "Registers · Shortcuts",       href: "/management/staff-operations/pos-registers#shortcuts",               icon: Keyboard,      group: "Registers"  },
@@ -314,7 +304,6 @@ const SEGMENT_LABEL: Record<string, string> = {
   "products-inventory": "Products & Inventory",
   "settings-integrations": "Settings",   // the hub renamed; the path segment did not
   "invoices-services": "Invoices & Services",
-  "service-options": "Service Options",
   "invoices": "Invoices",
   "mobile-pos": "Mobile POS",
 };
@@ -1991,7 +1980,6 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
   const wrappedChildren = (
     <>
       {user && !user.emailVerified && <EmailVerificationBanner />}
-      {user && !user.onboardingCompleted && <OnboardingWizard />}
       {children}
     </>
   );

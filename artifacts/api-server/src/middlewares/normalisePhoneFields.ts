@@ -17,8 +17,8 @@
  * - It only ever hands a value to `normalisePhone`, which returns anything it
  *   can't confidently read as a number completely untouched.
  * - It runs only for a request carrying a merchant session, because that is what
- *   says which country to assume. Public write paths (the booking form, a
- *   storefront order, the customer portal) know their merchant by other means
+ *   says which country to assume. Public write paths (the booking form, the
+ *   customer portal) know their merchant by other means
  *   and normalise explicitly in the handler.
  */
 

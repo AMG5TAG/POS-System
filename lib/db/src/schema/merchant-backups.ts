@@ -16,26 +16,17 @@ import { merchantsTable } from "./merchants";
  */
 export interface BackupStorageDestination {
   id: string;
-  type: "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
+  type: "local" | "sftp" | "nextcloud";
   // local
   directory?: string;
-  // s3
-  bucket?: string;
-  region?: string;
-  accessKeyId?: string;
-  secretAccessKeyEnc?: string;
-  // gcs
-  projectId?: string;
-  gcsBucket?: string;
-  serviceAccountJsonEnc?: string;
   // sftp
   host?: string;
   port?: number;
   username?: string;
   remotePath?: string;
   passwordEnc?: string;
-  // onedrive / nextcloud — uploads use the merchant's connected integration
-  // (OneDrive access token / Nextcloud app password); only the folder is stored.
+  // nextcloud — uploads use the merchant's connected integration (its app
+  // password); only the folder is stored.
   folder?: string;
 }
 
@@ -46,7 +37,9 @@ export interface BackupStorageDestination {
  * the user-selectable types). It is not a configurable destination.
  */
 export interface BackupLocation {
-  type: "server" | "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
+  // "onedrive" is historical: OneDrive was removed as a destination, but
+  // backups taken while it existed still record it as one of their locations.
+  type: "server" | "local" | "sftp" | "onedrive" | "nextcloud";
   ref: string;
 }
 

@@ -10,7 +10,7 @@ import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
 import { customerPortalUrl } from "../lib/publicUrl";
 import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
-import { getServiceWarrantyDefaults } from "./service-settings";
+import { SERVICE_WARRANTY_DEFAULTS } from "../lib/service-job-defaults";
 import { summariseJobQuotes, NO_QUOTE } from "../lib/service-job-quotes";
 
 const router: IRouter = Router();
@@ -142,10 +142,9 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
 
   // Pre-fill the repair warranty window from the merchant's Service Options
   // default unless the caller supplied an explicit value.
-  const warrantyDefaults = await getServiceWarrantyDefaults(merchantId);
   const repairWarrantyDays = body.repairWarrantyDays != null
     ? Math.max(0, Math.round(Number(body.repairWarrantyDays) || 0))
-    : warrantyDefaults.repairWarrantyDays;
+    : SERVICE_WARRANTY_DEFAULTS.repairWarrantyDays;
 
   // Derive the job number from max+1 and retry on the unique-index conflict so a
   // concurrent create can't produce a duplicate SJ####. `existing` is re-read per
@@ -525,7 +524,7 @@ router.post("/service-jobs/:id/rework", requireAuth, async (req, res): Promise<v
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { reworkWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
+  const { reworkWarrantyDays } = SERVICE_WARRANTY_DEFAULTS;
 
   const created = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
     const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })
@@ -577,7 +576,7 @@ router.post("/service-jobs/:id/reopen", requireAuth, async (req, res): Promise<v
 
   const today = new Date().toISOString().split("T")[0];
 
-  const { repairWarrantyDays } = await getServiceWarrantyDefaults(merchantId);
+  const { repairWarrantyDays } = SERVICE_WARRANTY_DEFAULTS;
 
   const created = await withUniqueRetry("service_jobs_merchant_job_number_unique", async (tryIndex) => {
     const existing = await db.select({ jobNumber: serviceJobsTable.jobNumber })

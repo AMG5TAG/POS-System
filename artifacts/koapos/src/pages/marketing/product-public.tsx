@@ -1,7 +1,7 @@
 import { useParams } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { Loader2, Package, Phone, MapPin, CheckCircle2, XCircle, ShieldCheck } from "lucide-react";
-import { useStorefrontSeo } from "@/pages/marketing/storefront-seo";
+import { usePageSeo } from "@/lib/page-seo";
 import { telHref } from "@/lib/utils";
 
 /*
@@ -49,13 +49,11 @@ export default function ProductPublicView() {
   });
 
   // SEO — runs every render (before early returns) to keep hook order stable.
-  useStorefrontSeo({
+  usePageSeo({
     enabled: !!data,
-    storeName: data?.business.name ?? "",
-    tagline: data?.name ?? "",
-    page: null,
-    logoUrl: data?.business.logoUrl ?? "",
-    catalog: null,
+    title: data?.business.name ?? "",
+    description: data?.name ?? "",
+    image: data?.business.logoUrl ?? "",
   });
 
   if (isLoading) {

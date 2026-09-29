@@ -4,7 +4,7 @@ import { merchantsTable } from "./merchants";
 /**
  * Additional named backup schedules for a merchant, on top of the single
  * frequency in merchant_backup_configs. Lets a merchant run several distinct
- * scheduled backups at once — e.g. "Daily → OneDrive" and "Monthly → S3".
+ * scheduled backups at once — e.g. "Daily → Nextcloud" and "Monthly → SFTP".
  *
  * Each schedule reuses the merchant's central encryption password and storage
  * destinations (in merchant_backup_configs); `destinationIds` selects which of

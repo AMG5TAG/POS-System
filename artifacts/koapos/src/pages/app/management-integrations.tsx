@@ -21,7 +21,7 @@ import {
   useListIntegrations, useGetVaultStatus, useDisconnectIntegration, useConnectIntegration,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
-import { OneDriveIcon, MicrosoftIcon, NextcloudIcon } from "@/components/provider-icons";
+import { NextcloudIcon } from "@/components/provider-icons";
 import { NextcloudConnectModal } from "@/components/nextcloud-connect-modal";
 import {
   CheckCircle2, ExternalLink, Plug, Unplug, Loader2, AlertCircle,
@@ -75,14 +75,6 @@ function AppleSvg({ className }: { className?: string }) {
   );
 }
 
-function TyroSvg({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" className={className} fill="currentColor" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-      <path d="M3 3.5h18v4H14v13h-4v-13H3z" />
-    </svg>
-  );
-}
-
 // Official Zip Pay wordmark (from zip.co). Two-tone brand colours — Zip ink
 // (#1A0826) + Zip violet (#AA8FFF) — so it's rendered on a white tile rather
 // than the monochrome currentColor treatment used for single-colour glyphs.
@@ -104,17 +96,9 @@ type LogoCfg =
 
 const LOGO_MAP: Record<string, LogoCfg> = {
   /* Cloud Storage & Productivity */
-  google_drive:         { type: "img",  bg: "bg-white border",  src: SI("googledrive",   "4285F4") },
-  // Microsoft brand marks were pulled from simple-icons (those slugs 404), so
-  // OneDrive/Microsoft use the inline SVGs shared with the Sync page.
-  onedrive:             { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: OneDriveIcon },
-  dropbox:              { type: "img",  bg: "bg-[#0061FF]",     src: SI("dropbox",       "ffffff") },
   nextcloud:            { type: "svg",  bg: "bg-white border",  color: "text-[#0082C9]", component: NextcloudIcon },
-  google_contacts:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
-  microsoft_contacts:   { type: "svg",  bg: "bg-white border",  color: "text-[#0078D4]", component: MicrosoftIcon },
   apple_account:        { type: "svg",  bg: "bg-black",          color: "text-white",    component: AppleSvg },
   apple_icloud:         { type: "img",  bg: "bg-[#3693F3]",     src: SI("icloud",        "ffffff") },
-  openai:               { type: "img",  bg: "bg-black",          src: SI("openai",        "ffffff") },
   zapier:               { type: "img",  bg: "bg-[#FF4A00]",     src: SI("zapier",        "ffffff") },
   deputy:               { type: "img",  bg: "bg-[#FF8C00]",     src: SI("deputy",        "ffffff") },
   /* Accounting & Finance */
@@ -129,10 +113,7 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   /* Payments & Terminals */
   stripe_own:           { type: "img",  bg: "bg-[#635BFF]",     src: SI("stripe",            "ffffff") },
   commbank_eftpos:      { type: "img",  bg: "bg-[#FFD200]",     src: SI("commonwealthbank",  "000000"), pad: true },
-  square_terminal:      { type: "img",  bg: "bg-black",          src: SI("square",            "ffffff") },
-  tyro_eftpos:          { type: "svg",  bg: "bg-[#00B9E4]",     color: "text-white",    component: TyroSvg },
   paypal:               { type: "img",  bg: "bg-[#003087]",     src: SI("paypal",        "ffffff") },
-  wechat_alipay:        { type: "img",  bg: "bg-[#07C160]",     src: SI("wechat",        "ffffff") },
   afterpay:             { type: "img",  bg: "bg-[#B2FCE4]",     src: SI("afterpay",      "000000") },
   zip:                  { type: "svg",  bg: "bg-white border",  color: "text-[#1A0826]", component: ZipSvg },
   klarna:               { type: "img",  bg: "bg-[#FFB3C7]",     src: SI("klarna",        "000000") },
@@ -258,16 +239,14 @@ function ConnectModal({ integration, onClose, onSaved }: { integration: Integrat
    settings) instead of only being able to disconnect. */
 const CONFIG_ROUTES: Record<string, string> = {
   xero:        "/management/settings-integrations/integrations/xero",
-  tyro_eftpos: "/management/settings-integrations/integrations/tyro-eftpos",
 };
 
 function IntegrationCard({
-  intg, busy, onConnect, onDisconnect, onOAuth, onNavigate, onSyncContacts,
+  intg, busy, onConnect, onDisconnect, onOAuth, onNavigate,
 }: {
   intg: Integration; busy: boolean;
   onConnect: () => void; onDisconnect: () => void; onOAuth: () => void;
   onNavigate?: (href: string) => void;
-  onSyncContacts?: () => void;
 }) {
   const isConnected = intg.status === "connected";
   const needsReconnect = !isConnected && !!intg.disconnectedReason;
@@ -348,17 +327,6 @@ function IntegrationCard({
                 <CheckCircle2 className="w-3 h-3" /> Connected
               </Badge>
               <div className="flex items-center gap-1">
-                {onSyncContacts && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="gap-1.5 text-xs h-7 px-2"
-                    onClick={onSyncContacts}
-                    title="Sync contacts to this platform"
-                  >
-                    <Users className="w-3 h-3" /> Sync Contacts
-                  </Button>
-                )}
                 {onNavigate && CONFIG_ROUTES[intg.key] && (
                   <Button
                     variant="ghost"
@@ -415,8 +383,7 @@ function IntegrationCard({
 function Section({
   id, title, description, icon: Icon, accent, iconBg, iconColor,
   items, connecting, onConnect, onDisconnect, onOAuth,
-  onNavigate, onSyncContacts,
-  defaultOpen = false,
+  onNavigate,
 }: {
   id: string; title: string; description: string;
   icon: React.ComponentType<{ className?: string }>;
@@ -427,18 +394,12 @@ function Section({
   onDisconnect: (i: Integration) => void;
   onOAuth: (i: Integration) => void;
   onNavigate?: (href: string) => void;
-  onSyncContacts?: (i: Integration) => void;
-  defaultOpen?: boolean;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   const connected = items.filter((i) => i.status === "connected").length;
   const needsReconnect = items.filter((i) => !!i.disconnectedReason && i.status !== "connected").length;
   return (
     <section className="space-y-2">
-      <button
-        className={cn("w-full rounded-2xl border px-5 py-4 flex items-center gap-4 text-left transition-all", accent, "hover:shadow-sm")}
-        onClick={() => setOpen((o) => !o)}
-      >
+      <div className={cn("w-full rounded-2xl border px-5 py-4 flex items-center gap-4", accent)}>
         <div className={cn("rounded-xl p-2.5 shrink-0", iconBg)}>
           <Icon className={cn("w-5 h-5", iconColor)} />
         </div>
@@ -458,43 +419,29 @@ function Section({
           </div>
           <p className="text-sm text-muted-foreground mt-0.5">{description}</p>
         </div>
-        <div className="shrink-0 ml-2">
-          {open
-            ? <ChevronDown className="w-5 h-5 text-muted-foreground" />
-            : <ChevronRight className="w-5 h-5 text-muted-foreground" />}
-        </div>
-      </button>
+      </div>
 
-      {open && (
-        <>
-        <div className="flex justify-end -mt-1">
-          <a
-            href={`/management/settings-integrations/integrations/help#${id}`}
-            className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
-          >
-            <HelpCircle className="w-3.5 h-3.5" /> How to connect these
-          </a>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
-          {items.map((intg) => (
-            <IntegrationCard
-              key={intg.key}
-              intg={intg}
-              busy={!!connecting[intg.key]}
-              onConnect={() => onConnect(intg)}
-              onDisconnect={() => onDisconnect(intg)}
-              onOAuth={() => onOAuth(intg)}
-              onNavigate={CONFIG_ROUTES[intg.key] ? onNavigate : undefined}
-              onSyncContacts={
-                (intg.key === "google_contacts" || intg.key === "microsoft_contacts") && onSyncContacts
-                  ? () => onSyncContacts(intg)
-                  : undefined
-              }
-            />
-          ))}
-        </div>
-        </>
-      )}
+      <div className="flex justify-end -mt-1">
+        <a
+          href={`/management/settings-integrations/integrations/help#${id}`}
+          className="inline-flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground"
+        >
+          <HelpCircle className="w-3.5 h-3.5" /> How to connect these
+        </a>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-4 items-stretch">
+        {items.map((intg) => (
+          <IntegrationCard
+            key={intg.key}
+            intg={intg}
+            busy={!!connecting[intg.key]}
+            onConnect={() => onConnect(intg)}
+            onDisconnect={() => onDisconnect(intg)}
+            onOAuth={() => onOAuth(intg)}
+            onNavigate={CONFIG_ROUTES[intg.key] ? onNavigate : undefined}
+          />
+        ))}
+      </div>
     </section>
   );
 }
@@ -544,7 +491,7 @@ const ALL_SECTIONS = [
     icon: Sparkles,
     // Bring-your-own-key, so this section is where AI features are switched on:
     // without a connected account there is no AI, by design.
-    description: "Connect your own Claude or OpenAI account — AI usage is billed to you, not KoaPOS",
+    description: "Connect your own Claude account — AI usage is billed to your Anthropic account",
     accent: "bg-indigo-50/60 border-indigo-200 dark:bg-indigo-950/20 dark:border-indigo-900",
     iconBg: "bg-indigo-100 dark:bg-indigo-900/40",
     iconColor: "text-indigo-600 dark:text-indigo-400",
@@ -564,12 +511,8 @@ const ALL_SECTIONS = [
 
 // Account/contacts integrations are configured on the consolidated Sync page
 // (Management → Settings & Integrations → Sync), so they are hidden here.
-// The cloud-storage destinations (Google Drive, OneDrive, Dropbox) stay
-// visible: the Cloud Storage section is where merchants expect to connect a
-// backup destination, and the Sync page still owns what actually gets synced
-// once connected.
 export const SYNC_INTEGRATION_KEYS = new Set([
-  "google_contacts", "microsoft_contacts", "apple_account",
+  "apple_account",
 ]);
 
 interface VaultStatus {
@@ -585,12 +528,6 @@ export default function ManagementIntegrationsPage() {
   const [connecting, setConnecting]     = useState<Record<string, boolean>>({});
   const [modalTarget, setModalTarget]   = useState<Integration | null>(null);
   const [nextcloudOpen, setNextcloudOpen] = useState(false);
-
-  /* ─── Sync Contacts dialog state ────────────────────────────────────────── */
-  const [syncTarget,         setSyncTarget]         = useState<Integration | null>(null);
-  const [syncIncludeNotes,   setSyncIncludeNotes]   = useState(false);
-  const [syncNotesConflict,  setSyncNotesConflict]  = useState<"append" | "overwrite">("append");
-  const [syncingContacts,    setSyncingContacts]     = useState(false);
 
   const { data: integrationsRaw, isLoading: loading, refetch: refetchIntegrations } = useListIntegrations({ query: { queryKey: ["integrations"] } });
   const integrations = ((integrationsRaw ?? []) as unknown as Integration[]).filter((i) => !SYNC_INTEGRATION_KEYS.has(i.key));
@@ -651,7 +588,6 @@ export default function ManagementIntegrationsPage() {
   const reconnectList = integrations.filter((i) => !!i.disconnectedReason && i.status !== "connected");
   const keyRotatedReconnect = reconnectList.filter((i) => i.disconnectedReason === "key_rotated");
   const bySection = (id: string) => integrations.filter((i) => i.section === id);
-  const sectionsWithReconnect = new Set(reconnectList.map((i) => i.section));
 
   return (
     <AppLayout>
@@ -765,8 +701,6 @@ export default function ManagementIntegrationsPage() {
                   onDisconnect={handleDisconnect}
                   onOAuth={handleOAuth}
                   onNavigate={(href) => setLocation(href)}
-                  onSyncContacts={sec.id === "cloud" ? (intg) => { setSyncTarget(intg); setSyncIncludeNotes(false); setSyncNotesConflict("append"); } : undefined}
-                  defaultOpen={sectionsWithReconnect.has(sec.id)}
                 />
               );
             })}
@@ -786,99 +720,6 @@ export default function ManagementIntegrationsPage() {
         }}
       />
 
-      {/* ── Sync Contacts dialog (Google / Microsoft) ────────────────────── */}
-      <Dialog open={!!syncTarget} onOpenChange={(o) => { if (!o) setSyncTarget(null); }}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <Users className="w-4 h-4" />
-              Sync Contacts to {syncTarget?.label}
-            </DialogTitle>
-            <DialogDescription>
-              Push your KoaPOS customers to{" "}
-              {syncTarget?.key === "google_contacts" ? "Google Contacts" : "Microsoft Contacts"}.
-              Existing contacts are not de-duplicated — re-syncing creates additional entries.
-            </DialogDescription>
-          </DialogHeader>
-
-          <div className="space-y-4 py-1">
-            {/* Include Notes toggle */}
-            <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-sm font-medium">Include customer notes</p>
-                <p className="text-xs text-muted-foreground mt-0.5">
-                  {syncTarget?.key === "google_contacts"
-                    ? "Maps to Google Contacts → About (biographies)"
-                    : "Maps to Outlook Contact → Notes (personalNotes)"}
-                </p>
-              </div>
-              <Switch
-                checked={syncIncludeNotes}
-                onCheckedChange={setSyncIncludeNotes}
-              />
-            </div>
-
-            {/* Notes conflict — only when include notes is on */}
-            {syncIncludeNotes && (
-              <div className="space-y-1.5 pl-4 border-l-2 border-muted">
-                <Label className="text-xs font-medium text-muted-foreground">Notes conflict</Label>
-                <Select
-                  value={syncNotesConflict}
-                  onValueChange={(v) => setSyncNotesConflict(v as "append" | "overwrite")}
-                >
-                  <SelectTrigger className="h-8 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="append">Append all notes (newest first)</SelectItem>
-                    <SelectItem value="overwrite">Most recent note only</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter className="gap-2 sm:gap-0">
-            <Button variant="outline" onClick={() => setSyncTarget(null)} disabled={syncingContacts}>
-              Cancel
-            </Button>
-            <Button
-              disabled={syncingContacts}
-              onClick={async () => {
-                if (!syncTarget) return;
-                setSyncingContacts(true);
-                try {
-                  const r = await fetch("/api/integrations/contacts/sync", {
-                    method:      "POST",
-                    credentials: "include",
-                    headers:     { "Content-Type": "application/json" },
-                    body:        JSON.stringify({
-                      provider:      syncTarget.key,
-                      includeNotes:  syncIncludeNotes,
-                      notesConflict: syncNotesConflict,
-                    }),
-                  });
-                  const data = await r.json() as { ok?: boolean; synced?: number; failed?: number; notesSynced?: number; message?: string; error?: string };
-                  if (r.ok && data.ok) {
-                    const failMsg = (data.failed ?? 0) > 0 ? `, ${data.failed} failed` : "";
-                    toast.success(data.message ?? `Synced ${data.synced} contacts${failMsg}`);
-                    setSyncTarget(null);
-                  } else {
-                    toast.error(data.error ?? "Contact sync failed");
-                  }
-                } catch {
-                  toast.error("Contact sync request failed — please try again");
-                } finally {
-                  setSyncingContacts(false);
-                }
-              }}
-            >
-              {syncingContacts ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1.5" /> : <Users className="w-3.5 h-3.5 mr-1.5" />}
-              {syncingContacts ? "Syncing…" : "Sync Now"}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
     </AppLayout>
   );
 }

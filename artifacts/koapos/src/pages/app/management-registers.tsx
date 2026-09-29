@@ -105,15 +105,12 @@ const PAYMENT_INTEGRATION_CATS = [
 const INTEGRATION_LABELS: Record<string, string> = {
   stripe_own:      "Stripe",
   commbank_eftpos: "CommBank EFTPOS",
-  tyro_eftpos:     "Tyro",
-  square_terminal: "Square Terminal",
   paypal:          "PayPal",
   afterpay:        "Afterpay",
   zip:             "Zip",
   klarna:          "Klarna",
   apple_wallet:    "Apple Wallet",
   google_pay:      "Google Pay",
-  wechat_alipay:   "WeChat / Alipay",
 };
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
@@ -1228,7 +1225,7 @@ function OpenTillsSection({ registerNames }: { registerNames: Record<string, str
         data: {
           closedAt: new Date().toISOString(),
           cashCounted: String(totals["cash"] ?? 0),
-          eftposDeclared: String(totals["eftpos"] ?? totals["tyro_eftpos"] ?? totals["commbank_eftpos"] ?? 0),
+          eftposDeclared: String(totals["eftpos"] ?? totals["commbank_eftpos"] ?? 0),
           paymentTotals: JSON.stringify(totals),
           closingNotes,
         },

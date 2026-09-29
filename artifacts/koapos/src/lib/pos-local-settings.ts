@@ -108,15 +108,12 @@ export const POS_GRID_DEFAULTS: PosGridSettings = {
 export const INTEGRATION_PAYMENT_LABELS: Record<string, string> = {
   stripe_own:      "Stripe",
   commbank_eftpos: "CommBank EFTPOS",
-  tyro_eftpos:     "Tyro",
-  square_terminal: "Square Terminal",
   paypal:          "PayPal",
   afterpay:        "Afterpay",
   zip:             "Zip",
   klarna:          "Klarna",
   apple_wallet:    "Apple Wallet",
   google_pay:      "Google Pay",
-  wechat_alipay:   "WeChat / Alipay",
 };
 
 /**

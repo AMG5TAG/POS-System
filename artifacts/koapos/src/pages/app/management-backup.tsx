@@ -73,19 +73,16 @@ import { toast } from "sonner";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { useQueryClient } from "@tanstack/react-query";
-import { OneDriveIcon, NextcloudIcon } from "@/components/provider-icons";
+import { NextcloudIcon } from "@/components/provider-icons";
 
-type StorageType = "local" | "s3" | "gcs" | "sftp" | "onedrive" | "nextcloud";
+type StorageType = "local" | "sftp" | "nextcloud";
 
 const STORAGE_META: Record<
   StorageType,
   { label: string; icon: React.ComponentType<{ className?: string }> }
 > = {
   local: { label: "Local server", icon: HardDrive },
-  s3: { label: "Amazon S3", icon: Cloud },
-  gcs: { label: "Google Cloud Storage", icon: Cloud },
   sftp: { label: "SFTP server", icon: Server },
-  onedrive: { label: "OneDrive", icon: OneDriveIcon },
   nextcloud: { label: "Nextcloud", icon: NextcloudIcon },
 };
 
@@ -105,15 +102,6 @@ interface DestDraft {
   id: string;
   type: StorageType;
   directory: string;
-  bucket: string;
-  region: string;
-  accessKeyId: string;
-  secretAccessKey: string;
-  secretAccessKeySet: boolean;
-  projectId: string;
-  gcsBucket: string;
-  serviceAccountJson: string;
-  serviceAccountJsonSet: boolean;
   host: string;
   port: string;
   username: string;
@@ -128,15 +116,6 @@ function emptyDraft(type: StorageType): DestDraft {
     id: `new_${Math.random().toString(36).slice(2, 9)}`,
     type,
     directory: "",
-    bucket: "",
-    region: "",
-    accessKeyId: "",
-    secretAccessKey: "",
-    secretAccessKeySet: false,
-    projectId: "",
-    gcsBucket: "",
-    serviceAccountJson: "",
-    serviceAccountJsonSet: false,
     host: "",
     port: "22",
     username: "",
@@ -152,15 +131,6 @@ function toDraft(d: BackupStorageDestination): DestDraft {
     id: d.id,
     type: d.type,
     directory: d.directory ?? "",
-    bucket: d.bucket ?? "",
-    region: d.region ?? "",
-    accessKeyId: d.accessKeyId ?? "",
-    secretAccessKey: "",
-    secretAccessKeySet: d.secretAccessKeySet ?? false,
-    projectId: d.projectId ?? "",
-    gcsBucket: d.gcsBucket ?? "",
-    serviceAccountJson: "",
-    serviceAccountJsonSet: d.serviceAccountJsonSet ?? false,
     host: d.host ?? "",
     port: d.port != null ? String(d.port) : "22",
     username: d.username ?? "",
@@ -175,22 +145,13 @@ function draftToInput(d: DestDraft): BackupStorageDestinationInput {
   const base: BackupStorageDestinationInput = { id: d.id, type: d.type };
   if (d.type === "local") {
     if (d.directory) base.directory = d.directory;
-  } else if (d.type === "s3") {
-    if (d.bucket) base.bucket = d.bucket;
-    if (d.region) base.region = d.region;
-    if (d.accessKeyId) base.accessKeyId = d.accessKeyId;
-    if (d.secretAccessKey) base.secretAccessKey = d.secretAccessKey;
-  } else if (d.type === "gcs") {
-    if (d.projectId) base.projectId = d.projectId;
-    if (d.gcsBucket) base.gcsBucket = d.gcsBucket;
-    if (d.serviceAccountJson) base.serviceAccountJson = d.serviceAccountJson;
   } else if (d.type === "sftp") {
     if (d.host) base.host = d.host;
     if (d.port) base.port = Number(d.port);
     if (d.username) base.username = d.username;
     if (d.remotePath) base.remotePath = d.remotePath;
     if (d.password) base.password = d.password;
-  } else if (d.type === "onedrive" || d.type === "nextcloud") {
+  } else if (d.type === "nextcloud") {
     if (d.folder) base.folder = d.folder;
   }
   return base;
@@ -253,7 +214,7 @@ const SCHEDULE_FREQ_OPTIONS = [
 
 function destinationLabel(d: BackupStorageDestination): string {
   const base = STORAGE_META[d.type as StorageType]?.label ?? d.type;
-  const hint = d.bucket || d.gcsBucket || d.folder || d.directory || d.host || "";
+  const hint = d.folder || d.directory || d.host || "";
   return hint ? `${base} · ${hint}` : base;
 }
 
@@ -314,7 +275,7 @@ function BackupSchedulesCard({ destinations, passwordIsSet }: { destinations: Ba
           <div>
             <CardTitle className="flex items-center gap-2"><Clock className="h-5 w-5" /> Scheduled backups</CardTitle>
             <CardDescription>
-              Run several backups on different schedules and destinations — e.g. Daily → OneDrive and Monthly → S3.
+              Run several backups on different schedules and destinations — e.g. Daily → Nextcloud and Monthly → SFTP.
             </CardDescription>
           </div>
           <Button size="sm" variant="outline" onClick={openNew} disabled={!passwordIsSet}><Plus className="mr-1 h-4 w-4" /> Add schedule</Button>
@@ -365,7 +326,7 @@ function BackupSchedulesCard({ destinations, passwordIsSet }: { destinations: Ba
             <div className="space-y-4">
               <div className="space-y-2">
                 <Label>Name</Label>
-                <Input value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} placeholder="e.g. Nightly OneDrive" />
+                <Input value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} placeholder="e.g. Nightly Nextcloud" />
               </div>
               <div className="space-y-2">
                 <Label>Frequency</Label>
@@ -440,8 +401,8 @@ export function BackupSettingsPanel() {
   const triggerBackup = useTriggerBackup();
   const restoreBackup = useRestoreBackup();
 
-  // OneDrive and Nextcloud backups reuse the accounts connected on the Sync
-  // page rather than holding their own credentials on the destination.
+  // Nextcloud backups reuse the account connected on the Sync page rather
+  // than holding their own credentials on the destination.
   const { data: integrationsRaw } = useListIntegrations({
     query: { queryKey: ["integrations"] },
   });
@@ -450,8 +411,6 @@ export function BackupSettingsPanel() {
     status: string;
     accountHandle: string | null;
   }>;
-  const oneDrive = integrations.find((i) => i.key === "onedrive");
-  const oneDriveConnected = oneDrive?.status === "connected";
   const nextcloud = integrations.find((i) => i.key === "nextcloud");
   const nextcloudConnected = nextcloud?.status === "connected";
 
@@ -728,102 +687,6 @@ export function BackupSettingsPanel() {
                       </div>
                     )}
 
-                    {d.type === "s3" && (
-                      <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                        <div className="space-y-1">
-                          <Label className="text-xs">Bucket</Label>
-                          <Input
-                            value={d.bucket}
-                            onChange={(e) =>
-                              updateDraft(d.id, { bucket: e.target.value })
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Region</Label>
-                          <Input
-                            placeholder="ap-southeast-2"
-                            value={d.region}
-                            onChange={(e) =>
-                              updateDraft(d.id, { region: e.target.value })
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">Access Key ID</Label>
-                          <Input
-                            value={d.accessKeyId}
-                            onChange={(e) =>
-                              updateDraft(d.id, { accessKeyId: e.target.value })
-                            }
-                          />
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">
-                            Secret Access Key
-                            {d.secretAccessKeySet && (
-                              <span className="text-muted-foreground"> (set)</span>
-                            )}
-                          </Label>
-                          <Input
-                            type="password"
-                            placeholder={d.secretAccessKeySet ? "••••••••" : ""}
-                            value={d.secretAccessKey}
-                            onChange={(e) =>
-                              updateDraft(d.id, { secretAccessKey: e.target.value })
-                            }
-                          />
-                        </div>
-                      </div>
-                    )}
-
-                    {d.type === "gcs" && (
-                      <div className="space-y-3">
-                        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-                          <div className="space-y-1">
-                            <Label className="text-xs">Project ID</Label>
-                            <Input
-                              value={d.projectId}
-                              onChange={(e) =>
-                                updateDraft(d.id, { projectId: e.target.value })
-                              }
-                            />
-                          </div>
-                          <div className="space-y-1">
-                            <Label className="text-xs">Bucket</Label>
-                            <Input
-                              value={d.gcsBucket}
-                              onChange={(e) =>
-                                updateDraft(d.id, { gcsBucket: e.target.value })
-                              }
-                            />
-                          </div>
-                        </div>
-                        <div className="space-y-1">
-                          <Label className="text-xs">
-                            Service account JSON
-                            {d.serviceAccountJsonSet && (
-                              <span className="text-muted-foreground"> (set)</span>
-                            )}
-                          </Label>
-                          <Textarea
-                            rows={4}
-                            placeholder={
-                              d.serviceAccountJsonSet
-                                ? "•••••• (leave blank to keep)"
-                                : '{ "type": "service_account", ... }'
-                            }
-                            value={d.serviceAccountJson}
-                            onChange={(e) =>
-                              updateDraft(d.id, {
-                                serviceAccountJson: e.target.value,
-                              })
-                            }
-                          />
-                        </div>
-                      </div>
-                    )}
-
                     {d.type === "sftp" && (
                       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
                         <div className="space-y-1">
@@ -878,50 +741,6 @@ export function BackupSettingsPanel() {
                               updateDraft(d.id, { remotePath: e.target.value })
                             }
                           />
-                        </div>
-                      </div>
-                    )}
-
-                    {d.type === "onedrive" && (
-                      <div className="space-y-3">
-                        {oneDriveConnected ? (
-                          <div className="flex items-center gap-2 rounded-md bg-emerald-50 px-3 py-2 text-xs text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-300">
-                            <CheckCircle2 className="h-4 w-4 shrink-0" />
-                            <span>
-                              Using your connected OneDrive
-                              {oneDrive?.accountHandle
-                                ? ` (${oneDrive.accountHandle})`
-                                : ""}
-                              . Archives upload to its app folder.
-                            </span>
-                          </div>
-                        ) : (
-                          <div className="flex items-center justify-between gap-2 rounded-md bg-amber-50 px-3 py-2 text-xs text-amber-700 dark:bg-amber-900/30 dark:text-amber-300">
-                            <span>
-                              OneDrive isn't connected. Connect it to back up
-                              here.
-                            </span>
-                            <Link
-                              href="/management/settings-integrations/sync"
-                              className="font-medium underline shrink-0"
-                            >
-                              Connect
-                            </Link>
-                          </div>
-                        )}
-                        <div className="space-y-1">
-                          <Label className="text-xs">Sub-folder (optional)</Label>
-                          <Input
-                            placeholder="koapos-backups"
-                            value={d.folder}
-                            onChange={(e) =>
-                              updateDraft(d.id, { folder: e.target.value })
-                            }
-                          />
-                          <p className="text-muted-foreground text-[11px]">
-                            A folder inside the KoaPOS app folder in your
-                            OneDrive. Leave blank to use the app folder root.
-                          </p>
                         </div>
                       </div>
                     )}

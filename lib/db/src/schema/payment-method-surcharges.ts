@@ -3,6 +3,11 @@ import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod/v4";
 import { merchantsTable } from "./merchants";
 
+/*
+ * RETAINED, UNUSED: the payment-method Surcharges system was removed from the single-business install, but
+ * this table still holds data, so its definition stays — dropping it here
+ * would make `drizzle-kit push` offer to delete those rows. No code reads it.
+ */
 /**
  * Per-merchant, per-payment-method surcharge / cost-of-acceptance config.
  *
