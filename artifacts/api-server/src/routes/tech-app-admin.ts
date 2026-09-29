@@ -41,10 +41,11 @@ function formatSettings(s: typeof techAppSettingsTable.$inferSelect) {
   };
 }
 
-/** The public tech app URL for a merchant, or null when no username is set. */
+/** The public tech app URL (/a/tech), or null when no username is set — the app
+ *  still needs one to reach its API. /b/<username>/t/techapp keeps working. */
 export function buildTechAppUrl(req: Request, username: string | null): string | null {
   if (!username) return null;
-  return `https://${publicDomain(req)}/b/${username}/t/techapp`;
+  return `https://${publicDomain(req)}/a/tech`;
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */

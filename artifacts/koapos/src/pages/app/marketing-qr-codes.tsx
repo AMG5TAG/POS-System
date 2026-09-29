@@ -803,7 +803,7 @@ export default function MarketingQRCodesPage() {
         return {
           id,
           label: String(landingNames[id] || p.title || slug || "Untitled page"),
-          url:   `${publicOrigin()}/b/${username || "your-username"}/l/${slug}`,
+          url:   `${publicOrigin()}/l/${slug}`,
         };
       });
   }, [landingResponse, merchant, landingNames]);

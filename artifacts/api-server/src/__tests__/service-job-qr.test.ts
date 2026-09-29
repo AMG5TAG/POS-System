@@ -58,13 +58,13 @@ describe("GET /api/qr/j/:jobId", () => {
     h.rows = [[JOB], [MERCHANT]];
     const res = await request(app).get("/api/qr/j/7");
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe("https://pos.koastal.com.au/b/koastal/t/techapp?job=7");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/a/tech?job=7");
   });
 
   it("sends a completed job to the customer's portal", async () => {
     h.rows = [[{ ...JOB, status: "completed" }], [MERCHANT], [{ portalToken: "tok-123" }]];
     const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://pos.koastal.com.au/b/koastal/c/tok-123");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/c/tok-123");
   });
 
   it("prefers the merchant's own portal domain when they have one", async () => {
@@ -81,7 +81,7 @@ describe("GET /api/qr/j/:jobId", () => {
   it("falls back to the Tech App when a completed job has no portal to open", async () => {
     h.rows = [[{ ...JOB, status: "completed" }], [MERCHANT], [{ portalToken: null }]];
     const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://pos.koastal.com.au/b/koastal/t/techapp?job=7");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/a/tech?job=7");
   });
 
   it("falls back to the staff Service View when the merchant has no username", async () => {

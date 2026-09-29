@@ -120,6 +120,21 @@ accounts) and all of their data are still in the database.
   `.koapos.enc` backups (new ones are `.kkpos.enc`; restore follows stored refs,
   not extensions), and the `artifacts/koapos` package path. The Print Bridge
   reads a pre-rename `KoaPOS` config folder and `KOAPOS_BRIDGE_*` env vars.
+- **Short public addresses.** The current forms carry no business segment, and
+  the older ones still route (links and QR codes already handed out):
+  - customer portal `/c/<token>` (was `/b/<user>/c/<token>`) — `customerPortalUrl`;
+    `/portal/resolve-domain` answers the one business for any host that is not a
+    merchant's own custom portal domain;
+  - landing pages `/l/<name>` (was `/b/<user>/l/<name>`) — API
+    `/landing-pages/public/l/:customName`;
+  - Tech App `/a/tech`, Mobile POS `/a/mobile` (were `/b/<user>/t/techapp|posapp`)
+    — the apps still address their APIs by username, read from
+    `GET /public/business` (`lib/sole-business.ts`);
+  - dashboard `/d/dashboard/<access code>` (was `/d/<token>`). The code is the only
+    credential, so the owner may set their own (`PUT /dashboard-app/access-code`)
+    and the public route rate-limits wrong codes (20 / 15 min / IP).
+  `short-app-routes.test.ts`, `portal-url.test.ts` and `legacy-domain-redirect.test.ts`
+  pin these.
 - **Business username is fixed** at `koastal` (`/b/koastal/...` for the portal,
   Tech App, Mobile POS, booking and product QR pages). `PATCH /merchants/me`
   rejects a username change, because every printed sticker and sent portal
@@ -402,6 +417,23 @@ never the sum of the job's quotes. The panel revises a job's quote in place and
 only raises a new row once the last is converted or declined, so summing them
 would add a superseded price to the one that replaced it. The footer sums the
 rows actually on screen, so it follows the tab and the filters.
+
+### Linking a job or appointment to an invoice
+
+In the invoice editor, linking a service job or appointment also sets the
+invoice's customer and offers that customer's quote: the job's own quote, or for
+an appointment (quotes have no appointment link) the customer's latest one. Only
+`draft`/`sent`/`accepted` quotes are offered, as at the till. The prompt shows
+the lines and never replaces existing lines by default. Importing is not
+committing: the quote is marked converted only when the invoice saves.
+
+### Default customer image
+
+Customers with no photo show `customer_settings.defaultCustomerImageUrl`.
+"Apply to existing customers" (`POST /customer-settings/apply-default-image`)
+stamps it onto customers with no photo or still carrying the previous default —
+never over a photo set for one customer. iCloud contact sync sends each
+customer's photo, else the default, as the vCard PHOTO (skipped over 512 KB).
 
 ### Phone numbers
 

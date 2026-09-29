@@ -7,6 +7,7 @@ import crypto from "node:crypto";
 import { deflateSync } from "node:zlib";
 import forge from "node-forge";
 import { publicDomain } from "../lib/publicUrl";
+import { SOLE_MERCHANT_EMAIL } from "../lib/sole-merchant";
 import { applyEstimateApprovalToJob } from "../services/quoteApproval";
 import { resolvePortalAccess } from "../lib/portalAuth";
 import { normalisePhoneFor } from "../lib/phone";
@@ -230,12 +231,8 @@ function buildPortalUrl(opts: {
   if (merchantPortalDomain) {
     return `https://${merchantPortalDomain}/c/${customerPortalToken}`;
   }
-  const platformDomain = publicDomain(req);
-  if (merchantUsername) {
-    return `https://${platformDomain}/b/${merchantUsername}/c/${customerPortalToken}`;
-  }
-  // Fallback: legacy token-only path
-  return `https://${platformDomain}/portal/${customerPortalToken}`;
+  void merchantUsername; // the token alone identifies the customer
+  return `https://${publicDomain(req)}/c/${customerPortalToken}`;
 }
 
 // ── Routes ────────────────────────────────────────────────────────────────────
@@ -245,10 +242,15 @@ router.get("/portal/resolve-domain", async (req, res): Promise<void> => {
   const host = typeof req.query.host === "string" ? req.query.host.toLowerCase().trim() : null;
   if (!host) { res.status(400).json({ error: "host query param required" }); return; }
 
-  const [merchant] = await db
-    .select({ username: merchantsTable.username, businessName: merchantsTable.businessName })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.portalDomain, host));
+  // A merchant's own custom portal domain wins. Any other host reaching this
+  // server is one of ours (pos.koastal.com.au, the domain it moved from, a dev
+  // host), and they all serve the one business's portal at /c/<token>. Only the
+  // business name and username come back, both already public.
+  const cols = { username: merchantsTable.username, businessName: merchantsTable.businessName };
+  const [custom] = await db.select(cols).from(merchantsTable).where(eq(merchantsTable.portalDomain, host));
+  const [merchant] = custom
+    ? [custom]
+    : await db.select(cols).from(merchantsTable).where(eq(merchantsTable.email, SOLE_MERCHANT_EMAIL));
 
   if (!merchant) { res.status(404).json({ error: "Domain not found" }); return; }
   res.json({ username: merchant.username, businessName: merchant.businessName });

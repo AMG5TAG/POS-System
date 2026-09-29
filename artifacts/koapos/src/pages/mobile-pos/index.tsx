@@ -7,9 +7,10 @@ import {
   ShoppingCart, FileText, Package, Loader2, LogOut, Plus, Minus, Trash2,
   Search, X, Check, Banknote, CreditCard, User, Wrench, CalendarDays, Link2, Star,
 } from "lucide-react";
+import { useBusinessUsername } from "@/lib/sole-business";
 
 /**
- * Mobile POS web app — served at /b/:businessUsername/t/posapp.
+ * Mobile POS web app — served at /a/mobile (and the older /b/:businessUsername/t/posapp).
  * A staff member signs in with their PIN (scoped to the business); the session
  * unlocks only the /api/mobile-pos endpoints. Three tabs — Sell, Invoices,
  * Products — each gated by the merchant's Mobile POS settings.
@@ -49,8 +50,9 @@ const STATUS_CLASS: Record<string, string> = {
 };
 
 export default function MobilePosAppPage() {
+  // Current address is /a/mobile; /b/:username/t/posapp still works.
   const [, params] = useRoute("/b/:businessUsername/t/posapp");
-  const username = params?.businessUsername ?? "";
+  const username = useBusinessUsername(params?.businessUsername);
 
   const [phase, setPhase] = useState<"boot" | "login" | "app" | "no-business">("boot");
   const [business, setBusiness] = useState<Business | null>(null);
@@ -61,6 +63,7 @@ export default function MobilePosAppPage() {
 
   /* Boot: resolve existing session, else show login for this business. */
   useEffect(() => {
+    if (!username) return; // still resolving on the short /a/mobile address
     let active = true;
     (async () => {
       const me = await mpFetch<{ staff: StaffInfo; business: Business; settings: Settings }>("/me");

@@ -63,6 +63,27 @@ export default function ManagementDashboardAppPage() {
   const [sendMethod, setSendMethod] = useState<"email" | "sms">("email");
   const [sendTo, setSendTo] = useState("");
   const [sending, setSending] = useState(false);
+  const [accessCode, setAccessCode] = useState("");
+  const [savingCode, setSavingCode] = useState(false);
+
+  /* The code is the whole credential for this sign-in-free link, so changing it
+     immediately retires the old address everywhere it was shared. */
+  const saveAccessCode = async () => {
+    setSavingCode(true);
+    try {
+      const r = await api<{ url: string | null }>("/dashboard-app/access-code", {
+        method: "PUT",
+        body: JSON.stringify({ code: accessCode.trim() }),
+      });
+      setLink((cur) => ({ username: cur?.username ?? null, url: r.url }));
+      setAccessCode("");
+      toast.success("Access code saved — the old link no longer works");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSavingCode(false);
+    }
+  };
 
   const { data: staffData } = useListStaff();
   const staff = Array.isArray(staffData) ? staffData : [];
@@ -162,6 +183,25 @@ export default function ManagementDashboardAppPage() {
                 </Button>
               </div>
             )}
+
+            <div className="space-y-1.5">
+              <Label className="text-xs">Access code</Label>
+              <div className="flex items-center gap-2 flex-wrap">
+                <Input
+                  value={accessCode}
+                  onChange={(e) => setAccessCode(e.target.value.replace(/[^A-Za-z0-9-]/g, ""))}
+                  placeholder="Set your own code (6+ letters or numbers)"
+                  className="h-8 text-xs max-w-xs"
+                  noPhoneFormat
+                />
+                <Button size="sm" variant="outline" className="h-8 text-xs" onClick={() => void saveAccessCode()} disabled={accessCode.trim().length < 6 || savingCode}>
+                  {savingCode ? "Saving…" : "Save code"}
+                </Button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                The last part of the link. Anyone with it can view this dashboard, so a longer code is safer; repeated wrong codes are blocked.
+              </p>
+            </div>
 
             {!settings?.enabled && (
               <div className="flex items-start gap-2.5 rounded-lg border bg-muted/40 px-4 py-3 text-sm text-muted-foreground">

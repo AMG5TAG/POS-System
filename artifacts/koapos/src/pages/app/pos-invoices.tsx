@@ -11,6 +11,7 @@ import {
   getInvoicePdf, type Transaction,
   useListServiceJobs, useListAppointments,
   useGetInvoiceSettings, useGetPosSettings,
+  listQuotes, convertQuote, type Quote,
 } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useStaffSession } from "@/lib/staff-day-session";
@@ -90,6 +91,10 @@ type LineItem = { description: string; quantity: number; unitPrice: number; taxR
 type InvoiceEvent = { id?: string | null; type: string; timestamp: string; detail?: string; method?: string; amount?: number | null; reverses?: string | null };
 type Instalment = { label?: string | null; amount: number; dueDate?: string | null };
 type DiscountType = "fixed" | "percent";
+
+/* Quotes that can still become an invoice — mirrors IMPORTABLE_QUOTE_STATUSES at
+   the till. A converted quote is already paid for; declined/expired never agreed. */
+const INVOICE_IMPORTABLE_QUOTE_STATUSES = new Set(["draft", "sent", "accepted"]);
 type Invoice = {
   id: number;
   invoiceNumber: string;
@@ -370,8 +375,68 @@ export default function POSInvoicesPage() {
   const { data: linkServiceJobsData } = useListServiceJobs({ query: { queryKey: ["service-jobs-invoice-link"], enabled: !!linkDialogFor } });
   const { data: linkAppointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appointments-invoice-link"], enabled: !!linkDialogFor } });
   // Both endpoints return a plain array; tolerate an { items } envelope just in case.
-  type LinkServiceJob = { id: number; jobNumber: string; deviceType?: string | null; deviceDescription?: string | null; status?: string | null; customerName?: string | null };
-  type LinkAppointment = { id: number; title: string; scheduledAt?: string | null; status?: string | null; customerName?: string | null };
+  type LinkServiceJob = { id: number; jobNumber: string; deviceType?: string | null; deviceDescription?: string | null; status?: string | null; customerId?: number | null; customerName?: string | null };
+  type LinkAppointment = { id: number; title: string; scheduledAt?: string | null; status?: string | null; customerId?: number | null; customerName?: string | null };
+
+  /* Linking a job or appointment brings its customer onto the invoice, and offers
+     the quote the customer was given: the job's own quote, or — for an
+     appointment, which has none of its own — the customer's latest one. Only a
+     quote that could still be billed is offered (as at the till): a converted
+     one has been paid, and importing it again would bill the customer twice. */
+  const [quoteOffer, setQuoteOffer] = useState<{ quote: Quote; target: "create" | "edit"; source: string } | null>(null);
+  /* A quote imported into the open form. Importing is not committing: the quote
+     is marked converted only once the invoice actually saves, so abandoning the
+     form leaves it open for the next attempt (the till works the same way). */
+  const [importedQuoteId, setImportedQuoteId] = useState<{ create: number | null; edit: number | null }>({ create: null, edit: null });
+  const closeImportedQuote = async (target: "create" | "edit") => {
+    const id = importedQuoteId[target];
+    if (id == null) return;
+    setImportedQuoteId((q) => ({ ...q, [target]: null }));
+    try { await convertQuote(id, {}); } catch { /* the invoice is saved; the quote can be closed by hand */ }
+  };
+  const adoptLinkedCustomer = (target: "create" | "edit", customerId: number | null | undefined) => {
+    if (!customerId) return;
+    if (target === "create") setForm((f) => ({ ...f, customerId: String(customerId) }));
+    else setEditForm((f) => ({ ...f, customerId: String(customerId) }));
+  };
+  const offerLinkedQuote = async (
+    target: "create" | "edit",
+    lookup: { serviceJobId: number } | { customerId: number },
+    source: string,
+  ) => {
+    try {
+      const res = await listQuotes({ ...lookup, limit: 20 });
+      const quote = (res.items ?? []).find((q) => INVOICE_IMPORTABLE_QUOTE_STATUSES.has(q.status) && (q.items ?? []).length > 0);
+      if (quote) setQuoteOffer({ quote, target, source });
+    } catch { /* no offer — the invoice is keyed by hand as before */ }
+  };
+  const linkJobOrAppointment = (target: "create" | "edit", kind: "job" | "appointment", row: { id: number; customerId?: number | null; label: string }) => {
+    adoptLinkedCustomer(target, row.customerId);
+    if (kind === "job") void offerLinkedQuote(target, { serviceJobId: row.id }, row.label);
+    else if (row.customerId) void offerLinkedQuote(target, { customerId: row.customerId }, row.label);
+  };
+  /* Bring the quote's lines (and its whole-quote discount, which is part of the
+     agreed price) onto the invoice. `replace` swaps out the current lines; it is
+     only the default when there is nothing real to lose. */
+  const importQuoteToInvoice = (quote: Quote, target: "create" | "edit", replace: boolean) => {
+    const imported: LineItem[] = (quote.items ?? []).map((l) => ({
+      description: l.description,
+      quantity: l.quantity,
+      unitPrice: l.unitPrice,
+      taxRate: l.taxRate,
+      productId: l.productId ?? null,
+    }));
+    const setL = target === "create" ? setLines : setEditLines;
+    setL((cur) => (replace ? imported : [...cur.filter((l) => l.description.trim() || l.unitPrice), ...imported]));
+    const dType = quote.discountType === "percent" || quote.discountType === "fixed" ? quote.discountType : null;
+    if (dType && (quote.discountValue ?? 0) > 0) {
+      const d = { enabled: true, type: dType as DiscountType, value: String(quote.discountValue) };
+      if (target === "create") setDiscount(d); else setEditDiscount(d);
+    }
+    setImportedQuoteId((q) => ({ ...q, [target]: quote.id }));
+    toast.success(`Quote ${quote.quoteNumber} imported`);
+    setQuoteOffer(null);
+  };
   const asArray = <T,>(d: unknown): T[] =>
     Array.isArray(d) ? (d as T[]) : ((d as { items?: T[] } | undefined)?.items ?? []);
   const linkServiceJobs = asArray<LinkServiceJob>(linkServiceJobsData);
@@ -402,6 +467,7 @@ export default function POSInvoicesPage() {
         const entry = { id: sj.id, jobNumber: sj.jobNumber, label: `#${sj.jobNumber} · ${sj.deviceType || sj.deviceDescription || "Service"}` };
         if (linkDialogFor === "create") { setCreateLinkedServiceJob(entry); setCreateLinkedAppointment(null); }
         else { setEditLinkedServiceJob(entry); setEditLinkedAppointment(null); }
+        if (linkDialogFor) linkJobOrAppointment(linkDialogFor, "job", { id: sj.id, customerId: sj.customerId, label: `Service job #${sj.jobNumber}` });
         setLinkDialogFor(null);
       }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
         <Wrench className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -421,6 +487,7 @@ export default function POSInvoicesPage() {
         const entry = { id: apt.id, title: apt.title, label: apt.title };
         if (linkDialogFor === "create") { setCreateLinkedAppointment(entry); setCreateLinkedServiceJob(null); }
         else { setEditLinkedAppointment(entry); setEditLinkedServiceJob(null); }
+        if (linkDialogFor) linkJobOrAppointment(linkDialogFor, "appointment", { id: apt.id, customerId: apt.customerId, label: apt.title || `Appointment #${apt.id}` });
         setLinkDialogFor(null);
       }} className={`w-full text-left px-3 py-2.5 hover:bg-muted text-sm flex items-center gap-2 transition-colors ${isSelected ? "bg-primary/10 text-primary" : ""}`}>
         <CalendarDays className="w-3.5 h-3.5 shrink-0 text-muted-foreground" />
@@ -806,6 +873,7 @@ export default function POSInvoicesPage() {
     setEditLineDropOpen(items.map(() => false));
     setEditDiscount(newDiscount);
     editInitialRef.current = { form: newForm, lines: items, discount: newDiscount, recurring: newRecurring, schedule: newSchedule };
+    setImportedQuoteId((q) => ({ ...q, edit: null }));
     setEditOpen(true);
   };
 
@@ -841,6 +909,7 @@ export default function POSInvoicesPage() {
         } as Parameters<typeof updateInvoiceMutation.mutateAsync>[0]["data"],
       }) as unknown as Invoice;
       queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(updated.id) });
+      await closeImportedQuote("edit");
       toast.success("Invoice updated");
       setEditOpen(false);
       invalidateInvoices();
@@ -865,6 +934,7 @@ export default function POSInvoicesPage() {
     setDiscount({ enabled: false, type: "percent", value: "" });
     setCreateLinkedServiceJob(null);
     setCreateLinkedAppointment(null);
+    setImportedQuoteId((q) => ({ ...q, create: null }));
   };
 
   /* ── Create invoice ── */
@@ -907,6 +977,7 @@ export default function POSInvoicesPage() {
         }),
       };
       const created = await createInvoiceMutation.mutateAsync({ data: body as Parameters<typeof createInvoiceMutation.mutateAsync>[0]["data"] }) as unknown as Invoice;
+      await closeImportedQuote("create");
       setCreateOpen(false);
       resetCreate();
       invalidateInvoices();
@@ -2958,6 +3029,50 @@ export default function POSInvoicesPage() {
         </DialogContent>
       </Dialog>
 
+      {/* ── Quote offer (after linking a job / appointment) ── */}
+      <Dialog open={!!quoteOffer} onOpenChange={(o) => { if (!o) setQuoteOffer(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Import quote {quoteOffer?.quote.quoteNumber}?</DialogTitle>
+          </DialogHeader>
+          {quoteOffer && (() => {
+            const q = quoteOffer.quote;
+            const current = quoteOffer.target === "create" ? lines : editLines;
+            const hasLines = current.some((l) => l.description.trim() || l.unitPrice);
+            return (
+              <div className="space-y-3">
+                <p className="text-sm text-muted-foreground">
+                  {quoteOffer.source} · {(q.items ?? []).length} line{(q.items ?? []).length === 1 ? "" : "s"} · {q.status} ·{" "}
+                  <span className="font-medium text-foreground">{formatCurrency(q.total)}</span>
+                </p>
+                <ul className="text-sm rounded-md border divide-y">
+                  {(q.items ?? []).slice(0, 5).map((l, idx) => (
+                    <li key={idx} className="flex justify-between gap-3 px-3 py-1.5">
+                      <span className="truncate">{l.quantity} × {l.description}</span>
+                      <span className="tabular-nums shrink-0">{formatCurrency(l.unitPrice * l.quantity)}</span>
+                    </li>
+                  ))}
+                  {(q.items ?? []).length > 5 && (
+                    <li className="px-3 py-1.5 text-xs text-muted-foreground">+{(q.items ?? []).length - 5} more</li>
+                  )}
+                </ul>
+                {hasLines && (
+                  <p className="text-xs text-muted-foreground">This invoice already has lines. “Add” keeps them; “Replace” removes them.</p>
+                )}
+                <div className="flex flex-wrap justify-end gap-2 pt-1">
+                  <Button variant="ghost" onClick={() => setQuoteOffer(null)}>Not now</Button>
+                  <Button variant={hasLines ? "outline" : "default"} onClick={() => importQuoteToInvoice(q, quoteOffer.target, true)}>
+                    {hasLines ? "Replace lines" : "Import quote"}
+                  </Button>
+                  {hasLines && (
+                    <Button onClick={() => importQuoteToInvoice(q, quoteOffer.target, false)}>Add to invoice</Button>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

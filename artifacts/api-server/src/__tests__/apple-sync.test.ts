@@ -37,6 +37,22 @@ describe("customerToVCard", () => {
     const v = customerToVCard({ ...baseCustomer, firstName: null, lastName: null } as CustomerArg);
     expect(v).toContain("FN:sarah@example.com");
   });
+
+  it("embeds a photo as folded base64 that unfolds back to the same bytes", () => {
+    const bytes = Buffer.alloc(300, 7);
+    const v = customerToVCard(baseCustomer, null, { bytes, contentType: "image/png" });
+    const lines = v.split("\r\n");
+    const start = lines.findIndex((l) => l.startsWith("PHOTO;ENCODING=b;TYPE=PNG:"));
+    expect(start).toBeGreaterThan(-1);
+    for (const l of lines) expect(l.length).toBeLessThanOrEqual(75);
+    let joined = lines[start]!;
+    for (let k = start + 1; lines[k]?.startsWith(" "); k++) joined += lines[k]!.slice(1);
+    expect(Buffer.from(joined.split(":")[1]!, "base64").equals(bytes)).toBe(true);
+  });
+
+  it("carries no PHOTO line when there is no photo", () => {
+    expect(customerToVCard(baseCustomer)).not.toContain("PHOTO");
+  });
 });
 
 describe("generateIcs method option", () => {

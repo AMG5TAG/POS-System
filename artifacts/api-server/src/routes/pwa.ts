@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, merchantsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
+import { SOLE_MERCHANT_EMAIL } from "../lib/sole-merchant";
 
 /**
  * Per-app web app manifest.
@@ -35,6 +36,8 @@ type AppRoute = {
   re: RegExp;
   /** Whether capture group 1 is a business username (vs. an opaque token). */
   hasUsername: boolean;
+  /** Brand with the one business this install runs (lib/sole-merchant.ts). */
+  soleBusiness?: boolean;
   /** Appended to the business name, e.g. "Acme Repairs Tech". */
   suffix: string;
   /** Used when there is no business to brand with. */
@@ -51,6 +54,11 @@ const APP_ROUTES: AppRoute[] = [
   { re: /^\/b\/([^/]+)\/c\/[^/]+$/, hasUsername: true, suffix: "", fallbackName: "KK POS", themeColor: PORTAL_THEME },
   { re: /^\/c\/[^/]+$/, hasUsername: false, suffix: "", fallbackName: "KK POS", themeColor: PORTAL_THEME },
   { re: /^\/d\/[^/]+$/, hasUsername: false, suffix: "Dashboard", fallbackName: "KK POS Dashboard", themeColor: DEFAULT_THEME },
+  { re: /^\/d\/dashboard\/[^/]+$/, hasUsername: false, suffix: "Dashboard", fallbackName: "KK POS Dashboard", themeColor: DEFAULT_THEME },
+  // The short staff-app addresses carry no username; they brand with the one
+  // business this install runs.
+  { re: /^\/a\/tech$/, hasUsername: false, soleBusiness: true, suffix: "Tech", fallbackName: "KK POS Tech", themeColor: DEFAULT_THEME },
+  { re: /^\/a\/mobile$/, hasUsername: false, soleBusiness: true, suffix: "POS", fallbackName: "KK POS POS", themeColor: DEFAULT_THEME },
 ];
 
 /**
@@ -92,6 +100,14 @@ async function findActiveMerchant(username: string) {
   return m && m.status === "active" ? m : null;
 }
 
+async function findSoleMerchant() {
+  const [m] = await db
+    .select({ businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
+    .from(merchantsTable)
+    .where(eq(merchantsTable.email, SOLE_MERCHANT_EMAIL));
+  return m ?? null;
+}
+
 type Icon = { src: string; sizes: string; type?: string; purpose: string };
 
 /* Root-relative icon/start URLs resolve against this endpoint's origin, which
@@ -127,7 +143,9 @@ router.get("/pwa/manifest.webmanifest", async (req, res): Promise<void> => {
     themeColor = route.themeColor;
     name = route.fallbackName;
 
-    const merchant = username ? await findActiveMerchant(username) : null;
+    const merchant = username
+      ? await findActiveMerchant(username)
+      : route.soleBusiness ? await findSoleMerchant() : null;
     if (merchant) {
       name = route.suffix ? `${merchant.businessName} ${route.suffix}` : merchant.businessName;
       logoUrl = merchant.logoUrl ?? null;

@@ -65,11 +65,14 @@ function formatSettings(s: typeof dashboardAppSettingsTable.$inferSelect) {
   };
 }
 
-/** The public Dashboard app URL, addressed by an unguessable token (not the
- *  guessable business username). Null when no token has been generated. */
+/** The public Dashboard app URL, /d/dashboard/<access code>. The code is the
+ *  only thing between a visitor and the data, so it defaults to a random
+ *  48-char token; an owner can choose their own (see PUT /dashboard-app/access-code),
+ *  and wrong guesses are rate-limited on the public route. The older /d/<code>
+ *  form still resolves. Null when no code has been generated. */
 export function buildDashboardUrl(req: Request, token: string | null): string | null {
   if (!token) return null;
-  return `https://${publicDomain(req)}/d/${token}`;
+  return `https://${publicDomain(req)}/d/dashboard/${encodeURIComponent(token)}`;
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */
@@ -122,6 +125,32 @@ router.get("/dashboard-app/link", requireAuth, async (req, res): Promise<void> =
     username: merchant?.username ?? null,
     url: buildDashboardUrl(req, settings.publicToken),
   });
+});
+
+/* ── Access code ─────────────────────────────────────────────────────── */
+
+// Letters, digits and hyphens: it sits in a URL path segment. Six characters is
+// the floor; the public route's attempt limit is what makes a short code viable.
+const AccessCodeBody = z.object({ code: z.string().trim().regex(/^[A-Za-z0-9-]{6,64}$/) });
+
+router.put("/dashboard-app/access-code", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const parsed = AccessCodeBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "Use 6–64 letters, numbers or hyphens." });
+    return;
+  }
+  await getOrCreateSettings(req.session.merchantId!);
+  try {
+    const [updated] = await db
+      .update(dashboardAppSettingsTable)
+      .set({ publicToken: parsed.data.code })
+      .where(eq(dashboardAppSettingsTable.merchantId, req.session.merchantId!))
+      .returning();
+    res.json({ url: buildDashboardUrl(req, updated!.publicToken) });
+  } catch {
+    // public_token is unique across the table.
+    res.status(409).json({ error: "That code is already in use — choose another." });
+  }
 });
 
 /* ── Send Link (email / SMS) ─────────────────────────────────────────── */

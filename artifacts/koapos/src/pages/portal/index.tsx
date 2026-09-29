@@ -172,10 +172,8 @@ const APPT_COLORS: Record<string, string> = {
 /* ── Loyalty Tab ────────────────────────────────────────────────────────────── */
 
 function LoyaltyTab({ data, token, businessUsername }: { data: PortalData; token: string; businessUsername: string | undefined }) {
-  // On custom domains businessUsername is absent; the current URL is already canonical.
-  const portalUrl = businessUsername
-    ? `${window.location.origin}/b/${businessUsername}/c/${token}`
-    : `${window.location.origin}/c/${token}`;
+  // The short address is canonical whichever form the customer arrived on.
+  const portalUrl = `${window.location.origin}/c/${token}`;
   const [copied, setCopied] = useState(false);
   const [walletLoading, setWalletLoading] = useState<"apple" | "google" | null>(null);
   const qrRef = useRef<SVGSVGElement>(null);

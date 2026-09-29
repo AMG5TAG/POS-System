@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { recordMarketingEvent } from "../lib/marketingEvents";
+import { SOLE_MERCHANT_EMAIL } from "../lib/sole-merchant";
 
 const PostLandingPage = z.object({
   pageId: z.string().min(1),
@@ -50,27 +51,36 @@ router.get("/landing-pages/public/:slug", async (req, res): Promise<void> => {
   res.json(row);
 });
 
-// Resolve a landing page by business username + custom name (public, no auth):
-//   /b/:username/l/:customName  →  https://pos.koastal.com.au/b/USERNAME/l/CUSTOMNAME
-// `/a/` is kept as a backward-compatible alias for previously shared links.
-router.get(["/landing-pages/public/b/:username/l/:customName", "/landing-pages/public/b/:username/a/:customName"], async (req, res): Promise<void> => {
-  const username = String(req.params.username || "").trim().toLowerCase();
-  const customName = String(req.params.customName || "").trim();
-  if (!username || !customName) { res.status(404).json({ error: "Not found" }); return; }
-
-  const [merchant] = await db
-    .select({ id: merchantsTable.id })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.username, username))
-    .limit(1);
-  if (!merchant) { res.status(404).json({ error: "Not found" }); return; }
-
+/** A merchant's published landing page by its custom name, or null. */
+async function findPublicPage(where: ReturnType<typeof eq>, customName: string) {
+  const [merchant] = await db.select({ id: merchantsTable.id }).from(merchantsTable).where(where).limit(1);
+  if (!merchant) return null;
   const [row] = await db
     .select()
     .from(landingPagesTable)
     .where(and(eq(landingPagesTable.merchantId, merchant.id), eq(landingPagesTable.slug, customName)))
     .limit(1);
-  if (!row || row.isTemplate === "true") { res.status(404).json({ error: "Not found" }); return; }
+  return row && row.isTemplate !== "true" ? row : null;
+}
+
+// Resolve a landing page by custom name (public, no auth) — the current address:
+//   /l/:customName  →  https://pos.koastal.com.au/l/CUSTOMNAME
+// It belongs to the one business this install runs (lib/sole-merchant.ts).
+router.get("/landing-pages/public/l/:customName", async (req, res): Promise<void> => {
+  const customName = String(req.params.customName || "").trim();
+  const row = customName ? await findPublicPage(eq(merchantsTable.email, SOLE_MERCHANT_EMAIL), customName) : null;
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
+  recordMarketingEvent(req, { merchantId: row.merchantId, kind: "landing", targetId: row.id, targetSlug: row.slug });
+  res.json(row);
+});
+
+// The older form, by business username + custom name — kept for links and QR
+// codes already shared: /b/:username/l/:customName, and `/a/` before that.
+router.get(["/landing-pages/public/b/:username/l/:customName", "/landing-pages/public/b/:username/a/:customName"], async (req, res): Promise<void> => {
+  const username = String(req.params.username || "").trim().toLowerCase();
+  const customName = String(req.params.customName || "").trim();
+  const row = username && customName ? await findPublicPage(eq(merchantsTable.username, username), customName) : null;
+  if (!row) { res.status(404).json({ error: "Not found" }); return; }
   recordMarketingEvent(req, { merchantId: row.merchantId, kind: "landing", targetId: row.id, targetSlug: row.slug });
   res.json(row);
 });

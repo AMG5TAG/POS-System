@@ -816,13 +816,7 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
     token = crypto.randomUUID();
     await db.update(customersTable).set({ portalToken: token }).where(eq(customersTable.id, customer.id));
   }
-  const [merchant] = await db.select({ username: merchantsTable.username })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.id, req.session.merchantId!));
-  const origin = publicOrigin(req);
-  const username = merchant?.username;
-  const portalPath = username ? `/b/${username}/c/${token}` : `/portal/${token}`;
-  res.json({ token, portalUrl: `${origin}${portalPath}` });
+  res.json({ token, portalUrl: `${publicOrigin(req)}/c/${token}` });
 });
 
 /* ─── Shared merge helper ─────────────────────────────────────────────────── */

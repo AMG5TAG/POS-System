@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "sonner";
 import { Link2, Copy, Check, Loader2, ShieldCheck } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
+import { publicOrigin } from "@/lib/public-url";
 
 function CustomerPortalCard({ merchant }: { merchant: { username?: string | null; portalDomain?: string | null } | null }) {
   const qc = useQueryClient();
@@ -16,11 +17,8 @@ function CustomerPortalCard({ merchant }: { merchant: { username?: string | null
   const [saving, setSaving] = useState(false);
   const [copied, setCopied] = useState(false);
 
-  const platformDomain = window.location.hostname;
-  const username = merchant?.username;
-  const platformUrl = username
-    ? `https://${platformDomain}/b/${username}/c/[customer-code]`
-    : `https://${platformDomain}/b/[your-username]/c/[customer-code]`;
+  const platformDomain = new URL(publicOrigin()).host;
+  const platformUrl = `${publicOrigin()}/c/[customer-code]`;
 
   const handleSaveDomain = async () => {
     setSaving(true);
@@ -68,9 +66,6 @@ function CustomerPortalCard({ merchant }: { merchant: { username?: string | null
               {copied ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
             </button>
           </div>
-          {!username && (
-            <p className="text-xs text-amber-600">Set a username in Business Info to activate your portal URL.</p>
-          )}
         </div>
 
         {/* Custom domain */}

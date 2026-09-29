@@ -12,26 +12,32 @@ type PublicLandingPage = LandingPage & {
 };
 
 export default function LandingPagePublicView() {
-  // Two public URL shapes resolve to the same page:
-  //   /b/:businessUsername/l/:customName   (preferred; `/a/` is a legacy alias)
-  //   /p/:slug   (legacy)
+  // Public URL shapes that resolve to the same page:
+  //   /l/:customName                        (current — the one business's page)
+  //   /b/:businessUsername/l/:customName    (older; `/a/` is a legacy alias)
+  //   /p/:slug                              (legacy)
   const params = useParams<{ slug?: string; businessUsername?: string; customName?: string }>();
   const slug = params.slug ?? "";
   const byHandle = !!(params.businessUsername && params.customName);
-  const displayPath = byHandle ? `/b/${params.businessUsername}/l/${params.customName}` : `/p/${slug}`;
+  const byName = !byHandle && !!params.customName;
+  const displayPath = byHandle || byName ? `/l/${params.customName}` : `/p/${slug}`;
 
   const { data: row, isLoading, isError } = useQuery<PublicLandingPage>({
     queryKey: byHandle
       ? ["landing-public", "b", params.businessUsername, params.customName]
-      : ["landing-public", "p", slug],
+      : byName
+        ? ["landing-public", "l", params.customName]
+        : ["landing-public", "p", slug],
     queryFn: () =>
       customFetch<PublicLandingPage>(
         byHandle
           ? `/api/landing-pages/public/b/${encodeURIComponent(params.businessUsername!)}/l/${encodeURIComponent(params.customName!)}`
-          : `/api/landing-pages/public/${encodeURIComponent(slug)}`,
+          : byName
+            ? `/api/landing-pages/public/l/${encodeURIComponent(params.customName!)}`
+            : `/api/landing-pages/public/${encodeURIComponent(slug)}`,
         { method: "GET" },
       ),
-    enabled: byHandle || !!slug,
+    enabled: byHandle || byName || !!slug,
   });
 
   const links: LandingPageLink[] = (() => {

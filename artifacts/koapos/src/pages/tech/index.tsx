@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { cn, telHref } from "@/lib/utils";
 import { setHomeScreenApp } from "@/lib/home-screen";
+import { useBusinessUsername } from "@/lib/sole-business";
 
 /**
  * Tech App — mobile companion for technicians.
@@ -1180,11 +1181,11 @@ function AppointmentsTab() {
 /* ── Root page ───────────────────────────────────────────────────────── */
 
 export default function TechAppPage() {
-  // Canonical route is /t/techapp; /t/webapp is kept as a legacy alias so
-  // already-printed service-ticket QR codes keep resolving.
+  // Current address is /a/tech. /b/:username/t/techapp and the older /t/webapp
+  // are kept so already-printed service-ticket QR codes keep resolving.
   const [, techParams] = useRoute("/b/:businessUsername/t/techapp");
   const [, legacyParams] = useRoute("/b/:businessUsername/t/webapp");
-  const username = techParams?.businessUsername ?? legacyParams?.businessUsername ?? "";
+  const username = useBusinessUsername(techParams?.businessUsername ?? legacyParams?.businessUsername);
 
   const [phase, setPhase] = useState<"boot" | "login" | "app" | "no-business">("boot");
   const [business, setBusiness] = useState<TechBusiness | null>(null);

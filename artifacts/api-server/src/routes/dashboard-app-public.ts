@@ -5,6 +5,7 @@ import {
   dashboardNotesTable, customersTable,
 } from "@workspace/db";
 import { eq, and, gte, lte, lt, ne, notInArray, desc, sql } from "drizzle-orm";
+import rateLimit from "express-rate-limit";
 import { customerDisplayName } from "../lib/customer-name";
 
 /**
@@ -17,9 +18,21 @@ import { customerDisplayName } from "../lib/customer-name";
 
 const router: IRouter = Router();
 
+/* The access code is the only credential, and an owner may choose a short one.
+   Wrong codes are limited per IP so a code can't be found by trying them all;
+   a screen that has the right code auto-refreshes freely (successes are free). */
+const badCodeLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  limit: 20,
+  skipSuccessfulRequests: true,
+  standardHeaders: "draft-7",
+  legacyHeaders: false,
+  message: { error: "Too many attempts. Try again later." },
+});
+
 const FINISHED = ["completed", "cancelled"];
 
-router.get("/public/dashboard/:token", async (req, res): Promise<void> => {
+router.get("/public/dashboard/:token", badCodeLimiter, async (req, res): Promise<void> => {
   const token = String(req.params.token || "").trim();
   if (!token) { res.status(404).json({ error: "Not found" }); return; }
 

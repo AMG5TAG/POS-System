@@ -36,10 +36,11 @@ function formatSettings(s: typeof mobilePosAppSettingsTable.$inferSelect) {
   };
 }
 
-/** The public Mobile POS URL for a merchant, or null when no username is set. */
+/** The public Mobile POS URL (/a/mobile), or null when no username is set — the
+ *  app still needs one to reach its API. /b/<username>/t/posapp keeps working. */
 export function buildMobilePosUrl(req: Request, username: string | null): string | null {
   if (!username) return null;
-  return `https://${publicDomain(req)}/b/${username}/t/posapp`;
+  return `https://${publicDomain(req)}/a/mobile`;
 }
 
 /* ── Settings ────────────────────────────────────────────────────────── */

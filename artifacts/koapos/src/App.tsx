@@ -203,7 +203,7 @@ const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/staff-r
 setOnUnauthorized(() => {
   queryClient.clear();
   const path = window.location.pathname;
-  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/") || path.startsWith("/c/") || path.startsWith("/book/"));
+  const isPublic = PUBLIC_PATHS.some((p) => path === p || path.startsWith("/b/") || path.startsWith("/c/") || path.startsWith("/l/") || path.startsWith("/p/") || path.startsWith("/d/") || path.startsWith("/a/") || path.startsWith("/book/"));
   if (!isPublic) {
     window.location.replace("/login");
   }
@@ -326,11 +326,20 @@ function Router() {
       <Route path="/b/:businessUsername/c/:token">
         <PublicRoute component={PortalPage} />
       </Route>
+      <Route path="/a/tech">
+        <PublicRoute component={TechAppPage} />
+      </Route>
+      <Route path="/a/mobile">
+        <PublicRoute component={MobilePosAppPage} />
+      </Route>
       <Route path="/b/:businessUsername/t/techapp">
         <PublicRoute component={TechAppPage} />
       </Route>
       <Route path="/b/:businessUsername/t/webapp">
         <PublicRoute component={TechAppPage} />
+      </Route>
+      <Route path="/d/dashboard/:token">
+        <PublicRoute component={DashboardAppPage} />
       </Route>
       <Route path="/d/:token">
         <PublicRoute component={DashboardAppPage} />
@@ -768,9 +777,10 @@ function Router() {
         <ProtectedRoute component={SettingsPage} />
       </Route>
 
-      {/* Public landing pages (no auth required). `/l/` is the current segment;
-          `/a/` is kept as a backward-compatible alias for links/QR codes that
-          were already shared before the change. */}
+      {/* Public landing pages (no auth required). `/l/:customName` is the current
+          address; the `/b/:username/l/` and `/a/` forms are kept for links and
+          QR codes that were already shared before the change. */}
+      <Route path="/l/:customName" component={LandingPagePublicView} />
       <Route path="/b/:businessUsername/l/:customName" component={LandingPagePublicView} />
       <Route path="/b/:businessUsername/a/:customName" component={LandingPagePublicView} />
       <Route path="/p/:slug" component={LandingPagePublicView} />

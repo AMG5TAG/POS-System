@@ -61,8 +61,10 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
 }
 
 export default function DashboardAppPage() {
-  const [, params] = useRoute("/d/:token");
-  const token = params?.token ?? "";
+  // /d/dashboard/<code> is the current address; /d/<code> the older one.
+  const [, current] = useRoute("/d/dashboard/:token");
+  const [, legacy] = useRoute("/d/:token");
+  const token = current?.token ?? legacy?.token ?? "";
 
   const [snap, setSnap] = useState<Snapshot | null>(null);
   const [status, setStatus] = useState<"loading" | "ok" | "disabled" | "notfound" | "error">("loading");

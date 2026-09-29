@@ -9,13 +9,46 @@
  * validating the provider key they are handed.
  */
 import type { Logger } from "pino";
-import { db, customersTable, customerNotesTable, appointmentsTable, contactSyncLinksTable, oauthTokenVaultTable } from "@workspace/db";
+import { db, customersTable, customerNotesTable, customerSettingsTable, appointmentsTable, contactSyncLinksTable, oauthTokenVaultTable } from "@workspace/db";
 import { eq, and, desc, gte } from "drizzle-orm";
 import { formatAddressParts } from "../lib/address";
 import { readCredentialVault } from "./tokenVault";
-import { customerToVCard, appleContactUid } from "./vcardGenerator";
+import { customerToVCard, appleContactUid, type VCardPhoto } from "./vcardGenerator";
+import { ObjectStorageService } from "../lib/objectStorage";
 import { generateIcs } from "./icsGenerator";
 import { openAppleCalendar, openAppleContacts, type AppleCreds } from "./appleDav";
+
+const objectStorage = new ObjectStorageService();
+
+/* A photo bigger than this is left off the contact rather than sent: iCloud
+   rejects oversized cards, and uploads are already resized in the browser. */
+const MAX_CONTACT_PHOTO_BYTES = 512 * 1024;
+
+/* Read a customer photo — our object storage (/api/storage/objects/...) or an
+   external URL. Null on any failure, so a broken photo never breaks the sync. */
+async function readPhotoBytes(photoUrl: string): Promise<VCardPhoto | null> {
+  try {
+    let bytes: Buffer;
+    let contentType: string;
+    if (/^https?:\/\//i.test(photoUrl)) {
+      const r = await fetch(photoUrl);
+      if (!r.ok) return null;
+      bytes = Buffer.from(await r.arrayBuffer());
+      contentType = r.headers.get("content-type") || "image/jpeg";
+    } else {
+      const objectPath = photoUrl.replace(/^\/api\/storage/, "");
+      if (!objectPath.startsWith("/objects/")) return null;
+      const file = await objectStorage.getObjectEntityFile(objectPath);
+      [bytes] = await file.download();
+      const [md] = await file.getMetadata().catch(() => [{ contentType: "image/jpeg" }] as const);
+      contentType = (md as { contentType?: string }).contentType || "image/jpeg";
+    }
+    if (!contentType.startsWith("image/") || bytes.length > MAX_CONTACT_PHOTO_BYTES) return null;
+    return { bytes, contentType };
+  } catch {
+    return null;
+  }
+}
 
 export type SyncProvider = "apple_icloud";
 export type DuplicateStrategy = "overwrite" | "skip";
@@ -174,10 +207,24 @@ async function syncAppleContacts(merchantId: number, opts: ContactSyncOptions, l
 
   const book = await openAppleContacts(creds);
 
+  /* Each contact carries the customer's own photo, else the merchant's default
+     customer image — the same fallback the app shows. Loaded once per URL. */
+  const [settings] = await db
+    .select({ defaultImage: customerSettingsTable.defaultCustomerImageUrl })
+    .from(customerSettingsTable)
+    .where(eq(customerSettingsTable.merchantId, merchantId));
+  const defaultImage = settings?.defaultImage?.trim() ?? "";
+  const photos = new Map<string, Promise<VCardPhoto | null>>();
+  const photoFor = (url: string) => {
+    if (!photos.has(url)) photos.set(url, readPhotoBytes(url));
+    return photos.get(url)!;
+  };
+
   let created = 0, updated = 0, failed = 0, notesSynced = 0;
   for (const c of customers) {
     const noteText = includeNotes ? (notesByCustomer.get(c.id) ?? "") : "";
-    const vcard = customerToVCard(c, noteText);
+    const photoUrl = c.photoUrl?.trim() || defaultImage;
+    const vcard = customerToVCard(c, noteText, photoUrl ? await photoFor(photoUrl) : null);
     try {
       const { href } = await book.putContact(`${appleContactUid(c.id)}.vcf`, vcard);
       if (linkedCustomerIds.has(c.id)) updated++; else created++;

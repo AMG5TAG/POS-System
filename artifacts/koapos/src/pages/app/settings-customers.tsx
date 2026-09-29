@@ -150,6 +150,39 @@ type MergeProgress = {
 export default function SettingsCustomersPage() {
   const { settings, save } = useCustomerSettings();
   const queryClient = useQueryClient();
+
+  /* Default customer image → existing customers. Customers with no photo already
+     show the default; applying stamps it on as their own photo so it travels with
+     them (exports, iCloud contacts). The previous default is remembered so a
+     customer still carrying it is updated too; a customer's own photo never is. */
+  const [applyImageOpen, setApplyImageOpen] = useState(false);
+  const [previousDefaultImage, setPreviousDefaultImage] = useState("");
+  const [applyingImage, setApplyingImage] = useState(false);
+  const changeDefaultImage = (url: string) => {
+    setPreviousDefaultImage(settings.defaultCustomerImageUrl ?? "");
+    save({ defaultCustomerImageUrl: url });
+    if (url) setApplyImageOpen(true);
+  };
+  const applyDefaultImage = async () => {
+    setApplyingImage(true);
+    try {
+      const r = await fetch("/api/customer-settings/apply-default-image", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ previousUrl: previousDefaultImage }),
+      });
+      const data = await r.json().catch(() => ({}));
+      if (!r.ok) throw new Error(data.error ?? "Couldn't update customers");
+      toast.success(`Default image applied to ${data.updated} customer${data.updated === 1 ? "" : "s"}`);
+      void queryClient.invalidateQueries();
+      setApplyImageOpen(false);
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setApplyingImage(false);
+    }
+  };
   const { data: customersData } = useListCustomers(
     { limit: 1000 },
     { query: { queryKey: ["customers-settings"] } }
@@ -594,14 +627,21 @@ export default function SettingsCustomersPage() {
                 <div className="w-24 shrink-0">
                   <ImageUploader
                     value={settings.defaultCustomerImageUrl}
-                    onChange={(url) => save({ defaultCustomerImageUrl: url })}
+                    onChange={changeDefaultImage}
                     aspectRatio="square"
                   />
                 </div>
-                <p className="text-xs text-muted-foreground pt-1 max-w-xs">
-                  Fallback avatar shown for customers who don't have their own photo. Drop or click to upload an
-                  image, or use the URL option to link an external image.
-                </p>
+                <div className="space-y-2 pt-1 max-w-xs">
+                  <p className="text-xs text-muted-foreground">
+                    Fallback avatar shown for customers who don't have their own photo. Drop or click to upload an
+                    image, or use the URL option to link an external image.
+                  </p>
+                  {settings.defaultCustomerImageUrl && (
+                    <Button type="button" variant="outline" size="sm" className="h-7 text-xs" onClick={() => setApplyImageOpen(true)}>
+                      Apply to existing customers
+                    </Button>
+                  )}
+                </div>
               </div>
             </div>
           </CardContent>
@@ -1076,6 +1116,24 @@ export default function SettingsCustomersPage() {
       </Dialog>
 
       <CustomerSettingsFormGuard />
+      <Dialog open={applyImageOpen} onOpenChange={setApplyImageOpen}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Apply to existing customers?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Sets this image as the photo of every customer who has no photo of their own
+            {previousDefaultImage ? " or still has the previous default" : ""}. Photos you have set for
+            individual customers are left alone. It also becomes their contact photo on the next iCloud sync.
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setApplyImageOpen(false)} disabled={applyingImage}>Not now</Button>
+            <Button onClick={() => void applyDefaultImage()} disabled={applyingImage}>
+              {applyingImage ? "Applying…" : "Apply to customers"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </AppLayout>
   );
 }

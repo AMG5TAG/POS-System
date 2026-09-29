@@ -151,11 +151,7 @@ async function issueSetupLink(
   // The link is always built from the trusted public origin (or the merchant's
   // own portal domain) — never from request headers, which are attacker
   // controlled and could redirect a set-up link to someone else's site.
-  const base = merchant?.portalDomain
-    ? `https://${merchant.portalDomain}`
-    : merchant?.username
-      ? `${publicOrigin()}/b/${encodeURIComponent(merchant.username)}`
-      : publicOrigin();
+  const base = merchant?.portalDomain ? `https://${merchant.portalDomain}` : publicOrigin();
   const link = `${base}/c/${customer.portalToken}/set-password?token=${rawToken}`;
 
   const heading = purpose === "setup" ? "Set up your account" : "Reset your password";

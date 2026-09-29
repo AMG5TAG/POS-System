@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, customerSettingsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, customerSettingsTable, customersTable } from "@workspace/db";
+import { and, eq, isNull, or, inArray } from "drizzle-orm";
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router: IRouter = Router();
@@ -86,6 +87,30 @@ router.put("/customer-settings", requireAuth, async (req, res): Promise<void> =>
     [row] = await db.insert(customerSettingsTable).values({ merchantId, ...data }).returning();
   }
   res.json(fmt(row!));
+});
+
+/* Stamp the default customer image onto existing customers as their own photo.
+   Only customers with no photo, or still carrying the previous default (sent by
+   the page that just replaced it), are touched — a photo set for a particular
+   customer is never overwritten. Stamped photos then travel with the customer
+   (exports, iCloud contacts) even if the default changes later. */
+router.post("/customer-settings/apply-default-image", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const [row] = await db.select().from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));
+  const image = row?.defaultCustomerImageUrl?.trim() ?? "";
+  if (!image) { res.status(400).json({ error: "Set a default customer image first." }); return; }
+
+  const previous = typeof req.body?.previousUrl === "string" ? req.body.previousUrl.trim() : "";
+  const replaceable = previous && previous !== image ? ["", previous] : [""];
+  const updated = await db
+    .update(customersTable)
+    .set({ photoUrl: image })
+    .where(and(
+      eq(customersTable.merchantId, merchantId),
+      or(isNull(customersTable.photoUrl), inArray(customersTable.photoUrl, replaceable)),
+    ))
+    .returning({ id: customersTable.id });
+  res.json({ updated: updated.length });
 });
 
 export default router;

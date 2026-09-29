@@ -129,6 +129,7 @@ import mobilePosAppAdminRouter from "./mobile-pos-app-admin";
 import dashboardAppAdminRouter from "./dashboard-app-admin";
 import dashboardAppPublicRouter from "./dashboard-app-public";
 import warrantiesRouter from "./warranties";
+import publicBusinessRouter from "./public-business";
 
 const router: IRouter = Router();
 
@@ -201,6 +202,8 @@ router.use(payrollRouter);
 // routers below — is safe and keeps those public scan endpoints reachable.
 // Mounting them after the blanket guard 401s scans with {"error":"Unauthorized"}.
 router.use(qrRouter);
+// Public: the staff apps read the business username here (see the router).
+router.use(publicBusinessRouter);
 router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);
