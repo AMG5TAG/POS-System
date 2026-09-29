@@ -11,7 +11,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middlewares/errorHandler";
 import { normalisePhoneFields } from "./middlewares/normalisePhoneFields";
-import { publicOrigin, legacyDomains } from "./lib/publicUrl";
+import { publicOrigin, legacyDomains, shopDomain } from "./lib/publicUrl";
 import { legacyDomainRedirect } from "./middlewares/legacyDomainRedirect";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
@@ -75,6 +75,7 @@ if (isProduction) {
   // override), plus the domains it used to live on, which still serve requests.
   allowedOrigins.add(publicOrigin());
   for (const d of legacyDomains()) allowedOrigins.add(`https://${d}`);
+  allowedOrigins.add(`https://${shopDomain()}`);
   // The branded short-link domain serves the SPA, which calls the API
   // cross-origin to resolve a slug → destination before redirecting.
   allowedOrigins.add(`https://${SHORT_DOMAIN}`);
@@ -152,6 +153,32 @@ app.use("/api", router);
  * frontend build on disk — in both cases the block is skipped and the server
  * behaves exactly as it did before.
  */
+/*
+ * The online shop (shop.koastal.com.au) is a second front end served by this
+ * same process, chosen by host: a request on the shop domain gets the shop's
+ * build, everything else the POS's. Same process, same /api, so the shop calls
+ * the API same-origin and its session cookie is its own (host-only). Skipped
+ * when there is no shop build on disk, like the POS block below.
+ */
+const shopDir =
+  process.env.SHOP_DIST_DIR?.trim() ||
+  path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../shop/dist/public");
+const shopIndex = path.join(shopDir, "index.html");
+
+if (existsSync(shopIndex)) {
+  logger.info({ shopDir, host: shopDomain() }, "Serving built shop");
+  const shopSite = express.Router();
+  shopSite.use("/assets", express.static(path.join(shopDir, "assets"), { immutable: true, maxAge: "1y" }));
+  shopSite.use(express.static(shopDir, { index: false, maxAge: "1h" }));
+  shopSite.get(/.*/, (_req, res, next) => {
+    res.sendFile(shopIndex, { headers: { "Cache-Control": "no-cache" } }, (err) => { if (err) next(err); });
+  });
+  app.use((req, res, next) => {
+    if (req.hostname.toLowerCase() !== shopDomain() || req.path.startsWith("/api")) return next();
+    shopSite(req, res, next);
+  });
+}
+
 const spaDir =
   process.env.SPA_DIST_DIR?.trim() ||
   path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../koapos/dist/public");

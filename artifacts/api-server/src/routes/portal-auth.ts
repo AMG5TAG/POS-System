@@ -8,6 +8,7 @@ import { hashPassword, verifyPassword } from "../lib/auth";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
 import { publicOrigin } from "../lib/publicUrl";
+import { hashToken, issueSetupLink } from "../lib/customerPasswordLinks";
 import {
   findCustomerByPortalToken,
   readPortalAuthState,
@@ -32,8 +33,6 @@ import {
  */
 
 const router: IRouter = Router();
-
-const TOKEN_TTL_MS = 60 * 60 * 1000; // 1 hour, as the merchant reset flow
 
 /**
  * Rate limits.
@@ -119,80 +118,6 @@ const SetPasswordBody = z.object({
 
 const LoginBody = z.object({ password: z.string().min(1) });
 
-function hashToken(raw: string): string {
-  return createHash("sha256").update(raw).digest("hex");
-}
-
-/**
- * Mint a one-time token and deliver it. Email is preferred; SMS is the fallback
- * for customers with no address on file. Delivery is best-effort and never
- * changes the response — the caller is told the same thing either way.
- */
-async function issueSetupLink(
-  customer: typeof customersTable.$inferSelect,
-  purpose: "setup" | "reset",
-  log: { warn: (o: unknown, m: string) => void; error: (o: unknown, m: string) => void },
-): Promise<void> {
-  const rawToken = randomBytes(32).toString("hex");
-
-  await db.insert(customerPortalTokensTable).values({
-    customerId: customer.id,
-    tokenHash: hashToken(rawToken),
-    purpose,
-    expiresAt: new Date(Date.now() + TOKEN_TTL_MS),
-  });
-
-  const [merchant] = await db
-    .select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.id, customer.merchantId));
-
-  const bizName = merchant?.businessName ?? "Your store";
-  // The link is always built from the trusted public origin (or the merchant's
-  // own portal domain) — never from request headers, which are attacker
-  // controlled and could redirect a set-up link to someone else's site.
-  const base = merchant?.portalDomain ? `https://${merchant.portalDomain}` : publicOrigin();
-  const link = `${base}/c/${customer.portalToken}/set-password?token=${rawToken}`;
-
-  const heading = purpose === "setup" ? "Set up your account" : "Reset your password";
-  const lead = purpose === "setup"
-    ? `Set a password for your ${bizName} account so only you can see your repairs, quotes and rewards.`
-    : `We received a request to reset the password for your ${bizName} account.`;
-
-  if (customer.email) {
-    void sendEmail(customer.merchantId, {
-      to: customer.email,
-      subject: `${heading} — ${bizName}`,
-      html: `
-        <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
-          <h2 style="margin-top:0">${heading}</h2>
-          <p>${lead}</p>
-          <p style="margin:24px 0">
-            <a href="${link}"
-               style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-              ${heading}
-            </a>
-          </p>
-          <p style="color:#666;font-size:14px">This link expires in 1 hour. If you didn't request it, you can safely ignore this email — nothing changes.</p>
-          <p style="color:#999;font-size:12px">If the button doesn't work, copy and paste this URL into your browser:<br>${link}</p>
-        </div>
-      `,
-      text: `${heading} — ${bizName}\n\n${lead}\n\n${link}\n\nThis link expires in 1 hour. If you didn't request it, ignore this email.`,
-    }).then((result) => {
-      if (!result.success) log.warn({ provider: result.provider, error: result.error }, "Portal set-up email delivery failed");
-    }).catch((err: unknown) => {
-      log.error({ err }, "Portal set-up email threw unexpectedly");
-    });
-    return;
-  }
-
-  if (customer.phone) {
-    void sendSms(
-      { to: customer.phone, body: `${bizName}: ${heading.toLowerCase()} for your account here (expires in 1 hour): ${link}` },
-      customer.merchantId,
-    ).catch(() => { /* delivery is best-effort */ });
-  }
-}
 
 /** Public: which screen the SPA should render for this token. */
 router.get("/portal/:token/auth/state", async (req, res): Promise<void> => {

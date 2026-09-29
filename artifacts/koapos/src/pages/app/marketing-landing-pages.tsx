@@ -224,11 +224,11 @@ export function LandingPageRenderer({ page, scale = 1 }: { page: LandingPage; sc
       ) : (
         <div className="w-20 h-20 rounded-full bg-white/20 flex items-center justify-center mb-4 text-3xl">🏪</div>
       )}
-      <h1 className="text-xl font-bold text-center leading-tight" style={{ color: page.textColor }}>
+      <h1 className="text-xl font-bold text-center leading-tight break-words max-w-full" style={{ color: page.textColor }}>
         {page.title || "My Business"}
       </h1>
       {page.subtitle && (
-        <p className="text-sm mt-1 text-center opacity-80" style={{ color: page.textColor }}>{page.subtitle}</p>
+        <p className="text-sm mt-1 text-center opacity-80 whitespace-pre-line break-words max-w-full" style={{ color: page.textColor }}>{page.subtitle}</p>
       )}
       {page.bio && (
         <p className="text-xs mt-2 text-center opacity-70 max-w-xs leading-relaxed" style={{ color: page.textColor }}>{page.bio}</p>
@@ -479,7 +479,7 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
               <Input value={page.title} onChange={(e) => set("title", e.target.value)} placeholder="My Business" />
             </div>
             <div className="space-y-1"><Label className="text-xs">Subtitle</Label>
-              <Input value={page.subtitle} onChange={(e) => set("subtitle", e.target.value)} placeholder="Follow us for updates" />
+              <Textarea value={page.subtitle} onChange={(e) => set("subtitle", e.target.value)} placeholder="Follow us for updates" rows={3} className="resize-y text-sm" />
             </div>
             <div className="space-y-1"><Label className="text-xs">Bio / Description</Label>
               <Textarea value={page.bio} onChange={(e) => set("bio", e.target.value)}
@@ -706,8 +706,8 @@ function PagesListView({ pages, onSelect, onCreate, onDelete, onClone, onUse, on
                 onClick={() => onSelect(page.id)}>
                 <div className="absolute inset-0 flex flex-col items-center justify-center gap-1 p-4">
                   {page.profileImage ? <img src={page.profileImage} alt="" className="w-12 h-12 rounded-full object-cover ring-2 ring-white/40" /> : <div className="w-12 h-12 rounded-full bg-white/20 flex items-center justify-center text-xl">🏪</div>}
-                  <p className="text-sm font-bold truncate max-w-full" style={{ color: page.textColor, fontFamily: page.font ? `"${page.font}", sans-serif` : "inherit" }}>{page.title}</p>
-                  <p className="text-xs opacity-70 truncate max-w-full text-center" style={{ color: page.textColor }}>{page.subtitle}</p>
+                  <p className="text-sm font-bold line-clamp-2 break-words max-w-full text-center" title={page.title} style={{ color: page.textColor, fontFamily: page.font ? `"${page.font}", sans-serif` : "inherit" }}>{page.title}</p>
+                  <p className="text-xs opacity-70 line-clamp-2 whitespace-pre-line break-words max-w-full text-center" style={{ color: page.textColor }}>{page.subtitle}</p>
                   {!isTemplates && (
                     <Badge variant="secondary" className="text-[10px] mt-1">
                       {page.links.filter((l) => l.enabled).length} link{page.links.filter((l) => l.enabled).length !== 1 ? "s" : ""}
@@ -717,7 +717,7 @@ function PagesListView({ pages, onSelect, onCreate, onDelete, onClone, onUse, on
               </div>
               <CardContent className="p-3">
                 {names[page.id] && (
-                  <p className="text-sm font-semibold truncate mb-2" title={names[page.id]}>{names[page.id]}</p>
+                  <p className="text-sm font-semibold line-clamp-2 break-words mb-2" title={names[page.id]}>{names[page.id]}</p>
                 )}
                 {isTemplates ? (
                   <div className="space-y-2">

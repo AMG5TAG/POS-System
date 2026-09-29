@@ -418,6 +418,41 @@ only raises a new row once the last is converted or declined, so summing them
 would add a superseded price to the one that replaced it. The footer sums the
 rows actually on screen, so it follows the tab and the filters.
 
+### Online shop (shop.koastal.com.au)
+
+A second front end on the SAME database, so nothing is synced: products,
+prices, stock, customers and their accounts are the POS's own rows. It is being
+built in stages — 1: catalogue + accounts (done); 2: checkout (Stripe cards,
+Afterpay/Zip), paid order → stock, POS sale, a Deliveries entry and a staff
+alert; 3: account area (orders, all purchases, invoices, repairs, quotes,
+appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
+
+- **App**: `artifacts/shop` (`@workspace/shop`, React + Vite + Tailwind, wouter),
+  its own package — it shares no UI code with the POS, only the API. In
+  production `app.ts` serves its build for requests on `shopDomain()`
+  (`SHOP_DOMAIN`, default shop.koastal.com.au) and the POS build for every other
+  host; `/api` is the same on both, so the shop calls it same-origin and its
+  session cookie is its own. In development it runs behind `/shop-preview`
+  (its `artifact.toml`, `BASE_PATH`), and wouter's `base` follows `BASE_URL`.
+- **API**: `routes/shop.ts`, public and scoped to `soleMerchantId()` — no request
+  can name a merchant. A product is listed when `isActive` and `showOnline`
+  (`products.show_online`, default "true", added by
+  `scripts/src/add-product-show-online.ts` in the `db:push` chain). Only in/out
+  of stock is exposed, never the count; a product whose product type doesn't
+  track stock (services) is always available.
+- **Accounts are the portal's.** One password (`customers.portal_password_hash`)
+  and one signed-in marker (`req.session.portalCustomerId`) for shop and portal.
+  Login is email + password, trying each POS customer with that email (the POS
+  has duplicates). **Signing up with an email the POS already knows never sets
+  a password** — it emails a set-up link to that address
+  (`lib/customerPasswordLinks.ts`, `destination: "shop"`), because knowing an
+  email must not be enough to claim an account. Pinned by `shop-accounts.test.ts`.
+- **Invites** (`routes/shop-invites.ts`, the "Online shop accounts" card on
+  Customers settings): emails a 14-day set-password link to customers with an
+  email and no password, once per address, skipping anyone invited in the last
+  14 days; email only, never SMS. It needs the exact count typed back and sends
+  in the background, paced for the email provider. Pinned by `shop-invites.test.ts`.
+
 ### Linking a job or appointment to an invoice
 
 In the invoice editor, linking a service job or appointment also sets the

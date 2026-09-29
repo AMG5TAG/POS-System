@@ -37,6 +37,9 @@ export const productsTable = pgTable("products", {
   lowStockThreshold: integer("low_stock_threshold").default(5),
   taxRate:           numeric("tax_rate", { precision: 5, scale: 2 }).default("10"),
   isActive:          text("is_active").notNull().default("true"),
+  /** Listed on the online shop (shop.koastal.com.au). Every active product is by
+   *  default; this is the per-product switch to keep one off the site. */
+  showOnline:        text("show_online").notNull().default("true"),
   excludeFromLoyalty: text("exclude_from_loyalty").notNull().default("false"),
   groupPrices:        jsonb("group_prices").$type<Record<string, number>>(),
   supplier:           text("supplier"),

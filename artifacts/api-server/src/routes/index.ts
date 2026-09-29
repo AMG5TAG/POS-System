@@ -130,6 +130,8 @@ import dashboardAppAdminRouter from "./dashboard-app-admin";
 import dashboardAppPublicRouter from "./dashboard-app-public";
 import warrantiesRouter from "./warranties";
 import publicBusinessRouter from "./public-business";
+import shopRouter from "./shop";
+import shopInvitesRouter from "./shop-invites";
 
 const router: IRouter = Router();
 
@@ -204,6 +206,9 @@ router.use(payrollRouter);
 router.use(qrRouter);
 // Public: the staff apps read the business username here (see the router).
 router.use(publicBusinessRouter);
+// Public: the online shop (shop.koastal.com.au) — catalogue and customer accounts.
+router.use(shopRouter);
+router.use(shopInvitesRouter);
 router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);

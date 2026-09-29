@@ -30,6 +30,19 @@ export function legacyDomains(): string[] {
     .filter((d) => d && d !== publicDomain());
 }
 
+/**
+ * The online shop's hostname (shop.koastal.com.au, SHOP_DOMAIN overrides). It is
+ * served by this same server: app.ts picks the shop's build for this host.
+ */
+export function shopDomain(): string {
+  return toHost(process.env.SHOP_DOMAIN?.trim() || "shop.koastal.com.au").toLowerCase();
+}
+
+/** The shop's origin, for links in customer emails. */
+export function shopOrigin(): string {
+  return `https://${shopDomain()}`;
+}
+
 /** Reduce a full URL or bare host to just its hostname. */
 function toHost(value: string): string {
   return value

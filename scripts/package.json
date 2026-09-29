@@ -54,7 +54,8 @@
     "add-service-job-device-colour": "tsx ./src/add-service-job-device-colour.ts",
     "add-service-job-device-quantity": "tsx ./src/add-service-job-device-quantity.ts",
     "add-parked-sale-links": "tsx ./src/add-parked-sale-links.ts",
-    "typecheck": "tsc -p tsconfig.json --noEmit"
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "add-product-show-online": "tsx ./src/add-product-show-online.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

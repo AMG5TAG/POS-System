@@ -139,13 +139,13 @@ export default function LandingPagePublicView() {
         )}
 
         <h1
-          className="text-2xl font-bold text-center leading-snug"
+          className="text-2xl font-bold text-center leading-snug break-words max-w-full"
           style={{ color: row.textColor }}
         >
           {row.title}
         </h1>
         {row.subtitle && (
-          <p className="text-base mt-1.5 text-center" style={{ color: row.textColor, opacity: 0.85 }}>
+          <p className="text-base mt-1.5 text-center whitespace-pre-line break-words max-w-full" style={{ color: row.textColor, opacity: 0.85 }}>
             {row.subtitle}
           </p>
         )}
