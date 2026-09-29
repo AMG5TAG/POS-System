@@ -40,14 +40,14 @@ function buildFrom(fromName: string | null, fromEmail: string | null, fallback: 
  * Supports two providers:
  *   - SMTP:   SYSTEM_SMTP_HOST, SYSTEM_SMTP_PORT, SYSTEM_SMTP_USER, SYSTEM_SMTP_PASS,
  *             SYSTEM_SMTP_SECURE (optional, defaults "false"), SYSTEM_FROM_EMAIL,
- *             SYSTEM_FROM_NAME (optional, defaults "KoaPOS")
+ *             SYSTEM_FROM_NAME (optional, defaults "KK POS")
  *   - Resend: SYSTEM_RESEND_API_KEY, SYSTEM_FROM_EMAIL (required),
- *             SYSTEM_FROM_NAME (optional, defaults "KoaPOS")
+ *             SYSTEM_FROM_NAME (optional, defaults "KK POS")
  *
  * Returns { success: false } if no system email is configured.
  */
 export async function sendSystemEmail(message: EmailMessage): Promise<SendResult> {
-  const fromName = process.env.SYSTEM_FROM_NAME ?? "KoaPOS";
+  const fromName = process.env.SYSTEM_FROM_NAME ?? "KK POS";
   const fromEmail = process.env.SYSTEM_FROM_EMAIL ?? null;
 
   const resendKey = process.env.SYSTEM_RESEND_API_KEY;

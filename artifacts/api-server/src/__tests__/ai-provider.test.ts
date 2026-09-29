@@ -1,7 +1,7 @@
 /**
  * Provider selection under bring-your-own-key.
  *
- * KoaPOS holds no platform AI key: a merchant connects their own Anthropic
+ * KK POS holds no platform AI key: a merchant connects their own Anthropic
  * account and their own key pays for their own usage. That makes three things
  * worth pinning down.
  *

@@ -10,7 +10,7 @@ export function POSVisual() {
       <circle cx="32" cy="22" r="6" fill="#f59e0b" />
       <circle cx="48" cy="22" r="6" fill="#22c55e" />
       <rect x="64" y="14" width="200" height="16" rx="8" fill="#334155" />
-      <text x="72" y="26" fontSize="9" fill="#94a3b8" fontFamily="system-ui">KoaPOS Register</text>
+      <text x="72" y="26" fontSize="9" fill="#94a3b8" fontFamily="system-ui">KK POS Register</text>
       <rect x="420" y="14" width="88" height="16" rx="4" fill="#f0b800" />
       <text x="428" y="25.5" fontSize="8.5" fill="#1e293b" fontFamily="system-ui" fontWeight="600">Staff PIN ▾</text>
 

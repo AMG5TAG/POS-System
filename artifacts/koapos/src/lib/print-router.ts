@@ -99,7 +99,7 @@ export async function printDocument(job: PrintJob): Promise<PrintMethod> {
   const { hw, purpose } = job;
   const profile = profileForPurpose(hw, purpose);
   const copies = Math.max(1, Math.min(20, job.copies ?? 1));
-  const jobName = job.jobName ?? "KoaPOS";
+  const jobName = job.jobName ?? "KK POS";
 
   if (profile && job.escpos && isThermalProfile(profile)) {
     const bytes = job.escpos(thermalWidth(profile));

@@ -79,6 +79,9 @@ const WINDOWS_PDF_PRINTER_CANDIDATES = [
   "C:\\Program Files\\SumatraPDF\\SumatraPDF.exe",
   "C:\\Program Files (x86)\\SumatraPDF\\SumatraPDF.exe",
   path.join(process.env.LOCALAPPDATA || "", "SumatraPDF", "SumatraPDF.exe"),
+  path.join(process.env.ProgramFiles || "", "KKPOS", "SumatraPDF.exe"),
+  path.join(process.env.ProgramFiles || "", "KKPOS", "PDFtoPrinter.exe"),
+  // Where tills set up before the KoaPOS → KK POS rename installed them.
   path.join(process.env.ProgramFiles || "", "KoaPOS", "SumatraPDF.exe"),
   path.join(process.env.ProgramFiles || "", "KoaPOS", "PDFtoPrinter.exe"),
 ];
@@ -103,7 +106,7 @@ export function findPdfPrinter(cfg: BridgeConfig): string {
 /** Inject the paper preset just before </head> (or at the top for fragments). */
 function withPageCss(html: string, paper: PaperSize, heightMm?: number): string {
   if (paper === "auto") return html;
-  const style = `<style id="koapos-bridge-page">${pageCss(paper, heightMm)}</style>`;
+  const style = `<style id="kkpos-bridge-page">${pageCss(paper, heightMm)}</style>`;
   if (/<\/head>/i.test(html)) return html.replace(/<\/head>/i, `${style}</head>`);
   if (/<html[\s>]/i.test(html)) return html.replace(/<html([^>]*)>/i, `<html$1><head>${style}</head>`);
   return `<!doctype html><html><head><meta charset="utf-8">${style}</head><body>${html}</body></html>`;
@@ -198,7 +201,7 @@ export async function printHtml(
     heightMm?: number;
   },
 ): Promise<void> {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "koapos-html-"));
+  const dir = mkdtempSync(path.join(os.tmpdir(), "kkpos-html-"));
   const pdfFile = await htmlToPdf(cfg, opts.html, opts.paper, opts.heightMm, dir);
   // Copies are looped rather than passed to the tool: SumatraPDF and
   // PDFtoPrinter disagree on the flag, and a loop behaves identically on CUPS.

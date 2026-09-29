@@ -1,18 +1,20 @@
 /* ─── Bridge configuration ────────────────────────────────────────────────────
  * Persisted next to the OS user profile so the token and printer defaults
  * survive restarts:
- *   Windows  %APPDATA%\KoaPOS\print-bridge.json
- *   macOS    ~/Library/Application Support/KoaPOS/print-bridge.json
- *   Linux    ${XDG_CONFIG_HOME:-~/.config}/koapos/print-bridge.json
- * Everything here is device-local — the merchant-level routing policy lives in
- * KoaPOS (`pos_settings.hardwareConfig`), not in this file.
+ *   Windows  %APPDATA%\KKPOS\print-bridge.json
+ *   macOS    ~/Library/Application Support/KKPOS/print-bridge.json
+ *   Linux    ${XDG_CONFIG_HOME:-~/.config}/kkpos/print-bridge.json
+ * A till set up before the rename keeps its config under "KoaPOS"/"koapos";
+ * that folder is still read (and the file carried across) so the pairing token
+ * survives the upgrade. Everything here is device-local — the merchant-level
+ * routing policy lives in KK POS (`pos_settings.hardwareConfig`), not here.
  */
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 
-export const BRIDGE_NAME = "koapos-print-bridge";
+export const BRIDGE_NAME = "kkpos-print-bridge";
 export const BRIDGE_VERSION = "1.0.0";
 export const DEFAULT_PORT = 17777;
 
@@ -41,23 +43,41 @@ const DEFAULTS: Omit<BridgeConfig, "token"> = {
   allowedOrigins: [
     "https://*.replit.app",
     "https://*.replit.dev",
-    "https://*.koapos.com",
-    "https://koapos.com",
+    "https://pos.koastal.com.au",
+    "https://koapos.com.au",
   ],
   chromePath: "",
   pdfPrinterPath: "",
   debug: false,
 };
 
-export function configDir(): string {
+function configDirNamed(winMac: string, linux: string): string {
   if (process.platform === "win32") {
-    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), "KoaPOS");
+    return path.join(process.env.APPDATA || path.join(os.homedir(), "AppData", "Roaming"), winMac);
   }
   if (process.platform === "darwin") {
-    return path.join(os.homedir(), "Library", "Application Support", "KoaPOS");
+    return path.join(os.homedir(), "Library", "Application Support", winMac);
   }
-  return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), "koapos");
+  return path.join(process.env.XDG_CONFIG_HOME || path.join(os.homedir(), ".config"), linux);
 }
+
+export function configDir(): string {
+  return configDirNamed("KKPOS", "kkpos");
+}
+
+/** Where a bridge installed before the KoaPOS → KK POS rename kept its config. */
+function legacyConfigPath(): string {
+  return path.join(configDirNamed("KoaPOS", "koapos"), "print-bridge.json");
+}
+
+/** Env override, under its current name or the pre-rename KOAPOS_ one. */
+function env(name: string): string | undefined {
+  return process.env[`KKPOS_BRIDGE_${name}`] || process.env[`KOAPOS_BRIDGE_${name}`];
+}
+
+/** Origins the bridge always trusts, whatever a stored config lists: the app's
+ *  own domains, so an upgraded bridge keeps working after a domain move. */
+const REQUIRED_ORIGINS = ["https://pos.koastal.com.au", "https://koapos.com.au"];
 
 export function configPath(): string {
   return path.join(configDir(), "print-bridge.json");
@@ -74,22 +94,33 @@ export function loadConfig(): BridgeConfig {
   try {
     stored = JSON.parse(readFileSync(file, "utf8")) as Partial<BridgeConfig>;
   } catch {
-    /* first run, or a corrupt file we deliberately overwrite below */
+    // First run under the new name: carry an existing pre-rename config (and
+    // with it the pairing token) across rather than unpairing every browser.
+    try {
+      stored = JSON.parse(readFileSync(legacyConfigPath(), "utf8")) as Partial<BridgeConfig>;
+    } catch {
+      /* first run, or a corrupt file we deliberately overwrite below */
+    }
   }
   const cfg: BridgeConfig = {
     ...DEFAULTS,
     ...stored,
     // Never inherit a blank/short token from a hand-edited file.
     token: typeof stored.token === "string" && stored.token.length >= 16 ? stored.token : newToken(),
-    allowedOrigins: Array.isArray(stored.allowedOrigins) && stored.allowedOrigins.length
-      ? stored.allowedOrigins
-      : DEFAULTS.allowedOrigins,
+    allowedOrigins: [...new Set([
+      ...(Array.isArray(stored.allowedOrigins) && stored.allowedOrigins.length
+        ? stored.allowedOrigins
+        : DEFAULTS.allowedOrigins),
+      ...REQUIRED_ORIGINS,
+    ])],
   };
-  const envPort = Number(process.env.KOAPOS_BRIDGE_PORT);
+  const envPort = Number(env("PORT"));
   if (Number.isFinite(envPort) && envPort > 0) cfg.port = envPort;
-  if (process.env.KOAPOS_BRIDGE_CHROME) cfg.chromePath = process.env.KOAPOS_BRIDGE_CHROME;
-  if (process.env.KOAPOS_BRIDGE_PDF_PRINTER) cfg.pdfPrinterPath = process.env.KOAPOS_BRIDGE_PDF_PRINTER;
-  if (process.env.KOAPOS_BRIDGE_DEBUG === "1") cfg.debug = true;
+  const chrome = env("CHROME");
+  if (chrome) cfg.chromePath = chrome;
+  const pdfPrinter = env("PDF_PRINTER");
+  if (pdfPrinter) cfg.pdfPrinterPath = pdfPrinter;
+  if (env("DEBUG") === "1") cfg.debug = true;
 
   if (JSON.stringify(stored) !== JSON.stringify(cfg)) saveConfig(cfg);
   return cfg;

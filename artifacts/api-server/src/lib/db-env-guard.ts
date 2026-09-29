@@ -2,7 +2,7 @@
  * db-env-guard — fail-closed confirmation that a destructive maintenance script
  * is connected to the database the operator actually intends to modify.
  *
- * KoaPOS selects dev vs prod purely by the value of `DATABASE_URL`, so nothing
+ * KK POS selects dev vs prod purely by the value of `DATABASE_URL`, so nothing
  * normally stops a restore/transfer from running against the wrong database. The
  * guard requires an explicit `EXPECTED_DB` opt-in and cross-checks it against a
  * fingerprint of the live connection. It throws (never prompts) so it is safe in

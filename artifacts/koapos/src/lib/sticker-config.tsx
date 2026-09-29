@@ -1351,7 +1351,7 @@ export function useStickerPrinter() {
       purpose: "label",
       hw: hardware,
       paper: "auto",
-      jobName: "KoaPOS labels",
+      jobName: "KK POS labels",
       html: () => html,
       browserFallback: () => { printLabelHtmlViaIframe(html); },
     }).catch((err: unknown) => {

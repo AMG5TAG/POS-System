@@ -41,7 +41,7 @@ export function generateIcs({
   const lines = [
     "BEGIN:VCALENDAR",
     "VERSION:2.0",
-    "PRODID:-//KoaPOS//Appointments//EN",
+    "PRODID:-//KKPOS//Appointments//EN",
     ...(method ? [`METHOD:${method}`] : []),
     "BEGIN:VEVENT",
     `UID:${uid}`,

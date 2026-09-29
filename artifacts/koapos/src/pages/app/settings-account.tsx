@@ -99,7 +99,7 @@ function SecuritySettingsCard() {
           <SlidersHorizontal className="w-4 h-4" /> Anomaly Detection Sensitivity
         </CardTitle>
         <CardDescription>
-          Control how aggressively KoaPOS flags suspicious login patterns. Lower thresholds trigger holds sooner; higher values are more permissive.
+          Control how aggressively KK POS flags suspicious login patterns. Lower thresholds trigger holds sooner; higher values are more permissive.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-5">
@@ -714,7 +714,7 @@ export default function SettingsAccountPage() {
         <Card id="login-details">
           <CardHeader>
             <CardTitle>Login Details</CardTitle>
-            <CardDescription>Your account credentials for KoaPOS.</CardDescription>
+            <CardDescription>Your account credentials for KK POS.</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
             <div>
@@ -735,7 +735,7 @@ export default function SettingsAccountPage() {
               <KeyRound className="w-4 h-4" /> Change Password
             </CardTitle>
             <CardDescription>
-              Update your KoaPOS login password.
+              Update your KK POS login password.
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">

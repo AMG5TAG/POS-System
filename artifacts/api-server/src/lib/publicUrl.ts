@@ -8,14 +8,27 @@
  * Priority:
  *   1. APP_BASE_URL / PUBLIC_DOMAIN — operator-configured override (full URL or
  *      bare host both accepted)
- *   2. koapos.com.au — production default
+ *   2. pos.koastal.com.au — production default
  *   3. the request host — development fallback only (e.g. localhost)
  *
  * We deliberately never derive public links from REPLIT_DOMAINS: that exposes
  * the internal *.replit.app hostname, which must not appear anywhere in the
  * app. Request headers are only trusted as a dev convenience.
  */
-const DEFAULT_PUBLIC_DOMAIN = "koapos.com.au";
+const DEFAULT_PUBLIC_DOMAIN = "pos.koastal.com.au";
+
+/**
+ * Domains the app used to live on. They stay attached to the deployment because
+ * QR stickers, service sheets and SMS links printed or sent under them are still
+ * in circulation; `legacyDomainRedirect` (app.ts) sends their page loads and QR
+ * scans on to the current domain. Override with LEGACY_DOMAINS (comma-separated).
+ */
+export function legacyDomains(): string[] {
+  return (process.env.LEGACY_DOMAINS ?? "koapos.com.au,www.koapos.com.au")
+    .split(",")
+    .map((d) => toHost(d).toLowerCase())
+    .filter((d) => d && d !== publicDomain());
+}
 
 /** Reduce a full URL or bare host to just its hostname. */
 function toHost(value: string): string {
@@ -25,7 +38,7 @@ function toHost(value: string): string {
     .replace(/\/.*$/, "");
 }
 
-/** The public hostname (no scheme), e.g. "koapos.com.au". */
+/** The public hostname (no scheme), e.g. "pos.koastal.com.au". */
 export function publicDomain(req?: { hostname?: string }): string {
   const explicit = process.env.APP_BASE_URL?.trim() || process.env.PUBLIC_DOMAIN?.trim();
   if (explicit) return toHost(explicit);
@@ -33,7 +46,7 @@ export function publicDomain(req?: { hostname?: string }): string {
   return req?.hostname ?? DEFAULT_PUBLIC_DOMAIN;
 }
 
-/** The public origin (with scheme), e.g. "https://koapos.com.au". */
+/** The public origin (with scheme), e.g. "https://pos.koastal.com.au". */
 export function publicOrigin(req?: { hostname?: string }): string {
   return `https://${publicDomain(req)}`;
 }

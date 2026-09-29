@@ -93,7 +93,7 @@ export function printDailyClose(row: DailyClose, businessName?: string, hw?: Har
   </div>` : ""}
 
   <div class="footer">
-    KoaPOS &nbsp;·&nbsp; Report generated ${new Date().toLocaleString("en-AU")}
+    KK POS &nbsp;·&nbsp; Report generated ${new Date().toLocaleString("en-AU")}
   </div>
 
 </body>

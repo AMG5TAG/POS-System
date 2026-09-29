@@ -50,7 +50,7 @@ export interface ScannerCfg {
 
 /* ── Printer profiles + per-purpose routing ─────────────────────────────────── */
 
-/** How the app reaches a printer. `bridge` = the local KoaPOS Print Bridge. */
+/** How the app reaches a printer. `bridge` = the local KK POS Print Bridge. */
 export type PrinterTransport = "usb" | "serial" | "bridge" | "network" | "system";
 
 /** Paper a profile is loaded with. Drives which renderer a document uses.

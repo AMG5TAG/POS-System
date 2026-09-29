@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-KoaPOS — an in-house Point of Sale system run for a **single business** (Koastal). It began as a multi-tenant SaaS; see "Single-business install" below for what that left behind. Clean, tablet/mobile-ready UI. A pnpm monorepo (Node 24, TypeScript 5.9) with a React/Vite frontend, an Express 5 API server, PostgreSQL + Drizzle ORM, and a contract-first OpenAPI codegen pipeline.
+KK POS — an in-house Point of Sale system run for a **single business** (Koastal). It began as a multi-tenant SaaS; see "Single-business install" below for what that left behind. Clean, tablet/mobile-ready UI. A pnpm monorepo (Node 24, TypeScript 5.9) with a React/Vite frontend, an Express 5 API server, PostgreSQL + Drizzle ORM, and a contract-first OpenAPI codegen pipeline.
 
 ## Run & Operate
 
@@ -59,7 +59,7 @@ Session-based (not JWT): `express-session` + `bcryptjs`, signed with `SESSION_SE
 
 ### Single-business install
 
-KoaPOS was built as a subscription SaaS with one `merchants` row per business,
+KK POS was built as a subscription SaaS with one `merchants` row per business,
 and every table is still scoped by `merchantId`. It now runs for one business,
 and the change was made **in code only — no rows were deleted or rewritten**.
 The other merchant accounts (the seeded demo, a second Koastal account, test
@@ -81,7 +81,7 @@ accounts) and all of their data are still in the database.
   logins and multi-location all still work *within* the one business.
 - **Removed:** sign-up (`/auth/register`), the landing and pricing pages (`/`
   now redirects to `/dashboard` or `/login`), the plans/modules/subscriptions
-  API and the Modules page, the KoaPOS partner-referral program (its API, page,
+  API and the Modules page, the KK POS partner-referral program (its API, page,
   template quick codes and the "platform referral link" document block), and
   self-serve account deletion. None of it was enforced: billing never gated a
   feature, so everything was and remains unlocked.
@@ -107,6 +107,19 @@ accounts) and all of their data are still in the database.
   quotes"); the onboarding wizard; Clear Demo Data; and the tax labels for other
   countries — tax is Australian GST with an ABN. The overdue-invoice surcharge
   under Invoice Settings is a different feature and stays.
+- **Domain and name.** The app is **KK POS** at **pos.koastal.com.au**
+  (`APP_BASE_URL` in `.replit`, `DEFAULT_PUBLIC_DOMAIN` in both `publicUrl.ts`
+  files). It was KoaPOS at koapos.com.au, and that domain must stay attached to
+  the deployment: stickers and service sheets printed with it are still being
+  scanned. `middlewares/legacyDomainRedirect.ts` 301s its GET/HEAD requests to
+  the same path on the new domain (`LEGACY_DOMAINS` overrides the list), pinned
+  by `legacy-domain-redirect.test.ts`. A few `koapos` identifiers are kept on
+  purpose because renaming them would break existing data: the token-vault salt
+  `koapos-vault-v1`, the HMAC fallback secrets, the analytics salt, the Google
+  Wallet `koapos-loyalty` class id, browser `localStorage` keys, the old
+  `.koapos.enc` backups (new ones are `.kkpos.enc`; restore follows stored refs,
+  not extensions), and the `artifacts/koapos` package path. The Print Bridge
+  reads a pre-rename `KoaPOS` config folder and `KOAPOS_BRIDGE_*` env vars.
 - **Business username is fixed** at `koastal` (`/b/koastal/...` for the portal,
   Tech App, Mobile POS, booking and product QR pages). `PATCH /merchants/me`
   rejects a username change, because every printed sticker and sent portal
@@ -457,7 +470,7 @@ customer PDF and sticker shortcodes.
 The country comes from `merchants.defaultPhoneCountry` (Settings › Regional ›
 Phone Numbers), and **every merchant who has not set one gets Australia** —
 `resolvePhoneCountry`, whose only fallback is `FALLBACK_PHONE_COUNTRY`. It
-deliberately does *not* read `merchants.country`: KoaPOS sells to Australian
+deliberately does *not* read `merchants.country`: KK POS sells to Australian
 retail, so +61 is right for all but a handful of accounts, and a default that
 varied per merchant would be one nobody could predict from the settings screen.
 `""` is what every merchant stores until they choose, and an unrecognised code
@@ -687,13 +700,13 @@ Platform-level fallback when a merchant has no email provider configured in Mana
 
 **Option A — Resend (recommended):**
 - `SYSTEM_RESEND_API_KEY` — Resend API key; platform default sender.
-- `SYSTEM_FROM_EMAIL` — Required sender address when using Resend (e.g. `noreply@koapos.com`).
-- `SYSTEM_FROM_NAME` — Display name (optional, defaults to `KoaPOS`).
+- `SYSTEM_FROM_EMAIL` — Required sender address when using Resend (e.g. `noreply@koastal.com.au`).
+- `SYSTEM_FROM_NAME` — Display name (optional, defaults to `KK POS`).
 
 **Option B — SMTP:**
 - `SYSTEM_SMTP_HOST` / `SYSTEM_SMTP_PORT` (default `587`) / `SYSTEM_SMTP_USER` / `SYSTEM_SMTP_PASS`
 - `SYSTEM_SMTP_SECURE` — `"true"` for SSL/TLS on port 465; defaults to `"false"`.
-- `SYSTEM_FROM_EMAIL` (optional, falls back to SMTP user) / `SYSTEM_FROM_NAME` (optional, defaults to `KoaPOS`).
+- `SYSTEM_FROM_EMAIL` (optional, falls back to SMTP user) / `SYSTEM_FROM_NAME` (optional, defaults to `KK POS`).
 
 If neither is configured, auth emails are silently dropped and a warning is logged.
 
@@ -716,7 +729,7 @@ Nextcloud is the one cloud-storage integration with no platform OAuth app: each 
 - **Auth — Login Flow v2** (`services/nextcloudAuth.ts`, `routes/nextcloud.ts`). `POST /integrations/nextcloud/login-flow/start` opens a login session on the merchant's server and returns a `loginUrl`; the browser polls `.../poll` until the merchant approves, and the poll that succeeds is what stores the issued **app password** in `oauth_token_vault` under provider key `nextcloud`. The poll token is held in `req.session.nextcloudLoginFlow` and never sent to the browser. Flows expire after 20 minutes. App passwords do not expire, so unlike Google/Microsoft there is **no token refresher**.
 - **Transport — WebDAV** (`lib/nextcloud.ts`), HTTP Basic over `remote.php/dav/files/<user>`. Files over 50 MB use chunked upload v2 (MKCOL a transfer dir → PUT chunks → MOVE `.file` onto the destination), because a single large PUT hits whatever body limit fronts the merchant's server.
 - **SSRF guard**: the server URL is merchant-supplied, so `assertSafeNextcloudUrl` resolves the host and rejects loopback/RFC1918/link-local/CGNAT/multicast answers before every request. Do not add a Nextcloud request path that skips it. `normaliseServerUrl` rejects non-http(s) schemes and rejects plain http under `NODE_ENV=production`. Covered by `src/__tests__/nextcloud-url.test.ts`.
-- **Surfaces**: a backup destination (`lib/backup-storage/nextcloud.ts`, folder defaults to `KoaPOS/Backups`), a customer-file mirror target (`services/cloudFileMirror.ts`), and a restore/download source — `retrieveArchive` in `lib/backup-storage/index.ts` tries the platform `server` copy first, then Nextcloud.
+- **Surfaces**: a backup destination (`lib/backup-storage/nextcloud.ts`, folder defaults to `KKPOS/Backups`), a customer-file mirror target (`services/cloudFileMirror.ts`), and a restore/download source — `retrieveArchive` in `lib/backup-storage/index.ts` tries the platform `server` copy first, then Nextcloud.
 
 Nextcloud is now the **only** cloud storage provider (backup destination and
 customer-file mirror) — Google Drive/Workspace, OneDrive and Dropbox were
@@ -724,7 +737,7 @@ removed; see "Removed providers" under Single-business install. Adding one back 
 
 ### AI providers (bring-your-own-key, Claude preferred)
 
-KoaPOS runs AI on the **merchant's own** API key. A merchant connects their
+KK POS runs AI on the **merchant's own** API key. A merchant connects their
 Anthropic account under Management › Integrations › AI Providers, the key is
 encrypted at rest in the OAuth token vault, and their usage is billed to them.
 **The platform holds no production AI key**, so a merchant who has connected
@@ -771,13 +784,11 @@ route talks to a vendor SDK directly, and nothing but that module names a model.
 
 Login; Dashboard (analytics, sales chart, KPIs); POS Register (product grid + cart + payment modal card/cash/split); Products (CRUD, categories, inventory, SKU, pricing); Customers (CRM, loyalty, spend, visits); Transactions (history, receipts, refunds); Inventory (stock levels, low-stock alerts); Staff (roles, PIN); Settings (business + regional).
 
-## Seeded demo data
+## Accounts
 
-- Merchant: `demo@koapos.com` / `password123` — **cannot sign in** unless you run the API with `SOLE_MERCHANT_EMAIL=demo@koapos.com` (see "Single-business install")
-- Products: 7 across 3 categories (Beverages, Snacks, Electronics)
-- Customers: 2 (Sarah Johnson, Mike Chen)
-- Staff: 2 (Alex Taylor — owner, Jamie Nguyen — cashier)
-- Transactions: 5 completed sales
+The only account is `admin@koastal.com.au` (Koastal Kollective, username
+`koastal`) in both databases; the seeded demo merchant and every test account
+were deleted from dev. Sign in to dev with that account.
 
 ## User preferences (follow these)
 

@@ -1,5 +1,5 @@
 /**
- * accountSync — core logic for pushing KoaPOS customers/appointments to the
+ * accountSync — core logic for pushing KK POS customers/appointments to the
  * connected Apple iCloud account's contacts and calendar (CardDAV / CalDAV).
  * Extracted from the HTTP routes so both the manual sync endpoints AND the
  * background auto-sync scheduler can call the same code.
@@ -103,10 +103,10 @@ async function buildCustomerNotes(
     const existing = notesByCustomer.get(note.customerId) ?? "";
     const date = new Date(note.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
     if (notesConflict === "overwrite") {
-      if (existing === "") notesByCustomer.set(note.customerId, `[KoaPOS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS));
+      if (existing === "") notesByCustomer.set(note.customerId, `[KK POS Notes]\n• ${date}: ${note.note}`.slice(0, MAX_NOTE_CHARS));
     } else {
       const line = `• ${date}: ${note.note}`;
-      const next = existing === "" ? `[KoaPOS Notes]\n${line}` : `${existing}\n${line}`;
+      const next = existing === "" ? `[KK POS Notes]\n${line}` : `${existing}\n${line}`;
       notesByCustomer.set(note.customerId, next.slice(0, MAX_NOTE_CHARS));
     }
   }

@@ -148,7 +148,7 @@ export function buildQRDataString(type: QRCodeType, content: QRTypeContent): str
     case "dynamic":
     case "landing":
     case "shortlink":
-      return (content.url ?? "").trim() || "https://koapos.com";
+      return (content.url ?? "").trim() || "https://pos.koastal.com.au";
 
     case "static":
     case "micro":
@@ -222,7 +222,7 @@ export function buildQRDataString(type: QRCodeType, content: QRTypeContent): str
       return `SMSTO:${content.smsTo ?? ""}:${content.smsMsg ?? ""}`;
 
     default:
-      return "https://koapos.com";
+      return "https://pos.koastal.com.au";
   }
 }
 
@@ -232,7 +232,7 @@ export function buildQROptions(settings: QRSettings, data: string, size: number)
   const isCircleTemplate = QR_FRAME_TEMPLATES.find((t) => t.id === settings.template)?.circle ?? false;
   return {
     type: "svg",
-    data: data || "https://koapos.com",
+    data: data || "https://pos.koastal.com.au",
     width: size,
     height: size,
     shape: isCircleTemplate ? "circle" : "square",
@@ -275,7 +275,7 @@ export function blobToDataUri(blob: Blob): Promise<string> {
    overlay (see buildFramedQrSvg), so there is no embedded image to load and no CORS
    taint to guard against. */
 export async function renderQrPngDataUri(settings: QRSettings, data: string): Promise<string> {
-  const blob = await new QRCodeStyling(buildQROptions(settings, data || "https://koapos.com", QR_EXPORT_PX)).getRawData("png");
+  const blob = await new QRCodeStyling(buildQROptions(settings, data || "https://pos.koastal.com.au", QR_EXPORT_PX)).getRawData("png");
   if (!blob) throw new Error("QR render failed");
   return blobToDataUri(blob as Blob);
 }

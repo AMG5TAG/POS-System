@@ -66,14 +66,14 @@ router.post("/settings/email/test", requireAuth, async (req, res) => {
   const { to } = TestEmailSettingsBody.parse(req.body);
   const result = await sendEmail(merchantId, {
     to,
-    subject: "KoaPOS — Email Configuration Test",
+    subject: "KK POS — Email Configuration Test",
     html: `
       <div style="font-family:sans-serif;max-width:480px;margin:0 auto;padding:32px 24px;">
         <h2 style="margin:0 0 8px;color:#111;">Email is working!</h2>
-        <p style="color:#555;margin:0 0 16px;">Your KoaPOS email integration is configured correctly.</p>
+        <p style="color:#555;margin:0 0 16px;">Your KK POS email integration is configured correctly.</p>
         <p style="color:#888;font-size:13px;">Sent via provider: <strong>${"smtp"}</strong></p>
       </div>`,
-    text: "Email is working! Your KoaPOS email integration is configured correctly.",
+    text: "Email is working! Your KK POS email integration is configured correctly.",
   });
   if (!result.success) {
     res.status(400).json({ error: result.error ?? "Failed to send test email" });

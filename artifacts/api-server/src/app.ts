@@ -11,7 +11,8 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middlewares/errorHandler";
 import { normalisePhoneFields } from "./middlewares/normalisePhoneFields";
-import { publicOrigin } from "./lib/publicUrl";
+import { publicOrigin, legacyDomains } from "./lib/publicUrl";
+import { legacyDomainRedirect } from "./middlewares/legacyDomainRedirect";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
 const PgSession = connectPgSimple(session);
@@ -19,6 +20,8 @@ const PgSession = connectPgSimple(session);
 const app: Express = express();
 
 app.set("trust proxy", 1);
+
+app.use(legacyDomainRedirect);
 
 // Security headers. CSP is disabled here because this is a JSON/redirect API —
 // the SPA is served (and sets its own CSP) elsewhere, and a restrictive default
@@ -68,8 +71,10 @@ if (isProduction && !process.env.UNSUBSCRIBE_SECRET) {
 
 const allowedOrigins: Set<string> = new Set();
 if (isProduction) {
-  // The app's public origin (koapos.com.au, or APP_BASE_URL/PUBLIC_DOMAIN override).
+  // The app's public origin (pos.koastal.com.au, or APP_BASE_URL/PUBLIC_DOMAIN
+  // override), plus the domains it used to live on, which still serve requests.
   allowedOrigins.add(publicOrigin());
+  for (const d of legacyDomains()) allowedOrigins.add(`https://${d}`);
   // The branded short-link domain serves the SPA, which calls the API
   // cross-origin to resolve a slug → destination before redirecting.
   allowedOrigins.add(`https://${SHORT_DOMAIN}`);

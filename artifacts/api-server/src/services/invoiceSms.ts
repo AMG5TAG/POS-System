@@ -33,7 +33,7 @@ export async function sendInvoiceSms(
   if (!phone) return { success: false, skipped: true, error: "No customer phone on file" };
 
   const inv = row.invoice;
-  const bizName = row.businessName ?? "KoaPOS";
+  const bizName = row.businessName ?? "KK POS";
   const total = `$${parseFloat(inv.total).toFixed(2)}`;
   const dueStr = inv.dueDate
     ? new Date(inv.dueDate).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" })

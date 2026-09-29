@@ -54,7 +54,7 @@ function buildEmailHtml(items: LowStockItem[], merchantName: string): string {
       </div>
     </div>
     <div style="padding:16px 32px;background:#f9fafb;border-top:1px solid #f0f0f0;">
-      <p style="margin:0;font-size:12px;color:#aaa;">Sent by KoaPOS · Manage alerts in Settings → Business Info</p>
+      <p style="margin:0;font-size:12px;color:#aaa;">Sent by KK POS · Manage alerts in Settings → Business Info</p>
     </div>
   </div>
 </body>

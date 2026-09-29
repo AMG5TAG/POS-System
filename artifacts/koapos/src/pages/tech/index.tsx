@@ -721,7 +721,7 @@ function ScanTab({ onOpenJob }: { onOpenJob: (id: number) => void }) {
   const handleScan = useCallback(async (text: string) => {
     const id = parseScannedJobId(text);
     if (id == null) {
-      setMessage("That QR code isn't a KoaPOS service ticket.");
+      setMessage("That QR code isn't a KK POS service ticket.");
       return;
     }
     setBusy(true);
@@ -829,7 +829,7 @@ function LoginScreen({
           {pending ? <Loader2 className="w-4 h-4 animate-spin mx-auto" /> : "Sign In"}
         </button>
         <p className="text-[11px] text-muted-foreground text-center leading-relaxed">
-          Use the staff PIN set for you in KoaPOS. Only staff of {business?.businessName ?? "this business"} can access these service jobs.
+          Use the staff PIN set for you in KK POS. Only staff of {business?.businessName ?? "this business"} can access these service jobs.
         </p>
       </div>
     </div>

@@ -18,7 +18,7 @@ import {
 } from "../nextcloud";
 
 /** Where backups land when the merchant leaves the folder blank. */
-export const DEFAULT_BACKUP_FOLDER = "KoaPOS/Backups";
+export const DEFAULT_BACKUP_FOLDER = "KKPOS/Backups";
 
 function targetSegments(folder: string | undefined): string[] {
   const segments = folderSegments(folder);

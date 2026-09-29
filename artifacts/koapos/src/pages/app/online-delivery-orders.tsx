@@ -85,7 +85,7 @@ function apiToLocal(o: ApiOrder): DeliveryOrder {
 
 /* ── Constants ─────────────────────────────────────────────────────────── */
 
-const PLATFORMS = ["Uber Eats", "DoorDash", "Deliveroo", "KoaPOS", "Phone", "Walk-in"];
+const PLATFORMS = ["Uber Eats", "DoorDash", "Deliveroo", "KK POS", "Phone", "Walk-in"];
 
 const STATUS_CONFIG: Record<DeliveryStatus, { label: string; color: string; icon: React.ElementType }> = {
   pending:          { label: "Pending",          color: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400", icon: Clock        },
@@ -114,7 +114,7 @@ const STATUS_GROUPS: DeliveryStatus[][] = [
 ];
 
 const EMPTY_FORM = {
-  platform: "KoaPOS",
+  platform: "KK POS",
   customerName: "",
   address: "",
   phone: "",

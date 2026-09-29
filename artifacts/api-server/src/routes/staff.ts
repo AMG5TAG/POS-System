@@ -116,7 +116,7 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
           <div style="font-size:32px;font-weight:700;letter-spacing:12px;text-align:center;background:#f4f4f5;border-radius:8px;padding:20px 0;margin:16px 0">${pin}</div>
           <p style="color:#555;font-size:13px">Use this PIN when prompted at the POS register to switch to your account. Keep it private.</p>
           <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0"/>
-          <p style="color:#999;font-size:12px">This message was sent by ${businessName} via KoaPOS. If you were not expecting this email, please disregard it.</p>
+          <p style="color:#999;font-size:12px">This message was sent by ${businessName} via KK POS. If you were not expecting this email, please disregard it.</p>
         </div>
       `,
       text: `Welcome, ${firstName}!\n\nYou've been added as a staff member at ${businessName}.\n\nYour POS PIN is: ${pin}\n\nUse this PIN at the register to switch to your account. Keep it private.`,

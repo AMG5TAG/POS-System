@@ -87,7 +87,7 @@ const STORAGE_META: Record<
 };
 
 /** Where Nextcloud archives land when the sub-folder is left blank. */
-const NEXTCLOUD_DEFAULT_FOLDER = "KoaPOS/Backups";
+const NEXTCLOUD_DEFAULT_FOLDER = "KKPOS/Backups";
 
 const FREQUENCY_OPTIONS = [
   { value: "disabled", label: "Manual only (no schedule)" },

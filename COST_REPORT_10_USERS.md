@@ -1,7 +1,7 @@
-# KoaPOS — Operating Cost Report for 10 Platform Users
+# KK POS — Operating Cost Report for 10 Platform Users
 
 **Prepared:** 2026-06-14
-**Scope:** Infrastructure & metered-service cost to the *platform operator* (Koastal) of running **10 merchant accounts** on KoaPOS. This is a cost-of-goods-sold (COGS) view, not a P&L — subscription revenue is excluded.
+**Scope:** Infrastructure & metered-service cost to the *platform operator* (Koastal) of running **10 merchant accounts** on KK POS. This is a cost-of-goods-sold (COGS) view, not a P&L — subscription revenue is excluded.
 
 > **"Platform user" = one merchant tenant.** Each merchant may have many staff seats; staff seats add only marginal DB rows/sessions, not separate infrastructure. If you instead meant 10 staff inside one merchant, real cost is far lower (one tenant's share of the fixed infra).
 
@@ -9,7 +9,7 @@
 
 ## 1. What actually costs money
 
-KoaPOS is a multi-tenant SaaS on **Replit** (autoscale target in `.replit`, Postgres + Object Storage, Node/Express API + React/Vite SPA). The important architectural fact for cost:
+KK POS is a multi-tenant SaaS on **Replit** (autoscale target in `.replit`, Postgres + Object Storage, Node/Express API + React/Vite SPA). The important architectural fact for cost:
 
 > **The API server runs 8+ in-process `setInterval` schedulers** (marketing automation hourly, recurring invoices, backups, low-stock alerts, social-post publishing, referral digests, token/login cleanup). These only fire while the process is alive, so the server must run **always-on** — a **Reserved VM**, *not* scale-to-zero Autoscale. That makes compute a fixed monthly cost, not a per-request one.
 

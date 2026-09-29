@@ -24,7 +24,7 @@ merchant authorises against it.
 ## A. Register the platform Xero app (one-time, Koastal)
 
 1. Go to <https://developer.xero.com/app/manage> → **New app**.
-2. **Integration type:** Web app. Name it (e.g. "KoaPOS").
+2. **Integration type:** Web app. Name it (e.g. "KK POS").
 3. **Company or application URL:** your platform URL.
 4. **Redirect URI** — must match exactly (the callback is built from the request host in
    `xero.ts:81-83`):
@@ -45,7 +45,7 @@ merchant authorises against it.
 
 ## C. Pre-check the config flag (no OAuth yet)
 
-8. Log into KoaPOS, then in the same browser open `/api/xero/status`.
+8. Log into KK POS, then in the same browser open `/api/xero/status`.
    - ✅ Expect `{"connected": false, "configured": true}`.
    - If `configured` is still `false`, the env vars didn't load — recheck B and that the API
      actually restarted.

@@ -87,7 +87,7 @@ router.post("/settings/sms/test", requireAuth, async (req, res): Promise<void> =
   const merchantId = req.session.merchantId!;
   const { to } = req.body as { to?: string };
   if (!to?.trim()) { res.status(400).json({ error: "Phone number is required" }); return; }
-  const result = await sendSms({ to: to.trim(), body: "KoaPOS: SMS test message. Your Twilio integration is working!" }, merchantId);
+  const result = await sendSms({ to: to.trim(), body: "KK POS: SMS test message. Your Twilio integration is working!" }, merchantId);
   if (!result.success) {
     res.status(400).json({ error: result.error ?? "Failed to send test SMS" });
     return;

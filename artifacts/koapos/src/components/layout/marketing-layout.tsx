@@ -11,9 +11,9 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
         <div className="container mx-auto px-4 md:px-8 h-16 flex items-center justify-between">
           <div className="flex items-center gap-6">
             <Link href="/" className="flex items-center gap-2">
-              <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain" />
+              <img src="/logo.png" alt="KK POS" className="w-8 h-8 object-contain" />
               <span className="font-bold text-xl tracking-tight hidden sm:inline-block">
-                KoaPOS
+                KK POS
               </span>
             </Link>
           </div>
@@ -36,7 +36,7 @@ export function MarketingLayout({ children }: { children: React.ReactNode }) {
       <footer className="border-t border-border py-12 bg-muted/20">
         <div className="container mx-auto px-4 md:px-8 text-center text-muted-foreground text-sm space-y-2">
           <p>
-            &copy; {new Date().getFullYear()} KoaPOS. All rights reserved.
+            &copy; {new Date().getFullYear()} KK POS. All rights reserved.
           </p>
           <p className="text-xs">
             Proudly Australian. 🇦🇺 Designed, Hosted and Maintained by{" "}

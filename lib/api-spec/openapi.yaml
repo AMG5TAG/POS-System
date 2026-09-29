@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: KoaPOS API specification
+  description: KK POS API specification
 servers:
   - url: /api
     description: Base API path
@@ -8826,9 +8826,9 @@ paths:
     post:
       operationId: syncIntegrationContacts
       tags: [integrations]
-      summary: Sync KoaPOS customers to Google Contacts or Microsoft Contacts
+      summary: Sync KK POS customers to Google Contacts or Microsoft Contacts
       description: |
-        Pushes all KoaPOS customers to the requested contact platform.
+        Pushes all KK POS customers to the requested contact platform.
         When `includeNotes` is true, CRM notes are mapped to each platform's
         native notes field (Google → biographies, Microsoft → personalNotes).
         Per-contact failures are counted and returned without aborting the batch.

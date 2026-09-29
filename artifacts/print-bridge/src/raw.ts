@@ -90,7 +90,7 @@ let cachedScriptPath: string | null = null;
 
 function rawPrintScript(): string {
   if (cachedScriptPath) return cachedScriptPath;
-  const dir = mkdtempSync(path.join(os.tmpdir(), "koapos-bridge-"));
+  const dir = mkdtempSync(path.join(os.tmpdir(), "kkpos-bridge-"));
   const file = path.join(dir, "raw-print.ps1");
   // BOM keeps PowerShell from mis-reading the C# block on legacy code pages.
   writeFileSync(file, `﻿${RAW_PRINT_PS1}`, "utf8");
@@ -100,7 +100,7 @@ function rawPrintScript(): string {
 
 /** Write `data` to a scratch file and push it through the named queue verbatim. */
 export async function printRaw(printerName: string, data: Buffer, jobName: string): Promise<void> {
-  const dir = mkdtempSync(path.join(os.tmpdir(), "koapos-raw-"));
+  const dir = mkdtempSync(path.join(os.tmpdir(), "kkpos-raw-"));
   const file = path.join(dir, "job.bin");
   writeFileSync(file, data);
 

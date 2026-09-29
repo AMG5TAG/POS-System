@@ -1,5 +1,5 @@
 /**
- * The app's public-facing origin (with scheme), e.g. "https://koapos.com.au".
+ * The app's public-facing origin (with scheme), e.g. "https://pos.koastal.com.au".
  *
  * Use this — not `window.location.origin` — whenever a link is printed,
  * embedded in a QR code, or otherwise leaves the app, so it always advertises
@@ -8,7 +8,7 @@
  * An operator can override the default via the VITE_PUBLIC_DOMAIN build var
  * (bare host or full URL both accepted).
  */
-const DEFAULT_PUBLIC_DOMAIN = "koapos.com.au";
+const DEFAULT_PUBLIC_DOMAIN = "pos.koastal.com.au";
 
 export function publicOrigin(): string {
   const override = import.meta.env.VITE_PUBLIC_DOMAIN?.trim();

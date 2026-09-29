@@ -8,10 +8,10 @@ import { merchantsTable } from "./merchants";
  */
 /**
  * Keys that let a merchant's own website (or the AI agent building it) read
- * their KoaPOS data through the Storefront Data API.
+ * their KK POS data through the Storefront Data API.
  *
  * This is the reverse of `online_store_thirdparty`, where the merchant pastes
- * *someone else's* credential so KoaPOS can call Shopify. Here KoaPOS issues
+ * *someone else's* credential so KK POS can call Shopify. Here KK POS issues
  * the credential and something outside calls in.
  *
  * Only the SHA-256 hash of a key is stored, like `password_reset_tokens` and

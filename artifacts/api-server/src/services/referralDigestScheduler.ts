@@ -248,7 +248,7 @@ function buildEmailHtml(businessName: string, highlights: Highlight[], sparkline
         <tr>
           <td colspan="2" style="padding:20px 32px 28px;border-top:1px solid #f1f5f9;">
             <p style="margin:0;font-size:12px;color:#94a3b8;line-height:1.6;">
-              You're receiving this because weekly referral digest is enabled in your KoaPOS settings.<br>
+              You're receiving this because weekly referral digest is enabled in your KK POS settings.<br>
               To stop these emails, turn off <em>Weekly Referral Digest</em> under
               <strong>Customer Settings → Heard From Breakdown</strong>.
             </p>

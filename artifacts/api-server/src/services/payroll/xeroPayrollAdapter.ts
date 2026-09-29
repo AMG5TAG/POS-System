@@ -29,7 +29,7 @@ function payrollBase(region: PayrollRegion): string {
     : "https://api.xero.com/payroll.xro/2.0";
 }
 
-/** Xero AU serialises money as decimal dollars; the rest of KoaPOS uses cents. */
+/** Xero AU serialises money as decimal dollars; the rest of KK POS uses cents. */
 function dollarsToCents(value: unknown): number {
   const n = typeof value === "number" ? value : parseFloat(String(value ?? 0));
   return Number.isFinite(n) ? Math.round(n * 100) : 0;
@@ -43,7 +43,7 @@ function parseXeroDate(value: unknown): string | undefined {
   return Number.isNaN(d.getTime()) ? undefined : d.toISOString().split("T")[0];
 }
 
-/** Map a Xero leave-type name to KoaPOS's normalised leave types. */
+/** Map a Xero leave-type name to KK POS's normalised leave types. */
 function normaliseLeaveType(name: string): ProviderLeaveBalance["leaveType"] {
   const n = name.toLowerCase();
   if (n.includes("annual") || n.includes("holiday")) return "annual";

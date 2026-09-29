@@ -17,6 +17,7 @@ import { createHmac } from "crypto";
 import { sendEmail } from "./email";
 import { sendSms } from "./sms";
 import type { Logger } from "pino";
+import { publicOrigin } from "../lib/publicUrl";
 
 type Rule = typeof marketingAutomationRulesTable.$inferSelect;
 
@@ -35,7 +36,7 @@ function makeUnsubscribeToken(merchantId: number, customerId: number): string {
 
 /** Build an absolute unsubscribe URL for inclusion in marketing emails. */
 function unsubscribeUrl(merchantId: number, customerId: number): string {
-  const base = process.env.APP_BASE_URL ?? "https://app.koastal.com.au";
+  const base = publicOrigin();
   return `${base}/api/unsubscribe?t=${makeUnsubscribeToken(merchantId, customerId)}`;
 }
 

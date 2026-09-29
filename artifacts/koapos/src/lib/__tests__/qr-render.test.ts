@@ -48,7 +48,7 @@ describe("apiToQrEntry", () => {
 
 describe("buildQRDataString", () => {
   it("encodes each type in its scanner-recognised form", () => {
-    expect(buildQRDataString("website", { url: "https://koapos.com" })).toBe("https://koapos.com");
+    expect(buildQRDataString("website", { url: "https://pos.koastal.com.au" })).toBe("https://pos.koastal.com.au");
     expect(buildQRDataString("static", { text: "Hello" })).toBe("Hello");
     expect(buildQRDataString("sms", { smsTo: "0400000000", smsMsg: "Hi" })).toBe("SMSTO:0400000000:Hi");
     expect(buildQRDataString("wifi", { wifiSsid: "Koastal", wifiPass: "pw", wifiSec: "WPA" })).toContain("WIFI:");
@@ -96,7 +96,7 @@ describe("buildQROptions", () => {
   it("carries the saved design onto the renderer", () => {
     const o = buildQROptions(
       { ...DEFAULT_QR_SETTINGS, patternColor: "#166534", eyeColor: "#111", dotStyle: "dots", level: "H" },
-      "https://koapos.com",
+      "https://pos.koastal.com.au",
       512,
     );
     expect(o.width).toBe(512);

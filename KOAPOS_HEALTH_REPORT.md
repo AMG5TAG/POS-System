@@ -1,4 +1,4 @@
-# KoaPOS System Health Report
+# KK POS System Health Report
 
 _Generated: May 28, 2026_
 _Scope: `artifacts/koapos/` (frontend) and `artifacts/api-server/` (backend), cross-checked against `lib/api-spec/openapi.yaml` and `lib/db/src/schema/`._

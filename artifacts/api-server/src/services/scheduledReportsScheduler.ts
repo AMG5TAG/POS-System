@@ -115,7 +115,7 @@ async function runOne(row: typeof scheduledReportsTable.$inferSelect, logger: Lo
     to: row.email,
     subject: `${row.name} — ${period}`,
     html: `<p>Your scheduled <strong>${escapeHtml(row.name)}</strong> report for <strong>${escapeHtml(period)}</strong> is attached.</p>
-           <p style="color:#6b7280;font-size:12px">${rows.length} row(s). Sent automatically by KoaPOS (${escapeHtml(row.frequency)}).</p>`,
+           <p style="color:#6b7280;font-size:12px">${rows.length} row(s). Sent automatically by KK POS (${escapeHtml(row.frequency)}).</p>`,
     text: `Your scheduled "${row.name}" report for ${period} is attached (${rows.length} rows).`,
     attachments: [{ filename, content, contentType }],
   });

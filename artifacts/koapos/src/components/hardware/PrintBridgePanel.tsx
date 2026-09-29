@@ -21,7 +21,7 @@ import {
 } from "@/lib/print-bridge";
 
 /**
- * Hardware settings for the KoaPOS Print Bridge and per-purpose printer routing.
+ * Hardware settings for the KK POS Print Bridge and per-purpose printer routing.
  *
  * The bridge is the local service that lets the browser print to a *named*
  * printer with no OS print dialog. Without it the app can only print silently to
@@ -171,7 +171,7 @@ export function PrintBridgeCard({
 
           {status?.reachable && status.originAllowed && !status.paired && !status.pairingOpen && (
             <p className="text-xs text-amber-600 dark:text-amber-400">
-              Pairing is closed on the bridge. On this computer, focus the KoaPOS Print Bridge window and press
+              Pairing is closed on the bridge. On this computer, focus the KK POS Print Bridge window and press
               &quot;p&quot; (or restart it), then press Pair.
             </p>
           )}

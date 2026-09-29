@@ -5,8 +5,8 @@
  * exchange a code against: each merchant's server issues its own credential.
  * Login Flow v2 is Nextcloud's answer to that — we ask the merchant's server to
  * open a login session, send the merchant there to approve it in their browser,
- * and poll until the server hands back an app password scoped to KoaPOS. The
- * merchant never types a password into KoaPOS, and can revoke the app password
+ * and poll until the server hands back an app password scoped to KK POS. The
+ * merchant never types a password into KK POS, and can revoke the app password
  * from Nextcloud → Settings → Security without changing their account password.
  *
  * The resulting credentials are stored in the encrypted OAuth token vault under
@@ -80,7 +80,7 @@ export async function startLoginFlow(
       method: "POST",
       // Nextcloud shows this name on the generated app password, so the
       // merchant can see what the credential belongs to when revoking it.
-      headers: { "User-Agent": "KoaPOS", Accept: "application/json" },
+      headers: { "User-Agent": "KK POS", Accept: "application/json" },
     });
   } catch {
     throw new Error(
@@ -142,7 +142,7 @@ export async function pollLoginFlow(pending: PendingLoginFlow): Promise<PollResu
       method: "POST",
       headers: {
         "Content-Type": "application/x-www-form-urlencoded",
-        "User-Agent": "KoaPOS",
+        "User-Agent": "KK POS",
         Accept: "application/json",
       },
       body: new URLSearchParams({ token: pending.pollToken }),

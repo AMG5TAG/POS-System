@@ -1,4 +1,4 @@
-# KoaPOS Full Code Audit — 2 July 2026
+# KK POS Full Code Audit — 2 July 2026
 
 Scope: entire monorepo (API server, frontend, shared libs, DB schema, migrations,
 schedulers, dependencies). Method: four parallel deep scans (security, backend

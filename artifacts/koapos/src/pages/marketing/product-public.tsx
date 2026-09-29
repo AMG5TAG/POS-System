@@ -6,7 +6,7 @@ import { telHref } from "@/lib/utils";
 
 /*
  * Public, unauthenticated product page.
- * URL: https://koapos.com.au/b/:businessUsername/p/:productId
+ * URL: https://pos.koastal.com.au/b/:businessUsername/p/:productId
  *
  * The page a customer lands on after scanning a product QR code (printed on a
  * sticker or shown in the app). Renders the product's details — image, price,
@@ -166,7 +166,7 @@ export default function ProductPublicView() {
         )}
 
         <p className="text-center text-[11px] text-muted-foreground/60 mt-8">
-          Powered by {data.business.name || "KoaPOS"}
+          Powered by {data.business.name || "KK POS"}
         </p>
       </main>
     </div>

@@ -66,7 +66,7 @@ async function performBackup(
   config: typeof merchantBackupConfigsTable.$inferSelect,
   opts?: BackupRunOptions,
 ): Promise<void> {
-  const fileName = `backup-${merchantId}-${backupId}-${Date.now()}.koapos.enc`;
+  const fileName = `backup-${merchantId}-${backupId}-${Date.now()}.kkpos.enc`;
   const dir = canonicalDir(merchantId);
   const canonicalPath = path.join(dir, fileName);
 
@@ -224,7 +224,7 @@ export async function backupMerchantNow(
     .values({ merchantId, status: "pending", trigger })
     .returning();
 
-  const fileName = `backup-${merchantId}-${pending.id}-${Date.now()}.koapos.enc`;
+  const fileName = `backup-${merchantId}-${pending.id}-${Date.now()}.kkpos.enc`;
   const dir = canonicalDir(merchantId);
   const canonicalPath = path.join(dir, fileName);
 

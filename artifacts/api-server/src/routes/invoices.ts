@@ -1435,7 +1435,7 @@ export async function sendInvoiceEmailInternal(
     db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Email"))).then((r) => r[0]),
     getInvoiceSettings(merchantId),
   ]);
-  const bizName = merchant?.businessName ?? "KoaPOS";
+  const bizName = merchant?.businessName ?? "KK POS";
   const inv = row.invoice;
   const cName = customerName(row.customerFirstName, row.customerLastName, row.customerCompany);
   const lines = (inv.items as LineItem[] | null) ?? [];

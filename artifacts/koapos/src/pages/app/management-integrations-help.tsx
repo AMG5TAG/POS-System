@@ -30,16 +30,16 @@ const SECTIONS: HelpSection[] = [
     id: "accounting",
     title: "Accounting & Finance — Xero",
     icon: Landmark,
-    intro: "Xero connects in one click using KoaPOS's secure platform connection — no developer app needed.",
+    intro: "Xero connects in one click using KK POS's secure platform connection — no developer app needed.",
     faqs: [
       {
         q: "How do I connect Xero?",
         steps: [
           "Open the Xero integration and click Connect with Xero.",
-          "You'll be sent to Xero to log in and approve access — KoaPOS only requests accounting data, never bank account details.",
+          "You'll be sent to Xero to log in and approve access — KK POS only requests accounting data, never bank account details.",
           "After approving, choose which Xero organisation to sync.",
         ],
-        note: "No developer app or keys required — KoaPOS handles the connection for you.",
+        note: "No developer app or keys required — KK POS handles the connection for you.",
         links: [
           { label: "About Xero OAuth2", url: "https://developer.xero.com/documentation/guides/oauth2/overview/" },
         ],
@@ -64,7 +64,7 @@ const SECTIONS: HelpSection[] = [
         steps: [
           "In your Stripe Dashboard go to Developers → API keys.",
           "Copy your Secret Key (sk_…) and Publishable Key (pk_…).",
-          "Paste both into the Stripe dialog in KoaPOS and Save. (Optionally add a webhook signing secret for payment updates.)",
+          "Paste both into the Stripe dialog in KK POS and Save. (Optionally add a webhook signing secret for payment updates.)",
         ],
         links: [
           { label: "Stripe API keys", url: "https://dashboard.stripe.com/apikeys" },
@@ -76,7 +76,7 @@ const SECTIONS: HelpSection[] = [
         steps: [
           "For Afterpay and Klarna: from the provider's merchant dashboard, copy your Merchant ID and API Key.",
           "For Zip (In-store QR): copy your API Key, Location ID and Device Reference from your Zip onboarding details — Zip issues these with your sandbox/production credentials.",
-          "Paste them into the integration dialog in KoaPOS.",
+          "Paste them into the integration dialog in KK POS.",
           "Copy the webhook URL shown in the dialog, add it in your provider dashboard, and paste back the signing secret it gives you.",
           "Save. At checkout, choose the provider — the customer scans the on-screen QR code in their app to approve, and the sale completes once approved.",
         ],
@@ -129,7 +129,7 @@ const SECTIONS: HelpSection[] = [
         steps: [
           "Click Connect Account on the integration.",
           "You'll be redirected to the provider to sign in and approve the requested permissions.",
-          "After approving, you're returned to KoaPOS and the integration shows as connected.",
+          "After approving, you're returned to KK POS and the integration shows as connected.",
         ],
         note: "If a card shows “OAuth credentials not configured”, the platform connection for that provider hasn't been set up yet — contact support.",
       },
@@ -161,9 +161,9 @@ const SECTIONS: HelpSection[] = [
         ],
       },
       {
-        q: "Is my Nextcloud password stored in KoaPOS?",
+        q: "Is my Nextcloud password stored in KK POS?",
         steps: [
-          "No. You approve the connection on your own Nextcloud, which issues KoaPOS an app password specific to it.",
+          "No. You approve the connection on your own Nextcloud, which issues KK POS an app password specific to it.",
           "That app password is encrypted at rest and only ever used for uploads to the folder you choose.",
           "Revoke it any time from Nextcloud → Settings → Security, or click Disconnect on the Sync page.",
         ],
@@ -171,7 +171,7 @@ const SECTIONS: HelpSection[] = [
       {
         q: "My Nextcloud server won't connect",
         steps: [
-          "The server must be reachable from the internet over https — KoaPOS cannot reach an address on your local network.",
+          "The server must be reachable from the internet over https — KK POS cannot reach an address on your local network.",
           "Check the address is the instance root (https://cloud.example.com), not a page inside it.",
           "If uploads fail with a size error, raise the upload limit on your server (nginx's client_max_body_size).",
         ],

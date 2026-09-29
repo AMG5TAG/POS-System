@@ -148,7 +148,7 @@ NODE_ENV = "production"
 
 [userenv.shared]
 SYSTEM_FROM_EMAIL = "noreply@koastal.com.au"
-APP_BASE_URL = "https://koapos.com.au"
+APP_BASE_URL = "https://pos.koastal.com.au"
 
 [objectStorage]
 defaultBucketID = "replit-objstore-811efc31-e78b-4bbc-9dc8-6ad79963c826"

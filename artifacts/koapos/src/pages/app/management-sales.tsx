@@ -2611,7 +2611,7 @@ export default function ReportsPage() {
               Reports
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Business intelligence and analytics across all areas of KoaPOS
+              Business intelligence and analytics across all areas of KK POS
             </p>
           </div>
 

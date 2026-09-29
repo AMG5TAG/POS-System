@@ -149,9 +149,9 @@ describe("assertSafeNextcloudUrl", () => {
 
 describe("backup location refs", () => {
   it("round-trips a remote path", () => {
-    const ref = nextcloudRef("https://cloud.example.com", "KoaPOS/Backups/b.enc");
-    expect(ref).toBe("nextcloud://cloud.example.com/KoaPOS/Backups/b.enc");
-    expect(parseNextcloudRef(ref)).toBe("KoaPOS/Backups/b.enc");
+    const ref = nextcloudRef("https://cloud.example.com", "KKPOS/Backups/b.enc");
+    expect(ref).toBe("nextcloud://cloud.example.com/KKPOS/Backups/b.enc");
+    expect(parseNextcloudRef(ref)).toBe("KKPOS/Backups/b.enc");
   });
 
   it("keeps the port in the ref host", () => {

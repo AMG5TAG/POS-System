@@ -1,5 +1,5 @@
 /**
- * vcardGenerator — server-side RFC 6350 vCard 3.0 builder for pushing KoaPOS
+ * vcardGenerator — server-side RFC 6350 vCard 3.0 builder for pushing KK POS
  * customers to CardDAV address books (iCloud/Apple Contacts). Mirrors the
  * client-side exporter in koapos `lib/contacts-export.ts`, which is already
  * verified against Apple Contacts / iCloud.

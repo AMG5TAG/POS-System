@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "KoaPOS"
+title = "KK POS"
 version = "1.0.0"
 id = "artifacts/koapos"
 router = "path"

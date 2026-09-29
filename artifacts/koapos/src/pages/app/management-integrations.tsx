@@ -601,7 +601,7 @@ export default function ManagementIntegrationsPage() {
               Integrations
             </h1>
             <p className="text-muted-foreground text-sm mt-1 max-w-xl">
-              Connect third-party services to extend KoaPOS. OAuth tokens are encrypted and stored securely in the platform vault.
+              Connect third-party services to extend KK POS. OAuth tokens are encrypted and stored securely in the platform vault.
             </p>
             <a
               href="/management/settings-integrations/integrations/help"

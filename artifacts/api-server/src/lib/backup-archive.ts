@@ -25,9 +25,9 @@ export async function createArchive(
   destPath: string,
   password: string,
 ): Promise<void> {
-  const workDir = await mkdtemp(path.join(os.tmpdir(), "koapos-backup-"));
+  const workDir = await mkdtemp(path.join(os.tmpdir(), "kkpos-backup-"));
   const jsonPath = path.join(workDir, JSON_ENTRY_NAME);
-  const tarPath = path.join(os.tmpdir(), `koapos-backup-${randomUUID()}.tar.gz`);
+  const tarPath = path.join(os.tmpdir(), `kkpos-backup-${randomUUID()}.tar.gz`);
   try {
     await writeFile(jsonPath, JSON.stringify(dataJson), "utf8");
     // -C workDir so the archive contains just `backup.json`, no path prefix.
@@ -50,7 +50,7 @@ export async function extractArchive<T = unknown>(
   // Throws on wrong password / tamper.
   const tarBuf = await decryptBuffer(encryptedPath, password);
 
-  const workDir = await mkdtemp(path.join(os.tmpdir(), "koapos-restore-"));
+  const workDir = await mkdtemp(path.join(os.tmpdir(), "kkpos-restore-"));
   const tarPath = path.join(workDir, "archive.tar.gz");
   try {
     await writeFile(tarPath, tarBuf);

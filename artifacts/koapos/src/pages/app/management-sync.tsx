@@ -243,7 +243,7 @@ function CustomerFilesCloudPanel({ storages }: { storages: SyncIntegration[] }) 
                 <div className="space-y-1.5">
                   <Label className="text-xs">Destination folder</Label>
                   <Input
-                    placeholder="e.g. KoaPOS/Customer Files"
+                    placeholder="e.g. KK POS/Customer Files"
                     value={settings.folder}
                     onChange={(e) => update({ folder: e.target.value })}
                   />
@@ -663,7 +663,7 @@ export default function ManagementSyncPage() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2"><Users className="w-4 h-4" /> Sync Contacts to {syncTarget?.label}</DialogTitle>
             <DialogDescription>
-              Push your KoaPOS customers to iCloud Contacts. Re-syncing updates the same contacts instead of creating duplicates.
+              Push your KK POS customers to iCloud Contacts. Re-syncing updates the same contacts instead of creating duplicates.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-1">
@@ -806,7 +806,7 @@ function AppleConnectModal({ open, onClose, onConnected }: { open: boolean; onCl
             <p>
               Sign in at{" "}
               <a href="https://appleid.apple.com" target="_blank" rel="noreferrer" className="text-primary hover:underline">appleid.apple.com</a>{" "}
-              → Sign-In &amp; Security → App-Specific Passwords → generate one for “KoaPOS”, then paste it above. Requires two-factor authentication.
+              → Sign-In &amp; Security → App-Specific Passwords → generate one for “KK POS”, then paste it above. Requires two-factor authentication.
             </p>
           </div>
         </div>

@@ -96,7 +96,7 @@ function customerToGoogleRow(c: Customer): string {
   return csvRow([
     fn, c.firstName, "", c.lastName,
     "", "", "", c.dateOfBirth || "", "",
-    notes, c.customerGroup ? `* KoaPOS - ${c.customerGroup}` : "* KoaPOS",
+    notes, c.customerGroup ? `* KK POS - ${c.customerGroup}` : "* KK POS",
     c.email ? "Work" : "", c.email || "",
     c.phone ? "Work" : "", c.phone || "",
     addr ? "Work" : "", addr,

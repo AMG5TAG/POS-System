@@ -1,6 +1,6 @@
-# KoaPOS Print Bridge
+# KK POS Print Bridge
 
-A tiny local service that runs on the till and gives the KoaPOS browser tab the one
+A tiny local service that runs on the till and gives the KK POS browser tab the one
 thing a browser cannot do on its own: **send a document to a named printer with no
 print dialog.**
 
@@ -26,33 +26,33 @@ per-purpose printer routing.
 
 * **Loopback only.** The bridge binds `127.0.0.1`, so nothing on the LAN — or the
   internet — can reach it.
-* **Origin allow-list.** Only the KoaPOS origins listed in the config may call it.
+* **Origin allow-list.** Only the KK POS origins listed in the config may call it.
 * **Bearer token.** Every print endpoint needs the pairing token.
 * **Pairing window.** The token is only handed out while a local operator has opened
   the pairing window — automatically for 10 minutes at startup, or by pressing `p` in
   the bridge window. A malicious site cannot pair itself.
 
-Browsers treat `http://127.0.0.1` as a *trustworthy origin*, so an HTTPS KoaPOS page
+Browsers treat `http://127.0.0.1` as a *trustworthy origin*, so an HTTPS KK POS page
 can call the bridge without a mixed-content block. Chrome and Edge are supported;
 Safari blocks loopback requests from HTTPS pages.
 
 ## Install (Windows till)
 
 1. Install [Node.js 20+](https://nodejs.org) (LTS).
-2. Copy the built `dist/` folder to the till, e.g. `C:\Program Files\KoaPOS\print-bridge\`.
+2. Copy the built `dist/` folder to the till, e.g. `C:\Program Files\KKPOS\print-bridge\`.
 3. For **silent A4 printing**, install one PDF helper:
    * [SumatraPDF](https://www.sumatrapdfreader.org) (recommended, free), or
-   * `PDFtoPrinter.exe` dropped in `C:\Program Files\KoaPOS\`.
+   * `PDFtoPrinter.exe` dropped in `C:\Program Files\KKPOS\`.
 
    Receipts and 80 mm dockets print as raw ESC/POS and need **no** helper.
    Microsoft Edge (preinstalled on Windows 10/11) handles the HTML→PDF step.
 4. Start it:
 
    ```
-   node "C:\Program Files\KoaPOS\print-bridge\index.mjs"
+   node "C:\Program Files\KKPOS\print-bridge\index.mjs"
    ```
 
-5. In KoaPOS: **Settings › Registers › Hardware › Print Bridge → Pair this device**.
+5. In KK POS: **Settings › Registers › Hardware › Print Bridge → Pair this device**.
 
 ### Network / shared printers (label printers especially)
 
@@ -68,14 +68,14 @@ decides whether the bridge can see it:
 
 A connection to a printer shared from another PC is stored per-user, so a bridge
 running as a Windows service (`SYSTEM`) cannot see it, and it simply won't appear in
-`node index.mjs printers` or in KoaPOS. For a shared label printer, pick one:
+`node index.mjs printers` or in KK POS. For a shared label printer, pick one:
 
 * **Install it machine-wide** — add it locally on a *Standard TCP/IP Port* pointing at
   the printer or print-server address, rather than browsing to `\\PC\Printer`. Then a
   service install works. This is the recommended setup.
 * **Or run the bridge from the Startup folder** as the operator's login, not as a service.
 
-`GET /v1/health` reports `runningAsService`, and KoaPOS shows a warning in
+`GET /v1/health` reports `runningAsService`, and KK POS shows a warning in
 Settings › Registers › Hardware when the bridge is running as `SYSTEM`, so this is
 visible rather than a silent missing printer.
 
@@ -91,8 +91,8 @@ Set the shortcut to **Run: Minimized** so it sits out of the way. To run it as a
 proper Windows service instead, wrap it with [NSSM](https://nssm.cc):
 
 ```
-nssm install KoaPOSPrintBridge "C:\Program Files\nodejs\node.exe" "C:\Program Files\KoaPOS\print-bridge\index.mjs"
-nssm start KoaPOSPrintBridge
+nssm install KKPOSPrintBridge "C:\Program Files\nodejs\node.exe" "C:\Program Files\KKPOS\print-bridge\index.mjs"
+nssm start KKPOSPrintBridge
 ```
 
 Note that a service has no console, so pair the browser **before** installing it as a
@@ -113,8 +113,10 @@ While running: `p` reopens pairing, `t` shows the token, `q` quits.
 
 ## Configuration
 
-`%APPDATA%\KoaPOS\print-bridge.json` on Windows
-(`~/Library/Application Support/KoaPOS/` on macOS, `~/.config/koapos/` on Linux):
+`%APPDATA%\KKPOS\print-bridge.json` on Windows
+(`~/Library/Application Support/KKPOS/` on macOS, `~/.config/kkpos/` on Linux).
+A bridge set up before the rename keeps its config in a `KoaPOS` folder; the
+first run under the new name reads it from there, so the till stays paired:
 
 ```jsonc
 {
@@ -122,7 +124,7 @@ While running: `p` reopens pairing, `t` shows the token, `q` quits.
   "token": "…",                       // pairing secret; `rotate` replaces it
   "allowedOrigins": [                 // one leading "*." wildcard is supported
     "https://*.replit.app",
-    "https://*.koapos.com"
+    "https://pos.koastal.com.au"
   ],
   "chromePath": "",                   // blank = auto-detect Edge/Chrome
   "pdfPrinterPath": "",               // blank = auto-detect SumatraPDF/PDFtoPrinter
@@ -130,11 +132,13 @@ While running: `p` reopens pairing, `t` shows the token, `q` quits.
 }
 ```
 
-Environment overrides: `KOAPOS_BRIDGE_PORT`, `KOAPOS_BRIDGE_CHROME`,
-`KOAPOS_BRIDGE_PDF_PRINTER`, `KOAPOS_BRIDGE_DEBUG=1`.
+Environment overrides: `KKPOS_BRIDGE_PORT`, `KKPOS_BRIDGE_CHROME`,
+`KKPOS_BRIDGE_PDF_PRINTER`, `KKPOS_BRIDGE_DEBUG=1` (the old `KOAPOS_BRIDGE_*`
+names still work).
 
-**Add your production origin** to `allowedOrigins` and restart the bridge — the
-defaults cover `*.replit.app`, `*.replit.dev` and `*.koapos.com` only.
+The app's own domains (`https://pos.koastal.com.au` and the old
+`https://koapos.com.au`) are always trusted, whatever the file lists; add any
+other origin to `allowedOrigins` and restart the bridge.
 
 ## How each document type prints
 
@@ -168,12 +172,12 @@ receipts go out that way.
 ## Troubleshooting
 
 **"This browser is not paired"** — press `p` in the bridge window, then Pair again in
-KoaPOS.
+KK POS.
 
-**"Origin … is not allowed"** — add the KoaPOS URL to `allowedOrigins` and restart.
+**"Origin … is not allowed"** — add the KK POS URL to `allowedOrigins` and restart.
 
 **"Printer … not found"** — run `node index.mjs printers` to see the exact queue names
-Windows reports, then pick that name in KoaPOS Hardware settings.
+Windows reports, then pick that name in KK POS Hardware settings.
 
 **"Silent PDF printing needs a helper"** — install SumatraPDF, or set `pdfPrinterPath`
 to your own tool. Raw ESC/POS printing is unaffected.

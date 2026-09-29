@@ -12,7 +12,7 @@ import type { ServiceSheetBranding, ServiceSheetData } from "@/components/printi
 const branding: ServiceSheetBranding = {
   businessName: "Koastal Repairs",
   abn: "12 345 678 901",
-  website: "koastal.com.au",
+  website: "www.koastalrepairs.example",
   email: "hi@koastal.com.au",
   address: "New South Wales 2259",
   brandColor: "#efbf04",
@@ -207,7 +207,7 @@ describe("buildServiceJobDocketBytes", () => {
       expect(text).toContain("Koastal Repairs");
       expect(text).toContain("ABN 12 345 678 901");
       expect(text).not.toContain("New South Wales 2259");
-      expect(text).not.toContain("koastal.com.au");
+      expect(text).not.toContain("www.koastalrepairs.example");
       expect(text).not.toContain("hi@koastal.com.au");
     });
 

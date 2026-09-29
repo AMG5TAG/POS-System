@@ -76,7 +76,7 @@ export async function printTestReceipt(hw: HardwareCfg, profileId?: string): Pro
     if (!bridgeUsable(hw)) {
       throw new Error("Turn the Print Bridge on and pair this device before running a bridge test print.");
     }
-    await bridgePrintRaw({ printer: resolveQueueName(profile), data: bytes, jobName: "KoaPOS test ticket" });
+    await bridgePrintRaw({ printer: resolveQueueName(profile), data: bytes, jobName: "KK POS test ticket" });
     return "bridge-raw";
   }
   throw new Error(

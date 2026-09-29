@@ -139,11 +139,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
       const ipLabel = ip ?? "Unknown";
       void sendEmail(lockedMerchant.id, {
         to: lockedMerchant.email,
-        subject: "Sign-in attempt on your locked KoaPOS account",
+        subject: "Sign-in attempt on your locked KK POS account",
         html: `
           <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
             <h2 style="margin-top:0;color:#dc2626">Sign-in attempt while account is locked</h2>
-            <p>Someone tried to sign in to your KoaPOS account while it is temporarily locked.</p>
+            <p>Someone tried to sign in to your KK POS account while it is temporarily locked.</p>
             <table style="border-collapse:collapse;width:100%;margin:16px 0">
               <tr>
                 <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
@@ -166,7 +166,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
             </p>
           </div>
         `,
-        text: `Sign-in attempt on locked KoaPOS account\n\nTime: ${failTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password once you regain access.`,
+        text: `Sign-in attempt on locked KK POS account\n\nTime: ${failTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password once you regain access.`,
       });
     }
     const errorMsg = lockStatus.isAnomalyHold
@@ -202,11 +202,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
       const ipLabel = ip ?? "Unknown";
       void sendEmail(merchant.id, {
         to: merchant.email,
-        subject: "Failed sign-in attempt on your KoaPOS account",
+        subject: "Failed sign-in attempt on your KK POS account",
         html: `
           <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
             <h2 style="margin-top:0;color:#dc2626">Failed sign-in attempt detected</h2>
-            <p>Someone tried to sign in to your KoaPOS account with an incorrect password.</p>
+            <p>Someone tried to sign in to your KK POS account with an incorrect password.</p>
             <table style="border-collapse:collapse;width:100%;margin:16px 0">
               <tr>
                 <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
@@ -229,7 +229,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
             </p>
           </div>
         `,
-        text: `Failed sign-in attempt on KoaPOS\n\nTime: ${failTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password immediately.`,
+        text: `Failed sign-in attempt on KK POS\n\nTime: ${failTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password immediately.`,
       });
     }
     // Check for multi-IP anomaly — fire-and-forget hold + email if threshold exceeded
@@ -266,11 +266,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
           void sendEmail(merchant.id, {
             to: merchant.email,
-            subject: "Your KoaPOS account has been locked due to suspicious activity",
+            subject: "Your KK POS account has been locked due to suspicious activity",
             html: `
               <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
                 <h2 style="margin-top:0;color:#dc2626">Unusual sign-in activity detected</h2>
-                <p>We detected multiple failed login attempts to your KoaPOS account from different locations and have temporarily locked your account as a precaution.</p>
+                <p>We detected multiple failed login attempts to your KK POS account from different locations and have temporarily locked your account as a precaution.</p>
                 <table style="border-collapse:collapse;width:100%;margin:16px 0">
                   <tr>
                     <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">IP address</td>
@@ -293,7 +293,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
                 <p style="color:#666;font-size:14px">You can review recent sign-in activity in <strong>Account → Recent Sign-ins</strong>.</p>
               </div>
             `,
-            text: `Unusual sign-in activity detected on your KoaPOS account.\n\nMultiple failed login attempts from different locations have triggered an automatic account hold.\n\nIP: ${ip ?? "Unknown"}\nLock duration: ${holdHours} hours\n\nIf this was you, clear the hold immediately using this link (expires in 1 hour):\n${clearUrl}\n\nIf this wasn't you, do NOT click the link above and change your password immediately.`,
+            text: `Unusual sign-in activity detected on your KK POS account.\n\nMultiple failed login attempts from different locations have triggered an automatic account hold.\n\nIP: ${ip ?? "Unknown"}\nLock duration: ${holdHours} hours\n\nIf this was you, clear the hold immediately using this link (expires in 1 hour):\n${clearUrl}\n\nIf this wasn't you, do NOT click the link above and change your password immediately.`,
           });
         }
       } catch (_err) {
@@ -315,11 +315,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
         });
         void sendEmail(lockedMerchantId, {
           to: lockedMerchantEmail,
-          subject: "Your KoaPOS account is now unlocked",
+          subject: "Your KK POS account is now unlocked",
           html: `
             <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
               <h2 style="margin-top:0;color:#16a34a">Your account is unlocked</h2>
-              <p>The temporary lock on your KoaPOS account has expired. You can now sign in again.</p>
+              <p>The temporary lock on your KK POS account has expired. You can now sign in again.</p>
               <table style="border-collapse:collapse;width:100%;margin:16px 0">
                 <tr>
                   <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Unlocked at</td>
@@ -329,7 +329,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
               <p style="margin:24px 0">
                 <a href="${loginUrl}"
                    style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-                  Sign in to KoaPOS
+                  Sign in to KK POS
                 </a>
               </p>
               <p style="color:#999;font-size:12px">If the button doesn't work, copy and paste this URL into your browser:<br>${loginUrl}</p>
@@ -338,7 +338,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
               </p>
             </div>
           `,
-          text: `Your KoaPOS account is now unlocked.\n\nThe temporary lock has expired and you can sign in again.\n\nUnlocked at: ${unlockTime}\n\nSign in here: ${loginUrl}\n\nIf you don't recognise recent sign-in attempts, change your password after logging in.`,
+          text: `Your KK POS account is now unlocked.\n\nThe temporary lock has expired and you can sign in again.\n\nUnlocked at: ${unlockTime}\n\nSign in here: ${loginUrl}\n\nIf you don't recognise recent sign-in attempts, change your password after logging in.`,
         }).catch(() => {
           // Non-blocking — suppress errors from the delayed notification
         });
@@ -390,11 +390,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   if (isNewIp && merchant.loginNotifyEmailNewLocation !== "false") {
     void sendEmail(merchant.id, {
       to: merchant.email,
-      subject: "⚠️ Sign-in from a new location on your KoaPOS account",
+      subject: "⚠️ Sign-in from a new location on your KK POS account",
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
           <h2 style="margin-top:0;color:#d97706">Sign-in from a new location</h2>
-          <p>Your KoaPOS account was signed in to from an IP address that has not been used before.</p>
+          <p>Your KK POS account was signed in to from an IP address that has not been used before.</p>
           <table style="border-collapse:collapse;width:100%;margin:16px 0">
             <tr>
               <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
@@ -412,11 +412,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
           <p><strong>If this was you</strong> — you can dismiss this alert in <strong>Account → Recent Sign-ins</strong>.</p>
           <p><strong>If this wasn't you</strong> — change your password immediately and review your recent sign-in activity.</p>
           <p style="color:#666;font-size:14px">
-            To review recent sign-in events, go to <strong>Account → Recent Sign-ins</strong> in KoaPOS.
+            To review recent sign-in events, go to <strong>Account → Recent Sign-ins</strong> in KK POS.
           </p>
         </div>
       `,
-      text: `Sign-in from a new location on your KoaPOS account.\n\nTime: ${loginTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this was you, you can dismiss the alert in Account → Recent Sign-ins.\nIf this wasn't you, change your password immediately.`,
+      text: `Sign-in from a new location on your KK POS account.\n\nTime: ${loginTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this was you, you can dismiss the alert in Account → Recent Sign-ins.\nIf this wasn't you, change your password immediately.`,
     });
   }
 
@@ -424,11 +424,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   if (merchant.loginNotifyEmail === "true") {
     void sendEmail(merchant.id, {
       to: merchant.email,
-      subject: "New sign-in to your KoaPOS account",
+      subject: "New sign-in to your KK POS account",
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
           <h2 style="margin-top:0">New sign-in detected</h2>
-          <p>Someone (hopefully you) just signed in to your KoaPOS account.</p>
+          <p>Someone (hopefully you) just signed in to your KK POS account.</p>
           <table style="border-collapse:collapse;width:100%;margin:16px 0">
             <tr>
               <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
@@ -452,7 +452,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
           </p>
         </div>
       `,
-      text: `New sign-in to KoaPOS\n\nTime: ${loginTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password immediately.`,
+      text: `New sign-in to KK POS\n\nTime: ${loginTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this wasn't you, change your password immediately.`,
     });
   }
 
@@ -571,11 +571,11 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
           const ipLabel = updated.ipAddress ?? "Unknown";
           await sendEmail(merchantId, {
             to: merchant.email,
-            subject: "⚠️ Suspicious sign-in flagged on your KoaPOS account",
+            subject: "⚠️ Suspicious sign-in flagged on your KK POS account",
             html: `
               <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
                 <h2 style="margin-top:0;color:#dc2626">Suspicious sign-in flagged</h2>
-                <p>You (or a team member) flagged a sign-in on your KoaPOS account as suspicious.</p>
+                <p>You (or a team member) flagged a sign-in on your KK POS account as suspicious.</p>
                 <table style="border-collapse:collapse;width:100%;margin:16px 0">
                   <tr>
                     <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">Time</td>
@@ -595,7 +595,7 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
                 <p style="color:#666;font-size:14px">To stop receiving these emails, turn off <strong>Login email notifications</strong> in your Account settings.</p>
               </div>
             `,
-            text: `Suspicious sign-in flagged on your KoaPOS account.\n\nTime: ${eventTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this sign-in was not you, change your password immediately.\n\nReview recent sign-ins in Account → Recent Sign-ins.`,
+            text: `Suspicious sign-in flagged on your KK POS account.\n\nTime: ${eventTime}\nIP: ${ipLabel}\nBrowser: ${browserLabel}\n\nIf this sign-in was not you, change your password immediately.\n\nReview recent sign-ins in Account → Recent Sign-ins.`,
           });
         }
       } catch (_err) {
@@ -632,7 +632,7 @@ const resetPasswordLimiter = rateLimit({
  * Returns the trusted public origin for this app (used in password-reset links).
  *
  * Delegates to the shared publicOrigin() helper, which resolves to the
- * operator-configured APP_BASE_URL/PUBLIC_DOMAIN or the koapos.com.au default.
+ * operator-configured APP_BASE_URL/PUBLIC_DOMAIN or the pos.koastal.com.au default.
  *
  * Request headers (Host, X-Forwarded-Host, etc.) are intentionally NOT used
  * because they are attacker-controlled and can be poisoned to redirect reset
@@ -687,11 +687,11 @@ router.post("/auth/forgot-password", resetPasswordLimiter, async (req, res): Pro
 
   void sendEmail(merchant.id, {
     to: merchant.email,
-    subject: "Reset your KoaPOS password",
+    subject: "Reset your KK POS password",
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
         <h2 style="margin-top:0">Reset your password</h2>
-        <p>We received a request to reset the password for your KoaPOS account. Click the button below to choose a new password.</p>
+        <p>We received a request to reset the password for your KK POS account. Click the button below to choose a new password.</p>
         <p style="margin:24px 0">
           <a href="${resetUrl}"
              style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
@@ -702,7 +702,7 @@ router.post("/auth/forgot-password", resetPasswordLimiter, async (req, res): Pro
         <p style="color:#999;font-size:12px">If the button doesn't work, copy and paste this URL into your browser:<br>${resetUrl}</p>
       </div>
     `,
-    text: `Reset your KoaPOS password\n\nClick the link below to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request a password reset, ignore this email.`,
+    text: `Reset your KK POS password\n\nClick the link below to reset your password (expires in 1 hour):\n\n${resetUrl}\n\nIf you didn't request a password reset, ignore this email.`,
   }).then((result) => {
     if (!result.success) {
       req.log.warn({ provider: result.provider, error: result.error }, "Password reset email delivery failed — configure SYSTEM_SMTP_* or SYSTEM_RESEND_API_KEY env vars, or set up email in Management → Email");
@@ -795,11 +795,11 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
     const changeTime = new Date().toLocaleString("en-AU", { timeZone: merchant.timezone ?? "Australia/Sydney", hour12: true });
     void sendEmail(merchant.id, {
       to: merchant.email,
-      subject: "Your KoaPOS password was changed",
+      subject: "Your KK POS password was changed",
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
           <h2 style="margin-top:0">Password changed</h2>
-          <p>The password for your KoaPOS account (<strong>${merchant.email}</strong>) was just changed.</p>
+          <p>The password for your KK POS account (<strong>${merchant.email}</strong>) was just changed.</p>
           <table style="border-collapse:collapse;width:100%;margin:16px 0">
             <tr><td style="padding:6px 12px;font-weight:600;width:120px">Time</td><td style="padding:6px 12px">${changeTime}</td></tr>
           </table>
@@ -808,7 +808,7 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
           <p style="color:#666;font-size:13px">You can turn off these alerts in <strong>Account Settings → Login Email Notifications</strong>.</p>
         </div>
       `,
-      text: `Your KoaPOS password was changed\n\nThe password for ${merchant.email} was just changed.\n\nTime: ${changeTime}\n\nIf this was you, no action is needed.\n\nIf this wasn't you, use "Forgot password" on the login page to regain control immediately and review recent sign-ins in Account → Recent Sign-ins.`,
+      text: `Your KK POS password was changed\n\nThe password for ${merchant.email} was just changed.\n\nTime: ${changeTime}\n\nIf this was you, no action is needed.\n\nIf this wasn't you, use "Forgot password" on the login page to regain control immediately and review recent sign-ins in Account → Recent Sign-ins.`,
     });
   }
 
@@ -1039,17 +1039,17 @@ router.post("/auth/resend-verification", requireAuth, resendVerifyLimiter, async
   const base = getAppBaseUrl();
   void sendSystemEmail({
     to: merchant.email,
-    subject: "Verify your KoaPOS email address",
+    subject: "Verify your KK POS email address",
     html: `
       <div style="font-family:sans-serif;max-width:540px;margin:0 auto;color:#111">
         <h2 style="margin-top:0;color:#16a34a">Verify your email address</h2>
-        <p>Click the button below to verify your KoaPOS account email.</p>
+        <p>Click the button below to verify your KK POS account email.</p>
         <p style="margin-top:24px">
           <a href="${base}/api/auth/verify-email?token=${token}" style="background:#16a34a;color:#fff;padding:12px 24px;border-radius:6px;text-decoration:none;font-weight:600">Verify email address →</a>
         </p>
       </div>
     `,
-    text: `Verify your KoaPOS email: ${base}/api/auth/verify-email?token=${token}`,
+    text: `Verify your KK POS email: ${base}/api/auth/verify-email?token=${token}`,
   });
   res.json({ ok: true });
 });

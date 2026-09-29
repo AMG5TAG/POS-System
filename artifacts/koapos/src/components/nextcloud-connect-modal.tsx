@@ -131,7 +131,7 @@ export function NextcloudConnectModal({ open, onClose, onConnected }: {
           </DialogTitle>
           <DialogDescription>
             {stage === "server"
-              ? "Back up your KoaPOS data and mirror customer files to your own Nextcloud server."
+              ? "Back up your KK POS data and mirror customer files to your own Nextcloud server."
               : `Approve the connection on ${resolvedServer} to finish.`}
           </DialogDescription>
         </DialogHeader>
@@ -153,7 +153,7 @@ export function NextcloudConnectModal({ open, onClose, onConnected }: {
                 <ShieldCheck className="w-3.5 h-3.5" /> What happens next
               </p>
               <p>
-                You'll approve the connection on your own Nextcloud, which issues KoaPOS
+                You'll approve the connection on your own Nextcloud, which issues KK POS
                 an app password. Your account password is never entered here, and you can
                 revoke access any time from Nextcloud → Settings → Security.
               </p>

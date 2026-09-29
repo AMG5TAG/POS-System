@@ -1635,8 +1635,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
       <header ref={headerRef} className={cn("h-14 flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30 transition-all duration-200 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80", headerScrolled ? "shadow-[0_4px_24px_-2px_rgba(0,0,0,0.10),0_1px_4px_-1px_rgba(0,0,0,0.06)] border-b border-transparent" : "border-b border-border")}>
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-1">
-          <img src="/logo.png" alt="KoaPOS" className="w-7 h-7 object-contain" />
-          <span className="font-bold text-sm hidden lg:block max-w-[110px] truncate">{user?.businessName || "KoaPOS"}</span>
+          <img src="/logo.png" alt="KK POS" className="w-7 h-7 object-contain" />
+          <span className="font-bold text-sm hidden lg:block max-w-[110px] truncate">{user?.businessName || "KK POS"}</span>
         </Link>
 
         {/* Nav items */}
@@ -2084,8 +2084,8 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
     >
       <SidebarHeader className="min-h-16 flex items-center px-4 py-3 border-b">
         <Link href="/dashboard" className="flex items-center gap-2 w-full">
-          <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain shrink-0" />
-          <span className="font-bold text-sm leading-snug break-words line-clamp-3 min-w-0">{user?.businessName || "KoaPOS"}</span>
+          <img src="/logo.png" alt="KK POS" className="w-8 h-8 object-contain shrink-0" />
+          <span className="font-bold text-sm leading-snug break-words line-clamp-3 min-w-0">{user?.businessName || "KK POS"}</span>
         </Link>
       </SidebarHeader>
 

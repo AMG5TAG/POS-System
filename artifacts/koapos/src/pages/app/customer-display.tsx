@@ -69,8 +69,8 @@ export default function CustomerDisplayPage() {
       {/* Header */}
       <div className="border-b border-white/10 px-10 py-5 flex items-center justify-between shrink-0">
         <div className="flex items-center gap-3">
-          <img src="/logo.png" alt="KoaPOS" className="w-9 h-9 object-contain opacity-90" />
-          <span className="text-xl font-bold text-white/90 tracking-tight">KoaPOS</span>
+          <img src="/logo.png" alt="KK POS" className="w-9 h-9 object-contain opacity-90" />
+          <span className="text-xl font-bold text-white/90 tracking-tight">KK POS</span>
         </div>
         {payload?.customerName && (
           <div className="text-sm text-white/50">

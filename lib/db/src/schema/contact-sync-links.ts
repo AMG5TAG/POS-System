@@ -3,7 +3,7 @@ import { merchantsTable } from "./merchants";
 import { customersTable } from "./customers";
 
 /**
- * contact_sync_links — persistent map of a KoaPOS customer → the contact it
+ * contact_sync_links — persistent map of a KK POS customer → the contact it
  * created on the connected iCloud account.
  *
  * This is what makes contact sync a *true* sync instead of a blind re-push.

@@ -19,12 +19,12 @@ export default function TermsPage() {
         <div className="prose prose-sm max-w-none space-y-6 text-sm leading-relaxed">
           <section>
             <h2 className="text-lg font-semibold mb-2">1. Acceptance of Terms</h2>
-            <p>By creating an account or using KoaPOS ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
+            <p>By creating an account or using KK POS ("the Service"), you agree to be bound by these Terms of Service. If you do not agree, do not use the Service.</p>
           </section>
 
           <section>
             <h2 className="text-lg font-semibold mb-2">2. Description of Service</h2>
-            <p>KoaPOS is an in-house point-of-sale system. We provide tools for sales, inventory, customer management, and reporting.</p>
+            <p>KK POS is an in-house point-of-sale system. We provide tools for sales, inventory, customer management, and reporting.</p>
           </section>
 
           <section>
@@ -39,7 +39,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold mb-2">5. Data Ownership</h2>
-            <p>You retain ownership of all data you input into KoaPOS (products, customers, transactions, etc.). We do not sell your data to third parties. You may export your data at any time via Management → Import/Export.</p>
+            <p>You retain ownership of all data you input into KK POS (products, customers, transactions, etc.). We do not sell your data to third parties. You may export your data at any time via Management → Import/Export.</p>
           </section>
 
           <section>
@@ -49,7 +49,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold mb-2">7. Limitation of Liability</h2>
-            <p>To the maximum extent permitted by law, KoaPOS and its operators are not liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service.</p>
+            <p>To the maximum extent permitted by law, KK POS and its operators are not liable for any indirect, incidental, special, consequential, or punitive damages arising from your use of the Service.</p>
           </section>
 
           <section>
@@ -69,7 +69,7 @@ export default function TermsPage() {
 
           <section>
             <h2 className="text-lg font-semibold mb-2">11. Contact</h2>
-            <p>Questions about these Terms? Contact us at <a href="mailto:legal@koapos.com" className="text-primary hover:underline">legal@koapos.com</a>.</p>
+            <p>Questions about these Terms? Contact us at <a href="mailto:admin@koastal.com.au" className="text-primary hover:underline">admin@koastal.com.au</a>.</p>
           </section>
         </div>
       </div>

@@ -192,7 +192,7 @@ async function davFetch(
     headers: {
       Authorization: authHeader(creds),
       // Nextcloud keys some rate-limit and app-password behaviour off the agent.
-      "User-Agent": "KoaPOS",
+      "User-Agent": "KK POS",
       ...(init.headers ?? {}),
     },
   });
@@ -341,7 +341,7 @@ async function uploadChunked(
 ): Promise<void> {
   // Nextcloud only requires the transfer id to be unique per user; the target
   // path makes collisions between concurrent backups impossible in practice.
-  const transferId = `koapos-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+  const transferId = `kkpos-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
   const transferDir = `${uploadsRoot(creds)}/${encodeURIComponent(transferId)}`;
   const destination = `${filesRoot(creds)}/${encodePath(remotePath)}`;
 

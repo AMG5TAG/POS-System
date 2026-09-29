@@ -18,6 +18,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
 import { escapeHtml } from "../lib/html-escape";
+import { publicOrigin } from "../lib/publicUrl";
 
 const router: IRouter = Router();
 
@@ -31,7 +32,7 @@ export const FOLLOW_UP_SHORTCODES: { code: string; label: string; example: strin
   { code: "first_name",     label: "Customer first name",       example: "Sarah" },
   { code: "last_name",      label: "Customer last name",        example: "Johnson" },
   { code: "customer_name",  label: "Customer full name",        example: "Sarah Johnson" },
-  { code: "business_name",  label: "Your business name",        example: "KoaPOS Demo" },
+  { code: "business_name",  label: "Your business name",        example: "KK POS Demo" },
   { code: "business_phone", label: "Your business phone",       example: "02 5555 1234" },
   { code: "business_email", label: "Your business email",       example: "hello@example.com" },
   { code: "reference",      label: "Job number / booking ref",  example: "SJ-1042" },
@@ -588,7 +589,7 @@ router.post("/follow-ups/send", requireAuth, async (req, res): Promise<void> => 
   const settings = await getOrCreateSettings(merchantId);
   const biz = await getBizInfo(merchantId);
   const requireOptIn = settings.requireOptIn === "true";
-  const baseUrl = process.env.APP_BASE_URL ?? "https://app.koastal.com.au";
+  const baseUrl = publicOrigin();
 
   // Load every requested record once, then dispatch from that snapshot.
   const wantServiceIds = input.targets.filter((t) => t.sourceType === "service_job").map((t) => t.sourceId);

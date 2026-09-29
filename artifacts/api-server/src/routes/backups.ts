@@ -286,7 +286,7 @@ router.get("/backups/:id/download", requireAuth, requireManagerOrOwner, async (r
   }
 
   const startedAt = backup.startedAt ? new Date(backup.startedAt).toISOString().slice(0, 10) : "backup";
-  const fileName = `koapos-backup-${merchantId}-${startedAt}-${id}.koapos.enc`;
+  const fileName = `kkpos-backup-${merchantId}-${startedAt}-${id}.kkpos.enc`;
   res.download(archivePath, fileName, async (err) => {
     if (cleanup) await cleanup().catch(() => { /* best-effort */ });
     if (err && !res.headersSent) res.status(500).end();

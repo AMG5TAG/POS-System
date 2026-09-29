@@ -127,7 +127,7 @@ async function buildSystemPrompt(merchantId: number, mode: string): Promise<stri
       totalTransactions,
       avgTransaction: totalTransactions > 0 ? totalRevenue / totalTransactions : 0,
     };
-    return `You are a financial analyst and business advisor for "${businessName}", an Australian retail merchant using KoaPOS.
+    return `You are a financial analyst and business advisor for "${businessName}", an Australian retail merchant using KK POS.
 
 Business context (last 30 days):
 - Total Revenue: $${Number(agg?.totalRevenue ?? 0).toFixed(2)} AUD
@@ -168,7 +168,7 @@ Your role: Provide insightful financial forecasting, budgeting advice, profit an
         ).join("\n")
       : "  (No low-stock items currently detected)";
 
-    return `You are an inventory and purchasing manager for "${businessName}", an Australian retail merchant using KoaPOS.
+    return `You are an inventory and purchasing manager for "${businessName}", an Australian retail merchant using KK POS.
 
 Current inventory snapshot:
 Low-stock / needs reordering:
@@ -195,7 +195,7 @@ Your role: Analyse the stock levels above and provide specific purchase order re
     const cardPayments = recentTx.filter(t => t.paymentMethod === "card").length;
     const cashPayments = recentTx.filter(t => t.paymentMethod === "cash").length;
 
-    return `You are a creative marketing strategist for "${businessName}", an Australian retail merchant using KoaPOS.
+    return `You are a creative marketing strategist for "${businessName}", an Australian retail merchant using KK POS.
 
 Business profile:
 - Business Name: ${merchant2?.businessName ?? businessName}
@@ -209,7 +209,7 @@ Recent sales metrics (last 20 transactions):
 Your role: Generate creative, localised marketing ideas, social media copy, promotional angles, and campaign concepts tailored for Australian retail. Keep suggestions practical and actionable — include specific caption examples, hashtag suggestions, and timing recommendations. Focus on ideas that work for small-to-medium retail businesses.`;
   }
 
-  return `You are an AI business assistant for "${businessName}", an Australian retail merchant using KoaPOS. Help the business owner with analytical questions about their business, retail operations, and strategy.`;
+  return `You are an AI business assistant for "${businessName}", an Australian retail merchant using KK POS. Help the business owner with analytical questions about their business, retail operations, and strategy.`;
 }
 
 /* ── Send message + SSE stream ──────────────────────────────────────────── */

@@ -424,7 +424,7 @@ function TemplateMini({ template, settings, data, selected, onClick, fontFamily 
       style={{ width: 100 }}>
       <div className="flex items-center justify-center w-full h-[88px] overflow-hidden">
         <TemplateWrapper template={template.id} bgColor={settings.bgColor} patternColor={settings.patternColor} borderColor={settings.borderColor} scale={0.6} fontFamily={fontFamily} code={settings.customCode}>
-          <StyledQR settings={previewSettings} data={data || "https://koapos.com"} size={72} />
+          <StyledQR settings={previewSettings} data={data || "https://pos.koastal.com.au"} size={72} />
         </TemplateWrapper>
       </div>
       <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap">{template.label}</span>
@@ -810,7 +810,7 @@ export default function MarketingQRCodesPage() {
 
   const shortlinkOptions = useMemo<LinkOption[]>(() => {
     const sl = shortlinkSettings as Record<string, unknown> | undefined;
-    const fallbackBase = `${String(sl?.baseDomain ?? "go.koapos.com")}/${String(sl?.prefix ?? "s")}`;
+    const fallbackBase = `${String(sl?.baseDomain ?? "go.koastal.com.au")}/${String(sl?.prefix ?? "s")}`;
     return ((shortlinksResponse?.items ?? []) as unknown as Record<string, unknown>[]).map((s) => {
       const slug = String(s.slug ?? s.linkId ?? "");
       const base = String(s.baseDomain ?? fallbackBase);
@@ -988,7 +988,7 @@ export default function MarketingQRCodesPage() {
   }, [downloadFile]);
 
   const downloadLive = useCallback((format: "png" | "svg" = "png") =>
-    downloadFramed(settings, effectiveData || "https://koapos.com", label || "qrcode", format),
+    downloadFramed(settings, effectiveData || "https://pos.koastal.com.au", label || "qrcode", format),
     [settings, effectiveData, label, downloadFramed]);
 
   // Tracked entries encode the redirect (/api/qr/r/:id), so re-downloads from
@@ -1044,7 +1044,7 @@ export default function MarketingQRCodesPage() {
      QR actually changes, not on every parent render (e.g. as queries resolve). */
   const liveSig = JSON.stringify({ settings, effectiveData });
   useEffect(() => {
-    const opts = buildQROptions(settings, effectiveData || "https://koapos.com", Math.min(settings.size, 240));
+    const opts = buildQROptions(settings, effectiveData || "https://pos.koastal.com.au", Math.min(settings.size, 240));
     if (!liveQrRef.current) {
       liveQrRef.current = new QRCodeStyling(opts);
       if (liveContainerRef.current) { liveContainerRef.current.innerHTML = ""; liveQrRef.current.append(liveContainerRef.current); }
@@ -1300,7 +1300,7 @@ export default function MarketingQRCodesPage() {
                                 scale={0.6}
                                 code={tmpl.settings.customCode}
                               >
-                                <StyledQR settings={tmpl.settings} data={qrData || "https://koapos.com"} size={72} />
+                                <StyledQR settings={tmpl.settings} data={qrData || "https://pos.koastal.com.au"} size={72} />
                               </TemplateWrapper>
                             </div>
                             <span className="text-[10px] text-muted-foreground font-medium whitespace-nowrap overflow-hidden max-w-full text-ellipsis px-1">
@@ -1327,7 +1327,7 @@ export default function MarketingQRCodesPage() {
                     so every frame is visible at once (≈ two rows on a wide card). */}
                 <div className="flex flex-wrap gap-3 pb-1">
                   {TEMPLATES.map((t) => (
-                    <TemplateMini key={t.id} template={t} settings={settings} data="https://koapos.com"
+                    <TemplateMini key={t.id} template={t} settings={settings} data="https://pos.koastal.com.au"
                       selected={settings.template === t.id} onClick={() => set("template", t.id)} fontFamily={brandFontFamily} />
                   ))}
                 </div>

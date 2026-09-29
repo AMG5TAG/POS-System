@@ -41,7 +41,10 @@ const JOB = { id: 7, merchantId: 1, status: "in-progress", customerId: 3 };
 const MERCHANT = { username: "koastal", portalDomain: null };
 
 beforeAll(async () => {
-  process.env.PUBLIC_DOMAIN = "koapos.com.au"; // pin the origin the links advertise
+  // Pin the origin the links advertise. APP_BASE_URL outranks PUBLIC_DOMAIN,
+  // so clear it or the shell's own value would leak into the assertions.
+  delete process.env.APP_BASE_URL;
+  process.env.PUBLIC_DOMAIN = "pos.koastal.com.au";
   const { default: qrRouter } = await import("../routes/qr");
   app = express();
   app.use(express.json());
@@ -55,13 +58,13 @@ describe("GET /api/qr/j/:jobId", () => {
     h.rows = [[JOB], [MERCHANT]];
     const res = await request(app).get("/api/qr/j/7");
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe("https://koapos.com.au/b/koastal/t/techapp?job=7");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/b/koastal/t/techapp?job=7");
   });
 
   it("sends a completed job to the customer's portal", async () => {
     h.rows = [[{ ...JOB, status: "completed" }], [MERCHANT], [{ portalToken: "tok-123" }]];
     const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://koapos.com.au/b/koastal/c/tok-123");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/b/koastal/c/tok-123");
   });
 
   it("prefers the merchant's own portal domain when they have one", async () => {
@@ -78,13 +81,13 @@ describe("GET /api/qr/j/:jobId", () => {
   it("falls back to the Tech App when a completed job has no portal to open", async () => {
     h.rows = [[{ ...JOB, status: "completed" }], [MERCHANT], [{ portalToken: null }]];
     const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://koapos.com.au/b/koastal/t/techapp?job=7");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/b/koastal/t/techapp?job=7");
   });
 
   it("falls back to the staff Service View when the merchant has no username", async () => {
     h.rows = [[JOB], [{ username: null, portalDomain: null }]];
     const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://koapos.com.au/service-jobs/7");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au/service-jobs/7");
   });
 
   it("404s an unknown job rather than redirecting somewhere misleading", async () => {
@@ -96,7 +99,7 @@ describe("GET /api/qr/j/:jobId", () => {
   it("sends a junk id home instead of querying with NaN", async () => {
     const res = await request(app).get("/api/qr/j/not-a-number");
     expect(res.status).toBe(302);
-    expect(res.headers.location).toBe("https://koapos.com.au");
+    expect(res.headers.location).toBe("https://pos.koastal.com.au");
     expect(h.rows).toEqual([]); // no query was attempted
   });
 });

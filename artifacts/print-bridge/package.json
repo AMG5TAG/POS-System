@@ -3,9 +3,9 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "KoaPOS Print Bridge \u2014 local silent-print service for Windows/macOS/Linux tills",
+  "description": "KK POS Print Bridge \u2014 local silent-print service for Windows/macOS/Linux tills",
   "bin": {
-    "koapos-print-bridge": "./dist/index.mjs"
+    "kkpos-print-bridge": "./dist/index.mjs"
   },
   "scripts": {
     "dev": "tsx src/index.ts",

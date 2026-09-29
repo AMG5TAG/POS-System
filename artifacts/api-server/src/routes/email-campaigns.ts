@@ -5,6 +5,7 @@ import { createHmac } from "crypto";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
+import { publicOrigin } from "../lib/publicUrl";
 
 function makeUnsubToken(merchantId: number, customerId: number): string {
   const secret = process.env.UNSUBSCRIBE_SECRET ?? process.env.SESSION_SECRET ?? "koapos-unsub-secret";
@@ -116,7 +117,7 @@ router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<
   ]);
   const bizName = merchant?.name ?? "Our Business";
   const bizAddress = [merchant?.address, merchant?.city, bp?.state, bp?.postcode].filter(Boolean).join(", ");
-  const baseUrl = process.env.APP_BASE_URL ?? "https://app.koastal.com.au";
+  const baseUrl = publicOrigin();
 
   // Build recipient list — only customers who have explicitly opted in (Spam Act 2003 s 16)
   let customers = await db

@@ -93,7 +93,7 @@ type XeroCredentials = {
 
 /* ── Helpers ─────────────────────────────────────────────────────────────── */
 
-// Build the OAuth callback from the app's canonical public origin (koapos.com.au
+// Build the OAuth callback from the app's canonical public origin (pos.koastal.com.au
 // in production) — NOT from raw request headers, which in the Replit deployment
 // resolve to the internal *.replit.dev host and make Xero reject the redirect_uri.
 // This URL must exactly match a Redirect URI registered in the Xero app config.
@@ -547,7 +547,7 @@ router.put("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
 
 /* ── POST /api/xero/sync/contacts ────────────────────────────────────────── */
 /*
- * Syncs KoaPOS customers and suppliers to Xero as Contacts via PUT /Contacts.
+ * Syncs KK POS customers and suppliers to Xero as Contacts via PUT /Contacts.
  * When `syncSettings.includeNotes` is enabled, a follow-up POST to each
  * contact's /History endpoint records CRM notes as a History entry. Notes sync
  * is best-effort: individual failures are logged and counted but do not abort
@@ -728,7 +728,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
       // "append": concatenate all notes newest-first.
       const notesToFormat = notesConflict === "overwrite" ? notes.slice(0, 1) : notes;
       let noteText =
-        "[KoaPOS Notes]\n" +
+        "[KK POS Notes]\n" +
         notesToFormat
           .map((n) => {
             const date = new Date(n.createdAt).toLocaleDateString("en-AU", {
@@ -778,7 +778,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
 
 /* ── POST /api/xero/sync/transactions ───────────────────────────────────────
    Syncs the last 90 days of completed transactions as Xero Invoices (ACCREC).
-   Each KoaPOS transaction becomes one Xero invoice with line items.
+   Each KK POS transaction becomes one Xero invoice with line items.
    ─────────────────────────────────────────────────────────────────────────── */
 
 router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<void> => {
@@ -857,7 +857,7 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
       InvoiceNumber: tx.receiptNumber ?? `KP-${tx.id}`,
       Date:      new Date(tx.createdAt).toISOString().split("T")[0],
       DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
-      Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
+      Reference: `KK POS Receipt ${tx.receiptNumber ?? tx.id}`,
       LineItems: lineItems,
       LineAmountTypes: "Inclusive",
     };
@@ -948,7 +948,7 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
       DueDate:         po.expectedDate
         ? new Date(po.expectedDate).toISOString().split("T")[0]
         : new Date(po.createdAt).toISOString().split("T")[0],
-      Reference:       `KoaPOS PO ${po.poNumber ?? po.id}`,
+      Reference:       `KK POS PO ${po.poNumber ?? po.id}`,
       LineItems:       [{ Description: "Purchase Order", Quantity: 1, UnitAmount: parseFloat(String(po.totalCost ?? 0)), AccountCode: purchasesCode }],
       LineAmountTypes: "Exclusive",
     };
@@ -1061,7 +1061,7 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
     InvoiceNumber: invoiceNumber,
     Date:      new Date(tx.createdAt).toISOString().split("T")[0],
     DueDate:   new Date(tx.createdAt).toISOString().split("T")[0],
-    Reference: `KoaPOS Receipt ${tx.receiptNumber ?? tx.id}`,
+    Reference: `KK POS Receipt ${tx.receiptNumber ?? tx.id}`,
     LineItems: lineItems,
     LineAmountTypes: "Inclusive",
   };

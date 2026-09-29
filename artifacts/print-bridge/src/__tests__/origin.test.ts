@@ -3,11 +3,11 @@ import { isOriginAllowed } from "../config.js";
 
 /**
  * The origin allow-list is the bridge's outer perimeter: any website the till's
- * browser visits could try to talk to loopback, so only KoaPOS deployments may
+ * browser visits could try to talk to loopback, so only KK POS deployments may
  * get past it (the bearer token then gates the actual printing).
  */
 describe("isOriginAllowed", () => {
-  const allowed = ["https://*.replit.app", "https://koapos.com", "https://pos.example.com:8443"];
+  const allowed = ["https://*.replit.app", "https://pos.koastal.com.au", "https://pos.example.com:8443"];
 
   it("accepts subdomains of a wildcard entry, and the bare domain", () => {
     expect(isOriginAllowed("https://my-app.replit.app", allowed)).toBe(true);
@@ -23,7 +23,7 @@ describe("isOriginAllowed", () => {
 
   it("requires the scheme to match, so an http impostor can't stand in", () => {
     expect(isOriginAllowed("http://my-app.replit.app", allowed)).toBe(false);
-    expect(isOriginAllowed("http://koapos.com", allowed)).toBe(false);
+    expect(isOriginAllowed("http://pos.koastal.com.au", allowed)).toBe(false);
   });
 
   it("matches an exact entry including its port", () => {
@@ -40,6 +40,6 @@ describe("isOriginAllowed", () => {
   it("rejects a missing, malformed, or unlisted origin", () => {
     expect(isOriginAllowed(undefined, allowed)).toBe(false);
     expect(isOriginAllowed("not a url", allowed)).toBe(false);
-    expect(isOriginAllowed("https://koapos.com", [])).toBe(false);
+    expect(isOriginAllowed("https://pos.koastal.com.au", [])).toBe(false);
   });
 });

@@ -24,7 +24,7 @@ export const landingPagesTable = pgTable("landing_pages", {
   textColor:    text("text_color").notNull().default("#ffffff"),
   font:         text("font").notNull().default("Inter"),
   privacyUrl:   text("privacy_url").notNull().default(""),
-  // "true"/"false" — whether the "Powered by KoaPOS" referral footer is shown.
+  // "true"/"false" — whether the "Powered by KK POS" referral footer is shown.
   showPoweredBy: text("show_powered_by").notNull().default("true"),
   // "true" marks this row as a reusable style template rather than a published page.
   isTemplate:   text("is_template").notNull().default("false"),

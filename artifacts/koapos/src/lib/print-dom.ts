@@ -33,7 +33,7 @@ export function standaloneHtmlFrom(el: HTMLElement | null, opts: StandaloneHtmlO
 
 /** Wrap a markup fragment in a complete, self-contained HTML document. */
 export function standaloneHtml(markup: string, opts: StandaloneHtmlOpts = {}): string {
-  const title = escapeHtml(opts.title ?? "KoaPOS");
+  const title = escapeHtml(opts.title ?? "KK POS");
   const font = opts.fontCss ? `body { font-family: ${opts.fontCss}; }` : "";
   return `<!doctype html>
 <html>

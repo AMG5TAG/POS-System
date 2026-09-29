@@ -1,7 +1,7 @@
 /**
  * Provider-agnostic payroll abstraction.
  *
- * KoaPOS integrates an EXTERNAL payroll provider (Xero Payroll first) that owns
+ * KK POS integrates an EXTERNAL payroll provider (Xero Payroll first) that owns
  * pay calculation, STP/ATO lodgement, superannuation and multi-region
  * compliance. Each provider is implemented as a `PayrollProvider` adapter; the
  * route layer talks only to this interface and never to a provider's API

@@ -19,7 +19,7 @@ export default function PrivacyPage() {
         <div className="prose prose-sm max-w-none space-y-6 text-sm leading-relaxed">
           <section>
             <h2 className="text-lg font-semibold mb-2">1. Overview</h2>
-            <p>KoaPOS ("we", "us", "our") is committed to protecting your privacy. This policy explains how we collect, use, store, and disclose personal information in accordance with the Australian Privacy Act 1988 (Cth) and the Australian Privacy Principles (APPs).</p>
+            <p>KK POS ("we", "us", "our") is committed to protecting your privacy. This policy explains how we collect, use, store, and disclose personal information in accordance with the Australian Privacy Act 1988 (Cth) and the Australian Privacy Principles (APPs).</p>
           </section>
 
           <section>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">3. How We Use Your Information</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li>To provide and improve the KoaPOS service.</li>
+              <li>To provide and improve the KK POS service.</li>
               <li>To send transactional and account-related emails (receipts, password resets, security alerts).</li>
               <li>To detect and prevent fraud and unauthorised access.</li>
               <li>To comply with legal obligations.</li>
@@ -63,7 +63,7 @@ export default function PrivacyPage() {
               <li>Request deletion of your personal information (subject to legal obligations).</li>
               <li>Lodge a complaint with the Office of the Australian Information Commissioner (OAIC) at <a href="https://oaic.gov.au" target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">oaic.gov.au</a>.</li>
             </ul>
-            <p className="mt-2">To exercise these rights, contact us at <a href="mailto:privacy@koapos.com" className="text-primary hover:underline">privacy@koapos.com</a>.</p>
+            <p className="mt-2">To exercise these rights, contact us at <a href="mailto:admin@koastal.com.au" className="text-primary hover:underline">admin@koastal.com.au</a>.</p>
           </section>
 
           <section>
@@ -88,7 +88,7 @@ export default function PrivacyPage() {
 
           <section>
             <h2 className="text-lg font-semibold mb-2">11. Contact</h2>
-            <p>Privacy enquiries: <a href="mailto:privacy@koapos.com" className="text-primary hover:underline">privacy@koapos.com</a></p>
+            <p>Privacy enquiries: <a href="mailto:admin@koastal.com.au" className="text-primary hover:underline">admin@koastal.com.au</a></p>
           </section>
         </div>
       </div>

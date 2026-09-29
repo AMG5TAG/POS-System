@@ -254,7 +254,7 @@ function ManagementProtectedRoute({ component: Component }: { component: React.C
   );
 }
 
-/* KoaPOS is in-house software for one business, so there is no public
+/* KK POS is in-house software for one business, so there is no public
    marketing site: the root is the app — the dashboard when signed in,
    otherwise the login page. */
 function HomeRedirect() {
@@ -560,7 +560,7 @@ function Router() {
       <Route path="/management/settings-integrations/locations">
         <ManagementProtectedRoute component={ManagementLocationsPage} />
       </Route>
-      {/* Customisation hub — everything that changes how KoaPOS looks and what it prints. */}
+      {/* Customisation hub — everything that changes how KK POS looks and what it prints. */}
       <Route path="/management/customisation/themes">
         <ManagementProtectedRoute component={SettingsThemesPage} />
       </Route>
@@ -985,7 +985,7 @@ function ShortlinkRedirect() {
     const home = `${publicOrigin()}/`;
     if (!slug) { window.location.replace(home); return; }
     let cancelled = false;
-    // Resolve against the API's real origin (koapos.com.au) rather than a
+    // Resolve against the API's real origin (pos.koastal.com.au) rather than a
     // relative path — the short domain may not proxy /api to the API server.
     fetch(`${publicOrigin()}/api/shortlinks/r/${encodeURIComponent(slug)}`, { credentials: "omit" })
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error(String(r.status)))))

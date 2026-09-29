@@ -171,7 +171,7 @@ export default function SettingsEmailPage() {
           <div>
             <h1 className="text-2xl font-bold">Email</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Configure how KoaPOS sends transactional emails such as receipts
+              Configure how KK POS sends transactional emails such as receipts
             </p>
           </div>
           <Button onClick={handleSave} disabled={update.isPending || !dirty}>
