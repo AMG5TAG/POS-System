@@ -26,7 +26,7 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-stone-200" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div className="mx-auto max-w-7xl px-4 h-20 flex items-center gap-4">
+      <div className="mx-auto max-w-7xl px-4 h-20 md:h-24 flex items-center gap-4">
         <button className="md:hidden p-2 -ml-2" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
@@ -34,7 +34,7 @@ function Header() {
             shown as text when no logo is set. */}
         <Link href="/" className="flex items-center shrink-0" aria-label={info?.businessName ?? "Home"}>
           {info?.logoUrl
-            ? <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-12 sm:h-14 w-auto max-w-[180px] sm:max-w-[240px] object-contain" />
+            ? <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-14 md:h-20 w-auto max-w-[200px] md:max-w-[320px] object-contain" />
             : <span className="font-bold text-lg tracking-tight">{info?.businessName ?? "Shop"}</span>}
         </Link>
         <form onSubmit={submit} className="hidden md:flex flex-1 max-w-xl mx-auto">

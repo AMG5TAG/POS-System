@@ -9,7 +9,7 @@ import { useAccessibility } from "@/lib/accessibility";
 import { useAppTheme } from "@/lib/app-theme";
 import { Button } from "@/components/ui/button";
 import {
-  LayoutDashboard, ShoppingCart, Package, Users, Receipt,
+  LayoutDashboard, ShoppingCart, Package, Users, Receipt, ExternalLink,
   Boxes, UserSquare2, Settings, Blocks, LogOut, LogIn, CalendarClock, CalendarRange, Wallet,
   Wrench, ChevronDown, LayoutGrid, Layers, ClipboardList, Clock,
   RotateCcw, Truck, Bookmark, Tag, Hash, AlertTriangle, History,
@@ -1664,6 +1664,11 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
               isOpen={openDropdown === "management"} onToggle={() => toggle("management")} location={location} navigate={navigate} />
           )}
+          <span aria-hidden className="mx-1 h-5 border-l border-border shrink-0" />
+          <a href={SOLVUP_URL} target="_blank" rel="noopener noreferrer"
+            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
+            SolvUP <ExternalLink className="w-3.5 h-3.5" />
+          </a>
         </nav>
 
         {/* Right actions — one search icon plus a hamburger on phones */}
@@ -1871,6 +1876,10 @@ interface LayoutSharedProps {
   /** Owner/Manager — controls visibility of the Management section menus. */
   canManage: boolean;
 }
+
+/* External tools listed under Management, below a divider. They open in a new
+   tab: they are other sites, and the POS tab should stay where it was. */
+const SOLVUP_URL = "https://apps.solvup.com/requests/lists";
 
 /* ─── Main AppLayout ─────────────────────────────────────────────────────── */
 
@@ -2142,6 +2151,15 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
               badgeCountByHref={mgmtBadgeByHref}
             />
           )}
+          <li role="separator" aria-hidden className="my-2 mx-2 border-t border-sidebar-border" />
+          <SidebarMenuItem>
+            <SidebarMenuButton asChild tooltip="SolvUP (opens in a new tab)">
+              <a href={SOLVUP_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+                <span className="font-medium group-data-[collapsible=icon]:hidden">SolvUP</span>
+                <ExternalLink className="w-4 h-4 shrink-0" />
+              </a>
+            </SidebarMenuButton>
+          </SidebarMenuItem>
         </SidebarMenu>
       </SidebarContent>
 

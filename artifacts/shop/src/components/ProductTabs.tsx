@@ -16,7 +16,7 @@ export function ProductTabs({ product, tab, onTab }: { product: ProductDetail; t
     { key: "reviews", label: `Reviews${product.rating.count ? ` (${product.rating.count})` : ""}` },
   ];
   return (
-    <section id="product-tabs" className="mt-12 scroll-mt-24">
+    <section id="product-tabs" className="mt-12 scroll-mt-24 md:scroll-mt-40">
       <div role="tablist" className="flex gap-1 border-b border-stone-200 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => onTab(t.key)}

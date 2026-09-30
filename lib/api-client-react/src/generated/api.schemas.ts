@@ -1740,6 +1740,8 @@ export interface CalendarDay {
   sales: number;
   serviceJobs: number;
   invoices: number;
+  /** Online shop orders placed this date that were paid and not cancelled. */
+  onlineSales: number;
   /** Distinct service jobs / appointments that were followed up on this date — a message successfully sent, or the record marked done by hand. Email + SMS on the same record counts once. */
   followUpsCompleted: number;
   appointments: CalendarAppointment[];

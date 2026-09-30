@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable, followUpLogTable } from "@workspace/db";
-import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull } from "drizzle-orm";
+import { db, transactionsTable, customersTable, productsTable, appointmentsTable, serviceJobsTable, invoicesTable, dashboardConfigTable, merchantsTable, followUpLogTable, deliveryOrdersTable } from "@workspace/db";
+import { eq, and, gte, sql, desc, lt, inArray, or, isNull, isNotNull, ne } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
 import { GetDashboardSummaryQueryParams, GetRecentTransactionsQueryParams, GetSalesChartQueryParams, GetTopProductsQueryParams, GetDashboardCalendarQueryParams, UpsertDashboardConfigBody } from "@workspace/api-zod";
@@ -767,6 +767,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
     sales: number;
     serviceJobs: number;
     invoices: number;
+    onlineSales: number;
     followUpsCompleted: Set<string>;
     appointments: { id: number; title: string; scheduledAt: string; durationMinutes: number; status: string; customerName: string | null; customerPhone: string | null; customerAddress: string | null; notes: string | null }[];
     customerBirthdays: { id: number; firstName: string; lastName: string | null; phone: string | null; email: string | null }[];
@@ -781,6 +782,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
       sales: 0,
       serviceJobs: 0,
       invoices: 0,
+      onlineSales: 0,
       followUpsCompleted: new Set<string>(),
       appointments: [],
       customerBirthdays: [],
@@ -889,6 +891,24 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
   for (const inv of invs) {
     const key = toLocalDateKey(inv.createdAt, timezone);
     if (dayMap[key]) dayMap[key].invoices += 1;
+  }
+
+  // Online sales — shop orders that were paid (the point Online › Orders books
+  // them as a sale), bucketed by the day they were placed. A cancelled order
+  // is not a sale even if it was paid first.
+  const onlineOrders = await db
+    .select({ createdAt: deliveryOrdersTable.createdAt })
+    .from(deliveryOrdersTable)
+    .where(and(
+      eq(deliveryOrdersTable.merchantId, merchantId),
+      eq(deliveryOrdersTable.paymentStatus, "paid"),
+      ne(deliveryOrdersTable.status, "cancelled"),
+      gte(deliveryOrdersTable.createdAt, queryStart),
+      lt(deliveryOrdersTable.createdAt, queryEnd),
+    ));
+  for (const o of onlineOrders) {
+    const key = toLocalDateKey(o.createdAt, timezone);
+    if (dayMap[key]) dayMap[key].onlineSales += 1;
   }
 
   // Follow-ups completed — a record counts as chased on the day it was either

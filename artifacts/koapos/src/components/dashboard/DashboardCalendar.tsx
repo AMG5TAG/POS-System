@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from "@/components/ui/dialog";
-import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User, MessageCircleReply } from "lucide-react";
+import { ChevronLeft, ChevronRight, ShoppingCart, Wrench, FileText, CalendarDays, Cake, MapPin, Clock, Send, Loader2, Phone, User, MessageCircleReply, Globe } from "lucide-react";
 import { cn, telHref } from "@/lib/utils";
 import { toast } from "sonner";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
@@ -19,6 +19,7 @@ const EVENT_COLORS = {
   sales:         "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/50 dark:text-emerald-300 dark:border-emerald-700",
   serviceJobs:   "bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/50 dark:text-blue-300 dark:border-blue-700",
   invoices:      "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/50 dark:text-amber-300 dark:border-amber-700",
+  onlineSales:   "bg-teal-100 text-teal-700 border-teal-200 dark:bg-teal-900/50 dark:text-teal-300 dark:border-teal-700",
   appointments:  "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/50 dark:text-violet-300 dark:border-violet-700",
   birthdays:     "bg-pink-100 text-pink-700 border-pink-200 dark:bg-pink-900/50 dark:text-pink-300 dark:border-pink-700",
   // Tailwind ships no brown ramp, so this one is spelled out in hex.
@@ -234,14 +235,14 @@ function DayCell({
 
   const dayNum = parseInt(day.date.split("-")[2], 10);
   const hasEvents = day.publicHoliday || day.sales > 0 || day.serviceJobs > 0 ||
-    day.invoices > 0 || day.followUpsCompleted > 0 ||
+    day.invoices > 0 || day.onlineSales > 0 || day.followUpsCompleted > 0 ||
     day.appointments.length > 0 || day.customerBirthdays.length > 0;
 
   const apptCount = day.appointments.length;
   const bdayCount = day.customerBirthdays.length;
 
   // Build left column (sales, serviceJobs) and right column (invoices, appointments, birthdays)
-  // max 3 rows total displayed in a 2-col grid
+  // max 4 rows per column in a 2-col grid
   const leftItems: ReactNode[] = [];
   const rightItems: ReactNode[] = [];
 
@@ -275,6 +276,13 @@ function DayCell({
       <CalendarDays className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{apptCount}</span>
     </button>
   );
+  if (day.onlineSales > 0) rightItems.push(
+    <div key="online" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.onlineSales)}
+      title={`${day.onlineSales} online order${day.onlineSales === 1 ? "" : "s"} completed`}
+    >
+      <Globe className="w-2.5 h-2.5 shrink-0" /><span className="truncate">{day.onlineSales}</span>
+    </div>
+  );
   if (day.followUpsCompleted > 0) rightItems.push(
     <div key="followups" className={cn("text-[10px] px-1 py-0.5 rounded border flex items-center gap-0.5 truncate", EVENT_COLORS.followUps)}
       title={`${day.followUpsCompleted} follow-up${day.followUpsCompleted === 1 ? "" : "s"} completed`}
@@ -283,7 +291,7 @@ function DayCell({
     </div>
   );
 
-  const maxRows = 3;
+  const maxRows = 4;
   const leftSlots  = leftItems.slice(0, maxRows);
   const rightSlots = rightItems.slice(0, maxRows);
 
@@ -409,6 +417,7 @@ export function DashboardCalendar() {
     { color: EVENT_COLORS.serviceJobs,   label: "Service Jobs",   total: sumBy((d) => d.serviceJobs) },
     { color: EVENT_COLORS.invoices,      label: "Invoices",       total: sumBy((d) => d.invoices) },
     { color: EVENT_COLORS.appointments,  label: "Appointments",   total: sumBy((d) => d.appointments.length) },
+    { color: EVENT_COLORS.onlineSales,   label: "Online Sales",   total: sumBy((d) => d.onlineSales) },
     { color: EVENT_COLORS.birthdays,     label: "Birthdays",      total: sumBy((d) => d.customerBirthdays.length) },
     { color: EVENT_COLORS.followUps,     label: "Follow Ups",     total: sumBy((d) => d.followUpsCompleted) },
   ];

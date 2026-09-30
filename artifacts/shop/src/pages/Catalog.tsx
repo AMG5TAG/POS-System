@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useCategories, useProducts } from "@/lib/shop";
@@ -58,6 +58,19 @@ export default function Catalog() {
   const activeRoot = rootOf(category);
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
+  /* Choosing a category (here or in the header menu) or another page jumps to
+     the products. Side by side (lg+) that is the top of the page; stacked, the
+     category list comes first, so it's the start of the results instead. */
+  const results = useRef<HTMLDivElement>(null);
+  const first = useRef(true);
+  useEffect(() => {
+    if (first.current) { first.current = false; return; }
+    const smooth = !window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    const behavior: ScrollBehavior = smooth ? "smooth" : "auto";
+    if (window.matchMedia("(min-width: 1024px)").matches || !results.current) window.scrollTo({ top: 0, behavior });
+    else results.current.scrollIntoView({ block: "start", behavior });
+  }, [category, page]);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8 grid lg:grid-cols-[240px_1fr] gap-8">
       <aside className="space-y-1 text-sm">
@@ -78,17 +91,24 @@ export default function Catalog() {
                   </button>
                 )}
               </div>
-              {open && subs.map((k) => (
-                <button key={k.id} onClick={() => setParam("category", String(k.id))} className={`block w-full text-left pl-6 pr-3 py-1 rounded-lg ${category === k.id ? "bg-brand-50 font-medium text-ink" : "text-stone-600 hover:bg-stone-100"}`}>
-                  {k.name}
-                </button>
-              ))}
+              {open && subs.map((k, i) => {
+                // A top-level category's own subcategories are bold too, so each
+                // group reads as a heading; anything deeper is plain. Same indent
+                // for all — the weight shows the level, not a tree.
+                const secondary = k.parentId === c.id;
+                return (
+                  <button key={k.id} onClick={() => setParam("category", String(k.id))}
+                    className={`block w-full text-left pl-6 pr-3 py-1 rounded-lg ${secondary ? `font-semibold ${i > 0 ? "mt-1" : ""}` : ""} ${category === k.id ? "bg-brand-50 text-ink" : `${secondary ? "text-ink" : "text-stone-600"} hover:bg-stone-100`} ${category === k.id && !secondary ? "font-medium" : ""}`}>
+                    {k.name}
+                  </button>
+                );
+              })}
             </div>
           );
         })}
       </aside>
 
-      <div>
+      <div ref={results} className="scroll-mt-24">
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <h1 className="text-2xl font-bold mr-auto flex items-center gap-3">
             {!q && current?.imageUrl && <img src={current.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-stone-200" />}

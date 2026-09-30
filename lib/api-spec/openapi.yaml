@@ -11717,7 +11717,7 @@ components:
 
     CalendarDay:
       type: object
-      required: [date, sales, serviceJobs, invoices, followUpsCompleted, appointments, customerBirthdays]
+      required: [date, sales, serviceJobs, invoices, onlineSales, followUpsCompleted, appointments, customerBirthdays]
       properties:
         date:
           type: string
@@ -11729,6 +11729,11 @@ components:
           type: integer
         invoices:
           type: integer
+        onlineSales:
+          type: integer
+          description: >-
+            Online shop orders placed this date that were paid and not
+            cancelled.
         followUpsCompleted:
           type: integer
           description: >-
