@@ -121,6 +121,7 @@ export * from "./void-audit";
 export * from "./pricing-rules";
 export * from "./modifier-groups";
 export * from "./auth-events";
+export * from "./trusted-ips";
 export * from "./password-reset-tokens";
 export * from "./customer-portal-tokens";
 export * from "./account-hold-tokens";

@@ -7,6 +7,7 @@ import {
 import { eq, and, gte, lte, lt, ne, notInArray, desc, sql } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import { customerDisplayName } from "../lib/customer-name";
+import { DEVICE_HEADER, gateDevice, isValidDeviceSecret } from "../lib/dashboard-devices";
 
 /**
  * Public, read-only snapshot for the shared Dashboard app (/d/:token). NO
@@ -56,6 +57,30 @@ router.get("/public/dashboard/:token", badCodeLimiter, async (req, res): Promise
     .where(eq(merchantsTable.id, settings.merchantId))
     .limit(1);
   if (!merchant) { res.status(404).json({ error: "Dashboard not found" }); return; }
+
+  // Screen approval: the right code alone isn't enough while it is required.
+  // A waiting screen gets 202 — a success to the wrong-code limiter, since it
+  // polls every few seconds until someone approves it.
+  if (settings.requireApproval) {
+    const secret = req.headers[DEVICE_HEADER];
+    if (!isValidDeviceSecret(secret)) {
+      res.status(400).json({ error: "This screen needs to be approved. Reload the page.", approval: "missing" });
+      return;
+    }
+    const gate = await gateDevice(merchant.id, secret, { ip: req.ip, userAgent: req.headers["user-agent"] });
+    if (gate.state === "pending") {
+      res.status(202).json({ approval: "pending", pairCode: gate.pairCode, businessName: merchant.businessName, logoUrl: merchant.logoUrl });
+      return;
+    }
+    if (gate.state === "denied") {
+      res.status(403).json({ error: "This screen was not approved.", approval: "denied" });
+      return;
+    }
+    if (gate.state === "busy") {
+      res.status(429).json({ error: "Too many screens are waiting for approval. Try again shortly.", approval: "busy" });
+      return;
+    }
+  }
 
   const merchantId = merchant.id;
   const now = new Date();

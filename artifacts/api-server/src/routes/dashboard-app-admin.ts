@@ -1,7 +1,8 @@
 import { Router, type IRouter, type Request } from "express";
 import crypto from "node:crypto";
-import { db, dashboardAppSettingsTable, merchantsTable } from "@workspace/db";
-import { eq } from "drizzle-orm";
+import { db, dashboardAppSettingsTable, dashboardAppDevicesTable, merchantsTable, staffTable } from "@workspace/db";
+import { and, desc, eq, gt } from "drizzle-orm";
+import { PENDING_LIVE_MS } from "../lib/dashboard-devices";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
@@ -61,6 +62,7 @@ function formatSettings(s: typeof dashboardAppSettingsTable.$inferSelect) {
     showServiceJobsPanel: s.showServiceJobsPanel,
     showCalendar:         s.showCalendar,
     showReferralRevenue:  s.showReferralRevenue,
+    requireApproval:      s.requireApproval,
     updatedAt:            s.updatedAt.toISOString(),
   };
 }
@@ -91,6 +93,7 @@ const UpdateSettingsBody = z.object({
   showServiceJobsPanel: z.boolean().optional(),
   showCalendar:         z.boolean().optional(),
   showReferralRevenue:  z.boolean().optional(),
+  requireApproval:      z.boolean().optional(),
 });
 
 router.put("/dashboard-app/settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
@@ -151,6 +154,85 @@ router.put("/dashboard-app/access-code", requireAuth, requireManagerOrOwner, asy
     // public_token is unique across the table.
     res.status(409).json({ error: "That code is already in use — choose another." });
   }
+});
+
+/* ── Screen approval ─────────────────────────────────────────────────────
+   Screens that opened the link while approval is required (see
+   lib/dashboard-devices.ts). Pending ones are listed only while still polling,
+   so a request from a screen that has since been closed doesn't linger. */
+
+function formatDevice(d: typeof dashboardAppDevicesTable.$inferSelect) {
+  return {
+    id: d.id,
+    status: d.status,
+    pairCode: d.pairCode,
+    ipAddress: d.ipAddress,
+    userAgent: d.userAgent,
+    decidedBy: d.decidedBy,
+    decidedAt: d.decidedAt?.toISOString() ?? null,
+    requestedAt: d.requestedAt.toISOString(),
+    lastSeenAt: d.lastSeenAt.toISOString(),
+  };
+}
+
+router.get("/dashboard-app/devices", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(dashboardAppDevicesTable)
+    .where(eq(dashboardAppDevicesTable.merchantId, req.session.merchantId!))
+    .orderBy(desc(dashboardAppDevicesTable.requestedAt));
+  const cutoff = Date.now() - PENDING_LIVE_MS;
+  res.json(rows.filter((d) => d.status !== "pending" || d.lastSeenAt.getTime() > cutoff).map(formatDevice));
+});
+
+/** What the POS-wide approval banner polls. Empty when approval is off. */
+router.get("/dashboard-app/devices/pending", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(dashboardAppDevicesTable)
+    .where(and(
+      eq(dashboardAppDevicesTable.merchantId, req.session.merchantId!),
+      eq(dashboardAppDevicesTable.status, "pending"),
+      gt(dashboardAppDevicesTable.lastSeenAt, new Date(Date.now() - PENDING_LIVE_MS)),
+    ))
+    .orderBy(desc(dashboardAppDevicesTable.requestedAt));
+  res.json(rows.map(formatDevice));
+});
+
+async function deciderName(req: Request): Promise<string> {
+  if (req.session.staffId) {
+    const [s] = await db.select({ name: staffTable.name }).from(staffTable)
+      .where(and(eq(staffTable.id, req.session.staffId), eq(staffTable.merchantId, req.session.merchantId!))).limit(1);
+    if (s?.name) return s.name;
+  }
+  return req.session.staffRole === "owner" ? "Owner" : "Manager";
+}
+
+const DecisionBody = z.object({ decision: z.enum(["approved", "denied"]) });
+
+router.post("/dashboard-app/devices/:id/decision", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  const parsed = DecisionBody.safeParse(req.body);
+  if (isNaN(id) || !parsed.success) { res.status(400).json({ error: "Invalid request" }); return; }
+  const [updated] = await db
+    .update(dashboardAppDevicesTable)
+    .set({ status: parsed.data.decision, decidedBy: await deciderName(req), decidedAt: new Date() })
+    .where(and(eq(dashboardAppDevicesTable.id, id), eq(dashboardAppDevicesTable.merchantId, req.session.merchantId!)))
+    .returning();
+  if (!updated) { res.status(404).json({ error: "That screen is no longer waiting" }); return; }
+  res.json(formatDevice(updated));
+});
+
+/** Forget a screen entirely: next time it opens the link it asks again. */
+router.delete("/dashboard-app/devices/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [gone] = await db
+    .delete(dashboardAppDevicesTable)
+    .where(and(eq(dashboardAppDevicesTable.id, id), eq(dashboardAppDevicesTable.merchantId, req.session.merchantId!)))
+    .returning({ id: dashboardAppDevicesTable.id });
+  if (!gone) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ ok: true });
 });
 
 /* ── Send Link (email / SMS) ─────────────────────────────────────────── */

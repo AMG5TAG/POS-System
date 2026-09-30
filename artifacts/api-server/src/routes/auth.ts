@@ -1,8 +1,9 @@
-import { Router, type IRouter } from "express";
+import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import rateLimit from "express-rate-limit";
 import { randomBytes, createHash, createHmac } from "crypto";
-import { db, merchantsTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable } from "@workspace/db";
+import { db, merchantsTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, trustedIpsTable } from "@workspace/db";
 import { eq, desc, and, gt, sql } from "drizzle-orm";
+import { z } from "zod/v4";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
 import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requireAuth";
@@ -350,9 +351,14 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
 
   await clearFailedAttempts(email);
 
-  // Check if this IP has been seen before for this merchant (only when an IP is present)
+  // Check if this IP has been seen before for this merchant (only when an IP is present).
+  // An IP the owner marked trusted is never new.
   let isNewIp = false;
-  if (ip) {
+  const [trusted] = ip
+    ? await db.select({ id: trustedIpsTable.id }).from(trustedIpsTable)
+        .where(and(eq(trustedIpsTable.merchantId, merchant.id), eq(trustedIpsTable.ipAddress, ip))).limit(1)
+    : [];
+  if (ip && !trusted) {
     const [existingIpEvent] = await db
       .select({ id: authEventsTable.id })
       .from(authEventsTable)
@@ -489,13 +495,100 @@ router.get("/auth/events", requireAuth, async (req, res): Promise<void> => {
   );
 });
 
+// Recent Sign-ins shows the last 7 days, so the banner counts the same window —
+// a flag older than that has no row on screen to clear it from.
+const FLAG_WINDOW_MS = 7 * 24 * 60 * 60 * 1000;
+
 router.get("/auth/events/flagged-count", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const rows = await db
     .select({ id: authEventsTable.id })
     .from(authEventsTable)
-    .where(and(eq(authEventsTable.merchantId, merchantId), eq(authEventsTable.status, "flagged")));
+    .where(and(
+      eq(authEventsTable.merchantId, merchantId),
+      eq(authEventsTable.status, "flagged"),
+      gt(authEventsTable.createdAt, new Date(Date.now() - FLAG_WINDOW_MS)),
+    ));
   res.json({ count: rows.length });
+});
+
+/* ── Trusted IPs ─────────────────────────────────────────────────────────
+   An IP marked trusted is never flagged as a new sign-in location. Trusting
+   one also clears the flags already raised for it. Owner only: this is the
+   owner's own sign-in history. */
+
+function requireOwner(req: Request, res: Response, next: NextFunction): void {
+  if (req.session.staffRole && req.session.staffRole !== "owner") {
+    res.status(403).json({ error: "Only the owner can change trusted IPs" });
+    return;
+  }
+  next();
+}
+
+router.get("/auth/trusted-ips", requireAuth, async (req, res): Promise<void> => {
+  const rows = await db
+    .select()
+    .from(trustedIpsTable)
+    .where(eq(trustedIpsTable.merchantId, req.session.merchantId!))
+    .orderBy(desc(trustedIpsTable.createdAt));
+  res.json(rows.map((r) => ({ id: r.id, ipAddress: r.ipAddress, label: r.label, createdAt: r.createdAt.toISOString() })));
+});
+
+const TrustIpBody = z.object({
+  ipAddress: z.string().trim().min(2).max(64).regex(/^[0-9A-Fa-f:.]+$/, "Not an IP address"),
+  label: z.string().trim().max(80).optional(),
+});
+
+router.post("/auth/trusted-ips", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const parsed = TrustIpBody.safeParse(req.body);
+  if (!parsed.success) {
+    res.status(400).json({ error: "A valid IP address is required" });
+    return;
+  }
+  const merchantId = req.session.merchantId!;
+  const { ipAddress, label } = parsed.data;
+  await db
+    .insert(trustedIpsTable)
+    .values({ merchantId, ipAddress, label: label || null })
+    .onConflictDoUpdate({ target: [trustedIpsTable.merchantId, trustedIpsTable.ipAddress], set: { label: label || null } });
+  // Its existing new-location flags were about an address now known to be safe.
+  const cleared = await db
+    .update(authEventsTable)
+    .set({ status: "acknowledged", flagReason: null })
+    .where(and(
+      eq(authEventsTable.merchantId, merchantId),
+      eq(authEventsTable.ipAddress, ipAddress),
+      eq(authEventsTable.status, "flagged"),
+      eq(authEventsTable.flagReason, "new_ip"),
+    ))
+    .returning({ id: authEventsTable.id });
+  res.json({ ok: true, cleared: cleared.length });
+});
+
+router.delete("/auth/trusted-ips/:id", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const id = parseInt(String(req.params.id), 10);
+  if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
+  const [gone] = await db
+    .delete(trustedIpsTable)
+    .where(and(eq(trustedIpsTable.id, id), eq(trustedIpsTable.merchantId, req.session.merchantId!)))
+    .returning({ id: trustedIpsTable.id });
+  if (!gone) { res.status(404).json({ error: "Not found" }); return; }
+  res.json({ ok: true });
+});
+
+/** Dismiss every automatic new-location flag at once. Manual flags stay: someone
+ *  chose to raise those. */
+router.post("/auth/events/clear-new-location-flags", requireAuth, requireOwner, async (req, res): Promise<void> => {
+  const cleared = await db
+    .update(authEventsTable)
+    .set({ status: "acknowledged", flagReason: null })
+    .where(and(
+      eq(authEventsTable.merchantId, req.session.merchantId!),
+      eq(authEventsTable.status, "flagged"),
+      eq(authEventsTable.flagReason, "new_ip"),
+    ))
+    .returning({ id: authEventsTable.id });
+  res.json({ ok: true, cleared: cleared.length });
 });
 
 router.get("/auth/events/unread-count", requireAuth, async (req, res): Promise<void> => {

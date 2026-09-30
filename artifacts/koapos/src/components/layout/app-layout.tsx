@@ -64,6 +64,7 @@ import {
 import { Input } from "@/components/ui/input";
 import { toast } from "sonner";
 import { EmailVerificationBanner } from "@/components/email-verification-banner";
+import { DashboardAccessBanner } from "@/components/dashboard-access-banner";
 import { LocationSwitcher } from "@/components/layout/location-switcher";
 
 /* ─── Nav data ───────────────────────────────────────────────────────────── */
@@ -1876,7 +1877,12 @@ interface LayoutSharedProps {
 export function AppLayout({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {
   const embedded = useEmbedded();
   if (embedded) return <>{children}</>;
-  return <AppLayoutInner hideSidebar={hideSidebar}>{children}</AppLayoutInner>;
+  return (
+    <>
+      <AppLayoutInner hideSidebar={hideSidebar}>{children}</AppLayoutInner>
+      <DashboardAccessBanner />
+    </>
+  );
 }
 
 function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; hideSidebar?: boolean }) {

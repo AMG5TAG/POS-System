@@ -17,12 +17,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
-  Tag, Plus, Search, ChevronRight, ChevronDown, Pencil, Trash2,
-  ShoppingCart, Coffee, Pizza, Apple, Shirt, Tv, Smartphone, Book,
-  Music, Camera, Dumbbell, Heart, Star, Home, Briefcase, Gift, Zap,
-  Leaf, Bike, Car, Scissors, Utensils, Wine, Candy, Gamepad2,
-  Headphones, Watch, Diamond, Flower, Baby, Dog, Globe, Paintbrush, Package,
-  Boxes, FolderOpen, Folder,
+  AlarmClock, Anchor, Antenna, Aperture, Apple, Archive, Armchair, Award, Baby, Backpack, BadgePercent, Banana, Banknote, Bath, Battery, BatteryCharging, Bed, Beef, Beer, Bike, Bird, Blocks, Bluetooth, Bone, Book, BookOpen, Box, Boxes, Briefcase, Brush, Bus, Cable, Calendar, Camera, Candy, Car, Carrot, Cat, Cctv, Cherry, ChevronDown, ChevronRight, Citrus, Clapperboard, Clock, Cloud, Coffee, Cog, Coins, Compass, Container, Cookie, CookingPot, Cpu, CreditCard, Croissant, Crown, CupSoda, Database, Diamond, Disc3, Dog, Drill, Droplet, Drum, Dumbbell, Egg, FileText, Film, Fish, Flame, Flashlight, Flower, Flower2, Folder, FolderOpen, Footprints, Fuel, Gamepad, Gamepad2, Gem, Gift, Glasses, Globe, GraduationCap, Grape, Grid3x3, Guitar, Hammer, HardDrive, Hash, Headphones, Headset, Heart, HeartPulse, Home, IceCreamCone, Image as ImageIcon, Joystick, Key, Keyboard, Lamp, Laptop, Layers, Leaf, Library, Lightbulb, Lock, Map as MapIcon, MapPin, Medal, MemoryStick, Mic, Microwave, Milk, Monitor, MonitorSmartphone, Moon, Mountain, Mouse, Music, Newspaper, Package, Paintbrush, Palette, PawPrint, PenTool, Pencil, Percent, PhoneCall, Piano, PiggyBank, Pill, Pizza, Plane, Plug, PlugZap, Plus, Popcorn, Printer, Projector, Puzzle, Rabbit, Radio, Receipt, Recycle, Refrigerator, Rocket, Router, Ruler, Salad, Sandwich, Satellite, Scissors, Search, Server, Settings, Shield, ShieldCheck, Ship, Shirt, ShoppingBag, ShoppingBasket, ShoppingCart, ShowerHead, Signal, Smartphone, Smile, Snowflake, Sofa, Soup, Sparkle, Sparkles, Speaker, Sprout, Stamp, Star, Stethoscope, Sticker, Store, Sun, Syringe, TabletSmartphone, Tag, Tags, Tent, Thermometer, Ticket, ToyBrick, Trash2, TreePine, Trees, Trophy, Truck, Tv, Tv2, Umbrella, Usb, User, Users, Utensils, Video, Volume2, Wallet, Wand2, WashingMachine, Watch, Waves, Webcam, Wifi, Wine, Wrench, Zap,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -42,15 +37,24 @@ const COLORS = [
   "#a855f7","#ec4899","#6b7280","#0f172a",
 ];
 
-const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
-  Tag, ShoppingCart, Coffee, Pizza, Apple, Shirt, Tv, Smartphone, Book,
-  Music, Camera, Dumbbell, Heart, Star, Home, Briefcase, Gift, Zap,
-  Leaf, Bike, Car, Scissors, Utensils, Wine, Candy, Gamepad2,
-  Headphones, Watch, Diamond, Flower, Baby, Dog, Globe, Paintbrush, Package,
-  Boxes, FolderOpen, Folder,
-};
+/* Grouped for the picker; a saved category stores just the icon's name, so an
+   icon may move between groups freely but must never be renamed or removed —
+   categories already using it would fall back to the tag. */
+const ICON_GROUPS: { title: string; icons: Record<string, React.ComponentType<{ className?: string }>> }[] = [
+  { title: "Tech & repairs", icons: { Smartphone, PhoneCall, MonitorSmartphone, TabletSmartphone, Laptop, Monitor, Tv, Tv2, Keyboard, Mouse, Printer, Cpu, HardDrive, MemoryStick, Server, Database, Usb, Cable, Plug, PlugZap, BatteryCharging, Battery, Wifi, Router, Bluetooth, Signal, Antenna, Satellite, Cctv, Webcam, Projector, Disc3, Headphones, Headset, Speaker, Radio, Mic, Camera, Aperture, Watch, Gamepad2, Gamepad, Joystick, Wrench, Hammer, Drill, Cog, Settings, Wand2, Shield, ShieldCheck, Lock, Key } },
+  { title: "Shopping", icons: { Tag, Tags, ShoppingCart, ShoppingBag, ShoppingBasket, Store, Receipt, CreditCard, Wallet, Banknote, Coins, PiggyBank, Percent, BadgePercent, Gift, Package, Box, Boxes, Archive, Container, Layers, Sparkles, Sparkle, Star, Crown, Trophy, Medal, Award, Ticket, Diamond, Gem } },
+  { title: "Home & living", icons: { Home, Lamp, Lightbulb, Flashlight, Sofa, Armchair, Bed, Bath, ShowerHead, Refrigerator, WashingMachine, Microwave, CookingPot, Utensils, Recycle, Trash2, Umbrella, Clock, AlarmClock, Calendar } },
+  { title: "Food & drink", icons: { Coffee, Pizza, Apple, Cherry, Citrus, Grape, Banana, Carrot, Beef, Sandwich, Soup, Salad, Egg, Milk, Croissant, Cookie, Candy, IceCreamCone, Popcorn, CupSoda, Beer, Wine } },
+  { title: "Fashion & beauty", icons: { Shirt, Glasses, Footprints, Backpack, Briefcase, Scissors, Droplet, Flower, Flower2, Heart, Smile } },
+  { title: "Health", icons: { HeartPulse, Pill, Stethoscope, Syringe, Thermometer, Dumbbell, Baby } },
+  { title: "Creative & learning", icons: { Book, BookOpen, Library, GraduationCap, FileText, Newspaper, Palette, Paintbrush, Brush, PenTool, Pencil, Ruler, Sticker, Stamp, Image: ImageIcon, Film, Clapperboard, Video, Music, Guitar, Piano, Drum, Volume2, Puzzle, Blocks, ToyBrick } },
+  { title: "Travel & outdoors", icons: { Car, Bike, Bus, Truck, Plane, Ship, Anchor, Rocket, Fuel, Map: MapIcon, MapPin, Compass, Globe, Mountain, TreePine, Trees, Leaf, Sprout, Tent, Waves, Sun, Moon, Cloud, Snowflake, Flame, Zap } },
+  { title: "Animals", icons: { Dog, Cat, Rabbit, Bird, Fish, PawPrint, Bone } },
+  { title: "General", icons: { Folder, FolderOpen, Hash, Grid3x3, Users, User } },
+];
 
-const ICON_NAMES = Object.keys(ICON_MAP);
+const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> =
+  Object.assign({}, ...ICON_GROUPS.map((g) => g.icons));
 const MAX_DEPTH = 4;
 const EMPTY_FORM: FormState = { name: "", color: COLORS[0], icon: "Tag", parentId: "", imageUrl: "" };
 
@@ -91,27 +95,47 @@ function CategoryIcon({ name, className, color }: { name?: string | null; classN
 /* ─── Icon Picker ────────────────────────────────────────────────────────── */
 
 function IconPicker({ value, onChange }: { value: string; onChange: (v: string) => void }) {
+  const [query, setQuery] = useState("");
+  const q = query.trim().toLowerCase();
+  // Icon names are PascalCase ("BatteryCharging"); match "battery charging" too.
+  const matches = (name: string) => !q || name.replace(/([a-z])([A-Z0-9])/g, "$1 $2").toLowerCase().includes(q) || name.toLowerCase().includes(q.replace(/\s+/g, ""));
+  const groups = ICON_GROUPS
+    .map((g) => ({ title: g.title, names: Object.keys(g.icons).filter(matches) }))
+    .filter((g) => g.names.length > 0);
   return (
-    <div className="grid grid-cols-8 gap-1 max-h-40 overflow-y-auto p-1 rounded border bg-muted/20">
-      {ICON_NAMES.map((name) => {
-        const Comp = ICON_MAP[name];
-        return (
-          <button
-            key={name}
-            type="button"
-            title={name}
-            onClick={() => onChange(name)}
-            className={cn(
-              "w-8 h-8 flex items-center justify-center rounded transition-all",
-              value === name
-                ? "bg-primary text-primary-foreground"
-                : "hover:bg-muted text-muted-foreground hover:text-foreground"
-            )}
-          >
-            <Comp className="w-4 h-4" />
-          </button>
-        );
-      })}
+    <div className="rounded border bg-muted/20">
+      <div className="p-1.5 border-b">
+        <Input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search icons (e.g. phone, battery, food)" className="h-8 text-xs" noPhoneFormat />
+      </div>
+      <div className="max-h-56 overflow-y-auto p-1 space-y-2">
+        {groups.length === 0 && <p className="text-xs text-muted-foreground px-1 py-2">No icons match “{query}”.</p>}
+        {groups.map((g) => (
+          <div key={g.title}>
+            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground px-1 pb-1">{g.title}</p>
+            <div className="grid grid-cols-8 gap-1">
+              {g.names.map((name) => {
+                const Comp = ICON_MAP[name];
+                return (
+                  <button
+                    key={name}
+                    type="button"
+                    title={name.replace(/([a-z])([A-Z0-9])/g, "$1 $2")}
+                    onClick={() => onChange(name)}
+                    className={cn(
+                      "w-8 h-8 flex items-center justify-center rounded transition-all",
+                      value === name
+                        ? "bg-primary text-primary-foreground"
+                        : "hover:bg-muted text-muted-foreground hover:text-foreground"
+                    )}
+                  >
+                    <Comp className="w-4 h-4" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

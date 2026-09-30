@@ -1,4 +1,6 @@
 import { useState, useEffect } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { PENDING_SCREENS_KEY } from "@/components/dashboard-access-banner";
 import { AppLayout } from "@/components/layout/app-layout";
 import { useListStaff } from "@workspace/api-client-react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -9,7 +11,7 @@ import { Switch } from "@/components/ui/switch";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   LayoutDashboard, Copy, ExternalLink, Send, Mail, MessageSquare,
-  Loader2, AlertTriangle, Globe,
+  Loader2, AlertTriangle, Globe, MonitorSmartphone,
 } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
@@ -32,10 +34,18 @@ type DashboardSettings = {
   showServiceJobsPanel: boolean;
   showCalendar: boolean;
   showReferralRevenue: boolean;
+  requireApproval: boolean;
+};
+
+type Screen = {
+  id: number; status: "pending" | "approved" | "denied"; pairCode: string;
+  ipAddress: string | null; userAgent: string | null; decidedBy: string | null;
+  decidedAt: string | null; requestedAt: string; lastSeenAt: string;
 };
 
 const TOGGLES: { key: keyof DashboardSettings; title: string; desc: string }[] = [
   { key: "enabled",              title: "Share the Dashboard link",  desc: "Master switch — while off the link shows nothing. Anyone with the link can view the sections below; no sign-in is required." },
+  { key: "requireApproval",      title: "Approve each screen",       desc: "A new screen opening the link shows a code and waits until an owner or manager approves it from the POS. Approved screens stay approved until you revoke them below." },
   { key: "showMetricTiles",      title: "Key metrics",               desc: "Today's sales, active jobs, pending invoices and upcoming appointments." },
   { key: "showStatusTiles",      title: "Service job status tiles",  desc: "Counts of in-progress, awaiting-customer, pending and critical jobs." },
   { key: "showOverdueBanner",    title: "Overdue jobs",              desc: "Jobs booked 7+ days ago that aren't completed or cancelled." },
@@ -289,7 +299,89 @@ export default function ManagementDashboardAppPage() {
             ))}
           </CardContent>
         </Card>
+
+        {settings?.requireApproval && <ScreensCard />}
       </div>
     </AppLayout>
+  );
+}
+
+/* Screens that have asked to show the Dashboard. Revoking keeps the screen on
+   the list as denied, so it can't simply ask again; Remove forgets it, and the
+   next time it opens the link it waits for approval afresh. */
+function ScreensCard() {
+  const qc = useQueryClient();
+  const [busy, setBusy] = useState<number | null>(null);
+  const { data: screens } = useQuery({
+    queryKey: ["dashboard-app-devices"],
+    refetchInterval: 15_000,
+    queryFn: () => api<Screen[]>("/dashboard-app/devices"),
+  });
+
+  const act = async (id: number, action: "approved" | "denied" | "remove") => {
+    setBusy(id);
+    try {
+      if (action === "remove") await api(`/dashboard-app/devices/${id}`, { method: "DELETE" });
+      else await api(`/dashboard-app/devices/${id}/decision`, { method: "POST", body: JSON.stringify({ decision: action }) });
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setBusy(null);
+      void qc.invalidateQueries({ queryKey: ["dashboard-app-devices"] });
+      void qc.invalidateQueries({ queryKey: PENDING_SCREENS_KEY });
+    }
+  };
+
+  const when = (iso: string) => new Date(iso).toLocaleString("en-AU", { dateStyle: "medium", timeStyle: "short" });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2"><MonitorSmartphone className="w-4 h-4 text-primary" /> Screens</CardTitle>
+        <CardDescription>Screens that have opened the Dashboard link. Requests also pop up at the top of every POS page for owners and managers.</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {!screens?.length ? (
+          <p className="text-sm text-muted-foreground">No screens yet. Open the link on the TV and it will appear here.</p>
+        ) : (
+          <ul className="divide-y">
+            {screens.map((d) => (
+              <li key={d.id} className="py-3 first:pt-0 last:pb-0 flex flex-wrap items-center gap-3">
+                <div className="flex-1 min-w-[14rem]">
+                  <p className="text-sm font-medium flex items-center gap-2">
+                    Code <span className="tabular-nums tracking-wider">{d.pairCode}</span>
+                    <span className={cn(
+                      "text-[11px] rounded-full px-2 py-0.5 font-medium",
+                      d.status === "approved" ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300"
+                        : d.status === "pending" ? "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300"
+                        : "bg-muted text-muted-foreground",
+                    )}>
+                      {d.status === "approved" ? "Approved" : d.status === "pending" ? "Waiting" : "Denied"}
+                    </span>
+                  </p>
+                  <p className="text-xs text-muted-foreground mt-0.5 break-words">
+                    {d.ipAddress ?? "Unknown IP"} · last seen {when(d.lastSeenAt)}
+                    {d.decidedBy && d.decidedAt ? ` · ${d.status === "approved" ? "approved" : "denied"} by ${d.decidedBy}, ${when(d.decidedAt)}` : ""}
+                  </p>
+                </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  {d.status !== "approved" && (
+                    <Button size="sm" className="h-7 text-xs" disabled={busy === d.id} onClick={() => void act(d.id, "approved")}>Approve</Button>
+                  )}
+                  {d.status !== "denied" && (
+                    <Button size="sm" variant="outline" className="h-7 text-xs" disabled={busy === d.id} onClick={() => void act(d.id, "denied")}>
+                      {d.status === "approved" ? "Revoke" : "Deny"}
+                    </Button>
+                  )}
+                  {d.status === "denied" && (
+                    <Button size="sm" variant="ghost" className="h-7 text-xs" disabled={busy === d.id} onClick={() => void act(d.id, "remove")}>Remove</Button>
+                  )}
+                </div>
+              </li>
+            ))}
+          </ul>
+        )}
+      </CardContent>
+    </Card>
   );
 }

@@ -233,6 +233,39 @@ function summaryOf(p: SummaryRow) {
   };
 }
 
+/* "Just purchased" pop-ups: products sold in the last 24 hours, newest first —
+   till sales and paid online orders alike, since both are transactions. Says
+   *what* sold and roughly when, never who bought it: no customer, suburb,
+   quantity or price paid leaves this route. Only products the shop lists
+   (and not services — "someone just bought a screen repair" isn't news). */
+export const RECENT_PURCHASE_WINDOW_HOURS = 24;
+router.get("/shop/recent-purchases", async (_req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const sold = await db.execute<{ pid: number; at: string }>(sql`
+    SELECT (item->>'productId')::int AS pid, max(t.created_at) AS at
+    FROM ${transactionsTable} t, jsonb_array_elements(CASE WHEN jsonb_typeof(t.items) = 'array' THEN t.items ELSE '[]'::jsonb END) item
+    WHERE t.merchant_id = ${merchantId}
+      AND t.status = 'completed'
+      AND t.created_at > now() - make_interval(hours => ${RECENT_PURCHASE_WINDOW_HOURS})
+      AND (item->>'productId') ~ '^[1-9][0-9]{0,9}$'
+    GROUP BY 1 ORDER BY 2 DESC LIMIT 40`);
+  const when = new Map(sold.rows.map((r) => [Number(r.pid), new Date(r.at)]));
+  if (when.size === 0) { res.set("Cache-Control", "public, max-age=300"); res.json([]); return; }
+  const rows = await db
+    .select({ id: productsTable.id, name: productsTable.name, imageUrl: productsTable.imageUrl, isService: productTypesTable.isService })
+    .from(productsTable)
+    .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
+    .where(and(visible(merchantId), inArray(productsTable.id, [...when.keys()])));
+  const items = rows
+    .filter((p) => p.isService !== true)
+    .map((p) => ({ id: p.id, name: p.name, imageUrl: shopMediaUrl(p.imageUrl ?? null), purchasedAt: when.get(p.id)!.toISOString() }))
+    .sort((a, b) => b.purchasedAt.localeCompare(a.purchasedAt))
+    .slice(0, 12);
+  res.set("Cache-Control", "public, max-age=300");
+  res.json(items);
+});
+
 router.get("/shop/products/:id", async (req, res): Promise<void> => {
   const merchantId = await merchantOr404(res);
   if (merchantId == null) return;

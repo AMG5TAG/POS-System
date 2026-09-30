@@ -41,6 +41,10 @@ export const useShopInfo = () =>
 export const useCategories = () =>
   useQuery({ queryKey: ["shop-categories"], queryFn: () => api<Category[]>("/shop/categories"), staleTime: 60_000 });
 
+export interface RecentPurchase { id: number; name: string; imageUrl: string | null; purchasedAt: string }
+export const useRecentPurchases = () =>
+  useQuery({ queryKey: ["shop-recent-purchases"], queryFn: () => api<RecentPurchase[]>("/shop/recent-purchases"), staleTime: 5 * 60_000 });
+
 export interface ProductQuery { category?: number; search?: string; sort?: string; inStock?: boolean; page?: number; pageSize?: number }
 
 export const useProducts = (q: ProductQuery) => {

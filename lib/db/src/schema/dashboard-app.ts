@@ -26,10 +26,37 @@ export const dashboardAppSettingsTable = pgTable("dashboard_app_settings", {
   // guessable username-based URL so a merchant's shared dashboard can't be found
   // by trying usernames. Nullable until backfilled / lazily generated.
   publicToken:          text("public_token"),
+  // When on, a browser that opens the link sees nothing until staff approve it
+  // from the POS (dashboardAppDevicesTable). Approval lasts until revoked.
+  requireApproval:      boolean("require_approval").notNull().default(true),
   updatedAt:            timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [
   uniqueIndex("dashboard_app_settings_public_token_unique").on(t.publicToken),
 ]);
 
+/**
+ * Browsers that have opened the public Dashboard link while approval is
+ * required. The browser holds a random secret (localStorage); only its SHA-256
+ * is stored here. `pairCode` is a short code shown both on the waiting screen
+ * and in the POS prompt, so staff can tell which screen they are approving.
+ * status: pending | approved | denied. Approval lasts until revoked.
+ */
+export const dashboardAppDevicesTable = pgTable("dashboard_app_devices", {
+  id:          serial("id").primaryKey(),
+  merchantId:  integer("merchant_id").notNull().references(() => merchantsTable.id, { onDelete: "cascade" }),
+  secretHash:  text("secret_hash").notNull(),
+  status:      text("status").notNull().default("pending"),
+  pairCode:    text("pair_code").notNull(),
+  ipAddress:   text("ip_address"),
+  userAgent:   text("user_agent"),
+  decidedBy:   text("decided_by"),
+  decidedAt:   timestamp("decided_at", { withTimezone: true }),
+  requestedAt: timestamp("requested_at", { withTimezone: true }).notNull().defaultNow(),
+  lastSeenAt:  timestamp("last_seen_at", { withTimezone: true }).notNull().defaultNow(),
+}, (t) => [
+  uniqueIndex("dashboard_app_devices_merchant_secret_uniq").on(t.merchantId, t.secretHash),
+]);
+
+export type DashboardAppDevice = typeof dashboardAppDevicesTable.$inferSelect;
 export type DashboardAppSettings = typeof dashboardAppSettingsTable.$inferSelect;
 export type InsertDashboardAppSettings = typeof dashboardAppSettingsTable.$inferInsert;

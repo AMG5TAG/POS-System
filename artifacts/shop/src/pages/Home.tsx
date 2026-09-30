@@ -1,17 +1,12 @@
 import { Link } from "wouter";
 import { ArrowRight, Wrench, Truck, Store } from "lucide-react";
-import { useCategories, useProducts, useShopInfo } from "@/lib/shop";
+import { useProducts, useShopInfo } from "@/lib/shop";
 import { ProductCard } from "@/components/ProductCard";
 import { RewardsSection } from "@/components/RewardsSection";
 
 export default function Home() {
   const { data: info } = useShopInfo();
-  const { data: cats } = useCategories();
   const { data: latest } = useProducts({ sort: "newest", pageSize: 8 });
-  const topCats = (cats ?? []).filter((c) => c.parentId == null);
-  // Once any category has an image every tile gets a picture area, so the row
-  // stays even; one without an image shows its colour and initial instead.
-  const withImages = topCats.some((c) => c.imageUrl);
 
   return (
     <div>
@@ -42,33 +37,6 @@ export default function Home() {
         ))}
       </section>
 
-      {topCats.length > 0 && (
-        <section className="mx-auto max-w-7xl px-4 mt-14">
-          <h2 className="text-2xl font-bold mb-5">Shop by category</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
-            {topCats.map((c) => (
-              <Link key={c.id} href={`/products?category=${c.id}`}
-                className="group rounded-xl border border-stone-200 bg-white text-center font-medium overflow-hidden hover:border-brand hover:shadow-sm transition"
-                style={c.color && !withImages ? { borderTopColor: c.color, borderTopWidth: 3 } : undefined}>
-                {withImages && (
-                  <div className="aspect-square overflow-hidden" style={{ backgroundColor: (c.color ?? "#a8a29e") + "22" }}>
-                    {c.imageUrl
-                      ? <img src={c.imageUrl} alt="" loading="lazy" className="w-full h-full object-cover group-hover:scale-105 transition" />
-                      : <span className="w-full h-full flex items-center justify-center text-4xl font-bold" style={{ color: c.color ?? "#a8a29e" }}>{c.name.charAt(0)}</span>}
-                  </div>
-                )}
-                <div className={withImages ? "px-3 py-3" : "px-4 py-5"}>
-                  {c.name}
-                  <span className="block text-xs text-stone-500 font-normal mt-1">{c.productCount} item{c.productCount === 1 ? "" : "s"}</span>
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
-      )}
-
-      <RewardsSection compact />
-
       {(latest?.items.length ?? 0) > 0 && (
         <section className="mx-auto max-w-7xl px-4 mt-14">
           <div className="flex items-end justify-between mb-5">
@@ -80,6 +48,8 @@ export default function Home() {
           </div>
         </section>
       )}
+
+      <RewardsSection compact />
     </div>
   );
 }

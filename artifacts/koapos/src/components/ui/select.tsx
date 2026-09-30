@@ -95,6 +95,7 @@ const SelectContent = React.forwardRef<
              the dropdown stays open and the background doesn't scroll. */
           e.stopPropagation();
         }}
+        onTouchMove={(e) => e.stopPropagation()}
       >
         {children}
       </SelectPrimitive.Viewport>

@@ -8,8 +8,8 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { useQueryClient } from "@tanstack/react-query";
-import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal, MapPin, Trash2, UserX } from "lucide-react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { AlertTriangle, Globe, Loader2, Check, ExternalLink, AtSign, KeyRound, Eye, EyeOff, ShieldCheck, CheckCircle2, XCircle, LockOpen, Lock, Bell, Flag, CheckCheck, ShieldAlert, Download, SlidersHorizontal, MapPin, Trash2, UserX, ShieldPlus } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 
@@ -391,10 +391,63 @@ function csvEscape(value: string): string {
   return value;
 }
 
+type TrustedIp = { id: number; ipAddress: string; label: string | null; createdAt: string };
+
+async function postJson(path: string, method: string, body?: unknown) {
+  const r = await fetch(`/api${path}`, {
+    method,
+    credentials: "include",
+    headers: body ? { "Content-Type": "application/json" } : undefined,
+    body: body ? JSON.stringify(body) : undefined,
+  });
+  const data = await r.json().catch(() => null);
+  if (!r.ok) throw new Error((data as { error?: string } | null)?.error ?? `Request failed (${r.status})`);
+  return data as { cleared?: number };
+}
+
 function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
   const qc = useQueryClient();
   const updateEvent = useUpdateAuthEvent();
   const [pending, setPending] = useState<Record<number, boolean>>({});
+  const [ipBusy, setIpBusy] = useState<string | null>(null);
+
+  /* A trusted IP is never flagged as a new location again, and trusting one
+     clears the flags it already raised. */
+  const { data: trustedIps } = useQuery({
+    queryKey: ["trusted-ips"],
+    queryFn: async (): Promise<TrustedIp[]> => {
+      const r = await fetch("/api/auth/trusted-ips", { credentials: "include" });
+      return r.ok ? r.json() : [];
+    },
+  });
+  const trusted = new Set((trustedIps ?? []).map((t) => t.ipAddress));
+  const refreshAll = () => {
+    void qc.invalidateQueries({ queryKey: ["trusted-ips"] });
+    void qc.invalidateQueries({ queryKey: ["auth-events"] });
+    void qc.invalidateQueries({ queryKey: ["auth-events-flagged-count"] });
+  };
+  const trustIp = async (ip: string) => {
+    setIpBusy(ip);
+    try {
+      const r = await postJson("/auth/trusted-ips", "POST", { ipAddress: ip });
+      toast.success(r.cleared ? `${ip} trusted — ${r.cleared} flag${r.cleared === 1 ? "" : "s"} cleared` : `${ip} trusted`);
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setIpBusy(null); refreshAll(); }
+  };
+  const untrustIp = async (t: TrustedIp) => {
+    setIpBusy(t.ipAddress);
+    try { await postJson(`/auth/trusted-ips/${t.id}`, "DELETE"); toast.success(`${t.ipAddress} is no longer trusted`); }
+    catch (e) { toast.error((e as Error).message); }
+    finally { setIpBusy(null); refreshAll(); }
+  };
+  const clearNewLocationFlags = async () => {
+    setIpBusy("*");
+    try {
+      const r = await postJson("/auth/events/clear-new-location-flags", "POST");
+      toast.success(`${r.cleared ?? 0} new-location flag${r.cleared === 1 ? "" : "s"} dismissed`);
+    } catch (e) { toast.error((e as Error).message); }
+    finally { setIpBusy(null); refreshAll(); }
+  };
 
   // Only keep a 7-day sign-in history.
   const HISTORY_DAYS = 7;
@@ -451,17 +504,31 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
           <CardTitle className="flex items-center gap-2">
             <ShieldCheck className="w-4 h-4" /> Recent Sign-ins
           </CardTitle>
-          {recentEvents.length > 0 && (
-            <Button
-              variant="outline"
-              size="sm"
-              className="h-7 text-xs px-2 gap-1.5"
-              onClick={handleDownloadCSV}
-            >
-              <Download className="w-3 h-3" />
-              Download CSV
-            </Button>
-          )}
+          <div className="flex items-center gap-2 flex-wrap justify-end">
+            {(authEvents ?? []).some((ev) => ev.status === "flagged" && ev.flagReason === "new_ip") && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2 gap-1.5"
+                disabled={ipBusy === "*"}
+                onClick={() => void clearNewLocationFlags()}
+              >
+                {ipBusy === "*" ? <Loader2 className="w-3 h-3 animate-spin" /> : <CheckCheck className="w-3 h-3" />}
+                Dismiss all new-location flags
+              </Button>
+            )}
+            {recentEvents.length > 0 && (
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs px-2 gap-1.5"
+                onClick={handleDownloadCSV}
+              >
+                <Download className="w-3 h-3" />
+                Download CSV
+              </Button>
+            )}
+          </div>
         </div>
         <CardDescription>
           Login attempts from the last 7 days. Flag anything that looks suspicious.
@@ -537,10 +604,25 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
                         {formatRelative(ev.createdAt)}
                       </span>
                     </div>
-                    <p className="text-xs text-muted-foreground">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1.5 flex-wrap">
                       {parseUserAgent(ev.userAgent)}{ev.ipAddress ? ` · ${ev.ipAddress}` : ""}
+                      {ev.ipAddress && trusted.has(ev.ipAddress) && (
+                        <Badge variant="secondary" className="text-[10px] py-0 px-1.5 h-4 gap-1"><ShieldCheck className="w-2.5 h-2.5" /> Trusted IP</Badge>
+                      )}
                     </p>
-                    <div className="flex items-center gap-2 pt-0.5">
+                    <div className="flex items-center gap-2 pt-0.5 flex-wrap">
+                      {ev.outcome === "success" && ev.ipAddress && !trusted.has(ev.ipAddress) && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-xs px-2"
+                          disabled={ipBusy === ev.ipAddress}
+                          onClick={() => void trustIp(ev.ipAddress!)}
+                        >
+                          {ipBusy === ev.ipAddress ? <Loader2 className="w-3 h-3 animate-spin" /> : <ShieldPlus className="w-3 h-3 mr-1" />}
+                          Trust this IP
+                        </Button>
+                      )}
                       {isFlagged ? (
                         <Button
                           size="sm"
@@ -604,6 +686,22 @@ function RecentSignInsCard({ authEvents }: { authEvents?: AuthEventItem[] }) {
               );
             })}
           </ul>
+        )}
+        {(trustedIps?.length ?? 0) > 0 && (
+          <div className="mt-5 pt-4 border-t">
+            <p className="text-sm font-medium flex items-center gap-1.5"><ShieldCheck className="w-4 h-4" /> Trusted IPs</p>
+            <p className="text-xs text-muted-foreground mt-0.5 mb-2">Sign-ins from these addresses are never flagged as a new location.</p>
+            <ul className="space-y-1.5">
+              {trustedIps!.map((t) => (
+                <li key={t.id} className="flex items-center justify-between gap-2 text-sm rounded-lg border px-3 py-1.5">
+                  <span className="font-mono text-xs break-all">{t.ipAddress}{t.label ? <span className="font-sans text-muted-foreground"> · {t.label}</span> : null}</span>
+                  <Button size="sm" variant="ghost" className="h-6 text-xs px-2 text-muted-foreground shrink-0" disabled={ipBusy === t.ipAddress} onClick={() => void untrustIp(t)}>
+                    Remove
+                  </Button>
+                </li>
+              ))}
+            </ul>
+          </div>
         )}
       </CardContent>
     </Card>

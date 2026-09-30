@@ -19,7 +19,14 @@ const PgSession = connectPgSimple(session);
 
 const app: Express = express();
 
-app.set("trust proxy", 1);
+/* Replit puts two hops in front of this process: the X-Forwarded-For chain
+   arrives as "<client>, <replit proxy>" with the socket peer on loopback. With
+   one hop trusted, req.ip was the Replit proxy — a Google Cloud address that
+   changes between requests — so every sign-in looked like a new location and
+   every rate limit was shared by whoever landed on the same proxy. The edge
+   replaces any X-Forwarded-For the client sends, so the second hop can't be
+   spoofed. TRUST_PROXY_HOPS overrides the count if the hosting ever changes. */
+app.set("trust proxy", Number(process.env.TRUST_PROXY_HOPS) || 2);
 
 app.use(legacyDomainRedirect);
 

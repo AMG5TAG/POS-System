@@ -60,6 +60,22 @@ function Stat({ label, value, accent }: { label: string; value: string | number;
   );
 }
 
+/* This screen's approval secret (see api lib/dashboard-devices.ts). Kept for
+   the life of the browser profile, so an approved TV stays approved across
+   reloads and power cycles. If storage is unavailable a fresh secret is made
+   per page load — the screen then asks for approval each time it loads. */
+const DEVICE_KEY = "koapos.dashboardDeviceSecret";
+function deviceSecret(): string {
+  try {
+    const saved = localStorage.getItem(DEVICE_KEY);
+    if (saved && /^[0-9a-f]{64}$/.test(saved)) return saved;
+  } catch { /* fall through */ }
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  const secret = Array.from(bytes, (b) => b.toString(16).padStart(2, "0")).join("");
+  try { localStorage.setItem(DEVICE_KEY, secret); } catch { /* per-load secret */ }
+  return secret;
+}
+
 export default function DashboardAppPage() {
   // /d/dashboard/<code> is the current address; /d/<code> the older one.
   const [, current] = useRoute("/d/dashboard/:token");
@@ -67,15 +83,23 @@ export default function DashboardAppPage() {
   const token = current?.token ?? legacy?.token ?? "";
 
   const [snap, setSnap] = useState<Snapshot | null>(null);
-  const [status, setStatus] = useState<"loading" | "ok" | "disabled" | "notfound" | "error">("loading");
+  const [status, setStatus] = useState<"loading" | "ok" | "disabled" | "notfound" | "error" | "pending" | "denied" | "busy">("loading");
+  const [waiting, setWaiting] = useState<{ pairCode: string; businessName: string; logoUrl: string | null } | null>(null);
+  const [secret] = useState(deviceSecret);
   const [refreshing, setRefreshing] = useState(false);
 
   const load = useCallback(async (initial = false) => {
     if (!token) return;
     if (!initial) setRefreshing(true);
     try {
-      const r = await fetch(`/api/public/dashboard/${encodeURIComponent(token)}`);
-      if (r.status === 403) { setStatus("disabled"); return; }
+      const r = await fetch(`/api/public/dashboard/${encodeURIComponent(token)}`, { headers: { "X-Dashboard-Device": secret } });
+      if (r.status === 202) { setWaiting(await r.json()); setStatus("pending"); return; }
+      if (r.status === 429) { setStatus("busy"); return; }
+      if (r.status === 403) {
+        const body = await r.json().catch(() => null) as { approval?: string } | null;
+        setStatus(body?.approval === "denied" ? "denied" : "disabled");
+        return;
+      }
       if (r.status === 404) { setStatus("notfound"); return; }
       if (!r.ok) { setStatus("error"); return; }
       setSnap(await r.json());
@@ -85,9 +109,18 @@ export default function DashboardAppPage() {
     } finally {
       setRefreshing(false);
     }
-  }, [token]);
+  }, [token, secret]);
 
   useEffect(() => { void load(true); }, [load]);
+
+  // A screen waiting for approval checks every few seconds, so it opens as soon
+  // as someone taps Approve; a denied one checks now and then in case that changes.
+  useEffect(() => {
+    const every = status === "pending" ? 4_000 : status === "denied" || status === "busy" ? 60_000 : 0;
+    if (!every) return;
+    const t = setInterval(() => void load(true), every);
+    return () => clearInterval(t);
+  }, [status, load]);
 
   /* Brand the home-screen icon for this business's Dashboard. */
   useEffect(() => {
@@ -105,8 +138,35 @@ export default function DashboardAppPage() {
     return <div className="min-h-screen grid place-items-center"><Loader2 className="w-6 h-6 animate-spin text-muted-foreground" /></div>;
   }
 
+  if (status === "pending" && waiting) {
+    return (
+      <div className="min-h-screen grid place-items-center p-6 bg-muted/20">
+        <div className="text-center max-w-md space-y-5">
+          {waiting.logoUrl
+            ? <img src={waiting.logoUrl} alt="" className="h-14 mx-auto object-contain" />
+            : <LayoutDashboard className="w-10 h-10 text-primary mx-auto" />}
+          <div>
+            <h1 className="text-xl font-semibold">{waiting.businessName} Dashboard</h1>
+            <p className="text-sm text-muted-foreground mt-1">Waiting for this screen to be approved in the POS.</p>
+          </div>
+          <div>
+            <p className="text-xs uppercase tracking-widest text-muted-foreground">Screen code</p>
+            <p className="text-6xl font-bold tracking-[0.3em] tabular-nums mt-1 pl-[0.3em]">{waiting.pairCode}</p>
+          </div>
+          <p className="text-xs text-muted-foreground flex items-center justify-center gap-1.5">
+            <Loader2 className="w-3.5 h-3.5 animate-spin" /> Approve the request showing this code — it opens here automatically.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
   if (status !== "ok" || !snap) {
-    const msg = status === "disabled"
+    const msg = status === "denied"
+      ? "This screen wasn't approved to show the dashboard."
+      : status === "busy"
+        ? "Too many screens are waiting for approval. This page will try again shortly."
+        : status === "disabled"
       ? "This dashboard isn't being shared right now."
       : status === "notfound"
         ? "Dashboard not found."

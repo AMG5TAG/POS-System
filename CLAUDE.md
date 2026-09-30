@@ -533,6 +533,35 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   14 days; email only, never SMS. It needs the exact count typed back and sends
   in the background, paced for the email provider. Pinned by `shop-invites.test.ts`.
 
+### Client IPs, trusted sign-in IPs, Dashboard screen approval
+
+- **`trust proxy` is 2, not 1.** Replit forwards `X-Forwarded-For` as
+  `<client>, <replit proxy>` with the socket on loopback; with one hop trusted
+  `req.ip` was the proxy (a Google Cloud `34.x`/`35.x` address that changes per
+  request), so every owner login was flagged "new location", distinct-IP
+  account holds could trip on one person's typos, and rate limits were shared
+  per proxy. The edge replaces a client-sent XFF, so hop 2 isn't spoofable.
+  `TRUST_PROXY_HOPS` overrides. Sign-ins recorded before the fix carry proxy IPs.
+- **Trusted IPs** (`trusted_ips`, `/auth/trusted-ips`, owner only): a trusted IP
+  is never flagged `new_ip`; trusting one acknowledges its existing flags. The
+  flagged-count banner counts the same 7 days Recent Sign-ins shows.
+- **Dashboard screen approval** (`dashboard_app_settings.require_approval`,
+  default on; `dashboard_app_devices`; `lib/dashboard-devices.ts`): the access
+  code says which dashboard, the approval says which screen. A browser sends a
+  localStorage secret in `X-Dashboard-Device` (only its SHA-256 is stored); an
+  unknown one gets **202** + a 4-digit pairing code — 202 so its polling isn't
+  counted by the wrong-code limiter — and appears in `DashboardAccessBanner`
+  (every POS page, owner/manager) until approved or denied. Approval lasts until
+  revoked. Pinned by `dashboard-screen-approval.test.ts`.
+
+### Shop "Just purchased" pop-up
+
+`GET /shop/recent-purchases` lists shop-visible, non-service products sold in
+the last 24h (completed transactions, so till sales and paid online orders),
+newest first. It names the product and time only — never the buyer, price or
+quantity (`shop-recent-purchases.test.ts`). `JustPurchased.tsx` shows one at a
+time bottom-left, not on cart/checkout/account, closable for the visit.
+
 ### Linking a job or appointment to an invoice
 
 In the invoice editor, linking a service job or appointment also sets the

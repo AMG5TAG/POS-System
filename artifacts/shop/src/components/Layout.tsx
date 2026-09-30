@@ -6,6 +6,7 @@ import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useCategories, useShopInfo } from "@/lib/shop";
 import { CategoryNav } from "./CategoryNav";
+import { JustPurchased } from "./JustPurchased";
 
 function Header() {
   const { data: info } = useShopInfo();
@@ -116,6 +117,7 @@ export function Layout({ children }: { children: ReactNode }) {
       <Header />
       <main className="flex-1">{children}</main>
       <Footer />
+      <JustPurchased />
     </div>
   );
 }
