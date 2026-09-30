@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable } from "@workspace/db";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
+import { loyaltyEarnedFor } from "../lib/loyalty";
 import { requireAuth } from "../middlewares/requireAuth";
 import {
   ListTransactionsQueryParams,
@@ -505,113 +506,17 @@ export async function finalizeSale(
   //
   // Earning is suppressed when the customer pays with loyalty, and when
   // the customer's group is in the excluded list.
-  let sanitizedEarned = 0;
-  if (scopedCustomer && paymentMethod !== "loyalty" && programOn) {
-    const excluded = ((loyaltyConfig.excludedCustomerGroups as string[]) ?? []).map((g) => g.toLowerCase());
-    const groupName = (scopedCustomer.customerGroup ?? "").toLowerCase();
-    const customerExcluded = !!groupName && excluded.includes(groupName);
-
-    if (!customerExcluded) {
-      // Eligible spend = sale total minus any line items whose product is
-      // flagged excludeFromLoyalty. Matches POS preview logic so the credited
-      // amount equals what the cashier saw on screen.
-      const eligibleTotal = round2(computedItems.reduce((s, it) => {
-        const p = productMap.get(it.productId);
-        if (p?.excludeFromLoyalty === "true") return s;
-        return s + it.totalPrice;
-      }, 0));
-
-      let baseEarned = 0;
-      switch (programType) {
-        case "cashback": {
-          const rate = (loyaltyConfig.cashbackRate as number) ?? 0.01;
-          baseEarned = eligibleTotal * rate;
-          break;
-        }
-        case "points": {
-          const ppd = (loyaltyConfig.pointsPerDollar as number) ?? 1;
-          baseEarned = eligibleTotal * ppd;
-          break;
-        }
-        case "tiered": {
-          const tiers = (loyaltyConfig.tiers ?? []) as Array<{ minSpend?: number; pointsRequired?: number; rate?: number; bonusMultiplier?: number; name: string }>;
-          const spent = parseFloat(scopedCustomer.totalSpent);
-          const pts = scopedCustomer.loyaltyPoints ?? 0;
-          const sorted = [...tiers].sort((a, b) =>
-            (b.pointsRequired ?? b.minSpend ?? 0) - (a.pointsRequired ?? a.minSpend ?? 0)
-          );
-          const tier = sorted.find((t) => {
-            if (t.pointsRequired != null) return pts >= t.pointsRequired;
-            return spent >= (t.minSpend ?? 0);
-          }) ?? sorted[sorted.length - 1];
-          const rate = tier?.rate ?? 0.01;
-          const bonusMult = tier?.bonusMultiplier ?? 1;
-          baseEarned = eligibleTotal * rate * bonusMult;
-          break;
-        }
-        case "stamp": {
-          // 1 stamp per sale (only if at least one eligible item was bought).
-          baseEarned = eligibleTotal > 0 ? 1 : 0;
-          break;
-        }
-        case "custom": {
-          const rate = (loyaltyConfig.customValue as number) ?? 0.01;
-          baseEarned = eligibleTotal * rate;
-          break;
-        }
-        default: baseEarned = 0;
-      }
-
-      // Apply active promotion multipliers / bonuses
-      const promotions = (loyaltyConfig.promotions ?? []) as Array<{
-        id: string; name: string; type: string; active: boolean;
-        multiplier?: number; bonusAmount?: number;
-        categoryId?: number | null; productId?: number | null;
-        minSpend?: number | null; startDate?: string | null; endDate?: string | null;
-      }>;
-      const today = new Date().toISOString().slice(0, 10);
-      const activePromos = promotions.filter((p) => {
-        if (!p.active) return false;
-        const inRange = (!p.startDate || p.startDate <= today) && (!p.endDate || p.endDate >= today);
-        if (!inRange) return false;
-        if (p.type === "spend_threshold" && (p.minSpend == null || total < p.minSpend)) return false;
-        if (p.type === "category_bonus" && p.categoryId != null) {
-          const hasCat = computedItems.some((it) => {
-            const product = productMap.get(it.productId);
-            return product && product.categoryId === p.categoryId;
-          });
-          if (!hasCat) return false;
-        }
-        if (p.type === "product_bonus" && p.productId != null) {
-          return computedItems.some((it) => it.productId === p.productId);
-        }
-        if (p.type === "birthday" && scopedCustomer) {
-          const dob = scopedCustomer.dateOfBirth;
-          if (!dob) return false;
-          const d = new Date(dob);
-          const todayM = new Date().getMonth() + 1;
-          const todayD = new Date().getDate();
-          return d.getMonth() + 1 === todayM && d.getDate() === todayD;
-        }
-        return true;
-      });
-      const bestMultiplier = activePromos.length > 0
-        ? Math.max(...activePromos.map((p) => p.multiplier ?? 1))
-        : 1;
-      const bestBonus = activePromos.length > 0
-        ? Math.max(...activePromos.map((p) => p.bonusAmount ?? 0))
-        : 0;
-      const finalEarned = baseEarned * bestMultiplier + bestBonus;
-
-      // Cap monetary earnings at the sale total so cashback never exceeds
-      // the amount paid. Points and stamps are integer counts so we floor those.
-      if (programType === "cashback" || programType === "tiered" || programType === "custom") {
-        sanitizedEarned = round2(Math.max(0, Math.min(finalEarned, total)));
-      } else {
-        sanitizedEarned = Math.max(0, Math.floor(finalEarned));
-      }
-    }
-  }
+  // The rule lives in lib/loyalty.ts, shared with the online shop's estimate.
+  const sanitizedEarned = loyaltyEarnedFor({
+    programType, config: loyaltyConfig, programOn, paymentMethod, total,
+    customer: scopedCustomer
+      ? { customerGroup: scopedCustomer.customerGroup ?? null, totalSpent: scopedCustomer.totalSpent, loyaltyPoints: scopedCustomer.loyaltyPoints ?? 0, dateOfBirth: scopedCustomer.dateOfBirth ?? null }
+      : null,
+    lines: computedItems.map((it) => {
+      const p = productMap.get(it.productId);
+      return { productId: it.productId, totalPrice: it.totalPrice, excludeFromLoyalty: p?.excludeFromLoyalty === "true", categoryId: p?.categoryId ?? null };
+    }),
+  });
   void loyaltyEarned; // client value is purely informational — server is authoritative
 
   // `let` so the sale transaction can be retried with a fresh receipt number if

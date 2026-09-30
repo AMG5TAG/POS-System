@@ -5,13 +5,15 @@ import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { shopOrigin } from "../lib/publicUrl";
+import { shopVisible, notInHiddenCategory } from "../lib/shop-visibility";
 
 /**
  * Management › Online Store — the POS side of shop.koastal.com.au.
  *
- * The shop lists a product when it is active AND `show_online` is on
- * (routes/shop.ts). This is where `show_online` is set. Only active products
- * are offered: an inactive product is off the shop whatever the flag says.
+ * The shop lists a product when it is active, its `show_online` is on and no
+ * category above it is hidden (lib/shop-visibility.ts). This is where both
+ * flags are set. Only active products are offered: an inactive product is off
+ * the shop whatever the flags say.
  */
 
 const router: IRouter = Router();
@@ -20,8 +22,8 @@ router.get("/online-store/summary", requireAuth, requireManagerOrOwner, async (r
   const merchantId = req.session.merchantId!;
   const [row] = await db
     .select({
-      listed: sql<number>`count(*) filter (where ${productsTable.showOnline} = 'true')::int`,
-      hidden: sql<number>`count(*) filter (where ${productsTable.showOnline} <> 'true')::int`,
+      listed: sql<number>`count(*) filter (where ${shopVisible(merchantId)})::int`,
+      hidden: sql<number>`count(*) filter (where not ${shopVisible(merchantId)})::int`,
     })
     .from(productsTable)
     .where(and(eq(productsTable.merchantId, merchantId), eq(productsTable.isActive, "true")));
@@ -40,6 +42,7 @@ router.get("/online-store/products", requireAuth, requireManagerOrOwner, async (
       categoryId: productsTable.categoryId,
       categoryName: categoriesTable.name,
       showOnline: productsTable.showOnline,
+      categoryShown: sql<boolean>`${notInHiddenCategory(merchantId)}`,
     })
     .from(productsTable)
     .leftJoin(categoriesTable, eq(categoriesTable.id, productsTable.categoryId))
@@ -62,6 +65,37 @@ router.patch("/online-store/products", requireAuth, requireManagerOrOwner, async
     .set({ showOnline: parsed.data.showOnline ? "true" : "false" })
     .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, parsed.data.ids)))
     .returning({ id: productsTable.id });
+  res.json({ updated: updated.length });
+});
+
+/* Categories: hiding one hides its subcategories and every product in them,
+   including products added later. */
+
+router.get("/online-store/categories", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const cats = await db
+    .select({ id: categoriesTable.id, name: categoriesTable.name, parentId: categoriesTable.parentId, color: categoriesTable.color, icon: categoriesTable.icon, showOnline: categoriesTable.showOnline })
+    .from(categoriesTable)
+    .where(eq(categoriesTable.merchantId, merchantId))
+    .orderBy(categoriesTable.sortOrder, categoriesTable.name); // the Categories page's order
+  const counts = await db
+    .select({ categoryId: productsTable.categoryId, n: sql<number>`count(*)::int` })
+    .from(productsTable)
+    .where(and(eq(productsTable.merchantId, merchantId), eq(productsTable.isActive, "true")))
+    .groupBy(productsTable.categoryId);
+  const countBy = new Map(counts.map((c) => [c.categoryId, c.n]));
+  res.json(cats.map((c) => ({ ...c, showOnline: c.showOnline === "true", productCount: countBy.get(c.id) ?? 0 })));
+});
+
+router.patch("/online-store/categories", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const parsed = SetVisibility.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Expected { ids: number[], showOnline: boolean }" }); return; }
+  const merchantId = req.session.merchantId!;
+  const updated = await db
+    .update(categoriesTable)
+    .set({ showOnline: parsed.data.showOnline ? "true" : "false" })
+    .where(and(eq(categoriesTable.merchantId, merchantId), inArray(categoriesTable.id, parsed.data.ids)))
+    .returning({ id: categoriesTable.id });
   res.json({ updated: updated.length });
 });
 

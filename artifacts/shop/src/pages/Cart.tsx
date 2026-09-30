@@ -3,6 +3,7 @@ import { Minus, Plus, Trash2, ShoppingCart } from "lucide-react";
 import { useCart } from "@/lib/cart";
 import { gstIn, money } from "@/lib/format";
 import { ProductImage } from "@/components/ProductCard";
+import { LoyaltyEstimate } from "@/components/LoyaltyEstimate";
 
 export default function Cart() {
   const { lines, subtotal, setQty, remove } = useCart();
@@ -47,6 +48,7 @@ export default function Cart() {
         <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold tabular-nums">{money(subtotal)}</span></div>
         <div className="flex justify-between text-sm text-stone-500"><span>Includes GST</span><span className="tabular-nums">{money(gstIn(subtotal))}</span></div>
         <p className="text-sm text-stone-500">Shipping or click & collect is chosen at checkout.</p>
+        <LoyaltyEstimate lines={lines} />
         <Link href="/checkout" className="flex h-11 items-center justify-center rounded-full bg-brand text-white font-semibold hover:bg-brand-dark">Checkout</Link>
         <Link href="/products" className="block text-center text-sm text-stone-600 hover:underline">Continue shopping</Link>
       </div>

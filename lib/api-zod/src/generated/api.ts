@@ -274,6 +274,7 @@ export const ListProductsResponse = zod.object({
   "icon": zod.string().nullish(),
   "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().nullish().describe('Category image, shown on the online shop.'),
   "createdAt": zod.coerce.date()
 }).optional(),
   "brandId": zod.number().nullish(),
@@ -298,6 +299,11 @@ export const ListProductsResponse = zod.object({
   "overflowLocation": zod.string().nullish(),
   "notification": zod.string().nullish(),
   "timeCardMinutes": zod.number().nullish(),
+  "technicalSpecs": zod.string().nullish().describe('Free-text technical specifications, one per line (online shop Specifications tab).'),
+  "weightKg": zod.number().nullish(),
+  "lengthCm": zod.number().nullish(),
+  "widthCm": zod.number().nullish(),
+  "heightCm": zod.number().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -339,7 +345,12 @@ export const CreateProductBody = zod.object({
   "tracksSerial": zod.boolean().optional(),
   "tags": zod.array(zod.string()).max(createProductBodyTagsMax).optional(),
   "notification": zod.string().optional(),
-  "timeCardMinutes": zod.number().optional()
+  "timeCardMinutes": zod.number().optional(),
+  "technicalSpecs": zod.string().nullish().describe('Free-text technical specifications, one per line (online shop Specifications tab).'),
+  "weightKg": zod.number().nullish(),
+  "lengthCm": zod.number().nullish(),
+  "widthCm": zod.number().nullish(),
+  "heightCm": zod.number().nullish()
 })
 
 
@@ -410,6 +421,7 @@ export const GetProductResponse = zod.object({
   "icon": zod.string().nullish(),
   "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().nullish().describe('Category image, shown on the online shop.'),
   "createdAt": zod.coerce.date()
 }).optional(),
   "brandId": zod.number().nullish(),
@@ -434,6 +446,11 @@ export const GetProductResponse = zod.object({
   "overflowLocation": zod.string().nullish(),
   "notification": zod.string().nullish(),
   "timeCardMinutes": zod.number().nullish(),
+  "technicalSpecs": zod.string().nullish().describe('Free-text technical specifications, one per line (online shop Specifications tab).'),
+  "weightKg": zod.number().nullish(),
+  "lengthCm": zod.number().nullish(),
+  "widthCm": zod.number().nullish(),
+  "heightCm": zod.number().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -476,7 +493,12 @@ export const UpdateProductBody = zod.object({
   "stockLocation": zod.string().optional(),
   "overflowLocation": zod.string().optional(),
   "notification": zod.string().nullish(),
-  "timeCardMinutes": zod.number().optional()
+  "timeCardMinutes": zod.number().optional(),
+  "technicalSpecs": zod.string().nullish().describe('Free-text technical specifications, one per line (online shop Specifications tab).'),
+  "weightKg": zod.number().nullish(),
+  "lengthCm": zod.number().nullish(),
+  "widthCm": zod.number().nullish(),
+  "heightCm": zod.number().nullish()
 })
 
 export const updateProductResponseTagsMax = 5;
@@ -501,6 +523,7 @@ export const UpdateProductResponse = zod.object({
   "icon": zod.string().nullish(),
   "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().nullish().describe('Category image, shown on the online shop.'),
   "createdAt": zod.coerce.date()
 }).optional(),
   "brandId": zod.number().nullish(),
@@ -525,6 +548,11 @@ export const UpdateProductResponse = zod.object({
   "overflowLocation": zod.string().nullish(),
   "notification": zod.string().nullish(),
   "timeCardMinutes": zod.number().nullish(),
+  "technicalSpecs": zod.string().nullish().describe('Free-text technical specifications, one per line (online shop Specifications tab).'),
+  "weightKg": zod.number().nullish(),
+  "lengthCm": zod.number().nullish(),
+  "widthCm": zod.number().nullish(),
+  "heightCm": zod.number().nullish(),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -656,6 +684,7 @@ export const ListCategoriesResponseItem = zod.object({
   "icon": zod.string().nullish(),
   "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().nullish().describe('Category image, shown on the online shop.'),
   "createdAt": zod.coerce.date()
 })
 export const ListCategoriesResponse = zod.array(ListCategoriesResponseItem)
@@ -672,7 +701,8 @@ export const CreateCategoryBody = zod.object({
   "color": zod.string().optional(),
   "icon": zod.string().optional(),
   "parentId": zod.number().optional(),
-  "sortOrder": zod.number().optional()
+  "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().optional()
 })
 
 
@@ -688,7 +718,8 @@ export const UpdateCategoryBody = zod.object({
   "color": zod.string().optional(),
   "icon": zod.string().optional(),
   "parentId": zod.number().nullish(),
-  "sortOrder": zod.number().optional()
+  "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().nullish().describe('null removes the image.')
 })
 
 export const UpdateCategoryResponse = zod.object({
@@ -699,6 +730,7 @@ export const UpdateCategoryResponse = zod.object({
   "icon": zod.string().nullish(),
   "parentId": zod.number().nullish(),
   "sortOrder": zod.number().optional(),
+  "imageUrl": zod.string().nullish().describe('Category image, shown on the online shop.'),
   "createdAt": zod.coerce.date()
 })
 

@@ -2,27 +2,9 @@ import { Router, type IRouter } from "express";
 import { db, transactionsTable, productsTable, customersTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, gt, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { DAY_MS, productWarrantyExpiry, productWarrantyLabel } from "../lib/warranty";
 
 const router: IRouter = Router();
-
-const DAY_MS = 24 * 60 * 60 * 1000;
-
-/** Expiry = sale date + duration (months/years). Mirrors the frontend warranty helper. */
-function productWarrantyExpiry(saleDate: Date | string, duration: number, unit: string): Date | null {
-  if (!duration || duration <= 0) return null;
-  const start = new Date(saleDate);
-  if (isNaN(start.getTime())) return null;
-  const months = unit === "years" ? duration * 12 : duration;
-  const end = new Date(start);
-  end.setMonth(end.getMonth() + months);
-  return end;
-}
-
-function productWarrantyLabel(duration: number, unit: string): string {
-  if (!duration || duration <= 0) return "";
-  const u = unit === "years" ? "year" : "month";
-  return `${duration} ${u}${duration === 1 ? "" : "s"} warranty`;
-}
 
 function customerName(c?: { firstName?: string | null; lastName?: string | null; company?: string | null } | null): string {
   if (!c) return "";

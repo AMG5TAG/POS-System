@@ -70,6 +70,23 @@ async function resolveCategoryName(merchantId: number, body: unknown): Promise<n
   return created.id;
 }
 
+// Specifications tab fields: numbers come in as numbers and are stored in
+// numeric columns as strings. A blank/zero/invalid measurement is stored as
+// null ("not entered") rather than 0, which the shop would print as "0 kg".
+// Only keys present in the body are returned, so a PATCH leaves the rest alone.
+type SpecFields = { technicalSpecs?: string | null; weightKg?: number | null; lengthCm?: number | null; widthCm?: number | null; heightCm?: number | null };
+function specColumns(d: SpecFields): Record<string, string | null> {
+  const out: Record<string, string | null> = {};
+  if (d.technicalSpecs !== undefined) out.technicalSpecs = d.technicalSpecs?.trim() ? d.technicalSpecs.trim() : null;
+  for (const k of ["weightKg", "lengthCm", "widthCm", "heightCm"] as const) {
+    const v = d[k];
+    if (v !== undefined) out[k] = v != null && Number.isFinite(v) && v > 0 ? String(v) : null;
+  }
+  return out;
+}
+
+const num = (v: string | null) => (v == null ? null : parseFloat(v));
+
 function formatProduct(
   p: typeof productsTable.$inferSelect,
   category?: typeof categoriesTable.$inferSelect | null,
@@ -117,6 +134,11 @@ function formatProduct(
     warrantyDuration: p.warrantyDuration ?? 0,
     warrantyUnit: p.warrantyUnit ?? "months",
     timeCardMinutes: p.timeCardMinutes ?? 0,
+    technicalSpecs: p.technicalSpecs ?? null,
+    weightKg: num(p.weightKg),
+    lengthCm: num(p.lengthCm),
+    widthCm: num(p.widthCm),
+    heightCm: num(p.heightCm),
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -130,6 +152,7 @@ function formatCategory(c: typeof categoriesTable.$inferSelect) {
     icon: c.icon ?? null,
     parentId: c.parentId ?? null,
     sortOrder: c.sortOrder,
+    imageUrl: c.imageUrl ?? null,
     createdAt: c.createdAt.toISOString(),
   };
 }
@@ -278,7 +301,7 @@ async function logCostHistory(
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, ...rest } = parsed.data;
 
   // Reject a SKU that already exists for this merchant (case-insensitive, like
   // the CSV import path). SKU has no DB unique constraint, so this is enforced
@@ -344,6 +367,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       ...(tracksSerial !== undefined ? { tracksSerial: tracksSerial === true ? "true" : "false" } : {}),
       groupPrices: groupPrices ?? null,
       tags: tags ?? null,
+      ...specColumns({ technicalSpecs, weightKg, lengthCm, widthCm, heightCm }),
     })
     .returning();
   // Record the initial cost as the first price-history entry.
@@ -744,7 +768,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, ...rest } = parsed.data;
 
   // Reject a SKU that already exists on a DIFFERENT product for this merchant
   // (case-insensitive), matching the create path. Only runs when the SKU is
@@ -775,6 +799,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (tracksSerial !== undefined) updates.tracksSerial = tracksSerial ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;
   if (tags !== undefined) updates.tags = tags;
+  Object.assign(updates, specColumns({ technicalSpecs, weightKg, lengthCm, widthCm, heightCm }));
   const warranty = readWarranty(req.body);
   if (warranty) { updates.warrantyDuration = warranty.warrantyDuration; updates.warrantyUnit = warranty.warrantyUnit; }
   const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);

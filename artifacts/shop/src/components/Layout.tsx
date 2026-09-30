@@ -1,19 +1,21 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, ShoppingCart, User, Menu, X, Phone, Mail, MapPin } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Phone, Mail, MapPin, Heart } from "lucide-react";
+import { useWishlist } from "@/lib/wishlist";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useCategories, useShopInfo } from "@/lib/shop";
+import { CategoryNav } from "./CategoryNav";
 
 function Header() {
   const { data: info } = useShopInfo();
   const { data: cats } = useCategories();
   const { count } = useCart();
   const { customer } = useAuth();
+  const wishlist = useWishlist();
   const [, navigate] = useLocation();
   const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
-  const topCats = (cats ?? []).filter((c) => c.parentId == null).slice(0, 8);
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -23,13 +25,16 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-stone-200" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div className="mx-auto max-w-7xl px-4 h-16 flex items-center gap-4">
+      <div className="mx-auto max-w-7xl px-4 h-20 flex items-center gap-4">
         <button className="md:hidden p-2 -ml-2" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
-        <Link href="/" className="flex items-center gap-2 shrink-0">
-          {info?.logoUrl ? <img src={info.logoUrl} alt="" className="w-9 h-9 rounded-full object-contain" /> : null}
-          <span className="font-bold text-lg tracking-tight">{info?.businessName ?? "Shop"}</span>
+        {/* The logo alone carries the brand; the name is only its alt text, or
+            shown as text when no logo is set. */}
+        <Link href="/" className="flex items-center shrink-0" aria-label={info?.businessName ?? "Home"}>
+          {info?.logoUrl
+            ? <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-12 sm:h-14 w-auto max-w-[180px] sm:max-w-[240px] object-contain" />
+            : <span className="font-bold text-lg tracking-tight">{info?.businessName ?? "Shop"}</span>}
         </Link>
         <form onSubmit={submit} className="hidden md:flex flex-1 max-w-xl mx-auto">
           <div className="relative w-full">
@@ -42,6 +47,14 @@ function Header() {
           <Link href={customer ? "/account" : "/account/login"} className="flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm">
             <User className="w-4 h-4" /><span className="hidden sm:inline">{customer ? customer.firstName || "Account" : "Sign in"}</span>
           </Link>
+          {customer && (
+            <Link href="/wishlist" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Wishlist">
+              <Heart className="w-4 h-4" /><span className="hidden sm:inline">Wishlist</span>
+              {wishlist.count > 0 && (
+                <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center">{wishlist.count}</span>
+              )}
+            </Link>
+          )}
           <Link href="/cart" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Cart">
             <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
             {count > 0 && (
@@ -50,17 +63,12 @@ function Header() {
           </Link>
         </nav>
       </div>
-      <div className={`${open ? "block" : "hidden"} md:block border-t border-stone-100`}>
-        <div className="mx-auto max-w-7xl px-4 py-2 flex flex-col md:flex-row md:items-center gap-1 md:gap-5 text-sm">
-          <form onSubmit={submit} className="md:hidden mb-2">
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search"
-              className="w-full h-10 rounded-full border border-stone-300 px-4 text-sm outline-none focus:border-brand" />
-          </form>
-          <Link href="/products" onClick={() => setOpen(false)} className="py-1 font-medium hover:text-brand">All products</Link>
-          {topCats.map((c) => (
-            <Link key={c.id} href={`/products?category=${c.id}`} onClick={() => setOpen(false)} className="py-1 text-stone-600 hover:text-brand">{c.name}</Link>
-          ))}
-        </div>
+      <div className={`${open ? "block max-h-[calc(100dvh-5rem)] overflow-y-auto" : "hidden"} md:block md:max-h-none md:overflow-visible border-t border-stone-100`}>
+        <form onSubmit={submit} className="md:hidden px-4 pt-3 pb-1">
+          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search"
+            className="w-full h-10 rounded-full border border-stone-300 px-4 text-sm outline-none focus:border-brand" />
+        </form>
+        <CategoryNav cats={cats ?? []} onNavigate={() => setOpen(false)} />
       </div>
     </header>
   );
@@ -92,6 +100,7 @@ function Footer() {
         <div className="space-y-2">
           <p className="font-semibold">Shop</p>
           <Link href="/products" className="block text-stone-600 hover:text-ink">All products</Link>
+          <Link href="/rewards" className="block text-stone-600 hover:text-ink">Rewards</Link>
           <Link href="/account" className="block text-stone-600 hover:text-ink">My account</Link>
           <Link href="/cart" className="block text-stone-600 hover:text-ink">Cart</Link>
         </div>

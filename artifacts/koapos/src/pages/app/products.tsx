@@ -100,6 +100,17 @@ type BulkActionPending =
   | { type: "set_product_type"; productTypeId: number; typeName: string }
   | { type: "delete" };
 
+/* Physical details: blank or non-positive means "not entered". */
+function positiveOrNull(v: string): number | null {
+  const n = parseFloat(v);
+  return Number.isFinite(n) && n > 0 ? n : null;
+}
+const KG_PER: Record<string, number> = { kg: 1, g: 0.001, lb: 0.45359237, oz: 0.028349523125 };
+function weightToKg(v: string, unit: string): number | null {
+  const n = positiveOrNull(v);
+  return n == null ? null : Math.round(n * (KG_PER[unit] ?? 1) * 1000) / 1000;
+}
+
 type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
   sku: string; barcode: string; categoryId: string; brandId: string;
@@ -111,6 +122,8 @@ type ProductForm = {
   /* physical */
   weight: string; weightUnit: string;
   lengthCm: string; widthCm: string; heightCm: string;
+  /* shown on the online shop's Specifications tab, one spec per line */
+  technicalSpecs: string;
   /* stock */
   productType: string;
   productTypeId: string;
@@ -144,6 +157,7 @@ const defaultForm: ProductForm = {
   supplier: "", supplierCode: "",
   weight: "", weightUnit: "kg",
   lengthCm: "", widthCm: "", heightCm: "",
+  technicalSpecs: "",
   productType: "standard",
   productTypeId: "",
   stockQuantity: "0", lowStockThreshold: "5",
@@ -1626,8 +1640,12 @@ export default function ProductsPage() {
       imageUrl: ep.imageUrl || "",
       imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
       supplier: ep.supplier || "", supplierCode: ep.supplierCode || "",
-      weight: "", weightUnit: "kg",
-      lengthCm: "", widthCm: "", heightCm: "",
+      // Weight is stored in kg whatever unit it was typed in.
+      weight: ep.weightKg != null ? String(ep.weightKg) : "", weightUnit: "kg",
+      lengthCm: ep.lengthCm != null ? String(ep.lengthCm) : "",
+      widthCm: ep.widthCm != null ? String(ep.widthCm) : "",
+      heightCm: ep.heightCm != null ? String(ep.heightCm) : "",
+      technicalSpecs: ep.technicalSpecs ?? "",
       productType: ep.productType ?? "standard",
       productTypeId: ep.productTypeId?.toString() || "",
       stockQuantity: (p.stockQuantity ?? 0).toString(),
@@ -1700,6 +1718,12 @@ export default function ProductsPage() {
       warrantyDuration: form.warrantyDuration ? parseInt(form.warrantyDuration) || 0 : 0,
       warrantyUnit: form.warrantyUnit === "years" ? "years" : "months",
       timeCardMinutes: form.timeCardMinutes ? parseInt(form.timeCardMinutes) || 0 : 0,
+      // Specifications tab on the online shop. Blank measurements save as null.
+      technicalSpecs: form.technicalSpecs,
+      weightKg: weightToKg(form.weight, form.weightUnit),
+      lengthCm: positiveOrNull(form.lengthCm),
+      widthCm: positiveOrNull(form.widthCm),
+      heightCm: positiveOrNull(form.heightCm),
       // Every customer group always gets a price so downstream features never
       // see a blank: a manually-typed value wins, otherwise the group's rule
       // price, otherwise the standard sell price.
@@ -2941,19 +2965,31 @@ export default function ProductsPage() {
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">L (cm)</Label>
-                      <Input type="number" step="0.01" min="0" value={form.lengthCm} onChange={(e) => setField("lengthCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
+                      <Input type="number" step="0.1" min="0" value={form.lengthCm} onChange={(e) => setField("lengthCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">W (cm)</Label>
-                      <Input type="number" step="0.01" min="0" value={form.widthCm} onChange={(e) => setField("widthCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
+                      <Input type="number" step="0.1" min="0" value={form.widthCm} onChange={(e) => setField("widthCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
                     </div>
                     <div>
                       <Label className="text-xs text-muted-foreground">H (cm)</Label>
-                      <Input type="number" step="0.01" min="0" value={form.heightCm} onChange={(e) => setField("heightCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
+                      <Input type="number" step="0.1" min="0" value={form.heightCm} onChange={(e) => setField("heightCm", e.target.value)} placeholder="0.00" className="mt-1.5" />
                     </div>
                   </div>
+                  <p className="text-xs text-muted-foreground">Shown on the online shop's Specifications tab. Weight is saved in kg.</p>
                 </div>
                 )}
+
+                <div className="border-t pt-4 space-y-2">
+                  <SectionHeader label="Technical Specifications" />
+                  <Textarea
+                    value={form.technicalSpecs}
+                    onChange={(e) => setField("technicalSpecs", e.target.value)}
+                    rows={6}
+                    placeholder={"One per line, e.g.\nProcessor: Intel Core i5-13400\nMemory: 16 GB DDR5\nStorage: 512 GB NVMe SSD"}
+                  />
+                  <p className="text-xs text-muted-foreground">Shown on the online shop's Specifications tab. Write "Label: value" on a line to have it laid out as a table row.</p>
+                </div>
               </div>
             )}
 

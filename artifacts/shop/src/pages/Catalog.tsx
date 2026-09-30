@@ -35,6 +35,16 @@ export default function Catalog() {
   const current = cats?.find((c) => c.id === category);
   const parents = (cats ?? []).filter((c) => c.parentId == null);
   const childrenOf = (id: number) => (cats ?? []).filter((c) => c.parentId === id);
+  // Every subcategory shows, at any depth, indented one step per level.
+  const renderChildren = (id: number, depth: number): React.ReactNode =>
+    childrenOf(id).map((k) => (
+      <div key={k.id}>
+        <button onClick={() => setParam("category", String(k.id))} style={{ paddingLeft: `${0.75 + depth * 1}rem` }} className={`block w-full text-left pr-3 py-1 rounded-lg text-stone-600 ${category === k.id ? "bg-brand-50 font-medium text-ink" : "hover:bg-stone-100"}`}>
+          {k.name}
+        </button>
+        {renderChildren(k.id, depth + 1)}
+      </div>
+    ));
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
@@ -47,18 +57,17 @@ export default function Catalog() {
             <button onClick={() => setParam("category", String(c.id))} className={`block w-full text-left px-3 py-1.5 rounded-lg ${category === c.id ? "bg-brand-50 font-medium" : "hover:bg-stone-100"}`}>
               {c.name} <span className="text-stone-400">({c.productCount})</span>
             </button>
-            {childrenOf(c.id).map((k) => (
-              <button key={k.id} onClick={() => setParam("category", String(k.id))} className={`block w-full text-left pl-7 pr-3 py-1 rounded-lg text-stone-600 ${category === k.id ? "bg-brand-50 font-medium text-ink" : "hover:bg-stone-100"}`}>
-                {k.name}
-              </button>
-            ))}
+            {renderChildren(c.id, 1)}
           </div>
         ))}
       </aside>
 
       <div>
         <div className="flex flex-wrap items-center gap-3 mb-5">
-          <h1 className="text-2xl font-bold mr-auto">{q ? `Results for “${q}”` : current?.name ?? "All products"}</h1>
+          <h1 className="text-2xl font-bold mr-auto flex items-center gap-3">
+            {!q && current?.imageUrl && <img src={current.imageUrl} alt="" className="w-12 h-12 rounded-lg object-cover border border-stone-200" />}
+            {q ? `Results for “${q}”` : current?.name ?? "All products"}
+          </h1>
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" checked={inStock} onChange={(e) => setParam("inStock", e.target.checked ? "true" : null)} className="accent-brand" />
             In stock only

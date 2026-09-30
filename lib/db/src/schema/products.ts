@@ -14,6 +14,12 @@ export const categoriesTable = pgTable("categories", {
   icon:       text("icon"),
   parentId:   integer("parent_id").references((): AnyPgColumn => categoriesTable.id),
   sortOrder:  integer("sort_order").notNull().default(0),
+  /* "false" hides the category, its subcategories and their products from the
+     online shop (scripts/src/add-category-show-online.ts). */
+  showOnline: text("show_online").notNull().default("true"),
+  /* Shown on the online shop's category tiles
+     (scripts/src/add-category-image-url.ts). */
+  imageUrl:   text("image_url"),
   createdAt:  timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("categories_merchant_id_idx").on(t.merchantId),
@@ -59,6 +65,14 @@ export const productsTable = pgTable("products", {
   warrantyUnit:       text("warranty_unit").notNull().default("months"),
   // For "time_card" products: prepaid duration in minutes that the card grants.
   timeCardMinutes:    integer("time_card_minutes").notNull().default(0),
+  /* Online shop product page, Specifications tab (scripts/src/add-product-specs.ts).
+     Free text, one spec per line. Weight/dimensions are numbers in kg/cm so
+     shipping quotes can use them later; null means not entered. */
+  technicalSpecs:     text("technical_specs"),
+  weightKg:           numeric("weight_kg", { precision: 10, scale: 3 }),
+  lengthCm:           numeric("length_cm", { precision: 10, scale: 1 }),
+  widthCm:            numeric("width_cm", { precision: 10, scale: 1 }),
+  heightCm:           numeric("height_cm", { precision: 10, scale: 1 }),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

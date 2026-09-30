@@ -451,7 +451,46 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   (`products.show_online`, default "true", added by
   `scripts/src/add-product-show-online.ts` in the `db:push` chain). Only in/out
   of stock is exposed, never the count; a product whose product type doesn't
-  track stock (services) is always available.
+  track stock (services) is always available. A category can be hidden too
+  (`categories.show_online`, `scripts/src/add-category-show-online.ts`), which
+  hides its subcategories and every product in them, including ones added
+  later. `shopVisible` in `lib/shop-visibility.ts` is the one rule, used by the
+  shop and by the Online Store screens' counts, so the two cannot disagree.
+  Categories nest to any depth, so choosing one lists every category below it.
+  A category's image (`categories.image_url`, set in Products › Categories,
+  `scripts/src/add-category-image-url.ts`) is shown on the shop's category
+  tiles and catalogue heading.
+- **Product page**: Description / Specifications / Reviews tabs and a Related
+  products carousel (same category, then brand, then sibling categories).
+  Specifications are `products.technical_specs` ("Label: value" lines become
+  table rows) plus `weight_kg` and `length_cm`/`width_cm`/`height_cm` — numbers
+  in kg/cm, not text, because shipping quotes will need them — and the
+  warranty. The POS product form had Weight and L/W/H inputs that never saved;
+  they now do (weight converted to kg). Added by `scripts/src/add-product-specs.ts`.
+- **Reviews** reuse `product_reviews` with a new `customer_id`. Only a signed-in
+  shopper who has bought the product may write one: a completed/refunded sale
+  or paid invoice line naming it, across every POS customer sharing their email
+  (`lib/shop-reviews.ts`). One per customer per product; posting again edits it
+  and keeps its status. Shown as first name + last initial. There is no staff
+  moderation screen yet — set `status = 'hidden'` to take one down. Pinned by
+  `shop-reviews.test.ts`.
+- **Wishlist**: `customer_wishlist_items` (`scripts/src/add-customer-wishlist-table.ts`),
+  the heart on product images, rendered only for a signed-in shopper. Pinned by
+  `shop-wishlist.test.ts`.
+- **Loyalty on the shop.** What a sale earns is `loyaltyEarnedFor` in
+  `lib/loyalty.ts`, used by the till's `POST /transactions` *and* the shop's
+  `POST /shop/loyalty/estimate`, so the cart's "You've earned…" is the figure
+  the sale will credit (the rule used to live inline in `transactions.ts`).
+  The rewards section's name, unit and "X for every $Y spent" wording are
+  generated from the POS loyalty settings by `loyaltyProgramInfo` — set the
+  program name there (e.g. Koastal Koins); nothing on the site hardcodes it.
+  Pinned by `loyalty-rules.test.ts`.
+- **Account area** (`GET /shop/account/overview`): loyalty balance, current and
+  previous repairs, and live product/repair warranties (`lib/warranty.ts`,
+  shared with the staff Warranty page). A shopper may add their birthday once
+  but not change it online — it triggers the birthday promotion, and moving it
+  to today would pay the bonus on demand. Staff correct it in the POS. Pinned
+  by `shop-account.test.ts`.
 - **Accounts are the portal's.** One password (`customers.portal_password_hash`)
   and one signed-in marker (`req.session.portalCustomerId`) for shop and portal.
   Login is email + password, trying each POS customer with that email (the POS
@@ -466,7 +505,10 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   `/delivery-orders` API keep their old name. It replaced the Deliveries page.
   Tracking is `tracking_carrier` + `tracking_number` (carrier ids and tracking
   links in `lib/order-tracking.ts`); `shipped_at` / `delivered_at` are stamped
-  by the server the first time the status reaches them. Marking an order paid
+  by the server the first time the status reaches them. The dashboard's
+  Online Orders tile counts `OPEN_ORDER_STATUSES` (the page's Open tab; there
+  is no "completed" status, delivered/cancelled are the finished ones), with
+  the `new` count in its corner. Marking an order paid
   books it as a sale (`services/deliveryOrderSale.ts`). Pinned by
   `online-orders.test.ts`.
 - **Invites** (`routes/shop-invites.ts`, Management › Online Store › Customer

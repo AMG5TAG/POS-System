@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db, productsTable, productVariantsTable, productTypesTable, categoriesTable, brandsTable, merchantsTable, businessProfileTable, customersTable, customerPortalTokensTable } from "@workspace/db";
-import { and, asc, desc, eq, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
+import { db, productsTable, productVariantsTable, productTypesTable, categoriesTable, brandsTable, merchantsTable, businessProfileTable, customersTable, customerPortalTokensTable, productReviewsTable, customerWishlistItemsTable, loyaltySettingsTable, serviceJobsTable, transactionsTable } from "@workspace/db";
+import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { hashPassword, verifyPassword } from "../lib/auth";
@@ -9,6 +9,10 @@ import { soleMerchantId } from "../lib/sole-merchant";
 import { normalisePhoneFor } from "../lib/phone";
 import { hashToken, issueSetupLink } from "../lib/customerPasswordLinks";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
+import { shopVisible } from "../lib/shop-visibility";
+import { hasPurchased, reviewerName, buyerCustomerIds, PURCHASE_SALE_STATUSES } from "../lib/shop-reviews";
+import { loyaltyEarnedFor, loyaltyProgramInfo, formatLoyalty, type LoyaltyConfig } from "../lib/loyalty";
+import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_MS } from "../lib/warranty";
 
 /**
  * The online shop's API (shop.koastal.com.au) — public, no staff session.
@@ -18,7 +22,8 @@ import { triggerInstantSync } from "../services/autoSyncScheduler";
  * POS's own rows. Everything here is scoped to the one business this install
  * runs (soleMerchantId); nothing in a request can name another merchant.
  *
- * Catalogue: a product is listed when it is active AND show_online is on.
+ * Catalogue: a product is listed when it is active, show_online is on and no
+ * category above it is hidden (lib/shop-visibility.ts).
  * Only whether an item is in stock is revealed, never the count.
  *
  * Accounts: a customer has one account for the shop and the portal — the
@@ -47,6 +52,7 @@ const ipLimiter = (windowMs: number, max: number, message: string, failuresOnly 
 
 const loginLimiter = ipLimiter(15 * 60 * 1000, 20, "Too many sign-in attempts — please try again in 15 minutes.", true);
 const linkLimiter = ipLimiter(60 * 60 * 1000, 10, "Too many requests — please try again later.");
+const reviewLimiter = ipLimiter(60 * 60 * 1000, 20, "Too many reviews from this connection — please try again later.");
 const registerLimiter = ipLimiter(60 * 60 * 1000, 10, "Too many sign-ups from this connection — please try again later.");
 
 async function merchantOr404(res: import("express").Response): Promise<number | null> {
@@ -116,8 +122,7 @@ router.get("/shop/favicon", async (req, res): Promise<void> => {
 
 /* ── Catalogue ────────────────────────────────────────────────────────── */
 
-const visible = (merchantId: number): SQL =>
-  and(eq(productsTable.merchantId, merchantId), eq(productsTable.isActive, "true"), eq(productsTable.showOnline, "true"))!;
+const visible = shopVisible;
 
 router.get("/shop/categories", async (_req, res): Promise<void> => {
   const merchantId = await merchantOr404(res);
@@ -133,7 +138,7 @@ router.get("/shop/categories", async (_req, res): Promise<void> => {
   const total = (id: number): number =>
     (countBy.get(id) ?? 0) + cats.filter((c) => c.parentId === id).reduce((s, c) => s + total(c.id), 0);
   res.json(cats
-    .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? null, color: c.color ?? null, productCount: total(c.id) }))
+    .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? null, color: c.color ?? null, imageUrl: c.imageUrl ?? null, productCount: total(c.id) }))
     .filter((c) => c.productCount > 0));
 });
 
@@ -161,10 +166,16 @@ router.get("/shop/products", async (req, res): Promise<void> => {
 
   const conds: SQL[] = [visible(merchantId)];
   if (category) {
-    // Include the category's children, so a parent category lists everything under it.
-    const kids = await db.select({ id: categoriesTable.id }).from(categoriesTable)
-      .where(and(eq(categoriesTable.merchantId, merchantId), eq(categoriesTable.parentId, category)));
-    conds.push(inArray(productsTable.categoryId, [category, ...kids.map((k) => k.id)]));
+    // Include every category below it, at any depth, so a parent lists
+    // everything under it — the same set its productCount adds up.
+    conds.push(sql`${productsTable.categoryId} IN (
+      WITH RECURSIVE sub AS (
+        SELECT id FROM ${categoriesTable} WHERE ${categoriesTable.merchantId} = ${merchantId} AND ${categoriesTable.id} = ${category}
+        UNION
+        SELECT c.id FROM ${categoriesTable} c JOIN sub s ON c.parent_id = s.id
+      )
+      SELECT id FROM sub
+    )`);
   }
   if (search) {
     const like = `%${search.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
@@ -193,15 +204,20 @@ router.get("/shop/products", async (req, res): Promise<void> => {
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
     .where(where).orderBy(...order).limit(pageSize).offset((page - 1) * pageSize);
 
-  res.json({
-    total, page, pageSize,
-    items: rows.map((p) => ({
-      id: p.id, name: p.name, price: money(p.price) ?? 0, imageUrl: p.imageUrl ?? null,
-      categoryId: p.categoryId ?? null, brand: p.brandName ?? null,
-      inStock: inStockOf(p), refurbished: bool(p.isRefurbished), isService: p.isService === true,
-    })),
-  });
+  res.json({ total, page, pageSize, items: rows.map(summaryOf) });
 });
+
+type SummaryRow = {
+  id: number; name: string; price: string; imageUrl: string | null; categoryId: number | null; brandName: string | null;
+  trackInventory: string; stockQuantity: number; isRefurbished: string; typeTracksStock: boolean | null; isService: boolean | null;
+};
+function summaryOf(p: SummaryRow) {
+  return {
+    id: p.id, name: p.name, price: money(p.price) ?? 0, imageUrl: p.imageUrl ?? null,
+    categoryId: p.categoryId ?? null, brand: p.brandName ?? null,
+    inStock: inStockOf(p), refurbished: bool(p.isRefurbished), isService: p.isService === true,
+  };
+}
 
 router.get("/shop/products/:id", async (req, res): Promise<void> => {
   const merchantId = await merchantOr404(res);
@@ -228,11 +244,340 @@ router.get("/shop/products/:id", async (req, res): Promise<void> => {
     inStock: inStockOf({ ...pr, typeTracksStock: p.typeTracksStock }), refurbished: bool(pr.isRefurbished),
     isService: p.isService === true,
     warranty: pr.warrantyDuration > 0 ? { duration: pr.warrantyDuration, unit: pr.warrantyUnit } : null,
+    technicalSpecs: pr.technicalSpecs ?? "",
+    weightKg: pr.weightKg != null ? parseFloat(pr.weightKg) : null,
+    dimensionsCm: pr.lengthCm != null || pr.widthCm != null || pr.heightCm != null
+      ? { length: pr.lengthCm != null ? parseFloat(pr.lengthCm) : null, width: pr.widthCm != null ? parseFloat(pr.widthCm) : null, height: pr.heightCm != null ? parseFloat(pr.heightCm) : null }
+      : null,
+    rating: await ratingOf(merchantId, id),
     variants: variants.map((v) => ({
       id: v.id, name: v.name, price: money(v.price) ?? money(pr.price) ?? 0, imageUrl: v.imageUrl ?? null,
       attributes: v.attributes ?? {}, inStock: inStockOf({ trackInventory: pr.trackInventory, stockQuantity: v.stockQuantity, typeTracksStock: p.typeTracksStock }),
     })),
   });
+});
+
+/* ── Related products ────────────────────────────────────────────────── */
+
+/* Up to 12 other listed products: the same category first, then the same
+   brand, then the category's siblings (same parent). */
+router.get("/shop/products/:id/related", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const id = Number(req.params.id);
+  if (!Number.isInteger(id) || id <= 0) { res.status(404).json({ error: "Not found" }); return; }
+  const [p] = await db.select({ categoryId: productsTable.categoryId, brandId: productsTable.brandId })
+    .from(productsTable).where(and(visible(merchantId), eq(productsTable.id, id)));
+  if (!p) { res.status(404).json({ error: "Not found" }); return; }
+
+  const tiers: SQL[] = [];
+  if (p.categoryId != null) tiers.push(eq(productsTable.categoryId, p.categoryId));
+  if (p.brandId != null) tiers.push(eq(productsTable.brandId, p.brandId));
+  if (p.categoryId != null) tiers.push(sql`${productsTable.categoryId} IN (
+    SELECT s.id FROM ${categoriesTable} s JOIN ${categoriesTable} me ON me.id = ${p.categoryId}
+    WHERE s.merchant_id = ${merchantId} AND me.parent_id IS NOT NULL AND s.parent_id = me.parent_id)`);
+  if (tiers.length === 0) { res.json({ items: [] }); return; }
+
+  const rank = sql`CASE ${sql.join(tiers.map((t, i) => sql`WHEN ${t} THEN ${i}`), sql` `)} END`;
+  const rows = await db
+    .select({
+      id: productsTable.id, name: productsTable.name, price: productsTable.price, imageUrl: productsTable.imageUrl,
+      categoryId: productsTable.categoryId, brandName: brandsTable.name,
+      trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity,
+      isRefurbished: productsTable.isRefurbished, typeTracksStock: productTypesTable.trackStock,
+      isService: productTypesTable.isService,
+    })
+    .from(productsTable)
+    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
+    .where(and(visible(merchantId), sql`${productsTable.id} <> ${id}`, or(...tiers)))
+    .orderBy(rank, desc(productsTable.createdAt))
+    .limit(12);
+  res.json({ items: rows.map(summaryOf) });
+});
+
+/* ── Reviews ─────────────────────────────────────────────────────────── */
+
+/* Anyone can read a listed product's approved reviews. Writing one needs a
+   signed-in shop account that has bought the product (lib/shop-reviews.ts);
+   one review per customer per product, and posting again edits it. */
+
+async function ratingOf(merchantId: number, productId: number) {
+  const [r] = await db.select({ avg: sql<string | null>`avg(${productReviewsTable.rating})`, n: sql<number>`count(*)::int` })
+    .from(productReviewsTable)
+    .where(and(eq(productReviewsTable.merchantId, merchantId), eq(productReviewsTable.productId, productId), eq(productReviewsTable.status, "approved")));
+  return { average: r?.avg != null ? Math.round(parseFloat(r.avg) * 10) / 10 : null, count: r?.n ?? 0 };
+}
+
+async function listedProduct(merchantId: number, raw: string): Promise<number | null> {
+  const id = Number(raw);
+  if (!Number.isInteger(id) || id <= 0) return null;
+  const [p] = await db.select({ id: productsTable.id }).from(productsTable).where(and(visible(merchantId), eq(productsTable.id, id)));
+  return p?.id ?? null;
+}
+
+router.get("/shop/products/:id/reviews", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const id = await listedProduct(merchantId, String(req.params.id));
+  if (id == null) { res.status(404).json({ error: "Not found" }); return; }
+  const rows = await db.select().from(productReviewsTable)
+    .where(and(eq(productReviewsTable.merchantId, merchantId), eq(productReviewsTable.productId, id), eq(productReviewsTable.status, "approved")))
+    .orderBy(desc(productReviewsTable.createdAt))
+    .limit(100);
+
+  const c = await shopCustomer(req);
+  let viewer: { signedIn: boolean; canReview: boolean; myReview: { rating: number; title: string; body: string } | null } = { signedIn: false, canReview: false, myReview: null };
+  if (c) {
+    const [mine] = await db.select().from(productReviewsTable)
+      .where(and(eq(productReviewsTable.merchantId, merchantId), eq(productReviewsTable.productId, id), eq(productReviewsTable.customerId, c.id)));
+    viewer = {
+      signedIn: true,
+      canReview: await hasPurchased(merchantId, c, id),
+      myReview: mine ? { rating: mine.rating, title: mine.title, body: mine.body } : null,
+    };
+  }
+  res.json({
+    rating: await ratingOf(merchantId, id),
+    reviews: rows.map((r) => ({
+      id: r.id, author: r.authorName || "Customer", rating: r.rating, title: r.title, body: r.body,
+      verified: r.verified === "true", createdAt: r.createdAt.toISOString(),
+    })),
+    viewer,
+  });
+});
+
+const ReviewBody = z.object({
+  rating: z.number().int().min(1).max(5),
+  title: z.string().trim().max(120).default(""),
+  body: z.string().trim().min(1, "Please write a few words about the product").max(4000),
+});
+
+router.post("/shop/products/:id/reviews", reviewLimiter, async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const c = await shopCustomer(req);
+  if (!c) { res.status(401).json({ error: "Sign in to leave a review" }); return; }
+  const id = await listedProduct(merchantId, String(req.params.id));
+  if (id == null) { res.status(404).json({ error: "Not found" }); return; }
+  const parsed = ReviewBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid review" }); return; }
+  if (!(await hasPurchased(merchantId, c, id))) {
+    res.status(403).json({ error: "Only customers who have bought this product can review it" });
+    return;
+  }
+  const fields = {
+    rating: parsed.data.rating, title: parsed.data.title, body: parsed.data.body,
+    authorName: reviewerName(c.firstName, c.lastName), authorEmail: c.email ?? "", verified: "true",
+  };
+  const [existing] = await db.select({ id: productReviewsTable.id }).from(productReviewsTable)
+    .where(and(eq(productReviewsTable.merchantId, merchantId), eq(productReviewsTable.productId, id), eq(productReviewsTable.customerId, c.id)));
+  if (existing) {
+    // Editing keeps the review's status: a review staff hid stays hidden.
+    await db.update(productReviewsTable).set(fields).where(eq(productReviewsTable.id, existing.id));
+    res.json({ ok: true, updated: true });
+    return;
+  }
+  await db.insert(productReviewsTable).values({ ...fields, merchantId, productId: id, customerId: c.id, status: "approved" });
+  res.status(201).json({ ok: true, updated: false });
+});
+
+/* ── Loyalty ─────────────────────────────────────────────────────────── */
+
+/* The POS loyalty program as the shop shows it: the rewards section, the
+   account balance and the cart's "You'll earn…". Everything comes from the
+   POS loyalty settings and lib/loyalty.ts, so the website says what the till
+   does. */
+
+async function loyaltySettings(merchantId: number) {
+  const [row] = await db.select().from(loyaltySettingsTable).where(eq(loyaltySettingsTable.merchantId, merchantId)).limit(1);
+  return {
+    programType: row?.programType ?? "cashback",
+    config: (row?.config ?? {}) as LoyaltyConfig,
+    // Same default as the till: no settings row means the program is on.
+    programOn: row ? row.isEnabled === "true" : true,
+  };
+}
+
+router.get("/shop/loyalty", async (_req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const l = await loyaltySettings(merchantId);
+  res.json(loyaltyProgramInfo(l.programType, l.config, l.programOn));
+});
+
+const EstimateBody = z.object({
+  lines: z.array(z.object({
+    productId: z.number().int().positive(),
+    variantId: z.number().int().positive().nullish(),
+    quantity: z.number().int().min(1).max(99),
+  })).max(100),
+});
+
+/* What a cart would earn, priced from the database (never the browser). A
+   guest gets the figure they'd earn once signed in, flagged signedIn: false. */
+router.post("/shop/loyalty/estimate", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const parsed = EstimateBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid cart" }); return; }
+  const l = await loyaltySettings(merchantId);
+  const c = await shopCustomer(req);
+  const ids = [...new Set(parsed.data.lines.map((x) => x.productId))];
+  const products = ids.length === 0 ? [] : await db.select({
+    id: productsTable.id, price: productsTable.price, categoryId: productsTable.categoryId, excludeFromLoyalty: productsTable.excludeFromLoyalty,
+  }).from(productsTable).where(and(visible(merchantId), inArray(productsTable.id, ids)));
+  const byId = new Map(products.map((p) => [p.id, p]));
+  const variantIds = parsed.data.lines.map((x) => x.variantId).filter((v): v is number => v != null);
+  const variants = variantIds.length === 0 ? [] : await db.select({ id: productVariantsTable.id, productId: productVariantsTable.productId, price: productVariantsTable.price })
+    .from(productVariantsTable).where(and(inArray(productVariantsTable.id, variantIds), eq(productVariantsTable.isActive, "true")));
+  const variantById = new Map(variants.map((v) => [v.id, v]));
+
+  const lines = parsed.data.lines.flatMap((x) => {
+    const p = byId.get(x.productId);
+    if (!p) return [];
+    const v = x.variantId != null ? variantById.get(x.variantId) : undefined;
+    const unit = money(v && v.productId === p.id ? v.price : null) ?? money(p.price) ?? 0;
+    return [{ productId: p.id, totalPrice: Math.round(unit * x.quantity * 100) / 100, excludeFromLoyalty: p.excludeFromLoyalty === "true", categoryId: p.categoryId ?? null }];
+  });
+  const total = Math.round(lines.reduce((s, x) => s + x.totalPrice, 0) * 100) / 100;
+  const customer = c
+    ? { customerGroup: c.customerGroup ?? null, totalSpent: c.totalSpent, loyaltyPoints: c.loyaltyPoints ?? 0, dateOfBirth: c.dateOfBirth ?? null }
+    : { customerGroup: null, totalSpent: "0", loyaltyPoints: 0, dateOfBirth: null };
+  const earned = loyaltyEarnedFor({ programType: l.programType, config: l.config, programOn: l.programOn, customer, lines, total });
+  res.json({ enabled: l.programOn, earned, formatted: formatLoyalty(l.programType, l.config, earned), signedIn: !!c });
+});
+
+/* ── Account overview ────────────────────────────────────────────────── */
+
+/* The signed-in shopper's loyalty balance, repairs and live warranties. Repairs
+   and purchases are gathered across every POS record sharing their email (the
+   POS has duplicates; lib/shop-reviews.ts explains why that is safe). */
+router.get("/shop/account/overview", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const c = await shopCustomer(req);
+  if (!c) { res.status(401).json({ error: "Please sign in." }); return; }
+  const ids = await buyerCustomerIds(merchantId, c);
+  const l = await loyaltySettings(merchantId);
+  const now = new Date();
+
+  const jobs = await db.select({
+    id: serviceJobsTable.id, jobNumber: serviceJobsTable.jobNumber, title: serviceJobsTable.title, status: serviceJobsTable.status,
+    bookInDate: serviceJobsTable.bookInDate, deviceType: serviceJobsTable.deviceType, deviceDescription: serviceJobsTable.deviceDescription,
+    completedAt: serviceJobsTable.completedAt, repairWarrantyDays: serviceJobsTable.repairWarrantyDays, createdAt: serviceJobsTable.createdAt,
+  }).from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.merchantId, merchantId), inArray(serviceJobsTable.customerId, ids)))
+    .orderBy(desc(serviceJobsTable.createdAt)).limit(100);
+
+  const warranties: { key: string; kind: "product" | "repair"; name: string; label: string; startedAt: string; expiresAt: string; daysRemaining: number; reference: string | null }[] = [];
+
+  const sales = await db.select({ id: transactionsTable.id, receiptNumber: transactionsTable.receiptNumber, createdAt: transactionsTable.createdAt, items: transactionsTable.items })
+    .from(transactionsTable)
+    .where(and(eq(transactionsTable.merchantId, merchantId), inArray(transactionsTable.customerId, ids), inArray(transactionsTable.status, [...PURCHASE_SALE_STATUSES])));
+  type Line = { productId?: number | null; productName?: string | null; name?: string | null };
+  const soldIds = [...new Set(sales.flatMap((t) => (Array.isArray(t.items) ? (t.items as Line[]) : []).map((i) => i.productId).filter((x): x is number => x != null)))];
+  const warrantied = soldIds.length === 0 ? [] : await db.select({ id: productsTable.id, name: productsTable.name, warrantyDuration: productsTable.warrantyDuration, warrantyUnit: productsTable.warrantyUnit })
+    .from(productsTable).where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, soldIds), gt(productsTable.warrantyDuration, 0)));
+  const wById = new Map(warrantied.map((p) => [p.id, p]));
+  for (const t of sales) {
+    (Array.isArray(t.items) ? (t.items as Line[]) : []).forEach((it, idx) => {
+      const p = it.productId != null ? wById.get(it.productId) : undefined;
+      if (!p) return;
+      const exp = productWarrantyExpiry(t.createdAt, p.warrantyDuration, p.warrantyUnit);
+      if (!exp || exp < now) return;
+      warranties.push({
+        key: `p-${t.id}-${idx}`, kind: "product", name: it.productName || it.name || p.name,
+        label: productWarrantyLabel(p.warrantyDuration, p.warrantyUnit), startedAt: t.createdAt.toISOString(), expiresAt: exp.toISOString(),
+        daysRemaining: Math.ceil((exp.getTime() - now.getTime()) / DAY_MS), reference: t.receiptNumber,
+      });
+    });
+  }
+  for (const j of jobs) {
+    if (!j.completedAt || j.status === "cancelled") continue;
+    const exp = repairWarrantyExpiry(j.completedAt, j.repairWarrantyDays);
+    if (!exp || exp < now) continue;
+    warranties.push({
+      key: `r-${j.id}`, kind: "repair", name: `${j.deviceDescription || j.deviceType || j.title} — repair`,
+      label: `${j.repairWarrantyDays}-day repair warranty`, startedAt: j.completedAt.toISOString(), expiresAt: exp.toISOString(),
+      daysRemaining: Math.ceil((exp.getTime() - now.getTime()) / DAY_MS), reference: j.jobNumber,
+    });
+  }
+  warranties.sort((a, b) => a.daysRemaining - b.daysRemaining);
+
+  res.json({
+    loyalty: {
+      ...loyaltyProgramInfo(l.programType, l.config, l.programOn),
+      balance: c.loyaltyPoints ?? 0,
+      formatted: formatLoyalty(l.programType, l.config, c.loyaltyPoints ?? 0),
+    },
+    repairs: jobs.map((j) => ({
+      id: j.id, jobNumber: j.jobNumber, status: j.status,
+      device: j.deviceDescription || j.deviceType || j.title || "Repair",
+      bookedIn: j.bookInDate || j.createdAt.toISOString().slice(0, 10),
+      completedAt: j.completedAt ? j.completedAt.toISOString() : null,
+    })),
+    warranties,
+  });
+});
+
+/* ── Wishlist ────────────────────────────────────────────────────────── */
+
+/* The heart on a product image. Signed-in shoppers only. `ids` is every saved
+   product (so hearts render filled); `items` only those still listed, since a
+   product taken off the shop can't be opened. */
+
+router.get("/shop/wishlist", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const c = await shopCustomer(req);
+  if (!c) { res.status(401).json({ error: "Sign in to see your wishlist" }); return; }
+  const saved = await db.select({ productId: customerWishlistItemsTable.productId }).from(customerWishlistItemsTable)
+    .where(and(eq(customerWishlistItemsTable.merchantId, merchantId), eq(customerWishlistItemsTable.customerId, c.id)))
+    .orderBy(desc(customerWishlistItemsTable.createdAt));
+  const ids = saved.map((r) => r.productId);
+  if (ids.length === 0) { res.json({ ids, items: [] }); return; }
+  const rows = await db
+    .select({
+      id: productsTable.id, name: productsTable.name, price: productsTable.price, imageUrl: productsTable.imageUrl,
+      categoryId: productsTable.categoryId, brandName: brandsTable.name,
+      trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity,
+      isRefurbished: productsTable.isRefurbished, typeTracksStock: productTypesTable.trackStock,
+      isService: productTypesTable.isService,
+    })
+    .from(productsTable)
+    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
+    .where(and(visible(merchantId), inArray(productsTable.id, ids)));
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  res.json({ ids, items: ids.flatMap((id) => (byId.has(id) ? [summaryOf(byId.get(id)!)] : [])) });
+});
+
+router.put("/shop/wishlist/:productId", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const c = await shopCustomer(req);
+  if (!c) { res.status(401).json({ error: "Sign in to save items" }); return; }
+  const id = await listedProduct(merchantId, String(req.params.productId));
+  if (id == null) { res.status(404).json({ error: "Not found" }); return; }
+  await db.insert(customerWishlistItemsTable).values({ merchantId, customerId: c.id, productId: id }).onConflictDoNothing();
+  res.json({ ok: true });
+});
+
+router.delete("/shop/wishlist/:productId", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const c = await shopCustomer(req);
+  if (!c) { res.status(401).json({ error: "Sign in to change your wishlist" }); return; }
+  const id = Number(req.params.productId);
+  if (!Number.isInteger(id) || id <= 0) { res.status(404).json({ error: "Not found" }); return; }
+  // No listing check: removing something since taken off the shop must still work.
+  await db.delete(customerWishlistItemsTable).where(and(
+    eq(customerWishlistItemsTable.merchantId, merchantId),
+    eq(customerWishlistItemsTable.customerId, c.id),
+    eq(customerWishlistItemsTable.productId, id),
+  ));
+  res.json({ ok: true });
 });
 
 /* ── Accounts ─────────────────────────────────────────────────────────── */
@@ -248,6 +593,7 @@ function accountOf(c: typeof customersTable.$inferSelect) {
       postcode: c.billingPostcode ?? "", country: c.billingCountry ?? "Australia",
     },
     loyaltyPoints: c.loyaltyPoints, portalToken: c.portalToken ?? null,
+    dateOfBirth: c.dateOfBirth ?? null,
   };
 }
 
@@ -397,7 +743,17 @@ const ProfileBody = z.object({
     street: z.string().trim().max(200), city: z.string().trim().max(100), state: z.string().trim().max(50),
     postcode: z.string().trim().max(10), country: z.string().trim().max(60),
   }),
+  /** YYYY-MM-DD, for the birthday reward. Optional, and set once — see below. */
+  dateOfBirth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter your birthday as a full date").optional().or(z.literal("")),
 });
+
+/** A real, past date no more than 120 years ago. */
+function plausibleBirthday(v: string): boolean {
+  const d = new Date(`${v}T00:00:00Z`);
+  if (isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== v) return false;
+  const now = new Date();
+  return d < now && d.getUTCFullYear() >= now.getUTCFullYear() - 120;
+}
 
 /* A shopper edits their own record — the same row the POS shows. Email is not
    editable here: it is the login, and changing it would need verification. */
@@ -407,7 +763,20 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
   const parsed = ProfileBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Please check your details." }); return; }
   const b = parsed.data;
+  // The birthday earns a birthday reward, so a shopper can add it but not
+  // change it afterwards (moving it to today would pay the bonus on demand).
+  // Staff can still correct it in the POS.
+  let dateOfBirth: string | undefined;
+  if (b.dateOfBirth) {
+    if (!plausibleBirthday(b.dateOfBirth)) { res.status(400).json({ error: "Please enter a valid birthday." }); return; }
+    if (c.dateOfBirth && c.dateOfBirth !== b.dateOfBirth) {
+      res.status(409).json({ error: "Your birthday is already set. Contact us if it needs correcting." });
+      return;
+    }
+    if (!c.dateOfBirth) dateOfBirth = b.dateOfBirth;
+  }
   const [updated] = await db.update(customersTable).set({
+    ...(dateOfBirth ? { dateOfBirth } : {}),
     firstName: b.firstName, lastName: b.lastName || null,
     phone: b.phone ? await normalisePhoneFor(c.merchantId, b.phone) : null,
     billingStreet: b.address.street || null, billingCity: b.address.city || null, billingState: b.address.state || null,

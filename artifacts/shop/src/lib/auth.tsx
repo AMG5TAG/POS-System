@@ -11,6 +11,8 @@ export interface Account {
   address: { street: string; city: string; state: string; postcode: string; country: string };
   loyaltyPoints: number;
   portalToken: string | null;
+  /** YYYY-MM-DD; set once by the shopper, for the birthday reward. */
+  dateOfBirth: string | null;
 }
 
 interface AuthCtx {

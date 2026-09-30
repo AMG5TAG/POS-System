@@ -813,6 +813,11 @@ export interface Category {
   /** @nullable */
   parentId?: number | null;
   sortOrder?: number;
+  /**
+     * Category image, shown on the online shop.
+     * @nullable
+     */
+  imageUrl?: string | null;
   createdAt: string;
 }
 
@@ -868,6 +873,19 @@ export interface Product {
   notification?: string | null;
   /** @nullable */
   timeCardMinutes?: number | null;
+  /**
+     * Free-text technical specifications, one per line (online shop Specifications tab).
+     * @nullable
+     */
+  technicalSpecs?: string | null;
+  /** @nullable */
+  weightKg?: number | null;
+  /** @nullable */
+  lengthCm?: number | null;
+  /** @nullable */
+  widthCm?: number | null;
+  /** @nullable */
+  heightCm?: number | null;
   /** @nullable */
   digitalCodesCount?: number | null;
   createdAt: string;
@@ -934,6 +952,19 @@ export interface ProductInput {
   tags?: string[];
   notification?: string;
   timeCardMinutes?: number;
+  /**
+     * Free-text technical specifications, one per line (online shop Specifications tab).
+     * @nullable
+     */
+  technicalSpecs?: string | null;
+  /** @nullable */
+  weightKg?: number | null;
+  /** @nullable */
+  lengthCm?: number | null;
+  /** @nullable */
+  widthCm?: number | null;
+  /** @nullable */
+  heightCm?: number | null;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -972,6 +1003,19 @@ export interface ProductUpdate {
   /** @nullable */
   notification?: string | null;
   timeCardMinutes?: number;
+  /**
+     * Free-text technical specifications, one per line (online shop Specifications tab).
+     * @nullable
+     */
+  technicalSpecs?: string | null;
+  /** @nullable */
+  weightKg?: number | null;
+  /** @nullable */
+  lengthCm?: number | null;
+  /** @nullable */
+  widthCm?: number | null;
+  /** @nullable */
+  heightCm?: number | null;
 }
 
 export interface ProductList {
@@ -986,6 +1030,7 @@ export interface CategoryInput {
   icon?: string;
   parentId?: number;
   sortOrder?: number;
+  imageUrl?: string;
 }
 
 export interface CategoryUpdate {
@@ -995,6 +1040,11 @@ export interface CategoryUpdate {
   /** @nullable */
   parentId?: number | null;
   sortOrder?: number;
+  /**
+     * null removes the image.
+     * @nullable
+     */
+  imageUrl?: string | null;
 }
 
 export interface DigitalCode {

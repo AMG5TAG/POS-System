@@ -10496,6 +10496,17 @@ components:
           type: ["string", "null"]
         timeCardMinutes:
           type: ["integer", "null"]
+        technicalSpecs:
+          type: ["string", "null"]
+          description: Free-text technical specifications, one per line (online shop Specifications tab).
+        weightKg:
+          type: ["number", "null"]
+        lengthCm:
+          type: ["number", "null"]
+        widthCm:
+          type: ["number", "null"]
+        heightCm:
+          type: ["number", "null"]
         digitalCodesCount:
           type: ["integer", "null"]
         createdAt:
@@ -10596,6 +10607,17 @@ components:
           type: string
         timeCardMinutes:
           type: integer
+        technicalSpecs:
+          type: ["string", "null"]
+          description: Free-text technical specifications, one per line (online shop Specifications tab).
+        weightKg:
+          type: ["number", "null"]
+        lengthCm:
+          type: ["number", "null"]
+        widthCm:
+          type: ["number", "null"]
+        heightCm:
+          type: ["number", "null"]
 
     ProductUpdate:
       type: object
@@ -10657,6 +10679,17 @@ components:
           type: ["string", "null"]
         timeCardMinutes:
           type: integer
+        technicalSpecs:
+          type: ["string", "null"]
+          description: Free-text technical specifications, one per line (online shop Specifications tab).
+        weightKg:
+          type: ["number", "null"]
+        lengthCm:
+          type: ["number", "null"]
+        widthCm:
+          type: ["number", "null"]
+        heightCm:
+          type: ["number", "null"]
 
     ProductList:
       type: object
@@ -10688,6 +10721,9 @@ components:
           type: ["integer", "null"]
         sortOrder:
           type: integer
+        imageUrl:
+          type: ["string", "null"]
+          description: Category image, shown on the online shop.
         createdAt:
           type: string
           format: date-time
@@ -10707,6 +10743,8 @@ components:
           type: integer
         sortOrder:
           type: integer
+        imageUrl:
+          type: string
 
     CategoryUpdate:
       type: object
@@ -10721,6 +10759,9 @@ components:
           type: ["integer", "null"]
         sortOrder:
           type: integer
+        imageUrl:
+          type: ["string", "null"]
+          description: null removes the image.
 
     # ── Digital Codes ─────────────────────────────────────────────────────────
     DigitalCode:

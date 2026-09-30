@@ -63,6 +63,35 @@ describe("online store product visibility", () => {
   });
 });
 
+describe("online store category visibility", () => {
+  it("rejects a bad body, writing nothing", async () => {
+    for (const body of [{ ids: [], showOnline: true }, { ids: [1], showOnline: "no" }]) {
+      const res = await request(app).patch("/api/online-store/categories").send(body);
+      expect(res.status).toBe(400);
+    }
+    expect(h.sets).toEqual([]);
+  });
+
+  it("stores the category flag as a text boolean", async () => {
+    h.rows = [[{ id: 3 }]];
+    const res = await request(app).patch("/api/online-store/categories").send({ ids: [3], showOnline: false });
+    expect(res.body).toEqual({ updated: 1 });
+    expect(h.sets).toEqual([{ showOnline: "false" }]);
+  });
+
+  it("lists categories with a boolean flag and active-product counts", async () => {
+    h.rows = [
+      [{ id: 1, name: "Phones", parentId: null, color: null, icon: null, showOnline: "false" }, { id: 2, name: "Cases", parentId: 1, color: null, icon: null, showOnline: "true" }],
+      [{ categoryId: 2, n: 4 }],
+    ];
+    const res = await request(app).get("/api/online-store/categories");
+    expect(res.body).toEqual([
+      expect.objectContaining({ id: 1, showOnline: false, productCount: 0 }),
+      expect.objectContaining({ id: 2, showOnline: true, productCount: 4 }),
+    ]);
+  });
+});
+
 describe("order tracking", () => {
   it("stamps shippedAt the first time an order is shipped", async () => {
     h.rows = [[{ shippedAt: null, deliveredAt: null }], [order({ status: "shipped" })]];

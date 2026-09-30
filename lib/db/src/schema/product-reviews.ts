@@ -3,15 +3,11 @@ import { merchantsTable } from "./merchants";
 import { productsTable } from "./products";
 
 /*
- * RETAINED, UNUSED: Online Store product reviews was removed from the single-business install, but
- * this table still holds data, so its definition stays — dropping it here
- * would make `drizzle-kit push` offer to delete those rows. No code reads it.
- */
-/*
- * Customer product reviews submitted from the online storefront. Reviews are
- * shown publicly when status = "approved"; merchants can hide spam from the
- * moderation panel. `verified` marks an author whose email matches a customer
- * who has placed an order with this merchant.
+ * Product reviews on the online shop (shop.koastal.com.au, routes/shop.ts).
+ * Only a signed-in customer who has bought the product can write one, one per
+ * customer per product (a second submission edits the first). `customer_id`
+ * (scripts/src/add-product-specs.ts) is that customer; rows from the removed
+ * old storefront have none. Shown when status = "approved".
  */
 export const productReviewsTable = pgTable("product_reviews", {
   id:          serial("id").primaryKey(),
@@ -25,6 +21,7 @@ export const productReviewsTable = pgTable("product_reviews", {
   /** approved (shown publicly) | hidden (kept but not shown). */
   status:      text("status").notNull().default("approved"),
   verified:    text("verified").notNull().default("false"),
+  customerId:  integer("customer_id"),
   createdAt:   timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("product_reviews_merchant_id_idx").on(t.merchantId),

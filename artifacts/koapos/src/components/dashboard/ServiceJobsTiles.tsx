@@ -1,10 +1,11 @@
-import { useListServiceJobs, useListAppointments, useGetDashboardSummary, useGetDashboardKpi, type ServiceJob } from "@workspace/api-client-react";
+import { useListServiceJobs, useListAppointments, useGetDashboardSummary, useGetDashboardKpi, useListDeliveryOrders, getListDeliveryOrdersQueryKey, type ServiceJob } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Receipt, Clock, Target } from "lucide-react";
+import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Receipt, Clock, Target, ShoppingBag } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
 import { FollowUpBanner } from "./FollowUpBanner";
+import { OPEN_ORDER_STATUSES } from "@/lib/order-tracking";
 
 // ─── helpers ──────────────────────────────────────────────────────────────────
 
@@ -84,9 +85,11 @@ interface MetricTileProps {
   iconColor: string;
   valueColor: string;
   sub?: React.ReactNode;
+  /** Small count pinned to the top-left corner; hidden when 0 or absent. */
+  cornerBadge?: { count: number; title: string };
 }
 
-function MetricTile({ icon, value, label, iconColor, valueColor, sub, href }: MetricTileProps & { href?: string }) {
+function MetricTile({ icon, value, label, iconColor, valueColor, sub, href, cornerBadge }: MetricTileProps & { href?: string }) {
   const [, navigate] = useLocation();
   const clickable = !!href;
   const Wrapper = clickable ? "button" : "div";
@@ -94,10 +97,18 @@ function MetricTile({ icon, value, label, iconColor, valueColor, sub, href }: Me
     <Wrapper
       onClick={clickable ? () => navigate(href) : undefined}
       className={cn(
-        "rounded-2xl border bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full",
+        "relative rounded-2xl border bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full",
         clickable && "cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
       )}
     >
+      {cornerBadge && cornerBadge.count > 0 && (
+        <span
+          title={cornerBadge.title}
+          className="absolute top-2 left-2 min-w-5 h-5 px-1.5 rounded-full bg-blue-600 text-white text-[11px] font-bold tabular-nums flex items-center justify-center"
+        >
+          {cornerBadge.count}
+        </span>
+      )}
       <span className={cn("text-xl mb-0.5", iconColor)}>{icon}</span>
       <span className={cn("text-3xl font-bold tabular-nums", valueColor)}>{value}</span>
       <span className="text-[11px] font-semibold tracking-wider uppercase text-muted-foreground">{label}</span>
@@ -246,7 +257,13 @@ export function ServiceJobsTiles({
   const { data: appointmentsData } = useListAppointments(undefined, { query: { queryKey: ["appts-dash"] } });
   const { data: todaySummary } = useGetDashboardSummary({ period: "today" }, { query: { queryKey: ["dashboard-summary-today"] } });
 
+  const { data: ordersData } = useListDeliveryOrders({ query: { queryKey: getListDeliveryOrdersQueryKey(), refetchInterval: 60_000 } });
+
   const jobs = jobsData ?? [];
+  // Online orders not yet finished (delivered/cancelled) — Online › Orders' "Open" tab.
+  const orders = ordersData?.items ?? [];
+  const openOrders = orders.filter((o) => OPEN_ORDER_STATUSES.has(o.status)).length;
+  const newOrders = orders.filter((o) => o.status === "new").length;
 
   const inProgress = jobs.filter((j) => !["completed", "partner-replacement", "cancelled"].includes(j.status as string)).length;
   const awaitingCustomer = jobs.filter((j) => (j.status as string) === "awaiting-customer").length;
@@ -316,7 +333,16 @@ export function ServiceJobsTiles({
 
       {/* Row 2: Business metric tiles */}
       {showMetricTiles && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          <MetricTile
+            icon={<ShoppingBag className="w-5 h-5" />}
+            value={openOrders}
+            label="Online Orders"
+            iconColor="text-sky-500"
+            valueColor="text-sky-700"
+            href="/online/orders"
+            cornerBadge={{ count: newOrders, title: `${newOrders} new online order${newOrders === 1 ? "" : "s"}` }}
+          />
           <MetricTile
             icon={<FileText className="w-5 h-5" />}
             value={jobs.filter((j) => !["completed", "cancelled"].includes(j.status as string)).length}

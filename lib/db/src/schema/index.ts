@@ -140,3 +140,4 @@ export * from "./product-reviews";
 export * from "./report-views";
 export * from "./merchant-assets";
 export * from "./end-of-week-reports";
+export * from "./customer-wishlist";

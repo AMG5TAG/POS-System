@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { ColourPicker } from "@/components/ui/colour-picker";
+import { ImageUploader } from "@/components/ui/image-uploader";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListCategories, useCreateCategory, useUpdateCategory, useDeleteCategory,
@@ -31,7 +32,7 @@ import { cn } from "@/lib/utils";
 
 type CategoryNode = Category & { children: CategoryNode[]; depth: number };
 
-type FormState = { name: string; color: string; icon: string; parentId: string };
+type FormState = { name: string; color: string; icon: string; parentId: string; imageUrl: string };
 
 /* ─── Constants ──────────────────────────────────────────────────────────── */
 
@@ -51,7 +52,7 @@ const ICON_MAP: Record<string, React.ComponentType<{ className?: string }>> = {
 
 const ICON_NAMES = Object.keys(ICON_MAP);
 const MAX_DEPTH = 4;
-const EMPTY_FORM: FormState = { name: "", color: COLORS[0], icon: "Tag", parentId: "" };
+const EMPTY_FORM: FormState = { name: "", color: COLORS[0], icon: "Tag", parentId: "", imageUrl: "" };
 
 /* ─── Helpers ────────────────────────────────────────────────────────────── */
 
@@ -153,12 +154,16 @@ function CategoryRow({
       </button>
 
       {/* color + icon */}
-      <div
-        className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-        style={{ backgroundColor: (node.color ?? "#6366f1") + "22" }}
-      >
-        <CategoryIcon name={node.icon} className="w-4 h-4" color={node.color ?? "#6366f1"} />
-      </div>
+      {node.imageUrl ? (
+        <img src={node.imageUrl} alt="" className="w-8 h-8 rounded-lg object-cover shrink-0 border" />
+      ) : (
+        <div
+          className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+          style={{ backgroundColor: (node.color ?? "#6366f1") + "22" }}
+        >
+          <CategoryIcon name={node.icon} className="w-4 h-4" color={node.color ?? "#6366f1"} />
+        </div>
+      )}
 
       {/* name + meta */}
       <div className="flex-1 min-w-0">
@@ -281,6 +286,7 @@ export default function ProductsCategoriesPage() {
       color: parent?.color ?? COLORS[0],
       icon: parent?.icon ?? "Tag",
       parentId: parentId?.toString() ?? "",
+      imageUrl: "",
     });
     setDialogOpen(true);
   };
@@ -292,6 +298,7 @@ export default function ProductsCategoriesPage() {
       color: cat.color ?? COLORS[0],
       icon: cat.icon ?? "Tag",
       parentId: cat.parentId?.toString() ?? "",
+      imageUrl: cat.imageUrl ?? "",
     });
     setDialogOpen(true);
   };
@@ -308,13 +315,14 @@ export default function ProductsCategoriesPage() {
 
     if (editingCat) {
       updateCategory.mutate(
-        { id: editingCat.id, data },
+        // null clears an image that was removed in the dialog.
+        { id: editingCat.id, data: { ...data, imageUrl: form.imageUrl || null } },
         {
           onSuccess: () => {
             toast.success("Category updated");
             if (andAddAnother) {
               setEditingCat(null);
-              setForm((f) => ({ ...f, name: "" }));
+              setForm((f) => ({ ...f, name: "", imageUrl: "" }));
             } else {
               setDialogOpen(false);
             }
@@ -325,12 +333,12 @@ export default function ProductsCategoriesPage() {
       );
     } else {
       createCategory.mutate(
-        { data },
+        { data: { ...data, imageUrl: form.imageUrl || undefined } },
         {
           onSuccess: (newCat) => {
             toast.success("Category created");
             if (andAddAnother) {
-              setForm((f) => ({ ...f, name: "" }));
+              setForm((f) => ({ ...f, name: "", imageUrl: "" }));
               if (typeof newCat.parentId === "number") setExpanded((prev) => new Set([...prev, newCat.parentId as number]));
             } else {
               setDialogOpen(false);
@@ -504,6 +512,17 @@ export default function ProductsCategoriesPage() {
             <div className="space-y-1.5">
               <Label>Icon</Label>
               <IconPicker value={form.icon} onChange={(v) => setForm((f) => ({ ...f, icon: v }))} />
+            </div>
+
+            <div className="space-y-1.5">
+              <Label>Category Image</Label>
+              <p className="text-xs text-muted-foreground">Shown on the online shop's category tiles. Square images look best.</p>
+              <ImageUploader
+                value={form.imageUrl}
+                onChange={(url) => setForm((f) => ({ ...f, imageUrl: url }))}
+                aspectRatio="square"
+                className="w-40"
+              />
             </div>
 
             <div className="flex justify-between items-center pt-1">

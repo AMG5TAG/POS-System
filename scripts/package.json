@@ -56,7 +56,11 @@
     "add-parked-sale-links": "tsx ./src/add-parked-sale-links.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "add-product-show-online": "tsx ./src/add-product-show-online.ts",
-    "add-delivery-order-tracking": "tsx ./src/add-delivery-order-tracking.ts"
+    "add-delivery-order-tracking": "tsx ./src/add-delivery-order-tracking.ts",
+    "add-category-show-online": "tsx ./src/add-category-show-online.ts",
+    "add-category-image-url": "tsx ./src/add-category-image-url.ts",
+    "add-product-specs": "tsx ./src/add-product-specs.ts",
+    "add-customer-wishlist-table": "tsx ./src/add-customer-wishlist-table.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

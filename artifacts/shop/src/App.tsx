@@ -15,6 +15,8 @@ import Register from "@/pages/Register";
 import Forgot from "@/pages/Forgot";
 import SetPassword from "@/pages/SetPassword";
 import Account from "@/pages/Account";
+import Wishlist from "@/pages/Wishlist";
+import Rewards from "@/pages/Rewards";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -47,6 +49,8 @@ export default function App() {
                 <Route path="/account/forgot" component={Forgot} />
                 <Route path="/account/set-password" component={SetPassword} />
                 <Route path="/account" component={Account} />
+                <Route path="/wishlist" component={Wishlist} />
+                <Route path="/rewards" component={Rewards} />
                 <Route component={NotFound} />
               </Switch>
             </Layout>
