@@ -17,7 +17,7 @@ export function ProductTabs({ product, tab, onTab }: { product: ProductDetail; t
   ];
   return (
     <section id="product-tabs" className="mt-12 scroll-mt-24">
-      <div role="tablist" className="flex gap-1 border-b border-stone-200 overflow-x-auto">
+      <div role="tablist" className="flex gap-1 border-b border-stone-200 overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
         {tabs.map((t) => (
           <button key={t.key} role="tab" aria-selected={tab === t.key} onClick={() => onTab(t.key)}
             className={`px-4 sm:px-5 h-11 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition ${tab === t.key ? "border-brand text-brand" : "border-transparent text-stone-500 hover:text-ink"}`}>

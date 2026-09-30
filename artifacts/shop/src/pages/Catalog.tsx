@@ -1,6 +1,6 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { Link, useLocation, useSearch } from "wouter";
-import { Loader2 } from "lucide-react";
+import { ChevronDown, Loader2 } from "lucide-react";
 import { useCategories, useProducts } from "@/lib/shop";
 import { ProductCard } from "@/components/ProductCard";
 
@@ -11,6 +11,7 @@ const SORTS = [
   { value: "price-desc", label: "Price: high to low" },
 ];
 const PAGE_SIZE = 24;
+const COLLAPSED_KEY = "shop.catalog.collapsedCategories";
 
 export default function Catalog() {
   const search = useSearch();
@@ -35,16 +36,26 @@ export default function Catalog() {
   const current = cats?.find((c) => c.id === category);
   const parents = (cats ?? []).filter((c) => c.parentId == null);
   const childrenOf = (id: number) => (cats ?? []).filter((c) => c.parentId === id);
-  // Every subcategory shows, at any depth, indented one step per level.
-  const renderChildren = (id: number, depth: number): React.ReactNode =>
-    childrenOf(id).map((k) => (
-      <div key={k.id}>
-        <button onClick={() => setParam("category", String(k.id))} style={{ paddingLeft: `${0.75 + depth * 1}rem` }} className={`block w-full text-left pr-3 py-1 rounded-lg text-stone-600 ${category === k.id ? "bg-brand-50 font-medium text-ink" : "hover:bg-stone-100"}`}>
-          {k.name}
-        </button>
-        {renderChildren(k.id, depth + 1)}
-      </div>
-    ));
+  // Every level below a top-level category, flattened in order: the sidebar
+  // shows them as one plain list under their bold parent, not as a tree.
+  const descendantsOf = (id: number): typeof parents =>
+    childrenOf(id).flatMap((k) => [k, ...descendantsOf(k.id)]);
+  const rootOf = (id: number | undefined) => {
+    let c = cats?.find((x) => x.id === id);
+    while (c?.parentId != null) c = cats?.find((x) => x.id === c!.parentId);
+    return c?.id;
+  };
+  const [collapsed, setCollapsed] = useState<Set<number>>(() => {
+    try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]")); } catch { return new Set(); }
+  });
+  const toggle = (id: number) => setCollapsed((s) => {
+    const n = new Set(s);
+    if (n.has(id)) n.delete(id); else n.add(id);
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...n])); } catch { /* per-browser nicety only */ }
+    return n;
+  });
+  // The group holding the category being viewed is always shown open.
+  const activeRoot = rootOf(category);
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   return (
@@ -52,14 +63,29 @@ export default function Catalog() {
       <aside className="space-y-1 text-sm">
         <p className="font-semibold mb-2">Categories</p>
         <button onClick={() => setParam("category", null)} className={`block w-full text-left px-3 py-1.5 rounded-lg ${!category ? "bg-brand-50 font-medium" : "hover:bg-stone-100"}`}>All products</button>
-        {parents.map((c) => (
-          <div key={c.id}>
-            <button onClick={() => setParam("category", String(c.id))} className={`block w-full text-left px-3 py-1.5 rounded-lg ${category === c.id ? "bg-brand-50 font-medium" : "hover:bg-stone-100"}`}>
-              {c.name} <span className="text-stone-400">({c.productCount})</span>
-            </button>
-            {renderChildren(c.id, 1)}
-          </div>
-        ))}
+        {parents.map((c) => {
+          const subs = descendantsOf(c.id);
+          const open = subs.length > 0 && (!collapsed.has(c.id) || activeRoot === c.id);
+          return (
+            <div key={c.id}>
+              <div className="flex items-center">
+                <button onClick={() => setParam("category", String(c.id))} className={`flex-1 min-w-0 text-left px-3 py-1.5 rounded-lg font-semibold ${category === c.id ? "bg-brand-50" : "hover:bg-stone-100"}`}>
+                  {c.name} <span className="font-normal text-stone-400">({c.productCount})</span>
+                </button>
+                {subs.length > 0 && (
+                  <button onClick={() => toggle(c.id)} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${c.name} subcategories`} className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100">
+                    <ChevronDown className={`w-4 h-4 transition-transform ${open ? "" : "-rotate-90"}`} />
+                  </button>
+                )}
+              </div>
+              {open && subs.map((k) => (
+                <button key={k.id} onClick={() => setParam("category", String(k.id))} className={`block w-full text-left pl-6 pr-3 py-1 rounded-lg ${category === k.id ? "bg-brand-50 font-medium text-ink" : "text-stone-600 hover:bg-stone-100"}`}>
+                  {k.name}
+                </button>
+              ))}
+            </div>
+          );
+        })}
       </aside>
 
       <div>

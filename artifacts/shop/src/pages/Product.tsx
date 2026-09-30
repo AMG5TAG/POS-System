@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
 import { Loader2, Minus, Plus, ShieldCheck, Check } from "lucide-react";
-import { useProduct } from "@/lib/shop";
+import { useCategories, useProduct } from "@/lib/shop";
 import { useCart } from "@/lib/cart";
 import { money } from "@/lib/format";
 import { ProductTabs, type ProductTab } from "@/components/ProductTabs";
@@ -14,6 +14,7 @@ import type { MediaItem } from "@/lib/shop";
 export default function Product() {
   const { id } = useParams<{ id: string }>();
   const { data: p, isLoading, isError } = useProduct(Number(id));
+  const { data: cats } = useCategories();
   const { add } = useCart();
   const [variantId, setVariantId] = useState<number | null>(null);
   const [qty, setQty] = useState(1);
@@ -51,6 +52,14 @@ export default function Product() {
     setTimeout(() => setAdded(false), 2000);
   };
 
+  // The product's category and every parent above it, top level first.
+  const categoryPath: { id: number; name: string }[] = [];
+  for (let c = cats?.find((x) => x.id === p.category?.id); c; c = cats?.find((x) => x.id === c!.parentId)) {
+    categoryPath.unshift(c);
+    if (categoryPath.length > 20) break; // guard against a parent cycle
+  }
+  if (categoryPath.length === 0 && p.category) categoryPath.push(p.category);
+
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <nav className="text-sm text-stone-500 mb-6">
@@ -67,7 +76,19 @@ export default function Product() {
         </ProductGallery>
         <div className="space-y-5">
           {p.brand && <p className="text-sm uppercase tracking-wide text-stone-500">{p.brand}</p>}
-          <h1 className="text-3xl font-bold leading-tight break-words">{p.name}</h1>
+          <div>
+            <h1 className="text-3xl font-bold leading-tight break-words">{p.name}</h1>
+            {categoryPath.length > 0 && (
+              <p className="mt-1.5 text-sm text-stone-500 break-words">
+                {categoryPath.map((c, i) => (
+                  <span key={c.id}>
+                    {i > 0 && <span className="mx-1.5 text-stone-300">›</span>}
+                    <Link href={`/products?category=${c.id}`} className="hover:text-brand hover:underline">{c.name}</Link>
+                  </span>
+                ))}
+              </p>
+            )}
+          </div>
           {p.rating.count > 0 && (
             <button onClick={showReviews} className="flex items-center gap-2 text-sm text-stone-600 hover:text-brand">
               <Stars value={p.rating.average ?? 0} /> {p.rating.average?.toFixed(1)} · {p.rating.count} review{p.rating.count === 1 ? "" : "s"}
