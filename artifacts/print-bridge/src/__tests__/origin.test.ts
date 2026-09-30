@@ -3,7 +3,7 @@ import { isOriginAllowed } from "../config.js";
 
 /**
  * The origin allow-list is the bridge's outer perimeter: any website the till's
- * browser visits could try to talk to loopback, so only KK POS deployments may
+ * browser visits could try to talk to loopback, so only KoaPOS deployments may
  * get past it (the bearer token then gates the actual printing).
  */
 describe("isOriginAllowed", () => {

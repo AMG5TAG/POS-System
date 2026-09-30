@@ -709,7 +709,7 @@ function PosCameraTab() {
               <div>
                 <p className="text-sm font-medium">Photos</p>
                 <p className="text-xs text-muted-foreground">
-                  Captured frames are saved to the KK POS server and visible in the history below.
+                  Captured frames are saved to the KoaPOS server and visible in the history below.
                 </p>
               </div>
             </div>

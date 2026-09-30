@@ -47,11 +47,11 @@ export default function LandingPagePublicView() {
   })();
 
   /* Browser tab title: the page's own (editable) title, always suffixed with
-     "- KK POS". Restores the default on unmount. */
+     "- KoaPOS". Restores the default on unmount. */
   useEffect(() => {
     const title = row?.title?.trim();
-    document.title = title ? `${title} - KK POS` : "KK POS";
-    return () => { document.title = "KK POS"; };
+    document.title = title ? `${title} - KoaPOS` : "KoaPOS";
+    return () => { document.title = "KoaPOS"; };
   }, [row?.title]);
 
   /* Load Google Font if needed */
@@ -202,7 +202,7 @@ export default function LandingPagePublicView() {
         {row.showPoweredBy !== "false" && (
           <div className={`text-center ${bottomLinks.length > 0 ? "mt-6" : "mt-12"}`}>
             <span className="text-[11px]" style={{ color: row.textColor, opacity: 0.4 }}>
-              Powered by KK POS
+              Powered by KoaPOS
             </span>
           </div>
         )}

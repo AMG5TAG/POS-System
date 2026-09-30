@@ -59,7 +59,7 @@ export interface LandingPage {
   btnBg: string; btnText: string; btnBorder: string;
   textColor: string; font: string;
   privacyUrl: string;
-  /** Show the "Powered by KK POS" referral footer on the public page. */
+  /** Show the "Powered by KoaPOS" referral footer on the public page. */
   showPoweredBy: boolean;
   /** True when this row is a reusable style template rather than a published page. */
   isTemplate: boolean;
@@ -270,7 +270,7 @@ export function LandingPageRenderer({ page, scale = 1 }: { page: LandingPage; sc
       )}
       {page.showPoweredBy && (
         <div className="text-center mt-6">
-          <p className="text-[11px]" style={{ color: page.textColor, opacity: 0.4 }}>Powered by KK POS</p>
+          <p className="text-[11px]" style={{ color: page.textColor, opacity: 0.4 }}>Powered by KoaPOS</p>
         </div>
       )}
     </div>
@@ -612,9 +612,9 @@ function EditorPanel({ page, onChange }: { page: LandingPage; onChange: (patch: 
                   ? <ToggleRight className="w-5 h-5 text-primary shrink-0 mt-0.5" />
                   : <ToggleLeft className="w-5 h-5 text-muted-foreground shrink-0 mt-0.5" />}
                 <span className="space-y-0.5">
-                  <span className="block text-xs font-medium">Show "Powered by KK POS"</span>
+                  <span className="block text-xs font-medium">Show "Powered by KoaPOS"</span>
                   <span className="block text-[11px] text-muted-foreground">
-                    Displays a small footer credit. It links to KK POS with your referral code, so sign-ups are credited to you.
+                    Displays a small footer credit. It links to KoaPOS with your referral code, so sign-ups are credited to you.
                   </span>
                 </span>
               </button>

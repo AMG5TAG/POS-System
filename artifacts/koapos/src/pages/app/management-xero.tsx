@@ -392,7 +392,7 @@ export default function ManagementXeroPage() {
             <div>
               <h1 className="text-2xl font-bold">Xero Integration</h1>
               <p className="text-muted-foreground text-sm mt-0.5">
-                Connect your KK POS account to Xero — push sales, contacts, and purchase orders automatically.
+                Connect your KoaPOS account to Xero — push sales, contacts, and purchase orders automatically.
               </p>
             </div>
           </div>
@@ -452,7 +452,7 @@ export default function ManagementXeroPage() {
                 <div>
                   <h2 className="text-lg font-semibold">Connect to Xero</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Click the button below to authorise KK POS to access your Xero account.
+                    Click the button below to authorise KoaPOS to access your Xero account.
                   </p>
                 </div>
 
@@ -476,7 +476,7 @@ export default function ManagementXeroPage() {
                   <div className="flex flex-col items-center gap-4 py-6">
                     <XeroLogo size="lg" />
                     <p className="text-sm text-center text-muted-foreground max-w-sm">
-                      You'll be redirected to Xero to grant access. KK POS will only access accounting data — never bank account details.
+                      You'll be redirected to Xero to grant access. KoaPOS will only access accounting data — never bank account details.
                     </p>
                     <Button asChild className="gap-2 bg-[#13B5EA] hover:bg-[#0d8fb8] text-white px-6">
                       <a href="/api/xero/auth/start">
@@ -503,7 +503,7 @@ export default function ManagementXeroPage() {
                 <div>
                   <h2 className="text-lg font-semibold">Select your Xero organisation</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Choose which Xero organisation KK POS should sync data to.
+                    Choose which Xero organisation KoaPOS should sync data to.
                   </p>
                 </div>
 
@@ -564,7 +564,7 @@ export default function ManagementXeroPage() {
                 <div>
                   <h2 className="text-lg font-semibold">Map your Chart of Accounts</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Tell KK POS which Xero accounts to post to. These must exist in your Xero chart of accounts.
+                    Tell KoaPOS which Xero accounts to post to. These must exist in your Xero chart of accounts.
                   </p>
                 </div>
 
@@ -671,7 +671,7 @@ export default function ManagementXeroPage() {
                 <div>
                   <h2 className="text-lg font-semibold">Sync settings</h2>
                   <p className="text-sm text-muted-foreground mt-1">
-                    Choose what KK POS should sync to Xero and how often.
+                    Choose what KoaPOS should sync to Xero and how often.
                   </p>
                 </div>
 
@@ -697,7 +697,7 @@ export default function ManagementXeroPage() {
                     <div className="flex items-start justify-between gap-4">
                       <div>
                         <p className="text-sm font-medium">Sync customers &amp; suppliers</p>
-                        <p className="text-xs text-muted-foreground mt-0.5">Keep your Xero contacts in sync with KK POS CRM</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">Keep your Xero contacts in sync with KoaPOS CRM</p>
                       </div>
                       <Switch
                         checked={syncSettings.syncContacts}
@@ -712,7 +712,7 @@ export default function ManagementXeroPage() {
                           <div>
                             <p className="text-sm font-medium">Include customer notes</p>
                             <p className="text-xs text-muted-foreground mt-0.5">
-                              Append KK POS CRM notes to each Xero contact&apos;s History
+                              Append KoaPOS CRM notes to each Xero contact&apos;s History
                             </p>
                           </div>
                           <Switch
@@ -896,7 +896,7 @@ export default function ManagementXeroPage() {
                 {step === 6 && "What syncs?"}
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                {step === 2 && "KK POS uses OAuth2 — the same technology used by banks. Your Xero password is never seen or stored by KK POS. You can revoke access from Xero at any time."}
+                {step === 2 && "KoaPOS uses OAuth2 — the same technology used by banks. Your Xero password is never seen or stored by KoaPOS. You can revoke access from Xero at any time."}
                 {step === 3 && "If you have multiple Xero organisations (e.g. a holding company and a trading entity), select the one that should receive POS data. You can change this later."}
                 {step === 4 && "Use account codes that already exist in your Xero chart of accounts. For Australian businesses, revenue is typically 200, GST is 820. Ask your accountant if unsure."}
                 {step === 5 && "Daily sync is recommended for most retailers — it runs overnight so it doesn't affect daytime performance. Enable 'auto-sync' to schedule it, or run manual syncs anytime."}

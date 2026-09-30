@@ -105,7 +105,7 @@ async function issueStaffResetToken(staffId: number, toEmail: string, intro: str
   const [staff] = await db.select({ merchantId: staffTable.merchantId }).from(staffTable).where(eq(staffTable.id, staffId));
   void sendEmail(staff?.merchantId ?? 0, {
     to: toEmail,
-    subject: "Set your KK POS staff password",
+    subject: "Set your KoaPOS staff password",
     html: `
       <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
         <h2 style="margin-top:0">Staff sign-in</h2>
@@ -131,7 +131,7 @@ router.post("/staff-auth/enable", requireAuth, requireManagerOrOwner, async (req
     .where(and(eq(staffTable.id, parsed.data.staffId), eq(staffTable.merchantId, merchantId)));
   if (!staff) { res.status(404).json({ error: "Staff member not found" }); return; }
   if (!staff.email) { res.status(400).json({ error: "This staff member has no email address. Add one first." }); return; }
-  await issueStaffResetToken(staff.id, staff.email.trim().toLowerCase(), "You've been invited to sign in to KK POS with your email. Set a password to get started.");
+  await issueStaffResetToken(staff.id, staff.email.trim().toLowerCase(), "You've been invited to sign in to KoaPOS with your email. Set a password to get started.");
   res.json({ ok: true });
 });
 
@@ -145,7 +145,7 @@ router.post("/staff-auth/forgot-password", resetLimiter, async (req, res): Promi
     .from(staffTable)
     .where(and(eq(staffTable.email, email), eq(staffTable.isActive, "true")));
   if (staff?.email && staff.id) {
-    await issueStaffResetToken(staff.id, staff.email.trim().toLowerCase(), "We received a request to reset your KK POS staff password.");
+    await issueStaffResetToken(staff.id, staff.email.trim().toLowerCase(), "We received a request to reset your KoaPOS staff password.");
   }
   res.json({ ok: true });
 });

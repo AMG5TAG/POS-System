@@ -29,7 +29,7 @@ export const INTEGRATIONS = [
   { key: "apple_wallet",    label: "Apple Wallet",          section: "payments",   category: "Payments & Terminals", description: "Issue digital loyalty cards, membership passes, and coupons directly to Apple Wallet.",                  authType: "credentials" as const, fields: [{ name: "passTypeId", label: "Pass Type ID", type: "text" }, { name: "teamId", label: "Apple Team ID", type: "text" }, { name: "certificateBase64", label: "Certificate (Base64)", type: "password" }] as F[], useVault: false },
 
   /* ── MARKETING ─────────────────────────────────────────────────────────── */
-  { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing", description: "Create, manage, and track ad campaigns tied to your KK POS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
+  { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
   { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
 
   /* ── CLOUD STORAGE & PRODUCTIVITY ─────────────────────────────────────── */
@@ -38,11 +38,11 @@ export const INTEGRATIONS = [
   // Nextcloud is self-hosted, so there is no platform-registered app to OAuth
   // against — the merchant's own server issues the credential via Login Flow v2
   // (see routes/nextcloud.ts). Hence its own authType.
-  { key: "nextcloud",           label: "Nextcloud",           section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KK POS data and mirror customer files to your own Nextcloud server — self-hosted storage you control.", authType: "loginflow" as const, fields: [{ name: "serverUrl", label: "Server address", type: "text" }] as F[], useVault: true  },
+  { key: "nextcloud",           label: "Nextcloud",           section: "cloud", category: "Cloud Storage & Productivity", description: "Back up your KoaPOS data and mirror customer files to your own Nextcloud server — self-hosted storage you control.", authType: "loginflow" as const, fields: [{ name: "serverUrl", label: "Server address", type: "text" }] as F[], useVault: true  },
 
   /* ── AI PROVIDERS ──────────────────────────────────────────────────────────
      Bring-your-own-key: the merchant connects their own AI account and their
-     own key pays for their own usage. KK POS holds no platform key, so an
+     own key pays for their own usage. KoaPOS holds no platform key, so an
      unconnected merchant simply has no AI features rather than quietly
      spending someone else's budget.
 
@@ -450,7 +450,7 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
 });
 
 /* ── POST /integrations/contacts/sync ────────────────────────────────────────
-   Syncs KK POS customers to the connected iCloud contacts (CardDAV).
+   Syncs KoaPOS customers to the connected iCloud contacts (CardDAV).
    Optionally includes CRM notes in each contact's notes field.
 
    Body: {
@@ -522,7 +522,7 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
 });
 
 /* ── POST /integrations/calendar/sync ─────────────────────────────────────────
-   Pushes the merchant's upcoming KK POS appointments to the connected account's
+   Pushes the merchant's upcoming KoaPOS appointments to the connected account's
    iCloud calendar (CalDAV). Idempotent via stable event uids.
    Body: { provider: "apple_icloud" }
    ─────────────────────────────────────────────────────────────────────────── */

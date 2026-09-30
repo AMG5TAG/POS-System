@@ -120,7 +120,7 @@ const BY_CODE: Map<string, PhoneCountry> = new Map(
 /**
  * The country every merchant's numbers use until they choose otherwise.
  *
- * Australia, unconditionally — not the merchant's business country. KK POS sells
+ * Australia, unconditionally — not the merchant's business country. KoaPOS sells
  * to Australian retail, so +61 is right for all but a handful of accounts, and a
  * default that quietly varied per merchant would be a default nobody could
  * predict from the setting screen. A shop that needs another country picks one

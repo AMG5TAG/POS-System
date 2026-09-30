@@ -29,7 +29,7 @@ export default function Catalog() {
     const next = new URLSearchParams(params);
     if (value) next.set(key, value); else next.delete(key);
     if (key !== "page") next.delete("page");
-    navigate(`/shop${next.toString() ? `?${next}` : ""}`);
+    navigate(`/products${next.toString() ? `?${next}` : ""}`);
   };
 
   const current = cats?.find((c) => c.id === category);
@@ -41,14 +41,14 @@ export default function Catalog() {
     <div className="mx-auto max-w-7xl px-4 py-8 grid lg:grid-cols-[240px_1fr] gap-8">
       <aside className="space-y-1 text-sm">
         <p className="font-semibold mb-2">Categories</p>
-        <button onClick={() => setParam("category", null)} className={`block w-full text-left px-3 py-1.5 rounded-lg ${!category ? "bg-amber-100 font-medium" : "hover:bg-stone-100"}`}>All products</button>
+        <button onClick={() => setParam("category", null)} className={`block w-full text-left px-3 py-1.5 rounded-lg ${!category ? "bg-brand-50 font-medium" : "hover:bg-stone-100"}`}>All products</button>
         {parents.map((c) => (
           <div key={c.id}>
-            <button onClick={() => setParam("category", String(c.id))} className={`block w-full text-left px-3 py-1.5 rounded-lg ${category === c.id ? "bg-amber-100 font-medium" : "hover:bg-stone-100"}`}>
+            <button onClick={() => setParam("category", String(c.id))} className={`block w-full text-left px-3 py-1.5 rounded-lg ${category === c.id ? "bg-brand-50 font-medium" : "hover:bg-stone-100"}`}>
               {c.name} <span className="text-stone-400">({c.productCount})</span>
             </button>
             {childrenOf(c.id).map((k) => (
-              <button key={k.id} onClick={() => setParam("category", String(k.id))} className={`block w-full text-left pl-7 pr-3 py-1 rounded-lg text-stone-600 ${category === k.id ? "bg-amber-100 font-medium text-ink" : "hover:bg-stone-100"}`}>
+              <button key={k.id} onClick={() => setParam("category", String(k.id))} className={`block w-full text-left pl-7 pr-3 py-1 rounded-lg text-stone-600 ${category === k.id ? "bg-brand-50 font-medium text-ink" : "hover:bg-stone-100"}`}>
                 {k.name}
               </button>
             ))}
@@ -60,7 +60,7 @@ export default function Catalog() {
         <div className="flex flex-wrap items-center gap-3 mb-5">
           <h1 className="text-2xl font-bold mr-auto">{q ? `Results for “${q}”` : current?.name ?? "All products"}</h1>
           <label className="flex items-center gap-2 text-sm">
-            <input type="checkbox" checked={inStock} onChange={(e) => setParam("inStock", e.target.checked ? "true" : null)} className="accent-amber-500" />
+            <input type="checkbox" checked={inStock} onChange={(e) => setParam("inStock", e.target.checked ? "true" : null)} className="accent-brand" />
             In stock only
           </label>
           <select value={sort} onChange={(e) => setParam("sort", e.target.value)} className="h-9 rounded-lg border border-stone-300 bg-white px-2 text-sm">
@@ -73,7 +73,7 @@ export default function Catalog() {
           <div className="py-24 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>
         ) : !data || data.items.length === 0 ? (
           <div className="py-24 text-center text-stone-500">
-            Nothing found. <Link href="/shop" className="text-brand-dark underline">See all products</Link>
+            Nothing found. <Link href="/products" className="text-brand underline">See all products</Link>
           </div>
         ) : (
           <>

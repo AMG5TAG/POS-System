@@ -147,7 +147,7 @@ const MarketingFollowUpTemplatesPage = lazyWithRetry(() => import("@/pages/app/m
 const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/marketing-loyalty-promotions"));
 const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
-const OnlineDeliveryOrdersPage = lazyWithRetry(() => import("@/pages/app/online-delivery-orders"));
+const OnlineOrdersPage = lazyWithRetry(() => import("@/pages/app/online-orders"));
 const OnlineShippingPage = lazyWithRetry(() => import("@/pages/app/online-shipping"));
 const ManagementMiscPage = lazyWithRetry(() => import("@/pages/app/management-misc"));
 const ManagementSyncPage = lazyWithRetry(() => import("@/pages/app/management-sync"));
@@ -172,6 +172,9 @@ const ManagementReportsStaffLeaderboardPage = lazyWithRetry(() => import("@/page
 const ManagementReportsProductPerformancePage = lazyWithRetry(() => import("@/pages/app/management-reports-product-performance"));
 const ManagementCustomersHeardFromPage = lazyWithRetry(() => import("@/pages/app/management-customers-heard-from"));
 const ManagementCustomersPortalPage = lazyWithRetry(() => import("@/pages/app/management-customers-portal"));
+const ManagementOnlineStoreOverviewPage = lazyWithRetry(() => import("@/pages/app/management-online-store-overview"));
+const ManagementOnlineStoreProductsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-products"));
+const ManagementOnlineStoreAccountsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-accounts"));
 const SettingsPricingRulesPage = lazyWithRetry(() => import("@/pages/app/settings-pricing-rules"));
 const SettingsModifierGroupsPage = lazyWithRetry(() => import("@/pages/app/settings-modifier-groups"));
 
@@ -259,7 +262,7 @@ function ManagementProtectedRoute({ component: Component }: { component: React.C
   );
 }
 
-/* KK POS is in-house software for one business, so there is no public
+/* KoaPOS is in-house software for one business, so there is no public
    marketing site: the root is the app — the dashboard when signed in,
    otherwise the login page. */
 function HomeRedirect() {
@@ -517,6 +520,18 @@ function Router() {
       <Route path="/management/marketing-hub">   <Redirect to="/management/marketing-reports/sales-overview" /></Route>
       <Route path="/management/settings-hub">    <Redirect to="/management/settings-integrations/account" />      </Route>
 
+      {/* Online Store (shop.koastal.com.au) */}
+      <Route path="/management/online-store"><Redirect to="/management/online-store/overview" /></Route>
+      <Route path="/management/online-store/overview">
+        <ManagementProtectedRoute component={ManagementOnlineStoreOverviewPage} />
+      </Route>
+      <Route path="/management/online-store/products">
+        <ManagementProtectedRoute component={ManagementOnlineStoreProductsPage} />
+      </Route>
+      <Route path="/management/online-store/accounts">
+        <ManagementProtectedRoute component={ManagementOnlineStoreAccountsPage} />
+      </Route>
+
       {/* Customers */}
       <Route path="/management/customers/heard-from">
         <ManagementProtectedRoute component={ManagementCustomersHeardFromPage} />
@@ -574,7 +589,7 @@ function Router() {
       <Route path="/management/settings-integrations/locations">
         <ManagementProtectedRoute component={ManagementLocationsPage} />
       </Route>
-      {/* Customisation hub — everything that changes how KK POS looks and what it prints. */}
+      {/* Customisation hub — everything that changes how KoaPOS looks and what it prints. */}
       <Route path="/management/customisation/themes">
         <ManagementProtectedRoute component={SettingsThemesPage} />
       </Route>
@@ -856,8 +871,8 @@ function Router() {
       <Route path="/cameras">
         <ProtectedRoute component={CamerasPage} />
       </Route>
-      <Route path="/online/deliveries">
-        <ProtectedRoute component={OnlineDeliveryOrdersPage} />
+      <Route path="/online/orders">
+        <ProtectedRoute component={OnlineOrdersPage} />
       </Route>
       <Route path="/online/shipping">
         <ProtectedRoute component={OnlineShippingPage} />
@@ -939,7 +954,9 @@ function Router() {
       <Route path="/management/marketing/generators/shortlinks"><Redirect to="/management/marketing-reports/generators/shortlinks" /></Route>
       <Route path="/marketing/loyalty/promotions"><Redirect to="/marketing/loyalty/promos" /></Route>
       <Route path="/marketing/loyalty/leaderboard"><Redirect to="/marketing/loyalty/leaders" /></Route>
-      <Route path="/online/delivery-orders"><Redirect to="/online/deliveries" /></Route>
+      {/* The Deliveries page was replaced by Online › Orders. */}
+      <Route path="/online/deliveries"><Redirect to="/online/orders" /></Route>
+      <Route path="/online/delivery-orders"><Redirect to="/online/orders" /></Route>
       <Route path="/service-jobs/new"><Redirect to="/services/new-job" /></Route>
       <Route path="/service-jobs/:id">{(p) => <Redirect to={`/services/${p.id}`} />}</Route>
       <Route path="/service-jobs"><Redirect to="/services" /></Route>

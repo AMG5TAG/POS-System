@@ -2,7 +2,7 @@ import { db, merchantsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 /**
- * KK POS runs as in-house software for a single business. The merchants table
+ * KoaPOS runs as in-house software for a single business. The merchants table
  * still holds every account that ever registered — their data is deliberately
  * kept — but only this one may sign in, by any route (owner login, staff email
  * login, Tech App, Mobile POS) or through an existing session.

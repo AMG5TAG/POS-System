@@ -39,7 +39,6 @@ import {
   Phone, User, CheckCircle2, Loader2, AlertCircle,
   Download, FileSpreadsheet, FileText, ChevronDown, EyeOff, RotateCcw, Percent,
 } from "lucide-react";
-import { ShopInvitesCard } from "@/components/customers/ShopInvitesCard";
 
 /* ─── Per-group default markup ────────────────────────────────────────────────
  * Groups can carry an automatic price derived from each product's cost, e.g.
@@ -597,8 +596,6 @@ export default function SettingsCustomersPage() {
             ))}
           </CardContent>
         </Card>
-
-        <ShopInvitesCard />
 
         {/* Defaults */}
         <Card id="defaults">

@@ -87,10 +87,10 @@ export default function StaffResetPasswordPage() {
     <div className="min-h-screen flex items-center justify-center bg-muted/30 px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1 text-center">
-          <img src="/logo.png" alt="KK POS" className="mx-auto w-48 h-48 object-contain mb-4 rounded-full ring-2 ring-primary/20" />
+          <img src="/logo.png" alt="KoaPOS" className="mx-auto w-48 h-48 object-contain mb-4 rounded-full ring-2 ring-primary/20" />
           <CardTitle className="text-2xl font-bold tracking-tight">Set your staff password</CardTitle>
           <CardDescription>
-            Choose a password to sign in to KK POS with your email. Your register PIN stays the same.
+            Choose a password to sign in to KoaPOS with your email. Your register PIN stays the same.
           </CardDescription>
         </CardHeader>
         <CardContent>

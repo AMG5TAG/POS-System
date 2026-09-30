@@ -15,7 +15,7 @@ export default function Product() {
   const [added, setAdded] = useState(false);
 
   if (isLoading) return <div className="py-32 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
-  if (isError || !p) return <div className="py-32 text-center text-stone-500">This product isn't available. <Link href="/shop" className="text-brand-dark underline">Keep shopping</Link></div>;
+  if (isError || !p) return <div className="py-32 text-center text-stone-500">This product isn't available. <Link href="/products" className="text-brand underline">Keep shopping</Link></div>;
 
   const variant = p.variants.find((v) => v.id === variantId) ?? null;
   const needsVariant = p.variants.length > 0 && !variant;
@@ -32,8 +32,8 @@ export default function Product() {
   return (
     <div className="mx-auto max-w-7xl px-4 py-8">
       <nav className="text-sm text-stone-500 mb-6">
-        <Link href="/shop" className="hover:underline">Shop</Link>
-        {p.category && <> / <Link href={`/shop?category=${p.category.id}`} className="hover:underline">{p.category.name}</Link></>}
+        <Link href="/products" className="hover:underline">Shop</Link>
+        {p.category && <> / <Link href={`/products?category=${p.category.id}`} className="hover:underline">{p.category.name}</Link></>}
       </nav>
       <div className="grid md:grid-cols-2 gap-10">
         <div className="aspect-square rounded-2xl bg-white border border-stone-200 p-8"><ProductImage src={image} alt={p.name} /></div>
@@ -51,7 +51,7 @@ export default function Product() {
               <div className="flex flex-wrap gap-2">
                 {p.variants.map((v) => (
                   <button key={v.id} onClick={() => setVariantId(v.id)} disabled={!v.inStock}
-                    className={`px-4 h-10 rounded-full border text-sm ${variantId === v.id ? "border-ink bg-ink text-white" : "border-stone-300 hover:border-ink"} disabled:opacity-40 disabled:line-through`}>
+                    className={`px-4 h-10 rounded-full border text-sm ${variantId === v.id ? "border-brand bg-brand text-white" : "border-stone-300 hover:border-brand"} disabled:opacity-40 disabled:line-through`}>
                     {v.name}{v.price !== p.price ? ` · ${money(v.price)}` : ""}
                   </button>
                 ))}
@@ -66,11 +66,11 @@ export default function Product() {
               <button className="px-3" aria-label="More" onClick={() => setQty((n) => Math.min(99, n + 1))}><Plus className="w-4 h-4" /></button>
             </div>
             <button onClick={addToCart} disabled={needsVariant || (!inStock && !p.isService)}
-              className="flex-1 h-11 rounded-full bg-brand text-ink font-semibold hover:brightness-95 disabled:opacity-40 flex items-center justify-center gap-2">
+              className="flex-1 h-11 rounded-full bg-brand text-white font-semibold hover:bg-brand-dark disabled:opacity-40 flex items-center justify-center gap-2">
               {added ? <><Check className="w-4 h-4" /> Added</> : needsVariant ? "Choose an option" : "Add to cart"}
             </button>
           </div>
-          {added && <Link href="/cart" className="block text-sm text-brand-dark underline">View cart</Link>}
+          {added && <Link href="/cart" className="block text-sm text-brand underline">View cart</Link>}
 
           {p.warranty && (
             <p className="flex items-center gap-2 text-sm text-stone-600"><ShieldCheck className="w-4 h-4" />{p.warranty.duration} {p.warranty.unit} warranty</p>

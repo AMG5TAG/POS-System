@@ -192,7 +192,7 @@ async function davFetch(
     headers: {
       Authorization: authHeader(creds),
       // Nextcloud keys some rate-limit and app-password behaviour off the agent.
-      "User-Agent": "KK POS",
+      "User-Agent": "KoaPOS",
       ...(init.headers ?? {}),
     },
   });

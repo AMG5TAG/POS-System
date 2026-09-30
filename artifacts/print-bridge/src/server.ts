@@ -1,11 +1,11 @@
 /* ─── Bridge HTTP server ──────────────────────────────────────────────────────
- * Binds to loopback only and speaks a tiny JSON API to the KK POS tab running in
+ * Binds to loopback only and speaks a tiny JSON API to the KoaPOS tab running in
  * the same machine's browser. Browsers treat http://127.0.0.1 as a trustworthy
  * origin, so an HTTPS page can call it without a mixed-content block.
  *
  * Security model:
  *   • loopback bind — nothing on the LAN can reach it
- *   • Origin allow-list — only KK POS deployments may talk to it
+ *   • Origin allow-list — only KoaPOS deployments may talk to it
  *   • bearer token — pairs the browser to this specific bridge
  *   • pairing window — the token is only handed out while a local operator has
  *     opened the window (automatically at startup, or by pressing "p")
@@ -215,7 +215,7 @@ export function createBridgeServer(getConfig: () => BridgeConfig, pairing: Pairi
           const bytes = Buffer.from(dataB64, "base64");
           if (!bytes.length) throw new HttpError(400, "`data` decoded to zero bytes.");
           const printer = await resolvePrinterName(str(body, "printer"));
-          const jobName = str(body, "jobName") || "KK POS";
+          const jobName = str(body, "jobName") || "KoaPOS";
           const copies = copiesOf(body);
           for (let i = 0; i < copies; i++) await printRaw(printer, bytes, jobName);
           send(res, 200, { ok: true, printer, copies, bytes: bytes.length });
@@ -239,7 +239,7 @@ export function createBridgeServer(getConfig: () => BridgeConfig, pairing: Pairi
             printerName: printer,
             paper: requestedPaper,
             copies,
-            jobName: str(body, "jobName") || "KK POS",
+            jobName: str(body, "jobName") || "KoaPOS",
             heightMm: Number.isFinite(heightMm) ? heightMm : undefined,
           });
           send(res, 200, { ok: true, printer, copies, paper: requestedPaper });
@@ -253,7 +253,7 @@ export function createBridgeServer(getConfig: () => BridgeConfig, pairing: Pairi
           const t = Math.max(1, Math.min(255, Math.round(pulseMs / 2)));
           const printer = await resolvePrinterName(str(body, "printer"));
           // ESC p 0 t t — the standard cash-drawer kick on pin 2.
-          await printRaw(printer, Buffer.from([0x1b, 0x70, 0x00, t, t]), "KK POS drawer");
+          await printRaw(printer, Buffer.from([0x1b, 0x70, 0x00, t, t]), "KoaPOS drawer");
           send(res, 200, { ok: true, printer });
           return;
         }

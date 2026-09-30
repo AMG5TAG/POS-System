@@ -50,7 +50,7 @@ export function exportHeardFromCSV(
   const denom = (isRevenue ? windowRevenue : windowTotal) || 1;
   const rows: string[] = [];
 
-  rows.push(csvRow(["KK POS — Heard From Breakdown"]));
+  rows.push(csvRow(["KoaPOS — Heard From Breakdown"]));
   rows.push(csvRow(["Period", periodLabel(period)]));
   rows.push(csvRow(["View", metricLabel(metric)]));
   rows.push(csvRow(["Generated", new Date().toLocaleString()]));
@@ -114,7 +114,7 @@ export async function exportHeardFromXLSX(
   const denom = (isRevenue ? windowRevenue : windowTotal) || 1;
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "KK POS";
+  wb.creator = "KoaPOS";
   wb.created = new Date();
 
   const styleHeaderRow = (row: import("exceljs").Row) => {
@@ -128,7 +128,7 @@ export async function exportHeardFromXLSX(
   // ── Sheet 1: Per-source totals ──────────────────────────────────────────────
   const totals = wb.addWorksheet("Per-source totals");
 
-  const titleRow = totals.addRow(["KK POS — Heard From Breakdown"]);
+  const titleRow = totals.addRow(["KoaPOS — Heard From Breakdown"]);
   titleRow.getCell(1).font = TITLE_FONT;
   totals.addRow(["Period", periodLabel(period)]);
   totals.addRow(["View", metricLabel(metric)]);
@@ -196,7 +196,7 @@ export async function exportHeardFromXLSX(
 }
 
 // ─── PDF ──────────────────────────────────────────────────────────────────────
-// Print-ready A4 report with KK POS branding, per-source totals table, and
+// Print-ready A4 report with KoaPOS branding, per-source totals table, and
 // trend over time. Uses jsPDF (already a project dependency) — no html2canvas
 // needed, everything is drawn with vector primitives for crisp output.
 
@@ -266,7 +266,7 @@ export async function exportHeardFromPDF(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...C.light);
-    doc.text(`KK POS — Heard From Breakdown  ·  ${periodLabel(period)}`, ML, PAGE_H - 8);
+    doc.text(`KoaPOS — Heard From Breakdown  ·  ${periodLabel(period)}`, ML, PAGE_H - 8);
     const right = `Page ${pageNum} of ${pageCount}`;
     const rw = doc.getStringUnitWidth(right) * 7 * 0.352778;
     doc.text(right, PAGE_W - MR - rw, PAGE_H - 8);
@@ -283,7 +283,7 @@ export async function exportHeardFromPDF(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(...C.white);
-  doc.text("KK POS", ML, 12);
+  doc.text("KoaPOS", ML, 12);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);

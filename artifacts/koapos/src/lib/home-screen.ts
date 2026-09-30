@@ -2,7 +2,7 @@
  * Per-app "Add to Home Screen" branding.
  *
  * The whole frontend is a single SPA shell, so out of the box every route
- * would install to the phone home screen as the same generic "KK POS" icon
+ * would install to the phone home screen as the same generic "KoaPOS" icon
  * that reopens "/". The standalone apps (Tech, Mobile POS, Dashboard, Portal)
  * call this once they know which business they belong to, so the installed
  * icon carries that business's name and logo.
@@ -34,7 +34,7 @@ export function setHomeScreenApp(opts: {
   name: string;
   /** Path the installed icon reopens. Defaults to the current path. */
   startUrl?: string;
-  /** Merchant logo URL for the icon; falls back to the KK POS icon. */
+  /** Merchant logo URL for the icon; falls back to the KoaPOS icon. */
   iconUrl?: string | null;
   /** Status-bar / splash theme colour. */
   themeColor?: string;

@@ -33,6 +33,11 @@ export const deliveryOrdersTable = pgTable("delivery_orders", {
   paymentStatus:   text("payment_status").notNull().default("pending"),
   paymentProvider: text("payment_provider").notNull().default(""),
   paymentRef:      text("payment_ref").notNull().default(""),
+  /* ── Shipping (Online › Orders; scripts/src/add-delivery-order-tracking.ts) ── */
+  trackingCarrier: text("tracking_carrier").notNull().default(""),
+  trackingNumber:  text("tracking_number").notNull().default(""),
+  shippedAt:       timestamp("shipped_at", { withTimezone: true }),
+  deliveredAt:     timestamp("delivered_at", { withTimezone: true }),
   createdAt:      timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 });
 

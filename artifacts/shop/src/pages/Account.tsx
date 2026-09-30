@@ -33,7 +33,7 @@ export default function Account() {
     <div className="mx-auto max-w-5xl px-4 py-8 space-y-8">
       <div className="flex flex-wrap items-center gap-3">
         <h1 className="text-2xl font-bold mr-auto">Hi {customer.firstName || "there"}</h1>
-        <span className="inline-flex items-center gap-1.5 text-sm rounded-full bg-amber-100 px-3 h-8"><Gift className="w-4 h-4" />{customer.loyaltyPoints} points</span>
+        <span className="inline-flex items-center gap-1.5 text-sm rounded-full bg-brand-50 px-3 h-8"><Gift className="w-4 h-4" />{customer.loyaltyPoints} points</span>
         <button onClick={() => void logout()} className="h-8 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50">Sign out</button>
       </div>
 
@@ -43,7 +43,7 @@ export default function Account() {
           { icon: CalendarDays, title: "Appointments" }, { icon: FileText, title: "Quotes & invoices" },
         ].map(({ icon: Icon, title }) => (
           <div key={title} className="rounded-2xl bg-white border border-stone-200 p-4">
-            <Icon className="w-5 h-5 text-brand-dark mb-2" />
+            <Icon className="w-5 h-5 text-brand mb-2" />
             <p className="font-semibold">{title}</p>
             <p className="text-sm text-stone-500">Coming soon to your online account.</p>
           </div>
@@ -63,7 +63,7 @@ export default function Account() {
           <Field label="State" value={f.address.state} onChange={addr("state")} />
           <Field label="Postcode" value={f.address.postcode} onChange={addr("postcode")} />
         </div>
-        <button type="submit" disabled={busy} className="h-11 px-6 rounded-full bg-ink text-white font-medium disabled:opacity-50">{busy ? "Saving…" : "Save details"}</button>
+        <button type="submit" disabled={busy} className="h-11 px-6 rounded-full bg-brand text-white font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? "Saving…" : "Save details"}</button>
       </form>
     </div>
   );

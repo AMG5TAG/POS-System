@@ -1,5 +1,5 @@
 /* ─── Print Bridge client ─────────────────────────────────────────────────────
- * Talks to the KK POS Print Bridge (artifacts/print-bridge) running on this
+ * Talks to the KoaPOS Print Bridge (artifacts/print-bridge) running on this
  * till's loopback interface. The bridge is what lets the app print to a *named*
  * printer with no Windows print dialog — raw ESC/POS for thermal, HTML→PDF for
  * A4 — and is the only transport that can route different documents to
@@ -11,7 +11,7 @@
  * uses which profile) lives in `pos_settings.hardwareConfig` — see
  * `lib/hardware-config.ts`.
  *
- * Browsers treat http://127.0.0.1 as a trustworthy origin, so an HTTPS KK POS
+ * Browsers treat http://127.0.0.1 as a trustworthy origin, so an HTTPS KoaPOS
  * page can reach the bridge without a mixed-content block. Chrome/Edge only —
  * the same requirement as WebUSB.
  */
@@ -52,7 +52,7 @@ export interface BridgeDiagnostics {
 export interface BridgeStatus {
   /** A bridge answered /v1/health. */
   reachable: boolean;
-  /** The bridge accepted this KK POS origin. */
+  /** The bridge accepted this KoaPOS origin. */
   originAllowed: boolean;
   /** A token is stored *and* the bridge accepted it. */
   paired: boolean;
@@ -164,7 +164,7 @@ async function call<T>(
     });
   } catch {
     throw new BridgeError(
-      "Can't reach the print bridge. Make sure it's running on this computer (KK POS Print Bridge).",
+      "Can't reach the print bridge. Make sure it's running on this computer (KoaPOS Print Bridge).",
     );
   } finally {
     window.clearTimeout(timer);
@@ -267,7 +267,7 @@ export function bridgePrintRaw(opts: {
     body: {
       printer: opts.printer ?? "",
       data: toBase64(opts.data),
-      jobName: opts.jobName ?? "KK POS",
+      jobName: opts.jobName ?? "KoaPOS",
       copies: opts.copies ?? 1,
     },
   }).then(() => undefined);
@@ -296,7 +296,7 @@ export function bridgePrintHtml(opts: {
       printer: opts.printer ?? "",
       html: opts.html,
       paper: opts.paper ?? "A4",
-      jobName: opts.jobName ?? "KK POS",
+      jobName: opts.jobName ?? "KoaPOS",
       copies: opts.copies ?? 1,
       heightMm: opts.heightMm,
     },

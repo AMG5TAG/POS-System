@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-KK POS — an in-house Point of Sale system run for a **single business** (Koastal). It began as a multi-tenant SaaS; see "Single-business install" below for what that left behind. Clean, tablet/mobile-ready UI. A pnpm monorepo (Node 24, TypeScript 5.9) with a React/Vite frontend, an Express 5 API server, PostgreSQL + Drizzle ORM, and a contract-first OpenAPI codegen pipeline.
+KoaPOS — an in-house Point of Sale system run for a **single business** (Koastal). It began as a multi-tenant SaaS; see "Single-business install" below for what that left behind. Clean, tablet/mobile-ready UI. A pnpm monorepo (Node 24, TypeScript 5.9) with a React/Vite frontend, an Express 5 API server, PostgreSQL + Drizzle ORM, and a contract-first OpenAPI codegen pipeline.
 
 ## Run & Operate
 
@@ -59,7 +59,7 @@ Session-based (not JWT): `express-session` + `bcryptjs`, signed with `SESSION_SE
 
 ### Single-business install
 
-KK POS was built as a subscription SaaS with one `merchants` row per business,
+KoaPOS was built as a subscription SaaS with one `merchants` row per business,
 and every table is still scoped by `merchantId`. It now runs for one business,
 and the change was made **in code only — no rows were deleted or rewritten**.
 The other merchant accounts (the seeded demo, a second Koastal account, test
@@ -81,7 +81,7 @@ accounts) and all of their data are still in the database.
   logins and multi-location all still work *within* the one business.
 - **Removed:** sign-up (`/auth/register`), the landing and pricing pages (`/`
   now redirects to `/dashboard` or `/login`), the plans/modules/subscriptions
-  API and the Modules page, the KK POS partner-referral program (its API, page,
+  API and the Modules page, the KoaPOS partner-referral program (its API, page,
   template quick codes and the "platform referral link" document block), and
   self-serve account deletion. None of it was enforced: billing never gated a
   feature, so everything was and remains unlocked.
@@ -107,19 +107,26 @@ accounts) and all of their data are still in the database.
   quotes"); the onboarding wizard; Clear Demo Data; and the tax labels for other
   countries — tax is Australian GST with an ABN. The overdue-invoice surcharge
   under Invoice Settings is a different feature and stays.
-- **Domain and name.** The app is **KK POS** at **pos.koastal.com.au**
-  (`APP_BASE_URL` in `.replit`, `DEFAULT_PUBLIC_DOMAIN` in both `publicUrl.ts`
-  files). It was KoaPOS at koapos.com.au, and that domain must stay attached to
-  the deployment: stickers and service sheets printed with it are still being
-  scanned. `middlewares/legacyDomainRedirect.ts` 301s its GET/HEAD requests to
-  the same path on the new domain (`LEGACY_DOMAINS` overrides the list), pinned
-  by `legacy-domain-redirect.test.ts`. A few `koapos` identifiers are kept on
-  purpose because renaming them would break existing data: the token-vault salt
-  `koapos-vault-v1`, the HMAC fallback secrets, the analytics salt, the Google
-  Wallet `koapos-loyalty` class id, browser `localStorage` keys, the old
-  `.koapos.enc` backups (new ones are `.kkpos.enc`; restore follows stored refs,
-  not extensions), and the `artifacts/koapos` package path. The Print Bridge
-  reads a pre-rename `KoaPOS` config folder and `KOAPOS_BRIDGE_*` env vars.
+- **Domain and name.** The POS is named **KoaPOS** and lives at
+  **pos.koastal.com.au** (`APP_BASE_URL` in `.replit`, `DEFAULT_PUBLIC_DOMAIN`
+  in both `publicUrl.ts` files); the online shop is branded Koastal, not KoaPOS.
+  History: it was KoaPOS at koapos.com.au, was renamed KK POS when it moved to
+  pos.koastal.com.au, and its display name went back to KoaPOS afterwards. The
+  domain stayed. koapos.com.au must stay attached to the deployment:
+  stickers and service sheets printed with it are still being scanned.
+  `middlewares/legacyDomainRedirect.ts` 301s its GET/HEAD requests to the same
+  path on the new domain (`LEGACY_DOMAINS` overrides the list), pinned by
+  `legacy-domain-redirect.test.ts` — though in production it only sees `/api`
+  (see "Deployment"). Only the *display* name went back: the KK-era
+  `kkpos`/`KKPOS` identifiers stay, because they name things that already exist
+  — new backups are `.kkpos.enc` in `KKPOS/Backups` on Nextcloud (restore
+  follows stored refs, not extensions), and the Print Bridge's `kkpos-print-bridge`
+  name, `KKPOS` config folder and `KKPOS_BRIDGE_*` env vars (it still reads the
+  older `KoaPOS` folder and `KOAPOS_BRIDGE_*` too). Likewise the older `koapos`
+  identifiers are kept because renaming them would break existing data: the
+  token-vault salt `koapos-vault-v1`, the HMAC fallback secrets, the analytics
+  salt, the Google Wallet `koapos-loyalty` class id, browser `localStorage`
+  keys, the old `.koapos.enc` backups and the `artifacts/koapos` package path.
 - **Short public addresses.** The current forms carry no business segment, and
   the older ones still route (links and QR codes already handed out):
   - customer portal `/c/<token>` (was `/b/<user>/c/<token>`) — `customerPortalUrl`;
@@ -423,21 +430,22 @@ rows actually on screen, so it follows the tab and the filters.
 A second front end on the SAME database, so nothing is synced: products,
 prices, stock, customers and their accounts are the POS's own rows. It is being
 built in stages — 1: catalogue + accounts (done); 2: checkout (Stripe cards,
-Afterpay/Zip), paid order → stock, POS sale, a Deliveries entry and a staff
-alert; 3: account area (orders, all purchases, invoices, repairs, quotes,
+Afterpay/Zip), paid order → stock, POS sale, an Online › Orders entry and a
+staff alert; 3: account area (orders, all purchases, invoices, repairs, quotes,
 appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
 
 - **App**: `artifacts/shop` (`@workspace/shop`, React + Vite + Tailwind, wouter),
-  its own package — it shares no UI code with the POS, only the API. It lives
-  at **`/shop/`**, in production as in development. Replit's deployment routes
-  each artifact by *path*, never by host, and `/` is the POS on every domain —
-  so serving the shop by host from `app.ts` never ran in production. Instead
-  the POS's `index.html` sends a `shop.*` host to `/shop/` before any POS code
-  loads, and `shopOrigin()` (email links) is `https://<shop domain>/shop`. The
-  Vite base is fixed at `/shop/`, not read from `BASE_PATH`: the workspace sets
-  `BASE_PATH=/` globally, and a shop built for `/` fetches `/assets/*`, which
-  the POS answers — a blank page. `/api` is the same on both, so the shop calls
-  it same-origin and its session cookie is its own.
+  its own package — it shares no UI code with the POS, only the API. It is
+  served at the **root** of the shop domain (`SHOP_DOMAIN`, default
+  shop.koastal.com.au) by `artifacts/koapos/server.mjs` — see "Deployment" for
+  why that server exists. The shop artifact has no production service of its
+  own; `/shop` is only its development preview. Its Vite base is therefore
+  `/` for a build and `/shop/` for dev, and neither comes from `BASE_PATH`,
+  which the workspace sets to `/` globally. The catalogue is `/products`. A
+  `/shop/...` path on the shop domain 301s to the same path at the root, since
+  set-password emails went out with that prefix for a while. `/api` is the same
+  on both domains, so the shop calls it same-origin and its session cookie is
+  its own.
 - **API**: `routes/shop.ts`, public and scoped to `soleMerchantId()` — no request
   can name a merchant. A product is listed when `isActive` and `showOnline`
   (`products.show_online`, default "true", added by
@@ -451,8 +459,18 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   a password** — it emails a set-up link to that address
   (`lib/customerPasswordLinks.ts`, `destination: "shop"`), because knowing an
   email must not be enough to claim an account. Pinned by `shop-accounts.test.ts`.
-- **Invites** (`routes/shop-invites.ts`, the "Online shop accounts" card on
-  Customers settings): emails a 14-day set-password link to customers with an
+- **POS side.** Management › Online Store holds the shop's settings: Overview,
+  Products (`show_online` per product, `routes/online-store.ts`) and Customer
+  Accounts (the invites below). Online › Orders (`pages/app/online-orders.tsx`)
+  lists the store's orders — the `delivery_orders` rows, whose table and
+  `/delivery-orders` API keep their old name. It replaced the Deliveries page.
+  Tracking is `tracking_carrier` + `tracking_number` (carrier ids and tracking
+  links in `lib/order-tracking.ts`); `shipped_at` / `delivered_at` are stamped
+  by the server the first time the status reaches them. Marking an order paid
+  books it as a sale (`services/deliveryOrderSale.ts`). Pinned by
+  `online-orders.test.ts`.
+- **Invites** (`routes/shop-invites.ts`, Management › Online Store › Customer
+  Accounts): emails a 14-day set-password link to customers with an
   email and no password, once per address, skipping anyone invited in the last
   14 days; email only, never SMS. It needs the exact count typed back and sends
   in the background, paced for the email provider. Pinned by `shop-invites.test.ts`.
@@ -541,7 +559,7 @@ customer PDF and sticker shortcodes.
 The country comes from `merchants.defaultPhoneCountry` (Settings › Regional ›
 Phone Numbers), and **every merchant who has not set one gets Australia** —
 `resolvePhoneCountry`, whose only fallback is `FALLBACK_PHONE_COUNTRY`. It
-deliberately does *not* read `merchants.country`: KK POS sells to Australian
+deliberately does *not* read `merchants.country`: KoaPOS sells to Australian
 retail, so +61 is right for all but a handful of accounts, and a default that
 varied per merchant would be one nobody could predict from the settings screen.
 `""` is what every merchant stores until they choose, and an unrecognised code
@@ -654,6 +672,17 @@ with `Could not find run command` and nothing in git said what they should be.
 
     build = pnpm run build     # typecheck, then every package
     run   = pnpm --filter @workspace/api-server run start
+
+**Replit routes the deployment by path, per artifact, and `.replit`'s `run`
+is ignored** — each `artifact.toml`'s `[services.production]` decides what
+serves its paths. `/api` is the API server; every other path, on every domain,
+is the koapos artifact, which runs `artifacts/koapos/server.mjs`: a small
+dependency-free static server that picks the shop's build for the shop domain
+and the POS's for everything else. It exists because the host is the only
+thing that can tell those apart, and only that process sees `/`. Consequence:
+the Express code below that serves the SPA and `legacyDomainRedirect` only ever
+see `/api` in production (koapos.com.au page paths are served the POS, not
+301'd). The rest of this section describes the Express side.
 
 **One process serves both halves of the app.** `app.ts` mounts the API at `/api`
 and, when `artifacts/koapos/dist/public/index.html` exists, serves the built SPA
@@ -772,12 +801,12 @@ Platform-level fallback when a merchant has no email provider configured in Mana
 **Option A — Resend (recommended):**
 - `SYSTEM_RESEND_API_KEY` — Resend API key; platform default sender.
 - `SYSTEM_FROM_EMAIL` — Required sender address when using Resend (e.g. `noreply@koastal.com.au`).
-- `SYSTEM_FROM_NAME` — Display name (optional, defaults to `KK POS`).
+- `SYSTEM_FROM_NAME` — Display name (optional, defaults to `KoaPOS`).
 
 **Option B — SMTP:**
 - `SYSTEM_SMTP_HOST` / `SYSTEM_SMTP_PORT` (default `587`) / `SYSTEM_SMTP_USER` / `SYSTEM_SMTP_PASS`
 - `SYSTEM_SMTP_SECURE` — `"true"` for SSL/TLS on port 465; defaults to `"false"`.
-- `SYSTEM_FROM_EMAIL` (optional, falls back to SMTP user) / `SYSTEM_FROM_NAME` (optional, defaults to `KK POS`).
+- `SYSTEM_FROM_EMAIL` (optional, falls back to SMTP user) / `SYSTEM_FROM_NAME` (optional, defaults to `KoaPOS`).
 
 If neither is configured, auth emails are silently dropped and a warning is logged.
 
@@ -808,7 +837,7 @@ removed; see "Removed providers" under Single-business install. Adding one back 
 
 ### AI providers (bring-your-own-key, Claude preferred)
 
-KK POS runs AI on the **merchant's own** API key. A merchant connects their
+KoaPOS runs AI on the **merchant's own** API key. A merchant connects their
 Anthropic account under Management › Integrations › AI Providers, the key is
 encrypted at rest in the OAuth token vault, and their usage is billed to them.
 **The platform holds no production AI key**, so a merchant who has connected

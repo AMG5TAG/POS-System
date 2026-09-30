@@ -28,7 +28,7 @@ export default function Login() {
   };
 
   return (
-    <AuthCard title="Sign in" footer={<>New here? <Link href="/account/register" className="text-brand-dark font-medium underline">Create an account</Link></>}>
+    <AuthCard title="Sign in" footer={<>New here? <Link href="/account/register" className="text-brand font-medium underline">Create an account</Link></>}>
       <form onSubmit={submit} className="space-y-4">
         {error && <Notice>{error}</Notice>}
         {needsSetup && (

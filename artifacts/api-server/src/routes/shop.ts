@@ -82,6 +82,38 @@ router.get("/shop/info", async (_req, res): Promise<void> => {
   });
 });
 
+/* The shop's favicon is the business logo (Settings › Business Details), so it
+   follows the logo rather than carrying a copy of it. The logo is usually stored
+   as a data: URL, which a <link rel="icon"> in static HTML can't name — so it is
+   decoded and served as an image here. Raster types only: an SVG served from
+   this origin could carry script. */
+const FAVICON_TYPES = new Set(["image/png", "image/jpeg", "image/webp", "image/gif", "image/x-icon", "image/vnd.microsoft.icon"]);
+
+router.get("/shop/favicon", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const [m] = await db.select({ logoUrl: merchantsTable.logoUrl }).from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  const [p] = await db.select({ logo: businessProfileTable.logo }).from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).limit(1);
+  const logo = (p?.logo || m?.logoUrl || "").trim();
+
+  const data = /^data:([\w/.+-]+);base64,(.+)$/s.exec(logo);
+  if (data && FAVICON_TYPES.has(data[1]!.toLowerCase())) {
+    const body = Buffer.from(data[2]!, "base64");
+    const etag = `"${crypto.createHash("sha1").update(body).digest("base64url")}"`;
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.setHeader("ETag", etag);
+    if (req.headers["if-none-match"] === etag) { res.status(304).end(); return; }
+    res.type(data[1]!).send(body);
+    return;
+  }
+  if (/^https?:\/\//i.test(logo)) {
+    res.setHeader("Cache-Control", "public, max-age=3600");
+    res.redirect(302, logo);
+    return;
+  }
+  res.status(404).json({ error: "No logo" });
+});
+
 /* ── Catalogue ────────────────────────────────────────────────────────── */
 
 const visible = (merchantId: number): SQL =>

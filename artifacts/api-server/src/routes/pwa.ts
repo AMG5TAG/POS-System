@@ -46,19 +46,19 @@ type AppRoute = {
 };
 
 /* Mirrors the standalone-app routes in the frontend's App.tsx. Anything not
-   listed here is a normal page and gets the plain KK POS manifest. */
+   listed here is a normal page and gets the plain KoaPOS manifest. */
 const APP_ROUTES: AppRoute[] = [
   // /b/:username/t/techapp — /t/webapp is the legacy alias kept for printed QRs.
-  { re: /^\/b\/([^/]+)\/t\/(?:techapp|webapp)$/, hasUsername: true, suffix: "Tech", fallbackName: "KK POS Tech", themeColor: DEFAULT_THEME },
-  { re: /^\/b\/([^/]+)\/t\/posapp$/, hasUsername: true, suffix: "POS", fallbackName: "KK POS POS", themeColor: DEFAULT_THEME },
-  { re: /^\/b\/([^/]+)\/c\/[^/]+$/, hasUsername: true, suffix: "", fallbackName: "KK POS", themeColor: PORTAL_THEME },
-  { re: /^\/c\/[^/]+$/, hasUsername: false, suffix: "", fallbackName: "KK POS", themeColor: PORTAL_THEME },
-  { re: /^\/d\/[^/]+$/, hasUsername: false, suffix: "Dashboard", fallbackName: "KK POS Dashboard", themeColor: DEFAULT_THEME },
-  { re: /^\/d\/dashboard\/[^/]+$/, hasUsername: false, suffix: "Dashboard", fallbackName: "KK POS Dashboard", themeColor: DEFAULT_THEME },
+  { re: /^\/b\/([^/]+)\/t\/(?:techapp|webapp)$/, hasUsername: true, suffix: "Tech", fallbackName: "KoaPOS Tech", themeColor: DEFAULT_THEME },
+  { re: /^\/b\/([^/]+)\/t\/posapp$/, hasUsername: true, suffix: "POS", fallbackName: "KoaPOS POS", themeColor: DEFAULT_THEME },
+  { re: /^\/b\/([^/]+)\/c\/[^/]+$/, hasUsername: true, suffix: "", fallbackName: "KoaPOS", themeColor: PORTAL_THEME },
+  { re: /^\/c\/[^/]+$/, hasUsername: false, suffix: "", fallbackName: "KoaPOS", themeColor: PORTAL_THEME },
+  { re: /^\/d\/[^/]+$/, hasUsername: false, suffix: "Dashboard", fallbackName: "KoaPOS Dashboard", themeColor: DEFAULT_THEME },
+  { re: /^\/d\/dashboard\/[^/]+$/, hasUsername: false, suffix: "Dashboard", fallbackName: "KoaPOS Dashboard", themeColor: DEFAULT_THEME },
   // The short staff-app addresses carry no username; they brand with the one
   // business this install runs.
-  { re: /^\/a\/tech$/, hasUsername: false, soleBusiness: true, suffix: "Tech", fallbackName: "KK POS Tech", themeColor: DEFAULT_THEME },
-  { re: /^\/a\/mobile$/, hasUsername: false, soleBusiness: true, suffix: "POS", fallbackName: "KK POS POS", themeColor: DEFAULT_THEME },
+  { re: /^\/a\/tech$/, hasUsername: false, soleBusiness: true, suffix: "Tech", fallbackName: "KoaPOS Tech", themeColor: DEFAULT_THEME },
+  { re: /^\/a\/mobile$/, hasUsername: false, soleBusiness: true, suffix: "POS", fallbackName: "KoaPOS POS", themeColor: DEFAULT_THEME },
 ];
 
 /**
@@ -132,7 +132,7 @@ router.get("/pwa/manifest.webmanifest", async (req, res): Promise<void> => {
   const path = sanitiseAppPath(req.query.path);
   const matched = matchAppRoute(path);
 
-  let name = "KK POS";
+  let name = "KoaPOS";
   let logoUrl: string | null = null;
   let themeColor = DEFAULT_THEME;
   let startUrl = "/";
@@ -159,7 +159,7 @@ router.get("/pwa/manifest.webmanifest", async (req, res): Promise<void> => {
     id: startUrl,
     name,
     short_name: shortName(name),
-    description: "KK POS — point of sale and business apps.",
+    description: "KoaPOS — point of sale and business apps.",
     start_url: startUrl,
     scope: startUrl,
     display: "standalone",

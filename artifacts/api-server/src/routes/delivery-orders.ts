@@ -5,6 +5,12 @@ import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { recordPaidOrderAsSale } from "../services/deliveryOrderSale";
 
+/**
+ * Online store orders — the POS's Online › Orders page. The table and paths
+ * keep their historical "delivery order" name; the old Deliveries page that
+ * first used them is gone.
+ */
+
 const PostDeliveryOrder = z.object({
   orderId: z.string().min(1),
   number: z.string().min(1),
@@ -34,14 +40,24 @@ const PatchDeliveryOrder = z.object({
   /* Whether the money is actually in. Moving this to "paid" books the sale. */
   paymentStatus: z.enum(["pending", "paid", "refunded"]),
   paymentProvider: z.string(), paymentRef: z.string(),
+  trackingCarrier: z.string().max(40), trackingNumber: z.string().max(100),
 }).partial();
+
+type Row = typeof deliveryOrdersTable.$inferSelect;
+const num = (v: unknown) => parseFloat(String(v ?? 0)) || 0;
+const serialize = (r: Row) => ({
+  ...r,
+  total: num(r.total), subtotal: num(r.subtotal), taxTotal: num(r.taxTotal),
+  discountTotal: num(r.discountTotal), shippingTotal: num(r.shippingTotal),
+});
 
 const router: IRouter = Router();
 
 router.get("/delivery-orders", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const items = await db.select().from(deliveryOrdersTable).where(eq(deliveryOrdersTable.merchantId, merchantId));
-  res.json({ items: items.map(r => ({ ...r, total: parseFloat(r.total as unknown as string) })), total: items.length });
+  items.sort((a, b) => b.createdAt.getTime() - a.createdAt.getTime());
+  res.json({ items: items.map(serialize), total: items.length });
 });
 
 router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => {
@@ -54,7 +70,7 @@ router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => 
     merchantId, orderId, number, channel, customer, customerEmail, phone,
     address, city, postcode, state, shippingMethod, status, placedAt, total, items, notes,
   }).returning();
-  res.status(201).json({ ...row, total: parseFloat(row.total as unknown as string) });
+  res.status(201).json(serialize(row));
 });
 
 router.get("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
@@ -64,7 +80,7 @@ router.get("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> 
   const [row] = await db.select().from(deliveryOrdersTable)
     .where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId))).limit(1);
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
-  res.json({ ...row, total: parseFloat(row.total as unknown as string) });
+  res.json(serialize(row));
 });
 
 router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {
@@ -73,8 +89,18 @@ router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchDeliveryOrder.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  /* Reaching "shipped" / "delivered" stamps when it happened — once, so moving
+     the status back and forth keeps the first date. */
+  const stamps: Partial<Pick<Row, "shippedAt" | "deliveredAt">> = {};
+  if (parsed.data.status === "shipped" || parsed.data.status === "delivered") {
+    const [cur] = await db.select({ shippedAt: deliveryOrdersTable.shippedAt, deliveredAt: deliveryOrdersTable.deliveredAt })
+      .from(deliveryOrdersTable)
+      .where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId))).limit(1);
+    if (cur && !cur.shippedAt) stamps.shippedAt = new Date();
+    if (cur && parsed.data.status === "delivered" && !cur.deliveredAt) stamps.deliveredAt = new Date();
+  }
   const [row] = await db.update(deliveryOrdersTable)
-    .set(parsed.data)
+    .set({ ...parsed.data, ...stamps })
     .where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId))).returning();
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
 
@@ -91,7 +117,7 @@ router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void
     }
   }
 
-  res.json({ ...row, total: parseFloat(row.total as unknown as string) });
+  res.json(serialize(row));
 });
 
 router.delete("/delivery-orders/:id", requireAuth, async (req, res): Promise<void> => {

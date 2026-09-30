@@ -1463,7 +1463,7 @@ export default function ManagementRegistersPage() {
         <div className="flex items-start justify-between gap-4">
           <div>
             <h1 className="text-2xl font-bold">POS Registers</h1>
-            <p className="text-sm text-muted-foreground mt-1">Assign each register to a staff member — it becomes their default till when they log in to KK POS.</p>
+            <p className="text-sm text-muted-foreground mt-1">Assign each register to a staff member — it becomes their default till when they log in to KoaPOS.</p>
           </div>
           <Button onClick={openNew} className="shrink-0 bg-primary hover:bg-primary/90 text-primary-foreground">
             <Plus className="h-4 w-4 mr-1" />New Register

@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "type": "module",
-  "description": "KK POS Print Bridge \u2014 local silent-print service for Windows/macOS/Linux tills",
+  "description": "KoaPOS Print Bridge \u2014 local silent-print service for Windows/macOS/Linux tills",
   "bin": {
     "kkpos-print-bridge": "./dist/index.mjs"
   },

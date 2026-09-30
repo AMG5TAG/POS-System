@@ -475,7 +475,7 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
     db.select().from(businessProfileTable).where(eq(businessProfileTable.merchantId, merchantId)).then((r) => r[0]),
     db.select().from(salesTemplatesTable).where(and(eq(salesTemplatesTable.merchantId, merchantId), eq(salesTemplatesTable.templateType, "Quote"))).then((r) => r[0]),
   ]);
-  const bizName = merchant?.businessName ?? "KK POS";
+  const bizName = merchant?.businessName ?? "KoaPOS";
   const q = fmtRow(row);
   const cName = q.customerName;
   const lines = (q.items as LineItem[]) ?? [];

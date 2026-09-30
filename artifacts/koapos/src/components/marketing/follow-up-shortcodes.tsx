@@ -19,7 +19,7 @@ export const FALLBACK_SHORTCODES: FollowUpShortcode[] = [
   { code: "first_name",     label: "Customer first name",           example: "Sarah" },
   { code: "last_name",      label: "Customer last name",            example: "Johnson" },
   { code: "customer_name",  label: "Customer full name",            example: "Sarah Johnson" },
-  { code: "business_name",  label: "Your business name",            example: "KK POS Demo" },
+  { code: "business_name",  label: "Your business name",            example: "KoaPOS Demo" },
   { code: "business_phone", label: "Your business phone",           example: "02 5555 1234" },
   { code: "business_email", label: "Your business email",           example: "hello@example.com" },
   { code: "reference",      label: "Job number / booking ref",      example: "SJ-1042" },

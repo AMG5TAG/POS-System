@@ -132,6 +132,7 @@ import warrantiesRouter from "./warranties";
 import publicBusinessRouter from "./public-business";
 import shopRouter from "./shop";
 import shopInvitesRouter from "./shop-invites";
+import onlineStoreRouter from "./online-store";
 
 const router: IRouter = Router();
 
@@ -209,6 +210,7 @@ router.use(publicBusinessRouter);
 // Public: the online shop (shop.koastal.com.au) — catalogue and customer accounts.
 router.use(shopRouter);
 router.use(shopInvitesRouter);
+router.use(onlineStoreRouter);
 router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);

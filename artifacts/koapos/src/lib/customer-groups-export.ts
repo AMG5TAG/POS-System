@@ -26,7 +26,7 @@ export function exportCustomerGroupsCSV(
   const stats = buildStats(groups, groupCounts, total);
   const rows: string[] = [];
 
-  rows.push(csvRow(["KK POS — Customer Groups"]));
+  rows.push(csvRow(["KoaPOS — Customer Groups"]));
   rows.push(csvRow(["Generated", new Date().toLocaleString()]));
   rows.push(csvRow(["Total customers", total]));
   rows.push("");
@@ -55,12 +55,12 @@ export async function exportCustomerGroupsXLSX(
   const stats = buildStats(groups, groupCounts, total);
 
   const wb = new ExcelJS.Workbook();
-  wb.creator = "KK POS";
+  wb.creator = "KoaPOS";
   wb.created = new Date();
 
   const ws = wb.addWorksheet("Customer Groups");
 
-  const titleRow = ws.addRow(["KK POS — Customer Groups"]);
+  const titleRow = ws.addRow(["KoaPOS — Customer Groups"]);
   titleRow.getCell(1).font = TITLE_FONT;
   ws.addRow(["Generated", new Date().toLocaleString()]);
   ws.addRow(["Total customers", total]);
@@ -144,7 +144,7 @@ export async function exportCustomerGroupsPDF(
     doc.setFont("helvetica", "normal");
     doc.setFontSize(7);
     doc.setTextColor(...C.light);
-    doc.text("KK POS — Customer Groups", ML, PAGE_H - 8);
+    doc.text("KoaPOS — Customer Groups", ML, PAGE_H - 8);
     const right = `Page ${pageNum} of ${pageCount}`;
     const rw = doc.getStringUnitWidth(right) * 7 * 0.352778;
     doc.text(right, PAGE_W - MR - rw, PAGE_H - 8);
@@ -161,7 +161,7 @@ export async function exportCustomerGroupsPDF(
   doc.setFont("helvetica", "bold");
   doc.setFontSize(16);
   doc.setTextColor(...C.white);
-  doc.text("KK POS", ML, 12);
+  doc.text("KoaPOS", ML, 12);
 
   doc.setFont("helvetica", "normal");
   doc.setFontSize(9);

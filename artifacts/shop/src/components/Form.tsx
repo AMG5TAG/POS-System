@@ -4,7 +4,7 @@ export function Field({ label, ...props }: { label: string } & InputHTMLAttribut
   return (
     <label className="block space-y-1.5">
       <span className="text-sm font-medium">{label}</span>
-      <input {...props} className="w-full h-11 rounded-xl border border-stone-300 bg-white px-3 outline-none focus:border-brand focus:ring-2 focus:ring-amber-100" />
+      <input {...props} className="w-full h-11 rounded-xl border border-stone-300 bg-white px-3 outline-none focus:border-brand focus:ring-2 focus:ring-brand-light/40" />
     </label>
   );
 }
@@ -23,7 +23,7 @@ export function AuthCard({ title, children, footer }: { title: string; children:
 
 export function Submit({ busy, children }: { busy?: boolean; children: ReactNode }) {
   return (
-    <button type="submit" disabled={busy} className="w-full h-11 rounded-full bg-ink text-white font-medium hover:bg-stone-800 disabled:opacity-50">
+    <button type="submit" disabled={busy} className="w-full h-11 rounded-full bg-brand text-white font-medium hover:bg-brand-dark disabled:opacity-50">
       {busy ? "Please wait…" : children}
     </button>
   );

@@ -19,7 +19,7 @@ export default function PrivacyPage() {
         <div className="prose prose-sm max-w-none space-y-6 text-sm leading-relaxed">
           <section>
             <h2 className="text-lg font-semibold mb-2">1. Overview</h2>
-            <p>KK POS ("we", "us", "our") is committed to protecting your privacy. This policy explains how we collect, use, store, and disclose personal information in accordance with the Australian Privacy Act 1988 (Cth) and the Australian Privacy Principles (APPs).</p>
+            <p>KoaPOS ("we", "us", "our") is committed to protecting your privacy. This policy explains how we collect, use, store, and disclose personal information in accordance with the Australian Privacy Act 1988 (Cth) and the Australian Privacy Principles (APPs).</p>
           </section>
 
           <section>
@@ -36,7 +36,7 @@ export default function PrivacyPage() {
           <section>
             <h2 className="text-lg font-semibold mb-2">3. How We Use Your Information</h2>
             <ul className="list-disc pl-5 space-y-1">
-              <li>To provide and improve the KK POS service.</li>
+              <li>To provide and improve the KoaPOS service.</li>
               <li>To send transactional and account-related emails (receipts, password resets, security alerts).</li>
               <li>To detect and prevent fraud and unauthorised access.</li>
               <li>To comply with legal obligations.</li>

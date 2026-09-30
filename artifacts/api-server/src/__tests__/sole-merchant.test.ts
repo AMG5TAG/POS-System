@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
-/* KK POS runs for one business. Every other merchant row is kept in the
+/* KoaPOS runs for one business. Every other merchant row is kept in the
    database but must be unable to sign in or use an existing session. */
 
 const rows: Record<number, { status: string; email: string }> = {

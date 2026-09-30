@@ -17,14 +17,8 @@ localPort = 19161
 [services.development]
 run = "pnpm --filter @workspace/shop run dev"
 
-[services.production]
-build = [ "pnpm", "--filter", "@workspace/shop", "run", "build" ]
-publicDir = "artifacts/shop/dist/public"
-serve = "static"
-
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+# No production service: in production the shop is served at the root of the
+# shop domain by artifacts/koapos/server.mjs. /shop is the development preview.
 
 [services.env]
 PORT = "19161"

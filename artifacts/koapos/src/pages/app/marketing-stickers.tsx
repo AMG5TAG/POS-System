@@ -361,7 +361,7 @@ export default function MarketingStickersPage() {
       hw: hardware,
       // The markup declares its own exact die-cut size, so don't override it.
       paper: "auto",
-      jobName: "KK POS label",
+      jobName: "KoaPOS label",
       html: () => html,
       browserFallback: openPopup,
     }).catch((err: unknown) => {

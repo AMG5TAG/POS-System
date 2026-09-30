@@ -82,19 +82,6 @@ function flattenTree(nodes: CategoryNode[]): CategoryNode[] {
   return out;
 }
 
-function getDepth(cats: Category[], id: number): number {
-  let depth = 0;
-  let currentId: number | null = id;
-  const map = new Map(cats.map((c) => [c.id, c]));
-  while (currentId !== null) {
-    const cat = map.get(currentId);
-    if (!cat || !cat.parentId) break;
-    depth++;
-    currentId = cat.parentId;
-  }
-  return depth;
-}
-
 function CategoryIcon({ name, className, color }: { name?: string | null; className?: string; color?: string }) {
   const Comp = (name && ICON_MAP[name]) ? ICON_MAP[name] : Tag;
   return <span style={color ? { color } : undefined}><Comp className={className} /></span>;
@@ -373,13 +360,26 @@ export default function ProductsCategoriesPage() {
 
   const isPending = createCategory.isPending || updateCategory.isPending;
 
+  // Parent choices in the same order and nesting as the tree on the page. The
+  // category being edited and everything beneath it are left out (a category
+  // cannot sit under its own descendant), as is any parent too deep to take the
+  // moved branch without it passing MAX_DEPTH levels.
   const parentOptions = useMemo(() => {
-    return cats.filter((c) => {
-      if (editingCat && c.id === editingCat.id) return false;
-      const depth = getDepth(cats, c.id);
-      return depth < MAX_DEPTH - 1;
-    });
-  }, [cats, editingCat]);
+    let branchHeight = 0;
+    const excluded = new Set<number>();
+    if (editingCat) {
+      const self = flat.find((n) => n.id === editingCat.id);
+      const walk = (n: CategoryNode) => {
+        excluded.add(n.id);
+        branchHeight = Math.max(branchHeight, n.depth - (self?.depth ?? 0));
+        n.children.forEach(walk);
+      };
+      if (self) walk(self);
+    }
+    return flat.filter((n) => !excluded.has(n.id) && n.depth + 1 + branchHeight < MAX_DEPTH);
+  }, [flat, editingCat]);
+
+  const selectedParent = form.parentId ? cats.find((c) => c.id.toString() === form.parentId) : undefined;
 
   return (
     <AppLayout>
@@ -465,18 +465,20 @@ export default function ProductsCategoriesPage() {
                 onValueChange={(v) => setForm((f) => ({ ...f, parentId: v === "__none__" ? "" : v }))}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="None (top-level)" />
+                  <SelectValue placeholder="None (top-level)">
+                    {selectedParent ? selectedParent.name : "None (top-level)"}
+                  </SelectValue>
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__none__">None (top-level)</SelectItem>
-                  {parentOptions.map((c) => {
-                    const d = getDepth(cats, c.id);
-                    return (
-                      <SelectItem key={c.id} value={c.id.toString()}>
-                        {"  ".repeat(d)}{d > 0 ? "↳ " : ""}{c.name}
-                      </SelectItem>
-                    );
-                  })}
+                  {parentOptions.map((n) => (
+                    <SelectItem key={n.id} value={n.id.toString()}>
+                      <span className="flex items-center gap-2" style={{ paddingLeft: `${n.depth * 1.25}rem` }}>
+                        <CategoryIcon name={n.icon} className="w-3.5 h-3.5 shrink-0" color={n.color ?? undefined} />
+                        <span className={n.depth === 0 ? "font-medium" : undefined}>{n.name}</span>
+                      </span>
+                    </SelectItem>
+                  ))}
                 </SelectContent>
               </Select>
             </div>

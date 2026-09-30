@@ -1,5 +1,5 @@
 /**
- * appleDav — CalDAV/CardDAV transport for pushing KK POS appointments and
+ * appleDav — CalDAV/CardDAV transport for pushing KoaPOS appointments and
  * customers to an Apple/iCloud account.
  *
  * Apple has NO OAuth REST API for iCloud Contacts/Calendar, so this uses the

@@ -25,7 +25,7 @@ function Title() {
   return null;
 }
 
-/* Served under /shop (see vite.config.ts). */
+/* Served at "/" on the shop domain, and under /shop in development. */
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function App() {
@@ -38,7 +38,7 @@ export default function App() {
             <Layout>
               <Switch>
                 <Route path="/" component={Home} />
-                <Route path="/shop" component={Catalog} />
+                <Route path="/products" component={Catalog} />
                 <Route path="/product/:id" component={Product} />
                 <Route path="/cart" component={Cart} />
                 <Route path="/checkout" component={Checkout} />

@@ -1,6 +1,6 @@
 kind = "web"
 previewPath = "/"
-title = "KK POS"
+title = "KoaPOS"
 version = "1.0.0"
 id = "artifacts/koapos"
 router = "path"
@@ -17,14 +17,18 @@ localPort = 19141
 [services.development]
 run = "pnpm --filter @workspace/koapos run dev"
 
+# Not static: Replit routes by path only, so "/" on every domain lands here, and
+# server.mjs picks the shop's build for the shop domain and the POS's otherwise.
 [services.production]
-build = [ "pnpm", "--filter", "@workspace/koapos", "run", "build" ]
-publicDir = "artifacts/koapos/dist/public"
-serve = "static"
 
-[[services.production.rewrites]]
-from = "/*"
-to = "/index.html"
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/koapos", "--filter", "@workspace/shop", "run", "build" ]
+
+[services.production.run]
+args = [ "node", "artifacts/koapos/server.mjs" ]
+
+[services.production.run.env]
+PORT = "19141"
 
 [services.env]
 PORT = "19141"

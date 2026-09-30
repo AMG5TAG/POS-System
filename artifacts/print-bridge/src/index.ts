@@ -1,5 +1,5 @@
-/* ─── KK POS Print Bridge ─────────────────────────────────────────────────────
- * Runs on the till. Gives the KK POS browser tab the one thing a browser can't
+/* ─── KoaPOS Print Bridge ─────────────────────────────────────────────────────
+ * Runs on the till. Gives the KoaPOS browser tab the one thing a browser can't
  * do on its own: send a document to a *named* printer with no print dialog.
  *
  *   kkpos-print-bridge           start the bridge (default)
@@ -94,7 +94,7 @@ async function main(): Promise<void> {
       if (key.toLowerCase() === "p") {
         pairing.open(MANUAL_PAIR_WINDOW_MS);
         console.log(`\nPairing window open for ${MANUAL_PAIR_WINDOW_MS / 60000} minutes.`);
-        console.log("In KK POS: Settings > Registers > Hardware > Print Bridge -> Pair.\n");
+        console.log("In KoaPOS: Settings > Registers > Hardware > Print Bridge -> Pair.\n");
       }
       if (key.toLowerCase() === "t") console.log(`\nPairing token: ${cfg.token}\n`);
     });
@@ -111,7 +111,7 @@ function banner(cfg: BridgeConfig, pairingOpen: boolean): void {
   const chrome = findChrome(cfg);
   const pdfTool = findPdfPrinter(cfg);
   console.log("");
-  console.log(`  KK POS Print Bridge v${BRIDGE_VERSION}`);
+  console.log(`  KoaPOS Print Bridge v${BRIDGE_VERSION}`);
   console.log(`  Listening on http://127.0.0.1:${cfg.port} (this machine only)`);
   console.log(`  Config:       ${configPath()}`);
   console.log(`  HTML render:  ${chrome || "NOT FOUND - install Microsoft Edge or Chrome for A4 printing"}`);
@@ -120,7 +120,7 @@ function banner(cfg: BridgeConfig, pairingOpen: boolean): void {
   }
   console.log("");
   if (pairingOpen) {
-    console.log("  Pairing is OPEN. In KK POS go to");
+    console.log("  Pairing is OPEN. In KoaPOS go to");
     console.log("    Settings > Registers > Hardware > Print Bridge -> Pair this device");
   } else {
     console.log('  Pairing is closed. Press "p" to reopen it.');

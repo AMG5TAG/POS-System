@@ -17,7 +17,7 @@ function Header() {
 
   const submit = (e: React.FormEvent) => {
     e.preventDefault();
-    navigate(q.trim() ? `/shop?search=${encodeURIComponent(q.trim())}` : "/shop");
+    navigate(q.trim() ? `/products?search=${encodeURIComponent(q.trim())}` : "/products");
     setOpen(false);
   };
 
@@ -45,7 +45,7 @@ function Header() {
           <Link href="/cart" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Cart">
             <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
             {count > 0 && (
-              <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand text-ink text-[11px] font-bold flex items-center justify-center">{count}</span>
+              <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center">{count}</span>
             )}
           </Link>
         </nav>
@@ -56,9 +56,9 @@ function Header() {
             <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search"
               className="w-full h-10 rounded-full border border-stone-300 px-4 text-sm outline-none focus:border-brand" />
           </form>
-          <Link href="/shop" onClick={() => setOpen(false)} className="py-1 font-medium hover:text-brand-dark">All products</Link>
+          <Link href="/products" onClick={() => setOpen(false)} className="py-1 font-medium hover:text-brand">All products</Link>
           {topCats.map((c) => (
-            <Link key={c.id} href={`/shop?category=${c.id}`} onClick={() => setOpen(false)} className="py-1 text-stone-600 hover:text-brand-dark">{c.name}</Link>
+            <Link key={c.id} href={`/products?category=${c.id}`} onClick={() => setOpen(false)} className="py-1 text-stone-600 hover:text-brand">{c.name}</Link>
           ))}
         </div>
       </div>
@@ -91,7 +91,7 @@ function Footer() {
         )}
         <div className="space-y-2">
           <p className="font-semibold">Shop</p>
-          <Link href="/shop" className="block text-stone-600 hover:text-ink">All products</Link>
+          <Link href="/products" className="block text-stone-600 hover:text-ink">All products</Link>
           <Link href="/account" className="block text-stone-600 hover:text-ink">My account</Link>
           <Link href="/cart" className="block text-stone-600 hover:text-ink">Cart</Link>
         </div>

@@ -1514,7 +1514,7 @@ export default function ManagementImportExportPage() {
         <div>
           <h1 className="text-2xl font-bold">Import / Export</h1>
           <p className="text-muted-foreground text-sm mt-0.5">
-            Move data in and out of KK POS using standard CSV files.
+            Move data in and out of KoaPOS using standard CSV files.
           </p>
         </div>
 

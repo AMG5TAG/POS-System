@@ -26,7 +26,7 @@ export default function CloudStoragePage() {
           <div>
             <h1 className="text-2xl font-bold">Cloud Storage</h1>
             <p className="text-sm text-muted-foreground mt-0.5">
-              Your Nextcloud connection, and the folders KK POS keeps in sync.
+              Your Nextcloud connection, and the folders KoaPOS keeps in sync.
             </p>
           </div>
           <Button variant="outline" onClick={() => {

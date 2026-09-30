@@ -55,7 +55,8 @@
     "add-service-job-device-quantity": "tsx ./src/add-service-job-device-quantity.ts",
     "add-parked-sale-links": "tsx ./src/add-parked-sale-links.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
-    "add-product-show-online": "tsx ./src/add-product-show-online.ts"
+    "add-product-show-online": "tsx ./src/add-product-show-online.ts",
+    "add-delivery-order-tracking": "tsx ./src/add-delivery-order-tracking.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

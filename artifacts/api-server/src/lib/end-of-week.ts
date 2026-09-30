@@ -14,7 +14,7 @@ export const WEEK_DAY_NAMES = [
 ] as const;
 export type WeekDayName = (typeof WEEK_DAY_NAMES)[number];
 
-/** KK POS sells to Australian retail, where the trading week is Fri → Thu. */
+/** KoaPOS sells to Australian retail, where the trading week is Fri → Thu. */
 export const DEFAULT_WEEK_END_DAY: WeekDayName = "thursday";
 
 const pad = (n: number) => String(n).padStart(2, "0");

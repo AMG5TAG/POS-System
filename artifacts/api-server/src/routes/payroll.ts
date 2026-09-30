@@ -179,7 +179,7 @@ const serializeLeaveBalance = (r: typeof payrollLeaveBalancesTable.$inferSelect)
   asAtDate: r.asAtDate ?? null,
 });
 
-/** Normalise a provider pay-run status to KK POS's vocabulary. */
+/** Normalise a provider pay-run status to KoaPOS's vocabulary. */
 function normaliseStatus(providerStatus: string): string {
   const s = providerStatus.toLowerCase();
   if (s.includes("post")) return "posted";
@@ -818,7 +818,7 @@ router.post("/payroll/sync/journal", requireAuth, async (req, res): Promise<void
   const journal = {
     ManualJournals: [
       {
-        Narration: `KK POS Payroll ${run.periodStart} – ${run.periodEnd}`,
+        Narration: `KoaPOS Payroll ${run.periodStart} – ${run.periodEnd}`,
         Date: run.paymentDate ?? run.periodEnd,
         Status: "POSTED",
         JournalLines: [

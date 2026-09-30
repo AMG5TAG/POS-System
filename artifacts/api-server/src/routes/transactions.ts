@@ -1390,7 +1390,7 @@ router.post("/transactions/:id/send-receipt", requireAuth, async (req, res): Pro
   if (!tx) { res.status(404).json({ error: "Transaction not found" }); return; }
 
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, merchantId));
-  const bizName = merchant?.businessName ?? "KK POS";
+  const bizName = merchant?.businessName ?? "KoaPOS";
 
   const itemsRaw = tx.items as Array<{ name: string; qty: number; price: number; total: number }> | null;
   const itemRows = (itemsRaw ?? []).map(i =>

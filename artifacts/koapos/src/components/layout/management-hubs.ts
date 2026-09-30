@@ -43,6 +43,14 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
     ],
   },
   {
+    name: "Online Store", icon: Store, defaultHref: "/management/online-store/overview",
+    children: [
+      { name: "Overview",          href: "/management/online-store/overview", icon: Store },
+      { name: "Products",          href: "/management/online-store/products", icon: Boxes },
+      { name: "Customer Accounts", href: "/management/online-store/accounts", icon: Users },
+    ],
+  },
+  {
     name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/invoices",
     children: [
       { name: "Invoices",        href: "/management/invoices-services/invoices",        icon: FileText },

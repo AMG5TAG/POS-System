@@ -245,7 +245,7 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
   doc.setFont(font, "bold");
   doc.setFontSize(16);
   doc.setTextColor(...C.white);
-  doc.text(merchantName ?? "KK POS", textX, 12);
+  doc.text(merchantName ?? "KoaPOS", textX, 12);
 
   doc.setFont(font, "normal");
   doc.setFontSize(9);
@@ -734,7 +734,7 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
     doc.setFont(font, "normal");
     doc.setFontSize(6.5);
     doc.setTextColor(...C.light);
-    const footerLead = template?.footerText?.trim() || `${merchantName ?? "KK POS"} Customer Export`;
+    const footerLead = template?.footerText?.trim() || `${merchantName ?? "KoaPOS"} Customer Export`;
     doc.text(
       `${footerLead}  ·  ${fullName}  ·  Exported ${exportDate}`,
       ML,

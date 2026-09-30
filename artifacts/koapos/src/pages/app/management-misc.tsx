@@ -160,7 +160,7 @@ export default function ManagementMiscPage() {
               Maps Provider
             </CardTitle>
             <CardDescription>
-              Choose which map app opens when you tap an address anywhere in KK POS (appointments, customers, etc.).
+              Choose which map app opens when you tap an address anywhere in KoaPOS (appointments, customers, etc.).
             </CardDescription>
           </CardHeader>
           <CardContent className="space-y-6">
@@ -205,7 +205,7 @@ export default function ManagementMiscPage() {
               POS Button Style
             </CardTitle>
             <CardDescription>
-              Choose how action buttons are displayed throughout KK POS — icon only, icon with text, or text only.
+              Choose how action buttons are displayed throughout KoaPOS — icon only, icon with text, or text only.
             </CardDescription>
           </CardHeader>
           <CardContent>

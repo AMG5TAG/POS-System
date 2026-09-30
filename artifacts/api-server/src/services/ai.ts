@@ -1,7 +1,7 @@
 /**
- * The one place KK POS decides which AI provider serves a request.
+ * The one place KoaPOS decides which AI provider serves a request.
  *
- * KK POS is **bring-your-own-key**: a merchant connects their own Anthropic
+ * KoaPOS is **bring-your-own-key**: a merchant connects their own Anthropic
  * account under Management › Integrations, the key is encrypted at rest in the OAuth token vault, and
  * their usage is billed to them. The platform holds no production key, so
  * every entry point here takes a `merchantId` — there is no such thing as an

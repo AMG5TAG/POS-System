@@ -1,7 +1,7 @@
 {
-  "name": "KK POS",
-  "short_name": "KK POS",
-  "description": "KK POS — point of sale and business apps.",
+  "name": "KoaPOS",
+  "short_name": "KoaPOS",
+  "description": "KoaPOS — point of sale and business apps.",
   "start_url": "/",
   "scope": "/",
   "display": "standalone",

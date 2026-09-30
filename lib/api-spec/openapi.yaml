@@ -3,7 +3,7 @@ info:
   # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: KK POS API specification
+  description: KoaPOS API specification
 servers:
   - url: /api
     description: Base API path
@@ -8826,9 +8826,9 @@ paths:
     post:
       operationId: syncIntegrationContacts
       tags: [integrations]
-      summary: Sync KK POS customers to Google Contacts or Microsoft Contacts
+      summary: Sync KoaPOS customers to Google Contacts or Microsoft Contacts
       description: |
-        Pushes all KK POS customers to the requested contact platform.
+        Pushes all KoaPOS customers to the requested contact platform.
         When `includeNotes` is true, CRM notes are mapped to each platform's
         native notes field (Google → biographies, Microsoft → personalNotes).
         Per-contact failures are counted and returned without aborting the batch.
@@ -15059,6 +15059,11 @@ components:
         subtotal:       { type: number }
         taxTotal:       { type: number }
         discountTotal:  { type: number }
+        shippingTotal:  { type: number }
+        trackingCarrier: { type: string, description: "Carrier id (auspost, startrack, couriers, fastway, tnt, dhl, fedex, sendle) or other." }
+        trackingNumber:  { type: string }
+        shippedAt:      { type: string, format: date-time, nullable: true, description: "Set by the server the first time the status reaches shipped." }
+        deliveredAt:    { type: string, format: date-time, nullable: true, description: "Set by the server the first time the status reaches delivered." }
         createdAt:      { type: string, format: date-time }
 
     DeliveryOrderInput:
@@ -15090,6 +15095,8 @@ components:
             when the order was placed, so neither moves again.
         paymentProvider: { type: string }
         paymentRef:      { type: string }
+        trackingCarrier: { type: string }
+        trackingNumber:  { type: string }
 
     DeliveryOrderListResponse:
       type: object

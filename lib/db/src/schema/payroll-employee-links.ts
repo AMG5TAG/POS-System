@@ -2,7 +2,7 @@ import { pgTable, text, serial, integer, timestamp, uniqueIndex, index } from "d
 import { merchantsTable } from "./merchants";
 
 /**
- * payroll_employee_links — maps a KK POS staff member to the corresponding
+ * payroll_employee_links — maps a KoaPOS staff member to the corresponding
  * employee record in the external payroll provider. Keeping this mapping in its
  * own table (rather than a column on `staff`) keeps the adapter provider-agnostic
  * and lets a single staff member map across providers over time.

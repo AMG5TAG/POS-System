@@ -43,7 +43,7 @@ const WIDGETS: {
   {
     key: "showMetricTiles",
     label: "Business Metric Tiles",
-    description: "FY Sales, Total Jobs, Pending Deliveries, Total Customers",
+    description: "FY Sales, Total Jobs, Total Customers",
     icon: BarChart2,
   },
   {

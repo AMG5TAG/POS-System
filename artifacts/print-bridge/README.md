@@ -1,6 +1,6 @@
-# KK POS Print Bridge
+# KoaPOS Print Bridge
 
-A tiny local service that runs on the till and gives the KK POS browser tab the one
+A tiny local service that runs on the till and gives the KoaPOS browser tab the one
 thing a browser cannot do on its own: **send a document to a named printer with no
 print dialog.**
 
@@ -26,13 +26,13 @@ per-purpose printer routing.
 
 * **Loopback only.** The bridge binds `127.0.0.1`, so nothing on the LAN — or the
   internet — can reach it.
-* **Origin allow-list.** Only the KK POS origins listed in the config may call it.
+* **Origin allow-list.** Only the KoaPOS origins listed in the config may call it.
 * **Bearer token.** Every print endpoint needs the pairing token.
 * **Pairing window.** The token is only handed out while a local operator has opened
   the pairing window — automatically for 10 minutes at startup, or by pressing `p` in
   the bridge window. A malicious site cannot pair itself.
 
-Browsers treat `http://127.0.0.1` as a *trustworthy origin*, so an HTTPS KK POS page
+Browsers treat `http://127.0.0.1` as a *trustworthy origin*, so an HTTPS KoaPOS page
 can call the bridge without a mixed-content block. Chrome and Edge are supported;
 Safari blocks loopback requests from HTTPS pages.
 
@@ -52,7 +52,7 @@ Safari blocks loopback requests from HTTPS pages.
    node "C:\Program Files\KKPOS\print-bridge\index.mjs"
    ```
 
-5. In KK POS: **Settings › Registers › Hardware › Print Bridge → Pair this device**.
+5. In KoaPOS: **Settings › Registers › Hardware › Print Bridge → Pair this device**.
 
 ### Network / shared printers (label printers especially)
 
@@ -68,14 +68,14 @@ decides whether the bridge can see it:
 
 A connection to a printer shared from another PC is stored per-user, so a bridge
 running as a Windows service (`SYSTEM`) cannot see it, and it simply won't appear in
-`node index.mjs printers` or in KK POS. For a shared label printer, pick one:
+`node index.mjs printers` or in KoaPOS. For a shared label printer, pick one:
 
 * **Install it machine-wide** — add it locally on a *Standard TCP/IP Port* pointing at
   the printer or print-server address, rather than browsing to `\\PC\Printer`. Then a
   service install works. This is the recommended setup.
 * **Or run the bridge from the Startup folder** as the operator's login, not as a service.
 
-`GET /v1/health` reports `runningAsService`, and KK POS shows a warning in
+`GET /v1/health` reports `runningAsService`, and KoaPOS shows a warning in
 Settings › Registers › Hardware when the bridge is running as `SYSTEM`, so this is
 visible rather than a silent missing printer.
 
@@ -172,12 +172,12 @@ receipts go out that way.
 ## Troubleshooting
 
 **"This browser is not paired"** — press `p` in the bridge window, then Pair again in
-KK POS.
+KoaPOS.
 
-**"Origin … is not allowed"** — add the KK POS URL to `allowedOrigins` and restart.
+**"Origin … is not allowed"** — add the KoaPOS URL to `allowedOrigins` and restart.
 
 **"Printer … not found"** — run `node index.mjs printers` to see the exact queue names
-Windows reports, then pick that name in KK POS Hardware settings.
+Windows reports, then pick that name in KoaPOS Hardware settings.
 
 **"Silent PDF printing needs a helper"** — install SumatraPDF, or set `pdfPrinterPath`
 to your own tool. Raw ESC/POS printing is unaffected.

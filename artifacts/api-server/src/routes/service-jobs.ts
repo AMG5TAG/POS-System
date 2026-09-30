@@ -491,7 +491,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
   ${job.notes ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Notes</h3><div style="background:#f9f9f9;border:1px solid #eee;border-radius:6px;padding:12px;font-size:13px;white-space:pre-wrap;">${escapeHtml(job.notes)}</div>` : ""}
   ${photos.length ? `<h3 style="font-size:13px;text-transform:uppercase;letter-spacing:0.5px;color:#888;margin:20px 0 8px;">Photos</h3><p style="font-size:12px;color:#666;">${photos.length} photo(s) attached to this job.</p>` : ""}
 
-  <p style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">This email was sent automatically from ${bizName} via KK POS.</p>
+  <p style="margin-top:24px;padding-top:12px;border-top:1px solid #eee;font-size:12px;color:#999;">This email was sent automatically from ${bizName} via KoaPOS.</p>
 </body>
 </html>`;
 
@@ -499,7 +499,7 @@ router.post("/service-jobs/:id/email", requireAuth, async (req, res): Promise<vo
     to: toEmail,
     subject: `Service Job Update — #${job.jobNumber}`,
     html,
-    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nColour: ${formatVal(job.deviceColour)}\nQuantity: ${formatVal(job.deviceQuantity != null ? String(job.deviceQuantity) : null)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KK POS.`,
+    text: `Service Job #${job.jobNumber} from ${bizName}\n\nCustomer: ${formatVal(customer?.name)}\nPhone: ${formatVal(customer?.phone)}\nBook-In: ${fmtDate(job.bookInDate)}\nStatus: ${job.status}\n\nDevice: ${formatVal(job.deviceType)}\nDescription: ${formatVal(job.deviceDescription)}\nColour: ${formatVal(job.deviceColour)}\nQuantity: ${formatVal(job.deviceQuantity != null ? String(job.deviceQuantity) : null)}\nSerial: ${formatVal(job.serialNumber)}\nCondition: ${formatVal(job.condition)}\n\nWork: ${formatVal(job.workDescription)}\nEst. Cost: ${job.estimatedCost ? `$${parseFloat(job.estimatedCost).toFixed(2)}` : "—"}\n\n${job.notes ? `Notes:\n${job.notes}\n\n` : ""}Sent from ${bizName} via KoaPOS.`,
   });
 
   if (!result.success) {

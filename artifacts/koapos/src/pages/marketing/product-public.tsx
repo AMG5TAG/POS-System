@@ -166,7 +166,7 @@ export default function ProductPublicView() {
         )}
 
         <p className="text-center text-[11px] text-muted-foreground/60 mt-8">
-          Powered by {data.business.name || "KK POS"}
+          Powered by {data.business.name || "KoaPOS"}
         </p>
       </main>
     </div>

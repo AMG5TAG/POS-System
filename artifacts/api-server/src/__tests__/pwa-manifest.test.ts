@@ -66,11 +66,11 @@ describe("GET /api/pwa/manifest.webmanifest", () => {
     expect((await get("/b/acme/c/abc123")).body.start_url).toBe("/b/acme/c/abc123");
   });
 
-  it("falls back to the plain KK POS manifest for ordinary pages", async () => {
+  it("falls back to the plain KoaPOS manifest for ordinary pages", async () => {
     const res = await get("/pricing");
     expect(res.body.start_url).toBe("/");
     expect(res.body.scope).toBe("/");
-    expect(res.body.name).toBe("KK POS");
+    expect(res.body.name).toBe("KoaPOS");
   });
 
   it("never emits an off-origin start_url", async () => {
@@ -92,7 +92,7 @@ describe("GET /api/pwa/manifest.webmanifest", () => {
 
   it("keeps short_name within the 12-char home-screen budget", async () => {
     const res = await get("/d/abc123");
-    expect(res.body.name).toBe("KK POS Dashboard");
+    expect(res.body.name).toBe("KoaPOS Dashboard");
     expect(res.body.short_name.length).toBeLessThanOrEqual(12);
   });
 });

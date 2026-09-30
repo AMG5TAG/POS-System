@@ -12,7 +12,7 @@ export default function Cart() {
       <div className="mx-auto max-w-3xl px-4 py-24 text-center space-y-4">
         <ShoppingCart className="w-10 h-10 mx-auto text-stone-300" />
         <p className="text-lg font-medium">Your cart is empty</p>
-        <Link href="/shop" className="inline-flex h-11 items-center px-6 rounded-full bg-ink text-white">Start shopping</Link>
+        <Link href="/products" className="inline-flex h-11 items-center px-6 rounded-full bg-brand text-white hover:bg-brand-dark">Start shopping</Link>
       </div>
     );
   }
@@ -47,8 +47,8 @@ export default function Cart() {
         <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold tabular-nums">{money(subtotal)}</span></div>
         <div className="flex justify-between text-sm text-stone-500"><span>Includes GST</span><span className="tabular-nums">{money(gstIn(subtotal))}</span></div>
         <p className="text-sm text-stone-500">Shipping or click & collect is chosen at checkout.</p>
-        <Link href="/checkout" className="flex h-11 items-center justify-center rounded-full bg-brand text-ink font-semibold hover:brightness-95">Checkout</Link>
-        <Link href="/shop" className="block text-center text-sm text-stone-600 hover:underline">Continue shopping</Link>
+        <Link href="/checkout" className="flex h-11 items-center justify-center rounded-full bg-brand text-white font-semibold hover:bg-brand-dark">Checkout</Link>
+        <Link href="/products" className="block text-center text-sm text-stone-600 hover:underline">Continue shopping</Link>
       </div>
     </div>
   );

@@ -1,6 +1,6 @@
 import { useListServiceJobs, useListAppointments, useGetDashboardSummary, useGetDashboardKpi, type ServiceJob } from "@workspace/api-client-react";
 import { formatCurrency } from "@/lib/utils";
-import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Truck, Receipt, Clock, Target } from "lucide-react";
+import { AlertTriangle, Timer, Hourglass, CircleDot, CalendarDays, FileText, Receipt, Clock, Target } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
 import { useLocation } from "wouter";
@@ -92,12 +92,7 @@ function MetricTile({ icon, value, label, iconColor, valueColor, sub, href }: Me
   const Wrapper = clickable ? "button" : "div";
   return (
     <Wrapper
-      onClick={clickable ? () => {
-        if (href === "/online/deliveries") {
-          sessionStorage.setItem("koapos_deliveries_preselect", "new");
-        }
-        navigate(href);
-      } : undefined}
+      onClick={clickable ? () => navigate(href) : undefined}
       className={cn(
         "rounded-2xl border bg-card p-5 flex flex-col items-center justify-center gap-1 min-h-[100px] w-full",
         clickable && "cursor-pointer hover:border-primary/40 hover:shadow-sm transition-all"
@@ -321,7 +316,7 @@ export function ServiceJobsTiles({
 
       {/* Row 2: Business metric tiles */}
       {showMetricTiles && (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
           <MetricTile
             icon={<FileText className="w-5 h-5" />}
             value={jobs.filter((j) => !["completed", "cancelled"].includes(j.status as string)).length}
@@ -336,14 +331,6 @@ export function ServiceJobsTiles({
             iconColor="text-amber-500"
             valueColor="text-amber-700"
             href="/pos/invoices"
-          />
-          <MetricTile
-            icon={<Truck className="w-5 h-5" />}
-            value={0}
-            label="Pending Deliveries"
-            iconColor="text-teal-500"
-            valueColor="text-foreground"
-            href="/online/deliveries"
           />
           <KpiDashboardTile />
           <MetricTile

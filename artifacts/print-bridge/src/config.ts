@@ -7,7 +7,7 @@
  * A till set up before the rename keeps its config under "KoaPOS"/"koapos";
  * that folder is still read (and the file carried across) so the pairing token
  * survives the upgrade. Everything here is device-local — the merchant-level
- * routing policy lives in KK POS (`pos_settings.hardwareConfig`), not here.
+ * routing policy lives in KoaPOS (`pos_settings.hardwareConfig`), not here.
  */
 import { randomBytes } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";

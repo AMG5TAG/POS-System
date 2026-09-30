@@ -19,7 +19,7 @@ import {
   Percent, LayoutTemplate, Printer, Check, X, Menu, Accessibility,
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, UserPlus, Sparkles, Sticker,
-  ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
+  ShoppingBag, Store, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
   CreditCard, Plug, Scale, Lock, TabletSmartphone, Smartphone, ShieldCheck, FolderSync, Activity, Palette,
   MapPin, Repeat, Puzzle, Recycle, Image as ImageIcon, KeyRound, FolderOpen,
 } from "lucide-react";
@@ -98,8 +98,8 @@ const STAFF_SUBNAV: NavItem[] = [
 ];
 
 const ONLINE_SUBNAV: NavItem[] = [
-  { name: "Deliveries", href: "/online/deliveries", icon: Package2    },
-  { name: "Shipping",        href: "/online/shipping",        icon: Truck       },
+  { name: "Orders",   href: "/online/orders",   icon: ShoppingBag },
+  { name: "Shipping", href: "/online/shipping", icon: Truck       },
 ];
 
 const MARKETING_SUBNAV: NavItem[] = [
@@ -203,6 +203,9 @@ const SEARCH_INDEX = [
   { label: "Calculators · PC Builder", href: "/management/products-inventory/pc-builder", icon: HardDrive,   group: "Management" },
   { label: "Camera Management",             href: "/management/staff-operations/cameras",                    icon: Camera,         group: "Management"  },
   { label: "Customers",          href: "/management/customers/settings",        icon: Users,           group: "Management" },
+  { label: "Online Store",                     href: "/management/online-store/overview", icon: Store,   group: "Management" },
+  { label: "Online Store · Products",          href: "/management/online-store/products", icon: Package, group: "Management" },
+  { label: "Online Store · Customer Accounts", href: "/management/online-store/accounts", icon: Users,   group: "Management" },
   { label: "Customers · Heard From", href: "/management/customers/heard-from", icon: Radio,         group: "Management" },
   { label: "Customers · Portal",    href: "/management/customers/portal",     icon: Link2,         group: "Management" },
   { label: "Discounts",          href: "/management/customers/discounts-pricing",        icon: Percent,         group: "Management" },
@@ -259,7 +262,7 @@ const SEARCH_INDEX = [
   { label: "Cameras",                       href: "/cameras",                               icon: Camera,         group: "Pages"       },
   { label: "Marketing · Referrals",       href: "/marketing/referrals",                  icon: UserPlus,  group: "Marketing"  },
   { label: "Marketing · Automation",         href: "/marketing/automation",                icon: Zap,       group: "Marketing" },
-  { label: "Online · Deliveries",     href: "/online/deliveries",   icon: Package2,     group: "Online"     },
+  { label: "Online · Orders",           href: "/online/orders",            icon: ShoppingBag,  group: "Online"     },
   { label: "Online · Shipping",         href: "/online/shipping",          icon: Truck,        group: "Online"     },
   { label: "Registers · POS Settings",   href: "/management/staff-operations/pos-registers#pos-settings",            icon: Monitor,       group: "Registers"  },
   { label: "Registers · Hardware",        href: "/management/staff-operations/pos-registers#hardware",                icon: HardDrive,     group: "Registers"  },
@@ -1635,8 +1638,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
       <header ref={headerRef} className={cn("h-14 flex items-center gap-2 px-4 shrink-0 sticky top-0 z-30 transition-all duration-200 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80", headerScrolled ? "shadow-[0_4px_24px_-2px_rgba(0,0,0,0.10),0_1px_4px_-1px_rgba(0,0,0,0.06)] border-b border-transparent" : "border-b border-border")}>
         {/* Logo */}
         <Link href="/dashboard" className="flex items-center gap-2 shrink-0 mr-1">
-          <img src="/logo.png" alt="KK POS" className="w-7 h-7 object-contain" />
-          <span className="font-bold text-sm hidden lg:block max-w-[110px] truncate">{user?.businessName || "KK POS"}</span>
+          <img src="/logo.png" alt="KoaPOS" className="w-7 h-7 object-contain" />
+          <span className="font-bold text-sm hidden lg:block max-w-[110px] truncate">{user?.businessName || "KoaPOS"}</span>
         </Link>
 
         {/* Nav items */}
@@ -1646,6 +1649,8 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             isOpen={openDropdown === "pos"} onToggle={() => toggle("pos")} location={location} navigate={navigate} />
           <TopNavBtn icon={Wrench} label="Services" isActive={location === "/services" || location.startsWith("/services/")} onClick={() => navigate("/services")} />
           <TopNavBtn icon={CalendarClock} label="Appts" isActive={location === "/appointments"} onClick={() => navigate("/appointments")} />
+          <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
+            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/orders" />
           <TopNavDropdown label="Inventory" icon={Boxes} items={INVENTORY_SUBNAV} isActive={isInventorySection}
             isOpen={openDropdown === "inventory"} onToggle={() => toggle("inventory")} location={location} navigate={navigate} />
           <TopNavBtn icon={Users} label="Customers" isActive={location === "/customers"} onClick={() => navigate("/customers")} />
@@ -1653,8 +1658,6 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
             isOpen={openDropdown === "staff"} onToggle={() => toggle("staff")} location={location} navigate={navigate} />
           <TopNavDropdown label="Marketing" icon={Megaphone} items={MARKETING_SUBNAV} isActive={isMarketingSection}
             isOpen={openDropdown === "marketing"} onToggle={() => toggle("marketing")} location={location} navigate={navigate} defaultHref="/marketing/overview" />
-          <TopNavDropdown label="Online" icon={Globe} items={ONLINE_SUBNAV} isActive={isOnlineSection}
-            isOpen={openDropdown === "online"} onToggle={() => toggle("online")} location={location} navigate={navigate} defaultHref="/online/deliveries" />
           <TopNavBtn icon={Camera} label="Cameras" isActive={isCamerasSection} onClick={() => navigate("/cameras")} />
           {canManage && (
             <TopNavDropdown label="Management" icon={BriefcaseBusiness} items={MANAGEMENT_SUBNAV} isActive={isManagementSection}
@@ -1713,10 +1716,10 @@ function BottomMoreSheet({ open, onClose, location, navigate, user, onLogout, lo
 
   const sections: { label: string; items: NavLeaf[] }[] = [
     { label: "POS",        items: POS_SUBNAV },
+    { label: "Online",     items: flattenNavItems(ONLINE_SUBNAV) },
     { label: "Inventory",  items: INVENTORY_SUBNAV },
     { label: "Staff",      items: flattenNavItems(STAFF_SUBNAV) },
     { label: "Marketing",  items: flattenNavItems(MARKETING_SUBNAV) },
-    { label: "Online",     items: flattenNavItems(ONLINE_SUBNAV) },
     { label: "Cameras",    items: [{ name: "Camera Dashboard", href: "/cameras", icon: Camera }] },
     // Management menus are restricted to Owner/Manager roles.
     ...(canManage ? [{ label: "Management", items: flattenNavItems(MANAGEMENT_SUBNAV) }] : []),
@@ -2084,8 +2087,8 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
     >
       <SidebarHeader className="min-h-16 flex items-center px-4 py-3 border-b">
         <Link href="/dashboard" className="flex items-center gap-2 w-full">
-          <img src="/logo.png" alt="KK POS" className="w-8 h-8 object-contain shrink-0" />
-          <span className="font-bold text-sm leading-snug break-words line-clamp-3 min-w-0">{user?.businessName || "KK POS"}</span>
+          <img src="/logo.png" alt="KoaPOS" className="w-8 h-8 object-contain shrink-0" />
+          <span className="font-bold text-sm leading-snug break-words line-clamp-3 min-w-0">{user?.businessName || "KoaPOS"}</span>
         </Link>
       </SidebarHeader>
 
@@ -2099,6 +2102,11 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
           />
           <NavLink href="/services"  icon={Wrench}        name="Services" />
           <NavLink href="/appointments"  icon={CalendarClock} name="Appointments" />
+          <CollapsibleSection
+            label="Online" icon={Globe} isActive={isOnlineSection} isOpen={onlineOpen}
+            onToggle={() => { setOnlineOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMarketingOpen(false); setMgmtOpen(false); }}
+            items={ONLINE_SUBNAV} defaultHref="/online/orders"
+          />
           <CollapsibleSection
             label="Inventory" icon={Boxes} isActive={isInventorySection} isOpen={invOpen}
             onToggle={() => { setInvOpen((o) => !o); setPosOpen(false); setMgmtOpen(false); }}
@@ -2118,11 +2126,6 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
             label="Marketing" icon={Megaphone} isActive={isMarketingSection} isOpen={marketingOpen}
             onToggle={() => { setMarketingOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setOnlineOpen(false); setMgmtOpen(false); }}
             items={MARKETING_SUBNAV} defaultHref="/marketing/overview"
-          />
-          <CollapsibleSection
-            label="Online" icon={Globe} isActive={isOnlineSection} isOpen={onlineOpen}
-            onToggle={() => { setOnlineOpen((o) => !o); setPosOpen(false); setInvOpen(false); setStaffOpen(false); setCustsOpen(false); setMarketingOpen(false); setMgmtOpen(false); }}
-            items={ONLINE_SUBNAV} defaultHref="/online/deliveries"
           />
           <NavLink href="/cameras"       icon={Camera}        name="Cameras" />
           {canManage && (

@@ -3,7 +3,7 @@ info:
   title: Api
   version: 0.1.0
   description: |
-    KK POS Payroll API. Provider-backed payroll (Xero Payroll first). This spec is
+    KoaPOS Payroll API. Provider-backed payroll (Xero Payroll first). This spec is
     generated independently of the main openapi.yaml into an isolated client module
     (generated-payroll) so it never disturbs the existing generated surface.
 

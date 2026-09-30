@@ -27,13 +27,13 @@ export default function Register() {
     return (
       <AuthCard title="Check your email">
         <p className="text-stone-600">You're already one of our customers, so we've sent a link to <strong>{f.email}</strong> to set your password and finish setting up your online account.</p>
-        <Link href="/account/login" className="block text-center text-sm text-brand-dark underline">Back to sign in</Link>
+        <Link href="/account/login" className="block text-center text-sm text-brand underline">Back to sign in</Link>
       </AuthCard>
     );
   }
 
   return (
-    <AuthCard title="Create an account" footer={<>Already have an account? <Link href="/account/login" className="text-brand-dark font-medium underline">Sign in</Link></>}>
+    <AuthCard title="Create an account" footer={<>Already have an account? <Link href="/account/login" className="text-brand font-medium underline">Sign in</Link></>}>
       <form onSubmit={submit} className="space-y-4">
         {error && <Notice>{error}</Notice>}
         <div className="grid grid-cols-2 gap-3">

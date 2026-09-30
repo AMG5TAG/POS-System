@@ -11,13 +11,13 @@ export default function Home() {
 
   return (
     <div>
-      <section className="bg-gradient-to-br from-amber-50 via-white to-yellow-50 border-b border-stone-200">
+      <section className="bg-gradient-to-br from-brand-50 via-white to-brand-light/25 border-b border-stone-200">
         <div className="mx-auto max-w-7xl px-4 py-14 md:py-20 grid md:grid-cols-2 gap-10 items-center">
           <div className="space-y-5">
             <h1 className="text-4xl md:text-5xl font-extrabold tracking-tight">{info?.businessName ?? "Welcome"}</h1>
             <p className="text-lg text-stone-600 max-w-prose">{info?.tagline || info?.description || "Shop online and pick up in store or get it delivered."}</p>
             <div className="flex flex-wrap gap-3">
-              <Link href="/shop" className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-ink text-white font-medium hover:bg-stone-800">Shop now <ArrowRight className="w-4 h-4" /></Link>
+              <Link href="/products" className="inline-flex items-center gap-2 h-11 px-6 rounded-full bg-brand text-white font-medium hover:bg-brand-dark">Shop now <ArrowRight className="w-4 h-4" /></Link>
               <Link href="/account" className="inline-flex items-center h-11 px-6 rounded-full border border-stone-300 font-medium hover:bg-stone-50">My account</Link>
             </div>
           </div>
@@ -32,7 +32,7 @@ export default function Home() {
           { icon: Wrench, title: "Repairs & services", text: "Track your repairs in your account." },
         ].map(({ icon: Icon, title, text }) => (
           <div key={title} className="rounded-2xl bg-white border border-stone-200 p-5 flex gap-4 items-start shadow-sm">
-            <Icon className="w-6 h-6 text-brand-dark shrink-0" />
+            <Icon className="w-6 h-6 text-brand shrink-0" />
             <div><p className="font-semibold">{title}</p><p className="text-sm text-stone-600">{text}</p></div>
           </div>
         ))}
@@ -43,7 +43,7 @@ export default function Home() {
           <h2 className="text-2xl font-bold mb-5">Shop by category</h2>
           <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
             {topCats.map((c) => (
-              <Link key={c.id} href={`/shop?category=${c.id}`}
+              <Link key={c.id} href={`/products?category=${c.id}`}
                 className="rounded-xl border border-stone-200 bg-white px-4 py-5 text-center font-medium hover:border-brand hover:shadow-sm transition"
                 style={c.color ? { borderTopColor: c.color, borderTopWidth: 3 } : undefined}>
                 {c.name}
@@ -58,7 +58,7 @@ export default function Home() {
         <section className="mx-auto max-w-7xl px-4 mt-14">
           <div className="flex items-end justify-between mb-5">
             <h2 className="text-2xl font-bold">New in</h2>
-            <Link href="/shop?sort=newest" className="text-sm font-medium text-brand-dark hover:underline">View all</Link>
+            <Link href="/products?sort=newest" className="text-sm font-medium text-brand hover:underline">View all</Link>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
             {latest!.items.map((p) => <ProductCard key={p.id} p={p} />)}
