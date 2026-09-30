@@ -204,7 +204,9 @@
       "Bash(echo \"=== EXIT api-server: $? ===\")",
       "Bash(ps -eo pid,ppid,etime,cmd)",
       "Bash(curl -s https://api.resend.com/*)",
-      "Bash(curl -sS https://api.resend.com/*)"
+      "Bash(curl -sS https://api.resend.com/*)",
+      "Bash(curl -s -m 20 -D - -o /dev/null https://shop.koastal.com.au/)",
+      "Bash(curl -s -m 20 -D - -o /dev/null https://shop.koastal.com.au/api/healthz)"
     ],
     "ask": [
       "Bash(PGOPTIONS=\"-c default_transaction_read_only=on\" psql \"$PROD_DATABASE_URL\":*)"

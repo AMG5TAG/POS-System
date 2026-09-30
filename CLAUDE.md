@@ -428,12 +428,16 @@ alert; 3: account area (orders, all purchases, invoices, repairs, quotes,
 appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
 
 - **App**: `artifacts/shop` (`@workspace/shop`, React + Vite + Tailwind, wouter),
-  its own package — it shares no UI code with the POS, only the API. In
-  production `app.ts` serves its build for requests on `shopDomain()`
-  (`SHOP_DOMAIN`, default shop.koastal.com.au) and the POS build for every other
-  host; `/api` is the same on both, so the shop calls it same-origin and its
-  session cookie is its own. In development it runs behind `/shop-preview`
-  (its `artifact.toml`, `BASE_PATH`), and wouter's `base` follows `BASE_URL`.
+  its own package — it shares no UI code with the POS, only the API. It lives
+  at **`/shop/`**, in production as in development. Replit's deployment routes
+  each artifact by *path*, never by host, and `/` is the POS on every domain —
+  so serving the shop by host from `app.ts` never ran in production. Instead
+  the POS's `index.html` sends a `shop.*` host to `/shop/` before any POS code
+  loads, and `shopOrigin()` (email links) is `https://<shop domain>/shop`. The
+  Vite base is fixed at `/shop/`, not read from `BASE_PATH`: the workspace sets
+  `BASE_PATH=/` globally, and a shop built for `/` fetches `/assets/*`, which
+  the POS answers — a blank page. `/api` is the same on both, so the shop calls
+  it same-origin and its session cookie is its own.
 - **API**: `routes/shop.ts`, public and scoped to `soleMerchantId()` — no request
   can name a merchant. A product is listed when `isActive` and `showOnline`
   (`products.show_online`, default "true", added by

@@ -1,5 +1,5 @@
 kind = "web"
-previewPath = "/shop-preview/"
+previewPath = "/shop/"
 title = "Koastal Shop"
 version = "1.0.0"
 id = "artifacts/shop"
@@ -11,7 +11,7 @@ version = "1.0.0"
 
 [[services]]
 name = "web"
-paths = [ "/shop-preview" ]
+paths = [ "/shop" ]
 localPort = 19161
 
 [services.development]
@@ -28,4 +28,4 @@ to = "/index.html"
 
 [services.env]
 PORT = "19161"
-BASE_PATH = "/shop-preview/"
+BASE_PATH = "/shop/"

@@ -2,6 +2,14 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
+    <script>
+      /* The online shop's domain: Replit serves this POS page for "/" on every
+         host, so send shop.* visitors to the shop's own path before any POS code
+         loads. */
+      if (/^shop\./i.test(location.hostname) && location.pathname.indexOf("/shop") !== 0) {
+        location.replace("/shop" + (location.pathname === "/" ? "/" : location.pathname) + location.search);
+      }
+    </script>
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
     <title>KK POS</title>
     <meta name="description" content="KK POS — built on Replit. Update this description to reflect the app." />

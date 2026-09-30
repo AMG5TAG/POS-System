@@ -31,16 +31,16 @@ export function legacyDomains(): string[] {
 }
 
 /**
- * The online shop's hostname (shop.koastal.com.au, SHOP_DOMAIN overrides). It is
- * served by this same server: app.ts picks the shop's build for this host.
+ * The online shop's hostname (shop.koastal.com.au, SHOP_DOMAIN overrides). The
+ * shop itself lives under /shop on it (Replit routes by path; see shopOrigin).
  */
 export function shopDomain(): string {
   return toHost(process.env.SHOP_DOMAIN?.trim() || "shop.koastal.com.au").toLowerCase();
 }
 
-/** The shop's origin, for links in customer emails. */
+/** The shop's base URL, for links in customer emails: https://<shop domain>/shop */
 export function shopOrigin(): string {
-  return `https://${shopDomain()}`;
+  return `https://${shopDomain()}/shop`;
 }
 
 /** Reduce a full URL or bare host to just its hostname. */

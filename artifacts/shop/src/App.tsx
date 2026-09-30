@@ -25,7 +25,7 @@ function Title() {
   return null;
 }
 
-/* Served at "/" on the shop domain, and under /shop-preview in development. */
+/* Served under /shop (see vite.config.ts). */
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function App() {
