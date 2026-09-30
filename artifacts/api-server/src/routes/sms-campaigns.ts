@@ -1,9 +1,10 @@
 import { Router, type IRouter } from "express";
 import { db, smsCampaignsTable, customersTable } from "@workspace/db";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendSms } from "../services/sms";
+import { audienceWhere } from "../lib/campaign-audience";
 
 const PostSmsCampaign = z.object({
   campaignId:     z.string().min(1),
@@ -72,6 +73,16 @@ router.delete("/sms-campaigns/:id", requireAuth, async (req, res): Promise<void>
   res.status(204).end();
 });
 
+/** How many customers an audience reaches — what the page shows before sending. */
+router.get("/sms-campaigns/audience-count", requireAuth, async (req, res): Promise<void> => {
+  const audience = String(req.query.audience ?? "all");
+  const customerId = req.query.customerId ? Number(req.query.customerId) : null;
+  const where = audienceWhere(req.session.merchantId!, "sms", audience, customerId);
+  if (!where) { res.status(400).json({ error: "Unknown audience" }); return; }
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(customersTable).where(where);
+  res.json({ count: n });
+});
+
 router.post("/sms-campaigns/:id/send", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
@@ -83,18 +94,14 @@ router.post("/sms-campaigns/:id/send", requireAuth, async (req, res): Promise<vo
   if (!row) { res.status(404).json({ error: "Campaign not found" }); return; }
   if (!row.body) { res.status(400).json({ error: "Campaign body is required before sending" }); return; }
 
-  let customers = await db
+  // Recipients: opted-in customers in the campaign's audience —
+  // lib/campaign-audience.ts, the same rule the page counts with.
+  const where = audienceWhere(merchantId, "sms", row.audience, row.customerId);
+  if (!where) { res.status(400).json({ error: `Unknown audience "${row.audience}" — edit the campaign and choose its audience again` }); return; }
+  const customers = await db
     .select({ id: customersTable.id, firstName: customersTable.firstName, phone: customersTable.phone })
     .from(customersTable)
-    .where(and(
-      eq(customersTable.merchantId, merchantId),
-      isNotNull(customersTable.phone),
-      eq(customersTable.agreedToMarketing, "true"),
-    ));
-
-  if (row.audience === "single" && row.customerId != null) {
-    customers = customers.filter((c) => c.id === row.customerId);
-  }
+    .where(where);
 
   let delivered = 0;
   let failed = 0;

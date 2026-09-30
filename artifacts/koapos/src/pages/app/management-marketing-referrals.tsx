@@ -277,7 +277,7 @@ export default function ManagementMarketingReferralsPage() {
   const { data: customerSettingsData, isLoading: settingsLoading } = useGetCustomerSettings();
   const updateCustomerSettings = useUpdateCustomerSettings();
 
-  const { data: customersData, refetch } = useListCustomers({ limit: 500, offset: 0 });
+  const { data: customersData, refetch } = useListCustomers({ limit: 100000, offset: 0 });
   const customers = customersData?.items ?? [];
   const missingCount = customers.filter((c) => !c.referralCode).length;
 

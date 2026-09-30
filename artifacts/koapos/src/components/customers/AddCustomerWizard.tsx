@@ -119,7 +119,7 @@ export function AddCustomerWizard({
   const [pendingClose, setPendingClose] = useState(false);
   const initialFormRef = useRef<CustomerForm>(defaultForm);
 
-  const { data: allCustomersData } = useListCustomers({ limit: 500 });
+  const { data: allCustomersData } = useListCustomers({ limit: 100000 });
   const allCustomers = useMemo(() => (allCustomersData?.items ?? []) as Customer[], [allCustomersData]);
 
   const createMutation = useCreateCustomer();

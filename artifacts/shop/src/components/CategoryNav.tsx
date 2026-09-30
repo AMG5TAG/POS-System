@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, Mail, Star } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Mail, Star } from "lucide-react";
 import type { Category } from "@/lib/shop";
 
 /* The shop's category bar, styled after koastal.com.au's menu: a row of
@@ -8,7 +8,9 @@ import type { Category } from "@/lib/shop";
    Koastal teal when none is set), and on hover a plain white list of that
    category's level-2 subcategories that fill with the same colour. The first
    item, "Shop all …", is the featured one — a coloured left edge on a light
-   tint, as the website marks its featured link. Nothing below level 2.
+   tint, as the website marks its featured link. A subcategory with its own
+   subcategories pops out a flyout list beside it, to any depth — to the right,
+   or to the left when the menu sits near the right edge of the window.
    Touch screens get the accordion in the mobile menu, since they can't hover. */
 
 type Node = Category & { children: Node[] };
@@ -40,8 +42,10 @@ function Tab({ colour, active, children }: { colour: string; active?: boolean; c
   );
 }
 
-function MenuItem({ to, colour, featured, onNavigate, children }: { to: string; colour: string; featured?: boolean; onNavigate: () => void; children: React.ReactNode }) {
-  const [hover, setHover] = useState(false);
+function MenuItem({ to, colour, featured, active, onNavigate, children }: { to: string; colour: string; featured?: boolean; active?: boolean; onNavigate: () => void; children: React.ReactNode }) {
+  const [hovered, setHover] = useState(false);
+  // An item whose flyout is open stays lit while the pointer is in the flyout.
+  const hover = hovered || !!active;
   if (featured) {
     return (
       <Link href={to} onClick={onNavigate} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
@@ -60,10 +64,42 @@ function MenuItem({ to, colour, featured, onNavigate, children }: { to: string; 
   );
 }
 
+/* A list of subcategories; one with children of its own pops out another list
+   beside it on hover (or keyboard focus inside it). */
+function SubMenu({ nodes, colour, flipLeft, onNavigate }: { nodes: Node[]; colour: string; flipLeft: boolean; onNavigate: () => void }) {
+  const [open, setOpen] = useState<number | null>(null);
+  return (
+    <>
+      {nodes.map((n) => {
+        const has = n.children.length > 0;
+        return (
+          <div key={n.id} className="relative" onMouseEnter={() => setOpen(n.id)} onMouseLeave={() => setOpen((o) => (o === n.id ? null : o))}
+            onFocus={() => setOpen(n.id)}>
+            <MenuItem to={href(n.id)} colour={colour} onNavigate={onNavigate} active={has && open === n.id}>
+              <span className="truncate">{n.name}</span>
+              <span className="flex items-center gap-1 text-xs opacity-60 tabular-nums">
+                {n.productCount}
+                {has && (flipLeft ? <ChevronLeft className="w-3.5 h-3.5 -order-1" /> : <ChevronRight className="w-3.5 h-3.5" />)}
+              </span>
+            </MenuItem>
+            {has && open === n.id && (
+              <div className={`absolute top-0 ${flipLeft ? "right-full" : "left-full"} -mt-1 bg-white border border-stone-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] py-1 z-10`}>
+                <MenuItem to={href(n.id)} colour={colour} featured onNavigate={onNavigate}>All {n.name}</MenuItem>
+                <SubMenu nodes={n.children} colour={colour} flipLeft={flipLeft} onNavigate={onNavigate} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
 export function CategoryNav({ cats, onNavigate }: { cats: Category[]; onNavigate: () => void }) {
   const roots = useMemo(() => tree(cats), [cats]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [left, setLeft] = useState(0);
+  const [flipLeft, setFlipLeft] = useState(false);
   const timer = useRef<number | undefined>(undefined);
   const wrap = useRef<HTMLDivElement>(null);
   const tabs = useRef(new Map<number, HTMLElement>());
@@ -85,6 +121,9 @@ export function CategoryNav({ cats, onNavigate }: { cats: Category[]; onNavigate
     if (tab && box) {
       const t = tab.getBoundingClientRect();
       setLeft(Math.max(0, Math.min(t.left - box.left, box.width - 240)));
+      // Flyouts need ~240px per level beside the list; open them leftwards
+      // when there isn't room to the right.
+      setFlipLeft(t.left + 240 + 480 > window.innerWidth);
     }
     setOpenId(id);
   };
@@ -123,15 +162,11 @@ export function CategoryNav({ cats, onNavigate }: { cats: Category[]; onNavigate
           style={{ left }}
           className={`absolute top-full z-40 transition-opacity duration-100 ${active ? "visible opacity-100" : "invisible opacity-0 pointer-events-none"}`}
           aria-hidden={!active}>
+          {/* No overflow on the list: it would clip the flyouts beside it. */}
           {active && (
-            <div className="bg-white border border-stone-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] max-h-[70vh] overflow-y-auto py-1">
+            <div className="bg-white border border-stone-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] py-1">
               <MenuItem to={href(active.id)} colour={colourOf(active)} featured onNavigate={done}>Shop all {active.name}</MenuItem>
-              {active.children.map((sub) => (
-                <MenuItem key={sub.id} to={href(sub.id)} colour={colourOf(active)} onNavigate={done}>
-                  <span className="truncate">{sub.name}</span>
-                  <span className="text-xs opacity-60 tabular-nums">{sub.productCount}</span>
-                </MenuItem>
-              ))}
+              <SubMenu key={active.id} nodes={active.children} colour={colourOf(active)} flipLeft={flipLeft} onNavigate={done} />
             </div>
           )}
         </div>

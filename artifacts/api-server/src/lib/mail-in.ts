@@ -18,14 +18,34 @@ export const OPEN_MAIL_IN_STATUSES: ReadonlySet<string> = new Set(["awaiting_pos
  */
 export const MAIL_IN_CARRIERS = ["auspost", "startrack", "couriers", "fastway", "tnt", "dhl", "fedex", "sendle", "other"] as const;
 
+/**
+ * Device types a mail-in may be — the same list, in the same order, as the
+ * POS's service booking form (DEVICE_TYPES in koapos service-jobs-new.tsx), so
+ * the job a received parcel becomes carries a type staff already use.
+ * Change both together.
+ */
+export const SERVICE_DEVICE_TYPES = [
+  "AIO", "Desktop", "Laptop", "Tablet", "Smartphone", "Printer", "Network Device",
+  "VHS Tape", "DVD", "Cassette Tape", "Game Console", "Pictures", "External Hard Drive", "Other",
+] as const;
+
+/** Media sent as a batch rather than one device (MEDIA_DEVICE_TYPES in the POS). */
+export const MEDIA_DEVICE_TYPES: readonly string[] = ["VHS Tape", "DVD", "Cassette Tape", "Pictures"];
+
 /** What a customer ticks before submitting. Stored as one timestamp (agreedAt):
- *  the form can't be sent without all of them, so "agreed" means all four. */
+ *  the form can't be sent without all of them, so "agreed" means all four.
+ *  `{business}` is the business name as saved in Business Details. */
 export const MAIL_IN_TERMS = [
-  "I have backed up my data. Koastal is not responsible for any data lost during diagnosis or repair.",
+  "I have backed up my data. {business} is not responsible for any data lost during diagnosis or repair.",
   "I have removed SIM and memory cards, cases and accessories — anything sent that isn't listed on this form is at my own risk.",
-  "My device is my responsibility until it arrives with Koastal. I understand registered, tracked post is strongly recommended.",
+  "My device is my responsibility until it arrives with {business}. I understand registered, tracked post is strongly recommended.",
   "Diagnostics are free. No repair goes ahead until I have approved a quote.",
 ] as const;
+
+export function mailInTerms(businessName: string): string[] {
+  const name = businessName.trim() || "us";
+  return MAIL_IN_TERMS.map((t) => t.replaceAll("{business}", name));
+}
 
 /** Where a request may be moved by staff. `received` is not here: it is reached
  *  only through "Received", which also creates the service job. */

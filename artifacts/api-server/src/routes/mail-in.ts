@@ -18,9 +18,9 @@ import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { SERVICE_WARRANTY_DEFAULTS } from "../lib/service-job-defaults";
 import {
-  MAIL_IN_CARRIERS, MAIL_IN_TERMS, OPEN_MAIL_IN_STATUSES, canStaffSetStatus, statusAfterTracking,
+  MAIL_IN_CARRIERS, MAIL_IN_TERMS, mailInTerms, OPEN_MAIL_IN_STATUSES, canStaffSetStatus, statusAfterTracking,
   nextMailInReference, newMailInToken, hashMailInToken, isMailInToken, cleanTrackingNumber,
-  jobDeviceDescription, returnAddressLine, formatOpeningHours,
+  jobDeviceDescription, returnAddressLine, formatOpeningHours, SERVICE_DEVICE_TYPES, MEDIA_DEVICE_TYPES,
 } from "../lib/mail-in";
 
 /**
@@ -93,7 +93,9 @@ router.get("/shop/mail-in", async (_req, res): Promise<void> => {
     openingHours: business.openingHours,
     returnText: settings.returnText,
     extraNotes: settings.extraNotes,
-    terms: MAIL_IN_TERMS,
+    terms: mailInTerms(business.businessName),
+    deviceTypes: SERVICE_DEVICE_TYPES,
+    mediaDeviceTypes: MEDIA_DEVICE_TYPES,
   });
 });
 
@@ -107,7 +109,7 @@ const SubmitBody = z.object({
   suburb:       text(2, 80),
   state:        z.enum(["NSW", "VIC", "QLD", "WA", "SA", "TAS", "ACT", "NT"]),
   postcode:     z.string().trim().regex(/^\d{4}$/),
-  deviceType:   text(2, 60),
+  deviceType:   z.enum(SERVICE_DEVICE_TYPES),
   brandModel:   text(2, 120),
   serialNumber: text(0, 80).optional(),
   fault:        text(10, 3000),

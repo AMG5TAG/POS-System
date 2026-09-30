@@ -592,6 +592,18 @@ products from `useListProducts({ limit: 500 })`; its figures now come from
 `GET /inventory/overview`. Pickers that must see every product load the full
 list, as Purchase Orders does.
 
+### Campaign audiences
+
+Who an email/SMS campaign reaches is `audienceWhere` in
+`api-server/src/lib/campaign-audience.ts` — used by both `/…-campaigns/:id/send`
+and `/…-campaigns/audience-count` (what the page shows), so the count is what
+is sent. Every audience requires `agreedToMarketing` and the channel's contact.
+The send routes used to know only "all"/"single" while the pages save
+"specific", "loyalty", "new", "inactive", "layby", "high_value": a campaign to
+one customer, or to any segment, went to **every** opted-in customer. An
+unknown audience is now refused (400), never widened; "specific" with no
+customer reaches no one. Pinned by `campaign-audience.test.ts`.
+
 ### Linking a job or appointment to an invoice
 
 In the invoice editor, linking a service job or appointment also sets the

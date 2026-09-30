@@ -3,7 +3,7 @@ import request from "supertest";
 import express from "express";
 import {
   canStaffSetStatus, statusAfterTracking, nextMailInReference, cleanTrackingNumber,
-  formatOpeningHours, hashMailInToken, MAIL_IN_TERMS,
+  formatOpeningHours, hashMailInToken, MAIL_IN_TERMS, mailInTerms,
 } from "../lib/mail-in";
 
 /**
@@ -43,6 +43,12 @@ describe("mail-in rules", () => {
     expect(cleanTrackingNumber("ab")).toBeNull();
   });
 
+  it("names the business in the terms as it is saved", () => {
+    const terms = mailInTerms("Koastal Kollective");
+    expect(terms[0]).toContain("Koastal Kollective is not responsible");
+    expect(terms.join(" ")).not.toContain("{business}");
+  });
+
   it("formats Business Details opening hours", () => {
     expect(formatOpeningHours({
       Monday: { enabled: false, open: "09:00", close: "17:00" },
@@ -80,7 +86,7 @@ let app: express.Express;
 const form = (over: Record<string, unknown> = {}) => ({
   firstName: "Sam", lastName: "Lee", email: "Sam@Example.com", phone: "0412345678",
   street: "1 Beach Rd", suburb: "Byron Bay", state: "NSW", postcode: "2481",
-  deviceType: "Phone", brandModel: "iPhone 13 Pro", fault: "Screen cracked and touch not working",
+  deviceType: "Smartphone", brandModel: "iPhone 13 Pro", fault: "Screen cracked and touch not working",
   agreed: MAIL_IN_TERMS.map(() => true), ...over,
 });
 
@@ -98,6 +104,13 @@ describe("mail-in routes", () => {
   it("refuses a form without every term ticked, saving nothing", async () => {
     h.rows = [[]]; // settings (none → enabled)
     const res = await request(app).post("/api/shop/mail-in").send(form({ agreed: [true, true, true] }));
+    expect(res.status).toBe(400);
+    expect(h.values).toEqual([]);
+  });
+
+  it("only accepts the POS's service device types", async () => {
+    h.rows = [[]];
+    const res = await request(app).post("/api/shop/mail-in").send(form({ deviceType: "Phone" }));
     expect(res.status).toBe(400);
     expect(h.values).toEqual([]);
   });

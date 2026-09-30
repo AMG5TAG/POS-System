@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import DOMPurify from "dompurify";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
@@ -269,9 +270,8 @@ export default function MarketingEmailCampaignsPage() {
   const [sending, setSending] = useState(false);
   const editorRef = useRef<HTMLDivElement>(null);
 
-  const { data: customerData } = useListCustomers({ limit: 500 });
+  const { data: customerData } = useListCustomers({ limit: 100000 });
   const allCustomers = (customerData?.items ?? []) as Customer[];
-  const customersWithEmail = allCustomers.filter((c) => c.email).length;
   const specificCustomer = draft.audience === "specific" && draft.customerId
     ? allCustomers.find((c) => c.id === draft.customerId)
     : null;
@@ -297,13 +297,19 @@ export default function MarketingEmailCampaignsPage() {
     if (editorRef.current) setField("body", editorRef.current.innerHTML);
   };
 
-  const audienceCount = (() => {
-    if (draft.audience === "all") return customersWithEmail;
-    if (draft.audience === "specific") return specificCustomer ? 1 : 0;
-    if (draft.audience === "loyalty") return allCustomers.filter((c) => c.email && c.loyaltyPoints).length;
-    if (draft.audience === "no_email") return allCustomers.filter((c) => !c.email).length;
-    return Math.max(1, Math.floor(customersWithEmail * 0.3));
-  })();
+  /* Counted by the server with the same rule the send uses
+     (lib/campaign-audience.ts): opted-in customers with an email in this
+     audience. Until it answers, 0 — which also keeps Send disabled. */
+  const { data: audienceData } = useQuery({
+    queryKey: ["email-audience-count", draft.audience, draft.customerId],
+    queryFn: async (): Promise<{ count: number }> => {
+      const qs = new URLSearchParams({ audience: draft.audience, ...(draft.customerId ? { customerId: String(draft.customerId) } : {}) });
+      const r = await fetch(`/api/email-campaigns/audience-count?${qs}`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to count recipients");
+      return r.json();
+    },
+  });
+  const audienceCount = audienceData?.count ?? 0;
 
   const resolveAudienceLabel = () => {
     if (draft.audience === "specific" && specificCustomer) {

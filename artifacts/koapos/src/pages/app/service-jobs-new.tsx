@@ -69,6 +69,8 @@ import {
 import { ServiceJobSheet } from "@/components/printing/ServiceJobSheet";
 import { serviceJobQrUrl } from "@/lib/public-url";
 
+// The shop's Mail-In form offers the same list (SERVICE_DEVICE_TYPES in the
+// API's lib/mail-in.ts) — change both together.
 const DEVICE_TYPES = [
   "AIO",
   "Desktop",

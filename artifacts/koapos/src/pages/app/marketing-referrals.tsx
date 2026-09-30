@@ -96,7 +96,7 @@ export default function MarketingReferralsPage() {
   const [search, setSearch] = useState("");
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
-  const { data, isLoading, refetch } = useListCustomers({ limit: 500, offset: 0 });
+  const { data, isLoading, refetch } = useListCustomers({ limit: 100000, offset: 0 });
   const customers = data?.items ?? [];
 
   /* Build referral code -> referrer name map */

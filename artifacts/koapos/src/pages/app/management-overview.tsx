@@ -310,7 +310,7 @@ export default function ManagementOverviewPage() {
   /* Tax & loyalty settings */
   const { data: taxData }     = useGetTaxSettings();
   const { data: loyaltyData } = useGetLoyaltySettings();
-  const { data: customerData } = useListCustomers({ limit: 500 });
+  const { data: customerData } = useListCustomers({ limit: 100000 });
 
   /* Derived sales values */
   const totalSales    = summary?.totalSales       ?? 0;

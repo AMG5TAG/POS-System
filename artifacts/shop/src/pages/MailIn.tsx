@@ -36,9 +36,8 @@ type Form = {
 };
 const EMPTY: Form = {
   firstName: "", lastName: "", email: "", phone: "", street: "", suburb: "", state: "NSW", postcode: "",
-  deviceType: "Phone", brandModel: "", serialNumber: "", fault: "", accessories: "",
+  deviceType: "", brandModel: "", serialNumber: "", fault: "", accessories: "",
 };
-const DEVICE_TYPES = ["Phone", "Tablet", "Laptop", "Desktop computer", "Game console", "Smartwatch", "Other"];
 
 const field = "mt-1 w-full h-11 rounded-lg border border-stone-300 bg-white px-3";
 
@@ -72,6 +71,8 @@ export default function MailIn() {
     setForm((f) => ({ ...f, [k]: e.target.value }));
 
   const terms = info?.terms ?? [];
+  // VHS, DVDs, photos and the like come as a batch: ask what's in it, not for a model or serial.
+  const isMedia = (info?.mediaDeviceTypes ?? []).includes(form.deviceType);
   const allAgreed = terms.length > 0 && terms.every((_, i) => agreed[i]);
 
   const submit = async (e: React.FormEvent) => {
@@ -221,10 +222,17 @@ export default function MailIn() {
                 <fieldset className="rounded-2xl border border-stone-200 bg-white p-5 grid sm:grid-cols-2 gap-4">
                   <legend className="px-2 font-semibold">Your device</legend>
                   <label className="block"><span className="text-sm font-medium">Device type *</span>
-                    <select value={form.deviceType} onChange={set("deviceType")} className={field}>{DEVICE_TYPES.map((d) => <option key={d}>{d}</option>)}</select>
+                    <select required value={form.deviceType} onChange={set("deviceType")} className={field}>
+                      <option value="" disabled>Choose…</option>
+                      {(info?.deviceTypes ?? []).map((d) => <option key={d}>{d}</option>)}
+                    </select>
                   </label>
-                  <label className="block"><span className="text-sm font-medium">Brand and model *</span><input required minLength={2} maxLength={120} value={form.brandModel} onChange={set("brandModel")} className={field} placeholder="e.g. iPhone 13 Pro" /></label>
-                  <label className="block sm:col-span-2"><span className="text-sm font-medium">Serial number or IMEI</span><input maxLength={80} value={form.serialNumber} onChange={set("serialNumber")} className={field} placeholder="Optional — helps us match your parcel" /></label>
+                  {isMedia ? (
+                    <label className="block"><span className="text-sm font-medium">What are you sending? *</span><input required minLength={2} maxLength={120} value={form.brandModel} onChange={set("brandModel")} className={field} placeholder={`e.g. 12 ${form.deviceType === "Pictures" ? "photo albums" : `${form.deviceType}s`}`} /></label>
+                  ) : (
+                    <label className="block"><span className="text-sm font-medium">Brand and model *</span><input required minLength={2} maxLength={120} value={form.brandModel} onChange={set("brandModel")} className={field} placeholder="e.g. iPhone 13 Pro" /></label>
+                  )}
+                  {!isMedia && <label className="block sm:col-span-2"><span className="text-sm font-medium">Serial number or IMEI</span><input maxLength={80} value={form.serialNumber} onChange={set("serialNumber")} className={field} placeholder="Optional — helps us match your parcel" /></label>}
                   <label className="block sm:col-span-2"><span className="text-sm font-medium">What's wrong with it? *</span>
                     <textarea required minLength={10} maxLength={3000} rows={4} value={form.fault} onChange={set("fault")} className="mt-1 w-full rounded-lg border border-stone-300 bg-white px-3 py-2" placeholder="What happened, what it does now, anything you've already tried." />
                   </label>

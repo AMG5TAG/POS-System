@@ -11,6 +11,10 @@ export interface MailInInfo {
   returnText: string;
   extraNotes: string;
   terms: string[];
+  /** The POS's service device types, in its order. */
+  deviceTypes: string[];
+  /** Of those, media sent as a batch (VHS, DVD, …) rather than one device. */
+  mediaDeviceTypes: string[];
 }
 
 export interface MailInStatusView {

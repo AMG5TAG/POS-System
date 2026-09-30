@@ -1,11 +1,12 @@
 import { Router, type IRouter } from "express";
 import { db, emailCampaignsTable, customersTable, merchantsTable, businessProfileTable } from "@workspace/db";
-import { eq, and, isNotNull } from "drizzle-orm";
+import { eq, and, sql } from "drizzle-orm";
 import { createHmac } from "crypto";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
+import { audienceWhere } from "../lib/campaign-audience";
 
 function makeUnsubToken(merchantId: number, customerId: number): string {
   const secret = process.env.UNSUBSCRIBE_SECRET ?? process.env.SESSION_SECRET ?? "koapos-unsub-secret";
@@ -97,6 +98,16 @@ router.delete("/email-campaigns/:id", requireAuth, async (req, res): Promise<voi
   res.status(204).end();
 });
 
+/** How many customers an audience reaches — what the page shows before sending. */
+router.get("/email-campaigns/audience-count", requireAuth, async (req, res): Promise<void> => {
+  const audience = String(req.query.audience ?? "all");
+  const customerId = req.query.customerId ? Number(req.query.customerId) : null;
+  const where = audienceWhere(req.session.merchantId!, "email", audience, customerId);
+  if (!where) { res.status(400).json({ error: "Unknown audience" }); return; }
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(customersTable).where(where);
+  res.json({ count: n });
+});
+
 router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
@@ -119,22 +130,14 @@ router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<
   const bizAddress = [merchant?.address, merchant?.city, bp?.state, bp?.postcode].filter(Boolean).join(", ");
   const baseUrl = publicOrigin();
 
-  // Build recipient list — only customers who have explicitly opted in (Spam Act 2003 s 16)
-  let customers = await db
+  // Recipients: opted-in customers (Spam Act 2003 s 16) in the campaign's
+  // audience — lib/campaign-audience.ts, the same rule the page counts with.
+  const where = audienceWhere(merchantId, "email", row.audience, row.customerId);
+  if (!where) { res.status(400).json({ error: `Unknown audience "${row.audience}" — edit the campaign and choose its audience again` }); return; }
+  const customers = await db
     .select({ id: customersTable.id, firstName: customersTable.firstName, email: customersTable.email })
     .from(customersTable)
-    .where(and(
-      eq(customersTable.merchantId, merchantId),
-      isNotNull(customersTable.email),
-      eq(customersTable.agreedToMarketing, "true"),
-    ));
-
-  // Apply audience filter
-  if (row.audience === "no_purchase_30d") {
-    // filtered further on the server — keep all opted-in for now; refined queries can be added
-  } else if (row.audience === "single" && row.customerId != null) {
-    customers = customers.filter(c => c.id === row.customerId);
-  }
+    .where(where);
 
   let sent = 0;
   let failed = 0;
