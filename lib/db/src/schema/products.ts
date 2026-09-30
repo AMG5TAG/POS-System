@@ -25,6 +25,8 @@ export const categoriesTable = pgTable("categories", {
   index("categories_merchant_id_idx").on(t.merchantId),
 ]);
 
+export type ProductMediaItem = { type: "image" | "video"; url: string };
+
 export const productsTable = pgTable("products", {
   id:                serial("id").primaryKey(),
   merchantId:        integer("merchant_id").notNull().references(() => merchantsTable.id),
@@ -73,6 +75,10 @@ export const productsTable = pgTable("products", {
   lengthCm:           numeric("length_cm", { precision: 10, scale: 1 }),
   widthCm:            numeric("width_cm", { precision: 10, scale: 1 }),
   heightCm:           numeric("height_cm", { precision: 10, scale: 1 }),
+  /* Extra images and videos after the primary `imageUrl`, in display order
+     (scripts/src/add-product-media.ts). A video is an uploaded file or a
+     YouTube/Vimeo link. Null/empty means the primary image only. */
+  media:              jsonb("media").$type<ProductMediaItem[]>(),
   createdAt:         timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt:         timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),
 }, (t) => [

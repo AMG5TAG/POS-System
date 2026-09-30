@@ -4,11 +4,12 @@ import { Loader2, Minus, Plus, ShieldCheck, Check } from "lucide-react";
 import { useProduct } from "@/lib/shop";
 import { useCart } from "@/lib/cart";
 import { money } from "@/lib/format";
-import { ProductImage } from "@/components/ProductCard";
 import { ProductTabs, type ProductTab } from "@/components/ProductTabs";
 import { RelatedProducts } from "@/components/RelatedProducts";
 import { Stars } from "@/components/Stars";
 import { WishlistHeart } from "@/components/WishlistHeart";
+import { ProductGallery } from "@/components/ProductGallery";
+import type { MediaItem } from "@/lib/shop";
 
 export default function Product() {
   const { id } = useParams<{ id: string }>();
@@ -56,11 +57,14 @@ export default function Product() {
         <Link href="/products" className="hover:underline">Shop</Link>
         {p.category && <> / <Link href={`/products?category=${p.category.id}`} className="hover:underline">{p.category.name}</Link></>}
       </nav>
-      <div className="grid md:grid-cols-2 gap-10">
-        <div className="relative aspect-square rounded-2xl bg-white border border-stone-200 p-8">
-          <ProductImage src={image} alt={p.name} />
-          <WishlistHeart productId={p.id} name={p.name} className="absolute top-4 right-4 w-11 h-11" />
-        </div>
+      <div className="grid grid-cols-1 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-8 lg:gap-12 items-start">
+        {/* A chosen variant's own photo leads; the rest of the gallery follows. */}
+        <ProductGallery alt={p.name} items={[
+          ...(image ? [{ type: "image", url: image } as MediaItem] : []),
+          ...p.media.filter((m) => m.url !== image),
+        ]}>
+          <WishlistHeart productId={p.id} name={p.name} className="absolute top-3 right-3 w-11 h-11" />
+        </ProductGallery>
         <div className="space-y-5">
           {p.brand && <p className="text-sm uppercase tracking-wide text-stone-500">{p.brand}</p>}
           <h1 className="text-3xl font-bold leading-tight break-words">{p.name}</h1>

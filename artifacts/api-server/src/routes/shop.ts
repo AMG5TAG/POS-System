@@ -12,6 +12,8 @@ import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { shopVisible } from "../lib/shop-visibility";
 import { hasPurchased, reviewerName, buyerCustomerIds, PURCHASE_SALE_STATUSES } from "../lib/shop-reviews";
 import { loyaltyEarnedFor, loyaltyProgramInfo, formatLoyalty, type LoyaltyConfig } from "../lib/loyalty";
+import { shopMediaUrl, serveShopMedia, describeVideo } from "../lib/shop-media";
+import type { ProductMediaItem } from "@workspace/db";
 import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_MS } from "../lib/warranty";
 
 /**
@@ -120,6 +122,18 @@ router.get("/shop/favicon", async (req, res): Promise<void> => {
   res.status(404).json({ error: "No logo" });
 });
 
+/* ── Media ───────────────────────────────────────────────────────────── */
+
+/* Uploaded product/category images and videos, public only while the shop
+   shows them (lib/shop-media.ts). GET and HEAD, with Range for video. */
+router.get("/shop/media/*path", async (req, res): Promise<void> => {
+  const merchantId = await merchantOr404(res);
+  if (merchantId == null) return;
+  const raw = req.params.path as unknown;
+  const path = Array.isArray(raw) ? raw.join("/") : String(raw);
+  await serveShopMedia(req, res, merchantId, path);
+});
+
 /* ── Catalogue ────────────────────────────────────────────────────────── */
 
 const visible = shopVisible;
@@ -138,7 +152,7 @@ router.get("/shop/categories", async (_req, res): Promise<void> => {
   const total = (id: number): number =>
     (countBy.get(id) ?? 0) + cats.filter((c) => c.parentId === id).reduce((s, c) => s + total(c.id), 0);
   res.json(cats
-    .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? null, color: c.color ?? null, imageUrl: c.imageUrl ?? null, productCount: total(c.id) }))
+    .map((c) => ({ id: c.id, name: c.name, parentId: c.parentId ?? null, color: c.color ?? null, imageUrl: shopMediaUrl(c.imageUrl ?? null), productCount: total(c.id) }))
     .filter((c) => c.productCount > 0));
 });
 
@@ -213,7 +227,7 @@ type SummaryRow = {
 };
 function summaryOf(p: SummaryRow) {
   return {
-    id: p.id, name: p.name, price: money(p.price) ?? 0, imageUrl: p.imageUrl ?? null,
+    id: p.id, name: p.name, price: money(p.price) ?? 0, imageUrl: shopMediaUrl(p.imageUrl ?? null),
     categoryId: p.categoryId ?? null, brand: p.brandName ?? null,
     inStock: inStockOf(p), refurbished: bool(p.isRefurbished), isService: p.isService === true,
   };
@@ -238,7 +252,12 @@ router.get("/shop/products/:id", async (req, res): Promise<void> => {
   const pr = p.product;
   res.json({
     id: pr.id, name: pr.name, description: pr.description ?? "", price: money(pr.price) ?? 0,
-    imageUrl: pr.imageUrl ?? null, sku: pr.sku ?? null,
+    imageUrl: shopMediaUrl(pr.imageUrl ?? null), sku: pr.sku ?? null,
+    // Gallery after the primary image, in the order set in the POS.
+    media: ((pr.media ?? []) as ProductMediaItem[]).filter((m) => m && typeof m.url === "string" && m.url).map((m) =>
+      m.type === "video"
+        ? { type: "video" as const, url: shopMediaUrl(m.url), ...describeVideo(m.url) }
+        : { type: "image" as const, url: shopMediaUrl(m.url) }),
     category: p.categoryName ? { id: pr.categoryId, name: p.categoryName } : null,
     brand: p.brandName ?? null,
     inStock: inStockOf({ ...pr, typeTracksStock: p.typeTracksStock }), refurbished: bool(pr.isRefurbished),
@@ -251,7 +270,7 @@ router.get("/shop/products/:id", async (req, res): Promise<void> => {
       : null,
     rating: await ratingOf(merchantId, id),
     variants: variants.map((v) => ({
-      id: v.id, name: v.name, price: money(v.price) ?? money(pr.price) ?? 0, imageUrl: v.imageUrl ?? null,
+      id: v.id, name: v.name, price: money(v.price) ?? money(pr.price) ?? 0, imageUrl: shopMediaUrl(v.imageUrl ?? null),
       attributes: v.attributes ?? {}, inStock: inStockOf({ trackInventory: pr.trackInventory, stockQuantity: v.stockQuantity, typeTracksStock: p.typeTracksStock }),
     })),
   });

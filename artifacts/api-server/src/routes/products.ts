@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable, transactionsTable, invoicesTable, customersTable } from "@workspace/db";
+import type { ProductMediaItem } from "@workspace/db";
 import { eq, and, ilike, sql, or, desc, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import multer from "multer";
@@ -87,6 +88,21 @@ function specColumns(d: SpecFields): Record<string, string | null> {
 
 const num = (v: string | null) => (v == null ? null : parseFloat(v));
 
+// Gallery items: only our own uploads (/api/storage/objects/…) or https links
+// are kept — a javascript: or data: URL would be rendered on the public shop.
+// Duplicates and blanks are dropped; an empty list is stored as null.
+function cleanMedia(items: { type: "image" | "video"; url: string }[] | null): ProductMediaItem[] | null {
+  if (!items) return null;
+  const seen = new Set<string>();
+  const out = items.flatMap((m) => {
+    const url = m.url.trim();
+    if (!url || seen.has(url) || !(url.startsWith("/api/storage/objects/") || /^https:\/\//i.test(url))) return [];
+    seen.add(url);
+    return [{ type: m.type, url }];
+  });
+  return out.length ? out : null;
+}
+
 function formatProduct(
   p: typeof productsTable.$inferSelect,
   category?: typeof categoriesTable.$inferSelect | null,
@@ -139,6 +155,7 @@ function formatProduct(
     lengthCm: num(p.lengthCm),
     widthCm: num(p.widthCm),
     heightCm: num(p.heightCm),
+    media: (p.media as ProductMediaItem[] | null) ?? [],
     createdAt: p.createdAt.toISOString(),
   };
 }
@@ -301,7 +318,7 @@ async function logCostHistory(
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
 
   // Reject a SKU that already exists for this merchant (case-insensitive, like
   // the CSV import path). SKU has no DB unique constraint, so this is enforced
@@ -368,6 +385,7 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       groupPrices: groupPrices ?? null,
       tags: tags ?? null,
       ...specColumns({ technicalSpecs, weightKg, lengthCm, widthCm, heightCm }),
+      ...(media !== undefined ? { media: cleanMedia(media) } : {}),
     })
     .returning();
   // Record the initial cost as the first price-history entry.
@@ -768,7 +786,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
 
   // Reject a SKU that already exists on a DIFFERENT product for this merchant
   // (case-insensitive), matching the create path. Only runs when the SKU is
@@ -800,6 +818,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;
   if (tags !== undefined) updates.tags = tags;
   Object.assign(updates, specColumns({ technicalSpecs, weightKg, lengthCm, widthCm, heightCm }));
+  if (media !== undefined) updates.media = cleanMedia(media);
   const warranty = readWarranty(req.body);
   if (warranty) { updates.warrantyDuration = warranty.warrantyDuration; updates.warrantyUnit = warranty.warrantyUnit; }
   const resolvedCategoryId = await resolveCategoryName(req.session.merchantId!, req.body);

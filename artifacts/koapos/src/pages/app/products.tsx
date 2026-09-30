@@ -60,6 +60,7 @@ import { TreeCategorySelect } from "@/components/ui/tree-category-select";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
+import { ProductMediaEditor, type ProductMediaItem } from "@/components/products/ProductMediaEditor";
 import { formatCurrency } from "@/lib/utils";
 import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
@@ -115,8 +116,9 @@ type ProductForm = {
   name: string; description: string; price: string; costPrice: string;
   sku: string; barcode: string; categoryId: string; brandId: string;
   /* images */
-  imageUrl: string; imageUrl2: string; imageUrl3: string; imageUrl4: string;
-  videoUrl: string;
+  imageUrl: string;
+  /* gallery after the primary image — extra images and videos, in order */
+  media: ProductMediaItem[];
   /* pricing extras */
   supplier: string; supplierCode: string;
   /* physical */
@@ -153,7 +155,7 @@ type ProductForm = {
 const defaultForm: ProductForm = {
   name: "", description: "", price: "", costPrice: "0", sku: "", barcode: "",
   categoryId: "", brandId: "",
-  imageUrl: "", imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
+  imageUrl: "", media: [],
   supplier: "", supplierCode: "",
   weight: "", weightUnit: "kg",
   lengthCm: "", widthCm: "", heightCm: "",
@@ -1638,7 +1640,7 @@ export default function ProductsPage() {
       categoryId: p.categoryId?.toString() || "",
       brandId: (ep as Product & { brandId?: number | null }).brandId?.toString() || "",
       imageUrl: ep.imageUrl || "",
-      imageUrl2: "", imageUrl3: "", imageUrl4: "", videoUrl: "",
+      media: (ep.media ?? []) as ProductMediaItem[],
       supplier: ep.supplier || "", supplierCode: ep.supplierCode || "",
       // Weight is stored in kg whatever unit it was typed in.
       weight: ep.weightKg != null ? String(ep.weightKg) : "", weightUnit: "kg",
@@ -1698,6 +1700,7 @@ export default function ProductsPage() {
       sku: form.sku || undefined,
       barcode: form.barcode || undefined,
       imageUrl: form.imageUrl || undefined,
+      media: form.media,
       categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
       brandId: form.brandId ? parseInt(form.brandId) : undefined,
       productType: form.productType,
@@ -3139,31 +3142,20 @@ export default function ProductsPage() {
             {formTab === "media" && (
               <div className="py-5 space-y-6">
                 <div>
-                  <SectionHeader label="Product Images" />
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">Upload images or paste a URL. JPG, PNG, WebP · Max 2048×2048px recommended.</p>
-                  <div className="grid grid-cols-4 gap-3">
-                    <ImageSlot label="Primary"  value={form.imageUrl}  onChange={(v) => setField("imageUrl", v)}  />
-                    <ImageSlot label="Image 2"  value={form.imageUrl2} onChange={(v) => setField("imageUrl2", v)} />
-                    <ImageSlot label="Image 3"  value={form.imageUrl3} onChange={(v) => setField("imageUrl3", v)} />
-                    <ImageSlot label="Image 4"  value={form.imageUrl4} onChange={(v) => setField("imageUrl4", v)} />
+                  <SectionHeader label="Primary Image" />
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Shown on the product grid, receipts and first on the online shop. JPG, PNG, WebP · up to 2048×2048px recommended.</p>
+                  <div className="w-44">
+                    <ImageSlot label="Primary" value={form.imageUrl} onChange={(v) => setField("imageUrl", v)} />
                   </div>
                 </div>
 
                 <div className="border-t pt-5">
-                  <div className="flex items-center gap-2 mb-3">
+                  <div className="flex items-center gap-2">
                     <Video className="w-4 h-4 text-muted-foreground" />
-                    <SectionHeader label="Video" />
+                    <SectionHeader label="Gallery — Images & Videos" />
                   </div>
-                  <div>
-                    <Label className="text-xs text-muted-foreground">Video URL (YouTube or direct link)</Label>
-                    <Input
-                      value={form.videoUrl}
-                      onChange={(e) => setField("videoUrl", e.target.value)}
-                      placeholder="https://youtube.com/watch?v=… or direct video URL"
-                      className="mt-1.5"
-                    />
-                    <p className="text-xs text-muted-foreground mt-1.5">Displayed as a video preview on the product detail page.</p>
-                  </div>
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Shown after the primary image on the online shop's product page, in this order. Use the arrows to reorder.</p>
+                  <ProductMediaEditor value={form.media} onChange={(v) => setField("media", v)} />
                 </div>
               </div>
             )}

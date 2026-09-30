@@ -60,7 +60,8 @@
     "add-category-show-online": "tsx ./src/add-category-show-online.ts",
     "add-category-image-url": "tsx ./src/add-category-image-url.ts",
     "add-product-specs": "tsx ./src/add-product-specs.ts",
-    "add-customer-wishlist-table": "tsx ./src/add-customer-wishlist-table.ts"
+    "add-customer-wishlist-table": "tsx ./src/add-customer-wishlist-table.ts",
+    "add-product-media": "tsx ./src/add-product-media.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

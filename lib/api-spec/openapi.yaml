@@ -10507,11 +10507,29 @@ components:
           type: ["number", "null"]
         heightCm:
           type: ["number", "null"]
+        media:
+          type: ["array", "null"]
+          maxItems: 24
+          description: Extra images and videos after the primary image, in display order (online shop gallery).
+          items:
+            $ref: "#/components/schemas/ProductMediaItem"
         digitalCodesCount:
           type: ["integer", "null"]
         createdAt:
           type: string
           format: date-time
+
+    ProductMediaItem:
+      type: object
+      required: [type, url]
+      properties:
+        type:
+          type: string
+          enum: [image, video]
+        url:
+          type: string
+          minLength: 1
+          maxLength: 2048
 
     BulkProductUpdate:
       type: object
@@ -10618,6 +10636,12 @@ components:
           type: ["number", "null"]
         heightCm:
           type: ["number", "null"]
+        media:
+          type: ["array", "null"]
+          maxItems: 24
+          description: Extra images and videos after the primary image, in display order (online shop gallery).
+          items:
+            $ref: "#/components/schemas/ProductMediaItem"
 
     ProductUpdate:
       type: object
@@ -10690,6 +10714,12 @@ components:
           type: ["number", "null"]
         heightCm:
           type: ["number", "null"]
+        media:
+          type: ["array", "null"]
+          maxItems: 24
+          description: Extra images and videos after the primary image, in display order (online shop gallery).
+          items:
+            $ref: "#/components/schemas/ProductMediaItem"
 
     ProductList:
       type: object

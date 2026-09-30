@@ -467,6 +467,22 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   in kg/cm, not text, because shipping quotes will need them — and the
   warranty. The POS product form had Weight and L/W/H inputs that never saved;
   they now do (weight converted to kg). Added by `scripts/src/add-product-specs.ts`.
+- **Shop media is served by the shop, not storage.** Uploads live at
+  `/api/storage/objects/…`, which needs a POS staff session, so until this was
+  fixed every uploaded product photo was a 401 to shoppers and the shop showed
+  its placeholder. The shop API rewrites those links to `/api/shop/media/…`
+  (`shopMediaUrl`), which serves a file only while a listed product (image,
+  gallery, variant) or a shown category uses it — nothing else in storage is
+  exposed — and honours `Range`, without which iOS Safari won't play video.
+  Any new shop response carrying an image URL must pass it through
+  `shopMediaUrl`. Pinned by `shop-media.test.ts`.
+- **Gallery**: `products.media` (jsonb, `scripts/src/add-product-media.ts`) holds
+  images and videos after the primary `imageUrl`, in order — set in the POS
+  product form's Media tab (`ProductMediaEditor`). A video is an upload
+  (MP4/WebM/MOV, capped at 200 MB in the POS since it is hashed in memory) or a
+  YouTube/Vimeo link, embedded via `describeVideo`. Only uploads and https links
+  are stored (`cleanMedia`). The Media tab's old four image slots and video URL
+  box were never saved; they are replaced by this.
 - **Reviews** reuse `product_reviews` with a new `customer_id`. Only a signed-in
   shopper who has bought the product may write one: a completed/refunded sale
   or paid invoice line naming it, across every POS customer sharing their email

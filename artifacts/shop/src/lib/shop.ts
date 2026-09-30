@@ -19,8 +19,13 @@ export interface ProductDetail extends Omit<ProductSummary, "categoryId"> {
   weightKg: number | null;
   dimensionsCm: { length: number | null; width: number | null; height: number | null } | null;
   rating: Rating;
+  /** Gallery after the primary image (POS › Products › Media). */
+  media: MediaItem[];
   variants: { id: number; name: string; price: number; imageUrl: string | null; attributes: Record<string, string>; inStock: boolean }[];
 }
+export type MediaItem =
+  | { type: "image"; url: string }
+  | { type: "video"; url: string; provider: "file" | "youtube" | "vimeo"; embedUrl: string | null; thumbnail: string | null };
 export interface Rating { average: number | null; count: number }
 export interface Review { id: number; author: string; rating: number; title: string; body: string; verified: boolean; createdAt: string }
 export interface ReviewsResponse {

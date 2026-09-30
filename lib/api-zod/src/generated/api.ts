@@ -253,6 +253,10 @@ export const ListProductsQueryParams = zod.object({
 
 export const listProductsResponseItemsItemTagsMax = 5;
 
+export const listProductsResponseItemsItemMediaItemUrlMax = 2048;
+
+export const listProductsResponseItemsItemMediaMax = 24;
+
 
 
 export const ListProductsResponse = zod.object({
@@ -304,6 +308,10 @@ export const ListProductsResponse = zod.object({
   "lengthCm": zod.number().nullish(),
   "widthCm": zod.number().nullish(),
   "heightCm": zod.number().nullish(),
+  "media": zod.array(zod.object({
+  "type": zod.enum(['image', 'video']),
+  "url": zod.string().min(1).max(listProductsResponseItemsItemMediaItemUrlMax)
+})).max(listProductsResponseItemsItemMediaMax).nullish().describe('Extra images and videos after the primary image, in display order (online shop gallery).'),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -318,6 +326,10 @@ export const ListProductsResponse = zod.object({
 export const createProductBodyPriceMin = 0;
 
 export const createProductBodyTagsMax = 5;
+
+export const createProductBodyMediaItemUrlMax = 2048;
+
+export const createProductBodyMediaMax = 24;
 
 
 
@@ -350,7 +362,11 @@ export const CreateProductBody = zod.object({
   "weightKg": zod.number().nullish(),
   "lengthCm": zod.number().nullish(),
   "widthCm": zod.number().nullish(),
-  "heightCm": zod.number().nullish()
+  "heightCm": zod.number().nullish(),
+  "media": zod.array(zod.object({
+  "type": zod.enum(['image', 'video']),
+  "url": zod.string().min(1).max(createProductBodyMediaItemUrlMax)
+})).max(createProductBodyMediaMax).nullish().describe('Extra images and videos after the primary image, in display order (online shop gallery).')
 })
 
 
@@ -400,6 +416,10 @@ export const GetProductParams = zod.object({
 })
 
 export const getProductResponseTagsMax = 5;
+
+export const getProductResponseMediaItemUrlMax = 2048;
+
+export const getProductResponseMediaMax = 24;
 
 
 
@@ -451,6 +471,10 @@ export const GetProductResponse = zod.object({
   "lengthCm": zod.number().nullish(),
   "widthCm": zod.number().nullish(),
   "heightCm": zod.number().nullish(),
+  "media": zod.array(zod.object({
+  "type": zod.enum(['image', 'video']),
+  "url": zod.string().min(1).max(getProductResponseMediaItemUrlMax)
+})).max(getProductResponseMediaMax).nullish().describe('Extra images and videos after the primary image, in display order (online shop gallery).'),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })
@@ -464,6 +488,10 @@ export const UpdateProductParams = zod.object({
 })
 
 export const updateProductBodyTagsMax = 5;
+
+export const updateProductBodyMediaItemUrlMax = 2048;
+
+export const updateProductBodyMediaMax = 24;
 
 
 
@@ -498,10 +526,18 @@ export const UpdateProductBody = zod.object({
   "weightKg": zod.number().nullish(),
   "lengthCm": zod.number().nullish(),
   "widthCm": zod.number().nullish(),
-  "heightCm": zod.number().nullish()
+  "heightCm": zod.number().nullish(),
+  "media": zod.array(zod.object({
+  "type": zod.enum(['image', 'video']),
+  "url": zod.string().min(1).max(updateProductBodyMediaItemUrlMax)
+})).max(updateProductBodyMediaMax).nullish().describe('Extra images and videos after the primary image, in display order (online shop gallery).')
 })
 
 export const updateProductResponseTagsMax = 5;
+
+export const updateProductResponseMediaItemUrlMax = 2048;
+
+export const updateProductResponseMediaMax = 24;
 
 
 
@@ -553,6 +589,10 @@ export const UpdateProductResponse = zod.object({
   "lengthCm": zod.number().nullish(),
   "widthCm": zod.number().nullish(),
   "heightCm": zod.number().nullish(),
+  "media": zod.array(zod.object({
+  "type": zod.enum(['image', 'video']),
+  "url": zod.string().min(1).max(updateProductResponseMediaItemUrlMax)
+})).max(updateProductResponseMediaMax).nullish().describe('Extra images and videos after the primary image, in display order (online shop gallery).'),
   "digitalCodesCount": zod.number().nullish(),
   "createdAt": zod.coerce.date()
 })

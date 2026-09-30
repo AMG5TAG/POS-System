@@ -821,6 +821,23 @@ export interface Category {
   createdAt: string;
 }
 
+export type ProductMediaItemType = typeof ProductMediaItemType[keyof typeof ProductMediaItemType];
+
+
+export const ProductMediaItemType = {
+  image: 'image',
+  video: 'video',
+} as const;
+
+export interface ProductMediaItem {
+  type: ProductMediaItemType;
+  /**
+     * @minLength 1
+     * @maxLength 2048
+     */
+  url: string;
+}
+
 export interface Product {
   id: number;
   merchantId: number;
@@ -886,6 +903,12 @@ export interface Product {
   widthCm?: number | null;
   /** @nullable */
   heightCm?: number | null;
+  /**
+     * Extra images and videos after the primary image, in display order (online shop gallery).
+     * @maxItems 24
+     * @nullable
+     */
+  media?: ProductMediaItem[] | null;
   /** @nullable */
   digitalCodesCount?: number | null;
   createdAt: string;
@@ -965,6 +988,12 @@ export interface ProductInput {
   widthCm?: number | null;
   /** @nullable */
   heightCm?: number | null;
+  /**
+     * Extra images and videos after the primary image, in display order (online shop gallery).
+     * @maxItems 24
+     * @nullable
+     */
+  media?: ProductMediaItem[] | null;
 }
 
 export type ProductUpdateGroupPrices = {[key: string]: number};
@@ -1016,6 +1045,12 @@ export interface ProductUpdate {
   widthCm?: number | null;
   /** @nullable */
   heightCm?: number | null;
+  /**
+     * Extra images and videos after the primary image, in display order (online shop gallery).
+     * @maxItems 24
+     * @nullable
+     */
+  media?: ProductMediaItem[] | null;
 }
 
 export interface ProductList {
