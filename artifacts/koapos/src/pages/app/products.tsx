@@ -177,6 +177,15 @@ const defaultForm: ProductForm = {
   stockLocationOverflow: "",
 };
 
+/* Editing from the product view opens the form on the matching tab, so the
+   field being looked at is the one in front of the operator. Sales History has
+   no edit tab; a tab that doesn't apply to the product's type (e.g. Stock on a
+   service) falls back to the form's first visible tab. */
+const EDIT_TAB_FOR_VIEW_TAB: Record<DetailTab, FormTab> = {
+  details: "details", price: "pricing", media: "media", inventory: "stock",
+  serials: "stock", sales: "details", settings: "settings",
+};
+
 const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; variantOnly?: boolean; hideForService?: boolean; hideForDigitalCode?: boolean; hideForTimeCard?: boolean }[] = [
   { key: "details",       label: "Details"       },
   { key: "media",         label: "Media"         },
@@ -793,7 +802,7 @@ function ProductDetailDialog({
 }: {
   product: Product | null;
   onClose: () => void;
-  onEdit: (p: Product) => void;
+  onEdit: (p: Product, tab?: FormTab) => void;
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
 }) {
@@ -1065,7 +1074,7 @@ function ProductDetailDialog({
             >
               <Trash2 className="w-4 h-4" />
             </Button>
-            <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(product); }} title="Edit product">
+            <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(product, EDIT_TAB_FOR_VIEW_TAB[tab]); }} title="Edit product">
               <Pencil className="w-4 h-4" />
             </Button>
             <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
@@ -1630,7 +1639,7 @@ export default function ProductsPage() {
     setEditingProduct(null); setForm(startForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
-  const openEdit = (p: Product) => {
+  const openEdit = (p: Product, tab: FormTab = "details") => {
     setEditingProduct(p);
     const ep = p as Product & { barcode?: string; imageUrl?: string; productType?: string; productTypeId?: number | null; groupPrices?: Record<string, number>; supplier?: string | null; supplierCode?: string | null; isEpay?: boolean };
     const editForm: ProductForm = {
@@ -1685,7 +1694,7 @@ export default function ProductsPage() {
     setPcPartType(_c?.partType || "");
     setPcSocket(_c?.socket || "");
     setPcCompatNotes(_c?.specs || "");
-    setFormTab("details");
+    setFormTab(tab);
     setFormTouched(false);
     setDialogOpen(true);
   };

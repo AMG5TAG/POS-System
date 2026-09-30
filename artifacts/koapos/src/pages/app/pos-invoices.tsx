@@ -611,7 +611,7 @@ export default function POSInvoicesPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailInvoiceRaw]);
 
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const allProducts = productsData?.items ?? [];
   const { data: extSettings } = useGetRegionalExtSettings();
   const _parsedDefaultTaxRate = parseFloat((extSettings as any)?.defaultTaxRate ?? "10");

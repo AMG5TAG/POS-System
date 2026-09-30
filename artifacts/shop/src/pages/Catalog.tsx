@@ -36,15 +36,13 @@ export default function Catalog() {
   const current = cats?.find((c) => c.id === category);
   const parents = (cats ?? []).filter((c) => c.parentId == null);
   const childrenOf = (id: number) => (cats ?? []).filter((c) => c.parentId === id);
-  // Every level below a top-level category, flattened in order: the sidebar
-  // shows them as one plain list under their bold parent, not as a tree.
-  const descendantsOf = (id: number): typeof parents =>
-    childrenOf(id).flatMap((k) => [k, ...descendantsOf(k.id)]);
-  const rootOf = (id: number | undefined) => {
-    let c = cats?.find((x) => x.id === id);
-    while (c?.parentId != null) c = cats?.find((x) => x.id === c!.parentId);
-    return c?.id;
-  };
+  // The category being viewed and every category above it: these are always
+  // shown open, so the current selection is never hidden inside a collapsed group.
+  const openPath = new Set<number>();
+  for (let c = current; c; c = cats?.find((x) => x.id === c!.parentId)) {
+    openPath.add(c.id);
+    if (openPath.size > 20) break; // guard against a parent cycle
+  }
   const [collapsed, setCollapsed] = useState<Set<number>>(() => {
     try { return new Set(JSON.parse(localStorage.getItem(COLLAPSED_KEY) ?? "[]")); } catch { return new Set(); }
   });
@@ -54,8 +52,35 @@ export default function Catalog() {
     try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...n])); } catch { /* per-browser nicety only */ }
     return n;
   });
-  // The group holding the category being viewed is always shown open.
-  const activeRoot = rootOf(category);
+  const isOpen = (id: number) => !collapsed.has(id) || openPath.has(id);
+
+  const chevron = (c: { id: number; name: string }, open: boolean) => (
+    <button onClick={() => toggle(c.id)} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${c.name} subcategories`} className="w-8 h-8 shrink-0 flex items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100">
+      <ChevronDown className={`w-4 h-4 transition-transform ${open ? "" : "-rotate-90"}`} />
+    </button>
+  );
+
+  /* Below the top level every category sits at the same indent — the weight,
+     not a tree, shows the structure: any category with subcategories is bold
+     and collapsible, one without is plain. Collapsing hides everything under it. */
+  const subRows = (parentId: number): React.ReactNode =>
+    childrenOf(parentId).map((k) => {
+      const hasKids = childrenOf(k.id).length > 0;
+      const open = hasKids && isOpen(k.id);
+      const active = category === k.id;
+      return (
+        <div key={k.id} className={hasKids ? "mt-1" : undefined}>
+          <div className="flex items-center">
+            <button onClick={() => setParam("category", String(k.id))}
+              className={`flex-1 min-w-0 text-left pl-6 pr-3 py-1 rounded-lg ${hasKids ? "font-semibold text-ink" : active ? "font-medium text-ink" : "text-stone-600"} ${active ? "bg-brand-50" : "hover:bg-stone-100"}`}>
+              {k.name}
+            </button>
+            {hasKids && chevron(k, open)}
+          </div>
+          {open && subRows(k.id)}
+        </div>
+      );
+    });
   const pages = data ? Math.max(1, Math.ceil(data.total / PAGE_SIZE)) : 1;
 
   /* Choosing a category (here or in the header menu) or another page jumps to
@@ -77,32 +102,17 @@ export default function Catalog() {
         <p className="font-semibold mb-2">Categories</p>
         <button onClick={() => setParam("category", null)} className={`block w-full text-left px-3 py-1.5 rounded-lg ${!category ? "bg-brand-50 font-medium" : "hover:bg-stone-100"}`}>All products</button>
         {parents.map((c) => {
-          const subs = descendantsOf(c.id);
-          const open = subs.length > 0 && (!collapsed.has(c.id) || activeRoot === c.id);
+          const hasKids = childrenOf(c.id).length > 0;
+          const open = hasKids && isOpen(c.id);
           return (
             <div key={c.id}>
               <div className="flex items-center">
                 <button onClick={() => setParam("category", String(c.id))} className={`flex-1 min-w-0 text-left px-3 py-1.5 rounded-lg font-semibold ${category === c.id ? "bg-brand-50" : "hover:bg-stone-100"}`}>
                   {c.name} <span className="font-normal text-stone-400">({c.productCount})</span>
                 </button>
-                {subs.length > 0 && (
-                  <button onClick={() => toggle(c.id)} aria-expanded={open} aria-label={`${open ? "Hide" : "Show"} ${c.name} subcategories`} className="w-8 h-8 flex items-center justify-center rounded-lg text-stone-500 hover:bg-stone-100">
-                    <ChevronDown className={`w-4 h-4 transition-transform ${open ? "" : "-rotate-90"}`} />
-                  </button>
-                )}
+                {hasKids && chevron(c, open)}
               </div>
-              {open && subs.map((k, i) => {
-                // A top-level category's own subcategories are bold too, so each
-                // group reads as a heading; anything deeper is plain. Same indent
-                // for all — the weight shows the level, not a tree.
-                const secondary = k.parentId === c.id;
-                return (
-                  <button key={k.id} onClick={() => setParam("category", String(k.id))}
-                    className={`block w-full text-left pl-6 pr-3 py-1 rounded-lg ${secondary ? `font-semibold ${i > 0 ? "mt-1" : ""}` : ""} ${category === k.id ? "bg-brand-50 text-ink" : `${secondary ? "text-ink" : "text-stone-600"} hover:bg-stone-100`} ${category === k.id && !secondary ? "font-medium" : ""}`}>
-                    {k.name}
-                  </button>
-                );
-              })}
+              {open && subRows(c.id)}
             </div>
           );
         })}

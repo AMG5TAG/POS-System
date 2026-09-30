@@ -17,6 +17,8 @@ import SetPassword from "@/pages/SetPassword";
 import Account from "@/pages/Account";
 import Wishlist from "@/pages/Wishlist";
 import Rewards from "@/pages/Rewards";
+import MailIn from "@/pages/MailIn";
+import MailInTrack from "@/pages/MailInTrack";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -51,6 +53,8 @@ export default function App() {
                 <Route path="/account" component={Account} />
                 <Route path="/wishlist" component={Wishlist} />
                 <Route path="/rewards" component={Rewards} />
+                <Route path="/mail-in" component={MailIn} />
+                <Route path="/mail-in/track/:token" component={MailInTrack} />
                 <Route component={NotFound} />
               </Switch>
             </Layout>

@@ -29,7 +29,7 @@ export default function ProductsBundlesPage() {
   const [productSearch, setProductSearch] = useState("");
 
   const { data: bundles = [], isLoading } = useListProductBundles();
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const createBundle = useCreateProductBundle();
   const updateBundle = useUpdateProductBundle();
   const deleteBundle = useDeleteProductBundle();

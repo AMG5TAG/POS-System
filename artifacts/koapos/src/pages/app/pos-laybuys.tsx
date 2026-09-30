@@ -126,7 +126,7 @@ export default function POSLaybuysPage() {
   const paymentLegsTotal = paymentLegs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const [cancelReason, setCancelReason] = useState("");
 
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const allProducts = productsData?.items ?? [];
 
   const filteredProducts = allProducts.filter(

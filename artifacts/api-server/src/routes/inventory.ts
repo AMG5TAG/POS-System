@@ -63,6 +63,30 @@ router.get("/inventory", requireAuth, async (req, res): Promise<void> => {
   });
 });
 
+/* Inventory › Overview figures, over the whole catalogue. The page used to
+   fetch the first 500 products and count those, so every figure stopped at
+   500. Low stock and inventory value leave out services, as the inventory
+   list does; value is retail price × stock on hand, ignoring negative stock. */
+router.get("/inventory/overview", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const [row] = await db
+    .select({
+      total:      sql<number>`count(*)::int`,
+      active:     sql<number>`count(*) FILTER (WHERE ${productsTable.isActive} = 'true')::int`,
+      lowStock:   sql<number>`count(*) FILTER (WHERE (${productTypesTable.slug} IS DISTINCT FROM 'service') AND ${productsTable.trackInventory} = 'true' AND ${productsTable.stockQuantity} <= COALESCE(${productsTable.lowStockThreshold}, 5))::int`,
+      value:      sql<string>`COALESCE(SUM(CASE WHEN ${productTypesTable.slug} IS DISTINCT FROM 'service' THEN ${productsTable.price} * GREATEST(${productsTable.stockQuantity}, 0) ELSE 0 END), 0)`,
+    })
+    .from(productsTable)
+    .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
+    .where(eq(productsTable.merchantId, merchantId));
+  res.json({
+    totalProducts: row?.total ?? 0,
+    activeProducts: row?.active ?? 0,
+    lowStock: row?.lowStock ?? 0,
+    inventoryValue: Math.round(parseFloat(row?.value ?? "0") * 100) / 100,
+  });
+});
+
 router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<void> => {
   const params = UpdateInventoryParams.safeParse(req.params);
   if (!params.success) {

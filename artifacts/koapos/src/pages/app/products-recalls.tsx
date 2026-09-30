@@ -53,7 +53,7 @@ export default function ProductsRecallsPage() {
   const updateMutation = useUpdateProductRecall({ mutation: { onSuccess: () => { invalidate(); } } });
   const deleteMutation = useDeleteProductRecall({ mutation: { onSuccess: () => { invalidate(); } } });
 
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const products = productsData?.items ?? [];
 
   const openCreate = () => { setEditingId(null); setForm(emptyForm()); setDialogOpen(true); };

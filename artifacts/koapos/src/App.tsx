@@ -148,6 +148,7 @@ const MarketingLoyaltyPromotionsPage = lazyWithRetry(() => import("@/pages/app/m
 const ManagementMarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/management-marketing-referrals"));
 const ManagementMarketingAutomationPage = lazyWithRetry(() => import("@/pages/app/management-marketing-automation"));
 const OnlineOrdersPage = lazyWithRetry(() => import("@/pages/app/online-orders"));
+const OnlineMailInPage = lazyWithRetry(() => import("@/pages/app/online-mail-in"));
 const OnlineShippingPage = lazyWithRetry(() => import("@/pages/app/online-shipping"));
 const ManagementMiscPage = lazyWithRetry(() => import("@/pages/app/management-misc"));
 const ManagementSyncPage = lazyWithRetry(() => import("@/pages/app/management-sync"));
@@ -873,6 +874,9 @@ function Router() {
       </Route>
       <Route path="/online/orders">
         <ProtectedRoute component={OnlineOrdersPage} />
+      </Route>
+      <Route path="/online/mail-in">
+        <ProtectedRoute component={OnlineMailInPage} />
       </Route>
       <Route path="/online/shipping">
         <ProtectedRoute component={OnlineShippingPage} />

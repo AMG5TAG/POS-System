@@ -1,6 +1,8 @@
 import { Router, type IRouter } from "express";
 import { db, brandsTable, productsTable, productTypesTable } from "@workspace/db";
-import { eq, and, ilike, count, sql, or, notInArray, gt } from "drizzle-orm";
+import { eq, and, ilike, count, sql, or, notInArray, gt, inArray } from "drizzle-orm";
+import { z } from "zod/v4";
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateBrandParams, DeleteBrandParams } from "@workspace/api-zod";
 
@@ -61,6 +63,41 @@ router.post("/brands", requireAuth, async (req, res): Promise<void> => {
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
   const [brand] = await db.insert(brandsTable).values({ name, description, website, logoUrl, merchantId: req.session.merchantId! }).returning();
   res.status(201).json(brand);
+});
+
+/* Merge brands: every product on a source brand moves to the target, then the
+   source brands are deleted. `dryRun` answers with the counts and changes
+   nothing, so the page can say exactly what will move before it does. */
+const MergeBody = z.object({
+  targetId: z.number().int().positive(),
+  sourceIds: z.array(z.number().int().positive()).min(1).max(100),
+  dryRun: z.boolean().optional(),
+});
+
+router.post("/brands/merge", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const parsed = MergeBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Choose a brand to keep and at least one to merge into it" }); return; }
+  const merchantId = req.session.merchantId!;
+  const { targetId, dryRun } = parsed.data;
+  const sourceIds = [...new Set(parsed.data.sourceIds)].filter((id) => id !== targetId);
+  if (sourceIds.length === 0) { res.status(400).json({ error: "Choose at least one other brand to merge" }); return; }
+
+  const found = await db.select({ id: brandsTable.id }).from(brandsTable)
+    .where(and(eq(brandsTable.merchantId, merchantId), inArray(brandsTable.id, [targetId, ...sourceIds])));
+  if (found.length !== sourceIds.length + 1) { res.status(404).json({ error: "One of those brands no longer exists" }); return; }
+
+  const [{ n }] = await db.select({ n: sql<number>`count(*)::int` }).from(productsTable)
+    .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.brandId, sourceIds)));
+  if (dryRun) { res.json({ products: n, brandsRemoved: sourceIds.length }); return; }
+
+  const result = await db.transaction(async (tx) => {
+    const moved = await tx.update(productsTable).set({ brandId: targetId })
+      .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.brandId, sourceIds)))
+      .returning({ id: productsTable.id });
+    await tx.delete(brandsTable).where(and(eq(brandsTable.merchantId, merchantId), inArray(brandsTable.id, sourceIds)));
+    return { products: moved.length, brandsRemoved: sourceIds.length };
+  });
+  res.json(result);
 });
 
 router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {

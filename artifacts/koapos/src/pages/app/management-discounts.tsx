@@ -122,7 +122,7 @@ export default function ManagementDiscountsPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   const { data: discounts = [], isLoading } = useListDiscounts();
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const products = (productsData?.items ?? []).map((p) => ({ id: p.id, name: p.name }));
   const createDiscount = useCreateDiscount();
   const updateDiscount = useUpdateDiscount();

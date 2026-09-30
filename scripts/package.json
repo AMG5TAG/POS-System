@@ -62,7 +62,8 @@
     "add-product-specs": "tsx ./src/add-product-specs.ts",
     "add-customer-wishlist-table": "tsx ./src/add-customer-wishlist-table.ts",
     "add-product-media": "tsx ./src/add-product-media.ts",
-    "add-trusted-ips-and-dashboard-devices": "tsx ./src/add-trusted-ips-and-dashboard-devices.ts"
+    "add-trusted-ips-and-dashboard-devices": "tsx ./src/add-trusted-ips-and-dashboard-devices.ts",
+    "add-mail-in-tables": "tsx ./src/add-mail-in-tables.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

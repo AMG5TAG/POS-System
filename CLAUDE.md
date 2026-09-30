@@ -562,6 +562,36 @@ newest first. It names the product and time only — never the buyer, price or
 quantity (`shop-recent-purchases.test.ts`). `JustPurchased.tsx` shows one at a
 time bottom-left, not on cart/checkout/account, closable for the visit.
 
+### Mail-in repairs
+
+Shop `/mail-in` (packing guide, address + hours from Business Details, form,
+four required terms) → `mail_in_requests` (`scripts/src/add-mail-in-tables.ts`).
+Status `awaiting_postage → in_transit → received | cancelled`. The customer adds
+tracking at `/mail-in/track/<token>` (emailed; only the token's SHA-256 is
+stored). **A request is not a service job until the parcel arrives**: POS
+Online › Mail-In "Parcel received" (`POST /mail-in/:id/receive`) claims the row
+first (so a double click can't make two jobs), matches the customer (the
+submitting shopper → newest POS customer with that email → a new one) and
+creates a `KS####` job with `isMailIn`, inbound tracking and return address.
+`received` is reachable no other way (`canStaffSetStatus`). Rules in
+`lib/mail-in.ts`, pinned by `mail-in.test.ts`.
+
+### Merging brands and suppliers
+
+`POST /brands/merge` and `/suppliers/merge` (`{targetId, sourceIds, dryRun}`)
+move everything to the kept record in one transaction and delete the rest; the
+UI always shows the `dryRun` counts first. **Products name their supplier as
+text** (`products.supplier`), not by id, so a supplier merge renames that text
+(matched case/space-insensitively) as well as repointing
+`purchase_orders.supplier_id` and `product_return_auths.supplier_id`. A return
+keeps the supplier name printed on it; price history's `supplier_name` is left
+as history.
+
+**Don't count a capped list.** Inventory › Overview once counted the first 500
+products from `useListProducts({ limit: 500 })`; its figures now come from
+`GET /inventory/overview`. Pickers that must see every product load the full
+list, as Purchase Orders does.
+
 ### Linking a job or appointment to an invoice
 
 In the invoice editor, linking a service job or appointment also sets the

@@ -405,7 +405,7 @@ export default function ManagementLoyaltyPage() {
   const updateMutation = useUpdateLoyaltySettings();
   const { settings: customerConfig } = useCustomerSettings();
   const { data: categoriesData } = useListCategories();
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const categories = categoriesData ?? [];
   const products = productsData?.items ?? [];
 

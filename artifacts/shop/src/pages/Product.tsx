@@ -97,7 +97,7 @@ export default function Product() {
           <p className="text-3xl font-extrabold">{money(price)} <span className="text-sm font-normal text-stone-500">inc. GST</span></p>
           {p.isService
             ? <p className="text-sky-700 text-sm font-medium">Service — we'll be in touch to arrange it after you order.</p>
-            : inStock ? <p className="text-emerald-700 text-sm font-medium">In stock</p> : <p className="text-stone-500 text-sm font-medium">Out of stock</p>}
+            : inStock ? <p className="text-emerald-700 text-sm font-medium">In stock</p> : <p className="text-red-600 text-sm font-medium">Out of stock</p>}
 
           {p.variants.length > 0 && (
             <div className="space-y-2">

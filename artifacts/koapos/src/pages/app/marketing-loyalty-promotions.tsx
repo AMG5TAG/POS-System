@@ -48,7 +48,7 @@ export default function MarketingLoyaltyPromotionsPage() {
   const { data: settings, isLoading } = useGetLoyaltySettings();
   const updateMutation = useUpdateLoyaltySettings();
   const { data: categoriesData } = useListCategories();
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const categories = categoriesData ?? [];
   const products = productsData?.items ?? [];
 

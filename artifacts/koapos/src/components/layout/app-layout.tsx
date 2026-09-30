@@ -100,6 +100,7 @@ const STAFF_SUBNAV: NavItem[] = [
 
 const ONLINE_SUBNAV: NavItem[] = [
   { name: "Orders",   href: "/online/orders",   icon: ShoppingBag },
+  { name: "Mail-In",  href: "/online/mail-in",  icon: Mail        },
   { name: "Shipping", href: "/online/shipping", icon: Truck       },
 ];
 
@@ -1667,7 +1668,7 @@ function TopNavLayout({ children, location, navigate, user, theme, toggleTheme, 
           <span aria-hidden className="mx-1 h-5 border-l border-border shrink-0" />
           <a href={SOLVUP_URL} target="_blank" rel="noopener noreferrer"
             className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 text-sm font-medium text-muted-foreground hover:text-foreground hover:bg-muted transition-colors shrink-0">
-            SolvUP <ExternalLink className="w-3.5 h-3.5" />
+            <Globe className="w-4 h-4" /> SolvUP <ExternalLink className="w-3.5 h-3.5" />
           </a>
         </nav>
 
@@ -2154,9 +2155,10 @@ function AppLayoutInner({ children, hideSidebar }: { children: React.ReactNode; 
           <li role="separator" aria-hidden className="my-2 mx-2 border-t border-sidebar-border" />
           <SidebarMenuItem>
             <SidebarMenuButton asChild tooltip="SolvUP (opens in a new tab)">
-              <a href={SOLVUP_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2">
+              <a href={SOLVUP_URL} target="_blank" rel="noopener noreferrer" className="flex items-center gap-3">
+                <Globe className="w-4 h-4 shrink-0" />
                 <span className="font-medium group-data-[collapsible=icon]:hidden">SolvUP</span>
-                <ExternalLink className="w-4 h-4 shrink-0" />
+                <ExternalLink className="w-3.5 h-3.5 shrink-0 -ml-1.5 group-data-[collapsible=icon]:hidden" />
               </a>
             </SidebarMenuButton>
           </SidebarMenuItem>

@@ -28,7 +28,7 @@ export default function POSParkedPage() {
   const [selectedItems, setSelectedItems] = useState<ParkedItem[]>([]);
 
   const { data: sales = [], isLoading } = useListParkedSales();
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const createSale = useCreateParkedSale();
   const deleteSale = useDeleteParkedSale();
   const restoreSale = useRestoreParkedSale();

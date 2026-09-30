@@ -27,7 +27,7 @@ export function ProductCard({ p }: { p: ProductSummary }) {
           <span className="font-bold">{money(p.price)}</span>
           {p.isService
             ? <span className="text-xs text-sky-700">Service</span>
-            : p.inStock ? <span className="text-xs text-emerald-700">In stock</span> : <span className="text-xs text-stone-500">Out of stock</span>}
+            : p.inStock ? <span className="text-xs text-emerald-700">In stock</span> : <span className="text-xs text-red-600">Out of stock</span>}
         </div>
       </div>
     </Link>

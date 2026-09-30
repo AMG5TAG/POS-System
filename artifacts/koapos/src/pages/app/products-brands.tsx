@@ -15,9 +15,11 @@ import {
   Plus, Bookmark, Pencil, Trash2, Search, Globe, ImageIcon, X, Upload,
   Loader2, ChevronRight, ExternalLink, Package, ArrowUpDown, ArrowUp, ArrowDown,
   DollarSign,
+  Merge,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFile } from "@/lib/upload";
+import { MergeRecordsDialog } from "@/components/merge-records-dialog";
 import { cn } from "@/lib/utils";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
 import { useShowBrandCostValue } from "@/lib/brand-view-settings";
@@ -222,13 +224,16 @@ export default function ProductsBrandsPage() {
     { query: { queryKey: ["brands", search] } }
   );
   const brands = ((brandsData?.items ?? []) as unknown as Brand[]);
+  // The merge dialog lists every brand, not just the ones the search is showing.
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const { data: allBrandsData, refetch: refetchAllBrands } = useListBrands(undefined, { query: { queryKey: ["brands", ""], enabled: mergeOpen } });
 
   // "Cost Value" is a view option toggled from Management › Products and
   // Inventory › Inventory. When on, fetch all products once and total each
   // brand's inventory cost (cost price × stock on hand).
   const [showCostValue] = useShowBrandCostValue();
   const { data: allProductsData } = useListProducts(
-    { limit: 1000 } as unknown as Parameters<typeof useListProducts>[0],
+    { limit: 100000 } as unknown as Parameters<typeof useListProducts>[0],
     { query: { queryKey: ["products", "brand-cost-value"], enabled: showCostValue } }
   );
   const costValueByBrand = useMemo(() => {
@@ -322,6 +327,9 @@ export default function ProductsBrandsPage() {
               onClick={() => setShowCost((v) => !v)}
             >
               <DollarSign className="w-3.5 h-3.5" /> Show Cost
+            </Button>
+            <Button variant="outline" size="sm" className="rounded-full gap-1.5" onClick={() => setMergeOpen(true)}>
+              <Merge className="w-3.5 h-3.5" /> Merge
             </Button>
             <Button size="sm" className="rounded-full gap-1.5" onClick={openCreate}>
               <Plus className="w-4 h-4" /> Add Brand
@@ -481,6 +489,14 @@ export default function ProductsBrandsPage() {
           </div>
         </DialogContent>
       </Dialog>
+      <MergeRecordsDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        kind="brand"
+        items={((allBrandsData?.items ?? []) as unknown as Brand[]).map((b) => ({ id: b.id, name: b.name }))}
+        endpoint="/brands/merge"
+        onMerged={() => { void refetchBrands(); void refetchAllBrands(); }}
+      />
     </AppLayout>
   );
 }

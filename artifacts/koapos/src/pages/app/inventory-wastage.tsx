@@ -52,7 +52,7 @@ export default function InventoryWastagePage() {
   const [productSearch, setProductSearch] = useState("");
 
   const { data: entries = [], isLoading } = useListWastage({});
-  const { data: productsData } = useListProducts({ limit: 500 });
+  const { data: productsData } = useListProducts({ limit: 100000 });
   const createEntry = useCreateWastageEntry();
   const deleteEntry = useDeleteWastageEntry();
 

@@ -1,5 +1,6 @@
 import { AppLayout } from "@/components/layout/app-layout";
-import { useListProducts, useListCategories } from "@workspace/api-client-react";
+import { useListCategories } from "@workspace/api-client-react";
+import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Link } from "wouter";
@@ -7,24 +8,26 @@ import { Package, Layers, ClipboardList, ShoppingCart, Clock, RotateCcw, Truck, 
 import { formatCurrency } from "@/lib/utils";
 
 export default function ProductsOverviewPage() {
-  const { data: productsData } = useListProducts({ limit: 500 });
+  // Counted on the server over the whole catalogue (GET /inventory/overview).
+  const { data: overview } = useQuery({
+    queryKey: ["inventory-overview"],
+    queryFn: async (): Promise<{ totalProducts: number; activeProducts: number; lowStock: number; inventoryValue: number }> => {
+      const r = await fetch("/api/inventory/overview", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load overview");
+      return r.json();
+    },
+  });
   const { data: categoriesData } = useListCategories();
-
-  const products = productsData?.items ?? [];
   const categories = categoriesData ?? [];
-
-  const totalProducts = products.length;
-  const activeProducts = products.filter((p) => p.isActive !== false).length;
-  const stockableProducts = products.filter((p) => (p as unknown as { productType?: string }).productType !== "service");
-  const lowStock = stockableProducts.filter((p) => p.trackInventory && (p.stockQuantity ?? 0) <= (p.lowStockThreshold ?? 5)).length;
-  const totalValue = stockableProducts.reduce((sum, p) => sum + (p.price ?? 0) * (p.stockQuantity ?? 0), 0);
+  const lowStock = overview?.lowStock ?? 0;
+  const show = (n: number | undefined) => (n == null ? "—" : n.toLocaleString("en-AU"));
 
   const stats = [
-    { label: "Total Products", value: totalProducts, color: "text-blue-600" },
-    { label: "Active Products", value: activeProducts, color: "text-green-600" },
+    { label: "Total Products", value: show(overview?.totalProducts), color: "text-blue-600" },
+    { label: "Active Products", value: show(overview?.activeProducts), color: "text-green-600" },
     { label: "Categories", value: categories.length, color: "text-purple-600" },
-    { label: "Low Stock Alerts", value: lowStock, color: "text-amber-600" },
-    { label: "Inventory Value", value: formatCurrency(totalValue), color: "text-foreground" },
+    { label: "Low Stock Alerts", value: show(overview?.lowStock), color: "text-amber-600" },
+    { label: "Inventory Value", value: overview ? formatCurrency(overview.inventoryValue) : "—", color: "text-foreground" },
   ];
 
   const sections = [

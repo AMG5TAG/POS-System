@@ -102,6 +102,7 @@ function Footer() {
           <p className="font-semibold">Shop</p>
           <Link href="/products" className="block text-stone-600 hover:text-ink">All products</Link>
           <Link href="/rewards" className="block text-stone-600 hover:text-ink">Rewards</Link>
+          <Link href="/mail-in" className="block text-stone-600 hover:text-ink">Mail-in repairs</Link>
           <Link href="/account" className="block text-stone-600 hover:text-ink">My account</Link>
           <Link href="/cart" className="block text-stone-600 hover:text-ink">Cart</Link>
         </div>

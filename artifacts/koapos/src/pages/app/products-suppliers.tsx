@@ -18,10 +18,12 @@ import {
   Check, ChevronRight, ChevronLeft, Building2, MapPin, Users,
   FileText, CreditCard, ImageIcon, X, LayoutGrid, Table2, BarChart3,
   ChevronUp, ChevronDown, ChevronsUpDown, Upload, Smartphone,
+  Merge,
 } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
+import { MergeRecordsDialog } from "@/components/merge-records-dialog";
 import { expandStreetType, expandState } from "@/lib/address-format";
 import { StateSelectInput } from "@/components/ui/state-select-input";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
@@ -486,6 +488,9 @@ export default function ProductsSuppliersPage() {
     { query: { queryKey: ["suppliers", search] } }
   );
   const suppliers = ((suppliersData?.items ?? []) as unknown as Supplier[]);
+  // The merge dialog lists every supplier, not just the ones the search is showing.
+  const [mergeOpen, setMergeOpen] = useState(false);
+  const { data: allSuppliersData, refetch: refetchAllSuppliers } = useListSuppliers(undefined, { query: { queryKey: ["suppliers", ""], enabled: mergeOpen } });
 
   const createSupplierMutation = useCreateSupplier();
   const updateSupplierMutation = useUpdateSupplier();
@@ -628,6 +633,9 @@ export default function ProductsSuppliersPage() {
           {/* Right: count + add */}
           <div className="flex items-center gap-2 shrink-0">
             <span className="text-sm text-muted-foreground">{suppliers.length} supplier{suppliers.length !== 1 ? "s" : ""}</span>
+            <Button size="sm" variant="outline" onClick={() => setMergeOpen(true)} className="gap-1.5">
+              <Merge className="w-3.5 h-3.5" /> Merge
+            </Button>
             <Button size="sm" onClick={openCreate} className="gap-1.5">
               <Plus className="w-3.5 h-3.5" /> Add Supplier
             </Button>
@@ -824,6 +832,14 @@ export default function ProductsSuppliersPage() {
         editing={editing}
         onSave={handleSave}
         saving={saving}
+      />
+      <MergeRecordsDialog
+        open={mergeOpen}
+        onOpenChange={setMergeOpen}
+        kind="supplier"
+        items={((allSuppliersData?.items ?? []) as unknown as Supplier[]).map((x) => ({ id: x.id, name: x.name }))}
+        endpoint="/suppliers/merge"
+        onMerged={() => { void refetchSuppliers(); void refetchAllSuppliers(); }}
       />
     </AppLayout>
   );
