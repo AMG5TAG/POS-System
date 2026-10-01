@@ -34,6 +34,13 @@ vi.mock("../lib/shop-reviews", async (importOriginal) => ({
 }));
 vi.mock("../services/autoSyncScheduler", () => ({ triggerInstantSync: vi.fn() }));
 vi.mock("../lib/phone", () => ({ normalisePhoneFor: async (_m: number, p: string) => p }));
+vi.mock("../lib/customer-profile-rules", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  profileRequirements: vi.fn(async () => ({
+    required: { email: false, phone: false, dateOfBirth: false, company: false, abn: false, billingAddress: false },
+    heardFromSources: [],
+  })),
+}));
 
 let app: express.Express;
 const shopper = { id: 9, merchantId: 1, firstName: "Sam", lastName: "lee", email: "sam@example.com", dateOfBirth: null as string | null, loyaltyPoints: 0 };

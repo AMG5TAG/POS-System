@@ -91,7 +91,7 @@ export const SITE_NAV: NavItem[] = [
     label: "CONTACT",
     href: "#contact",
     children: [
-      { label: "Contact", href: "#contact" },
+      { label: "Contact Us", href: "#contact" },
       { label: "About Us", href: "/about" },
       { label: "Testimonials", href: "#testimonials" },
       { label: "Service Areas", href: "#service-areas" },
@@ -235,7 +235,8 @@ function ShopMenu({ categories, onShopNavigate, close }: { categories: ShopCateg
   const roots = tree(categories);
   return (
     <>
-      <ShopMenuItem href="/shop/products" colour={BRAND} featured onClick={shopClick("/shop/products", onShopNavigate, close)}>All products</ShopMenuItem>
+      {/* "All products" opens the shop's home page, not the bare catalogue. */}
+      <ShopMenuItem href="/shop/" colour={BRAND} featured onClick={shopClick("/shop/", onShopNavigate, close)}>All products</ShopMenuItem>
       <CategoryList nodes={roots} onShopNavigate={onShopNavigate} close={close} />
     </>
   );
@@ -252,8 +253,7 @@ function ShopMobileMenu({ categories, onShopNavigate, onNavigate }: { categories
   );
   return (
     <div className="text-sm divide-y divide-gray-100">
-      {link("/shop/", "block py-2.5 font-semibold dark:text-white", "Shop home")}
-      {link("/shop/products", "block py-2.5 font-semibold dark:text-white", "All products")}
+      {link("/shop/", "block py-2.5 font-semibold dark:text-white", "All products")}
       {roots.map((r) => (
         <div key={r.id}>
           <div className="flex items-center">

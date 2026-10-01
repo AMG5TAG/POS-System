@@ -667,6 +667,15 @@ shop account; nothing of it is left in the POS but a redirect. What moved:
 - **Repairs** now carry the work description and estimate. The portal also
   showed the job's `notes` as "Notes from the workshop" — that is the staff's
   internal log (calls, remarks), so it is deliberately **not** carried over.
+- **Profile = the POS record.** The customer edits everything the POS asks a
+  customer for — names, email, mobile (+ WhatsApp flag), birthday, company,
+  ABN, address, postal/delivery address (the shipping columns; "same as my
+  address" stores a copy), marketing consent and "how did you hear about us"
+  (by name, from `customer_settings.heard_from_sources`). Staff-only fields
+  (notes, warning, group, loyalty) are not exposed. The POS's **required
+  fields** setting applies here too (`lib/customer-profile-rules.ts`, served to
+  the form by `GET /shop/account/fields` and re-checked on save); a field the
+  request omits is judged by what is stored, and omitted fields are left alone.
 - **Email** can be changed on the profile (the portal allowed it), but never to
   an address another customer record holds: the account gathers records from
   every record sharing its email (`buyerCustomerIds`), so that would hand over

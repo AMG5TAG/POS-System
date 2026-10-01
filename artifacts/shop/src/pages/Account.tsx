@@ -1,11 +1,11 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { Redirect } from "wouter";
 import { Link } from "wouter";
-import { Loader2, Package, Wrench, Coins, ShieldCheck, Heart, Cake, KeyRound } from "lucide-react";
+import { Loader2, Package, Wrench, Coins, ShieldCheck, Heart, KeyRound } from "lucide-react";
 import { useAccountOverview, type Overview } from "@/lib/loyalty";
 import { api } from "@/lib/api";
-import { useAuth, type Account as AccountT } from "@/lib/auth";
-import { Field, Notice } from "@/components/Form";
+import { useAuth } from "@/lib/auth";
+import { ProfileForm } from "@/components/account/ProfileForm";
 import { QuotesCard } from "@/components/account/QuotesCard";
 import { AppointmentsCard } from "@/components/account/AppointmentsCard";
 import { LoyaltyPass } from "@/components/account/LoyaltyPass";
@@ -13,30 +13,9 @@ import { LoyaltyPass } from "@/components/account/LoyaltyPass";
 export default function Account() {
   const { customer, loading, setCustomer, logout } = useAuth();
   const { data: overview } = useAccountOverview();
-  const [f, setF] = useState<AccountT | null>(customer);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
-  useEffect(() => { setF(customer); }, [customer]);
 
-  // The form copy (`f`) fills one render after sign-in resolves; wait for it
-  // rather than treating it as signed out, which bounced a direct visit to
-  // /account to the login page.
-  if (loading || (customer && !f)) return <div className="py-32 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
-  if (!customer || !f) return <Redirect to="/account/login?next=/account" />;
-
-  const save = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setBusy(true); setMsg(null);
-    try {
-      const r = await api<{ customer: AccountT }>("/shop/account/profile", {
-        method: "PATCH",
-        body: JSON.stringify({ firstName: f.firstName, lastName: f.lastName, email: f.email || undefined, phone: f.phone, address: f.address, dateOfBirth: f.dateOfBirth ?? "" }),
-      });
-      setCustomer(r.customer);
-      setMsg({ tone: "ok", text: "Saved." });
-    } catch (err) { setMsg({ tone: "error", text: (err as Error).message }); } finally { setBusy(false); }
-  };
-  const addr = (k: keyof AccountT["address"]) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, address: { ...f.address, [k]: e.target.value } });
+  if (loading) return <div className="py-32 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
+  if (!customer) return <Redirect to="/account/login?next=/account" />;
 
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
@@ -61,29 +40,7 @@ export default function Account() {
         <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />
       )}
 
-      <form onSubmit={save} className="rounded-2xl bg-white border border-stone-200 p-6 space-y-4">
-        <h2 className="text-lg font-semibold">Your details</h2>
-        {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
-        <div className="grid sm:grid-cols-2 gap-4">
-          <Field label="First name" required value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.target.value })} />
-          <Field label="Last name" value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.target.value })} />
-          <Field label="Email" type="email" autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
-          <Field label="Mobile" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
-          <Field label="Street address" value={f.address.street} onChange={addr("street")} />
-          <Field label="Suburb" value={f.address.city} onChange={addr("city")} />
-          <Field label="State" value={f.address.state} onChange={addr("state")} />
-          <Field label="Postcode" value={f.address.postcode} onChange={addr("postcode")} />
-          <div>
-            <Field label="Birthday" type="date" value={f.dateOfBirth ?? ""} max={new Date().toISOString().slice(0, 10)}
-              disabled={!!customer.dateOfBirth} onChange={(e) => setF({ ...f, dateOfBirth: e.target.value || null })} />
-            <p className="mt-1 text-xs text-stone-500 flex items-center gap-1.5">
-              <Cake className="w-3.5 h-3.5" />
-              {customer.dateOfBirth ? "Set — contact us if it needs correcting." : "For your birthday reward. Once saved it can't be changed online."}
-            </p>
-          </div>
-        </div>
-        <button type="submit" disabled={busy} className="h-11 px-6 rounded-full bg-brand text-white font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? "Saving…" : "Save details"}</button>
-      </form>
+      <ProfileForm customer={customer} onSaved={setCustomer} />
 
       <div className="rounded-2xl bg-white border border-stone-200 p-4 flex items-center gap-3 text-sm">
         <Package className="w-5 h-5 text-stone-400" /><span><span className="font-medium">Orders and invoices</span> <span className="text-stone-500">— coming soon</span></span>

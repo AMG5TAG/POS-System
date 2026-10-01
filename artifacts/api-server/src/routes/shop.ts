@@ -16,6 +16,8 @@ import { loyaltyEarnedFor, loyaltyProgramInfo, formatLoyalty, type LoyaltyConfig
 import { shopMediaUrl, serveShopMedia, describeVideo } from "../lib/shop-media";
 import type { ProductMediaItem } from "@workspace/db";
 import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_MS } from "../lib/warranty";
+import { formatAddressParts } from "../lib/address";
+import { profileRequirements, missingRequired } from "../lib/customer-profile-rules";
 
 /**
  * The online shop's API (koastal.com.au/shop) — public, no staff session.
@@ -669,6 +671,15 @@ export function accountOf(c: typeof customersTable.$inferSelect) {
       street: c.billingStreet ?? c.address ?? "", city: c.billingCity ?? "", state: c.billingState ?? "",
       postcode: c.billingPostcode ?? "", country: c.billingCountry ?? "Australia",
     },
+    /* Postal / delivery address — the POS's shipping fields. */
+    shippingAddress: {
+      street: c.shippingStreet ?? "", city: c.shippingCity ?? "", state: c.shippingState ?? "",
+      postcode: c.shippingPostcode ?? "", country: c.shippingCountry ?? "",
+    },
+    company: c.company ?? "", abn: c.abn ?? "",
+    whatsapp: c.whatsappSameAsPhone === "true",
+    agreedToMarketing: c.agreedToMarketing === "true",
+    heardFrom: c.heardFrom ?? "", heardFromDetails: c.heardFromDetails ?? "",
     loyaltyPoints: c.loyaltyPoints, portalToken: c.portalToken ?? null,
     dateOfBirth: c.dateOfBirth ?? null,
     /* False for a customer who came in on an account link and has never set a
@@ -842,6 +853,25 @@ const ProfileBody = z.object({
   }),
   /** YYYY-MM-DD, for the birthday reward. Optional, and set once — see below. */
   dateOfBirth: z.string().trim().regex(/^\d{4}-\d{2}-\d{2}$/, "Enter your birthday as a full date").optional().or(z.literal("")),
+  /* The rest of what the POS records about a customer. Each is optional so an
+     older page (or a partial save) leaves the stored value alone. */
+  shippingAddress: z.object({
+    street: z.string().trim().max(200), city: z.string().trim().max(100), state: z.string().trim().max(50),
+    postcode: z.string().trim().max(10), country: z.string().trim().max(60),
+  }).optional(),
+  company: z.string().trim().max(120).optional(),
+  abn: z.string().trim().max(20).refine((v) => v === "" || /^\d{11}$/.test(v.replace(/\s/g, "")), "An ABN is 11 digits").optional(),
+  whatsapp: z.boolean().optional(),
+  agreedToMarketing: z.boolean().optional(),
+  heardFrom: z.string().trim().max(80).optional(),
+  heardFromDetails: z.string().trim().max(200).optional(),
+});
+
+/* The business's required fields and "heard from" choices, for the profile form. */
+router.get("/shop/account/fields", async (req, res): Promise<void> => {
+  const c = await shopCustomer(req);
+  if (!c) { res.status(401).json({ error: "Please sign in." }); return; }
+  res.json(await profileRequirements(c.merchantId));
 });
 
 /** A real, past date no more than 120 years ago. */
@@ -877,6 +907,21 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     }
     if (!c.dateOfBirth) dateOfBirth = b.dateOfBirth;
   }
+  // The POS's required fields apply here too. A field this request leaves out
+  // is judged by what is stored, so an older page can still save.
+  const reqs = await profileRequirements(c.merchantId);
+  const missing = missingRequired(reqs.required, {
+    email: b.email ?? c.email ?? "",
+    phone: b.phone,
+    dateOfBirth: b.dateOfBirth || c.dateOfBirth,
+    company: b.company ?? c.company ?? "",
+    abn: b.abn ?? c.abn ?? "",
+    address: b.address,
+  });
+  if (missing.length) { res.status(400).json({ error: `Please add your ${missing.join(", ")}.` }); return; }
+  const heard = b.heardFrom ? reqs.heardFromSources.find((h) => h.name === b.heardFrom) : undefined;
+  if (b.heardFrom && !heard && b.heardFrom !== c.heardFrom) { res.status(400).json({ error: "Please choose how you heard about us from the list." }); return; }
+
   let email: string | undefined;
   if (b.email && b.email !== (c.email ?? "").trim().toLowerCase()) {
     const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
@@ -895,6 +940,18 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     phone: b.phone ? await normalisePhoneFor(c.merchantId, b.phone) : null,
     billingStreet: b.address.street || null, billingCity: b.address.city || null, billingState: b.address.state || null,
     billingPostcode: b.address.postcode || null, billingCountry: b.address.country || null,
+    // The POS still shows the free-text address in places; keep it in step.
+    address: formatAddressParts(b.address.street, b.address.city, b.address.state, b.address.postcode) || c.address,
+    ...(b.shippingAddress ? {
+      shippingStreet: b.shippingAddress.street || null, shippingCity: b.shippingAddress.city || null,
+      shippingState: b.shippingAddress.state || null, shippingPostcode: b.shippingAddress.postcode || null,
+      shippingCountry: b.shippingAddress.country || null,
+    } : {}),
+    ...(b.company !== undefined ? { company: b.company || null } : {}),
+    ...(b.abn !== undefined ? { abn: b.abn.replace(/\s/g, "") || null } : {}),
+    ...(b.whatsapp !== undefined ? { whatsappSameAsPhone: b.whatsapp ? "true" : "false" } : {}),
+    ...(b.agreedToMarketing !== undefined ? { agreedToMarketing: b.agreedToMarketing ? "true" : "false" } : {}),
+    ...(b.heardFrom !== undefined ? { heardFrom: b.heardFrom || null, heardFromDetails: b.heardFromDetails || null } : {}),
     updatedAt: new Date(),
   }).where(eq(customersTable.id, c.id)).returning();
   triggerInstantSync(c.merchantId, "contacts");

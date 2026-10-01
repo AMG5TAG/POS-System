@@ -2,13 +2,25 @@ import { createContext, useContext, type ReactNode } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { api } from "./api";
 
+export interface Address { street: string; city: string; state: string; postcode: string; country: string }
+
 export interface Account {
   id: number;
   firstName: string;
   lastName: string;
   email: string;
   phone: string;
-  address: { street: string; city: string; state: string; postcode: string; country: string };
+  address: Address;
+  /** Postal / delivery address (the POS's shipping fields); blank when it is the same as `address`. */
+  shippingAddress: Address;
+  company: string;
+  abn: string;
+  /** Their mobile is also their WhatsApp number. */
+  whatsapp: boolean;
+  /** Opted in to marketing email/SMS — campaigns only ever reach customers who have. */
+  agreedToMarketing: boolean;
+  heardFrom: string;
+  heardFromDetails: string;
   loyaltyPoints: number;
   portalToken: string | null;
   /** YYYY-MM-DD; set once by the shopper, for the birthday reward. */

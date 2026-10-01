@@ -155,7 +155,44 @@ const services = [
     imageAlt: "Desktop monitor displaying a modern small-business website with a hero section, service cards and a call-to-action button",
     imageLeft: false,
   },
+  // Not open yet, like Pop Culture: future tense, and the Coming Soon overlay
+  // (COMING_SOON below) covers it.
+  {
+    id: "gaming",
+    label: "Gaming & Consoles",
+    heading: "Video Games, Consoles",
+    headingLine2: "& Trade-Ins",
+    subheading: "Coming Soon to Mannering Park",
+    intro:
+      "A gaming range is coming to the Mannering Park store — new games and consoles, controllers and accessories, and second-hand units cleaned and tested in our own repair workshop.",
+    points: [
+      {
+        title: "Games & Consoles",
+        text: "New releases and favourites for PlayStation, Xbox and Nintendo Switch, current-generation consoles and bundles, with pre-orders on upcoming titles.",
+      },
+      {
+        title: "Controllers & Accessories",
+        text: "Controllers, headsets, charging docks, storage, cases and cables — the bits that wear out or go missing.",
+      },
+      {
+        title: "Second-Hand & Retro",
+        text: "Pre-owned consoles, handhelds and games tested before sale, plus retro titles as they come in through trade-ins.",
+      },
+      {
+        title: "Trade-Ins",
+        text: "Trade the consoles, games and accessories you have finished with towards something new or pre-owned.",
+      },
+    ],
+    link: "/gaming",
+    linkText: "See What's Coming",
+    image: "/images/gaming-playstation-5.webp",
+    imageAlt: "PlayStation 5 console with a DualSense controller",
+    imageLeft: true,
+  },
 ];
+
+/* Ranges that have not opened: their blocks carry the Coming Soon overlay. */
+const COMING_SOON = new Set(["pop-culture", "gaming"]);
 
 export default function HomePage() {
   const reviewsRef = useRef<HTMLDivElement>(null);
@@ -314,15 +351,31 @@ export default function HomePage() {
           </p>
           <div className="relative overflow-hidden rounded-xl">
             <p>
-              A Pop Culture and gaming range is coming to the Mannering Park store. Fans will
-              find trading cards, collectables, statues, figures, apparel and art from their
-              favourite franchises, alongside video games, game consoles and gaming
-              accessories. There will also be a range of second-hand consoles and units, so
-              gamers can pick up a bargain or fill a gap in their collection.{" "}
+              A Pop Culture and gaming range is coming to the Mannering Park store, in the same
+              shopfront at 1/64 Vales Road where you already bring your laptop for repair. Fans
+              will find trading cards, collectables, statues, figures, apparel and art from their
+              favourite franchises, alongside new video games, game consoles and gaming
+              accessories for PlayStation, Xbox and Nintendo Switch.
+            </p>
+            <p className="mt-4">
+              There will also be a range of second-hand consoles, handhelds and games, so gamers
+              can pick up a bargain or fill a gap in their collection. Because repairs are what we
+              do every day, every pre-owned unit will be cleaned and tested in our own workshop
+              before it goes on the shelf. You will be able to trade in the consoles, games and
+              accessories you have finished with towards something new or pre-owned, and retro
+              titles will turn up as they come in through trade-ins.
+            </p>
+            <p className="mt-4">
+              We would rather stock what people here actually collect and play than guess, so tell
+              us what you would like to see on the shelves.{" "}
               <a href="/pop-culture" className="font-bold text-gray-900 hover:text-[#007b7d] transition-colors">
-                See what&apos;s coming
+                See the Pop Culture range
               </a>{" "}
-              or call{" "}
+              and{" "}
+              <a href="/gaming" className="font-bold text-gray-900 hover:text-[#007b7d] transition-colors">
+                what&apos;s coming in gaming
+              </a>
+              , or call{" "}
               <a href="tel:+61493145179" className="font-bold text-gray-900 hover:text-[#007b7d] transition-colors">
                 0493 145 179
               </a>{" "}
@@ -414,8 +467,8 @@ export default function HomePage() {
             </div>
           </div>
 
-          {/* Pop Culture Coming Soon full overlay */}
-          {service.id === "pop-culture" && (
+          {/* Coming Soon full overlay (Pop Culture, Gaming) */}
+          {COMING_SOON.has(service.id) && (
             <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25 pointer-events-none">
               <div className="bg-amber-500 text-white font-black text-3xl md:text-5xl uppercase tracking-[0.15em] px-10 py-6 rounded-2xl shadow-2xl border-4 border-white/30 rotate-[-3deg] animate-pulse">
                 Coming Soon

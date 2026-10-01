@@ -21,6 +21,8 @@ const h = vi.hoisted(() => ({
   rows: [] as unknown[][], values: [] as Record<string, unknown>[], sets: [] as Record<string, unknown>[],
   session: {} as Record<string, unknown>,
   approvals: [] as unknown[],
+  required: {} as Record<string, boolean>,
+  heardFrom: [] as { name: string; requiresDetails: boolean }[],
 }));
 
 vi.mock("@workspace/db", async (importOriginal) => {
@@ -40,6 +42,13 @@ vi.mock("@workspace/db", async (importOriginal) => {
 vi.mock("../lib/sole-merchant", () => ({ soleMerchantId: async () => 1, SOLE_MERCHANT_EMAIL: "owner@koastal.test" }));
 vi.mock("../services/autoSyncScheduler", () => ({ triggerInstantSync: vi.fn() }));
 vi.mock("../lib/phone", () => ({ normalisePhoneFor: async (_m: number, p: string) => p }));
+vi.mock("../lib/customer-profile-rules", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  profileRequirements: vi.fn(async () => ({
+    required: { email: false, phone: false, dateOfBirth: false, company: false, abn: false, billingAddress: false, ...h.required },
+    heardFromSources: h.heardFrom,
+  })),
+}));
 vi.mock("../services/quoteApproval", () => ({
   applyEstimateApprovalToJob: vi.fn(async (...args: unknown[]) => { h.approvals.push(args); return true; }),
 }));
@@ -66,7 +75,7 @@ beforeAll(async () => {
   app.use("/api", shopRouter, accountRouter);
 }, 60000);
 
-beforeEach(() => { h.rows = []; h.values = []; h.sets = []; h.session = {}; h.approvals = []; });
+beforeEach(() => { h.rows = []; h.values = []; h.sets = []; h.session = {}; h.approvals = []; h.required = {}; h.heardFrom = []; });
 
 describe("signing in from an account link", () => {
   it("admits a customer with no password, and signs them in", async () => {
@@ -237,5 +246,64 @@ describe("previewing the curtained shop", () => {
 
   it("nobody signed out may", async () => {
     expect((await request(app).get("/api/shop/auth/me")).body).toEqual({ customer: null, preview: false });
+  });
+});
+
+describe("the rest of the POS profile", () => {
+  const save = (body: object, stored: object = {}) => {
+    h.session = { portalCustomerId: 9 };
+    h.rows = [[{ ...customer, ...stored }], [{ ...customer, ...stored }]];
+    return request(app).patch("/api/shop/account/profile").send(profile(body));
+  };
+
+  it("saves company, ABN, WhatsApp, marketing, heard-from and a postal address", async () => {
+    h.heardFrom = [{ name: "Google", requiresDetails: false }];
+    const res = await save({
+      company: "Lee Co", abn: "51 824 753 556", whatsapp: true, agreedToMarketing: true, heardFrom: "Google",
+      shippingAddress: { street: "PO Box 1", city: "Toukley", state: "NSW", postcode: "2263", country: "Australia" },
+      address: { street: "1 Main St", city: "Toukley", state: "NSW", postcode: "2263", country: "Australia" },
+    });
+    expect(res.status).toBe(200);
+    expect(h.sets[0]).toMatchObject({
+      company: "Lee Co", abn: "51824753556", whatsappSameAsPhone: "true", agreedToMarketing: "true", heardFrom: "Google",
+      shippingStreet: "PO Box 1", shippingPostcode: "2263", address: "1 Main St, Toukley, NSW, 2263",
+    });
+  });
+
+  it("leaves fields an older page doesn't send alone", async () => {
+    const res = await save({});
+    expect(res.status).toBe(200);
+    for (const k of ["company", "abn", "whatsappSameAsPhone", "agreedToMarketing", "heardFrom", "shippingStreet"]) {
+      expect(h.sets[0]).not.toHaveProperty(k);
+    }
+  });
+
+  it("refuses an ABN that isn't 11 digits", async () => {
+    const res = await save({ abn: "1234" });
+    expect(res.status).toBe(400);
+    expect(h.sets).toEqual([]);
+  });
+
+  it("enforces the fields the POS requires", async () => {
+    h.required = { phone: true, billingAddress: true };
+    const res = await save({ phone: "" });
+    expect(res.status).toBe(400);
+    expect(res.body.error).toBe("Please add your mobile number, address.");
+    expect(h.sets).toEqual([]);
+  });
+
+  it("judges a required field the page didn't send by what is stored", async () => {
+    h.required = { company: true };
+    expect((await save({}, { company: "Lee Co" })).status).toBe(200);
+  });
+
+  it("only takes a heard-from answer from the business's list", async () => {
+    h.heardFrom = [{ name: "Google", requiresDetails: false }];
+    const res = await save({ heardFrom: "Made up" });
+    expect(res.status).toBe(400);
+  });
+
+  it("keeps a heard-from value the POS stored that is no longer on the list", async () => {
+    expect((await save({ heardFrom: "SolvUP" }, { heardFrom: "SolvUP" })).status).toBe(200);
   });
 });

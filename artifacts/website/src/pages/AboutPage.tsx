@@ -16,7 +16,7 @@ const operations = [
   {
     slug: "koastal",
     name: "Koastal Kollective",
-    tagline: "Computer Repairs, Web Design & Pop Culture",
+    tagline: "Computers and Media - Pop Culture and Gaming",
     description:
       "Your trusted local tech specialist on the Central Coast & Lake Macquarie. From laptop screen replacements and virus removal to MacBook servicing, data recovery and VHS-to-digital conversions — plus website design, hosting, business email and mobile apps built in-house by the same team. Koastal Kollective has been the go-to tech shop since 2011.",
     href: "https://www.koastal.com.au",
@@ -42,7 +42,7 @@ const operations = [
     name: "Direktories",
     tagline: "The Business & Community Directory",
     description:
-      "A growing online directory platform connecting local businesses with the communities they serve. Direktories helps customers discover trusted providers across categories — and gives businesses a simple, effective way to get found online.",
+      "An online directory exclusive to the Central Coast and Lake Macquarie, connecting local businesses with the communities they serve. Direktories helps locals discover trusted providers across categories — and gives businesses here a simple, effective way to get found online.",
     href: "#",
     ctaLabel: "Coming Soon",
     primary: "#800000",
@@ -53,7 +53,7 @@ const operations = [
     highlights: [
       "Local Business Listings",
       "Community Directory",
-      "Central Coast Exclusive",
+      "Central Coast & Lake Macquarie Exclusive",
       "Trusted Provider Profiles",
       "Review Integration",
       "Mobile-Friendly Listings",
