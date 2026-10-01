@@ -162,7 +162,7 @@ export default function HomePage() {
   useSeo({
     title: "Computer Repairs Central Coast | Koastal Kollective",
     description: "Family-run computer, Mac and laptop repairs plus website design, hosting and app development on the Central Coast & Lake Macquarie since 2011. Pop Culture merchandise & collectables coming soon. Free diagnostics, no-fix no-fee. Call 0493 145 179.",
-    ogImage: "https://koastal.com.au/opengraph.png",
+    ogImage: "https://koastal.com.au/api/share-image.png",
   });
 
   useStructuredData(

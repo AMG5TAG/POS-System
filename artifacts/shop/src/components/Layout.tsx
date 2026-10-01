@@ -1,91 +1,33 @@
-import { useState, type ReactNode } from "react";
+import type { ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, ShoppingCart, User, Menu, X, Phone, Mail, MapPin, Heart } from "lucide-react";
+import { Phone, Mail, MapPin } from "lucide-react";
 import { useWishlist } from "@/lib/wishlist";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
-import { useCategories, useShopInfo } from "@/lib/shop";
-import { SiteNavBar, SiteNavMobile } from "@workspace/site-nav";
-import { CategoryNav } from "./CategoryNav";
+import { useShopInfo } from "@/lib/shop";
+import { SiteHeader } from "@workspace/site-nav";
 import { JustPurchased } from "./JustPurchased";
 import { ComingSoon } from "./ComingSoon";
 
+/* The header is the one the Koastal Kollective website uses too
+   (@workspace/site-nav): logo, search, account and the site-wide menu, SHOP
+   lit, its drop-down holding the categories. The shop hands it its live
+   account, cart and wishlist state and routes its links without a reload. */
 function Header() {
   const { data: info } = useShopInfo();
-  const { data: cats } = useCategories();
   const { count } = useCart();
   const { customer } = useAuth();
   const wishlist = useWishlist();
   const [, navigate] = useLocation();
-  const [q, setQ] = useState("");
-  const [open, setOpen] = useState(false);
-
-  const submit = (e: React.FormEvent) => {
-    e.preventDefault();
-    navigate(q.trim() ? `/products?search=${encodeURIComponent(q.trim())}` : "/products");
-    setOpen(false);
-  };
-
   return (
-    <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-stone-200" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      {/* Row 1: logo, search and account. Rows 2 and 3 (desktop): the Koastal
-          Kollective menu shared with the website (@workspace/site-nav), SHOP
-          lit, and under it the shop's own category tabs. Phones get both in
-          the collapsible menu, the categories hung under SHOP. */}
-      <div className="mx-auto max-w-7xl px-4 h-16 md:h-20 flex items-center gap-4 md:gap-6">
-        <button className="lg:hidden p-2 -ml-2" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
-          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
-        </button>
-        {/* The logo alone carries the brand; the name is only its alt text, or
-            shown as text when no logo is set. */}
-        <Link href="/" className="flex items-center shrink-0" aria-label={info?.businessName ?? "Home"}>
-          {info?.logoUrl
-            ? <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-8 md:h-14 w-auto max-w-[120px] md:max-w-[200px] object-contain object-left" />
-            : <span className="font-bold text-lg tracking-tight">{info?.businessName ?? "Shop"}</span>}
-        </Link>
-        <form onSubmit={submit} className="hidden md:flex flex-1 max-w-xl">
-          <div className="relative w-full">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products and services"
-              className="w-full h-10 rounded-full border border-stone-300 bg-stone-50 pl-9 pr-4 text-sm outline-none focus:border-brand focus:bg-white" />
-          </div>
-        </form>
-        <nav className="ml-auto flex items-center gap-1">
-          <Link href={customer ? "/account" : "/account/login"} className="flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm">
-            <User className="w-4 h-4" /><span className="hidden sm:inline">{customer ? customer.firstName || "Account" : "Sign in"}</span>
-          </Link>
-          {customer && (
-            <Link href="/wishlist" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Wishlist">
-              <Heart className="w-4 h-4" /><span className="hidden sm:inline">Wishlist</span>
-              {wishlist.count > 0 && (
-                <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center">{wishlist.count}</span>
-              )}
-            </Link>
-          )}
-          <Link href="/cart" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Cart">
-            <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
-            {count > 0 && (
-              <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center">{count}</span>
-            )}
-          </Link>
-        </nav>
-      </div>
-      <div className="hidden lg:block mx-auto max-w-7xl px-4 pb-2 space-y-2">
-        {/* hashBase "/": the menu's #section links belong to the website's home page. */}
-        <SiteNavBar active="SHOP" hashBase="/" />
-        <CategoryNav variant="desktop" cats={cats ?? []} onNavigate={() => setOpen(false)} />
-      </div>
-      <div className={`${open ? "block max-h-[calc(100dvh-4rem)] overflow-y-auto" : "hidden"} lg:hidden border-t border-stone-100`}>
-        <form onSubmit={submit} className="px-4 pt-3 pb-1 md:hidden">
-          <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search"
-            className="w-full h-10 rounded-full border border-stone-300 px-4 text-sm outline-none focus:border-brand" />
-        </form>
-        <div className="px-4 py-3">
-          <SiteNavMobile hashBase="/" onNavigate={() => setOpen(false)} initiallyOpen="SHOP"
-            slots={{ SHOP: <CategoryNav variant="mobile" cats={cats ?? []} onNavigate={() => setOpen(false)} /> }} />
-        </div>
-      </div>
-    </header>
+    <SiteHeader
+      logoFallback={info?.logoUrl ?? null}
+      logoAlt={info?.businessName ?? "Koastal Kollective"}
+      active="SHOP"
+      hashBase="/"
+      onShopNavigate={navigate}
+      session={{ signedIn: !!customer, firstName: customer?.firstName || null, cartCount: count, wishlistCount: customer ? wishlist.count : 0 }}
+    />
   );
 }
 

@@ -80,7 +80,7 @@ export default function RegionPage() {
     description: region
       ? region.description
       : "That page doesn't exist. Head back to Koastal Kollective for computer repairs across the Central Coast & Lake Macquarie.",
-    ogImage: `${SITE}/opengraph.png`,
+    ogImage: `${SITE}/api/share-image.png`,
     noindex: !region,
   });
 

@@ -104,7 +104,7 @@ export function useSeo({ title, description, scrollToTop = true, canonicalPath, 
       description,
     );
 
-    const ogImgPath = ogImage || `${SITE_ORIGIN}/opengraph.png`;
+    const ogImgPath = ogImage || `${SITE_ORIGIN}/api/share-image.png`;
     const previousOgImg = setMeta(
       'meta[property="og:image"]',
       "property",

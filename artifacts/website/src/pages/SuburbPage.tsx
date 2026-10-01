@@ -174,7 +174,7 @@ export default function SuburbPage() {
     description: suburb
       ? `Local computer & laptop repairs, website design and app development in ${suburb}. Free diagnostic, no-fix no-fee, ${yearsExperience} years experience. Call 0493 145 179.`
       : "That page doesn't exist. Head back to Koastal Kollective for computer repairs across the Central Coast & Lake Macquarie.",
-    ogImage: "https://koastal.com.au/opengraph.png",
+    ogImage: "https://koastal.com.au/api/share-image.png",
     // An unresolved slug renders <NotFound />, but hooks cannot be conditional
     // so this effect still runs — and runs *after* the child's, overwriting it.
     // Give the invalid case real 404 metadata instead of the parent's fallback

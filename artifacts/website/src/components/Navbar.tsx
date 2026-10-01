@@ -1,21 +1,17 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
 import { Menu, X, Phone, Monitor, Globe } from "lucide-react";
-import { SiteNavBar, SiteNavMobile } from "@workspace/site-nav";
+import { SiteHeader, SiteNavMobile } from "@workspace/site-nav";
 import ThemeToggle from "@/components/ThemeToggle";
 import AccessibilityMenu from "@/components/AccessibilityMenu";
 
-/* The menu itself (items, tabs, drop-downs, the phone list) lives in
-   @workspace/site-nav, shared with the online shop so both read as one site.
-   It sits on its own row under the logo: with SHOP added it no longer fit
-   beside it. */
+/* The header itself — logo, shop search, phone, shop account and cart, and
+   the menu on its own row below — is @workspace/site-nav's SiteHeader, the
+   same one the online shop renders, so the two read as one site. Phones keep
+   this site's own bottom bar and menu overlay. */
 export default function Navbar() {
   const [location] = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
-
-  const logoSrc = location.startsWith("/media")
-    ? "/images/logo.png"
-    : "/images/logo.png";
 
   const logoAlt = location.startsWith("/media")
     ? "Koastal Kollective Web & App Development"
@@ -25,48 +21,13 @@ export default function Navbar() {
 
   return (
     <>
-      {/* ─── Top Navigation Bar (hidden on mobile) ─── */}
-      <header className="top-nav bg-white shadow-sm sticky top-0 z-50">
-        <div className="max-w-7xl mx-auto px-4">
-          <div className="flex items-center justify-between h-20">
-            {/* Logo */}
-            <a href={logoHref} className="flex-shrink-0">
-              <img
-                src={logoSrc}
-                alt={logoAlt}
-                className="h-16 w-auto"
-              />
-            </a>
-
-            {/* Phone + Theme + Accessibility + Mobile toggle */}
-            <div className="flex items-center gap-1">
-              <a
-                href="tel:+61493145179"
-                className="hidden xl:flex items-center gap-1.5 text-[#007b7d] font-bold text-sm hover:text-[#005f61] transition-colors mr-1"
-              >
-                <Phone className="h-4 w-4" />
-                0493 145 179
-              </a>
-              <div className="hidden md:flex items-center">
-                <ThemeToggle />
-                <AccessibilityMenu />
-              </div>
-              <button
-                className="lg:hidden p-2 text-gray-700 hover:text-[#007b7d]"
-                onClick={() => setMobileOpen(!mobileOpen)}
-                aria-label="Toggle menu"
-              >
-                {mobileOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
-              </button>
-            </div>
-          </div>
-          {/* Desktop menu, on its own row */}
-          <div className="hidden lg:flex pb-2 overflow-visible">
-            <SiteNavBar />
-          </div>
-        </div>
-
-      </header>
+      {/* ─── Top Navigation Bar (hidden on mobile by .top-nav) ─── */}
+      <SiteHeader
+        className="top-nav"
+        logoAlt={logoAlt}
+        logoHref={logoHref}
+        extras={<><ThemeToggle /><AccessibilityMenu /></>}
+      />
 
       {/* Mobile Menu overlay (rendered here so it survives the .top-nav hide rule) */}
       {mobileOpen && (

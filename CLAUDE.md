@@ -434,17 +434,23 @@ koastal.com.au, the shop under `/shop`, and the POS at pos.koastal.com.au.
 API, no database. It was copied across unchanged (the built bundle was verified
 token-for-token against the live one), so its own conventions hold:
 
-- **One menu for both apps.** The menu (HOME, SHOP, COMPUTERS, … CONTACT), its
-  slanted tabs, drop-downs and phone list live in `lib/site-nav`
-  (`@workspace/site-nav`), rendered by the website's `Navbar` and the shop's
-  header. On desktop it is its own row under the logo; the shop lights SHOP and
-  puts its category tabs on a row below, and on phones hangs them under SHOP.
-  Change the menu there, never in one app. It is source-only (no build), so
-  each app's `index.css` has an `@source` line for Tailwind, and both load the
-  website's Atkinson Hyperlegible so the bar is the same width in each. Its
+- **One header for both apps.** `lib/site-nav` (`@workspace/site-nav`) holds
+  the whole header — `SiteHeader`: logo, shop search, phone, the shop's Sign
+  in/Wishlist/Cart, and the menu (HOME, SHOP, … CONTACT) on its own row — and
+  both the website's `Navbar` and the shop's `Layout` render it. SHOP's
+  drop-down is the shop's category menu (all products, the category tree with
+  flyouts to any depth, mail-in), fetched from `/api/shop/categories`; on
+  phones SHOP opens into the same list. Change the header there, never in one
+  app. The shop passes its live session/cart/wishlist and `onShopNavigate`
+  (client-side routing); the website reads `/api/shop/auth/me` and the shop's
+  `kkshop_cart_v1` localStorage cart itself (same origin). Every fetch there
+  goes through `getJson`, which tolerates no `fetch` at all — the pre-render
+  runs in jsdom, and a bare `fetch` call there blanks every page. The package
+  is source-only (no build), so each app's `index.css` has an `@source` line
+  for Tailwind; both load Atkinson Hyperlegible, the header's typeface. Its
   `#section` links mean the website's current page; the shop passes
-  `hashBase="/"` so they go to the website's home page instead.
-
+  `hashBase="/"`. The website's dark-mode and accessibility toggles go in via
+  `extras`, and on phones the website keeps its own bottom bar.
 - **Pre-rendered.** `postbuild` runs `scripts/prerender.mjs` (jsdom, ~275
   routes, about a minute) and then `write-redirects.mjs` (legacy `/koasoft/*`
   and `/kollective/*` stubs, from `scripts/redirects.mjs`). Each route is

@@ -1,5 +1,5 @@
-import { useState, type ReactNode } from "react";
-import { ChevronDown, Star } from "lucide-react";
+import { useEffect, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, Heart, Mail, Menu, Phone, Search, ShoppingCart, Star, User, X } from "lucide-react";
 
 /*
  * The Koastal Kollective menu, shared by the website (artifacts/website) and
@@ -12,7 +12,8 @@ import { ChevronDown, Star } from "lucide-react";
  */
 
 export type NavChild = { label: string; href: string; disabled?: boolean; featured?: boolean };
-export type NavItem = { label: string; href: string; children?: NavChild[]; color?: string };
+/* `shop` marks the item whose drop-down is the online shop's category menu. */
+export type NavItem = { label: string; href: string; children?: NavChild[]; color?: string; shop?: boolean };
 
 export const BRAND = "#007b7d";
 /* The website's typeface, so the menu is the same width and look in both apps
@@ -23,7 +24,7 @@ const ACTIVE = "#004f51";
 
 export const SITE_NAV: NavItem[] = [
   { label: "HOME", href: "/" },
-  { label: "SHOP", href: "/shop/" },
+  { label: "SHOP", href: "/shop/", shop: true },
   {
     label: "COMPUTERS",
     href: "#it-services",
@@ -93,6 +94,181 @@ export const SITE_NAV: NavItem[] = [
   },
 ];
 
+/* ─── The shop's category menu (SHOP's drop-down) ───────────────────────── */
+
+export type ShopCategory = { id: number; name: string; parentId: number | null; color: string | null; productCount: number };
+type Node = ShopCategory & { children: Node[] };
+
+/* Both apps fetch from the shop's public API (same origin in production), so
+   a category hidden from the shop is hidden here too. Fetched once per page
+   load and shared by every caller; failure (the website's pre-render, a dev
+   server with no API) just leaves SHOP without categories. */
+let categoriesPromise: Promise<ShopCategory[]> | null = null;
+function loadCategories(): Promise<ShopCategory[]> {
+  categoriesPromise ??= getJson("/api/shop/categories").then((d) => (Array.isArray(d) ? (d as ShopCategory[]) : []));
+  return categoriesPromise;
+}
+
+/* Never throws, never rejects. The website's pre-render runs the app in jsdom,
+   which has no fetch at all: a bare call there throws synchronously, inside a
+   React effect, and every page renders empty. */
+function getJson(url: string): Promise<unknown> {
+  if (typeof fetch !== "function") return Promise.resolve(null);
+  try {
+    return fetch(url, { credentials: "include" }).then((r) => (r.ok ? r.json() : null)).catch(() => null);
+  } catch {
+    return Promise.resolve(null);
+  }
+}
+
+export function useShopCategories(): ShopCategory[] {
+  const [cats, setCats] = useState<ShopCategory[]>([]);
+  useEffect(() => {
+    let live = true;
+    loadCategories().then((c) => { if (live) setCats(c); });
+    return () => { live = false; };
+  }, []);
+  return cats;
+}
+
+function tree(cats: ShopCategory[]): Node[] {
+  const byId = new Map<number, Node>(cats.map((c) => [c.id, { ...c, children: [] }]));
+  const roots: Node[] = [];
+  byId.forEach((n) => {
+    const parent = n.parentId != null ? byId.get(n.parentId) : undefined;
+    if (parent) parent.children.push(n); else roots.push(n);
+  });
+  return roots;
+}
+
+const categoryHref = (id: number) => `/shop/products?category=${id}`;
+const colourOf = (c: { color: string | null }) => c.color || BRAND;
+// Any CSS colour a merchant saved, lightened for a featured item's tint.
+const tint = (colour: string) => `color-mix(in srgb, ${colour} 10%, white)`;
+const FLYOUT = 240; // width a flyout list needs beside its parent
+
+/* A link into the shop. Inside the shop app, `onShopNavigate` routes it
+   client-side (given the path below /shop); elsewhere it is a page load. */
+type ShopNav = ((path: string) => void) | undefined;
+function shopClick(href: string, onShopNavigate: ShopNav, after?: () => void) {
+  return (e: MouseEvent) => {
+    after?.();
+    if (!onShopNavigate || !href.startsWith("/shop/") || e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    onShopNavigate(href.slice("/shop".length));
+  };
+}
+
+function ShopMenuItem({ href, colour, featured, active, onClick, children }: {
+  href: string; colour: string; featured?: boolean; active?: boolean; onClick: (e: MouseEvent) => void; children: ReactNode;
+}) {
+  const [hovered, setHover] = useState(false);
+  // An item whose flyout is open stays lit while the pointer is in the flyout.
+  const hover = hovered || !!active;
+  if (featured) {
+    return (
+      <a href={href} onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+        className="flex items-center gap-2 mx-1 mb-1 px-3 py-2 text-sm font-bold rounded-sm border-l-4 transition-colors"
+        style={{ borderLeftColor: colour, backgroundColor: hover ? colour : tint(colour), color: hover ? "#fff" : colour }}>
+        <Star className="w-4 h-4 shrink-0" fill="currentColor" />{children}
+      </a>
+    );
+  }
+  return (
+    <a href={href} onClick={onClick} onMouseEnter={() => setHover(true)} onMouseLeave={() => setHover(false)}
+      className="flex items-center justify-between gap-4 px-4 py-2 text-sm transition-colors dark:text-white"
+      style={{ backgroundColor: hover ? colour : "transparent", color: hover ? "#fff" : undefined }}>
+      {children}
+    </a>
+  );
+}
+
+/* A list of categories; one with subcategories pops out another list beside
+   it on hover, to any depth — rightwards, or leftwards when there is no room.
+   Top-level rows take their own colour; everything below takes its root's. */
+function CategoryList({ nodes, colour, onShopNavigate, close }: { nodes: Node[]; colour?: string; onShopNavigate: ShopNav; close: () => void }) {
+  const [open, setOpen] = useState<{ id: number; left: boolean } | null>(null);
+  return (
+    <>
+      {nodes.map((n) => {
+        const c = colour ?? colourOf(n);
+        const has = n.children.length > 0;
+        const isOpen = has && open?.id === n.id;
+        const show = (el: HTMLElement) => setOpen({ id: n.id, left: el.getBoundingClientRect().right + FLYOUT > window.innerWidth });
+        return (
+          <div key={n.id} className="relative"
+            onMouseEnter={(e) => show(e.currentTarget)}
+            onMouseLeave={() => setOpen((o) => (o?.id === n.id ? null : o))}
+            onFocus={(e) => show(e.currentTarget)}>
+            <ShopMenuItem href={categoryHref(n.id)} colour={c} active={isOpen} onClick={shopClick(categoryHref(n.id), onShopNavigate, close)}>
+              <span className="truncate">{n.name}</span>
+              <span className="flex items-center gap-1 text-xs opacity-60 tabular-nums">
+                {n.productCount}
+                {has && (isOpen && open?.left ? <ChevronLeft className="w-3.5 h-3.5 -order-1" /> : <ChevronRight className="w-3.5 h-3.5" />)}
+              </span>
+            </ShopMenuItem>
+            {isOpen && (
+              <div className={`absolute top-0 ${open?.left ? "right-full" : "left-full"} -mt-1 bg-white border border-gray-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] py-1 z-10`}>
+                <ShopMenuItem href={categoryHref(n.id)} colour={c} featured onClick={shopClick(categoryHref(n.id), onShopNavigate, close)}>All {n.name}</ShopMenuItem>
+                <CategoryList nodes={n.children} colour={c} onShopNavigate={onShopNavigate} close={close} />
+              </div>
+            )}
+          </div>
+        );
+      })}
+    </>
+  );
+}
+
+/* SHOP's drop-down: all products, the category tree, and mail-in repairs. */
+function ShopMenu({ categories, onShopNavigate, close }: { categories: ShopCategory[]; onShopNavigate: ShopNav; close: () => void }) {
+  const roots = tree(categories);
+  return (
+    <>
+      <ShopMenuItem href="/shop/products" colour={BRAND} featured onClick={shopClick("/shop/products", onShopNavigate, close)}>All products</ShopMenuItem>
+      <CategoryList nodes={roots} onShopNavigate={onShopNavigate} close={close} />
+      <div className="my-1 border-t border-gray-100" />
+      <ShopMenuItem href="/shop/mail-in" colour={BRAND} onClick={shopClick("/shop/mail-in", onShopNavigate, close)}>
+        <span className="flex items-center gap-2 font-semibold"><Mail className="w-4 h-4" /> Mail-In Repairs</span>
+      </ShopMenuItem>
+    </>
+  );
+}
+
+/* The phone version: top-level categories with their colour as a left bar,
+   each opening its subcategories (one level, like the old shop menu). */
+function ShopMobileMenu({ categories, onShopNavigate, onNavigate }: { categories: ShopCategory[]; onShopNavigate: ShopNav; onNavigate: () => void }) {
+  const roots = tree(categories);
+  const [expanded, setExpanded] = useState<Set<number>>(new Set());
+  const toggle = (id: number) => setExpanded((s) => { const n = new Set(s); if (n.has(id)) n.delete(id); else n.add(id); return n; });
+  const link = (href: string, className: string, children: ReactNode, style?: CSSProperties) => (
+    <a href={href} onClick={shopClick(href, onShopNavigate, onNavigate)} className={className} style={style}>{children}</a>
+  );
+  return (
+    <div className="text-sm divide-y divide-gray-100">
+      {link("/shop/", "block py-2.5 font-semibold dark:text-white", "Shop home")}
+      {link("/shop/products", "block py-2.5 font-semibold dark:text-white", "All products")}
+      {roots.map((r) => (
+        <div key={r.id}>
+          <div className="flex items-center">
+            {link(categoryHref(r.id), "flex-1 py-2.5 font-bold border-l-4 pl-2.5 dark:text-white", r.name, { borderLeftColor: colourOf(r) })}
+            {r.children.length > 0 && (
+              <button onClick={() => toggle(r.id)} aria-label={`${expanded.has(r.id) ? "Hide" : "Show"} ${r.name} subcategories`} aria-expanded={expanded.has(r.id)}
+                className="w-10 h-10 flex items-center justify-center text-gray-500">
+                <ChevronDown className={`w-4 h-4 transition-transform ${expanded.has(r.id) ? "rotate-180" : ""}`} />
+              </button>
+            )}
+          </div>
+          {expanded.has(r.id) && r.children.map((k) => (
+            <div key={k.id} className="pl-4">{link(categoryHref(k.id), "block py-2 text-gray-600 dark:text-gray-300", k.name)}</div>
+          ))}
+        </div>
+      ))}
+      {link("/shop/mail-in", "flex items-center gap-2 py-2.5 font-semibold text-[#007b7d]", <><Mail className="w-4 h-4" /> Mail-In Repairs</>)}
+    </div>
+  );
+}
+
 /* "#contact"-style links name a section of the website's current page. Off the
    website (the shop) they must point at the website's home page instead:
    pass hashBase="/" there. A bare "#" is a placeholder and stays as it is. */
@@ -100,10 +276,14 @@ function resolve(href: string, hashBase: string) {
   return href.startsWith("#") && href.length > 1 ? `${hashBase}${href}` : href;
 }
 
-/* The desktop bar: slanted teal tabs with hover drop-downs. `active` names the
-   tab for the section being viewed (the shop passes "SHOP"). */
-export function SiteNavBar({ active, hashBase = "" }: { active?: string; hashBase?: string }) {
+/* The desktop bar: slanted teal tabs with hover drop-downs; SHOP's is the
+   shop's category menu. `active` names the tab for the section being viewed
+   (the shop passes "SHOP"); `onShopNavigate` lets the shop route its own
+   links without a page load. */
+export function SiteNavBar({ active, hashBase = "", onShopNavigate }: { active?: string; hashBase?: string; onShopNavigate?: (path: string) => void }) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  const categories = useShopCategories();
+  const close = () => setOpenDropdown(null);
   return (
     <nav className="h-11 flex items-stretch gap-[1px]" style={{ fontFamily: FONT }} aria-label="Main">
       {SITE_NAV.map((item) => {
@@ -112,18 +292,19 @@ export function SiteNavBar({ active, hashBase = "" }: { active?: string; hashBas
           <div
             key={item.label}
             className="relative flex"
-            onMouseEnter={() => item.children && setOpenDropdown(item.label)}
+            onMouseEnter={() => (item.children || item.shop) && setOpenDropdown(item.label)}
             onMouseLeave={() => setOpenDropdown(null)}
           >
             <a
               href={resolve(item.href, hashBase)}
+              onClick={item.shop ? shopClick(item.href, onShopNavigate, close) : undefined}
               aria-current={isActive ? "page" : undefined}
               className={`relative flex items-center justify-center gap-1 px-3 xl:px-5 text-xs font-bold text-white whitespace-nowrap tracking-wide ${isActive ? "" : "hover:brightness-110"}`}
               style={{ transform: "skewX(-20deg)", backgroundColor: isActive ? ACTIVE : item.color ?? BRAND }}
             >
               <span className="flex items-center gap-1" style={{ transform: "skewX(20deg)" }}>
                 {item.label}
-                {item.children && <ChevronDown className="h-4 w-4 mt-0.5" />}
+                {(item.children || item.shop) && <ChevronDown className="h-4 w-4 mt-0.5" />}
               </span>
             </a>
             {/* Rendered unconditionally and hidden with CSS rather than
@@ -131,6 +312,17 @@ export function SiteNavBar({ active, hashBase = "" }: { active?: string; hashBas
                 `openDropdown` kept all 30 service and partner links — the
                 website's primary internal linking — out of the DOM entirely.
                 Visibility is unchanged for real users. */}
+            {item.shop && (
+              /* No overflow here: it would clip the category flyouts. */
+              <div
+                className={`absolute top-full left-0 bg-white border border-gray-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] py-1 z-50 transition-opacity duration-100 ${
+                  openDropdown === item.label ? "visible opacity-100" : "invisible opacity-0 pointer-events-none"
+                }`}
+                aria-hidden={openDropdown !== item.label}
+              >
+                <ShopMenu categories={categories} onShopNavigate={onShopNavigate} close={close} />
+              </div>
+            )}
             {item.children && (
               <div
                 className={`absolute top-full left-0 bg-white border border-gray-200 shadow-lg rounded-sm min-w-[200px] py-1 z-50 transition-opacity duration-100 ${
@@ -157,21 +349,21 @@ export function SiteNavBar({ active, hashBase = "" }: { active?: string; hashBas
   );
 }
 
-/* The same menu as a vertical list, for a phone's menu panel. `slots` puts
-   extra content under an item, opened like a drop-down: the shop hangs its
-   categories under SHOP. */
-export function SiteNavMobile({ hashBase = "", onNavigate, slots = {}, initiallyOpen = null }: {
+/* The same menu as a vertical list, for a phone's menu panel. SHOP opens into
+   the shop's categories. */
+export function SiteNavMobile({ hashBase = "", onNavigate, onShopNavigate, initiallyOpen = null }: {
   hashBase?: string;
   onNavigate: () => void;
-  slots?: Record<string, ReactNode>;
+  onShopNavigate?: (path: string) => void;
   initiallyOpen?: string | null;
 }) {
   const [open, setOpen] = useState<string | null>(initiallyOpen);
+  const categories = useShopCategories();
   const rowClass = "w-full flex items-center justify-between px-3 py-2 text-sm font-bold text-gray-700 dark:text-white hover:text-[#007b7d] dark:hover:text-white hover:bg-gray-50 dark:hover:bg-[#1a3024] rounded transition-colors";
   return (
     <div className="space-y-1" style={{ fontFamily: FONT }}>
       {SITE_NAV.map((item) => {
-        const slot = slots[item.label];
+        const slot = item.shop ? <ShopMobileMenu categories={categories} onShopNavigate={onShopNavigate} onNavigate={onNavigate} /> : null;
         const expandable = !!item.children || !!slot;
         return (
           <div key={item.label}>
@@ -275,5 +467,135 @@ function MobileDropdownLink({ href, label, hoverColor, onNavigate, disabled, fea
     >
       {label}
     </a>
+  );
+}
+
+/* ─── The whole header ───────────────────────────────────────────────────── */
+
+/* Who is signed in to the shop, and what is in their cart — shown in the
+   header on both apps. The shop passes its own live state; the website reads
+   the same things the shop does: /api/shop/auth/me (same origin, same
+   session cookie) and the cart the shop keeps in this browser. */
+export type ShopSession = { firstName: string | null; signedIn: boolean; cartCount: number; wishlistCount: number };
+
+const CART_KEY = "kkshop_cart_v1"; // artifacts/shop/src/lib/cart.tsx
+function cartCount(): number {
+  try {
+    const v = JSON.parse(localStorage.getItem(CART_KEY) ?? "[]");
+    return Array.isArray(v) ? v.reduce((n: number, l: { qty?: number }) => n + (Number(l?.qty) || 0), 0) : 0;
+  } catch { return 0; }
+}
+
+export function useShopSession(): ShopSession {
+  const [session, setSession] = useState<ShopSession>({ firstName: null, signedIn: false, cartCount: 0, wishlistCount: 0 });
+  useEffect(() => {
+    let live = true;
+    setSession((s) => ({ ...s, cartCount: cartCount() }));
+    getJson("/api/shop/auth/me").then((d) => {
+      const customer = (d as { customer?: { firstName?: string } | null } | null)?.customer;
+      if (live && customer) setSession((s) => ({ ...s, signedIn: true, firstName: customer.firstName || null }));
+    });
+    const onStorage = (e: StorageEvent) => { if (e.key === CART_KEY) setSession((s) => ({ ...s, cartCount: cartCount() })); };
+    window.addEventListener("storage", onStorage);
+    return () => { live = false; window.removeEventListener("storage", onStorage); };
+  }, []);
+  return session;
+}
+
+const PHONE = { display: "0493 145 179", tel: "+61493145179" };
+/* The website's logo file, served at the root of koastal.com.au — the same
+   origin as the shop, so both headers show the same image. */
+const SITE_LOGO = "/images/logo.png";
+
+/* The header both apps render: logo, shop search, phone and shop account on
+   one row, the menu on the row below (desktop), and a collapsible menu panel
+   on narrower screens. `extras` is for controls only one app can honour (the
+   website's dark mode and accessibility toggles). */
+export function SiteHeader({
+  logoSrc = SITE_LOGO, logoFallback, logoAlt, logoHref = "/", active, hashBase = "", onShopNavigate, session, extras, className = "",
+}: {
+  logoSrc?: string;
+  /** Shown if logoSrc fails to load (the shop's dev preview has no /images). */
+  logoFallback?: string | null;
+  logoAlt: string;
+  logoHref?: string;
+  active?: string;
+  hashBase?: string;
+  onShopNavigate?: (path: string) => void;
+  /** The shop's live state; omitted on the website, which reads it itself. */
+  session?: ShopSession;
+  extras?: ReactNode;
+  className?: string;
+}) {
+  const own = useShopSession();
+  const s = session ?? own;
+  const [q, setQ] = useState("");
+  const [open, setOpen] = useState(false);
+  const go = (href: string) => {
+    setOpen(false);
+    if (onShopNavigate && href.startsWith("/shop/")) onShopNavigate(href.slice("/shop".length));
+    else window.location.assign(href);
+  };
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    go(q.trim() ? `/shop/products?search=${encodeURIComponent(q.trim())}` : "/shop/products");
+  };
+  const pill = "relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-sm";
+  const badge = "absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-bold flex items-center justify-center";
+  const searchBox = (cls: string) => (
+    <form onSubmit={submit} className={cls} role="search">
+      <div className="relative w-full">
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products and services" aria-label="Search the shop"
+          className="w-full h-10 rounded-full border border-gray-300 bg-gray-50 text-gray-900 pl-9 pr-4 text-sm outline-none focus:border-[#007b7d] focus:bg-white" />
+      </div>
+    </form>
+  );
+
+  return (
+    <header className={`sticky top-0 z-50 bg-white dark:bg-[#0b1616] dark:text-white border-b border-gray-200 dark:border-[#1c2e2e] shadow-sm ${className}`}
+      style={{ fontFamily: FONT, paddingTop: "env(safe-area-inset-top, 0px)" }}>
+      <div className="max-w-7xl mx-auto px-4 h-16 md:h-20 flex items-center gap-3 md:gap-6">
+        <button className="lg:hidden p-2 -ml-2" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
+          {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
+        </button>
+        <a href={logoHref} className="flex items-center shrink-0" aria-label={logoAlt}>
+          <img src={logoSrc} alt={logoAlt} className="h-10 md:h-14 w-auto max-w-[160px] object-contain object-left"
+            onError={(e) => { if (logoFallback && e.currentTarget.src !== logoFallback) e.currentTarget.src = logoFallback; }} />
+        </a>
+        {searchBox("hidden md:flex flex-1 max-w-xl")}
+        <nav className="ml-auto flex items-center gap-1" aria-label="Account">
+          <a href={`tel:${PHONE.tel}`} className="hidden xl:flex items-center gap-1.5 text-[#007b7d] font-bold text-sm hover:text-[#005f61] mr-1">
+            <Phone className="h-4 w-4" />{PHONE.display}
+          </a>
+          {extras && <div className="hidden md:flex items-center">{extras}</div>}
+          <a href={s.signedIn ? "/shop/account" : "/shop/account/login"} onClick={shopClick(s.signedIn ? "/shop/account" : "/shop/account/login", onShopNavigate)} className={pill}>
+            <User className="w-4 h-4" /><span className="hidden sm:inline">{s.signedIn ? s.firstName || "Account" : "Sign in"}</span>
+          </a>
+          {s.signedIn && (
+            <a href="/shop/wishlist" onClick={shopClick("/shop/wishlist", onShopNavigate)} className={pill} aria-label="Wishlist">
+              <Heart className="w-4 h-4" /><span className="hidden sm:inline">Wishlist</span>
+              {s.wishlistCount > 0 && <span className={`${badge} bg-rose-500 text-white`}>{s.wishlistCount}</span>}
+            </a>
+          )}
+          <a href="/shop/cart" onClick={shopClick("/shop/cart", onShopNavigate)} className={pill} aria-label="Cart">
+            <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
+            {s.cartCount > 0 && <span className={`${badge} bg-[#7bb8bd] text-gray-900`}>{s.cartCount}</span>}
+          </a>
+        </nav>
+      </div>
+      <div className="hidden lg:flex max-w-7xl mx-auto px-4 pb-2">
+        <SiteNavBar active={active} hashBase={hashBase} onShopNavigate={onShopNavigate} />
+      </div>
+      {open && (
+        <div className="lg:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-100 dark:border-[#1c2e2e]">
+          {searchBox("md:hidden px-4 pt-3 pb-1 flex")}
+          <div className="px-4 py-3">
+            <SiteNavMobile hashBase={hashBase} onNavigate={() => setOpen(false)} onShopNavigate={onShopNavigate}
+              initiallyOpen={active === "SHOP" ? "SHOP" : null} />
+          </div>
+        </div>
+      )}
+    </header>
   );
 }
