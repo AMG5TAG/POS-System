@@ -36,7 +36,7 @@ router.get("/qr/r/:id", async (req, res): Promise<void> => {
  * time:
  *
  *   job not completed  → the Tech App deep link (staff finish the work)
- *   job completed      → the customer's portal (they track/collect it themselves)
+ *   job completed      → the customer's shop account (customerPortalUrl; they track/collect it there)
  *
  * A completed job whose customer has no portal token (or a merchant with no
  * portal address) falls back to the Tech App rather than dead-ending: a sticker

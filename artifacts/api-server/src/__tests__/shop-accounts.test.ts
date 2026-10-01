@@ -75,10 +75,9 @@ describe("POST /api/shop/auth/register", () => {
       .send({ firstName: "Mallory", email: "SAM@example.com", password: "attacker-pass" });
     expect(res.body).toEqual({ status: "check-email" });
     expect(issueSetupLink).toHaveBeenCalledTimes(1);
-    const [target, purpose, , destination] = issueSetupLink.mock.calls[0] as unknown as [{ id: number }, string, unknown, string];
+    const [target, purpose] = issueSetupLink.mock.calls[0] as unknown as [{ id: number }, string];
     expect(target.id).toBe(5);
     expect(purpose).toBe("setup");
-    expect(destination).toBe("shop");
   });
 
   it("sends a reset link when that customer already has a password", async () => {

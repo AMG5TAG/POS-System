@@ -89,7 +89,7 @@ router.post("/shop-invites/send", requireAuth, requireManagerOrOwner, async (req
   void (async () => {
     for (const c of targets) {
       try {
-        await issueSetupLink(c, "invite", logger, "shop");
+        await issueSetupLink(c, "invite", logger);
         running!.sent++;
       } catch (err) {
         logger.warn({ err, customerId: c.id }, "Shop invite failed");

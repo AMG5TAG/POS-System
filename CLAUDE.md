@@ -129,9 +129,11 @@ accounts) and all of their data are still in the database.
   keys, the old `.koapos.enc` backups and the `artifacts/koapos` package path.
 - **Short public addresses.** The current forms carry no business segment, and
   the older ones still route (links and QR codes already handed out):
-  - customer portal `/c/<token>` (was `/b/<user>/c/<token>`) — `customerPortalUrl`;
-    `/portal/resolve-domain` answers the one business for any host that is not a
-    merchant's own custom portal domain;
+  - customer account `koastal.com.au/shop/c/<token>` — `customerPortalUrl`. The
+    customer portal moved into the shop account (see "Customer portal → shop
+    account"); its old `/c/<token>` and `/b/<user>/c/<token>` addresses on the
+    POS domain (and any custom portal domain) are a redirect page
+    (`koapos/src/pages/portal/index.tsx`) that forwards there;
   - landing pages `/l/<name>` (was `/b/<user>/l/<name>`) — API
     `/landing-pages/public/l/:customName`;
   - Tech App `/a/tech`, Mobile POS `/a/mobile` (were `/b/<user>/t/techapp|posapp`)
@@ -295,13 +297,13 @@ resolver, `/api/qr/j/:jobId` — `serviceJobQrUrl` on the frontend, the route in
 `routes/qr.ts`. A sticker is printed once and then lives on the device for
 weeks, so the ink can never be re-encoded; it therefore carries a url that is
 stable for the life of the job and the destination is chosen at scan time: the
-Tech App deep link while the job is open, the customer's portal once it is
-`completed` (falling back to the Tech App when there is no portal to open — a
+Tech App deep link while the job is open, the customer's shop account once it is
+`completed` (falling back to the Tech App when there is no account link — a
 sticker that opens nothing is worse than one that opens the staff view). Never
-print `techAppJobUrl` directly. That resolver hands the portal to whoever scans
+print `techAppJobUrl` directly. That resolver hands the account to whoever scans
 the sticker, since the portal token *is* the credential; `merchants.requirePortalPassword`
 is the intended control. `customerPortalUrl` in `lib/publicUrl.ts` builds the
-portal address for both the resolver and the status-change SMS (admin and Tech
+account link for both the resolver and the status-change SMS (admin and Tech
 App) so the three cannot drift.
 
 Custom QR reaches every document: the thermal receipt (HTML + ESC/POS), A4
@@ -535,10 +537,17 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   the shop calls it same-origin; production CORS must list the site domain
   (`app.ts`), or every shop POST is refused.
 - **Not launched yet.** `COMING_SOON` in `artifacts/shop/src/lib/launch.ts`
-  covers every page with `ComingSoon.tsx` unless a shopper is signed in (staff
-  preview with a shop account). Sign-in, forgot and set-password stay open;
-  sign-up does not, or anyone could walk past it. It is a curtain, not access
-  control — the API is public. Set it to `false` and publish to launch.
+  covers the shop with `ComingSoon.tsx`; `curtainCovers` holds the rules.
+  Open to everyone: sign-in, forgot, set-password, `/c/<token>` account links
+  and **mail-in** (a service running now). Open to any signed-in customer:
+  their account pages (`/account`, `/rewards`, `/wishlist`) — customers arrive
+  signed in from repair texts and QR codes, and must not see the unlaunched
+  catalogue. The whole shop is open only to a **preview** shopper: `GET
+  /shop/auth/me` says `preview: true` when the signed-in shop account's email
+  is `SOLE_MERCHANT_EMAIL` or an active staff member's, so staff preview by
+  signing in with a shop account on their own email. Sign-up stays curtained,
+  or anyone could walk past it. It is a curtain, not access control — the API
+  is public. Set it to `false` and publish to launch.
 - **API**: `routes/shop.ts`, public and scoped to `soleMerchantId()` — no request
   can name a merchant. A product is listed when `isActive` and `showOnline`
   (`products.show_online`, default "true", added by
@@ -606,13 +615,15 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   but not change it online — it triggers the birthday promotion, and moving it
   to today would pay the bonus on demand. Staff correct it in the POS. Pinned
   by `shop-account.test.ts`.
-- **Accounts are the portal's.** One password (`customers.portal_password_hash`)
-  and one signed-in marker (`req.session.portalCustomerId`) for shop and portal.
-  Login is email + password, trying each POS customer with that email (the POS
-  has duplicates). **Signing up with an email the POS already knows never sets
-  a password** — it emails a set-up link to that address
-  (`lib/customerPasswordLinks.ts`, `destination: "shop"`), because knowing an
-  email must not be enough to claim an account. Pinned by `shop-accounts.test.ts`.
+- **Accounts.** One password (`customers.portal_password_hash`) and one
+  signed-in marker (`req.session.portalCustomerId`). Login is email +
+  password, trying each POS customer with that email (the POS has
+  duplicates). **Signing up with an email the POS already knows never sets a
+  password** — it emails a set-up link to that address
+  (`lib/customerPasswordLinks.ts`; every link lands on the shop's
+  `/account/set-password`), because knowing an email must not be enough to
+  claim an account. Pinned by `shop-accounts.test.ts`.
+
 - **POS side.** Management › Online Store holds the shop's settings: Overview,
   Products (`show_online` per product, `routes/online-store.ts`) and Customer
   Accounts (the invites below). Online › Orders (`pages/app/online-orders.tsx`)
@@ -631,6 +642,46 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   email and no password, once per address, skipping anyone invited in the last
   14 days; email only, never SMS. It needs the exact count typed back and sends
   in the background, paced for the email provider. Pinned by `shop-invites.test.ts`.
+
+### Customer portal → shop account
+
+The customer portal (a POS-domain page at `/c/<token>`) was merged into the
+shop account; nothing of it is left in the POS but a redirect. What moved:
+
+- **Sign-in by link.** `POST /shop/auth/token` (`routes/shop-account.ts`) is the
+  portal's old gate (`resolvePortalAccess` rules, `lib/portalAuth.ts`): the
+  token alone signs in while the customer has no password or
+  `merchants.requirePortalPassword` is off; once both hold it answers 401
+  `password_required` and the shop asks for the password. Never another
+  business's customer. The shop's `/c/:token` page calls it and opens
+  `/account`; `/c/:token/set-password` forwards to `/account/set-password`. A
+  customer signed in by link with no password gets an "Email me a link" prompt.
+- **Quotes** (sent/accepted/declined; a sent one past expiry shows expired):
+  approve/decline while sent and unexpired; accepting calls
+  `applyEstimateApprovalToJob(…, "portal")`, as the portal did.
+- **Appointments**: list, and a request form (future, ≤12 months, 30 min,
+  status `scheduled`) — a request, not a checked slot, as before.
+- **Your card**: a QR of the account link, copy/save, and Apple/Google Wallet
+  passes (`lib/wallet-pass.ts`, shared with the staff copy in `routes/portal.ts`,
+  which is all that file still holds).
+- **Repairs** now carry the work description and estimate. The portal also
+  showed the job's `notes` as "Notes from the workshop" — that is the staff's
+  internal log (calls, remarks), so it is deliberately **not** carried over.
+- **Email** can be changed on the profile (the portal allowed it), but never to
+  an address another customer record holds: the account gathers records from
+  every record sharing its email (`buyerCustomerIds`), so that would hand over
+  someone else's history. The birthday keeps the shop's set-once rule.
+- Everything is gathered across same-email records (`buyerCustomerIds`), like
+  the rest of the account.
+- The service job dialog's **Portal** button (email/SMS the link) called a
+  route that never existed; it is `POST /service-jobs/:id/portal-link` now,
+  sending only to the contact on file.
+- Management › Customers › Portal describes the account link; the custom
+  portal domain no longer builds links (old links on it still forward, while
+  the domain stays pointed at the deployment).
+
+Pinned by `shop-portal.test.ts`, `service-job-portal-link.test.ts`,
+`portal-url.test.ts` and `service-job-qr.test.ts`.
 
 ### Client IPs, trusted sign-in IPs, Dashboard screen approval
 
@@ -662,6 +713,11 @@ quantity (`shop-recent-purchases.test.ts`). `JustPurchased.tsx` shows one at a
 time bottom-left, not on cart/checkout/account, closable for the visit.
 
 ### Mail-in repairs
+
+Open to everyone, signed in or not and while the shop is curtained — it is a
+service running now. Every suburb, region and repair/promotional page on the
+website carries `components/MailInRepairs.tsx` linking to it (not the media
+pages or Funeral Slideshows, where it doesn't fit).
 
 Shop `/mail-in` (packing guide, address + hours from Business Details, form,
 four required terms) → `mail_in_requests` (`scripts/src/add-mail-in-tables.ts`).
@@ -788,7 +844,7 @@ habit is one the next router won't have. Three things keep that safe:
   annoyance; a mangled one is a customer the shop can no longer reach.
 - It runs only for a request with a merchant session, since that is what says
   which country to assume. The public write paths — `public-booking.ts` and the
-  portal's profile update — know their merchant another
+  shop's profile update — know their merchant another
   way and call `normalisePhoneFor` in the handler. **A new public write path that
   takes a phone number must do the same.**
 

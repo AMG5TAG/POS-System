@@ -65,6 +65,7 @@ export const SITE_NAV: NavItem[] = [
     ],
   },
   { label: "POP CULTURE", href: "/pop-culture" },
+  { label: "GAMING", href: "/gaming" },
   {
     label: "PARTNERS",
     href: "#",
@@ -78,7 +79,6 @@ export const SITE_NAV: NavItem[] = [
       { label: "SyncBack Backup", href: "/syncback" },
     ],
   },
-  { label: "GAMING", href: "/gaming" },
   {
     label: "DIREKTORIES",
     href: "#",

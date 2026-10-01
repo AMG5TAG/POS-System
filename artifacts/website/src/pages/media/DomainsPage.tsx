@@ -1,6 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
-import { Globe2, Shield, Server, RefreshCw, Lock, Cloud, CheckCircle2 } from "lucide-react";
+import { Globe2, Shield, Server, RefreshCw, Lock, Cloud, CheckCircle2, ShoppingCart } from "lucide-react";
 
 const features = [
   { icon: Globe2, title: "Any TLD", body: ".com.au, .com, .net.au, .org, .io and most country and niche extensions." },
@@ -23,6 +23,13 @@ const planFeatures = [
   "Strategic SEO Advantage",
 ];
 
+/* Domain names are sold from the "Domain Hosting" category of the online shop
+   (koastal.com.au/shop) — the same id in dev and production. It links to the
+   category rather than a product because none has been added to it yet. The
+   shop is a separate app, so these links are plain <a>s (a full page load). */
+const DOMAIN_CATEGORY_ID = 1000071;
+const domainShopUrl = `/shop/products?category=${DOMAIN_CATEGORY_ID}`;
+
 const plan = {
   name: "Domain Hosting",
   price: "$30/year",
@@ -40,6 +47,11 @@ export default function DomainsPage() {
       eyebrow="Domains & Hosting"
       title={<>Your domain, sorted — and hosted properly</>}
       intro="Register, transfer and manage your domain with a team that also runs the hosting. One invoice, one phone number, no finger-pointing."
+      shopLink={{
+        href: domainShopUrl,
+        label: "Shop domain names",
+        ariaLabel: "Shop domain names in our online shop",
+      }}
     >
       <section className="py-14 bg-white">
         <div className="max-w-6xl mx-auto px-4">
@@ -84,6 +96,14 @@ export default function DomainsPage() {
                   </li>
                 ))}
               </ul>
+              <a
+                href={domainShopUrl}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#007b7d] px-4 py-3 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-[#004f51]"
+                aria-label="Shop domain names in our online shop"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Shop domain names
+              </a>
             </div>
           </div>
           <p className="text-center text-gray-500 text-sm mt-6">

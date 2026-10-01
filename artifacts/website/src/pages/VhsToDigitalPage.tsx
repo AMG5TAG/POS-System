@@ -1,16 +1,24 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import SocialLinks from "@/components/SocialLinks";
 import { Link } from "wouter";
 import {
   MessageCircle, MapPin, Mail, Phone, Clock, ExternalLink,
   CheckCircle2, Film, Heart, Shield, Download, Share2, HardDrive, Clock3, AlertTriangle,
+  ShoppingCart,
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
 import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
+
+/* The tape conversion service in the online shop (koastal.com.au/shop) — the
+   same id in dev and production, so Buy Now opens that product's page. The
+   shop is a separate app, so these links are plain <a>s (a full page load). */
+const VIDEO_CONVERSION_PRODUCT_ID = 1000046;
+const videoConversionShopUrl = `/shop/product/${VIDEO_CONVERSION_PRODUCT_ID}`;
 
 const formats = [
   "VHS tapes",
@@ -187,6 +195,14 @@ export default function VhsToDigitalPage() {
                   className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors"
                 >
                   How It Works
+                </a>
+                <a
+                  href={videoConversionShopUrl}
+                  className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+                  aria-label="Buy VHS to digital conversion now in our online shop"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Buy Now
                 </a>
                 <a
                   href="tel:+61493145179"
@@ -396,7 +412,15 @@ export default function VhsToDigitalPage() {
             These moments can never be recreated — but they can be preserved. Don't leave those tapes in a box and hope for the best. Let Koastal Kollective save them for you and for the generations that follow.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <a href="tel:+61493145179" className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors">
+            <a
+              href={videoConversionShopUrl}
+              className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+              aria-label="Buy VHS to digital conversion now in our online shop"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Buy Now
+            </a>
+            <a href="tel:+61493145179" className="border-2 border-white text-white hover:bg-white hover:text-[#007b7d] font-bold px-8 py-3 rounded-full text-sm transition-colors">
               Call 0493 145 179
             </a>
             <a href="https://wa.me/61493145179" target="_blank" rel="noopener noreferrer" className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold px-8 py-3 rounded-full text-sm transition-colors">
@@ -425,6 +449,9 @@ export default function VhsToDigitalPage() {
       </section>
 
             <MediaPromo />
+
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs />
 
       {/* ─── About Us ─── */}
       <section className="bg-[#007b7d] py-14 border-b border-[#006a6c] overflow-hidden relative">

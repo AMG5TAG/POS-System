@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import SocialLinks from "@/components/SocialLinks";
 import { Link } from "wouter";
 import {
@@ -293,6 +294,9 @@ export default function SyncBackPage() {
           </div>
         </div>
       </section>
+
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs />
 
       {/* ─── Team ─── */}
       <section id="team" className="bg-[#e8f4f5] py-14 border-b border-[#c8e0e2]">

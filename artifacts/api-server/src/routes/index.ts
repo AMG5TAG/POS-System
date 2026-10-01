@@ -44,7 +44,6 @@ import storageRouter from "./storage";
 import loyaltyRouter from "./loyalty";
 import invoiceSettingsRouter from "./invoice-settings";
 import portalRouter from "./portal";
-import portalAuthRouter from "./portal-auth";
 import cashDrawerRouter from "./cash-drawer";
 import parkedSalesRouter from "./parked-sales";
 import purchaseOrdersRouter from "./purchase-orders";
@@ -131,6 +130,7 @@ import dashboardAppPublicRouter from "./dashboard-app-public";
 import warrantiesRouter from "./warranties";
 import publicBusinessRouter from "./public-business";
 import shopRouter from "./shop";
+import shopAccountRouter from "./shop-account";
 import shareImageRouter from "./share-image";
 import mailInRouter from "./mail-in";
 import shopInvitesRouter from "./shop-invites";
@@ -169,7 +169,6 @@ router.use(publicBookingRouter);
 // below). A pathless requireAuth in a root-mounted sub-router runs for every
 // later request, so mounting these after it 401s their public endpoints.
 router.use(pwaRouter);
-router.use(portalAuthRouter);
 router.use(portalRouter);
 router.use(productsPublicRouter);
 router.use(techRouter);
@@ -211,6 +210,7 @@ router.use(qrRouter);
 router.use(publicBusinessRouter);
 // Public: the online shop (koastal.com.au/shop) — catalogue and customer accounts.
 router.use(shopRouter);
+router.use(shopAccountRouter);
 // Public: the link-preview image for koastal.com.au (Share.png in storage).
 router.use(shareImageRouter);
 router.use(mailInRouter);

@@ -3,7 +3,11 @@ import { db, customersTable, merchantsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 /**
- * Access control for the customer portal.
+ * Access control for a customer's account link (/c/<token>).
+ *
+ * The customer portal now lives in the online shop's account area; its link
+ * signs the customer in there (POST /shop/auth/token) under these same rules,
+ * and staff hand out wallet passes by token (routes/portal.ts).
  *
  * The portal began as token-only: whoever held the `portalToken` in the URL had
  * full read and write access to that customer. That is acceptable for a link
@@ -13,7 +17,7 @@ import { eq } from "drizzle-orm";
  * So a merchant can require a password. The rules, in the order they're applied:
  *
  *   - merchant hasn't opted in    -> token alone admits, exactly as before
- *   - customer has no password yet -> token alone admits, and the SPA offers set-up
+ *   - customer has no password yet -> token alone admits, and the account offers set-up
  *   - customer has a password      -> the token only IDENTIFIES the account;
  *                                     a session is required to read or write it
  *
@@ -72,39 +76,6 @@ export async function resolvePortalAccess(req: Request, token: string): Promise<
     ok: false,
     status: 401,
     body: { error: "Please sign in to view your account.", reason: "password_required" },
-  };
-}
-
-/**
- * What the portal SPA needs to decide which screen to render, before it has a
- * session. Deliberately says nothing a stranger couldn't already infer from
- * holding the link.
- */
-export async function readPortalAuthState(req: Request, token: string): Promise<{
-  found: boolean;
-  required: boolean;
-  hasPassword: boolean;
-  authenticated: boolean;
-  /** Masked destination the set-up link would go to, for the prompt copy. */
-  contactHint: string | null;
-  /** So the login screen can be branded — the merchant's name is already public. */
-  businessName: string | null;
-}> {
-  const customer = await findCustomerByPortalToken(token);
-  if (!customer) {
-    return { found: false, required: false, hasPassword: false, authenticated: false, contactHint: null, businessName: null };
-  }
-  const [merchant] = await db
-    .select({ businessName: merchantsTable.businessName, require: merchantsTable.requirePortalPassword })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.id, customer.merchantId));
-  return {
-    found: true,
-    required: merchant?.require === "true",
-    hasPassword: Boolean(customer.portalPasswordHash),
-    authenticated: isPortalAuthenticated(req, customer),
-    contactHint: maskContact(customer.email, customer.phone),
-    businessName: merchant?.businessName ?? null,
   };
 }
 

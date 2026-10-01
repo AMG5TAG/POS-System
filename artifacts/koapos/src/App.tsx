@@ -21,8 +21,9 @@ import { shouldRetryRequest, retryBackoff } from "@/lib/query-retry";
 import { lazyWithRetry } from "@/lib/lazy-retry";
 
 const CustomerDisplayPage = lazyWithRetry(() => import("@/pages/app/customer-display"));
+// The customer portal moved to the shop account; these forward its old links.
 const PortalPage = lazyWithRetry(() => import("@/pages/portal"));
-const PortalSetPasswordPage = lazyWithRetry(() => import("@/pages/portal/set-password"));
+const PortalSetPasswordPage = lazyWithRetry(() => import("@/pages/portal").then((m) => ({ default: m.PortalSetPasswordRedirect })));
 const BookingPage = lazyWithRetry(() => import("@/pages/booking"));
 const TechAppPage = lazyWithRetry(() => import("@/pages/tech"));
 const DashboardAppPage = lazyWithRetry(() => import("@/pages/dashboard-app"));

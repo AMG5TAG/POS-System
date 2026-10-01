@@ -1,6 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
-import { Apple, Smartphone, Layers, Cloud, Lock, Zap, CheckCircle2 } from "lucide-react";
+import { Apple, Smartphone, Layers, Cloud, Lock, Zap, CheckCircle2, ShoppingCart } from "lucide-react";
 
 const features = [
   { icon: Apple, title: "Native iOS", body: "Swift and SwiftUI builds optimised for iPhone and iPad, ready for the App Store." },
@@ -10,6 +10,12 @@ const features = [
   { icon: Lock, title: "Privacy first", body: "Built to meet Apple, Google and Australian Privacy Principles requirements." },
   { icon: Zap, title: "Lightning fast", body: "Performance-tuned UI, offline support and snappy launch times." },
 ];
+
+/* App Development in the online shop (koastal.com.au/shop) — the same id in
+   dev and production, so Buy Now opens that product's page. The shop is a
+   separate app, so these links are plain <a>s (a full page load). */
+const APP_DEVELOPMENT_PRODUCT_ID = 1000083;
+const appDevelopmentShopUrl = `/shop/product/${APP_DEVELOPMENT_PRODUCT_ID}`;
 
 const steps = [
   { n: "01", t: "Discovery", d: "We map your idea, users and goals into a clear scope and timeline." },
@@ -30,6 +36,11 @@ export default function AppsPage() {
       eyebrow="iOS & Android"
       title={<>Apps that people love to use</>}
       intro="We design and build fast, beautiful, secure mobile apps for iPhone, iPad and Android — published to the App Store and Google Play."
+      shopLink={{
+        href: appDevelopmentShopUrl,
+        label: "Buy Now",
+        ariaLabel: "Buy App Development now in our online shop",
+      }}
     >
       <section className="py-14 bg-white">
         <div className="max-w-6xl mx-auto px-4">
@@ -108,6 +119,14 @@ export default function AppsPage() {
                   </li>
                 ))}
               </ul>
+              <a
+                href={appDevelopmentShopUrl}
+                className="mt-6 inline-flex w-full items-center justify-center gap-2 rounded-lg bg-[#007b7d] px-4 py-3 text-sm font-bold uppercase tracking-wider text-white transition-colors hover:bg-[#004f51]"
+                aria-label="Buy the App Development plan now"
+              >
+                <ShoppingCart className="h-4 w-4" />
+                Buy Now
+              </a>
             </div>
           </div>
           <p className="text-center text-gray-500 text-sm mt-6">

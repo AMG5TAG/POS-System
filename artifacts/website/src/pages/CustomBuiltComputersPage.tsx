@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import SocialLinks from "@/components/SocialLinks";
 import { Link } from "wouter";
 import {
@@ -415,6 +416,9 @@ export default function CustomBuiltComputersPage() {
       </section>
 
             <MediaPromo />
+
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs />
 
       {/* ─── About Us ─── */}
       <section className="bg-[#007b7d] py-14 border-b border-[#006a6c] overflow-hidden relative">

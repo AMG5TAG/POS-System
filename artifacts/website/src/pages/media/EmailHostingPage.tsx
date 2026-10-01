@@ -1,6 +1,13 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
-import { CheckCircle2 } from "lucide-react";
+import { CheckCircle2, ShoppingCart } from "lucide-react";
+
+/* Email hosting is sold from the "Email Hosting" category of the online shop
+   (koastal.com.au/shop) — the same id in dev and production. It links to the
+   category rather than a product because none has been added to it yet. The
+   shop is a separate app, so these links are plain <a>s (a full page load). */
+const EMAIL_HOSTING_CATEGORY_ID = 1000073;
+const emailHostingShopUrl = `/shop/products?category=${EMAIL_HOSTING_CATEGORY_ID}`;
 
 const googlePlans = [
   {
@@ -146,6 +153,18 @@ function PlanCard({
           </li>
         ))}
       </ul>
+      <a
+        href={emailHostingShopUrl}
+        className={`mt-6 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${
+          featured
+            ? "bg-white text-[#007b7d] hover:bg-[#e8f4f5]"
+            : "bg-[#007b7d] text-white hover:bg-[#004f51]"
+        }`}
+        aria-label={`Shop email hosting for the ${plan.name} plan in our online shop`}
+      >
+        <ShoppingCart className="h-4 w-4" />
+        Shop email hosting
+      </a>
     </div>
   );
 }
@@ -162,6 +181,11 @@ export default function EmailHostingPage() {
       eyebrow="Business Email"
       title={<>Professional email on your own domain</>}
       intro="We set up Microsoft 365 and Google Workspace for Australian businesses — and then we actually look after it."
+      shopLink={{
+        href: emailHostingShopUrl,
+        label: "Shop email hosting",
+        ariaLabel: "Shop email hosting in our online shop",
+      }}
     >
       <section className="py-14 bg-white">
         <div className="max-w-4xl mx-auto px-4 text-center">

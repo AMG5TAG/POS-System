@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import { Link } from "wouter";
 import {
   MessageCircle, MapPin, Mail, Phone, Clock, ExternalLink,
@@ -401,6 +402,9 @@ export default function GamingPage() {
           </div>
         </div>
       </section>
+
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs />
 
       {/* ─── Team ─── */}
       <section id="team" className="bg-[#e8f4f5] py-14 border-b border-[#c8e0e2]">

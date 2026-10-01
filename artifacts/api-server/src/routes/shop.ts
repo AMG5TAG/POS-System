@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db, productsTable, productVariantsTable, productTypesTable, categoriesTable, brandsTable, merchantsTable, businessProfileTable, customersTable, customerPortalTokensTable, productReviewsTable, customerWishlistItemsTable, loyaltySettingsTable, serviceJobsTable, transactionsTable } from "@workspace/db";
+import { db, productsTable, productVariantsTable, productTypesTable, categoriesTable, brandsTable, merchantsTable, businessProfileTable, customersTable, customerPortalTokensTable, productReviewsTable, customerWishlistItemsTable, loyaltySettingsTable, serviceJobsTable, transactionsTable, staffTable } from "@workspace/db";
 import { and, asc, desc, eq, gt, ilike, inArray, isNull, or, sql, type SQL } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { hashPassword, verifyPassword } from "../lib/auth";
-import { soleMerchantId } from "../lib/sole-merchant";
+import { soleMerchantId, SOLE_MERCHANT_EMAIL } from "../lib/sole-merchant";
 import { normalisePhoneFor } from "../lib/phone";
 import { hashToken, issueSetupLink } from "../lib/customerPasswordLinks";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
@@ -29,9 +29,10 @@ import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_
  * category above it is hidden (lib/shop-visibility.ts).
  * Only whether an item is in stock is revealed, never the count.
  *
- * Accounts: a customer has one account for the shop and the portal — the
- * password is customers.portal_password_hash and a signed-in shopper is
- * `req.session.portalCustomerId`. Two rules keep accounts safe:
+ * Accounts: the shop account is also the customer's portal (the old portal's
+ * appointments, quotes, wallet passes and /c/<token> sign-in are in
+ * routes/shop-account.ts) — the password is customers.portal_password_hash
+ * and a signed-in shopper is `req.session.portalCustomerId`. Two rules keep accounts safe:
  *   - login is by email + password; one email can belong to several POS
  *     customers (duplicates), so each candidate's password is tried;
  *   - registering with an email the POS already knows never sets a password
@@ -534,6 +535,7 @@ router.get("/shop/account/overview", async (req, res): Promise<void> => {
     id: serviceJobsTable.id, jobNumber: serviceJobsTable.jobNumber, title: serviceJobsTable.title, status: serviceJobsTable.status,
     bookInDate: serviceJobsTable.bookInDate, deviceType: serviceJobsTable.deviceType, deviceDescription: serviceJobsTable.deviceDescription,
     completedAt: serviceJobsTable.completedAt, repairWarrantyDays: serviceJobsTable.repairWarrantyDays, createdAt: serviceJobsTable.createdAt,
+    workDescription: serviceJobsTable.workDescription, estimatedCost: serviceJobsTable.estimatedCost,
   }).from(serviceJobsTable)
     .where(and(eq(serviceJobsTable.merchantId, merchantId), inArray(serviceJobsTable.customerId, ids)))
     .orderBy(desc(serviceJobsTable.createdAt)).limit(100);
@@ -578,12 +580,18 @@ router.get("/shop/account/overview", async (req, res): Promise<void> => {
       ...loyaltyProgramInfo(l.programType, l.config, l.programOn),
       balance: c.loyaltyPoints ?? 0,
       formatted: formatLoyalty(l.programType, l.config, c.loyaltyPoints ?? 0),
+      totalSpent: parseFloat(c.totalSpent ?? "0"),
+      visitCount: c.visitCount ?? 0,
     },
     repairs: jobs.map((j) => ({
       id: j.id, jobNumber: j.jobNumber, status: j.status,
       device: j.deviceDescription || j.deviceType || j.title || "Repair",
       bookedIn: j.bookInDate || j.createdAt.toISOString().slice(0, 10),
       completedAt: j.completedAt ? j.completedAt.toISOString() : null,
+      // What the job is for and what it was estimated at. Never the job's
+      // `notes`: that is the staff's own log (calls, internal remarks).
+      workDescription: j.workDescription ?? null,
+      estimatedCost: money(j.estimatedCost),
     })),
     warranties,
   });
@@ -654,7 +662,7 @@ router.delete("/shop/wishlist/:productId", async (req, res): Promise<void> => {
 const Email = z.string().trim().toLowerCase().email().max(254);
 const Password = z.string().min(8, "Password must be at least 8 characters").max(200);
 
-function accountOf(c: typeof customersTable.$inferSelect) {
+export function accountOf(c: typeof customersTable.$inferSelect) {
   return {
     id: c.id, firstName: c.firstName ?? "", lastName: c.lastName ?? "", email: c.email ?? "", phone: c.phone ?? "",
     address: {
@@ -663,6 +671,9 @@ function accountOf(c: typeof customersTable.$inferSelect) {
     },
     loyaltyPoints: c.loyaltyPoints, portalToken: c.portalToken ?? null,
     dateOfBirth: c.dateOfBirth ?? null,
+    /* False for a customer who came in on an account link and has never set a
+       password: the account offers to email them a set-up link. */
+    hasPassword: !!c.portalPasswordHash,
   };
 }
 
@@ -682,9 +693,24 @@ export async function shopCustomer(req: import("express").Request) {
   return c ?? null;
 }
 
+/* Whether this shopper may see the whole shop while it is behind its Coming
+   Soon screen: the owner, or an active staff member, signed in with a shop
+   account on their own email. Any other signed-in customer gets their account
+   pages only. The curtain is not access control (the catalogue API is public);
+   this only decides who is shown the unlaunched shop. */
+async function canPreview(merchantId: number, email: string | null): Promise<boolean> {
+  const e = email?.trim().toLowerCase();
+  if (!e) return false;
+  if (e === SOLE_MERCHANT_EMAIL.toLowerCase()) return true;
+  const [staff] = await db.select({ id: staffTable.id }).from(staffTable)
+    .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.isActive, "true"), sql`lower(${staffTable.email}) = ${e}`))
+    .limit(1);
+  return !!staff;
+}
+
 router.get("/shop/auth/me", async (req, res): Promise<void> => {
   const c = await shopCustomer(req);
-  res.json({ customer: c ? accountOf(c) : null });
+  res.json({ customer: c ? accountOf(c) : null, preview: c ? await canPreview(c.merchantId, c.email) : false });
 });
 
 router.post("/shop/auth/login", loginLimiter, async (req, res): Promise<void> => {
@@ -737,7 +763,7 @@ router.post("/shop/auth/register", registerLimiter, async (req, res): Promise<vo
     // Already a customer (in store or online). Never set a password from here —
     // send the set-up link to the address on file; the inbox is the proof.
     const target = existing.find((c) => !c.portalPasswordHash) ?? existing[0]!;
-    await issueSetupLink(target, target.portalPasswordHash ? "reset" : "setup", req.log, "shop");
+    await issueSetupLink(target, target.portalPasswordHash ? "reset" : "setup", req.log);
     res.json({ status: "check-email" });
     return;
   }
@@ -768,7 +794,7 @@ router.post("/shop/auth/forgot", linkLimiter, async (req, res): Promise<void> =>
   if (parsed.success) {
     const candidates = await customersByEmail(merchantId, parsed.data.email);
     const target = candidates.find((c) => c.portalPasswordHash) ?? candidates[0];
-    if (target) await issueSetupLink(target, target.portalPasswordHash ? "reset" : "setup", req.log, "shop");
+    if (target) await issueSetupLink(target, target.portalPasswordHash ? "reset" : "setup", req.log);
   }
   res.json({ ok: true });
 });
@@ -806,6 +832,8 @@ router.post("/shop/auth/set-password", linkLimiter, async (req, res): Promise<vo
 
 const ProfileBody = z.object({
   firstName: z.string().trim().min(1).max(80),
+  /** Omitted leaves it alone. Changing it changes the login — see below. */
+  email: Email.optional(),
   lastName: z.string().trim().max(80),
   phone: z.string().trim().max(40),
   address: z.object({
@@ -824,8 +852,13 @@ function plausibleBirthday(v: string): boolean {
   return d < now && d.getUTCFullYear() >= now.getUTCFullYear() - 120;
 }
 
-/* A shopper edits their own record — the same row the POS shows. Email is not
-   editable here: it is the login, and changing it would need verification. */
+/* A shopper edits their own record — the same row the POS shows.
+
+   The email can be changed (as the customer portal allowed), but never to an
+   address another customer record already has. The account gathers repairs,
+   quotes and purchases from every record sharing its email
+   (buyerCustomerIds), so taking someone else's address would hand over their
+   history; staff merge genuine duplicates in the POS instead. */
 router.patch("/shop/account/profile", async (req, res): Promise<void> => {
   const c = await shopCustomer(req);
   if (!c) { res.status(401).json({ error: "Please sign in." }); return; }
@@ -844,8 +877,20 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     }
     if (!c.dateOfBirth) dateOfBirth = b.dateOfBirth;
   }
+  let email: string | undefined;
+  if (b.email && b.email !== (c.email ?? "").trim().toLowerCase()) {
+    const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
+      .where(and(eq(customersTable.merchantId, c.merchantId), sql`lower(${customersTable.email}) = ${b.email}`, sql`${customersTable.id} <> ${c.id}`))
+      .limit(1);
+    if (taken) {
+      res.status(409).json({ error: "That email is already on another account with us. Contact us and we can combine them." });
+      return;
+    }
+    email = b.email;
+  }
   const [updated] = await db.update(customersTable).set({
     ...(dateOfBirth ? { dateOfBirth } : {}),
+    ...(email ? { email } : {}),
     firstName: b.firstName, lastName: b.lastName || null,
     phone: b.phone ? await normalisePhoneFor(c.merchantId, b.phone) : null,
     billingStreet: b.address.street || null, billingCity: b.address.city || null, billingState: b.address.state || null,

@@ -78,9 +78,8 @@ describe("shop invites", () => {
       const ids = issueSetupLink.mock.calls.map((call) => ((call as unknown as [{ id: number }])[0]).id);
       expect(ids).toEqual([1, 3]);
       for (const call of issueSetupLink.mock.calls) {
-        const [, purpose, , dest] = call as unknown as [unknown, string, unknown, string];
+        const [, purpose] = call as unknown as [unknown, string];
         expect(purpose).toBe("invite");
-        expect(dest).toBe("shop");
       }
     } finally {
       vi.useRealTimers();

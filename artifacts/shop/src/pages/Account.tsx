@@ -1,11 +1,14 @@
 import { useEffect, useState } from "react";
 import { Redirect } from "wouter";
 import { Link } from "wouter";
-import { Loader2, Package, Wrench, CalendarDays, FileText, Coins, ShieldCheck, Heart, Cake } from "lucide-react";
+import { Loader2, Package, Wrench, Coins, ShieldCheck, Heart, Cake, KeyRound } from "lucide-react";
 import { useAccountOverview, type Overview } from "@/lib/loyalty";
 import { api } from "@/lib/api";
 import { useAuth, type Account as AccountT } from "@/lib/auth";
 import { Field, Notice } from "@/components/Form";
+import { QuotesCard } from "@/components/account/QuotesCard";
+import { AppointmentsCard } from "@/components/account/AppointmentsCard";
+import { LoyaltyPass } from "@/components/account/LoyaltyPass";
 
 export default function Account() {
   const { customer, loading, setCustomer, logout } = useAuth();
@@ -27,7 +30,7 @@ export default function Account() {
     try {
       const r = await api<{ customer: AccountT }>("/shop/account/profile", {
         method: "PATCH",
-        body: JSON.stringify({ firstName: f.firstName, lastName: f.lastName, phone: f.phone, address: f.address, dateOfBirth: f.dateOfBirth ?? "" }),
+        body: JSON.stringify({ firstName: f.firstName, lastName: f.lastName, email: f.email || undefined, phone: f.phone, address: f.address, dateOfBirth: f.dateOfBirth ?? "" }),
       });
       setCustomer(r.customer);
       setMsg({ tone: "ok", text: "Saved." });
@@ -43,12 +46,20 @@ export default function Account() {
         <button onClick={() => void logout()} className="h-8 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50">Sign out</button>
       </div>
 
+      {!customer.hasPassword && <PasswordPrompt email={customer.email} />}
+
       {overview && <LoyaltyCard loyalty={overview.loyalty} />}
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
         <RepairsCard repairs={overview?.repairs} />
+        <QuotesCard />
+        <AppointmentsCard />
         <WarrantiesCard warranties={overview?.warranties} />
       </div>
+
+      {overview && (
+        <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />
+      )}
 
       <form onSubmit={save} className="rounded-2xl bg-white border border-stone-200 p-6 space-y-4">
         <h2 className="text-lg font-semibold">Your details</h2>
@@ -56,7 +67,7 @@ export default function Account() {
         <div className="grid sm:grid-cols-2 gap-4">
           <Field label="First name" required value={f.firstName} onChange={(e) => setF({ ...f, firstName: e.target.value })} />
           <Field label="Last name" value={f.lastName} onChange={(e) => setF({ ...f, lastName: e.target.value })} />
-          <Field label="Email" value={f.email} disabled />
+          <Field label="Email" type="email" autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} />
           <Field label="Mobile" type="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} />
           <Field label="Street address" value={f.address.street} onChange={addr("street")} />
           <Field label="Suburb" value={f.address.city} onChange={addr("city")} />
@@ -74,12 +85,8 @@ export default function Account() {
         <button type="submit" disabled={busy} className="h-11 px-6 rounded-full bg-brand text-white font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? "Saving…" : "Save details"}</button>
       </form>
 
-      <div className="grid sm:grid-cols-3 gap-3">
-        {[{ icon: Package, title: "Orders" }, { icon: CalendarDays, title: "Appointments" }, { icon: FileText, title: "Quotes & invoices" }].map(({ icon: Icon, title }) => (
-          <div key={title} className="rounded-2xl bg-white border border-stone-200 p-4 flex items-center gap-3 text-sm">
-            <Icon className="w-5 h-5 text-stone-400" /><span><span className="font-medium">{title}</span> <span className="text-stone-500">— coming soon</span></span>
-          </div>
-        ))}
+      <div className="rounded-2xl bg-white border border-stone-200 p-4 flex items-center gap-3 text-sm">
+        <Package className="w-5 h-5 text-stone-400" /><span><span className="font-medium">Orders and invoices</span> <span className="text-stone-500">— coming soon</span></span>
       </div>
     </div>
   );
@@ -129,6 +136,10 @@ function RepairsCard({ repairs }: { repairs: Overview["repairs"] | undefined }) 
         <div className="flex-1 min-w-0">
           <p className="font-medium truncate">{r.device}</p>
           <p className="text-xs text-stone-500">Job {r.jobNumber} · booked in {date(r.bookedIn)}{r.completedAt ? ` · completed ${date(r.completedAt)}` : ""}</p>
+          {r.workDescription && <p className="text-sm text-stone-600 mt-1 line-clamp-3">{r.workDescription}</p>}
+          {r.estimatedCost != null && r.estimatedCost > 0 && (
+            <p className="text-xs text-stone-500 mt-0.5">Estimate {r.estimatedCost.toLocaleString("en-AU", { style: "currency", currency: "AUD" })}</p>
+          )}
         </div>
         <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-xs font-medium ${s.tone}`}>{s.label}</span>
       </li>
@@ -171,5 +182,33 @@ function WarrantiesCard({ warranties }: { warranties: Overview["warranties"] | u
             ))}
           </ul>}
     </section>
+  );
+}
+
+/* Shown to a customer who came in on an account link and has never set a
+   password: with one they can sign in by email, from any device. The link
+   goes to the email on file — the inbox is the proof it is theirs. */
+function PasswordPrompt({ email }: { email: string }) {
+  const [state, setState] = useState<"idle" | "busy" | "sent" | "error">("idle");
+  const send = async () => {
+    setState("busy");
+    try { await api("/shop/auth/forgot", { method: "POST", body: JSON.stringify({ email }) }); setState("sent"); }
+    catch { setState("error"); }
+  };
+  return (
+    <div className="rounded-2xl border border-amber-200 bg-amber-50 p-4 flex flex-wrap items-center gap-3 text-sm">
+      <KeyRound className="w-5 h-5 text-amber-700 shrink-0" />
+      <p className="flex-1 min-w-[14rem] text-amber-900">
+        {state === "sent" ? `We've emailed a link to ${email} — open it to set your password.`
+          : state === "error" ? "Something went wrong sending the link. Please try again."
+          : email ? "Set a password so you can sign in with your email from any device, and only you can open your account."
+          : "Ask us to add your email address so you can set a password and sign in from any device."}
+      </p>
+      {email && state !== "sent" && (
+        <button onClick={() => void send()} disabled={state === "busy"} className="h-9 px-4 rounded-full bg-amber-600 text-white font-medium hover:bg-amber-700 disabled:opacity-50">
+          {state === "busy" ? "Sending…" : "Email me a link"}
+        </button>
+      )}
+    </div>
   );
 }

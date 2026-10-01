@@ -15,7 +15,7 @@ import crypto from "node:crypto";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
-import { publicOrigin } from "../lib/publicUrl";
+import { customerPortalUrl } from "../lib/publicUrl";
 import { registerCustomerQr, registerCustomerQrsBatch, registerQrBestEffort } from "../services/entityQr";
 import {
   ListCustomersQueryParams,
@@ -816,7 +816,7 @@ router.get("/customers/:id/portal-token", requireAuth, async (req, res): Promise
     token = crypto.randomUUID();
     await db.update(customersTable).set({ portalToken: token }).where(eq(customersTable.id, customer.id));
   }
-  res.json({ token, portalUrl: `${publicOrigin(req)}/c/${token}` });
+  res.json({ token, portalUrl: customerPortalUrl(null, token) });
 });
 
 /* ─── Shared merge helper ─────────────────────────────────────────────────── */

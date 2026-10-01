@@ -2,7 +2,7 @@ import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import SocialLinks from "@/components/SocialLinks";
 import { Link, useLocation } from "wouter";
-import { Mail, Phone, MapPin, MessageCircle, Clock, ExternalLink } from "lucide-react";
+import { Mail, Phone, MapPin, MessageCircle, Clock, ExternalLink, ShoppingCart } from "lucide-react";
 import RepairsPromo from "@/components/RepairsPromo";
 import { suburbs, suburbPath, toSuburbSlug } from "@/data/suburbs";
 import { yearsExperience } from "@/lib/experience";
@@ -13,9 +13,13 @@ type Props = {
   intro: string;
   children: React.ReactNode;
   heroActions?: React.ReactNode;
+  /* Where this service is sold in the online shop. Shown first among the hero
+     buttons, ahead of call/email. The shop is a separate app under /shop, so
+     it is a plain <a> (a full page load), never a wouter <Link>. */
+  shopLink?: { href: string; label: string; ariaLabel?: string };
 };
 
-export default function MediaLayout({ eyebrow, title, intro, children, heroActions }: Props) {
+export default function MediaLayout({ eyebrow, title, intro, children, heroActions, shopLink }: Props) {
   const reviewsRef = useRef<HTMLDivElement>(null);
   const [location] = useLocation();
   const currentSuburbSlug = (() => {
@@ -60,6 +64,15 @@ export default function MediaLayout({ eyebrow, title, intro, children, heroActio
               <div className="flex flex-wrap justify-center gap-3">
                 {heroActions ?? (
                   <>
+                    {shopLink && (
+                      <a
+                        href={shopLink.href}
+                        className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+                        aria-label={shopLink.ariaLabel}
+                      >
+                        <ShoppingCart className="h-4 w-4" /> {shopLink.label}
+                      </a>
+                    )}
                     <a
                       href="tel:+61493145179"
                       className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"

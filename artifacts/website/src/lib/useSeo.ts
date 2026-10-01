@@ -134,7 +134,19 @@ export function useSeo({ title, description, scrollToTop = true, canonicalPath, 
     }
 
     if (scrollToTop) {
-      window.scrollTo(0, 0);
+      // Arriving on a #section link — the menu's CONTACT from a shop page is
+      // /#contact — goes to that section, not the top. The browser's own jump
+      // happens before React renders the page, and the scroll below used to
+      // undo it. Aligned again shortly after, once images and the reviews
+      // widget have pushed the layout down.
+      const id = decodeURIComponent(window.location.hash.slice(1));
+      if (id && document.getElementById(id)) {
+        const align = () => document.getElementById(id)?.scrollIntoView();
+        requestAnimationFrame(align);
+        setTimeout(align, 500);
+      } else {
+        window.scrollTo(0, 0);
+      }
     }
 
     return () => {

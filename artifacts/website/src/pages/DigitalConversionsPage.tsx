@@ -1,16 +1,26 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import SocialLinks from "@/components/SocialLinks";
 import { Link } from "wouter";
 import {
   MessageCircle, MapPin, Mail, Phone, Clock, ExternalLink,
   CheckCircle2, Image, Music, Film, Sparkles, Heart, Shield,
-  Share2, HardDrive, Download, AlertTriangle, Clock3,
+  Share2, HardDrive, Download, AlertTriangle, Clock3, ShoppingCart,
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
+
+/* The conversion services in the online shop (koastal.com.au/shop) — the same
+   ids in dev and production, so Buy Now opens that product's page. The shop is
+   a separate app, so these links are plain <a>s (a full page load). Film &
+   negative scanning and photo restoration have no shop product of their own,
+   so their cards keep the enquiry buttons only. */
+const VIDEO_CONVERSION_PRODUCT_ID = 1000046; // DVD / VHS / tape
+const PHOTO_CONVERSION_PRODUCT_ID = 1000047; // photos
+const shopProductUrl = (id: number) => `/shop/product/${id}`;
 
 const services = [
   {
@@ -20,6 +30,7 @@ const services = [
     badgeText: "text-white",
     icon: Image,
     title: "Photo Scanning & Digitisation",
+    shopProductId: PHOTO_CONVERSION_PRODUCT_ID as number | undefined,
     tagline: "Give your printed memories a digital life — forever.",
     description:
       "Boxes of loose prints, old photo albums, school photos, wedding shots, family portraits — we scan them all at high resolution so they're preserved perfectly in digital format. Once scanned, your photos can be shared with family anywhere in the world, printed again, or simply kept safe forever on a USB or in the cloud.",
@@ -39,6 +50,7 @@ const services = [
     badgeText: "text-gray-900",
     icon: Music,
     title: "Cassette Tape to Digital",
+    shopProductId: VIDEO_CONVERSION_PRODUCT_ID as number | undefined,
     tagline: "Your mixtapes and recordings deserve to be heard again.",
     description:
       "Whether it's a cherished mixtape from the 80s, a home recording of a family member singing, a live performance, or a spoken word recording, cassette tapes don't last forever. We convert them to high-quality MP3 or WAV files so you can listen on any device — or burn them to CD for the car.",
@@ -58,6 +70,7 @@ const services = [
     badgeText: "text-white",
     icon: Film,
     title: "Film & Negative Scanning",
+    shopProductId: undefined as number | undefined,
     tagline: "Unlock the photos that never made it to a print.",
     description:
       "Old film rolls, negatives and slides contain photos that were never printed — or prints that have since been lost. We scan your film negatives and slides to produce high-quality digital images that can be printed, shared or preserved. Often the resolution from a scanned negative is better than the original print.",
@@ -77,6 +90,7 @@ const services = [
     badgeText: "text-white",
     icon: Sparkles,
     title: "Photo Restoration",
+    shopProductId: undefined as number | undefined,
     tagline: "Torn. Faded. Water-damaged. We bring them back.",
     description:
       "A torn wedding photo. A faded portrait of a grandparent. A water-damaged family photo from a flood. Some photos are the only record of a person or a moment that exists — and when they're damaged, it can feel like losing that memory all over again. Our photo restoration service brings damaged photographs back to life using professional digital tools.",
@@ -232,6 +246,22 @@ export default function DigitalConversionsPage() {
                   Our Services
                 </a>
                 <a
+                  href={shopProductUrl(VIDEO_CONVERSION_PRODUCT_ID)}
+                  className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+                  aria-label="Buy video and tape conversion now in our online shop"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Buy Video &amp; Tape
+                </a>
+                <a
+                  href={shopProductUrl(PHOTO_CONVERSION_PRODUCT_ID)}
+                  className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+                  aria-label="Buy photo conversion now in our online shop"
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Buy Photos
+                </a>
+                <a
                   href="tel:+61493145179"
                   className="border-2 border-[#007b7d] text-[#007b7d] hover:bg-[#007b7d] hover:text-white font-bold px-7 py-3 rounded-full text-sm transition-colors"
                 >
@@ -350,6 +380,16 @@ export default function DigitalConversionsPage() {
                     ))}
                   </ul>
                   <div className="flex flex-wrap gap-3 pt-1">
+                    {svc.shopProductId !== undefined && (
+                      <a
+                        href={shopProductUrl(svc.shopProductId)}
+                        className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-5 py-2.5 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+                        aria-label={`Buy ${svc.title} now in our online shop`}
+                      >
+                        <ShoppingCart className="h-4 w-4" />
+                        Buy Now
+                      </a>
+                    )}
                     <a
                       href="#contact"
                       className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-5 py-2.5 rounded-full text-sm transition-colors"
@@ -406,7 +446,23 @@ export default function DigitalConversionsPage() {
             These things cannot be recreated. But they can be preserved — and they can be shared with the generations who come after. Don't leave it until it's too late. Let Koastal Kollective help you bring them back.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <a href="tel:+61493145179" className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors">
+            <a
+              href={shopProductUrl(VIDEO_CONVERSION_PRODUCT_ID)}
+              className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+              aria-label="Buy video and tape conversion now in our online shop"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Buy Video &amp; Tape
+            </a>
+            <a
+              href={shopProductUrl(PHOTO_CONVERSION_PRODUCT_ID)}
+              className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+              aria-label="Buy photo conversion now in our online shop"
+            >
+              <ShoppingCart className="h-4 w-4" />
+              Buy Photos
+            </a>
+            <a href="tel:+61493145179" className="border-2 border-white text-white hover:bg-white hover:text-[#007b7d] font-bold px-8 py-3 rounded-full text-sm transition-colors">
               Call 0493 145 179
             </a>
             <a href="https://wa.me/61493145179" target="_blank" rel="noopener noreferrer" className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold px-8 py-3 rounded-full text-sm transition-colors">
@@ -463,6 +519,9 @@ export default function DigitalConversionsPage() {
       </section>
 
             <MediaPromo />
+
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs />
 
       {/* ─── About Us ─── */}
       <section className="bg-[#007b7d] py-14 border-b border-[#006a6c] overflow-hidden relative">

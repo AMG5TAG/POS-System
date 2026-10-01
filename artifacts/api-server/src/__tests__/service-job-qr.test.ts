@@ -61,20 +61,10 @@ describe("GET /api/qr/j/:jobId", () => {
     expect(res.headers.location).toBe("https://pos.koastal.com.au/a/tech?job=7");
   });
 
-  it("sends a completed job to the customer's portal", async () => {
+  it("sends a completed job to the customer's shop account", async () => {
     h.rows = [[{ ...JOB, status: "completed" }], [MERCHANT], [{ portalToken: "tok-123" }]];
     const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://pos.koastal.com.au/c/tok-123");
-  });
-
-  it("prefers the merchant's own portal domain when they have one", async () => {
-    h.rows = [
-      [{ ...JOB, status: "completed" }],
-      [{ username: "koastal", portalDomain: "portal.koastal.com.au" }],
-      [{ portalToken: "tok-123" }],
-    ];
-    const res = await request(app).get("/api/qr/j/7");
-    expect(res.headers.location).toBe("https://portal.koastal.com.au/c/tok-123");
+    expect(res.headers.location).toBe("https://koastal.com.au/shop/c/tok-123");
   });
 
   // A sticker that opens nothing is worse than one that opens the staff view.

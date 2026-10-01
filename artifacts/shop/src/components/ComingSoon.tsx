@@ -1,19 +1,19 @@
 import { useEffect } from "react";
 import { Link, useLocation } from "wouter";
-import { Globe, LogIn } from "lucide-react";
+import { Globe, LogIn, User } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useShopInfo } from "@/lib/shop";
-import { COMING_SOON, OPEN_WHILE_CLOSED } from "@/lib/launch";
+import { curtainCovers } from "@/lib/launch";
 
-/* Covers the shop until launch. Shown while the sign-in check is still
-   loading too, so a visitor never glimpses the shop behind it; a signed-in
-   shopper sees it vanish once /shop/auth/me answers. This is a curtain, not
-   access control — the catalogue API is public either way. */
+/* Covers the shop until launch (the rules are in lib/launch.ts). Shown while
+   the sign-in check is still loading too, so a visitor never glimpses the shop
+   behind it. This is a curtain, not access control — the catalogue API is
+   public either way. */
 export function ComingSoon() {
-  const { customer, loading } = useAuth();
+  const { customer, preview, loading } = useAuth();
   const { data: info } = useShopInfo();
   const [path] = useLocation();
-  const show = COMING_SOON && !customer && !OPEN_WHILE_CLOSED.includes(path);
+  const show = curtainCovers(path, !!customer, preview);
 
   useEffect(() => {
     if (!show) return;
@@ -31,13 +31,18 @@ export function ComingSoon() {
         {info?.logoUrl && <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-12 w-auto mx-auto mb-6 object-contain" />}
         <p className="inline-block rounded-full bg-brand-50 text-brand px-3 py-1 text-xs font-bold uppercase tracking-wider">Coming soon</p>
         <h1 id="coming-soon-title" className="mt-4 text-2xl font-bold tracking-tight">Our online shop is on its way</h1>
-        <p className="mt-3 text-stone-600">We're putting the finishing touches on the {info?.businessName ?? "Koastal Kollective"} shop. Check back soon — in the meantime, we're open in store and online.</p>
+        <p className="mt-3 text-stone-600">We're putting the finishing touches on the {info?.businessName ?? "Koastal Kollective"} shop. Check back soon — in the meantime, we're open in store, and mail-in repairs are open now.</p>
         <div className="mt-6 flex flex-col sm:flex-row gap-3 justify-center">
           {/* The website sits outside the shop's /shop router base: a plain link. */}
           <a href="/" className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full bg-brand text-white font-semibold hover:bg-brand-dark">
             <Globe className="w-4 h-4" /> Visit our website
           </a>
-          {!loading && (
+          {!loading && customer && (
+            <Link href="/account" className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full border border-stone-300 font-semibold hover:bg-stone-50">
+              <User className="w-4 h-4" /> My account
+            </Link>
+          )}
+          {!loading && !customer && (
             <Link href="/account/login" className="inline-flex items-center justify-center gap-2 h-11 px-5 rounded-full border border-stone-300 font-semibold hover:bg-stone-50">
               <LogIn className="w-4 h-4" /> Sign in
             </Link>

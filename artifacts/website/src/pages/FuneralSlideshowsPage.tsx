@@ -11,6 +11,13 @@ import { useSeo } from "@/lib/useSeo";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
+/* The slideshow service in the online shop (koastal.com.au/shop) — the same id
+   in dev and production, so "Order a Slideshow" opens that product's page. The
+   shop is a separate app, so these links are plain <a>s (a full page load).
+   Worded gently on purpose: families reach this page while grieving. */
+const SLIDESHOW_PRODUCT_ID = 1000048;
+const slideshowShopUrl = `/shop/product/${SLIDESHOW_PRODUCT_ID}`;
+
 const features = [
   {
     icon: Images,
@@ -145,6 +152,14 @@ export default function FuneralSlideshowsPage() {
                   Discuss Your Tribute
                 </a>
                 <a
+                  href={slideshowShopUrl}
+                  className="bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+                  aria-label="Order a funeral slideshow in our online shop"
+                >
+                  <Heart className="h-4 w-4" />
+                  Order a Slideshow
+                </a>
+                <a
                   href="tel:+61493145179"
                   className="border-2 border-[#007b7d] text-[#007b7d] hover:bg-[#007b7d] hover:text-white font-bold px-7 py-3 rounded-full text-sm transition-colors"
                 >
@@ -248,7 +263,15 @@ export default function FuneralSlideshowsPage() {
             A funeral slideshow is more than a presentation — it's a final gift to the person who has passed, and a source of comfort for everyone who loved them. Let us help you create something beautiful, dignified and unforgettable.
           </p>
           <div className="flex flex-wrap justify-center gap-4">
-            <a href="tel:+61493145179" className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors">
+            <a
+              href={slideshowShopUrl}
+              className="bg-white text-[#007b7d] hover:bg-[#e8f4f5] font-bold px-8 py-3 rounded-full text-sm transition-colors inline-flex items-center gap-2"
+              aria-label="Order a funeral slideshow in our online shop"
+            >
+              <Heart className="h-4 w-4" />
+              Order a Slideshow
+            </a>
+            <a href="tel:+61493145179" className="border-2 border-white text-white hover:bg-white hover:text-[#007b7d] font-bold px-8 py-3 rounded-full text-sm transition-colors">
               Call 0493 145 179
             </a>
             <a href="https://wa.me/61493145179" target="_blank" rel="noopener noreferrer" className="bg-[#25D366] hover:bg-[#1ebe5d] text-white font-bold px-8 py-3 rounded-full text-sm transition-colors">

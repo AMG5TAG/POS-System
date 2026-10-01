@@ -19,11 +19,33 @@ export function publicOrigin(): string {
 }
 
 /**
+ * The online shop's base URL (no trailing slash): koastal.com.au/shop, where
+ * a customer's account lives. VITE_SITE_DOMAIN overrides the host. In
+ * development the shop is served under /shop on the same dev host, so a
+ * redirect stays on it rather than jumping to production.
+ */
+export function shopOrigin(): string {
+  if (import.meta.env.DEV && typeof window !== "undefined") return `${window.location.origin}/shop`;
+  const override = import.meta.env.VITE_SITE_DOMAIN?.trim();
+  const host = override ? override.replace(/^https?:\/\//, "").replace(/\/.*$/, "") : "koastal.com.au";
+  return `https://${host}/shop`;
+}
+
+/**
+ * A customer's account link: /c/<token> in the shop, which signs them into
+ * their shop account (repairs, quotes, appointments, rewards). That account
+ * replaced the customer portal. Mirrors `customerPortalUrl` on the server.
+ */
+export function customerAccountUrl(token: string | null | undefined): string | null {
+  return token ? `${shopOrigin()}/c/${token}` : null;
+}
+
+/**
  * The value a service job's QR encodes. Deliberately NOT the Tech App url: a
  * sticker is printed once and then lives on the device, so whatever is in the
  * ink must stay valid for the whole job. This resolver is stable for the life of
  * the job and picks the destination at scan time — the Tech App while the job is
- * open, the customer's portal once it is completed (see routes/qr.ts).
+ * open, the customer's shop account once it is completed (see routes/qr.ts).
  *
  * Needs no username: the server resolves the merchant from the job.
  */

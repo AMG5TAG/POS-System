@@ -75,7 +75,7 @@ import {
   type FormTemplate,
 } from "@/lib/forms-api";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
-import { publicOrigin } from "@/lib/public-url";
+import { customerAccountUrl } from "@/lib/public-url";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
@@ -1129,9 +1129,8 @@ function CustomerDetailInner({
     }
   }, [tab, customer.id, localPortalToken]);
 
-  /* The portal's short address — the token alone identifies the customer. */
-  const buildPortalUrl = (token: string | null | undefined) =>
-    token ? `${publicOrigin()}/c/${token}` : null;
+  /* The customer's account link — their shop account, which replaced the portal. */
+  const buildPortalUrl = customerAccountUrl;
 
   const handleCopyPortalUrl = async () => {
     const url = buildPortalUrl(localPortalToken);

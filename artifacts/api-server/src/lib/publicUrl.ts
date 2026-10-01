@@ -66,23 +66,25 @@ export function publicOrigin(req?: { hostname?: string }): string {
 }
 
 /**
- * A customer's portal address: `/c/<token>` on the merchant's own portal domain
- * when one is configured, else on ours. The token alone identifies the customer
- * (and so the business), so no username is needed — the older
- * `/b/<username>/c/<token>` form still routes, for links already sent. Returns
- * null when the customer has no token: there is no portal to link to.
+ * A customer's account link: `/c/<token>` in the online shop
+ * (koastal.com.au/shop/c/<token>), which signs them into their shop account —
+ * repairs, quotes, appointments, rewards — under the rules in lib/portalAuth.ts.
+ * That account replaced the customer portal, so this no longer points at the
+ * POS domain or a merchant's custom portal domain; links already sent there
+ * (`/c/<token>` and `/b/<username>/c/<token>` on the POS) forward to it.
+ * Returns null when the customer has no token: there is nothing to link to.
  *
- * Shared by the status-change SMS (admin and Tech App) and the service-job QR
- * redirect so the three cannot drift apart.
+ * Shared by the status-change SMS (admin and Tech App), the service-job QR
+ * redirect, wallet passes and the staff copy-link so they cannot drift apart.
+ * `merchant` and `req` are no longer read; they are kept so callers need not change.
  */
 export function customerPortalUrl(
-  merchant: { username?: string | null; portalDomain?: string | null } | null | undefined,
+  _merchant: { username?: string | null; portalDomain?: string | null } | null | undefined,
   portalToken: string | null | undefined,
-  req?: { hostname?: string },
+  _req?: { hostname?: string },
 ): string | null {
   if (!portalToken) return null;
-  if (merchant?.portalDomain) return `https://${merchant.portalDomain}/c/${portalToken}`;
-  return `${publicOrigin(req)}/c/${portalToken}`;
+  return `${shopOrigin()}/c/${portalToken}`;
 }
 
 /**

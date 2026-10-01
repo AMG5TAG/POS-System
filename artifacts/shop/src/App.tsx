@@ -19,6 +19,7 @@ import Wishlist from "@/pages/Wishlist";
 import Rewards from "@/pages/Rewards";
 import MailIn from "@/pages/MailIn";
 import MailInTrack from "@/pages/MailInTrack";
+import AccountLink, { AccountLinkSetPassword } from "@/pages/AccountLink";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -55,6 +56,9 @@ export default function App() {
                 <Route path="/rewards" component={Rewards} />
                 <Route path="/mail-in" component={MailIn} />
                 <Route path="/mail-in/track/:token" component={MailInTrack} />
+                {/* Account links (the former customer portal): texts, job QR codes, wallet passes. */}
+                <Route path="/c/:token/set-password" component={AccountLinkSetPassword} />
+                <Route path="/c/:token" component={AccountLink} />
                 <Route component={NotFound} />
               </Switch>
             </Layout>

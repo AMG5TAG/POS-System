@@ -1,10 +1,11 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import SocialLinks from "@/components/SocialLinks";
 import { Link } from "wouter";
 import {
   MessageCircle, MapPin, Mail, Phone, Clock, ExternalLink,
-  Monitor, Package, Zap, Shield, CheckCircle2, Truck, Wrench, Star,
+  Monitor, Zap, Shield, CheckCircle2, Truck, Wrench, Star,
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
@@ -53,29 +54,6 @@ const benefits = [
     icon: Star,
     title: "No-Fix No-Fee Guarantee",
     body: "If we can't replace your screen successfully, you pay nothing. We assess every device before ordering parts and only proceed when we're confident in the repair.",
-  },
-];
-
-const mailInSteps = [
-  {
-    step: "01",
-    title: "Contact Us First",
-    body: "Call or WhatsApp us to describe the issue and confirm your laptop model. We'll quote you upfront — no surprises when it arrives.",
-  },
-  {
-    step: "02",
-    title: "Pack It Safely",
-    body: "Wrap your laptop in bubble wrap and place it in a sturdy box with padding on all sides. Remove the battery if possible and don't include chargers or accessories.",
-  },
-  {
-    step: "03",
-    title: "Send to Our Workshop",
-    body: "Post your laptop to 1/64 Vales Road, Mannering Park NSW 2259. We recommend using a tracked service with insurance for your peace of mind.",
-  },
-  {
-    step: "04",
-    title: "Repaired & Returned",
-    body: "Once your screen is replaced and tested we'll contact you, take payment and ship your laptop back promptly — usually within 1–3 business days of receiving it.",
   },
 ];
 
@@ -279,35 +257,8 @@ export default function LaptopScreenRepairPage() {
         </div>
       </section>
 
-      {/* ─── Mail-In Process ─── */}
-      <section className="bg-gray-50 py-12 border-y border-gray-200">
-        <div className="max-w-5xl mx-auto px-4">
-          <div className="text-center mb-10">
-            <p className="text-[#007b7d] font-bold tracking-[0.18em] text-xs uppercase mb-2">Mail-In Repairs</p>
-            <h2 className="text-2xl md:text-3xl font-bold text-gray-900">Australia Wide — How It Works</h2>
-            <p className="text-gray-500 text-sm mt-2 max-w-lg mx-auto">
-              Not on the Central Coast? Send your laptop to us from anywhere in Australia and we'll repair and return it fast.
-            </p>
-          </div>
-          <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {mailInSteps.map(({ step, title, body }) => (
-              <div key={step} className="text-center">
-                <div className="w-14 h-14 rounded-full bg-[#007b7d] text-white flex items-center justify-center mx-auto mb-4 text-lg font-bold">
-                  {step}
-                </div>
-                <h3 className="font-bold text-gray-900 mb-2">{title}</h3>
-                <p className="text-sm text-gray-600 leading-relaxed">{body}</p>
-              </div>
-            ))}
-          </div>
-          <div className="mt-10 bg-white border border-[#c8e0e2] rounded-xl p-6 text-center max-w-2xl mx-auto">
-            <Package className="h-8 w-8 text-[#007b7d] mx-auto mb-3" />
-            <h3 className="font-bold text-gray-900 text-lg mb-1">Mail-In Address</h3>
-            <p className="text-gray-700 font-semibold">1/64 Vales Road, Mannering Park NSW 2259</p>
-            <p className="text-gray-500 text-sm mt-2">Always contact us before sending so we can confirm parts availability and provide your quote.</p>
-          </div>
-        </div>
-      </section>
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs />
 
       {/* ─── Guarantees ─── */}
       <section className="bg-[#007b7d] py-10 border-y border-[#006a6c]">

@@ -24,8 +24,11 @@ export function useLoyaltyEstimate(lines: { productId: number; variantId: number
 }
 
 export interface Overview {
-  loyalty: LoyaltyInfo & { balance: number; formatted: string };
-  repairs: { id: number; jobNumber: string; status: string; device: string; bookedIn: string; completedAt: string | null }[];
+  loyalty: LoyaltyInfo & { balance: number; formatted: string; totalSpent: number; visitCount: number };
+  repairs: {
+    id: number; jobNumber: string; status: string; device: string; bookedIn: string; completedAt: string | null;
+    workDescription: string | null; estimatedCost: number | null;
+  }[];
   warranties: { key: string; kind: "product" | "repair"; name: string; label: string; startedAt: string; expiresAt: string; daysRemaining: number; reference: string | null }[];
 }
 export function useAccountOverview() {

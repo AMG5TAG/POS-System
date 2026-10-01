@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
+import MailInRepairs from "@/components/MailInRepairs";
 import { Link, useRoute } from "wouter";
 import {
   MessageCircle, MapPin, Mail, Phone, Clock, Car, Wrench, ShieldCheck,
@@ -264,6 +265,9 @@ export default function RegionPage() {
           </p>
         </div>
       </section>
+
+      {/* ─── Mail-In Repairs ─── */}
+      <MailInRepairs area={region.slug === "central-coast" ? "the Central Coast" : region.name} />
 
       {/* ─── FAQs ─── */}
       <section className="bg-gray-50 py-12 border-b border-gray-100">

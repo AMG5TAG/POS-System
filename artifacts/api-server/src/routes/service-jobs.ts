@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import crypto from "node:crypto";
 import { db, serviceJobsTable, customersTable, merchantsTable, quotesTable } from "@workspace/db";
 import { eq, and, desc, inArray, isNotNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -402,6 +403,66 @@ router.post("/service-jobs/:id/sms", requireAuth, async (req, res): Promise<void
   }
 
   req.log.info({ serviceJobId: id, to: toPhone, provider: result.provider }, "Service job SMS sent");
+  res.json({ success: true });
+});
+
+// POST /service-jobs/:id/portal-link?via=email|sms
+// The job dialog's "Portal" button: sends the customer their account link
+// (customerPortalUrl — their shop account, where this repair, its quote and
+// their appointments are) to the email or mobile on file. Only to the contact
+// on file: the link signs them in, so it must not go to a typed-in address.
+router.post("/service-jobs/:id/portal-link", requireAuth, async (req, res): Promise<void> => {
+  const paramsResult = SendServiceJobEmailParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+  const via = req.query.via === "sms" ? "sms" : req.query.via === "email" ? "email" : null;
+  if (!via) { res.status(400).json({ error: "via must be email or sms" }); return; }
+
+  const [job] = await db.select().from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.id, id), eq(serviceJobsTable.merchantId, merchantId)));
+  if (!job) { res.status(404).json({ error: "Service job not found" }); return; }
+  const [customer] = job.customerId
+    ? await db.select().from(customersTable)
+        .where(and(eq(customersTable.id, job.customerId), eq(customersTable.merchantId, merchantId)))
+    : [];
+  if (!customer) { res.status(400).json({ error: "This job has no customer" }); return; }
+  if (via === "email" && !customer.email) { res.status(400).json({ error: "No email address on file" }); return; }
+  if (via === "sms" && !customer.phone) { res.status(400).json({ error: "No phone number on file" }); return; }
+
+  let token = customer.portalToken;
+  if (!token) {
+    token = crypto.randomUUID();
+    await db.update(customersTable).set({ portalToken: token }).where(eq(customersTable.id, customer.id));
+  }
+  const link = customerPortalUrl(null, token)!;
+  const [merchant] = await db.select({ businessName: merchantsTable.businessName })
+    .from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  const bizName = merchant?.businessName ?? "Your repair shop";
+  const name = customer.firstName?.trim() || "there";
+
+  const result = via === "sms"
+    ? await sendSms({ to: customer.phone!, body: `${bizName}: Track repair #${job.jobNumber}, see quotes and book appointments in your account: ${link}` }, merchantId)
+    : await sendEmail(merchantId, {
+        to: customer.email!,
+        subject: `Your repair #${job.jobNumber} — ${bizName}`,
+        html: `
+          <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+            <p>Hi ${escapeHtml(name)},</p>
+            <p>You can follow repair <strong>#${escapeHtml(job.jobNumber)}</strong>, approve quotes and book appointments in your ${escapeHtml(bizName)} account.</p>
+            <p style="margin:24px 0">
+              <a href="${link}" style="display:inline-block;padding:12px 24px;background:#007b7d;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Open my account</a>
+            </p>
+            <p style="color:#999;font-size:12px">If the button doesn't work, copy this address into your browser:<br>${link}</p>
+          </div>`,
+        text: `Hi ${name},\n\nFollow repair #${job.jobNumber}, approve quotes and book appointments in your ${bizName} account:\n${link}`,
+      });
+
+  if (!result.success) {
+    req.log.warn({ serviceJobId: id, via, error: result.error }, "Account link send failed");
+    res.status(400).json({ error: result.error ?? "Failed to send the link" });
+    return;
+  }
   res.json({ success: true });
 });
 

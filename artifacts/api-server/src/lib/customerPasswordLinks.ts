@@ -3,15 +3,15 @@ import { db, customersTable, merchantsTable, customerPortalTokensTable } from "@
 import { eq } from "drizzle-orm";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
-import { publicOrigin, shopOrigin } from "./publicUrl";
+import { shopOrigin } from "./publicUrl";
 
 /**
  * One-time links that let a customer set or reset their account password.
  *
- * A customer has ONE account, reached from two places: the customer portal
- * (/c/<token> on the POS domain) and the online shop (koastal.com.au/shop). Both
- * store the password in customers.portal_password_hash and both use these
- * links; only where the link lands differs (`destination`).
+ * A customer has ONE account: the online shop's (koastal.com.au/shop), which
+ * also replaced the customer portal. The password is
+ * customers.portal_password_hash, and every link lands on the shop's
+ * /account/set-password.
  *
  * Only the SHA-256 of the token is stored, it is single use and expires in an
  * hour — the merchant reset flow's rules. The address on file is the proof of
@@ -24,7 +24,6 @@ export function hashToken(raw: string): string {
   return createHash("sha256").update(raw).digest("hex");
 }
 
-export type LinkDestination = "portal" | "shop";
 export type LinkPurpose = "setup" | "reset" | "invite";
 
 /**
@@ -36,7 +35,6 @@ export async function issueSetupLink(
   customer: typeof customersTable.$inferSelect,
   purpose: LinkPurpose,
   log: { warn: (o: unknown, m: string) => void; error: (o: unknown, m: string) => void },
-  destination: LinkDestination = "portal",
 ): Promise<void> {
   const rawToken = randomBytes(32).toString("hex");
 
@@ -49,18 +47,14 @@ export async function issueSetupLink(
   });
 
   const [merchant] = await db
-    .select({ businessName: merchantsTable.businessName, username: merchantsTable.username, portalDomain: merchantsTable.portalDomain })
+    .select({ businessName: merchantsTable.businessName })
     .from(merchantsTable)
     .where(eq(merchantsTable.id, customer.merchantId));
 
   const bizName = merchant?.businessName ?? "Your store";
-  // The link is always built from the trusted public origin (or the merchant's
-  // own portal domain) — never from request headers, which are attacker
-  // controlled and could redirect a set-up link to someone else's site.
-  const base = merchant?.portalDomain ? `https://${merchant.portalDomain}` : publicOrigin();
-  const link = destination === "shop"
-    ? `${shopOrigin()}/account/set-password?token=${rawToken}`
-    : `${base}/c/${customer.portalToken}/set-password?token=${rawToken}`;
+  // Built from the configured shop origin, never from request headers, which
+  // are attacker controlled and could send a set-up link to someone else's site.
+  const link = `${shopOrigin()}/account/set-password?token=${rawToken}`;
 
   const heading = purpose === "reset" ? "Reset your password"
     : purpose === "invite" ? `Your ${bizName} online account is ready`
@@ -92,9 +86,9 @@ export async function issueSetupLink(
       `,
       text: `${heading} — ${bizName}\n\n${lead}\n\n${link}\n\n${expiry} If you didn't expect it, ignore this email.`,
     }).then((result) => {
-      if (!result.success) log.warn({ provider: result.provider, error: result.error }, "Portal set-up email delivery failed");
+      if (!result.success) log.warn({ provider: result.provider, error: result.error }, "Account set-up email delivery failed");
     }).catch((err: unknown) => {
-      log.error({ err }, "Portal set-up email threw unexpectedly");
+      log.error({ err }, "Account set-up email threw unexpectedly");
     });
     return;
   }
