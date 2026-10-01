@@ -1,9 +1,17 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The shared menu (@workspace/site-nav) sits outside this project. */
+@source "../../../lib/site-nav/src";
 
 /* Offset anchor scroll for sticky navbar (80px = 5rem, + extra breathing room) */
 [id] {
   scroll-margin-top: 6rem;
+}
+/* On desktop the menu has its own row under the logo (80px + 52px). */
+@media (min-width: 1024px) {
+  [id] {
+    scroll-margin-top: 9rem;
+  }
 }
 @plugin "@tailwindcss/typography";
 

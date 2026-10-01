@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The shared menu (@workspace/site-nav) sits outside this project. */
+@source "../../../lib/site-nav/src";
 
 @theme {
   /* Koastal colours: Dark Teal #007b7d (New Tropics 323) and Light Teal

@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, ChevronLeft, ChevronRight, Globe, Home, Mail, Star } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Mail, Star } from "lucide-react";
 import type { Category } from "@/lib/shop";
 
 /* The shop's category bar, styled after koastal.com.au's menu: a row of
@@ -11,7 +11,9 @@ import type { Category } from "@/lib/shop";
    tint, as the website marks its featured link. A subcategory with its own
    subcategories pops out a flyout list beside it, to any depth — to the right,
    or to the left when the menu sits near the right edge of the window.
-   Touch screens get the accordion in the mobile menu, since they can't hover. */
+   Touch screens get the accordion in the mobile menu, since they can't hover.
+   Both sit under the site-wide Koastal Kollective menu (@workspace/site-nav):
+   the bar beneath its row of tabs, the accordion inside its SHOP item. */
 
 type Node = Category & { children: Node[] };
 
@@ -200,13 +202,11 @@ function MobileCategories({ roots, onNavigate }: { roots: Node[]; onNavigate: ()
     </div>
   );
   return (
-    <nav className="md:hidden px-4 pb-3 text-sm divide-y divide-stone-100" aria-label="Categories">
+    <nav className="pl-3 text-sm divide-y divide-stone-100" aria-label="Categories">
       <Link href="/" onClick={onNavigate} className="flex items-center gap-2 py-2.5 font-semibold"><Home className="w-4 h-4" /> Home</Link>
       <Link href="/products" onClick={onNavigate} className="block py-2.5 font-semibold">All products</Link>
       {roots.map((r) => row(r, 0))}
       <Link href="/mail-in" onClick={onNavigate} className="flex items-center gap-2 py-2.5 font-semibold text-brand"><Mail className="w-4 h-4" /> Mail-In Repairs</Link>
-      {/* Outside the shop's /shop router base, so a plain link. */}
-      <a href="/" className="flex items-center gap-2 py-2.5 font-semibold"><Globe className="w-4 h-4" /> Koastal Kollective website</a>
     </nav>
   );
 }

@@ -431,9 +431,19 @@ The business's public website, merged in from its own Replit project
 ("Koastal Kollective") so that one deployment serves the website at
 koastal.com.au, the shop under `/shop`, and the POS at pos.koastal.com.au.
 `artifacts/website` (`@workspace/website`) is a static React + Vite site — no
-API, no database. It was copied across unchanged apart from the navbar's SHOP
-item (the built bundle was verified token-for-token against the live one), so
-its own conventions hold:
+API, no database. It was copied across unchanged (the built bundle was verified
+token-for-token against the live one), so its own conventions hold:
+
+- **One menu for both apps.** The menu (HOME, SHOP, COMPUTERS, … CONTACT), its
+  slanted tabs, drop-downs and phone list live in `lib/site-nav`
+  (`@workspace/site-nav`), rendered by the website's `Navbar` and the shop's
+  header. On desktop it is its own row under the logo; the shop lights SHOP and
+  puts its category tabs on a row below, and on phones hangs them under SHOP.
+  Change the menu there, never in one app. It is source-only (no build), so
+  each app's `index.css` has an `@source` line for Tailwind, and both load the
+  website's Atkinson Hyperlegible so the bar is the same width in each. Its
+  `#section` links mean the website's current page; the shop passes
+  `hashBase="/"` so they go to the website's home page instead.
 
 - **Pre-rendered.** `postbuild` runs `scripts/prerender.mjs` (jsdom, ~275
   routes, about a minute) and then `write-redirects.mjs` (legacy `/koasoft/*`
@@ -483,6 +493,11 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   come from `shopOrigin()` (`lib/publicUrl.ts`). `/api` is the same on every domain, so
   the shop calls it same-origin; production CORS must list the site domain
   (`app.ts`), or every shop POST is refused.
+- **Not launched yet.** `COMING_SOON` in `artifacts/shop/src/lib/launch.ts`
+  covers every page with `ComingSoon.tsx` unless a shopper is signed in (staff
+  preview with a shop account). Sign-in, forgot and set-password stay open;
+  sign-up does not, or anyone could walk past it. It is a curtain, not access
+  control — the API is public. Set it to `false` and publish to launch.
 - **API**: `routes/shop.ts`, public and scoped to `soleMerchantId()` — no request
   can name a merchant. A product is listed when `isActive` and `showOnline`
   (`products.show_online`, default "true", added by
