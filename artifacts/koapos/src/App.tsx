@@ -178,6 +178,7 @@ const ManagementOnlineStoreOverviewPage = lazyWithRetry(() => import("@/pages/ap
 const ManagementOnlineStoreProductsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-products"));
 const ManagementOnlineStoreAccountsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-accounts"));
 const ManagementOnlineStoreChannelsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-channels"));
+const ManagementOnlineStoreStatisticsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-statistics"));
 const SettingsPricingRulesPage = lazyWithRetry(() => import("@/pages/app/settings-pricing-rules"));
 const SettingsModifierGroupsPage = lazyWithRetry(() => import("@/pages/app/settings-modifier-groups"));
 
@@ -536,6 +537,9 @@ function Router() {
       </Route>
       <Route path="/management/online-store/channels">
         <ManagementProtectedRoute component={ManagementOnlineStoreChannelsPage} />
+      </Route>
+      <Route path="/management/online-store/statistics">
+        <ManagementProtectedRoute component={ManagementOnlineStoreStatisticsPage} />
       </Route>
 
       {/* Customers */}

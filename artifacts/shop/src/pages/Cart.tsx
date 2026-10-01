@@ -47,7 +47,7 @@ export default function Cart() {
       <div className="rounded-2xl bg-white border border-stone-200 p-5 space-y-3 lg:sticky lg:top-24">
         <div className="flex justify-between"><span>Subtotal</span><span className="font-semibold tabular-nums">{money(subtotal)}</span></div>
         <div className="flex justify-between text-sm text-stone-500"><span>Includes GST</span><span className="tabular-nums">{money(gstIn(subtotal))}</span></div>
-        <p className="text-sm text-stone-500">Shipping or click & collect is chosen at checkout.</p>
+        <p className="text-sm text-stone-500">Shipping or click & collect is chosen at checkout. We ship within Australia only.</p>
         <LoyaltyEstimate lines={lines} />
         <Link href="/checkout" className="flex h-11 items-center justify-center rounded-full bg-brand text-white font-semibold hover:bg-brand-dark">Checkout</Link>
         <Link href="/products" className="block text-center text-sm text-stone-600 hover:underline">Continue shopping</Link>

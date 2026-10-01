@@ -3,6 +3,7 @@ import { Link, useLocation, useSearch } from "wouter";
 import { ChevronDown, Loader2 } from "lucide-react";
 import { useCategories, useProducts } from "@/lib/shop";
 import { ProductCard } from "@/components/ProductCard";
+import { trackSearch } from "@/lib/track";
 
 const SORTS = [
   { value: "name", label: "Name" },
@@ -22,6 +23,9 @@ export default function Catalog() {
   const sort = params.get("sort") ?? "name";
   const inStock = params.get("inStock") === "true";
   const page = Math.max(1, Number(params.get("page")) || 1);
+
+  // Shop statistics: each new search (lib/track.ts).
+  useEffect(() => { trackSearch(q); }, [q]);
 
   const { data: cats } = useCategories();
   const { data, isLoading, isFetching } = useProducts({ category, search: q, sort, inStock, page, pageSize: PAGE_SIZE });

@@ -4,6 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { recordPaidOrderAsSale } from "../services/deliveryOrderSale";
+import { checkDeliveryAddress } from "../lib/shipping-region";
 
 /**
  * Online store orders — the POS's Online › Orders page. The table and paths
@@ -65,7 +66,12 @@ router.post("/delivery-orders", requireAuth, async (req, res): Promise<void> => 
   const parsed = PostDeliveryOrder.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { orderId, number, channel, customer, customerEmail, phone,
-    address, city, postcode, state, shippingMethod, status, placedAt, total, items, notes } = parsed.data;
+    address, city, postcode, shippingMethod, status, placedAt, total, items, notes } = parsed.data;
+  // The store ships within Australia only (lib/shipping-region.ts); an order
+  // with no address (click & collect) is fine.
+  const where = checkDeliveryAddress({ street: address, city, state: parsed.data.state, postcode });
+  if (!where.ok) { res.status(400).json({ error: where.error }); return; }
+  const state = where.state ?? parsed.data.state;
   const [row] = await db.insert(deliveryOrdersTable).values({
     merchantId, orderId, number, channel, customer, customerEmail, phone,
     address, city, postcode, state, shippingMethod, status, placedAt, total, items, notes,
@@ -89,6 +95,22 @@ router.patch("/delivery-orders/:id", requireAuth, async (req, res): Promise<void
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const parsed = PatchDeliveryOrder.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  /* Australia only (lib/shipping-region.ts): an edit touching the address is
+     checked as the whole address it leaves behind. Orders saved before the
+     rule are left alone until someone edits their address. */
+  const p = parsed.data;
+  if (p.address !== undefined || p.city !== undefined || p.state !== undefined || p.postcode !== undefined) {
+    const [cur] = await db.select({ address: deliveryOrdersTable.address, city: deliveryOrdersTable.city, state: deliveryOrdersTable.state, postcode: deliveryOrdersTable.postcode })
+      .from(deliveryOrdersTable)
+      .where(and(eq(deliveryOrdersTable.id, id), eq(deliveryOrdersTable.merchantId, merchantId))).limit(1);
+    if (!cur) { res.status(404).json({ error: "Not found" }); return; }
+    const where = checkDeliveryAddress({
+      street: p.address ?? cur.address, city: p.city ?? cur.city, state: p.state ?? cur.state, postcode: p.postcode ?? cur.postcode,
+    });
+    if (!where.ok) { res.status(400).json({ error: where.error }); return; }
+    if (where.state) p.state = where.state;
+  }
+
   /* Reaching "shipped" / "delivered" stamps when it happened — once, so moving
      the status back and forth keeps the first date. */
   const stamps: Partial<Pick<Row, "shippedAt" | "deliveredAt">> = {};

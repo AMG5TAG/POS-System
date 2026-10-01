@@ -22,3 +22,92 @@
 }
 
 html, body { background: #fafaf9; color: var(--color-ink); }
+
+/* ── Dark theme ───────────────────────────────────────────────────────────
+   The website's dark mode, carried onto the shop: the same `kk-theme` choice
+   (lib/site-nav/src/theme.tsx sets `.dark` on <html>) and the same deep-teal
+   palette as the website's index.css.
+
+   Tailwind v4 draws every stone/gray shade from a --color-* variable, so the
+   scales are inverted here rather than class by class — hovers, dividers,
+   gradients and opacity modifiers all follow. White is the exception: it is
+   both a surface (bg-white) and text on teal buttons (text-white), so
+   --color-white stays white and the white *surfaces* are overridden below.
+   Product photos keep a white ground (.kk-photo): nearly every product shot is
+   on white, and one on a dark tile reads as a broken image. */
+.dark {
+  color-scheme: dark;
+  --color-ink: #e3f0f0;
+
+  --color-stone-50:  #111e1e;
+  --color-stone-100: #152424;
+  --color-stone-200: #1d3030;
+  --color-stone-300: #2a4242;
+  --color-stone-400: #5d8888;
+  --color-stone-500: #7fa6a6;
+  --color-stone-600: #9dbebe;
+  --color-stone-700: #b8d3d3;
+  --color-stone-800: #cfe3e3;
+  --color-stone-900: #e3f0f0;
+
+  --color-gray-50:  #111e1e;
+  --color-gray-100: #152424;
+  --color-gray-200: #1d3030;
+  --color-gray-300: #2a4242;
+  --color-gray-400: #5d8888;
+  --color-gray-500: #7fa6a6;
+  --color-gray-600: #9dbebe;
+  --color-gray-700: #b8d3d3;
+  --color-gray-800: #cfe3e3;
+  --color-gray-900: #e3f0f0;
+
+  --color-brand-50: #0f2a2b;
+
+  /* Status tints: pale fills go deep, dark text goes light. */
+  --color-emerald-50:  #0a2a20;
+  --color-emerald-100: #0b3a2a;
+  --color-emerald-700: #6ee7b7;
+  --color-emerald-800: #86efc4;
+  --color-amber-50:  #2b2108;
+  --color-amber-100: #3a2c09;
+  --color-amber-200: #5c4510;
+  --color-amber-700: #fcd34d;
+  --color-amber-800: #fcd34d;
+  --color-amber-900: #fde68a;
+  --color-red-50:  #2f1212;
+  --color-red-100: #3f1515;
+  --color-red-600: #f87171;
+  --color-red-700: #fca5a5;
+  --color-sky-50:  #0b2533;
+  --color-sky-100: #0c2d3d;
+  --color-sky-700: #7dd3fc;
+  --color-sky-800: #a5e1fd;
+  --color-violet-50:  #1f1736;
+  --color-violet-100: #2a1f4a;
+  --color-violet-700: #c4b5fd;
+  --color-violet-800: #ddd6fe;
+  --color-blue-100: #102a4c;
+  --color-blue-800: #93c5fd;
+}
+
+html.dark, .dark body { background: #0b1616; }
+
+/* White surfaces (cards, panels, inputs, the header) */
+.dark .bg-white, .dark .hover\:bg-white:hover { background-color: #0f1e1e; }
+.dark .bg-white\/90 { background-color: rgb(15 30 30 / 0.9); }
+.dark .bg-white\/95 { background-color: rgb(15 30 30 / 0.95); }
+.dark .via-white { --tw-gradient-via: #0f1e1e; }
+
+/* Teal text on the dark ground: the brand teal is too dim to read there. */
+.dark .text-brand, .dark .hover\:text-brand:hover { color: #6cc0c3; }
+
+/* Solid dark buttons keep a dark fill (the inverted scale would make them pale under white text). */
+.dark .bg-stone-700, .dark .bg-stone-800 { background-color: #2f4a4a; }
+.dark .hover\:bg-stone-800:hover { background-color: #3a5858; }
+.dark .hover\:bg-amber-700:hover { background-color: #b45309; }
+
+/* Form controls follow the theme's text colour. */
+.dark input, .dark select, .dark textarea { color: var(--color-ink); }
+
+/* Product photos keep a white ground. */
+.dark .kk-photo { background-color: #fff; border-radius: 0.5rem; }

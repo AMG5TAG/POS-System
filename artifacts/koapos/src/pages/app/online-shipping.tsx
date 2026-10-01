@@ -46,8 +46,8 @@ const ALL_CARRIERS: Carrier[] = [
   { id: "auspost",  name: "Australia Post",   tagline: "National coverage, parcels & letters",       speedRange: "1–7 days",  connected: false },
   { id: "startrack",name: "StarTrack",        tagline: "Premium express network (Aus Post Group)",   speedRange: "1–3 days",  connected: false },
   { id: "couriers", name: "Couriers Please",  tagline: "Major metro courier network",                speedRange: "1–5 days",  connected: false },
-  { id: "tnt",      name: "TNT Express",      tagline: "Domestic & international express",           speedRange: "1–10 days", connected: false },
-  { id: "dhl",      name: "DHL Express",      tagline: "International priority",                     speedRange: "1–6 days",  connected: false },
+  { id: "tnt",      name: "TNT Express",      tagline: "Domestic express",           speedRange: "1–10 days", connected: false },
+  { id: "dhl",      name: "DHL Express",      tagline: "Domestic express",                     speedRange: "1–6 days",  connected: false },
   { id: "fastway",  name: "Aramex (Fastway)", tagline: "Local franchisee courier network",           speedRange: "1–4 days",  connected: false },
   { id: "sendle",   name: "Sendle",           tagline: "Carbon-neutral door-to-door",                speedRange: "1–5 days",  connected: false },
   { id: "shippit",  name: "Shippit",          tagline: "Multi-carrier aggregator (rates & labels)",  speedRange: "Varies",    connected: false },
@@ -74,7 +74,8 @@ function calculateQuotes(
     { carrierId: "startrack", service: "Premium",          multiplier: 1.8,  speed: "1–2 days",  insured: true  },
     { carrierId: "couriers",  service: "Road Express",     multiplier: 1.2,  speed: "2–5 days",  insured: false },
     { carrierId: "tnt",       service: "Express",          multiplier: 1.9,  speed: "1–3 days",  insured: true  },
-    { carrierId: "dhl",       service: "International",    multiplier: 3.2,  speed: "1–6 days",  insured: true  },
+    // The online store ships within Australia only, so no international services.
+    { carrierId: "dhl",       service: "Express Domestic", multiplier: 2.2,  speed: "1–3 days",  insured: true  },
     { carrierId: "fastway",   service: "Local Parcel",     multiplier: 0.9,  speed: "1–4 days",  insured: false },
     { carrierId: "sendle",    service: "Standard",         multiplier: 1.1,  speed: "1–5 days",  insured: true  },
     { carrierId: "shippit",   service: "Cheapest carrier", multiplier: 0.95, speed: "Varies",    insured: false },
@@ -179,7 +180,7 @@ export default function OnlineShippingPage() {
               Shipping
             </h1>
             <p className="text-muted-foreground text-sm mt-1">
-              Compare live rates from connected carriers. Quote by order, postcode, weight and dimensions.
+              Compare live rates from connected carriers. Quote by order, postcode, weight and dimensions. The online store ships within Australia only.
             </p>
           </div>
           <Badge variant="secondary" className="gap-1.5 text-sm px-3 py-1">

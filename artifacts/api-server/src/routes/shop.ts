@@ -19,6 +19,7 @@ import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_
 import { formatAddressParts } from "../lib/address";
 import { profileRequirements, missingRequired } from "../lib/customer-profile-rules";
 import { ensureReferralCode, findReferrer, normaliseReferralCode } from "../lib/referrals";
+import { checkDeliveryAddress } from "../lib/shipping-region";
 
 /**
  * The online shop's API (koastal.com.au/shop) — public, no staff session.
@@ -959,6 +960,11 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     referral = { referredBy: referrer.referralCode!, referredByCustomerId: referrer.id };
   }
 
+  // Delivery is within Australia only (lib/shipping-region.ts). The customer's
+  // own address may be anywhere; the one we would post to may not.
+  const delivery = b.shippingAddress ? checkDeliveryAddress(b.shippingAddress) : null;
+  if (delivery && !delivery.ok) { res.status(400).json({ error: delivery.error }); return; }
+
   let email: string | undefined;
   if (b.email && b.email !== (c.email ?? "").trim().toLowerCase()) {
     const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
@@ -981,8 +987,8 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     address: formatAddressParts(b.address.street, b.address.city, b.address.state, b.address.postcode) || c.address,
     ...(b.shippingAddress ? {
       shippingStreet: b.shippingAddress.street || null, shippingCity: b.shippingAddress.city || null,
-      shippingState: b.shippingAddress.state || null, shippingPostcode: b.shippingAddress.postcode || null,
-      shippingCountry: b.shippingAddress.country || null,
+      shippingState: (delivery?.ok && delivery.state) || null, shippingPostcode: b.shippingAddress.postcode || null,
+      shippingCountry: (delivery?.ok && delivery.country) || null,
     } : {}),
     ...(b.company !== undefined ? { company: b.company || null } : {}),
     ...(b.abn !== undefined ? { abn: b.abn.replace(/\s/g, "") || null } : {}),

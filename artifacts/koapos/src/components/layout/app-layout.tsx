@@ -209,6 +209,7 @@ const SEARCH_INDEX = [
   { label: "Online Store · Products",          href: "/management/online-store/products", icon: Package, group: "Management" },
   { label: "Online Store · Customer Accounts", href: "/management/online-store/accounts", icon: Users,   group: "Management" },
   { label: "Online Store · Shopping Channels", href: "/management/online-store/channels", icon: ShoppingBag, group: "Management" },
+  { label: "Online Store · Statistics",        href: "/management/online-store/statistics", icon: BarChart2, group: "Management" },
   { label: "Customers · Heard From", href: "/management/customers/heard-from", icon: Radio,         group: "Management" },
   { label: "Customers · Portal",    href: "/management/customers/portal",     icon: Link2,         group: "Management" },
   { label: "Discounts",          href: "/management/customers/discounts-pricing",        icon: Percent,         group: "Management" },

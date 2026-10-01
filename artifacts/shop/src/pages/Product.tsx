@@ -10,6 +10,7 @@ import { Stars } from "@/components/Stars";
 import { WishlistHeart } from "@/components/WishlistHeart";
 import { ProductGallery } from "@/components/ProductGallery";
 import type { MediaItem } from "@/lib/shop";
+import { trackProductView } from "@/lib/track";
 
 export default function Product() {
   const { id } = useParams<{ id: string }>();
@@ -32,6 +33,9 @@ export default function Product() {
   useEffect(() => {
     if (tab === "reviews" && window.location.hash === "#reviews" && p) document.getElementById("product-tabs")?.scrollIntoView();
   }, [p, tab]);
+  // Shop statistics: one product view per product opened (lib/track.ts).
+  const loadedId = p?.id;
+  useEffect(() => { if (loadedId) trackProductView(`/product/${loadedId}`, loadedId); }, [loadedId]);
 
   const showReviews = () => {
     setTab("reviews");

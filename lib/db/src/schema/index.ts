@@ -144,4 +144,5 @@ export * from "./end-of-week-reports";
 export * from "./customer-wishlist";
 export * from "./mail-in";
 export * from "./shop-settings";
+export * from "./shop-events";
 export * from "./referral-rewards";

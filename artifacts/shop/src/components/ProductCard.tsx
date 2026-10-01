@@ -11,7 +11,7 @@ export function ProductImage({ src, alt, className = "" }: { src: string | null;
   const [failed, setFailed] = useState(false);
   useEffect(() => { setFailed(false); }, [src]);
   return src && !failed
-    ? <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`w-full h-full object-contain ${className}`} />
+    ? <img src={src} alt={alt} loading="lazy" onError={() => setFailed(true)} className={`kk-photo w-full h-full object-contain ${className}`} />
     : <div className={`w-full h-full flex items-center justify-center text-stone-300 ${className}`}><ImageOff className="w-8 h-8" /></div>;
 }
 

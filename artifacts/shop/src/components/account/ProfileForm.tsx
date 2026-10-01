@@ -15,6 +15,7 @@ type RequiredKey = "email" | "phone" | "dateOfBirth" | "company" | "abn" | "bill
 interface Fields { required: Record<RequiredKey, boolean>; heardFromSources: { name: string; requiresDetails: boolean }[] }
 
 const STATES = ["NSW", "VIC", "QLD", "SA", "WA", "TAS", "ACT", "NT"];
+const inAustralia = (country: string) => ["", "australia", "au", "aus"].includes(country.trim().toLowerCase().replace(/\./g, ""));
 const same = (a: Address, b: Address) => (["street", "city", "state", "postcode"] as const).every((k) => a[k].trim() === b[k].trim());
 const empty = (a: Address) => !a.street && !a.city && !a.postcode;
 
@@ -55,7 +56,12 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
           firstName: f.firstName, lastName: f.lastName, email: f.email || undefined, phone: f.phone,
           // "Same" stores a copy, as the POS keeps both: a blank would wipe one a
           // cashier entered.
-          address: f.address, shippingAddress: postalSame ? f.address : f.shippingAddress,
+          // Delivery is within Australia only (the API checks it too). "Same as
+          // my address" with an overseas home address means no delivery address.
+          address: f.address,
+          shippingAddress: !postalSame ? { ...f.shippingAddress, country: "Australia" }
+            : inAustralia(f.address.country) ? f.address
+            : { street: "", city: "", state: "", postcode: "", country: "" },
           dateOfBirth: f.dateOfBirth ?? "", company: f.company, abn: f.abn, whatsapp: f.whatsapp,
           agreedToMarketing: f.agreedToMarketing, heardFrom: f.heardFrom, heardFromDetails: needsDetails ? f.heardFromDetails : "",
           friendReferralCode: isFriend && !linked && friendCode.trim() ? friendCode.trim() : undefined,
@@ -79,8 +85,10 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
           {[...STATES, ...(f[which].state && !STATES.includes(f[which].state) ? [f[which].state] : [])].map((s) => <option key={s} value={s}>{s}</option>)}
         </select>
       </label>
-      <Field label="Postcode" required={required} inputMode="numeric" maxLength={10} value={f[which].postcode} onChange={addr(which, "postcode")} />
-      <Field label="Country" value={f[which].country} onChange={addr(which, "country")} />
+      <Field label="Postcode" required={required} inputMode="numeric" maxLength={which === "shippingAddress" ? 4 : 10} value={f[which].postcode} onChange={addr(which, "postcode")} />
+      {which === "shippingAddress"
+        ? <Field label="Country" value="Australia" disabled readOnly />
+        : <Field label="Country" value={f[which].country} onChange={addr(which, "country")} />}
     </div>
   );
   const star = (k: RequiredKey) => (req?.[k] ? " *" : "");
@@ -126,6 +134,7 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
 
       <fieldset className="space-y-4">
         <legend className="text-sm font-semibold text-stone-700 mb-3">Postal / delivery address</legend>
+        <p className="text-xs text-stone-500 -mt-1">We deliver within Australia only.</p>
         <label className="flex items-center gap-2 text-sm text-stone-600">
           <input type="checkbox" checked={postalSame} onChange={(e) => setPostalSame(e.target.checked)} className="w-4 h-4" />
           Same as my address

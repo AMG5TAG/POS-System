@@ -3,6 +3,7 @@ import { ChevronDown, ChevronLeft, ChevronRight, FileText, Heart, Menu, Phone, S
 import { loadSiteIndex, searchPages, searchProducts, type PageHit, type ProductHit, type SitePage } from "./site-search";
 import { AccessibilityMenu, AccessibilityOptions } from "./accessibility";
 export { AccessibilityMenu, AccessibilityOptions, useAccessibility } from "./accessibility";
+export { ThemeToggle, applyTheme, applyStoredTheme, THEME_STORAGE_KEY, type ThemeMode } from "./theme";
 
 /*
  * The Koastal Kollective menu, shared by the website (artifacts/website) and
@@ -668,8 +669,8 @@ const SITE_LOGO = "/images/logo.png";
 /* The header both apps render: logo, site search, phone and shop account on
    one row, the menu on the row below (desktop), and a collapsible menu panel
    on narrower screens. The accessibility options are part of it, so they are
-   on every page of both apps; `extras` is for controls only one app can honour
-   (the website's dark-mode toggle). */
+   on every page of both apps; `extras` holds extra desktop controls — both
+   apps pass the theme toggle (./theme.tsx). */
 export function SiteHeader({
   logoSrc = SITE_LOGO, logoFallback, logoAlt, active, hashBase = "", homeHref = "/", onShopNavigate, session, extras, className = "",
 }: {

@@ -665,6 +665,55 @@ valid check digit; variants are items sharing `item_group_id`. Channels reject
 products whose link lands on the shop's coming-soon curtain, so submit after
 launch.
 
+### Shop statistics
+
+Management › Online Store › Statistics (`routes/shop-stats.ts`, rules in
+`lib/shop-stats.ts`, pinned by `shop-stats.test.ts`). The shop reports page
+views, product views, link clicks (every `<a>`), catalogue searches and
+add-to-carts from `artifacts/shop/src/lib/track.ts` to the public
+`POST /shop/track` (batched, `keepalive`, always 204) into `shop_events`
+(`scripts/src/add-shop-events-table.ts`). **No IP address is stored**: `ip_hash`
+is an HMAC under `SESSION_SECRET`, enough to count unique IPs. "Visitors" are
+browsers (`kk-visitor` in localStorage); crawlers and preview bots are dropped
+by user agent; referrers keep only another site's host. Live counters
+(`/online-store/stats/live`, polled every 15s) are all-time, today and "on the
+shop now" (last 5 minutes); the period report adds the chart, most viewed,
+most clicked, searches, referrers, devices, best sellers online (shop orders)
+and in store (till sales of listed products, excluding sales booked from
+online orders), most wishlisted and reviews. Days are Sydney days. There is no
+pruning yet — the table grows by one row per event.
+
+### Australia-only shipping
+
+The online store delivers within Australia only — `lib/shipping-region.ts`
+(`checkDeliveryAddress`), pinned by `shipping-region.test.ts`. Applied to the
+shop account's delivery address (country fixed to Australia, state normalised
+to its code; an overseas *home* address is still allowed, and "same as my
+address" then saves no delivery address) and to online orders
+(`/delivery-orders` POST, and PATCH when the address changes — older orders are
+left alone until edited). An order with no address (click & collect) passes.
+Mail-in return addresses already took only AU states and 4-digit postcodes.
+
+### Shop dark mode
+
+The shop follows the website's theme: `kk-theme` in localStorage (light / dark /
+system), the `ThemeToggle` in `lib/site-nav/src/theme.tsx` shared by both
+headers, and a pre-paint script in `artifacts/shop/index.html`. The shop's
+`dark:` variant is the `.dark` class (`@custom-variant` in its `index.css`),
+never `prefers-color-scheme` — that mismatch once made the shared menu white on
+white. Its dark palette inverts the `--color-stone-*`/`--color-gray-*` scales and
+overrides white *surfaces* only (`--color-white` stays white for text on teal
+buttons); product photos keep a white ground via `.kk-photo`.
+
+### Shop account Orders
+
+`GET /shop/account/orders` (`lib/shop-orders.ts`, `shop-orders.test.ts`): an
+In-Store tab (completed/refunded till sales across `buyerCustomerIds`) and an
+Online tab (shop orders by email, with status and carrier tracking link). A
+paid online order is also a till transaction (`delivery-order:<id>` key), so
+it is shown under Online only. Lines carry name, quantity and total — never
+cost price.
+
 ### Customer portal → shop account
 
 The customer portal (a POS-domain page at `/c/<token>`) was merged into the

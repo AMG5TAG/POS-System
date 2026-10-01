@@ -1,13 +1,14 @@
-import type { ReactNode } from "react";
+import { useEffect, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
 import { Phone, Mail, MapPin } from "lucide-react";
 import { useWishlist } from "@/lib/wishlist";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
 import { useShopInfo } from "@/lib/shop";
-import { SiteHeader } from "@workspace/site-nav";
+import { SiteHeader, ThemeToggle } from "@workspace/site-nav";
 import { JustPurchased } from "./JustPurchased";
 import { ComingSoon } from "./ComingSoon";
+import { installLinkTracking, trackPageView } from "@/lib/track";
 
 /* The header is the one the Koastal Kollective website uses too
    (@workspace/site-nav): logo, search, account and the site-wide menu, SHOP
@@ -28,6 +29,7 @@ function Header() {
       homeHref="/shop/"
       onShopNavigate={navigate}
       session={{ signedIn: !!customer, firstName: customer?.firstName || null, cartCount: count, wishlistCount: customer ? wishlist.count : 0 }}
+      extras={<ThemeToggle />}
     />
   );
 }
@@ -71,6 +73,10 @@ function Footer() {
 }
 
 export function Layout({ children }: { children: ReactNode }) {
+  // Shop statistics: a page view per route, and every link click (lib/track.ts).
+  const [location] = useLocation();
+  useEffect(() => { trackPageView(location); }, [location]);
+  useEffect(() => installLinkTracking(), []);
   return (
     <div className="min-h-dvh flex flex-col">
       <Header />

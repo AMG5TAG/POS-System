@@ -137,6 +137,7 @@ import mailInRouter from "./mail-in";
 import shopInvitesRouter from "./shop-invites";
 import onlineStoreRouter from "./online-store";
 import shopFeedRouter from "./shop-feed";
+import shopStatsRouter from "./shop-stats";
 
 const router: IRouter = Router();
 
@@ -221,6 +222,8 @@ router.use(shopInvitesRouter);
 router.use(onlineStoreRouter);
 // Public feed for shopping channels (token in the URL) + its staff settings.
 router.use(shopFeedRouter);
+// Public shop tracking beacon + the Online Store › Statistics report.
+router.use(shopStatsRouter);
 router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);

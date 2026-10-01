@@ -1,4 +1,5 @@
 import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from "react";
+import { trackAddToCart } from "./track";
 
 /* The cart lives in this browser until checkout. Prices here are only for
    display — checkout reprices every line from the POS catalogue. */
@@ -38,12 +39,15 @@ export function CartProvider({ children }: { children: ReactNode }) {
     lines,
     count: lines.reduce((s, l) => s + l.qty, 0),
     subtotal: Math.round(lines.reduce((s, l) => s + l.price * l.qty, 0) * 100) / 100,
-    add: (line, qty = 1) => setLines((cur) => {
-      const hit = cur.find((l) => same(l, line.productId, line.variantId));
-      return hit
-        ? cur.map((l) => (l === hit ? { ...l, qty: Math.min(99, l.qty + qty) } : l))
-        : [...cur, { ...line, qty }];
-    }),
+    add: (line, qty = 1) => {
+      trackAddToCart(line.productId);
+      setLines((cur) => {
+        const hit = cur.find((l) => same(l, line.productId, line.variantId));
+        return hit
+          ? cur.map((l) => (l === hit ? { ...l, qty: Math.min(99, l.qty + qty) } : l))
+          : [...cur, { ...line, qty }];
+      });
+    },
     setQty: (p, v, qty) => setLines((cur) => cur.map((l) => (same(l, p, v) ? { ...l, qty: Math.max(1, Math.min(99, qty)) } : l))),
     remove: (p, v) => setLines((cur) => cur.filter((l) => !same(l, p, v))),
     clear: () => setLines([]),

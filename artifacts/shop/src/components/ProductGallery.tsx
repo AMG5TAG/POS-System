@@ -98,7 +98,7 @@ function Arrow({ side, onClick }: { side: "left" | "right"; onClick: () => void 
 }
 
 function Thumb({ item }: { item: MediaItem }) {
-  if (item.type === "image") return <img src={item.url} alt="" loading="lazy" className="w-full h-full object-contain p-1" />;
+  if (item.type === "image") return <img src={item.url} alt="" loading="lazy" className="kk-photo w-full h-full object-contain p-1" />;
   return (
     <>
       {item.thumbnail
@@ -136,7 +136,7 @@ function Stage({ item, alt, active = true, zoom = true }: { item: MediaItem; alt
   return (
     <div className={`absolute inset-0 p-6 ${zoom ? "cursor-zoom-in" : ""}`} onMouseMove={zoom ? onMove : undefined} onMouseLeave={() => setOrigin(null)}>
       <img src={item.url} alt={alt} onError={() => setFailed(true)}
-        className="w-full h-full object-contain transition-transform duration-150 ease-out"
+        className="kk-photo w-full h-full object-contain transition-transform duration-150 ease-out"
         style={zoom && origin ? { transform: "scale(2)", transformOrigin: origin } : undefined} />
     </div>
   );

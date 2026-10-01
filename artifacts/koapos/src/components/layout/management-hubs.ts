@@ -47,6 +47,7 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
     name: "Online Store", icon: Store, defaultHref: "/management/online-store/overview",
     children: [
       { name: "Overview",          href: "/management/online-store/overview", icon: Store },
+      { name: "Statistics",        href: "/management/online-store/statistics", icon: BarChart2 },
       { name: "Products",          href: "/management/online-store/products", icon: Boxes },
       { name: "Customer Accounts", href: "/management/online-store/accounts", icon: Users },
       { name: "Shopping Channels", href: "/management/online-store/channels", icon: ShoppingBag },
