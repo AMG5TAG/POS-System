@@ -1,5 +1,6 @@
-import { useEffect, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Heart, Menu, Phone, Search, ShoppingCart, Star, User, X } from "lucide-react";
+import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
+import { ChevronDown, ChevronLeft, ChevronRight, FileText, Heart, Menu, Phone, Search, ShoppingCart, Star, User, X } from "lucide-react";
+import { loadSiteIndex, searchPages, searchProducts, type PageHit, type ProductHit, type SitePage } from "./site-search";
 
 /*
  * The Koastal Kollective menu, shared by the website (artifacts/website) and
@@ -77,7 +78,7 @@ export const SITE_NAV: NavItem[] = [
       { label: "SyncBack Backup", href: "/syncback" },
     ],
   },
-  { label: "TESTIMONIALS", href: "#testimonials" },
+  { label: "GAMING", href: "/gaming" },
   {
     label: "DIREKTORIES",
     href: "#",
@@ -92,6 +93,7 @@ export const SITE_NAV: NavItem[] = [
     children: [
       { label: "Contact", href: "#contact" },
       { label: "About Us", href: "/about" },
+      { label: "Testimonials", href: "#testimonials" },
       { label: "Service Areas", href: "#service-areas" },
     ],
   },
@@ -526,11 +528,133 @@ export function useShopSession(): ShopSession {
 }
 
 const PHONE = { display: "0493 145 179", tel: "+61493145179" };
+/* ─── Header search ─────────────────────────────────────────────────────── */
+
+const RESULTS_PATH = "/site-search";
+export const siteSearchHref = (q: string) => `${RESULTS_PATH}?q=${encodeURIComponent(q.trim())}`;
+const aud = (n: number) => n.toLocaleString("en-AU", { style: "currency", currency: "AUD" });
+
+/* The search box, with a drop-down of the website's pages and the shop's
+   products as you type (site-search.ts). Enter opens the highlighted result,
+   or the full results page when none is highlighted. */
+function HeaderSearch({ className, go }: { className: string; go: (href: string) => void }) {
+  const [q, setQ] = useState("");
+  const [focused, setFocused] = useState(false);
+  const [index, setIndex] = useState<SitePage[]>([]);
+  const [products, setProducts] = useState<{ q: string; items: ProductHit[] }>({ q: "", items: [] });
+  const [active, setActive] = useState(-1);
+  const box = useRef<HTMLFormElement>(null);
+
+  const query = q.trim();
+  const pages: PageHit[] = query.length >= 2 ? searchPages(index, query, 5) : [];
+  const shown = products.q === query ? products.items : [];
+
+  // Products ask the API, so wait for a pause in typing.
+  useEffect(() => {
+    if (query.length < 2) return;
+    let live = true;
+    const t = setTimeout(() => searchProducts(query, 4).then((r) => live && setProducts({ q: query, items: r.items })), 200);
+    return () => { live = false; clearTimeout(t); };
+  }, [query]);
+
+  // Close when the click lands anywhere else.
+  useEffect(() => {
+    if (!focused) return;
+    const away = (e: PointerEvent) => { if (!box.current?.contains(e.target as globalThis.Node)) setFocused(false); };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [focused]);
+
+  const items = [
+    ...pages.map((p) => p.path),
+    ...shown.map((p) => `/shop/product/${p.id}`),
+    siteSearchHref(query),
+  ];
+  const open = focused && query.length >= 2;
+  const follow = (href: string) => { setFocused(false); setActive(-1); go(href); };
+
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    if (!query) return;
+    follow(active >= 0 && active < items.length ? items[active] : siteSearchHref(query));
+  };
+  const onKey = (e: KeyboardEvent) => {
+    if (e.key === "ArrowDown") { e.preventDefault(); setFocused(true); setActive((a) => Math.min(a + 1, items.length - 1)); }
+    else if (e.key === "ArrowUp") { e.preventDefault(); setActive((a) => Math.max(a - 1, -1)); }
+    else if (e.key === "Escape") { setFocused(false); setActive(-1); }
+  };
+  const row = (i: number) => `flex items-start gap-3 px-4 py-2.5 text-left ${active === i ? "bg-[#e8f4f5] dark:bg-white/10" : "hover:bg-gray-50 dark:hover:bg-white/5"}`;
+  const click = (href: string) => (e: MouseEvent) => {
+    if (e.metaKey || e.ctrlKey || e.shiftKey || e.button !== 0) return;
+    e.preventDefault();
+    follow(href);
+  };
+
+  return (
+    <form ref={box} onSubmit={submit} className={className} role="search">
+      <div className="relative w-full">
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+        <input value={q} type="search" placeholder="Search the site, services and products" aria-label="Search the site"
+          aria-expanded={open} aria-controls="site-search-results" aria-autocomplete="list" autoComplete="off"
+          onChange={(e) => { setQ(e.target.value); setActive(-1); setFocused(true); }}
+          onFocus={() => { setFocused(true); loadSiteIndex().then(setIndex); }}
+          onKeyDown={onKey}
+          className="w-full h-10 rounded-full border border-gray-300 bg-gray-50 text-gray-900 pl-9 pr-4 text-sm outline-none focus:border-[#007b7d] focus:bg-white" />
+        {open && (
+          <div id="site-search-results" role="listbox"
+            className="absolute left-0 right-0 top-full mt-2 z-50 max-h-[70vh] overflow-y-auto rounded-xl border border-gray-200 dark:border-[#1c2e2e] bg-white dark:bg-[#0b1616] text-gray-900 dark:text-white shadow-xl">
+            {pages.length > 0 && (
+              <div className="py-1">
+                <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.15em] text-[#007b7d]">Pages</p>
+                {pages.map((p, i) => (
+                  <a key={p.path} href={p.path} onClick={click(p.path)} className={row(i)} role="option" aria-selected={active === i}>
+                    <FileText className="w-4 h-4 mt-0.5 shrink-0 text-[#007b7d]" />
+                    <span className="min-w-0">
+                      <span className="block text-sm font-bold truncate">{p.title}</span>
+                      {p.snippet && <span className="block text-xs text-gray-500 dark:text-gray-400 line-clamp-2">{p.snippet}</span>}
+                    </span>
+                  </a>
+                ))}
+              </div>
+            )}
+            {shown.length > 0 && (
+              <div className="py-1 border-t border-gray-100 dark:border-[#1c2e2e]">
+                <p className="px-4 pt-2 pb-1 text-[11px] font-bold uppercase tracking-[0.15em] text-[#007b7d]">Shop</p>
+                {shown.map((p, j) => {
+                  const i = pages.length + j;
+                  const href = `/shop/product/${p.id}`;
+                  return (
+                    <a key={p.id} href={href} onClick={click(href)} className={`${row(i)} items-center`} role="option" aria-selected={active === i}>
+                      {p.imageUrl
+                        ? <img src={p.imageUrl} alt="" className="w-9 h-9 rounded object-cover shrink-0 bg-gray-100" />
+                        : <ShoppingCart className="w-4 h-4 shrink-0 text-[#007b7d]" />}
+                      <span className="min-w-0 flex-1 text-sm font-semibold truncate">{p.name}</span>
+                      <span className="text-sm font-bold text-[#007b7d] shrink-0">{aud(p.price)}</span>
+                    </a>
+                  );
+                })}
+              </div>
+            )}
+            {pages.length === 0 && shown.length === 0 && (
+              <p className="px-4 py-3 text-sm text-gray-500">No quick matches for &ldquo;{query}&rdquo;.</p>
+            )}
+            <a href={siteSearchHref(query)} onClick={click(siteSearchHref(query))}
+              className={`${row(items.length - 1)} border-t border-gray-100 dark:border-[#1c2e2e] text-sm font-bold text-[#007b7d]`}
+              role="option" aria-selected={active === items.length - 1}>
+              <Search className="w-4 h-4 mt-0.5 shrink-0" /> See all results for &ldquo;{query}&rdquo;
+            </a>
+          </div>
+        )}
+      </div>
+    </form>
+  );
+}
+
 /* The website's logo file, served at the root of koastal.com.au — the same
    origin as the shop, so both headers show the same image. */
 const SITE_LOGO = "/images/logo.png";
 
-/* The header both apps render: logo, shop search, phone and shop account on
+/* The header both apps render: logo, site search, phone and shop account on
    one row, the menu on the row below (desktop), and a collapsible menu panel
    on narrower screens. `extras` is for controls only one app can honour (the
    website's dark mode and accessibility toggles). */
@@ -553,28 +677,15 @@ export function SiteHeader({
 }) {
   const own = useShopSession();
   const s = session ?? own;
-  const [q, setQ] = useState("");
   const [open, setOpen] = useState(false);
   const go = (href: string) => {
     setOpen(false);
     if (onShopNavigate && href.startsWith("/shop/")) onShopNavigate(href.slice("/shop".length));
     else window.location.assign(href);
   };
-  const submit = (e: FormEvent) => {
-    e.preventDefault();
-    go(q.trim() ? `/shop/products?search=${encodeURIComponent(q.trim())}` : "/shop/products");
-  };
   const pill = "relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-gray-100 dark:hover:bg-white/10 text-sm";
   const badge = "absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full text-[11px] font-bold flex items-center justify-center";
-  const searchBox = (cls: string) => (
-    <form onSubmit={submit} className={cls} role="search">
-      <div className="relative w-full">
-        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-        <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products and services" aria-label="Search the shop"
-          className="w-full h-10 rounded-full border border-gray-300 bg-gray-50 text-gray-900 pl-9 pr-4 text-sm outline-none focus:border-[#007b7d] focus:bg-white" />
-      </div>
-    </form>
-  );
+  const searchBox = (cls: string) => <HeaderSearch className={cls} go={go} />;
 
   return (
     <header className={`sticky top-0 z-50 bg-white dark:bg-[#0b1616] dark:text-white border-b border-gray-200 dark:border-[#1c2e2e] shadow-sm ${className}`}
@@ -588,7 +699,7 @@ export function SiteHeader({
           <img src={logoSrc} alt={logoAlt} className="h-10 md:h-14 w-auto max-w-[160px] object-contain object-left"
             onError={(e) => { if (logoFallback && e.currentTarget.src !== logoFallback) e.currentTarget.src = logoFallback; }} />
         </a>
-        {searchBox("hidden md:flex flex-1 max-w-xl")}
+        {searchBox("hidden md:flex flex-1 min-w-0")}
         <nav className="ml-auto flex items-center gap-1" aria-label="Account">
           <a href={`tel:${PHONE.tel}`} className="hidden xl:flex items-center gap-1.5 text-[#007b7d] font-bold text-sm hover:text-[#005f61] mr-1">
             <Phone className="h-4 w-4" />{PHONE.display}

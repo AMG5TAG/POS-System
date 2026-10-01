@@ -30,7 +30,9 @@ import SyncBackPage from "@/pages/SyncBackPage";
 import MateTelecomPage from "@/pages/MateTelecomPage";
 import SolvUpPage from "@/pages/SolvUpPage";
 import SearchPage from "@/pages/SearchPage";
+import SiteSearchPage from "@/pages/SiteSearchPage";
 import PopCulturePage from "@/pages/PopCulturePage";
+import GamingPage from "@/pages/GamingPage";
 import MediaHomePage from "@/pages/media/MediaHomePage";
 import MediaWebsiteDesignPage from "@/pages/media/WebsiteDesignPage";
 import MediaDomainsPage from "@/pages/media/DomainsPage";
@@ -388,6 +390,14 @@ function Router() {
         )}
       />
       <Route
+        path="/gaming"
+        component={() => (
+          <Layout>
+            <GamingPage />
+          </Layout>
+        )}
+      />
+      <Route
         path="/about"
         component={() => (
           <Layout>
@@ -396,6 +406,14 @@ function Router() {
         )}
       />
       <Route path="/search" component={SearchPage} />
+      <Route
+        path="/site-search"
+        component={() => (
+          <Layout>
+            <SiteSearchPage />
+          </Layout>
+        )}
+      />
       <Route component={NotFound} />
     </Switch>
   );

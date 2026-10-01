@@ -313,8 +313,11 @@ export default function HomePage() {
           </p>
           <div className="relative overflow-hidden rounded-xl">
             <p>
-              A Pop Culture range is coming to the Mannering Park store — trading cards,
-              collectables, statues, figures, apparel and art from your favourite franchises.{" "}
+              A Pop Culture and gaming range is coming to the Mannering Park store. Fans will
+              find trading cards, collectables, statues, figures, apparel and art from their
+              favourite franchises, alongside video games, game consoles and gaming
+              accessories. There will also be a range of second-hand consoles and units, so
+              gamers can pick up a bargain or fill a gap in their collection.{" "}
               <a href="/pop-culture" className="font-bold text-gray-900 hover:text-[#007b7d] transition-colors">
                 See what&apos;s coming
               </a>{" "}

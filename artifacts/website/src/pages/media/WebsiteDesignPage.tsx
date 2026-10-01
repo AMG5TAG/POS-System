@@ -1,6 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
-import { CheckCircle2, Smartphone, Gauge, Search, Wand2, Layers } from "lucide-react";
+import { CheckCircle2, Smartphone, Gauge, Search, Wand2, Layers, ShoppingCart } from "lucide-react";
 
 const features = [
   { icon: Wand2, title: "Pixel-perfect design", body: "Custom layouts that match your brand, not a recycled theme." },
@@ -26,9 +26,12 @@ const planFeatures = [
   "100% Local, Direct Support",
 ];
 
+/* Each plan's `productId` is its product in the online shop (koastal.com.au/shop)
+   — the same id in dev and production, so Buy Now opens that product's page. */
 const plans = [
   {
     name: "Bronze",
+    productId: 1000066,
     price: "$750",
     establishment: "No Establishment Fee",
     renews: "$750/year",
@@ -39,6 +42,7 @@ const plans = [
   },
   {
     name: "Silver",
+    productId: 1000067,
     price: "$1,495",
     establishment: "$750 Establishment Fee",
     renews: "$750/year",
@@ -49,6 +53,7 @@ const plans = [
   },
   {
     name: "Gold",
+    productId: 1000068,
     price: "$2,950",
     establishment: "$750 Establishment Fee",
     renews: "$950/year",
@@ -59,6 +64,7 @@ const plans = [
   },
   {
     name: "Diamond",
+    productId: 1000069,
     price: "$3,950",
     establishment: "$750 Establishment Fee",
     renews: "$950/year",
@@ -178,6 +184,19 @@ export default function WebsiteDesignPage() {
                     </li>
                   ))}
                 </ul>
+                {/* The shop is a separate app, so this is a full page load. */}
+                <a
+                  href={`/shop/product/${p.productId}`}
+                  className={`mt-6 inline-flex items-center justify-center gap-2 rounded-lg px-4 py-3 text-sm font-bold uppercase tracking-wider transition-colors ${
+                    p.featured
+                      ? "bg-white text-[#007b7d] hover:bg-[#e8f4f5]"
+                      : "bg-[#007b7d] text-white hover:bg-[#004f51]"
+                  }`}
+                  aria-label={`Buy the ${p.name} package now`}
+                >
+                  <ShoppingCart className="h-4 w-4" />
+                  Buy Now
+                </a>
               </div>
             ))}
           </div>

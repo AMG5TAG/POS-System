@@ -14,7 +14,7 @@ const SITE = "https://koastal.com.au";
 // Picks up every path="..." that does NOT contain a dynamic segment (:param)
 // and is not a catch-all or internal-only path.
 // ---------------------------------------------------------------------------
-const EXCLUDE = new Set(["/not-found", "/search"]);
+const EXCLUDE = new Set(["/not-found", "/search", "/site-search"]);
 
 function extractStaticRoutes(src) {
   const routes = new Set();

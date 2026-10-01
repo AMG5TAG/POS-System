@@ -70,6 +70,7 @@ function noindexRoutes() {
   const suburbs = readSuburbs();
   return [
     "/search",
+    "/site-search",
   ];
 }
 

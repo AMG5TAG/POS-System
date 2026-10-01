@@ -7,6 +7,7 @@ import {
   ShieldCheck, Zap, Wrench, Home, Wifi, Monitor, Code, Tv,
   MessageSquare, Printer, Smartphone, ShoppingCart, CheckCircle2,
   Globe, Server, Shirt, Layers, Boxes, Frame,
+  Gamepad2, Headphones, Recycle, ArrowLeftRight, Joystick,
 } from "lucide-react";
 import { findSuburbBySlug, suburbs, suburbPath } from "@/data/suburbs";
 import { REGIONS } from "@/data/regions";
@@ -113,6 +114,16 @@ const popCultureRanges = [
   { icon: Layers, title: "Trading Card Games",     text: "Sealed boosters and boxes, a singles cabinet, plus sleeves, toploaders and binders for Pokémon, Magic and Yu-Gi-Oh!" },
   { icon: Boxes,  title: "Collectables & Statues", text: "Limited edition figures, Funko Pops, resin statues and replicas — with special orders for pieces we do not shelf." },
   { icon: Frame,  title: "Art & Prints",           text: "Original work from local artists, licensed prints and posters in framing-friendly sizes." },
+];
+
+// Like Pop Culture, not open yet: future tense throughout (see GamingPage).
+const gamingRanges = [
+  { icon: Gamepad2,       title: "Video Games",              text: "New releases and favourites for PlayStation, Xbox and Nintendo Switch, with pre-orders on upcoming titles." },
+  { icon: Tv,             title: "Game Consoles",            text: "Current-generation consoles and bundles — and help choosing the right one and getting it set up." },
+  { icon: Headphones,     title: "Controllers & Accessories", text: "Controllers, headsets, charging docks, storage, cases and cables — the bits that wear out or go missing." },
+  { icon: Recycle,        title: "Second-Hand Units",        text: "Pre-owned consoles, handhelds and games, cleaned and tested in our own repair workshop before sale." },
+  { icon: ArrowLeftRight, title: "Trade-Ins",                text: "Trade the consoles, games and accessories you have finished with towards something new or pre-owned." },
+  { icon: Joystick,       title: "Retro Gaming",             text: "Older consoles, cartridges and games as they come in through trade-ins — one-of-a-kind and always changing." },
 ];
 
 const webWhyUs = [
@@ -516,6 +527,59 @@ export default function SuburbPage() {
           <div className="text-center mt-10">
             <Link
               href="/pop-culture"
+              className="inline-flex items-center gap-2 bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors"
+            >
+              See What&apos;s Coming
+            </Link>
+          </div>
+        </div>
+
+        <div className="absolute inset-0 z-20 flex items-center justify-center bg-black/25 pointer-events-none">
+          <div className="bg-amber-500 text-white font-black text-3xl md:text-5xl uppercase tracking-[0.15em] px-10 py-6 rounded-2xl shadow-2xl border-4 border-white/30 rotate-[-3deg] animate-pulse">
+            Coming Soon
+          </div>
+        </div>
+      </section>
+
+      {/* ─── Gaming & Consoles (not open yet — see the overlay) ─── */}
+      <section className="bg-white py-14 border-b border-gray-100 relative overflow-hidden">
+        <div className="max-w-6xl mx-auto px-4">
+          <div className="text-center mb-10">
+            <p className="text-[#007b7d] font-bold tracking-[0.18em] text-xs uppercase mb-2">
+              Gaming &amp; Consoles
+            </p>
+            <h2 className="text-2xl md:text-4xl font-bold text-gray-900 leading-tight">
+              Coming soon for{" "}
+              <em className="not-italic text-[#007b7d]">{suburb}</em>
+            </h2>
+            <p className="mt-4 text-sm text-gray-600 max-w-3xl mx-auto leading-relaxed">
+              A gaming range is coming to the Koastal Kollective store in Mannering Park, a short
+              drive from {suburb} — new games and consoles, controllers and accessories, and
+              second-hand units tested in our own workshop. You will also be able to trade in the
+              games and gear you have finished with. It is not open yet, but you can tell us what
+              to stock and be first to know when it lands.
+            </p>
+          </div>
+
+          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
+            {gamingRanges.map(({ icon: Icon, title, text }) => (
+              <div key={title} className="bg-gray-50 border border-gray-200 rounded-xl p-6">
+                <div className="flex items-start gap-4">
+                  <div className="w-12 h-12 rounded-full bg-[#007b7d] text-white flex items-center justify-center flex-shrink-0">
+                    <Icon className="h-6 w-6" />
+                  </div>
+                  <div>
+                    <h3 className="font-bold text-gray-900 text-lg mb-1">{title}</h3>
+                    <p className="text-sm text-gray-600 leading-relaxed">{text}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+
+          <div className="text-center mt-10">
+            <Link
+              href="/gaming"
               className="inline-flex items-center gap-2 bg-[#007b7d] hover:bg-[#005f61] text-white font-bold px-7 py-3 rounded-full text-sm transition-colors"
             >
               See What&apos;s Coming

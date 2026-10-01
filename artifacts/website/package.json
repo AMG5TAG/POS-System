@@ -11,7 +11,7 @@
     "build": "vite build --config vite.config.ts",
     "prerender": "node scripts/prerender.mjs",
     "write-redirects": "node scripts/write-redirects.mjs",
-    "postbuild": "node scripts/prerender.mjs && node scripts/write-redirects.mjs && node scripts/submit-indexnow.mjs",
+    "postbuild": "node scripts/prerender.mjs && node scripts/build-search-index.mjs && node scripts/write-redirects.mjs && node scripts/submit-indexnow.mjs",
     "serve": "vite preview --config vite.config.ts --host 0.0.0.0",
     "typecheck": "tsc -p tsconfig.json --noEmit"
   },

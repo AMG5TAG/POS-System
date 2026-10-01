@@ -435,7 +435,7 @@ API, no database. It was copied across unchanged (the built bundle was verified
 token-for-token against the live one), so its own conventions hold:
 
 - **One header for both apps.** `lib/site-nav` (`@workspace/site-nav`) holds
-  the whole header — `SiteHeader`: logo, shop search, phone, the shop's Sign
+  the whole header — `SiteHeader`: logo, site search, phone, the shop's Sign
   in/Wishlist/Cart, and the menu (HOME … CONTACT, then SHOP in the light teal
   and MAIL-IN REPAIRS last) on its own row — and
   both the website's `Navbar` and the shop's `Layout` render it. SHOP's
@@ -495,8 +495,19 @@ token-for-token against the live one), so its own conventions hold:
   deployment; their `DOMAIN_ENTRY_POINTS` entries are now unused. koastal.com.au
   is canonical; `www.` 301s to it.
 - GA4 (`G-639QEPSKTL`) is in `index.html`; the app sends page views itself.
-- Pop Culture is written in the future tense on purpose (the range has not
-  opened). Koastal Kollective is the only brand name in copy.
+- **Site search** (header box, `lib/site-nav/src/site-search.ts`): the
+  website's pages and the shop's products together. Pages come from
+  `/search-index.json`, which `scripts/build-search-index.mjs` (postbuild, after
+  the prerender) writes from the pre-rendered HTML of every sitemap route —
+  header/nav/footer stripped, suburb pages indexed on title + description only
+  so 240 copies of one template don't bury the real service page. It is fetched
+  on first focus and searched in the browser; products come from
+  `/api/shop/products?search=`. Either may be missing (dev servers) and the
+  search shows what it has. Enter or "See all results" opens `/site-search`
+  (noindex, out of the sitemap); `/search` is the separate private web search.
+- Pop Culture and Gaming (`/gaming`, and its section on suburb pages) are
+  written in the future tense on purpose (neither range has opened; the gaming
+  page's structured data deliberately carries no `offers`). Koastal Kollective is the only brand name in copy.
 
 ### Online shop (koastal.com.au/shop)
 
