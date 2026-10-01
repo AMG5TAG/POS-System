@@ -10463,6 +10463,17 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
+        preOrder:
+          type: boolean
+          description: >-
+            Pre-order product — sells before stock exists, each sale opening a
+            pre-order for the customer. Active until preOrderReleaseDate.
+        preOrderReleaseDate:
+          type: ["string", "null"]
+          description: Local date (YYYY-MM-DD) from which it sells as a normal product.
+        preOrderEtaDate:
+          type: ["string", "null"]
+          description: Local date (YYYY-MM-DD) customers can expect it.
         productType:
           type: string
         productTypeId:
@@ -10602,6 +10613,17 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
+        preOrder:
+          type: boolean
+          description: >-
+            Pre-order product — sells before stock exists, each sale opening a
+            pre-order for the customer. Active until preOrderReleaseDate.
+        preOrderReleaseDate:
+          type: ["string", "null"]
+          description: Local date (YYYY-MM-DD) from which it sells as a normal product.
+        preOrderEtaDate:
+          type: ["string", "null"]
+          description: Local date (YYYY-MM-DD) customers can expect it.
         productTypeId:
           type: integer
         groupPrices:
@@ -10676,6 +10698,17 @@ components:
           type: boolean
         excludeFromLoyalty:
           type: boolean
+        preOrder:
+          type: boolean
+          description: >-
+            Pre-order product — sells before stock exists, each sale opening a
+            pre-order for the customer. Active until preOrderReleaseDate.
+        preOrderReleaseDate:
+          type: ["string", "null"]
+          description: Local date (YYYY-MM-DD) from which it sells as a normal product.
+        preOrderEtaDate:
+          type: ["string", "null"]
+          description: Local date (YYYY-MM-DD) customers can expect it.
         productTypeId:
           type: ["integer", "null"]
         groupPrices:
@@ -11090,6 +11123,17 @@ components:
             Digital codes assigned to this line item during checkout. Populated
             in the response for products of type "digital_code" with unassigned
             codes available in inventory. One code per unit sold.
+        preOrderDeposit:
+          type: ["object", "null"]
+          description: >-
+            Marks this line (productId 0) as a deposit on a pre-order product
+            rather than the product itself: the server opens a pre-order for
+            `quantity` of `productId` with this line's total as the amount paid.
+            No stock moves until the balance is taken at collection.
+          required: [productId, quantity]
+          properties:
+            productId: { type: integer }
+            quantity: { type: integer, minimum: 1 }
 
     Transaction:
       type: object
@@ -11256,6 +11300,12 @@ components:
             The appointment this sale is billing. The appointment is marked
             completed when the sale is recorded. Falls back to the
             `[Appt #...]` notes marker when omitted.
+        preOrderId:
+          type: ["integer", "null"]
+          description: >-
+            The pre-order this sale collects (the balance on a deposit
+            pre-order). It is marked Collected with this sale, and its product
+            line does not open a new pre-order.
         paidAt:
           type: string
           description: >-
@@ -13565,6 +13615,22 @@ components:
       type: object
       required: [id, poNumber, status, orderDate, totalCost, createdAt]
       properties:
+        preOrderArrivals:
+          type: array
+          description: >-
+            Only on a receive response: pre-orders the received stock was
+            allocated to, oldest first, for the till to call out.
+          items:
+            type: object
+            required: [preOrderId, number, customerName, productName, quantity, allocatedQuantity, complete]
+            properties:
+              preOrderId: { type: integer }
+              number: { type: string }
+              customerName: { type: string }
+              productName: { type: string }
+              quantity: { type: integer }
+              allocatedQuantity: { type: integer }
+              complete: { type: boolean }
         id: { type: integer }
         supplierId: { type: integer, nullable: true }
         supplierName: { type: string, nullable: true }

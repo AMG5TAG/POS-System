@@ -36,6 +36,11 @@ import {
   GetProductSalesHistoryParams,
 } from "@workspace/api-zod";
 
+/** A pre-order date as stored: YYYY-MM-DD, or null for blank/anything else. */
+function preOrderDate(v: unknown): string | null {
+  return typeof v === "string" && /^\d{4}-\d{2}-\d{2}$/.test(v.trim()) ? v.trim() : null;
+}
+
 const router: IRouter = Router();
 
 // Warranty fields aren't in the generated CreateProductBody/UpdateProductBody
@@ -137,6 +142,9 @@ function formatProduct(
     taxRate: p.taxRate ? parseFloat(p.taxRate) : null,
     isActive: p.isActive === "true",
     excludeFromLoyalty: p.excludeFromLoyalty === "true",
+    preOrder: p.preOrder === "true",
+    preOrderReleaseDate: p.preOrderReleaseDate ?? null,
+    preOrderEtaDate: p.preOrderEtaDate ?? null,
     groupPrices: p.groupPrices ?? {},
     supplier: p.supplier ?? null,
     supplierCode: p.supplierCode ?? null,
@@ -318,7 +326,7 @@ async function logCostHistory(
 router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, preOrder, preOrderReleaseDate, preOrderEtaDate, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
 
   // Reject a SKU that already exists for this merchant (case-insensitive, like
   // the CSV import path). SKU has no DB unique constraint, so this is enforced
@@ -380,6 +388,9 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
       trackInventory: trackInventory === false ? "false" : "true",
       isActive: isActive === false ? "false" : "true",
       excludeFromLoyalty: excludeFromLoyalty === true ? "true" : "false",
+      preOrder: preOrder === true ? "true" : "false",
+      preOrderReleaseDate: preOrderDate(preOrderReleaseDate),
+      preOrderEtaDate: preOrderDate(preOrderEtaDate),
       isEpay: isEpayRaw === true ? "true" : "false",
       ...(tracksSerial !== undefined ? { tracksSerial: tracksSerial === true ? "true" : "false" } : {}),
       groupPrices: groupPrices ?? null,
@@ -786,7 +797,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
-  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
+  const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, preOrder, preOrderReleaseDate, preOrderEtaDate, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
 
   // Reject a SKU that already exists on a DIFFERENT product for this merchant
   // (case-insensitive), matching the create path. Only runs when the SKU is
@@ -813,6 +824,9 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (trackInventory !== undefined) updates.trackInventory = trackInventory ? "true" : "false";
   if (isActive !== undefined) updates.isActive = isActive ? "true" : "false";
   if (excludeFromLoyalty !== undefined) updates.excludeFromLoyalty = excludeFromLoyalty ? "true" : "false";
+  if (preOrder !== undefined) updates.preOrder = preOrder ? "true" : "false";
+  if (preOrderReleaseDate !== undefined) updates.preOrderReleaseDate = preOrderDate(preOrderReleaseDate);
+  if (preOrderEtaDate !== undefined) updates.preOrderEtaDate = preOrderDate(preOrderEtaDate);
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (tracksSerial !== undefined) updates.tracksSerial = tracksSerial ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;

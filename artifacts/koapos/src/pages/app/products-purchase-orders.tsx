@@ -30,7 +30,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown, Bell } from "lucide-react";
 import { toast } from "sonner";
 import { uploadFile } from "@/lib/upload";
 import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
@@ -218,6 +218,10 @@ export default function ProductsPurchaseOrdersPage() {
   const hardware = parseHardwareConfig((posSettings as { hardwareConfig?: string } | undefined)?.hardwareConfig);
   /* PO whose print-choice screen is open (A4 PO vs. sale tickets). */
   const [printChoicePO, setPrintChoicePO] = useState<PurchaseOrder | null>(null);
+  /* Pre-orders the goods just received were set aside for. Shown before the
+     print choice, which waits in `afterArrivals` until this is dismissed. */
+  const [arrivals, setArrivals] = useState<NonNullable<PurchaseOrder["preOrderArrivals"]> | null>(null);
+  const [afterArrivals, setAfterArrivals] = useState<PurchaseOrder | null>(null);
   const [viewingPO, setViewingPO] = useState<PurchaseOrder | null>(null);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -1380,11 +1384,47 @@ export default function ProductsPurchaseOrdersPage() {
           onSuccess={(updated) => {
             setViewingPO(updated);
             invalidateList();
-            // Goods are in — offer to print the PO and/or sale tickets.
-            setPrintChoicePO(updated);
+            // Stock for customers' pre-orders: call them out first, then offer
+            // printing. Otherwise straight to the print choice.
+            if (updated.preOrderArrivals?.length) {
+              setArrivals(updated.preOrderArrivals);
+              setAfterArrivals(updated);
+            } else {
+              setPrintChoicePO(updated);
+            }
           }}
         />
       )}
+
+      {/* ── Pre-orders covered by this delivery ─────────────────────── */}
+      <Dialog open={!!arrivals} onOpenChange={(o) => { if (!o) { setArrivals(null); if (afterArrivals) { setPrintChoicePO(afterArrivals); setAfterArrivals(null); } } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><Bell className="w-5 h-5 text-violet-600" /> Pre-orders in this delivery</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Set these aside for the customers below. Those marked <strong>Arrived</strong> have been sent an SMS/email that it's in.
+          </p>
+          <ul className="divide-y rounded-lg border max-h-[50vh] overflow-y-auto">
+            {(arrivals ?? []).map((a) => (
+              <li key={`${a.preOrderId}-${a.productName}`} className="flex items-center justify-between gap-3 px-3 py-2.5 text-sm">
+                <div className="min-w-0">
+                  <p className="font-semibold">{a.customerName}</p>
+                  <p className="text-xs text-muted-foreground truncate">{a.number} · {a.productName}</p>
+                </div>
+                <div className="text-right shrink-0">
+                  <p className="font-medium tabular-nums">{a.allocatedQuantity} of {a.quantity}</p>
+                  <p className={a.complete ? "text-xs text-emerald-600 font-medium" : "text-xs text-amber-600"}>{a.complete ? "Arrived" : "Partly arrived"}</p>
+                </div>
+              </li>
+            ))}
+          </ul>
+          <DialogFooter>
+            <Button variant="outline" asChild><a href="/pos/pre-orders">Open Pre-Orders</a></Button>
+            <Button onClick={() => { setArrivals(null); if (afterArrivals) { setPrintChoicePO(afterArrivals); setAfterArrivals(null); } }}>Done</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Print choice (A4 PO vs. sale tickets) ────────────────────── */}
       <POPrintChoiceDialog

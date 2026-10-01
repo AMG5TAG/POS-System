@@ -1,11 +1,21 @@
-import { useQuery } from "@tanstack/react-query";
+import { useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Switch } from "@/components/ui/switch";
 import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { ExternalLink, Package, Users, Loader2, Store } from "lucide-react";
 
-export interface OnlineStoreSummary { shopUrl: string; listed: number; hidden: number }
+export interface OnlineStoreSummary {
+  shopUrl: string;
+  listed: number;
+  hidden: number;
+  /** Listed on the shop but out of stock right now. */
+  outOfStock: number;
+  hideOutOfStock: boolean;
+}
 
 export async function onlineStoreFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const r = await fetch(`/api/online-store${path}`, {
@@ -26,6 +36,20 @@ export default function ManagementOnlineStoreOverviewPage() {
     queryFn: () => onlineStoreFetch<OnlineStoreSummary>("/summary"),
   });
   const host = data?.shopUrl.replace(/^https?:\/\//, "");
+  const qc = useQueryClient();
+  const [saving, setSaving] = useState(false);
+  const setHideOutOfStock = async (hideOutOfStock: boolean) => {
+    setSaving(true);
+    try {
+      await onlineStoreFetch("/settings", { method: "PUT", body: JSON.stringify({ hideOutOfStock }) });
+      await qc.invalidateQueries({ queryKey: ["online-store", "summary"] });
+      toast.success(hideOutOfStock ? "Out-of-stock items are now hidden from the shop" : "Out-of-stock items are shown again");
+    } catch (e) {
+      toast.error((e as Error).message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   return (
     <AppLayout>
@@ -69,6 +93,21 @@ export default function ManagementOnlineStoreOverviewPage() {
               <CardDescription>Everything that controls the online shop.</CardDescription>
             </CardHeader>
             <CardContent className="space-y-3">
+              <div className="flex items-start justify-between gap-4 rounded-lg border p-3">
+                <div>
+                  <p className="text-sm font-medium">Hide out-of-stock items</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Leave products with no stock out of the shop's catalogue, search, categories and suggestions. They reappear as soon as they're back in stock.
+                    A product page someone already has a link to still opens, marked out of stock.
+                  </p>
+                  {data && (
+                    <p className="text-xs text-muted-foreground mt-1.5">
+                      {data.outOfStock === 0 ? "No listed products are out of stock right now." : `${data.outOfStock} listed product${data.outOfStock === 1 ? " is" : "s are"} out of stock right now.`}
+                    </p>
+                  )}
+                </div>
+                <Switch checked={data?.hideOutOfStock ?? false} disabled={!data || saving} onCheckedChange={(v) => void setHideOutOfStock(v)} />
+              </div>
               <Link href="/management/online-store/products">
                 <Button variant="outline" className="w-full justify-start gap-2"><Package className="w-4 h-4" /> Products — choose what the shop lists</Button>
               </Link>

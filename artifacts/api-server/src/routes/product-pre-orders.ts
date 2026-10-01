@@ -1,6 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, productPreOrdersTable, productPreOrderItemsTable } from "@workspace/db";
-import { eq, and, desc, max, inArray } from "drizzle-orm";
+import { db, productPreOrdersTable, productPreOrderItemsTable, productsTable, transactionsTable, purchaseOrdersTable, purchaseOrderItemsTable, merchantsTable, customersTable } from "@workspace/db";
+import { eq, and, desc, inArray, sql } from "drizzle-orm";
+import { balanceOwing, isPreOrderActive, localDate, preOrderNumber, OPEN_STATUSES, PRE_ORDER_STATUS } from "../lib/pre-orders";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateProductPreOrderParams, DeleteProductPreOrderParams } from "@workspace/api-zod";
 
@@ -54,12 +55,46 @@ type OrderRow = typeof productPreOrdersTable.$inferSelect;
 
 // Shape a pre-order for the API. Legacy rows created before the items table
 // existed have no child rows, so synthesize a single item from the flat columns.
-function serialize(order: OrderRow, itemsMap: Map<number, SerializedItem[]>) {
+function serialize(order: OrderRow, itemsMap: Map<number, SerializedItem[]>, extra: { receiptNumber?: string | null; collectedReceiptNumber?: string | null; customerPhone?: string | null; customerEmail?: string | null } = {}) {
   const stored = itemsMap.get(order.id) ?? [];
   const items: SerializedItem[] = stored.length > 0
     ? stored
     : [{ id: null, productId: order.productId, productName: order.productName, quantity: order.quantity, unitPrice: 0 }];
-  return { ...order, depositAmount: parseFloat(String(order.depositAmount)), items };
+  const paid = parseFloat(String(order.depositAmount)) || 0;
+  // Older manual rows have no total recorded: their line prices are it.
+  const recorded = parseFloat(String(order.totalAmount)) || 0;
+  const total = recorded > 0 ? recorded : items.reduce((s, i) => s + i.unitPrice * i.quantity, 0);
+  return {
+    ...order,
+    depositAmount: paid,
+    totalAmount: Math.round(total * 100) / 100,
+    balanceOwing: balanceOwing(total, paid),
+    items,
+    receiptNumber: extra.receiptNumber ?? null,
+    collectedReceiptNumber: extra.collectedReceiptNumber ?? null,
+    customerPhone: extra.customerPhone ?? null,
+    customerEmail: extra.customerEmail ?? null,
+  };
+}
+
+/** Receipt numbers of the sales that opened / collected these pre-orders, and the customers' contact details. */
+async function extrasFor(rows: OrderRow[], merchantId: number) {
+  const txIds = [...new Set(rows.flatMap((r) => [r.transactionId, r.collectedTransactionId]).filter((id): id is number => id != null))];
+  const custIds = [...new Set(rows.map((r) => r.customerId).filter((id): id is number => id != null))];
+  const [txs, custs] = await Promise.all([
+    txIds.length ? db.select({ id: transactionsTable.id, receiptNumber: transactionsTable.receiptNumber }).from(transactionsTable)
+      .where(and(eq(transactionsTable.merchantId, merchantId), inArray(transactionsTable.id, txIds))) : [],
+    custIds.length ? db.select({ id: customersTable.id, phone: customersTable.phone, email: customersTable.email }).from(customersTable)
+      .where(and(eq(customersTable.merchantId, merchantId), inArray(customersTable.id, custIds))) : [],
+  ]);
+  const receipt = new Map(txs.map((t) => [t.id, t.receiptNumber]));
+  const cust = new Map(custs.map((c) => [c.id, c]));
+  return (r: OrderRow) => ({
+    receiptNumber: r.transactionId ? receipt.get(r.transactionId) ?? null : null,
+    collectedReceiptNumber: r.collectedTransactionId ? receipt.get(r.collectedTransactionId) ?? null : null,
+    customerPhone: r.customerId ? cust.get(r.customerId)?.phone ?? null : null,
+    customerEmail: r.customerId ? cust.get(r.customerId)?.email ?? null : null,
+  });
 }
 
 router.get("/pre-orders", requireAuth, async (req, res): Promise<void> => {
@@ -82,10 +117,58 @@ router.get("/pre-orders", requireAuth, async (req, res): Promise<void> => {
     );
   }
   const itemsMap = await itemsByOrder(rows.map((r) => r.id));
+  const extra = await extrasFor(rows, mid);
   res.json({
-    items: rows.map((r) => serialize(r, itemsMap)),
+    items: rows.map((r) => serialize(r, itemsMap, extra(r))),
     total: rows.length,
   });
+});
+
+/**
+ * Products on pre-order (the switch on), with where each stands: how many
+ * units customers have pre-ordered and are still waiting on, how many are
+ * already set aside for them, and how many are on purchase orders not yet
+ * received. `active` is false once the release date has passed.
+ */
+router.get("/pre-orders/products", requireAuth, async (req, res): Promise<void> => {
+  const mid = req.session.merchantId!;
+  const [m] = await db.select({ timezone: merchantsTable.timezone }).from(merchantsTable).where(eq(merchantsTable.id, mid));
+  const today = localDate(m?.timezone);
+  const products = await db.select({
+    id: productsTable.id, name: productsTable.name, sku: productsTable.sku, price: productsTable.price,
+    stockQuantity: productsTable.stockQuantity, imageUrl: productsTable.imageUrl,
+    preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
+  }).from(productsTable).where(and(eq(productsTable.merchantId, mid), eq(productsTable.preOrder, "true")));
+  const ids = products.map((p) => p.id);
+  const [demand, onOrder] = ids.length === 0 ? [[], []] : await Promise.all([
+    db.select({
+      productId: productPreOrderItemsTable.productId,
+      waiting: sql<number>`coalesce(sum(${productPreOrderItemsTable.quantity}), 0)::int`,
+      allocated: sql<number>`coalesce(sum(least(${productPreOrdersTable.allocatedQuantity}, ${productPreOrderItemsTable.quantity})), 0)::int`,
+      orders: sql<number>`count(distinct ${productPreOrdersTable.id})::int`,
+    }).from(productPreOrderItemsTable)
+      .innerJoin(productPreOrdersTable, eq(productPreOrdersTable.id, productPreOrderItemsTable.preOrderId))
+      .where(and(eq(productPreOrdersTable.merchantId, mid), inArray(productPreOrdersTable.status, [...OPEN_STATUSES]), inArray(productPreOrderItemsTable.productId, ids)))
+      .groupBy(productPreOrderItemsTable.productId),
+    db.select({
+      productId: purchaseOrderItemsTable.productId,
+      onOrder: sql<number>`coalesce(sum(greatest(${purchaseOrderItemsTable.quantity} - ${purchaseOrderItemsTable.received}, 0)), 0)::int`,
+    }).from(purchaseOrderItemsTable)
+      .innerJoin(purchaseOrdersTable, eq(purchaseOrdersTable.id, purchaseOrderItemsTable.poId))
+      .where(and(eq(purchaseOrdersTable.merchantId, mid), inArray(purchaseOrdersTable.status, ["Draft", "Ordered", "Sent", "Partial", "Partially Received"]), inArray(purchaseOrderItemsTable.productId, ids)))
+      .groupBy(purchaseOrderItemsTable.productId),
+  ]);
+  const d = new Map(demand.map((r) => [r.productId, r]));
+  const o = new Map(onOrder.map((r) => [r.productId, r.onOrder]));
+  res.json(products.map((p) => ({
+    ...p,
+    price: parseFloat(p.price),
+    active: isPreOrderActive(p, today),
+    openOrders: d.get(p.id)?.orders ?? 0,
+    unitsWaiting: d.get(p.id)?.waiting ?? 0,
+    unitsAllocated: d.get(p.id)?.allocated ?? 0,
+    unitsOnOrder: o.get(p.id) ?? 0,
+  })).sort((a, b) => Number(b.active) - Number(a.active) || a.name.localeCompare(b.name)));
 });
 
 router.post("/pre-orders", requireAuth, async (req, res): Promise<void> => {
@@ -96,12 +179,10 @@ router.post("/pre-orders", requireAuth, async (req, res): Promise<void> => {
   if (items.length === 0) { res.status(400).json({ error: "At least one product is required" }); return; }
   const first = items[0];
 
-  const [maxRow] = await db
-    .select({ max: max(productPreOrdersTable.id) })
-    .from(productPreOrdersTable)
-    .where(eq(productPreOrdersTable.merchantId, mid));
-  const nextNum = (maxRow?.max ?? 0) + 1;
-  const poNumber = `PRE-${String(nextNum).padStart(4, "0")}`;
+  // Numbered from the row's own id (set just after insert) so two created at
+  // once can't take the same number, as max+1 could.
+  const poNumber = "PRE-…";
+  const total = items.reduce((s, i) => s + (parseFloat(i.unitPrice) || 0) * i.quantity, 0);
 
   const order = await db.transaction(async (tx) => {
     const [created] = await tx
@@ -116,11 +197,14 @@ router.post("/pre-orders", requireAuth, async (req, res): Promise<void> => {
         productName: first.productName,
         quantity: first.quantity,
         depositAmount: String(parseFloat(String(depositAmount)) || 0),
-        status: status ?? "Pending",
+        status: status ?? PRE_ORDER_STATUS.awaiting,
         expectedDate: expectedDate ?? null,
         notes: notes ?? null,
+        totalAmount: total.toFixed(2),
       })
       .returning();
+    await tx.update(productPreOrdersTable).set({ poNumber: preOrderNumber(created.id) }).where(eq(productPreOrdersTable.id, created.id));
+    created.poNumber = preOrderNumber(created.id);
     await tx.insert(productPreOrderItemsTable).values(
       items.map((i) => ({ preOrderId: created.id, productId: i.productId, productName: i.productName, quantity: i.quantity, unitPrice: i.unitPrice })),
     );
@@ -128,7 +212,7 @@ router.post("/pre-orders", requireAuth, async (req, res): Promise<void> => {
   });
 
   const itemsMap = await itemsByOrder([order.id]);
-  res.status(201).json(serialize(order, itemsMap));
+  res.status(201).json(serialize(order, itemsMap, (await extrasFor([order], mid))(order)));
 });
 
 router.patch("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => {
@@ -158,6 +242,8 @@ router.patch("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => 
     ...(customerName !== undefined && { customerName }),
     ...(depositAmount !== undefined && { depositAmount: String(parseFloat(String(depositAmount)) || 0) }),
     ...(status !== undefined && { status }),
+    ...((status === PRE_ORDER_STATUS.collected || status === PRE_ORDER_STATUS.shipped) && { collectedAt: new Date() }),
+    ...(status === PRE_ORDER_STATUS.arrived && { arrivedAt: new Date() }),
     ...(expectedDate !== undefined && { expectedDate }),
     ...(notes !== undefined && { notes }),
   };
@@ -188,7 +274,7 @@ router.patch("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => 
     .from(productPreOrdersTable)
     .where(and(eq(productPreOrdersTable.id, id), eq(productPreOrdersTable.merchantId, mid)));
   const itemsMap = await itemsByOrder([id]);
-  res.json(serialize(order, itemsMap));
+  res.json(serialize(order, itemsMap, (await extrasFor([order], mid))(order)));
 });
 
 router.delete("/pre-orders/:id", requireAuth, async (req, res): Promise<void> => {

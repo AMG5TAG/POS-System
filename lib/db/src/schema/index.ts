@@ -143,3 +143,4 @@ export * from "./merchant-assets";
 export * from "./end-of-week-reports";
 export * from "./customer-wishlist";
 export * from "./mail-in";
+export * from "./shop-settings";

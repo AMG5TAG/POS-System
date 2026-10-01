@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "wouter";
 import { ImageOff } from "lucide-react";
 import { money } from "@/lib/format";
-import type { ProductSummary } from "@/lib/shop";
+import { formatDay, type ProductSummary } from "@/lib/shop";
 import { WishlistHeart } from "./WishlistHeart";
 
 /* A missing or unreachable photo shows the placeholder, never a broken image. */
@@ -18,6 +18,7 @@ export function ProductCard({ p }: { p: ProductSummary }) {
   return (
     <div className="group relative flex flex-col w-full rounded-2xl bg-white border border-stone-200 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition">
     <WishlistHeart productId={p.id} name={p.name} className="absolute top-2.5 right-2.5" />
+    {p.preOrder && <span className="absolute top-3 left-3 z-10 rounded-full bg-violet-600 text-white text-[11px] font-bold uppercase tracking-wide px-2.5 py-1">Pre-order</span>}
     <Link href={`/product/${p.id}`} className="flex flex-col flex-1">
       <div className="aspect-square bg-white p-4"><ProductImage src={p.imageUrl} alt={p.name} className="group-hover:scale-105 transition" /></div>
       <div className="p-4 pt-0 flex flex-col gap-1 flex-1">
@@ -25,7 +26,9 @@ export function ProductCard({ p }: { p: ProductSummary }) {
         <p className="font-medium leading-snug line-clamp-2">{p.name}</p>
         <div className="mt-auto pt-2 flex items-center justify-between gap-2">
           <span className="font-bold">{money(p.price)}</span>
-          {p.isService
+          {p.preOrder
+            ? <span className="text-xs font-semibold text-violet-700">Pre-order{p.preOrder.etaDate ? ` · ETA ${formatDay(p.preOrder.etaDate)}` : ""}</span>
+            : p.isService
             ? <span className="text-xs text-sky-700">Service</span>
             : p.inStock ? <span className="text-xs text-emerald-700">In stock</span> : <span className="text-xs text-red-600">Out of stock</span>}
         </div>

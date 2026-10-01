@@ -131,6 +131,7 @@ type ProductForm = {
   productTypeId: string;
   stockQuantity: string; lowStockThreshold: string; taxRate: string;
   trackInventory: boolean; isActive: boolean; excludeFromLoyalty: boolean;
+  preOrder: boolean; preOrderReleaseDate: string; preOrderEtaDate: string;
   /* when true, each unit carries a serial number / IMEI captured at PO receiving and at sale */
   tracksSerial: boolean;
   tags: string[];
@@ -164,6 +165,7 @@ const defaultForm: ProductForm = {
   productTypeId: "",
   stockQuantity: "0", lowStockThreshold: "5",
   taxRate: "10", trackInventory: true, isActive: true, excludeFromLoyalty: false,
+  preOrder: false, preOrderReleaseDate: "", preOrderEtaDate: "",
   tracksSerial: false,
   tags: [],
   internalNotes: "",
@@ -1665,6 +1667,9 @@ export default function ProductsPage() {
       trackInventory: p.trackInventory ?? true,
       isActive: p.isActive ?? true,
       excludeFromLoyalty: p.excludeFromLoyalty ?? false,
+      preOrder: p.preOrder ?? false,
+      preOrderReleaseDate: p.preOrderReleaseDate ?? "",
+      preOrderEtaDate: p.preOrderEtaDate ?? "",
       tracksSerial: (ep as Product & { tracksSerial?: boolean }).tracksSerial ?? false,
       tags: (ep as Product & { tags?: string[] }).tags ?? [],
       internalNotes: "",
@@ -1719,6 +1724,9 @@ export default function ProductsPage() {
       taxRate: parseFloat(form.taxRate) || 10,
       trackInventory: form.trackInventory, isActive: form.isActive,
       excludeFromLoyalty: form.excludeFromLoyalty,
+      preOrder: form.preOrder,
+      preOrderReleaseDate: form.preOrder ? form.preOrderReleaseDate || null : null,
+      preOrderEtaDate: form.preOrder ? form.preOrderEtaDate || null : null,
       tracksSerial: form.tracksSerial,
       supplier: form.supplier || undefined,
       supplierCode: form.supplierCode || undefined,
@@ -3172,6 +3180,37 @@ export default function ProductsPage() {
             {/* ── Stock ── */}
             {formTab === "stock" && (
               <div className="py-5 space-y-6">
+
+                {/* Pre-order — sells before stock exists; each sale opens a
+                    pre-order for the customer (Inventory › Pre-Orders). */}
+                <div>
+                  <SectionHeader label="Pre-order" />
+                  <div className="mt-3 p-3.5 border rounded-xl space-y-3">
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <p className="text-sm font-medium">Sell as a pre-order</p>
+                        <p className="text-xs text-muted-foreground mt-0.5">
+                          Can be sold before stock arrives. Each sale needs a customer and appears on the Pre-Orders screen; stock received on a purchase order is set aside for them, oldest first.
+                        </p>
+                      </div>
+                      <Switch checked={form.preOrder} onCheckedChange={(v) => setField("preOrder", v)} />
+                    </div>
+                    {form.preOrder && (
+                      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">Release date</Label>
+                          <Input type="date" value={form.preOrderReleaseDate} onChange={(e) => setField("preOrderReleaseDate", e.target.value)} />
+                          <p className="text-[11px] text-muted-foreground">From this date it sells as a normal product. Leave blank to keep it on pre-order until you turn this off.</p>
+                        </div>
+                        <div className="space-y-1.5">
+                          <Label className="text-xs">ETA delivery date</Label>
+                          <Input type="date" value={form.preOrderEtaDate} onChange={(e) => setField("preOrderEtaDate", e.target.value)} />
+                          <p className="text-[11px] text-muted-foreground">When customers can expect it — shown at the till and on the website.</p>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
 
                 {/* Inventory */}
                 <div>

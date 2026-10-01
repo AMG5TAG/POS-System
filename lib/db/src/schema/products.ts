@@ -49,6 +49,13 @@ export const productsTable = pgTable("products", {
    *  default; this is the per-product switch to keep one off the site. */
   showOnline:        text("show_online").notNull().default("true"),
   excludeFromLoyalty: text("exclude_from_loyalty").notNull().default("false"),
+  /** Pre-order product: sells before stock exists, each sale opening a
+   *  pre-order (product_pre_orders). Active until preOrderReleaseDate (local
+   *  YYYY-MM-DD), after which it sells as a normal product — lib/pre-orders.ts.
+   *  preOrderEtaDate is when customers can expect it. */
+  preOrder:            text("pre_order").notNull().default("false"),
+  preOrderReleaseDate: text("pre_order_release_date"),
+  preOrderEtaDate:     text("pre_order_eta_date"),
   groupPrices:        jsonb("group_prices").$type<Record<string, number>>(),
   supplier:           text("supplier"),
   supplierCode:       text("supplier_code"),

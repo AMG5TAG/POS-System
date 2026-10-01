@@ -289,6 +289,9 @@ export const ListProductsResponse = zod.object({
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "preOrder": zod.boolean().optional().describe('Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate.'),
+  "preOrderReleaseDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) from which it sells as a normal product.'),
+  "preOrderEtaDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) customers can expect it.'),
   "productType": zod.string(),
   "productTypeId": zod.number().nullish(),
   "productTypeName": zod.string().nullish(),
@@ -349,6 +352,9 @@ export const CreateProductBody = zod.object({
   "taxRate": zod.number().optional(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "preOrder": zod.boolean().optional().describe('Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate.'),
+  "preOrderReleaseDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) from which it sells as a normal product.'),
+  "preOrderEtaDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) customers can expect it.'),
   "productTypeId": zod.number().optional(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().optional(),
@@ -452,6 +458,9 @@ export const GetProductResponse = zod.object({
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "preOrder": zod.boolean().optional().describe('Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate.'),
+  "preOrderReleaseDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) from which it sells as a normal product.'),
+  "preOrderEtaDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) customers can expect it.'),
   "productType": zod.string(),
   "productTypeId": zod.number().nullish(),
   "productTypeName": zod.string().nullish(),
@@ -511,6 +520,9 @@ export const UpdateProductBody = zod.object({
   "taxRate": zod.number().optional(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "preOrder": zod.boolean().optional().describe('Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate.'),
+  "preOrderReleaseDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) from which it sells as a normal product.'),
+  "preOrderEtaDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) customers can expect it.'),
   "productTypeId": zod.number().nullish(),
   "groupPrices": zod.record(zod.string(), zod.number()).optional(),
   "supplier": zod.string().nullish(),
@@ -570,6 +582,9 @@ export const UpdateProductResponse = zod.object({
   "taxRate": zod.number().nullish(),
   "isActive": zod.boolean().optional(),
   "excludeFromLoyalty": zod.boolean().optional(),
+  "preOrder": zod.boolean().optional().describe('Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate.'),
+  "preOrderReleaseDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) from which it sells as a normal product.'),
+  "preOrderEtaDate": zod.string().nullish().describe('Local date (YYYY-MM-DD) customers can expect it.'),
   "productType": zod.string(),
   "productTypeId": zod.number().nullish(),
   "productTypeName": zod.string().nullish(),
@@ -1233,6 +1248,7 @@ export const GetCustomerHistoryParams = zod.object({
 
 export const getCustomerHistoryResponseTransactionsItemItemsItemUnitPriceMin = 0;
 
+
 export const getCustomerHistoryResponseInvoicesItemItemsItemQuantityMin = 0.0001;
 
 export const getCustomerHistoryResponseInvoicesItemItemsItemUnitPriceMin = 0;
@@ -1316,7 +1332,11 @@ export const GetCustomerHistoryResponse = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -1953,6 +1973,7 @@ export const listTransactionsResponseItemsItemItemsItemUnitPriceMin = 0;
 
 
 
+
 export const ListTransactionsResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
@@ -2023,7 +2044,11 @@ export const ListTransactionsResponse = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -2043,6 +2068,7 @@ export const createTransactionBodyItemsItemUnitPriceMin = 0;
 
 
 
+
 export const CreateTransactionBody = zod.object({
   "customerId": zod.number().optional(),
   "staffId": zod.number().optional(),
@@ -2056,7 +2082,11 @@ export const CreateTransactionBody = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
   "subtotal": zod.number(),
@@ -2078,6 +2108,7 @@ export const CreateTransactionBody = zod.object({
   "serviceJobId": zod.number().nullish().describe('The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.'),
   "quoteId": zod.number().nullish().describe('The quote whose lines were imported into this sale. A quoted line may carry a price the merchant agreed below (or above) the current catalogue price, so the server re-reads this quote — scoped to the merchant, and only while it is still draft\/sent\/accepted — and accepts those unit prices for the products they were quoted on. Without it the sale is repriced from the catalogue and rejected as a totals mismatch. The client is trusted for nothing but which quote; a price that matches no line on it is still repriced.'),
   "appointmentId": zod.number().nullish().describe('The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.'),
+  "preOrderId": zod.number().nullish().describe('The pre-order this sale collects (the balance on a deposit pre-order). It is marked Collected with this sale, and its product line does not open a new pre-order.'),
   "paidAt": zod.string().optional().describe('Optional accounting date for the sale. The transaction\'s createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of \"now\". Used for tenders that actually landed on an earlier day, e.g. a direct deposit \/ bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future.')
 })
 
@@ -2091,6 +2122,7 @@ export const GetTransactionParams = zod.object({
 
 
 export const getTransactionResponseItemsItemUnitPriceMin = 0;
+
 
 
 
@@ -2163,7 +2195,11 @@ export const GetTransactionResponse = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -2195,6 +2231,7 @@ export const RefundTransactionBody = zod.object({
 
 
 export const refundTransactionResponseItemsItemUnitPriceMin = 0;
+
 
 
 
@@ -2267,7 +2304,11 @@ export const RefundTransactionResponse = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -2290,6 +2331,7 @@ export const VoidTransactionBody = zod.object({
 
 
 export const voidTransactionResponseItemsItemUnitPriceMin = 0;
+
 
 
 
@@ -2362,7 +2404,11 @@ export const VoidTransactionResponse = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -2395,6 +2441,7 @@ export const ModifyCompletedSaleBody = zod.object({
 
 
 export const modifyCompletedSaleResponseItemsItemUnitPriceMin = 0;
+
 
 
 
@@ -2467,7 +2514,11 @@ export const ModifyCompletedSaleResponse = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -3297,6 +3348,7 @@ export const getRecentTransactionsResponseItemsItemUnitPriceMin = 0;
 
 
 
+
 export const GetRecentTransactionsResponseItem = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
@@ -3366,7 +3418,11 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "discount": zod.number().optional(),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
-  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.')
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
 })),
   "issuedGiftCards": zod.array(zod.object({
   "cardNumber": zod.string(),
@@ -5219,6 +5275,15 @@ export const ListPurchaseOrdersQueryParams = zod.object({
 })
 
 export const ListPurchaseOrdersResponseItem = zod.object({
+  "preOrderArrivals": zod.array(zod.object({
+  "preOrderId": zod.number(),
+  "number": zod.string(),
+  "customerName": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "allocatedQuantity": zod.number(),
+  "complete": zod.boolean()
+})).optional().describe('Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out.'),
   "id": zod.number(),
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string().nullish(),
@@ -5314,6 +5379,15 @@ export const GetPurchaseOrderParams = zod.object({
 })
 
 export const GetPurchaseOrderResponse = zod.object({
+  "preOrderArrivals": zod.array(zod.object({
+  "preOrderId": zod.number(),
+  "number": zod.string(),
+  "customerName": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "allocatedQuantity": zod.number(),
+  "complete": zod.boolean()
+})).optional().describe('Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out.'),
   "id": zod.number(),
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string().nullish(),
@@ -5404,6 +5478,15 @@ export const UpdatePurchaseOrderBody = zod.object({
 })
 
 export const UpdatePurchaseOrderResponse = zod.object({
+  "preOrderArrivals": zod.array(zod.object({
+  "preOrderId": zod.number(),
+  "number": zod.string(),
+  "customerName": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "allocatedQuantity": zod.number(),
+  "complete": zod.boolean()
+})).optional().describe('Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out.'),
   "id": zod.number(),
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string().nullish(),
@@ -5477,6 +5560,15 @@ export const ReceivePurchaseOrderItemsBody = zod.object({
 })
 
 export const ReceivePurchaseOrderItemsResponse = zod.object({
+  "preOrderArrivals": zod.array(zod.object({
+  "preOrderId": zod.number(),
+  "number": zod.string(),
+  "customerName": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "allocatedQuantity": zod.number(),
+  "complete": zod.boolean()
+})).optional().describe('Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out.'),
   "id": zod.number(),
   "supplierId": zod.number().nullish(),
   "supplierName": zod.string().nullish(),

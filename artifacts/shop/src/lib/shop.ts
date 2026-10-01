@@ -10,6 +10,8 @@ export interface Category { id: number; name: string; parentId: number | null; c
 export interface ProductSummary {
   id: number; name: string; price: number; imageUrl: string | null; categoryId: number | null;
   brand: string | null; inStock: boolean; refurbished: boolean; isService: boolean;
+  /** Set while the product is on pre-order: sold before stock exists. */
+  preOrder: { releaseDate: string | null; etaDate: string | null } | null;
 }
 export interface ProductDetail extends Omit<ProductSummary, "categoryId"> {
   description: string; sku: string | null;
@@ -71,3 +73,10 @@ export const useRelatedProducts = (id: number) =>
 export const reviewsKey = (id: number) => ["shop-reviews", id];
 export const useReviews = (id: number) =>
   useQuery({ queryKey: reviewsKey(id), queryFn: () => api<ReviewsResponse>(`/shop/products/${id}/reviews`), enabled: id > 0 });
+
+/** "12 Nov 2026" for a YYYY-MM-DD, or "". */
+export function formatDay(d: string | null | undefined): string {
+  if (!d || !/^\d{4}-\d{2}-\d{2}$/.test(d)) return "";
+  const [y, m, day] = d.split("-").map(Number);
+  return new Date(y, m - 1, day).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
+}

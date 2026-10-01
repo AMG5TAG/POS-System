@@ -19,6 +19,8 @@ import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
 import { isUniqueViolation } from "../lib/document-numbers";
 import { reconcileOversellLedger } from "../lib/oversellLedger";
 import { completeLinkedWork, mergeLinkedWork } from "../lib/linked-work";
+import { planPreOrders, recordPreOrders, loadCollectable, collectPreOrder, cancelSalePreOrders, type PreOrderPlan } from "../lib/pre-order-sales";
+import { localDate } from "../lib/pre-orders";
 
 const router: IRouter = Router();
 
@@ -187,6 +189,7 @@ export async function finalizeSale(
     serviceJobId: linkedServiceJobId,
     appointmentId: linkedAppointmentId,
     quoteId: importedQuoteId,
+    preOrderId: collectingPreOrderId,
   } = body;
 
   const idempotencyKey =
@@ -326,6 +329,7 @@ export async function finalizeSale(
     giftCardIssue?: boolean; giftCardNumber?: string;
     digitalCodes?: string[];
     serials?: string[];
+    preOrderDeposit?: { productId: number; quantity: number };
   }[] = [];
   // Per-item serial numbers aren't in the generated body schema (which strips
   // unknown keys), so they are supplied separately via `rawItems`, matched to
@@ -349,6 +353,7 @@ export async function finalizeSale(
       unitPrice  = Math.max(0, i.unitPrice ?? 0);
       taxRatePct = 10; // standard Australian GST
       itemName   = (i.productName || (i.giftCardIssue ? "Gift Card" : "Custom Item")).slice(0, 200);
+      // A pre-order deposit is named for its product below, once products are known.
     } else {
       const product = productMap.get(i.productId)!;
       const catalogPrice = parseFloat(product.price);
@@ -407,6 +412,7 @@ export async function finalizeSale(
       // Preserve client-provided number; server will fill in blanks before the DB write
       giftCardNumber: (i.giftCardIssue && i.giftCardNumber) ? i.giftCardNumber.trim().toUpperCase() : undefined,
       ...(serials.length ? { serials } : {}),
+      ...(i.productId === 0 && i.preOrderDeposit ? { preOrderDeposit: { productId: i.preOrderDeposit.productId, quantity: i.preOrderDeposit.quantity } } : {}),
     });
   }
 
@@ -448,6 +454,39 @@ export async function finalizeSale(
     };
   }
   void clientSubtotal; void clientTaxTotal; void clientDiscountTotal;
+
+  /* ── Pre-orders ─────────────────────────────────────────────────────────
+     A line for a product on pre-order, or a deposit line naming one, opens a
+     pre-order for the customer (lib/pre-order-sales.ts). Planned here, before
+     anything is written, so a sale that can't open its pre-orders — no
+     customer, a deposit on a product no longer on pre-order — is refused
+     whole. A sale collecting a pre-order (preOrderId) is the collection, not a
+     new pre-order of the same product. */
+  let collecting: Awaited<ReturnType<typeof loadCollectable>> = null;
+  if (collectingPreOrderId != null) {
+    collecting = await loadCollectable(merchantId, collectingPreOrderId);
+    if (!collecting) return { ok: false, status: 409, error: "That pre-order has already been collected or cancelled." };
+  }
+  const depositProductIds = computedItems.filter((it) => it.preOrderDeposit).map((it) => it.preOrderDeposit!.productId);
+  const extraIds = depositProductIds.filter((id) => !productMap.has(id));
+  const depositProducts = extraIds.length > 0
+    ? await db.select().from(productsTable).where(and(inArray(productsTable.id, extraIds), eq(productsTable.merchantId, merchantId)))
+    : [];
+  const preOrderProducts = new Map([...productMap, ...depositProducts.map((p) => [p.id, p] as const)]);
+  let preOrderPlans: PreOrderPlan[] = [];
+  const mayHavePreOrders = depositProductIds.length > 0 || [...productMap.values()].some((p) => p.preOrder === "true");
+  if (mayHavePreOrders) {
+    const [m] = await db.select({ timezone: merchantsTable.timezone }).from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+    const planned = planPreOrders(computedItems, preOrderProducts, localDate(m?.timezone), collecting?.productIds ?? new Set());
+    if (!planned.ok) return { ok: false, status: 400, error: planned.error };
+    preOrderPlans = planned.plans;
+    if (preOrderPlans.length > 0 && !scopedCustomer) {
+      return { ok: false, status: 400, error: "Pre-order sales need a customer — add one to the sale so we can let them know when it arrives." };
+    }
+    for (const it of computedItems) {
+      if (it.preOrderDeposit) it.productName = `Pre-order deposit — ${preOrderProducts.get(it.preOrderDeposit.productId)!.name}`.slice(0, 200);
+    }
+  }
 
   // Loyalty redemption — enforced server-side, not just in the UI.
   // The conversion from "balance units" to "dollars covered" depends on the
@@ -833,6 +872,13 @@ export async function finalizeSale(
       notes,
     ));
 
+    // Pre-orders this sale opens or collects — same transaction, so a sale can
+    // never commit without them (or they without it).
+    if (preOrderPlans.length > 0 && scopedCustomer) {
+      await recordPreOrders(tx, merchantId, row.id, scopedCustomer, preOrderPlans);
+    }
+    if (collecting) await collectPreOrder(tx, merchantId, collecting.row.id, row.id);
+
     return row;
         });
         break;
@@ -1064,6 +1110,7 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
         throw new HttpError(409, `Only completed sales can be refunded (this sale is ${transaction.status}).`);
       }
       await reverseSaleEffects(tx, merchantId, transaction);
+      await cancelSalePreOrders(tx, merchantId, transaction.id);
       const [row] = await tx
         .update(transactionsTable)
         .set({ status: "refunded", notes: parsed.data.reason })
@@ -1102,6 +1149,7 @@ router.post("/transactions/:id/void", requireAuth, async (req, res): Promise<voi
     .set({ status: "voided", notes: reason ?? transaction.notes })
     .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
     .returning();
+  await cancelSalePreOrders(db, merchantId, id);
 
   let cust: typeof customersTable.$inferSelect | null = null;
   if (updated.customerId) {

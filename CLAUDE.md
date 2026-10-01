@@ -456,6 +456,12 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   hides its subcategories and every product in them, including ones added
   later. `shopVisible` in `lib/shop-visibility.ts` is the one rule, used by the
   shop and by the Online Store screens' counts, so the two cannot disagree.
+  **Hide out-of-stock items** (Management › Online Store, `shop_settings`,
+  `scripts/src/add-shop-settings-table.ts`) narrows *listings* only —
+  catalogue, search, category counts, related, "Just purchased" — through
+  `shopListable`; product pages, cart, checkout and wishlist keep using
+  `shopVisible`, so a link a shopper already has still opens, marked out of
+  stock. In stock follows the shop's badge: untracked types and products count.
   Categories nest to any depth, so choosing one lists every category below it.
   A category's image (`categories.image_url`, set in Products › Categories,
   `scripts/src/add-category-image-url.ts`) is shown on the shop's category
@@ -603,6 +609,45 @@ The send routes used to know only "all"/"single" while the pages save
 one customer, or to any segment, went to **every** opted-in customer. An
 unknown audience is now refused (400), never widened; "specific" with no
 customer reaches no one. Pinned by `campaign-audience.test.ts`.
+
+### Pre-orders
+
+A product with `pre_order` on is a pre-order product until its
+`pre_order_release_date` (merchant-local YYYY-MM-DD) — then it sells normally
+with nobody switching it off (`isPreOrderActive`, `lib/pre-orders.ts`, mirrored
+in koapos `lib/pre-order.ts`). `pre_order_eta_date` is shown at the till and on
+the shop. Columns and the sale links on `product_pre_orders` come from
+`scripts/src/add-pre-order-sales.ts`.
+
+- **Till.** A pre-order line is sold either at full price (an ordinary product
+  line; stock goes below zero like any oversell) or as a deposit ("Take
+  deposit" swaps the line for a one-off line carrying `preOrderDeposit
+  {productId, quantity}`, which moves no stock). `finalizeSale` plans the
+  pre-orders before its DB transaction and records them inside it
+  (`lib/pre-order-sales.ts`), so a sale and its pre-orders commit together;
+  a sale with pre-orders and no customer is refused — the POS checks this
+  before the payment screen opens, so no card is charged for it. Numbers are
+  `PRE-<id>` (from the row's own id, not max+1).
+- **Collection.** Pre-Orders › "Collect at till" opens
+  `/pos/sell?collectPreOrder=<id>`: the product at full price less what was
+  paid, for its customer. The sale carries `preOrderId`; the server marks the
+  pre-order Collected in the same transaction and does not open a new one for
+  that product. A collecting sale can't be parked (the link wouldn't survive).
+- **Receiving.** `POST /purchase-orders/:id/receive` allocates received units
+  to waiting pre-orders oldest first, inside the receive's transaction with the
+  rows locked (`allocateArrivals`); a fully covered one becomes Arrived. The
+  response's `preOrderArrivals` drives the pop-up (customer + PRE number) before
+  the print choice; customers are SMS'd/emailed only after commit
+  (`notifyArrivals`, which stamps `notified_at`).
+- **Refund/void** cancels the sale's still-open pre-orders.
+- **Shop.** Products carry `preOrder {releaseDate, etaDate}`; pre-order products
+  count as in stock for listings and the in-stock filter. They can't be added to
+  the cart yet — online pre-purchase waits for checkout (stage 2).
+- **Known gap:** units allocated to a *deposit* pre-order are back in
+  `stock_quantity` until collection, so the till could sell them to someone
+  else; staff set them aside physically from the pop-up.
+
+Pinned by `pre-orders.test.ts`.
 
 ### Linking a job or appointment to an invoice
 

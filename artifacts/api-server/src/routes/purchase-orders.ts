@@ -2,6 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable, productOversellLedgerTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
+import { allocateArrivals, notifyArrivals, type PreOrderArrival } from "../lib/pre-order-sales";
 import { reconcileOversellLedger } from "../lib/oversellLedger";
 import { withUniqueRetry, nextSequential, isUniqueViolation } from "../lib/document-numbers";
 import {
@@ -579,8 +580,10 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
   const poItemMap = new Map(po.items.map((i) => [i.id, i]));
   const receiptLines: string[] = [];
 
+  const preOrderArrivals: PreOrderArrival[] = [];
   try {
     await db.transaction(async (tx) => {
+      preOrderArrivals.length = 0; // a retried transaction starts again
       for (const { poItemId, quantityReceiving, serialNumbers } of safeItems) {
         if (quantityReceiving <= 0) continue;
         const poItem = poItemMap.get(poItemId);
@@ -623,6 +626,10 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
               prevStock, newStock,
             });
           }
+
+          // Units arriving for customers' pre-orders are set aside for them,
+          // oldest pre-order first (lib/pre-order-sales.ts).
+          preOrderArrivals.push(...await allocateArrivals(tx, merchantId, poItem.productId, qty));
 
           // Update cost via a moving (weighted) average: blend the existing
           // on-hand value with the newly received value. Falls back to the PO
@@ -693,8 +700,12 @@ router.post("/purchase-orders/:id/receive", requireAuth, async (req, res): Promi
     return;
   }
 
+  // Customers whose pre-orders are now complete hear about it — after commit,
+  // and without holding up the response.
+  void notifyArrivals(merchantId, preOrderArrivals).catch((err) => req.log.error({ err }, "pre-order arrival notification failed"));
+
   const result = await getPOWithItems(id, merchantId);
-  res.json(result);
+  res.json({ ...result, preOrderArrivals: preOrderArrivals.map(({ customerId: _c, ...a }) => a) });
 });
 
 // POST /purchase-orders/:id/email

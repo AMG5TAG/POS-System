@@ -1,11 +1,11 @@
 import { Router, type IRouter } from "express";
-import { db, productsTable, categoriesTable } from "@workspace/db";
+import { db, productsTable, categoriesTable, shopSettingsTable } from "@workspace/db";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { shopOrigin } from "../lib/publicUrl";
-import { shopVisible, notInHiddenCategory } from "../lib/shop-visibility";
+import { shopVisible, notInHiddenCategory, shopListable, shopHidesOutOfStock, inStockSql } from "../lib/shop-visibility";
 
 /**
  * Management › Online Store — the POS side of shop.koastal.com.au.
@@ -20,14 +20,29 @@ const router: IRouter = Router();
 
 router.get("/online-store/summary", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
+  const hideOutOfStock = await shopHidesOutOfStock(merchantId);
   const [row] = await db
     .select({
-      listed: sql<number>`count(*) filter (where ${shopVisible(merchantId)})::int`,
+      listed: sql<number>`count(*) filter (where ${shopListable(merchantId, hideOutOfStock)})::int`,
       hidden: sql<number>`count(*) filter (where not ${shopVisible(merchantId)})::int`,
+      // Listed on the shop but out of stock: hidden too while the option is on.
+      outOfStock: sql<number>`count(*) filter (where ${shopVisible(merchantId)} and not ${inStockSql()})::int`,
     })
     .from(productsTable)
     .where(and(eq(productsTable.merchantId, merchantId), eq(productsTable.isActive, "true")));
-  res.json({ shopUrl: shopOrigin(), listed: row?.listed ?? 0, hidden: row?.hidden ?? 0 });
+  res.json({ shopUrl: shopOrigin(), listed: row?.listed ?? 0, hidden: row?.hidden ?? 0, outOfStock: row?.outOfStock ?? 0, hideOutOfStock });
+});
+
+const SettingsBody = z.object({ hideOutOfStock: z.boolean() });
+
+router.put("/online-store/settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+  const parsed = SettingsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid settings" }); return; }
+  const merchantId = req.session.merchantId!;
+  const value = parsed.data.hideOutOfStock ? "true" : "false";
+  await db.insert(shopSettingsTable).values({ merchantId, hideOutOfStock: value })
+    .onConflictDoUpdate({ target: shopSettingsTable.merchantId, set: { hideOutOfStock: value } });
+  res.json({ hideOutOfStock: parsed.data.hideOutOfStock });
 });
 
 router.get("/online-store/products", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {

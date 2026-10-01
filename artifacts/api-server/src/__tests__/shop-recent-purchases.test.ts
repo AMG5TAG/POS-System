@@ -40,6 +40,7 @@ describe("shop recent purchases", () => {
   it("lists listed products newest first, without services or buyer details", async () => {
     h.rows = [
       { rows: [{ pid: 2, at: "2026-09-30T03:00:00Z" }, { pid: 1, at: "2026-09-30T01:00:00Z" }, { pid: 3, at: "2026-09-30T02:00:00Z" }] },
+      [], // shop settings: none, so out-of-stock products aren't hidden
       [
         { id: 1, name: "USB-C cable", imageUrl: null, isService: false },
         { id: 2, name: "iPhone case", imageUrl: null, isService: null },

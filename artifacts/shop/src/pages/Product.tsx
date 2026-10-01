@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "wouter";
-import { Loader2, Minus, Plus, ShieldCheck, Check } from "lucide-react";
-import { useCategories, useProduct } from "@/lib/shop";
+import { Loader2, Minus, Plus, ShieldCheck, Check, CalendarClock } from "lucide-react";
+import { useCategories, useProduct, useShopInfo, formatDay } from "@/lib/shop";
 import { useCart } from "@/lib/cart";
 import { money } from "@/lib/format";
 import { ProductTabs, type ProductTab } from "@/components/ProductTabs";
@@ -15,6 +15,7 @@ export default function Product() {
   const { id } = useParams<{ id: string }>();
   const { data: p, isLoading, isError } = useProduct(Number(id));
   const { data: cats } = useCategories();
+  const { data: info } = useShopInfo();
   const { add } = useCart();
   const [variantId, setVariantId] = useState<number | null>(null);
   const [qty, setQty] = useState(1);
@@ -95,7 +96,16 @@ export default function Product() {
             </button>
           )}
           <p className="text-3xl font-extrabold">{money(price)} <span className="text-sm font-normal text-stone-500">inc. GST</span></p>
-          {p.isService
+          {p.preOrder ? (
+            <div className="rounded-2xl border border-violet-200 bg-violet-50 p-4 space-y-1.5">
+              <p className="font-semibold text-violet-800 flex items-center gap-2"><CalendarClock className="w-4 h-4" /> Available for pre-order</p>
+              {p.preOrder.releaseDate && <p className="text-sm text-stone-700">Release date: <strong>{formatDay(p.preOrder.releaseDate)}</strong></p>}
+              {p.preOrder.etaDate && <p className="text-sm text-stone-700">Estimated delivery: <strong>{formatDay(p.preOrder.etaDate)}</strong></p>}
+              <p className="text-sm text-stone-600">
+                Pre-order in store or call us{info?.phone ? <> on <a href={`tel:${info.phone}`} className="underline">{info.phone}</a></> : ""} — pay in full or leave a deposit, and we'll let you know the moment it arrives. Online pre-ordering is coming soon.
+              </p>
+            </div>
+          ) : p.isService
             ? <p className="text-sky-700 text-sm font-medium">Service — we'll be in touch to arrange it after you order.</p>
             : inStock ? <p className="text-emerald-700 text-sm font-medium">In stock</p> : <p className="text-red-600 text-sm font-medium">Out of stock</p>}
 
@@ -113,7 +123,8 @@ export default function Product() {
             </div>
           )}
 
-          <div className="flex items-center gap-3">
+          {/* Pre-orders can't go through the cart until online checkout exists. */}
+          {!p.preOrder && <div className="flex items-center gap-3">
             <div className="flex items-center border border-stone-300 rounded-full h-11">
               <button className="px-3" aria-label="Less" onClick={() => setQty((n) => Math.max(1, n - 1))}><Minus className="w-4 h-4" /></button>
               <span className="w-8 text-center tabular-nums">{qty}</span>
@@ -123,7 +134,7 @@ export default function Product() {
               className="flex-1 h-11 rounded-full bg-brand text-white font-semibold hover:bg-brand-dark disabled:opacity-40 flex items-center justify-center gap-2">
               {added ? <><Check className="w-4 h-4" /> Added</> : needsVariant ? "Choose an option" : "Add to cart"}
             </button>
-          </div>
+          </div>}
           {added && <Link href="/cart" className="block text-sm text-brand underline">View cart</Link>}
 
           {p.warranty && (

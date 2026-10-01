@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, ChevronLeft, ChevronRight, Mail, Star } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Home, Mail, Star } from "lucide-react";
 import type { Category } from "@/lib/shop";
 
 /* The shop's category bar, styled after koastal.com.au's menu: a row of
@@ -95,7 +95,9 @@ function SubMenu({ nodes, colour, flipLeft, onNavigate }: { nodes: Node[]; colou
   );
 }
 
-export function CategoryNav({ cats, onNavigate }: { cats: Category[]; onNavigate: () => void }) {
+/* `variant` picks the half to render: the header places the desktop bar beside
+   the logo and the mobile accordion in the collapsible menu. */
+export function CategoryNav({ cats, onNavigate, variant }: { cats: Category[]; onNavigate: () => void; variant: "desktop" | "mobile" }) {
   const roots = useMemo(() => tree(cats), [cats]);
   const [openId, setOpenId] = useState<number | null>(null);
   const [left, setLeft] = useState(0);
@@ -131,12 +133,15 @@ export function CategoryNav({ cats, onNavigate }: { cats: Category[]; onNavigate
   const active = roots.find((r) => r.id === openId && r.children.length > 0) ?? null;
   const done = () => { setOpenId(null); onNavigate(); };
 
+  if (variant === "mobile") return <MobileCategories roots={roots} onNavigate={onNavigate} />;
+
   return (
     <>
       {/* Desktop: slanted tabs + drop-down lists */}
-      <div ref={wrap} className="hidden md:block relative" onMouseLeave={closeSoon}>
-        <nav className="mx-auto max-w-7xl px-4 h-11 flex items-stretch gap-px overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Categories">
-          <Link href="/products" onMouseEnter={() => openNow(null)} className="flex shrink-0 pl-2"><Tab colour={BRAND}>All products</Tab></Link>
+      <div ref={wrap} className="relative" onMouseLeave={closeSoon}>
+        <nav className="h-11 flex items-stretch gap-px overflow-x-auto [scrollbar-width:none] [&::-webkit-scrollbar]:hidden" aria-label="Categories">
+          <Link href="/" onClick={onNavigate} onMouseEnter={() => openNow(null)} className="flex shrink-0 pl-2"><Tab colour={BRAND}><Home className="w-3.5 h-3.5" /> Home</Tab></Link>
+          <Link href="/products" onMouseEnter={() => openNow(null)} className="flex shrink-0"><Tab colour={BRAND}>All products</Tab></Link>
           {roots.map((c) => {
             const has = c.children.length > 0;
             const isOpen = openId === c.id && has;
@@ -171,9 +176,6 @@ export function CategoryNav({ cats, onNavigate }: { cats: Category[]; onNavigate
           )}
         </div>
       </div>
-
-      {/* Mobile accordion */}
-      <MobileCategories roots={roots} onNavigate={onNavigate} />
     </>
   );
 }
@@ -199,6 +201,7 @@ function MobileCategories({ roots, onNavigate }: { roots: Node[]; onNavigate: ()
   );
   return (
     <nav className="md:hidden px-4 pb-3 text-sm divide-y divide-stone-100" aria-label="Categories">
+      <Link href="/" onClick={onNavigate} className="flex items-center gap-2 py-2.5 font-semibold"><Home className="w-4 h-4" /> Home</Link>
       <Link href="/products" onClick={onNavigate} className="block py-2.5 font-semibold">All products</Link>
       {roots.map((r) => row(r, 0))}
       <Link href="/mail-in" onClick={onNavigate} className="flex items-center gap-2 py-2.5 font-semibold text-brand"><Mail className="w-4 h-4" /> Mail-In Repairs</Link>

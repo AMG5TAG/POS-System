@@ -867,6 +867,18 @@ export interface Product {
   taxRate?: number | null;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  /** Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate. */
+  preOrder?: boolean;
+  /**
+     * Local date (YYYY-MM-DD) from which it sells as a normal product.
+     * @nullable
+     */
+  preOrderReleaseDate?: string | null;
+  /**
+     * Local date (YYYY-MM-DD) customers can expect it.
+     * @nullable
+     */
+  preOrderEtaDate?: string | null;
   productType: string;
   /** @nullable */
   productTypeId?: number | null;
@@ -965,6 +977,18 @@ export interface ProductInput {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  /** Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate. */
+  preOrder?: boolean;
+  /**
+     * Local date (YYYY-MM-DD) from which it sells as a normal product.
+     * @nullable
+     */
+  preOrderReleaseDate?: string | null;
+  /**
+     * Local date (YYYY-MM-DD) customers can expect it.
+     * @nullable
+     */
+  preOrderEtaDate?: string | null;
   productTypeId?: number;
   groupPrices?: ProductInputGroupPrices;
   supplier?: string;
@@ -1016,6 +1040,18 @@ export interface ProductUpdate {
   taxRate?: number;
   isActive?: boolean;
   excludeFromLoyalty?: boolean;
+  /** Pre-order product — sells before stock exists, each sale opening a pre-order for the customer. Active until preOrderReleaseDate. */
+  preOrder?: boolean;
+  /**
+     * Local date (YYYY-MM-DD) from which it sells as a normal product.
+     * @nullable
+     */
+  preOrderReleaseDate?: string | null;
+  /**
+     * Local date (YYYY-MM-DD) customers can expect it.
+     * @nullable
+     */
+  preOrderEtaDate?: string | null;
   /** @nullable */
   productTypeId?: number | null;
   groupPrices?: ProductUpdateGroupPrices;
@@ -1244,6 +1280,16 @@ export interface CustomerList {
   total: number;
 }
 
+/**
+ * Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line's total as the amount paid. No stock moves until the balance is taken at collection.
+ * @nullable
+ */
+export type TransactionItemPreOrderDeposit = {
+  productId: number;
+  /** @minimum 1 */
+  quantity: number;
+} | null;
+
 export interface TransactionItem {
   productId: number;
   productName: string;
@@ -1260,6 +1306,11 @@ export interface TransactionItem {
   giftCardNumber?: string;
   /** Digital codes assigned to this line item during checkout. Populated in the response for products of type "digital_code" with unassigned codes available in inventory. One code per unit sold. */
   digitalCodes?: string[];
+  /**
+     * Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line's total as the amount paid. No stock moves until the balance is taken at collection.
+     * @nullable
+     */
+  preOrderDeposit?: TransactionItemPreOrderDeposit;
 }
 
 export type TransactionStatus = typeof TransactionStatus[keyof typeof TransactionStatus];
@@ -1401,6 +1452,11 @@ export interface TransactionInput {
      * @nullable
      */
   appointmentId?: number | null;
+  /**
+     * The pre-order this sale collects (the balance on a deposit pre-order). It is marked Collected with this sale, and its product line does not open a new pre-order.
+     * @nullable
+     */
+  preOrderId?: number | null;
   /** Optional accounting date for the sale. The transaction's createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of "now". Used for tenders that actually landed on an earlier day, e.g. a direct deposit / bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future. */
   paidAt?: string;
 }
@@ -3439,7 +3495,19 @@ export interface PurchaseOrderItem {
   oversellSales?: PurchaseOrderItemOversellSalesItem[];
 }
 
+export type PurchaseOrderPreOrderArrivalsItem = {
+  preOrderId: number;
+  number: string;
+  customerName: string;
+  productName: string;
+  quantity: number;
+  allocatedQuantity: number;
+  complete: boolean;
+};
+
 export interface PurchaseOrder {
+  /** Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out. */
+  preOrderArrivals?: PurchaseOrderPreOrderArrivalsItem[];
   id: number;
   supplierId?: number | null;
   supplierName?: string | null;

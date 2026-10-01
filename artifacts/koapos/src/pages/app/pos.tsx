@@ -70,6 +70,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
+import { isPreOrderActive, formatPreOrderDate, depositLineId } from "@/lib/pre-order";
 import { cn } from "@/lib/utils";
 import {
   Search, Plus, Minus, Trash2, Receipt, CreditCard, ChevronRight,
@@ -181,6 +182,10 @@ type CartItem = {
   modifiers?: Modifier[];
   /** Serial numbers for serial-tracked products — one per unit sold. */
   serials?: string[];
+  /** A deposit on a pre-order product instead of the product itself: the line
+   *  is a one-off (sent as productId 0) and the server opens a pre-order for
+   *  `quantity` of `product` with this line's total as the amount paid. */
+  preOrderDeposit?: { product: Product; quantity: number };
 };
 
 type WalkIn = { firstName: string; lastName: string };
@@ -612,6 +617,12 @@ export default function POSPage() {
      is paid — importing is not committing, and a cashier who abandons the sale
      must leave the quote open for the next attempt. */
   const [importedQuoteId, setImportedQuoteId] = useState<number | null>(null);
+  /* Pre-orders. A line for a product on pre-order can be switched to a deposit
+     (`depositFor` holds the line while the amount is typed); a sale opened from
+     Inventory › Pre-Orders › Collect is collecting that pre-order. */
+  const [depositFor, setDepositFor] = useState<CartItem | null>(null);
+  const [depositInput, setDepositInput] = useState("");
+  const [collectingPreOrder, setCollectingPreOrder] = useState<{ id: number; number: string } | null>(null);
   const convertQuoteMutation = useConvertQuote();
 
   /* AI upsell coach */
@@ -1451,6 +1462,48 @@ export default function POSPage() {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); /* run once on mount — allProducts/customersData handled by the effect below */
 
+  /* Collecting a pre-order (Inventory › Pre-Orders › Collect opens
+     /pos/sell?collectPreOrder=<id>): ring up its products at full price with
+     what's already been paid taken off, for its customer. The sale carries
+     preOrderId, so the server marks the pre-order Collected with it. */
+  useEffect(() => {
+    const id = Number(new URLSearchParams(window.location.search).get("collectPreOrder"));
+    if (!Number.isInteger(id) || id <= 0) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    void (async () => {
+      try {
+        const r = await fetch("/api/pre-orders", { credentials: "include" });
+        const list = (await r.json()) as { items: Array<{ id: number; poNumber: string; customerId: number | null; depositAmount: number; status: string; items: Array<{ productId: number | null; quantity: number }> }> };
+        const po = list.items.find((x) => x.id === id);
+        if (!po) { toast.error("That pre-order couldn't be found."); return; }
+        if (["Collected", "Shipped", "Cancelled"].includes(po.status)) { toast.error(`${po.poNumber} is already ${po.status.toLowerCase()}.`); return; }
+        const lines: CartItem[] = [];
+        for (const it of po.items) {
+          if (!it.productId) continue;
+          const pr = await fetch(`/api/products/${it.productId}`, { credentials: "include" });
+          if (!pr.ok) continue;
+          lines.push({ product: (await pr.json()) as Product, quantity: it.quantity, itemDiscount: 0 });
+        }
+        if (lines.length === 0) { toast.error(`${po.poNumber}'s product is no longer in the catalogue.`); return; }
+        // What was paid comes off the first line; any excess spills to the next.
+        let credit = po.depositAmount;
+        for (const l of lines) {
+          const gross = Number(l.product.price) * l.quantity;
+          const take = Math.min(credit, gross);
+          l.itemDiscount = Math.round(take * 100) / 100;
+          credit -= take;
+        }
+        setCart(lines);
+        setCollectingPreOrder({ id: po.id, number: po.poNumber });
+        if (po.customerId) setPendingLinkCustomerId(po.customerId);
+        toast.success(`Collecting ${po.poNumber} — ${formatCurrency(po.depositAmount)} already paid`);
+      } catch {
+        toast.error("Couldn't load that pre-order.");
+      }
+    })();
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   /* Once customers finish loading, resolve any pending customer from a restore. */
   useEffect(() => {
     if (!pendingRestoreCustomerId || !customersData?.items) return;
@@ -1892,6 +1945,44 @@ export default function POSPage() {
     });
   }, [customers, customerSearch]);
 
+  /* ── Pre-order deposits ──
+     A deposit replaces the product line with a one-off line for the amount
+     taken; the product itself is sold (and its stock moved) when the customer
+     collects and pays the balance. "Full price" puts the product line back. */
+  const applyDeposit = () => {
+    if (!depositFor) return;
+    const product = depositFor.product;
+    const qty = depositFor.quantity;
+    const full = Math.round(unitPriceFor(depositFor) * qty * 100) / 100;
+    const amount = Math.round((parseFloat(depositInput) || 0) * 100) / 100;
+    if (amount <= 0) { toast.error("Enter the deposit amount"); return; }
+    if (amount >= full) { toast.error(`That covers the full price (${formatCurrency(full)}) — sell it at full price instead.`); return; }
+    const depositProduct = {
+      ...product,
+      id: depositLineId(product.id),
+      name: `Pre-order deposit — ${product.name}`,
+      price: amount,
+      sku: null,
+      trackInventory: "false",
+      tracksSerial: "false",
+      costPrice: null,
+      // The amount typed is the amount charged: no group price or category
+      // pricing rule may reprice a deposit.
+      groupPrices: null,
+      categoryId: null,
+      preOrder: false,
+    } as unknown as Product;
+    setCart((prev) => prev.map((l) => l.product.id === product.id
+      ? { product: depositProduct, quantity: 1, itemDiscount: 0, preOrderDeposit: { product, quantity: qty } }
+      : l));
+    setDepositFor(null);
+  };
+  const restoreFullPrice = (line: CartItem) => {
+    if (!line.preOrderDeposit) return;
+    const { product, quantity } = line.preOrderDeposit;
+    setCart((prev) => prev.map((l) => l.product.id === line.product.id ? { product, quantity, itemDiscount: 0 } : l));
+  };
+
   /* ── Cart operations ── */
   const addTempToCart = () => {
     const name = tempItemForm.name.trim();
@@ -2087,6 +2178,9 @@ export default function POSPage() {
 
   const parkSale = async () => {
     if (cart.length === 0) return;
+    // The pre-order being collected isn't carried by a parked sale, so parking
+    // would lose it — and the resumed sale would open a new pre-order instead.
+    if (collectingPreOrder) { toast.error(`Finish collecting ${collectingPreOrder.number} before parking the sale.`); return; }
     const customerLabel = walkIn
       ? `${walkIn.firstName} ${walkIn.lastName}`.trim() || "Walk-in"
       : selectedCustomer
@@ -2259,6 +2353,7 @@ export default function POSPage() {
     setCart([]); setOverallDiscount(""); setSaleNotes("");
     setLinkedService(null); setLinkedAppointment(null); setExpandedDiscounts(new Set());
     setImportedQuoteId(null); setQuoteImport(null);
+    setCollectingPreOrder(null);
     idempotencyKeyRef.current = null;
     setDiscountExcessAmount(0);
     /* Sale is over — clear any payment-entry state so the navigation guard
@@ -2716,6 +2811,12 @@ export default function POSPage() {
      completed transaction + its snapshot. Shared by the instant path and Zip. */
   const completeSaleUi = (data: Transaction, snap: SaleCompletionSnapshot) => {
     idempotencyKeyRef.current = null;
+    // Pre-orders this sale opened or collected: refresh any pre-order list
+    // (the generated list key and the Pre-Orders screen's own both mention it).
+    if (collectingPreOrder || cart.some((i) => i.preOrderDeposit || isPreOrderActive(i.product))) {
+      setCollectingPreOrder(null);
+      queryClient.invalidateQueries({ predicate: (q) => String(q.queryKey[0]).includes("pre-orders") });
+    }
     invalidateSalesKpiQueries(queryClient);
     /* The imported quote is settled by THIS transaction, so it is marked
        converted here rather than at import time: a cashier who abandoned the
@@ -3083,7 +3184,7 @@ export default function POSPage() {
       return {
         // Gift card items must use productId:0 (custom item path on server) so
         // the server doesn't attempt a DB lookup for the synthetic product ID.
-        productId: i.giftCardNumber ? 0 : i.product.id,
+        productId: (i.giftCardNumber || i.preOrderDeposit) ? 0 : i.product.id,
         productName: i.product.name,
         quantity: i.quantity,
         unitPrice: unitPriceFor(i),
@@ -3093,6 +3194,7 @@ export default function POSPage() {
         ...(i.modifiers?.length ? { modifiers: i.modifiers.map(m => m.id) } : {}),
         ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
         ...(i.serials?.length ? { serials: i.serials } : {}),
+        ...(i.preOrderDeposit ? { preOrderDeposit: { productId: i.preOrderDeposit.product.id, quantity: i.preOrderDeposit.quantity } } : {}),
       };
     });
     const notesParts = [
@@ -3134,6 +3236,9 @@ export default function POSPage() {
          mismatch the moment a quote reduced (or raised) a line. Sending the id
          — never the prices — is what lets it read the quote and agree. */
       quoteId: importedQuoteId ?? undefined,
+      /* Collecting a pre-order: the server marks it Collected with this sale,
+         and doesn't open a new pre-order for the product being handed over. */
+      preOrderId: collectingPreOrder?.id ?? undefined,
       receiptNumber,
       idempotencyKey,
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
@@ -3409,7 +3514,9 @@ export default function POSPage() {
                         ? <img src={imgSrc} alt={product.name} loading="lazy" decoding="async" draggable={false} className="w-full h-full object-contain" />
                         : <span className="text-3xl font-bold text-muted-foreground/20">{product.name.charAt(0)}</span>;
                     })()}
-                    {product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
+                    {isPreOrderActive(product) ? (
+                      <Badge className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0 bg-violet-600 text-white border-transparent hover:bg-violet-600">Pre-order</Badge>
+                    ) : product.trackInventory && product.stockQuantity != null && product.stockQuantity <= (product.lowStockThreshold || 5) && !["Service", "Digital", "Digital Code"].includes((product as Product & { productTypeName?: string | null }).productTypeName ?? "") && (
                       product.stockQuantity <= 0 ? (
                         <Badge variant="destructive" className="absolute top-1.5 right-1.5 text-[10px] px-1 py-0 bg-red-600 text-white border-transparent hover:bg-red-600">OOS</Badge>
                       ) : (
@@ -3825,14 +3932,29 @@ export default function POSPage() {
                               {item.modifiers!.map(m => `${m.name}${m.priceAdjustment ? ` (${m.priceAdjustment > 0 ? "+" : ""}${formatCurrency(Math.abs(m.priceAdjustment))})` : ""}`).join(" · ")}
                             </p>
                           )}
+                          {item.preOrderDeposit ? (
+                            <p className="text-[10px] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span className="rounded bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 px-1.5 font-semibold">Deposit</span>
+                              <span className="text-muted-foreground">
+                                {item.preOrderDeposit.quantity} × {item.preOrderDeposit.product.name} · balance {formatCurrency(Math.max(0, Number(item.preOrderDeposit.product.price) * item.preOrderDeposit.quantity - unitPriceFor(item)))} at collection
+                              </span>
+                              <button type="button" className="text-primary hover:underline" onClick={() => restoreFullPrice(item)}>Full price</button>
+                            </p>
+                          ) : isPreOrderActive(item.product) && !collectingPreOrder ? (
+                            <p className="text-[10px] mt-0.5 flex items-center gap-1.5 flex-wrap">
+                              <span className="rounded bg-violet-100 text-violet-800 dark:bg-violet-900/40 dark:text-violet-300 px-1.5 font-semibold">Pre-order</span>
+                              {item.product.preOrderEtaDate && <span className="text-muted-foreground">ETA {formatPreOrderDate(item.product.preOrderEtaDate)}</span>}
+                              <button type="button" className="text-primary hover:underline" onClick={() => { setDepositFor(item); setDepositInput(""); }}>Take deposit</button>
+                            </p>
+                          ) : null}
                         </div>
                         <div className="flex items-center gap-0.5 shrink-0">
                           {isInvalidItem && (
                             <AlertTriangle className="w-3 h-3 text-destructive shrink-0 mr-0.5" />
                           )}
-                          <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber} onClick={() => updateQuantity(item.product.id, -1)}><Minus className="w-2.5 h-2.5" /></Button>
+                          <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber || !!item.preOrderDeposit} onClick={() => updateQuantity(item.product.id, -1)}><Minus className="w-2.5 h-2.5" /></Button>
                           <span className={cn("w-5 text-center text-xs font-medium", isInvalidItem && "text-destructive")}>{item.quantity}</span>
-                          <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber} onClick={() => updateQuantity(item.product.id, 1)}><Plus className="w-2.5 h-2.5" /></Button>
+                          <Button variant="outline" size="icon" className="h-6 w-6" disabled={!!item.giftCardNumber || !!item.preOrderDeposit} onClick={() => updateQuantity(item.product.id, 1)}><Plus className="w-2.5 h-2.5" /></Button>
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
                           <div className="w-14 text-right">
@@ -4190,6 +4312,12 @@ export default function POSPage() {
                     window.dispatchEvent(new CustomEvent("koapos:open-day-staff-login"));
                     return;
                   }
+                  // Checked before payment, so no card is charged for a sale the
+                  // server would refuse: a pre-order needs someone to notify.
+                  if (!selectedCustomer && cart.some((i) => i.preOrderDeposit || isPreOrderActive(i.product))) {
+                    toast.error("Pre-orders need a customer — add one to the sale so we can tell them when it arrives.");
+                    return;
+                  }
                   setPaymentModalOpen(true);
                 }}
               >
@@ -4201,6 +4329,31 @@ export default function POSPage() {
       </div>
 
       {/* ─── Payment modal ─── */}
+      <Dialog open={!!depositFor} onOpenChange={(o) => { if (!o) setDepositFor(null); }}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Pre-order deposit</DialogTitle>
+          </DialogHeader>
+          {depositFor && (
+            <div className="space-y-3 text-sm">
+              <p className="text-muted-foreground">
+                {depositFor.quantity} × {depositFor.product.name} — full price {formatCurrency(unitPriceFor(depositFor) * depositFor.quantity)}.
+                The balance is paid when the customer collects.
+              </p>
+              <div className="space-y-1.5">
+                <Label className="text-xs">Deposit amount</Label>
+                <Input type="number" inputMode="decimal" min="0" step="0.01" autoFocus value={depositInput}
+                  onChange={(e) => setDepositInput(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") applyDeposit(); }} placeholder="0.00" />
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setDepositFor(null)}>Cancel</Button>
+            <Button onClick={applyDeposit}>Take deposit</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <Dialog open={paymentModalOpen} onOpenChange={(o) => { if (!o) { tryClosePaymentModal(); } else { setPaymentModalOpen(true); } }}>
         <DialogContent className="max-w-[740px] p-0 overflow-hidden gap-0 [&>button.absolute]:hidden">
           <div className="flex flex-col sm:flex-row" style={{ minHeight: 520 }}>

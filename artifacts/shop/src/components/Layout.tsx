@@ -26,50 +26,60 @@ function Header() {
 
   return (
     <header className="sticky top-0 z-30 bg-white/95 backdrop-blur border-b border-stone-200" style={{ paddingTop: "env(safe-area-inset-top, 0px)" }}>
-      <div className="mx-auto max-w-7xl px-4 h-20 md:h-24 flex items-center gap-4">
-        <button className="md:hidden p-2 -ml-2" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
+      {/* Desktop: the logo runs the full height of both rows on the left; the
+          search/account row and the category menu sit beside it. Phones keep a
+          single row, with search and categories in the collapsible menu. */}
+      <div className="mx-auto max-w-7xl px-4 flex items-stretch gap-4 md:gap-6">
+        <button className="md:hidden p-2 -ml-2 self-center" aria-label="Menu" onClick={() => setOpen((o) => !o)}>
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
         {/* The logo alone carries the brand; the name is only its alt text, or
             shown as text when no logo is set. */}
-        <Link href="/" className="flex items-center shrink-0" aria-label={info?.businessName ?? "Home"}>
+        <Link href="/" className="flex items-center shrink-0 md:py-2" aria-label={info?.businessName ?? "Home"}>
           {info?.logoUrl
-            ? <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-14 md:h-20 w-auto max-w-[200px] md:max-w-[320px] object-contain" />
+            ? <img src={info.logoUrl} alt={info.businessName ?? ""} className="h-14 md:h-full w-auto max-w-[200px] md:max-w-[340px] object-contain object-left" />
             : <span className="font-bold text-lg tracking-tight">{info?.businessName ?? "Shop"}</span>}
         </Link>
-        <form onSubmit={submit} className="hidden md:flex flex-1 max-w-xl mx-auto">
-          <div className="relative w-full">
-            <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
-            <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products and services"
-              className="w-full h-10 rounded-full border border-stone-300 bg-stone-50 pl-9 pr-4 text-sm outline-none focus:border-brand focus:bg-white" />
-          </div>
-        </form>
-        <nav className="ml-auto flex items-center gap-1">
-          <Link href={customer ? "/account" : "/account/login"} className="flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm">
-            <User className="w-4 h-4" /><span className="hidden sm:inline">{customer ? customer.firstName || "Account" : "Sign in"}</span>
-          </Link>
-          {customer && (
-            <Link href="/wishlist" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Wishlist">
-              <Heart className="w-4 h-4" /><span className="hidden sm:inline">Wishlist</span>
-              {wishlist.count > 0 && (
-                <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center">{wishlist.count}</span>
+        <div className="flex-1 min-w-0 flex flex-col">
+          <div className="h-20 md:h-16 flex items-center gap-4">
+            <form onSubmit={submit} className="hidden md:flex flex-1 max-w-xl">
+              <div className="relative w-full">
+                <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-stone-400" />
+                <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search products and services"
+                  className="w-full h-10 rounded-full border border-stone-300 bg-stone-50 pl-9 pr-4 text-sm outline-none focus:border-brand focus:bg-white" />
+              </div>
+            </form>
+            <nav className="ml-auto flex items-center gap-1">
+              <Link href={customer ? "/account" : "/account/login"} className="flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm">
+                <User className="w-4 h-4" /><span className="hidden sm:inline">{customer ? customer.firstName || "Account" : "Sign in"}</span>
+              </Link>
+              {customer && (
+                <Link href="/wishlist" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Wishlist">
+                  <Heart className="w-4 h-4" /><span className="hidden sm:inline">Wishlist</span>
+                  {wishlist.count > 0 && (
+                    <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-rose-500 text-white text-[11px] font-bold flex items-center justify-center">{wishlist.count}</span>
+                  )}
+                </Link>
               )}
-            </Link>
-          )}
-          <Link href="/cart" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Cart">
-            <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
-            {count > 0 && (
-              <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center">{count}</span>
-            )}
-          </Link>
-        </nav>
+              <Link href="/cart" className="relative flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm" aria-label="Cart">
+                <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
+                {count > 0 && (
+                  <span className="absolute -top-0.5 right-0.5 min-w-5 h-5 px-1 rounded-full bg-brand-light text-ink text-[11px] font-bold flex items-center justify-center">{count}</span>
+                )}
+              </Link>
+            </nav>
+          </div>
+          <div className="hidden md:block">
+            <CategoryNav variant="desktop" cats={cats ?? []} onNavigate={() => setOpen(false)} />
+          </div>
+        </div>
       </div>
-      <div className={`${open ? "block max-h-[calc(100dvh-5rem)] overflow-y-auto" : "hidden"} md:block md:max-h-none md:overflow-visible border-t border-stone-100`}>
-        <form onSubmit={submit} className="md:hidden px-4 pt-3 pb-1">
+      <div className={`${open ? "block max-h-[calc(100dvh-5rem)] overflow-y-auto" : "hidden"} md:hidden border-t border-stone-100`}>
+        <form onSubmit={submit} className="px-4 pt-3 pb-1">
           <input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Search"
             className="w-full h-10 rounded-full border border-stone-300 px-4 text-sm outline-none focus:border-brand" />
         </form>
-        <CategoryNav cats={cats ?? []} onNavigate={() => setOpen(false)} />
+        <CategoryNav variant="mobile" cats={cats ?? []} onNavigate={() => setOpen(false)} />
       </div>
     </header>
   );

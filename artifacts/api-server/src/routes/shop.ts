@@ -9,7 +9,8 @@ import { soleMerchantId } from "../lib/sole-merchant";
 import { normalisePhoneFor } from "../lib/phone";
 import { hashToken, issueSetupLink } from "../lib/customerPasswordLinks";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
-import { shopVisible } from "../lib/shop-visibility";
+import { shopVisible, shopListable, shopHidesOutOfStock, inStockSql } from "../lib/shop-visibility";
+import { isPreOrderActive, localDate } from "../lib/pre-orders";
 import { hasPurchased, reviewerName, buyerCustomerIds, PURCHASE_SALE_STATUSES } from "../lib/shop-reviews";
 import { loyaltyEarnedFor, loyaltyProgramInfo, formatLoyalty, type LoyaltyConfig } from "../lib/loyalty";
 import { shopMediaUrl, serveShopMedia, describeVideo } from "../lib/shop-media";
@@ -143,7 +144,7 @@ router.get("/shop/categories", async (_req, res): Promise<void> => {
   if (merchantId == null) return;
   const counts = await db
     .select({ categoryId: productsTable.categoryId, n: sql<number>`count(*)::int` })
-    .from(productsTable).where(visible(merchantId)).groupBy(productsTable.categoryId);
+    .from(productsTable).where(shopListable(merchantId, await shopHidesOutOfStock(merchantId))).groupBy(productsTable.categoryId);
   const countBy = new Map(counts.map((c) => [c.categoryId, c.n]));
   const cats = await db.select().from(categoriesTable)
     .where(eq(categoriesTable.merchantId, merchantId))
@@ -178,7 +179,7 @@ router.get("/shop/products", async (req, res): Promise<void> => {
   if (!q.success) { res.status(400).json({ error: "Invalid query" }); return; }
   const { category, search, sort, inStock, page, pageSize } = q.data;
 
-  const conds: SQL[] = [visible(merchantId)];
+  const conds: SQL[] = [shopListable(merchantId, await shopHidesOutOfStock(merchantId))];
   if (category) {
     // Include every category below it, at any depth, so a parent lists
     // everything under it — the same set its productCount adds up.
@@ -195,7 +196,8 @@ router.get("/shop/products", async (req, res): Promise<void> => {
     const like = `%${search.replace(/[%_\\]/g, (c) => `\\${c}`)}%`;
     conds.push(or(ilike(productsTable.name, like), ilike(productsTable.sku, like), ilike(productsTable.description, like))!);
   }
-  if (inStock === "true") conds.push(sql`(${productTypesTable.trackStock} = false OR ${productsTable.trackInventory} <> 'true' OR ${productsTable.stockQuantity} > 0)`);
+  // Same rule as the "hide out-of-stock" option (lib/shop-visibility.ts): untracked, in stock, or on pre-order.
+  if (inStock === "true") conds.push(inStockSql());
 
   const order = sort === "price-asc" ? [asc(productsTable.price)]
     : sort === "price-desc" ? [desc(productsTable.price)]
@@ -212,6 +214,7 @@ router.get("/shop/products", async (req, res): Promise<void> => {
       trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity,
       isRefurbished: productsTable.isRefurbished, typeTracksStock: productTypesTable.trackStock,
       isService: productTypesTable.isService,
+      preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
     })
     .from(productsTable)
     .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
@@ -224,12 +227,23 @@ router.get("/shop/products", async (req, res): Promise<void> => {
 type SummaryRow = {
   id: number; name: string; price: string; imageUrl: string | null; categoryId: number | null; brandName: string | null;
   trackInventory: string; stockQuantity: number; isRefurbished: string; typeTracksStock: boolean | null; isService: boolean | null;
+  preOrder: string; preOrderReleaseDate: string | null; preOrderEtaDate: string | null;
 };
+
+/* A product on pre-order (lib/pre-orders.ts), as the shop shows it — or null.
+   The shop is the one business's, so "today" is its local (Sydney) date. */
+function preOrderOf(p: { preOrder: string; preOrderReleaseDate: string | null; preOrderEtaDate: string | null }) {
+  return isPreOrderActive(p, localDate("Australia/Sydney"))
+    ? { releaseDate: p.preOrderReleaseDate ?? null, etaDate: p.preOrderEtaDate ?? null }
+    : null;
+}
+
 function summaryOf(p: SummaryRow) {
   return {
     id: p.id, name: p.name, price: money(p.price) ?? 0, imageUrl: shopMediaUrl(p.imageUrl ?? null),
     categoryId: p.categoryId ?? null, brand: p.brandName ?? null,
     inStock: inStockOf(p), refurbished: bool(p.isRefurbished), isService: p.isService === true,
+    preOrder: preOrderOf(p),
   };
 }
 
@@ -256,7 +270,7 @@ router.get("/shop/recent-purchases", async (_req, res): Promise<void> => {
     .select({ id: productsTable.id, name: productsTable.name, imageUrl: productsTable.imageUrl, isService: productTypesTable.isService })
     .from(productsTable)
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
-    .where(and(visible(merchantId), inArray(productsTable.id, [...when.keys()])));
+    .where(and(shopListable(merchantId, await shopHidesOutOfStock(merchantId)), inArray(productsTable.id, [...when.keys()])));
   const items = rows
     .filter((p) => p.isService !== true)
     .map((p) => ({ id: p.id, name: p.name, imageUrl: shopMediaUrl(p.imageUrl ?? null), purchasedAt: when.get(p.id)!.toISOString() }))
@@ -294,6 +308,7 @@ router.get("/shop/products/:id", async (req, res): Promise<void> => {
     category: p.categoryName ? { id: pr.categoryId, name: p.categoryName } : null,
     brand: p.brandName ?? null,
     inStock: inStockOf({ ...pr, typeTracksStock: p.typeTracksStock }), refurbished: bool(pr.isRefurbished),
+    preOrder: preOrderOf(pr),
     isService: p.isService === true,
     warranty: pr.warrantyDuration > 0 ? { duration: pr.warrantyDuration, unit: pr.warrantyUnit } : null,
     technicalSpecs: pr.technicalSpecs ?? "",
@@ -338,11 +353,12 @@ router.get("/shop/products/:id/related", async (req, res): Promise<void> => {
       trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity,
       isRefurbished: productsTable.isRefurbished, typeTracksStock: productTypesTable.trackStock,
       isService: productTypesTable.isService,
+      preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
     })
     .from(productsTable)
     .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
-    .where(and(visible(merchantId), sql`${productsTable.id} <> ${id}`, or(...tiers)))
+    .where(and(shopListable(merchantId, await shopHidesOutOfStock(merchantId)), sql`${productsTable.id} <> ${id}`, or(...tiers)))
     .orderBy(rank, desc(productsTable.createdAt))
     .limit(12);
   res.json({ items: rows.map(summaryOf) });
@@ -596,6 +612,7 @@ router.get("/shop/wishlist", async (req, res): Promise<void> => {
       trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity,
       isRefurbished: productsTable.isRefurbished, typeTracksStock: productTypesTable.trackStock,
       isService: productTypesTable.isService,
+      preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
     })
     .from(productsTable)
     .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))

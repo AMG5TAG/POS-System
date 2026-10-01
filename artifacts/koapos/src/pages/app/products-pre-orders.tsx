@@ -1,5 +1,6 @@
-import { useState } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { useMemo, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useLocation } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListProductPreOrders,
@@ -20,17 +21,49 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
 import { formatCurrency, formatDate } from "@/lib/utils";
-import { Plus, Clock, Search, Pencil, Trash2, X } from "lucide-react";
+import { Plus, Clock, Search, Pencil, Trash2, X, ShoppingCart, PackageCheck, Truck, Ban, Package } from "lucide-react";
+import { formatPreOrderDate } from "@/lib/pre-order";
+import { cn } from "@/lib/utils";
 import { toast } from "sonner";
 
-type PreOrderStatus = "Pending" | "Confirmed" | "Ready" | "Collected" | "Cancelled";
+/* Statuses: a sale-made pre-order starts "Awaiting stock"; purchase-order
+   receiving moves it to "Arrived"; the till (or these buttons) close it as
+   "Collected" or "Shipped". Pending/Confirmed/Ready are the older manual ones. */
+type PreOrderStatus = "Awaiting stock" | "Arrived" | "Collected" | "Shipped" | "Cancelled" | "Pending" | "Confirmed" | "Ready";
+const EDITABLE_STATUSES: PreOrderStatus[] = ["Awaiting stock", "Arrived", "Collected", "Shipped", "Cancelled"];
 
-const STATUS_COLORS: Record<PreOrderStatus, string> = {
-  Pending: "secondary",
-  Confirmed: "outline",
-  Ready: "default",
-  Collected: "secondary",
-  Cancelled: "destructive",
+const STATUS_TONE: Record<string, string> = {
+  "Awaiting stock": "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  Pending: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  Confirmed: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  Arrived: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  Ready: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/40 dark:text-emerald-300",
+  Collected: "bg-muted text-muted-foreground",
+  Shipped: "bg-muted text-muted-foreground",
+  Cancelled: "bg-red-100 text-red-700 dark:bg-red-900/40 dark:text-red-300",
+};
+const AWAITING = new Set(["Awaiting stock", "Pending", "Confirmed"]);
+const ARRIVED = new Set(["Arrived", "Ready"]);
+const DONE = new Set(["Collected", "Shipped"]);
+const FILTERS = [
+  { key: "waiting", label: "Waiting for stock", match: (s: string) => AWAITING.has(s) },
+  { key: "arrived", label: "Arrived", match: (s: string) => ARRIVED.has(s) },
+  { key: "done", label: "Finished", match: (s: string) => DONE.has(s) },
+  { key: "cancelled", label: "Cancelled", match: (s: string) => s === "Cancelled" },
+  { key: "all", label: "All", match: () => true },
+] as const;
+
+/* The list API returns more than the generated type knows about. */
+type Extra = {
+  source?: string; receiptNumber?: string | null; collectedReceiptNumber?: string | null;
+  totalAmount?: number; balanceOwing?: number; allocatedQuantity?: number;
+  customerPhone?: string | null; arrivedAt?: string | null; notifiedAt?: string | null; collectedAt?: string | null;
+};
+
+type PreOrderProductRow = {
+  id: number; name: string; sku: string | null; price: number; stockQuantity: number | null;
+  preOrderReleaseDate: string | null; preOrderEtaDate: string | null; active: boolean;
+  openOrders: number; unitsWaiting: number; unitsAllocated: number; unitsOnOrder: number;
 };
 
 // A product line in the form. unitPrice is a snapshot of the product's sell
@@ -43,7 +76,7 @@ const emptyForm = () => ({
   depositAmount: "",
   expectedDate: "",
   notes: "",
-  status: "Pending" as PreOrderStatus,
+  status: "Awaiting stock" as PreOrderStatus,
 });
 
 export default function ProductsPreOrdersPage() {
@@ -56,10 +89,32 @@ export default function ProductsPreOrdersPage() {
   // Bumped after each add so the "add product" search input remounts and clears.
   const [addKey, setAddKey] = useState(0);
 
+  const [, navigate] = useLocation();
+  const [view, setView] = useState<"orders" | "products">("orders");
+  const [filter, setFilter] = useState<(typeof FILTERS)[number]["key"]>("waiting");
   const { data, isLoading } = useListProductPreOrders({ search: search || undefined });
-  const orders = data?.items ?? [];
+  const orders = (data?.items ?? []) as Array<NonNullable<typeof data>["items"][number] & Extra>;
+  const counts = useMemo(() => Object.fromEntries(FILTERS.map((f) => [f.key, orders.filter((o) => f.match(o.status)).length])), [orders]);
+  const shown = orders.filter((o) => FILTERS.find((f) => f.key === filter)!.match(o.status));
+  const { data: preOrderProducts, isLoading: productsLoading } = useQuery({
+    queryKey: ["pre-orders", "products"],
+    queryFn: async (): Promise<PreOrderProductRow[]> => {
+      const r = await fetch("/api/pre-orders/products", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load pre-order products");
+      return r.json();
+    },
+  });
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: getListProductPreOrdersQueryKey() });
+  const invalidate = () => {
+    void queryClient.invalidateQueries({ queryKey: getListProductPreOrdersQueryKey() });
+    void queryClient.invalidateQueries({ queryKey: ["pre-orders", "products"] });
+  };
+  const setStatus = (o: { id: number; poNumber: string }, status: PreOrderStatus) => {
+    updateMutation.mutate(
+      { id: o.id, data: { status } as never },
+      { onSuccess: () => toast.success(`${o.poNumber} marked ${status.toLowerCase()}`), onError: () => toast.error("Failed to update pre-order") },
+    );
+  };
 
   const createMutation = useCreateProductPreOrder({ mutation: { onSuccess: () => { invalidate(); } } });
   const updateMutation = useUpdateProductPreOrder({ mutation: { onSuccess: () => { invalidate(); } } });
@@ -173,72 +228,180 @@ export default function ProductsPreOrdersPage() {
             <Clock className="w-6 h-6 text-primary" />
             <div>
               <h1 className="text-2xl font-bold">Pre-Orders</h1>
-              <p className="text-sm text-muted-foreground">Manage customer pre-orders and deposits for upcoming stock arrivals.</p>
+              <p className="text-sm text-muted-foreground">Every pre-order sold at the till or taken by hand, and the products on pre-order. Received stock is set aside for them oldest first.</p>
             </div>
           </div>
           <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New Pre-Order</Button>
         </div>
 
-        <div className="relative">
-          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-          <Input placeholder="Search pre-orders..." className="pl-9" value={search} onChange={(e) => setSearch(e.target.value)} />
+        <div className="flex rounded-lg border overflow-hidden w-fit">
+          {([["orders", "Customer pre-orders"], ["products", "Pre-order products"]] as const).map(([k, label]) => (
+            <button key={k} onClick={() => setView(k)}
+              className={cn("px-4 py-2 text-sm font-medium transition-colors", view === k ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground")}>
+              {label}
+            </button>
+          ))}
         </div>
 
-        {isLoading ? (
-          <Card><CardContent className="flex items-center justify-center py-16">
-            <p className="text-muted-foreground text-sm">Loading pre-orders…</p>
-          </CardContent></Card>
-        ) : orders.length === 0 ? (
-          <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-4">
-            <Clock className="w-16 h-16 text-muted-foreground/30" />
-            <div><p className="font-medium text-lg">No pre-orders yet</p><p className="text-muted-foreground text-sm">Accept pre-orders for products not yet in stock.</p></div>
-            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New Pre-Order</Button>
-          </CardContent></Card>
+        {view === "products" ? (
+          <Card>
+            <CardContent className="p-0">
+              {productsLoading ? (
+                <p className="p-6 text-sm text-muted-foreground">Loading…</p>
+              ) : (preOrderProducts?.length ?? 0) === 0 ? (
+                <div className="p-10 text-center text-sm text-muted-foreground space-y-1">
+                  <Package className="w-10 h-10 mx-auto text-muted-foreground/30" />
+                  <p className="font-medium text-foreground">No pre-order products</p>
+                  <p>Turn on "Sell as a pre-order" in a product's Stock tab, with its release and ETA dates, and it appears here.</p>
+                </div>
+              ) : (
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted/50 border-b text-left">
+                      <tr>
+                        <th className="p-3 font-medium">Product</th>
+                        <th className="p-3 font-medium">Release</th>
+                        <th className="p-3 font-medium">ETA</th>
+                        <th className="p-3 font-medium text-right">Pre-orders</th>
+                        <th className="p-3 font-medium text-right">Units waiting</th>
+                        <th className="p-3 font-medium text-right">Set aside</th>
+                        <th className="p-3 font-medium text-right">On order</th>
+                        <th className="p-3 font-medium text-right">In stock</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y">
+                      {preOrderProducts!.map((p) => (
+                        <tr key={p.id} className="hover:bg-muted/20">
+                          <td className="p-3">
+                            <p className="font-medium">{p.name}</p>
+                            <p className="text-xs text-muted-foreground">{p.sku ?? ""} {formatCurrency(p.price)}</p>
+                          </td>
+                          <td className="p-3">
+                            {p.preOrderReleaseDate ? formatPreOrderDate(p.preOrderReleaseDate) : <span className="text-muted-foreground">—</span>}
+                            {!p.active && <span className="ml-1.5 text-[11px] rounded bg-muted px-1.5 py-0.5 text-muted-foreground">Released</span>}
+                          </td>
+                          <td className="p-3">{p.preOrderEtaDate ? formatPreOrderDate(p.preOrderEtaDate) : <span className="text-muted-foreground">—</span>}</td>
+                          <td className="p-3 text-right tabular-nums">{p.openOrders}</td>
+                          <td className="p-3 text-right tabular-nums font-medium">{p.unitsWaiting}</td>
+                          <td className="p-3 text-right tabular-nums">{p.unitsAllocated}</td>
+                          <td className={cn("p-3 text-right tabular-nums", p.unitsOnOrder < p.unitsWaiting - p.unitsAllocated && "text-amber-600 font-medium")}>{p.unitsOnOrder}</td>
+                          <td className="p-3 text-right tabular-nums">{p.stockQuantity ?? "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  <p className="p-3 text-xs text-muted-foreground border-t">"On order" is shown in amber when purchase orders don't yet cover the units customers are waiting for.</p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
         ) : (
-          <div className="rounded-lg border overflow-hidden">
-            <table className="w-full text-sm">
-              <thead className="bg-muted/50 border-b">
-                <tr>
-                  <th className="text-left p-3 font-medium">Reference</th>
-                  <th className="text-left p-3 font-medium">Customer</th>
-                  <th className="text-left p-3 font-medium hidden sm:table-cell">Products</th>
-                  <th className="text-right p-3 font-medium hidden md:table-cell">Qty</th>
-                  <th className="text-right p-3 font-medium hidden lg:table-cell">Deposit</th>
-                  <th className="text-left p-3 font-medium">Status</th>
-                  <th className="text-left p-3 font-medium hidden lg:table-cell">Date</th>
-                  <th className="p-3 w-20" />
-                </tr>
-              </thead>
-              <tbody className="divide-y">
-                {orders.map((o) => {
-                  const orderItems = o.items ?? [];
-                  const count = orderItems.length;
-                  const firstName = orderItems[0]?.productName ?? o.productName;
-                  const productLabel = count > 1 ? `${firstName} +${count - 1} more` : firstName;
-                  const totalQty = orderItems.length > 0 ? orderItems.reduce((s, it) => s + it.quantity, 0) : o.quantity;
-                  return (
-                    <tr key={o.id} className="bg-background hover:bg-muted/20">
-                      <td className="p-3 font-mono font-medium text-xs">{o.poNumber}</td>
-                      <td className="p-3 font-medium">{o.customerName}</td>
-                      <td className="p-3 hidden sm:table-cell text-muted-foreground" title={orderItems.map((it) => `${it.quantity}× ${it.productName}`).join(", ")}>{productLabel}</td>
-                      <td className="p-3 text-right hidden md:table-cell">{totalQty}</td>
-                      <td className="p-3 text-right hidden lg:table-cell">{formatCurrency(o.depositAmount)}</td>
-                      <td className="p-3">
-                        <Badge variant={STATUS_COLORS[o.status as PreOrderStatus] as "default" | "secondary" | "outline" | "destructive"}>{o.status}</Badge>
-                      </td>
-                      <td className="p-3 hidden lg:table-cell text-muted-foreground text-xs">{formatDate(o.createdAt)}</td>
-                      <td className="p-3">
-                        <div className="flex justify-end gap-1">
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => openEdit(o)}><Pencil className="w-3.5 h-3.5" /></Button>
-                          <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" onClick={() => handleDelete(o.id, o.poNumber)}><Trash2 className="w-3.5 h-3.5" /></Button>
-                        </div>
-                      </td>
+          <>
+            <div className="flex flex-wrap items-center gap-3">
+              <div className="flex rounded-lg border overflow-hidden">
+                {FILTERS.map((f) => (
+                  <button key={f.key} onClick={() => setFilter(f.key)}
+                    className={cn("px-3 py-1.5 text-xs font-medium transition-colors", filter === f.key ? "bg-primary text-primary-foreground" : "bg-background text-muted-foreground hover:text-foreground")}>
+                    {f.label} <span className="opacity-70 tabular-nums">({counts[f.key] ?? 0})</span>
+                  </button>
+                ))}
+              </div>
+              <div className="relative flex-1 min-w-[14rem]">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input placeholder="Search pre-order number, customer or product…" className="pl-9 h-9" value={search} onChange={(e) => setSearch(e.target.value)} noPhoneFormat />
+              </div>
+            </div>
+
+            {isLoading ? (
+              <Card><CardContent className="flex items-center justify-center py-16">
+                <p className="text-muted-foreground text-sm">Loading pre-orders…</p>
+              </CardContent></Card>
+            ) : shown.length === 0 ? (
+              <Card><CardContent className="flex flex-col items-center justify-center py-16 text-center gap-3">
+                <Clock className="w-14 h-14 text-muted-foreground/30" />
+                <p className="font-medium">{orders.length === 0 ? "No pre-orders yet" : "Nothing here"}</p>
+                <p className="text-muted-foreground text-sm max-w-md">Selling a pre-order product at the till adds it here automatically, with the customer and sale.</p>
+              </CardContent></Card>
+            ) : (
+              <div className="rounded-lg border overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead className="bg-muted/50 border-b text-left">
+                    <tr>
+                      <th className="p-3 font-medium">Pre-order</th>
+                      <th className="p-3 font-medium">Customer</th>
+                      <th className="p-3 font-medium">Product</th>
+                      <th className="p-3 font-medium">Sale</th>
+                      <th className="p-3 font-medium">ETA</th>
+                      <th className="p-3 font-medium text-right">Paid / owing</th>
+                      <th className="p-3 font-medium">Status</th>
+                      <th className="p-3" />
                     </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+                  </thead>
+                  <tbody className="divide-y">
+                    {shown.map((o) => {
+                      const orderItems = o.items ?? [];
+                      const qty = orderItems.length > 0 ? orderItems.reduce((s, it) => s + it.quantity, 0) : o.quantity;
+                      const label = orderItems.length > 1 ? `${orderItems[0].productName} +${orderItems.length - 1} more` : (orderItems[0]?.productName ?? o.productName);
+                      const owing = o.balanceOwing ?? 0;
+                      const open = AWAITING.has(o.status) || ARRIVED.has(o.status);
+                      return (
+                        <tr key={o.id} className="bg-background hover:bg-muted/20 align-top">
+                          <td className="p-3">
+                            <p className="font-mono font-medium text-xs">{o.poNumber}</p>
+                            <p className="text-[11px] text-muted-foreground">{o.source === "pos" ? "Till" : o.source === "online" ? "Online" : "Manual"} · {formatDate(o.createdAt)}</p>
+                          </td>
+                          <td className="p-3">
+                            <p className="font-medium">{o.customerName}</p>
+                            {o.customerPhone && <p className="text-xs text-muted-foreground">{o.customerPhone}</p>}
+                          </td>
+                          <td className="p-3" title={orderItems.map((it) => `${it.quantity}× ${it.productName}`).join(", ")}>
+                            <p>{qty} × {label}</p>
+                            {open && (o.allocatedQuantity ?? 0) > 0 && <p className="text-xs text-emerald-600">{o.allocatedQuantity} of {qty} set aside</p>}
+                          </td>
+                          <td className="p-3 text-xs">
+                            {o.receiptNumber ? <span className="font-mono">{o.receiptNumber}</span> : <span className="text-muted-foreground">—</span>}
+                            {o.collectedReceiptNumber && <p className="text-muted-foreground">Collected: <span className="font-mono">{o.collectedReceiptNumber}</span></p>}
+                          </td>
+                          <td className="p-3 text-xs">{o.expectedDate ? formatPreOrderDate(o.expectedDate) || o.expectedDate : "—"}</td>
+                          <td className="p-3 text-right tabular-nums">
+                            <p>{formatCurrency(o.depositAmount)}</p>
+                            <p className={cn("text-xs", owing > 0 ? "text-amber-600 font-medium" : "text-muted-foreground")}>{owing > 0 ? `${formatCurrency(owing)} owing` : "Paid"}</p>
+                          </td>
+                          <td className="p-3">
+                            <span className={cn("text-xs rounded-full px-2 py-0.5 font-medium whitespace-nowrap", STATUS_TONE[o.status] ?? "bg-muted")}>{o.status}</span>
+                            {o.notifiedAt && <p className="text-[11px] text-muted-foreground mt-1">Customer told {formatDate(o.notifiedAt)}</p>}
+                          </td>
+                          <td className="p-3">
+                            <div className="flex justify-end gap-1 flex-wrap">
+                              {open && owing > 0 && (
+                                <Button size="sm" className="h-7 text-xs gap-1" onClick={() => navigate(`/pos/sell?collectPreOrder=${o.id}`)}>
+                                  <ShoppingCart className="w-3.5 h-3.5" /> Collect at till
+                                </Button>
+                              )}
+                              {open && owing <= 0 && (
+                                <>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setStatus(o, "Collected")}><PackageCheck className="w-3.5 h-3.5" /> Collected</Button>
+                                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" onClick={() => setStatus(o, "Shipped")}><Truck className="w-3.5 h-3.5" /> Shipped</Button>
+                                </>
+                              )}
+                              {open && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-muted-foreground" title="Cancel pre-order" onClick={() => setStatus(o, "Cancelled")}><Ban className="w-3.5 h-3.5" /></Button>
+                              )}
+                              <Button variant="ghost" size="icon" className="h-7 w-7" title="Edit" onClick={() => openEdit(o)}><Pencil className="w-3.5 h-3.5" /></Button>
+                              {/* Only hand-typed pre-orders can be deleted: one made by a sale is that sale's record. */}
+                              {(o.source ?? "manual") === "manual" && (
+                                <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive" title="Delete" onClick={() => handleDelete(o.id, o.poNumber)}><Trash2 className="w-3.5 h-3.5" /></Button>
+                              )}
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </>
         )}
       </div>
 
@@ -328,11 +491,11 @@ export default function ProductsPreOrdersPage() {
                 <Label>Status</Label>
                 <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as PreOrderStatus })}>
                   <SelectTrigger><SelectValue /></SelectTrigger>
-                  <SelectContent>{["Pending", "Confirmed", "Ready", "Collected", "Cancelled"].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
+                  <SelectContent>{[...new Set([...EDITABLE_STATUSES, form.status])].map((s) => <SelectItem key={s} value={s}>{s}</SelectItem>)}</SelectContent>
                 </Select>
               </div>
               <div className="space-y-1.5">
-                <Label>Expected Date</Label>
+                <Label>ETA</Label>
                 <Input type="date" value={form.expectedDate} onChange={(e) => setForm({ ...form, expectedDate: e.target.value })} />
               </div>
             </div>
