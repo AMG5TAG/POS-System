@@ -1,5 +1,5 @@
 import { useEffect, useState, type CSSProperties, type FormEvent, type MouseEvent, type ReactNode } from "react";
-import { ChevronDown, ChevronLeft, ChevronRight, Heart, Mail, Menu, Phone, Search, ShoppingCart, Star, User, X } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Heart, Menu, Phone, Search, ShoppingCart, Star, User, X } from "lucide-react";
 
 /*
  * The Koastal Kollective menu, shared by the website (artifacts/website) and
@@ -13,9 +13,13 @@ import { ChevronDown, ChevronLeft, ChevronRight, Heart, Mail, Menu, Phone, Searc
 
 export type NavChild = { label: string; href: string; disabled?: boolean; featured?: boolean };
 /* `shop` marks the item whose drop-down is the online shop's category menu. */
-export type NavItem = { label: string; href: string; children?: NavChild[]; color?: string; shop?: boolean };
+export type NavItem = { label: string; href: string; children?: NavChild[]; color?: string; textColor?: string; shop?: boolean };
 
 export const BRAND = "#007b7d";
+/* Koastal's light teal (Mermaid Splash 317). White on it is too faint to
+   read, so its label is the dark teal. */
+export const LIGHT_TEAL = "#7bb8bd";
+const SHOP_TEXT = "#00393a";
 /* The website's typeface, so the menu is the same width and look in both apps
    (each loads it from Google Fonts in its index.html). */
 const FONT = "'Atkinson Hyperlegible', Arial, Helvetica, sans-serif";
@@ -24,7 +28,6 @@ const ACTIVE = "#004f51";
 
 export const SITE_NAV: NavItem[] = [
   { label: "HOME", href: "/" },
-  { label: "SHOP", href: "/shop/", shop: true },
   {
     label: "COMPUTERS",
     href: "#it-services",
@@ -92,6 +95,10 @@ export const SITE_NAV: NavItem[] = [
       { label: "Service Areas", href: "#service-areas" },
     ],
   },
+  // The online shop, in the light teal so it stands apart from the services.
+  { label: "SHOP", href: "/shop/", shop: true, color: LIGHT_TEAL, textColor: SHOP_TEXT },
+  // The shop's mail-in repair service (/shop/mail-in), last on purpose.
+  { label: "MAIL-IN REPAIRS", href: "/shop/mail-in" },
 ];
 
 /* ─── The shop's category menu (SHOP's drop-down) ───────────────────────── */
@@ -220,17 +227,14 @@ function CategoryList({ nodes, colour, onShopNavigate, close }: { nodes: Node[];
   );
 }
 
-/* SHOP's drop-down: all products, the category tree, and mail-in repairs. */
+/* SHOP's drop-down: all products and the category tree. (Mail-in repairs is
+   its own item at the end of the menu.) */
 function ShopMenu({ categories, onShopNavigate, close }: { categories: ShopCategory[]; onShopNavigate: ShopNav; close: () => void }) {
   const roots = tree(categories);
   return (
     <>
       <ShopMenuItem href="/shop/products" colour={BRAND} featured onClick={shopClick("/shop/products", onShopNavigate, close)}>All products</ShopMenuItem>
       <CategoryList nodes={roots} onShopNavigate={onShopNavigate} close={close} />
-      <div className="my-1 border-t border-gray-100" />
-      <ShopMenuItem href="/shop/mail-in" colour={BRAND} onClick={shopClick("/shop/mail-in", onShopNavigate, close)}>
-        <span className="flex items-center gap-2 font-semibold"><Mail className="w-4 h-4" /> Mail-In Repairs</span>
-      </ShopMenuItem>
     </>
   );
 }
@@ -264,7 +268,6 @@ function ShopMobileMenu({ categories, onShopNavigate, onNavigate }: { categories
           ))}
         </div>
       ))}
-      {link("/shop/mail-in", "flex items-center gap-2 py-2.5 font-semibold text-[#007b7d]", <><Mail className="w-4 h-4" /> Mail-In Repairs</>)}
     </div>
   );
 }
@@ -272,6 +275,11 @@ function ShopMobileMenu({ categories, onShopNavigate, onNavigate }: { categories
 /* "#contact"-style links name a section of the website's current page. Off the
    website (the shop) they must point at the website's home page instead:
    pass hashBase="/" there. A bare "#" is a placeholder and stays as it is. */
+/* HOME is the home page of whichever app you are in: the shop passes
+   homeHref="/shop/", the website keeps "/". (The header's logo always goes
+   to the website's home page.) */
+const hrefOf = (item: NavItem, homeHref: string) => (item.label === "HOME" ? homeHref : item.href);
+
 function resolve(href: string, hashBase: string) {
   return href.startsWith("#") && href.length > 1 ? `${hashBase}${href}` : href;
 }
@@ -280,27 +288,41 @@ function resolve(href: string, hashBase: string) {
    shop's category menu. `active` names the tab for the section being viewed
    (the shop passes "SHOP"); `onShopNavigate` lets the shop route its own
    links without a page load. */
-export function SiteNavBar({ active, hashBase = "", onShopNavigate }: { active?: string; hashBase?: string; onShopNavigate?: (path: string) => void }) {
+export function SiteNavBar({ active, hashBase = "", homeHref = "/", onShopNavigate }: { active?: string; hashBase?: string; homeHref?: string; onShopNavigate?: (path: string) => void }) {
   const [openDropdown, setOpenDropdown] = useState<string | null>(null);
+  // A drop-down near the window's right edge opens right-aligned to its tab.
+  const [alignRight, setAlignRight] = useState(false);
   const categories = useShopCategories();
   const close = () => setOpenDropdown(null);
   return (
-    <nav className="h-11 flex items-stretch gap-[1px]" style={{ fontFamily: FONT }} aria-label="Main">
+    // Wraps rather than overflowing when a wider face (the website's
+    // dyslexia font, large text) no longer fits one row; each tab keeps h-11.
+    <nav className="flex flex-wrap items-stretch gap-x-[1px] gap-y-1" style={{ fontFamily: FONT }} aria-label="Main">
       {SITE_NAV.map((item) => {
         const isActive = item.label === active;
         return (
           <div
             key={item.label}
-            className="relative flex"
-            onMouseEnter={() => (item.children || item.shop) && setOpenDropdown(item.label)}
+            className="relative flex h-11"
+            onMouseEnter={(e) => {
+              if (!item.children && !item.shop) return;
+              setAlignRight(e.currentTarget.getBoundingClientRect().left + 320 > window.innerWidth);
+              setOpenDropdown(item.label);
+            }}
             onMouseLeave={() => setOpenDropdown(null)}
           >
             <a
-              href={resolve(item.href, hashBase)}
-              onClick={item.shop ? shopClick(item.href, onShopNavigate, close) : undefined}
+              href={resolve(hrefOf(item, homeHref), hashBase)}
+              onClick={hrefOf(item, homeHref).startsWith("/shop/") ? shopClick(hrefOf(item, homeHref), onShopNavigate, close) : undefined}
               aria-current={isActive ? "page" : undefined}
-              className={`relative flex items-center justify-center gap-1 px-3 xl:px-5 text-xs font-bold text-white whitespace-nowrap tracking-wide ${isActive ? "" : "hover:brightness-110"}`}
-              style={{ transform: "skewX(-20deg)", backgroundColor: isActive ? ACTIVE : item.color ?? BRAND }}
+              className={`relative flex items-center justify-center gap-1 px-2 xl:px-5 text-xs font-bold whitespace-nowrap tracking-normal xl:tracking-wide ${isActive ? "" : "hover:brightness-110"}`}
+              style={{
+                transform: "skewX(-20deg)",
+                // The section being viewed: brand-teal tabs go dark; a tab with
+                // its own colour (SHOP's light teal) keeps it exactly.
+                backgroundColor: isActive && !item.color ? ACTIVE : item.color ?? BRAND,
+                color: item.textColor ?? "#ffffff",
+              }}
             >
               <span className="flex items-center gap-1" style={{ transform: "skewX(20deg)" }}>
                 {item.label}
@@ -315,7 +337,7 @@ export function SiteNavBar({ active, hashBase = "", onShopNavigate }: { active?:
             {item.shop && (
               /* No overflow here: it would clip the category flyouts. */
               <div
-                className={`absolute top-full left-0 bg-white border border-gray-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] py-1 z-50 transition-opacity duration-100 ${
+                className={`absolute top-full ${alignRight && openDropdown === item.label ? "right-0" : "left-0"} bg-white border border-gray-200 shadow-lg rounded-sm min-w-[220px] max-w-[320px] py-1 z-50 transition-opacity duration-100 ${
                   openDropdown === item.label ? "visible opacity-100" : "invisible opacity-0 pointer-events-none"
                 }`}
                 aria-hidden={openDropdown !== item.label}
@@ -325,7 +347,7 @@ export function SiteNavBar({ active, hashBase = "", onShopNavigate }: { active?:
             )}
             {item.children && (
               <div
-                className={`absolute top-full left-0 bg-white border border-gray-200 shadow-lg rounded-sm min-w-[200px] py-1 z-50 transition-opacity duration-100 ${
+                className={`absolute top-full ${alignRight && openDropdown === item.label ? "right-0" : "left-0"} bg-white border border-gray-200 shadow-lg rounded-sm min-w-[200px] py-1 z-50 transition-opacity duration-100 ${
                   openDropdown === item.label ? "visible opacity-100" : "invisible opacity-0 pointer-events-none"
                 }`}
                 aria-hidden={openDropdown !== item.label}
@@ -351,8 +373,9 @@ export function SiteNavBar({ active, hashBase = "", onShopNavigate }: { active?:
 
 /* The same menu as a vertical list, for a phone's menu panel. SHOP opens into
    the shop's categories. */
-export function SiteNavMobile({ hashBase = "", onNavigate, onShopNavigate, initiallyOpen = null }: {
+export function SiteNavMobile({ hashBase = "", homeHref = "/", onNavigate, onShopNavigate, initiallyOpen = null }: {
   hashBase?: string;
+  homeHref?: string;
   onNavigate: () => void;
   onShopNavigate?: (path: string) => void;
   initiallyOpen?: string | null;
@@ -391,7 +414,7 @@ export function SiteNavMobile({ hashBase = "", onNavigate, onShopNavigate, initi
                 )}
               </>
             ) : (
-              <a href={resolve(item.href, hashBase)} className={`block ${rowClass}`} onClick={onNavigate}>
+              <a href={resolve(hrefOf(item, homeHref), hashBase)} className={`block ${rowClass}`} onClick={shopClick(hrefOf(item, homeHref), onShopNavigate, onNavigate)}>
                 {item.label}
               </a>
             )}
@@ -512,13 +535,14 @@ const SITE_LOGO = "/images/logo.png";
    on narrower screens. `extras` is for controls only one app can honour (the
    website's dark mode and accessibility toggles). */
 export function SiteHeader({
-  logoSrc = SITE_LOGO, logoFallback, logoAlt, logoHref = "/", active, hashBase = "", onShopNavigate, session, extras, className = "",
+  logoSrc = SITE_LOGO, logoFallback, logoAlt, active, hashBase = "", homeHref = "/", onShopNavigate, session, extras, className = "",
 }: {
   logoSrc?: string;
   /** Shown if logoSrc fails to load (the shop's dev preview has no /images). */
   logoFallback?: string | null;
   logoAlt: string;
-  logoHref?: string;
+  /** Where the menu's HOME goes: this app's home page. */
+  homeHref?: string;
   active?: string;
   hashBase?: string;
   onShopNavigate?: (path: string) => void;
@@ -559,7 +583,8 @@ export function SiteHeader({
         <button className="lg:hidden p-2 -ml-2" aria-label="Menu" aria-expanded={open} onClick={() => setOpen((o) => !o)}>
           {open ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
         </button>
-        <a href={logoHref} className="flex items-center shrink-0" aria-label={logoAlt}>
+        {/* The logo is always the website's home page, from either app. */}
+        <a href="/" className="flex items-center shrink-0" aria-label={logoAlt}>
           <img src={logoSrc} alt={logoAlt} className="h-10 md:h-14 w-auto max-w-[160px] object-contain object-left"
             onError={(e) => { if (logoFallback && e.currentTarget.src !== logoFallback) e.currentTarget.src = logoFallback; }} />
         </a>
@@ -568,7 +593,6 @@ export function SiteHeader({
           <a href={`tel:${PHONE.tel}`} className="hidden xl:flex items-center gap-1.5 text-[#007b7d] font-bold text-sm hover:text-[#005f61] mr-1">
             <Phone className="h-4 w-4" />{PHONE.display}
           </a>
-          {extras && <div className="hidden md:flex items-center">{extras}</div>}
           <a href={s.signedIn ? "/shop/account" : "/shop/account/login"} onClick={shopClick(s.signedIn ? "/shop/account" : "/shop/account/login", onShopNavigate)} className={pill}>
             <User className="w-4 h-4" /><span className="hidden sm:inline">{s.signedIn ? s.firstName || "Account" : "Sign in"}</span>
           </a>
@@ -582,16 +606,18 @@ export function SiteHeader({
             <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
             {s.cartCount > 0 && <span className={`${badge} bg-[#7bb8bd] text-gray-900`}>{s.cartCount}</span>}
           </a>
+          {/* App-only controls (the website's theme and accessibility), last. */}
+          {extras && <div className="hidden md:flex items-center">{extras}</div>}
         </nav>
       </div>
       <div className="hidden lg:flex max-w-7xl mx-auto px-4 pb-2">
-        <SiteNavBar active={active} hashBase={hashBase} onShopNavigate={onShopNavigate} />
+        <SiteNavBar active={active} hashBase={hashBase} homeHref={homeHref} onShopNavigate={onShopNavigate} />
       </div>
       {open && (
         <div className="lg:hidden max-h-[calc(100dvh-4rem)] overflow-y-auto border-t border-gray-100 dark:border-[#1c2e2e]">
           {searchBox("md:hidden px-4 pt-3 pb-1 flex")}
           <div className="px-4 py-3">
-            <SiteNavMobile hashBase={hashBase} onNavigate={() => setOpen(false)} onShopNavigate={onShopNavigate}
+            <SiteNavMobile hashBase={hashBase} homeHref={homeHref} onNavigate={() => setOpen(false)} onShopNavigate={onShopNavigate}
               initiallyOpen={active === "SHOP" ? "SHOP" : null} />
           </div>
         </div>

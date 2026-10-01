@@ -436,10 +436,11 @@ token-for-token against the live one), so its own conventions hold:
 
 - **One header for both apps.** `lib/site-nav` (`@workspace/site-nav`) holds
   the whole header — `SiteHeader`: logo, shop search, phone, the shop's Sign
-  in/Wishlist/Cart, and the menu (HOME, SHOP, … CONTACT) on its own row — and
+  in/Wishlist/Cart, and the menu (HOME … CONTACT, then SHOP in the light teal
+  and MAIL-IN REPAIRS last) on its own row — and
   both the website's `Navbar` and the shop's `Layout` render it. SHOP's
-  drop-down is the shop's category menu (all products, the category tree with
-  flyouts to any depth, mail-in), fetched from `/api/shop/categories`; on
+  drop-down is the shop's category menu (all products and the category tree,
+  flyouts to any depth), fetched from `/api/shop/categories`; on
   phones SHOP opens into the same list. Change the header there, never in one
   app. The shop passes its live session/cart/wishlist and `onShopNavigate`
   (client-side routing); the website reads `/api/shop/auth/me` and the shop's
@@ -449,8 +450,31 @@ token-for-token against the live one), so its own conventions hold:
   is source-only (no build), so each app's `index.css` has an `@source` line
   for Tailwind; both load Atkinson Hyperlegible, the header's typeface. Its
   `#section` links mean the website's current page; the shop passes
-  `hashBase="/"`. The website's dark-mode and accessibility toggles go in via
-  `extras`, and on phones the website keeps its own bottom bar.
+  `hashBase="/"`. HOME is the current app's home page (the shop passes
+  `homeHref="/shop/"`); the logo is always the website's `/`. The website's
+  dark-mode and accessibility toggles go in via `extras`, last on the row, and
+  on phones the website keeps its own bottom bar. The menu wraps to a second
+  row rather than overflow, which a wider face (Large Text, the dyslexia
+  font) needs.
+- **Accessibility menu** (website): Large Text, High Contrast, Dyslexia-Friendly
+  Font and Reduce Motion, each a class on `<html>` saved in localStorage
+  (`kk-accessibility`, merged over defaults so older saves gain new keys). The
+  dyslexia font is OpenDyslexic (`@fontsource/opendyslexic`, OFL-1.1),
+  self-hosted, applied with `!important` because the shared header sets its
+  typeface inline.
+- **Link previews are Share.png.** `Share.png` at the root of the
+  object-storage bucket is served publicly by `GET /api/share-image.png`
+  (`routes/share-image.ts`, read per request, 1h cache — replace the file and
+  previews follow; `SHARE_IMAGE_OBJECT` names another object). Every website
+  page's og:image/twitter:image is that URL (`index.html`, `useSeo`'s default),
+  and so is the shop's (`artifacts/shop/index.html`, between `<!--share-->`
+  markers). The one exception is a shop product page: crawlers never run the
+  SPA, so `server.mjs` rewrites that block for `/shop/product/:id`
+  (`artifacts/koapos/share-meta.mjs`) to lead with the product's main photo
+  and keep Share.png second. It looks the product up through the API —
+  `API_INTERNAL_ORIGIN` (default `http://127.0.0.1:8080`), then the public
+  domain — with a 1.5s timeout and a 5-minute cache, and falls back to the
+  default block. Pinned by `share-meta.test.ts` (koapos).
 - **Pre-rendered.** `postbuild` runs `scripts/prerender.mjs` (jsdom, ~275
   routes, about a minute) and then `write-redirects.mjs` (legacy `/koasoft/*`
   and `/kollective/*` stubs, from `scripts/redirects.mjs`). Each route is

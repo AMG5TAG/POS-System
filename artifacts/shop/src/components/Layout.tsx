@@ -25,6 +25,7 @@ function Header() {
       logoAlt={info?.businessName ?? "Koastal Kollective"}
       active="SHOP"
       hashBase="/"
+      homeHref="/shop/"
       onShopNavigate={navigate}
       session={{ signedIn: !!customer, firstName: customer?.firstName || null, cartCount: count, wishlistCount: customer ? wishlist.count : 0 }}
     />

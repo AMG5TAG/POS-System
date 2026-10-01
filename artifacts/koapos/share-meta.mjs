@@ -75,8 +75,8 @@ export function withProductShare(html, product, opts) {
   const end = html.indexOf("<!--/share-->");
   if (start < 0 || end < start) return html;
   const { title, block } = productShareBlock(product, opts);
-  return html.slice(0, start) + `<!--share-->\n${block}\n    ` + html.slice(end)
-    .replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
+  const page = html.slice(0, start) + `<!--share-->\n${block}\n    ` + html.slice(end);
+  return page.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
 }
 
 /* /product/<id> below the shop's /shop base, else null. */

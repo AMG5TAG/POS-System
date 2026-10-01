@@ -254,6 +254,14 @@
     text-decoration: underline;
   }
 
+  /* Dyslexia-friendly font (Accessibility menu). !important because the
+     shared header (@workspace/site-nav) sets its typeface inline. SVG icons
+     are unaffected; they draw no text. */
+  .dyslexic-font,
+  .dyslexic-font * {
+    font-family: "OpenDyslexic", "Comic Sans MS", sans-serif !important;
+  }
+
   /* Reduce motion */
   .reduce-motion *,
   .reduce-motion *::before,

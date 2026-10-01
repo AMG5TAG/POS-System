@@ -17,15 +17,12 @@ export default function Navbar() {
     ? "Koastal Kollective Web & App Development"
     : "Koastal Kollective Central Coast Computer Repairs";
 
-  const logoHref = location.startsWith("/media") ? "/media" : "/";
-
   return (
     <>
       {/* ─── Top Navigation Bar (hidden on mobile by .top-nav) ─── */}
       <SiteHeader
         className="top-nav"
         logoAlt={logoAlt}
-        logoHref={logoHref}
         extras={<><ThemeToggle /><AccessibilityMenu /></>}
       />
 

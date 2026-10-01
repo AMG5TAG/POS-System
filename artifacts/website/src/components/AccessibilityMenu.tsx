@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Accessibility, Check, Type, Contrast, EyeOff } from "lucide-react";
+import { Accessibility, Check, Type, Contrast, EyeOff, BookOpen } from "lucide-react";
 
 const STORAGE_KEY = "kk-accessibility";
 
@@ -7,14 +7,19 @@ interface AccessibilityState {
   largeFont: boolean;
   highContrast: boolean;
   reduceMotion: boolean;
+  dyslexicFont: boolean;
 }
+
+const DEFAULTS: AccessibilityState = { largeFont: false, highContrast: false, reduceMotion: false, dyslexicFont: false };
 
 function getInitialState(): AccessibilityState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (raw) return JSON.parse(raw);
+    // Merged over the defaults: a choice saved before an option existed
+    // has no key for it.
+    if (raw) return { ...DEFAULTS, ...JSON.parse(raw) };
   } catch { /* noop */ }
-  return { largeFont: false, highContrast: false, reduceMotion: false };
+  return DEFAULTS;
 }
 
 export default function AccessibilityMenu() {
@@ -28,6 +33,7 @@ export default function AccessibilityMenu() {
     root.classList.toggle("text-lg", state.largeFont);
     root.classList.toggle("high-contrast", state.highContrast);
     root.classList.toggle("reduce-motion", state.reduceMotion);
+    root.classList.toggle("dyslexic-font", state.dyslexicFont);
   }, [state]);
 
   useEffect(() => {
@@ -58,6 +64,12 @@ export default function AccessibilityMenu() {
       label: "High Contrast",
       Icon: Contrast,
       desc: "Stronger text and border contrast",
+    },
+    {
+      key: "dyslexicFont",
+      label: "Dyslexia-Friendly Font",
+      Icon: BookOpen,
+      desc: "Switch to OpenDyslexic, a typeface designed for dyslexic readers",
     },
     {
       key: "reduceMotion",

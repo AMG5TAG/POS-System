@@ -16,9 +16,10 @@
  * start fast on an autoscale cold start.
  */
 import { createServer } from "node:http";
-import { createReadStream, statSync } from "node:fs";
+import { createReadStream, readFileSync, statSync } from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { productIdFromPath, withProductShare } from "./share-meta.mjs";
 
 const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT) || 19141;
@@ -100,6 +101,47 @@ function serveSite(req, res, root, urlPath, { prerendered = false } = {}) {
   }
 }
 
+/* A product page's link preview needs the product (share-meta.mjs). The API
+   is another process in this deployment: try it directly, then through the
+   public domain. Answers are cached briefly so a page load costs at most one
+   lookup, and anything slow or failing just leaves the default preview. */
+const apiOrigins = [process.env.API_INTERNAL_ORIGIN?.trim() || "http://127.0.0.1:8080", `https://${siteHost}`];
+const productCache = new Map(); // id -> { at, product | null }
+const PRODUCT_TTL_MS = 5 * 60_000;
+
+async function shopProduct(id) {
+  const hit = productCache.get(id);
+  if (hit && Date.now() - hit.at < PRODUCT_TTL_MS) return hit.product;
+  let product = null;
+  for (const origin of apiOrigins) {
+    try {
+      const r = await fetch(`${origin}/api/shop/products/${id}`, { signal: AbortSignal.timeout(1500) });
+      if (r.ok) { product = await r.json(); break; }
+      if (r.status === 404) break; // not listed: no point asking again
+    } catch { /* unreachable or slow: try the next origin */ }
+  }
+  if (productCache.size > 500) productCache.clear();
+  productCache.set(id, { at: Date.now(), product });
+  return product;
+}
+
+async function serveShopProduct(req, res, id, shopPath) {
+  const index = path.join(sites.shop, "index.html");
+  let html = readFileSync(index, "utf8");
+  const product = await shopProduct(id);
+  if (product?.name) {
+    html = withProductShare(html, product, { origin: `https://${siteHost}`, pageUrl: `https://${siteHost}${SHOP_PREFIX}${shopPath}` });
+  }
+  const body = Buffer.from(html);
+  res.writeHead(200, {
+    "Content-Type": "text/html; charset=utf-8",
+    "Content-Length": body.length,
+    "Cache-Control": "no-cache",
+    "X-Content-Type-Options": "nosniff",
+  });
+  res.end(req.method === "HEAD" ? undefined : body);
+}
+
 createServer((req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
@@ -115,7 +157,16 @@ createServer((req, res) => {
       if (url.pathname === SHOP_PREFIX) {
         redirect(res, `${SHOP_PREFIX}/${url.search}`);
       } else if (url.pathname.startsWith(`${SHOP_PREFIX}/`)) {
-        serveSite(req, res, sites.shop, url.pathname.slice(SHOP_PREFIX.length));
+        const shopPath = url.pathname.slice(SHOP_PREFIX.length);
+        const productId = productIdFromPath(shopPath);
+        if (productId) {
+          serveShopProduct(req, res, productId, shopPath).catch((err) => {
+            console.error(err);
+            if (!res.headersSent) serveSite(req, res, sites.shop, shopPath);
+          });
+        } else {
+          serveSite(req, res, sites.shop, shopPath);
+        }
       } else {
         serveSite(req, res, sites.website, url.pathname, { prerendered: true });
       }
