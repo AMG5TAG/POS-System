@@ -1521,6 +1521,7 @@ export const ListCustomerFilesResponseItem = zod.object({
   "contentType": zod.string(),
   "sizeBytes": zod.number(),
   "url": zod.string(),
+  "visibleToCustomer": zod.boolean().describe('The customer can see and download this file from their shop account. Otherwise staff only.'),
   "createdAt": zod.coerce.date()
 })
 export const ListCustomerFilesResponse = zod.array(ListCustomerFilesResponseItem)
@@ -1537,7 +1538,34 @@ export const CreateCustomerFileBody = zod.object({
   "filename": zod.string(),
   "fileKey": zod.string(),
   "contentType": zod.string(),
-  "sizeBytes": zod.number()
+  "sizeBytes": zod.number(),
+  "visibleToCustomer": zod.boolean().optional().describe('Defaults to false (staff only).')
+})
+
+
+/**
+ * @summary Choose whether the customer can see a file in their shop account
+ */
+export const UpdateCustomerFileParams = zod.object({
+  "id": zod.coerce.number(),
+  "fileId": zod.coerce.number()
+})
+
+export const UpdateCustomerFileBody = zod.object({
+  "visibleToCustomer": zod.boolean()
+})
+
+export const UpdateCustomerFileResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number(),
+  "filename": zod.string(),
+  "fileKey": zod.string(),
+  "contentType": zod.string(),
+  "sizeBytes": zod.number(),
+  "url": zod.string(),
+  "visibleToCustomer": zod.boolean().describe('The customer can see and download this file from their shop account. Otherwise staff only.'),
+  "createdAt": zod.coerce.date()
 })
 
 

@@ -31,7 +31,7 @@ import {
   DeleteCustomerNoteParams,
   ListCustomerFilesParams,
   CreateCustomerFileParams,
-  DeleteCustomerFileParams,
+  DeleteCustomerFileParams, UpdateCustomerFileParams, UpdateCustomerFileBody,
   MergeCustomerProfilesParams,
 } from "@workspace/api-zod";
 import { ObjectStorageService } from "../lib/objectStorage";
@@ -746,6 +746,19 @@ function fileUrl(fileKey: string): string {
   return `/api/storage/objects/${fileKey.replace(/^\/objects\//, "")}`;
 }
 
+/* `visibleToCustomer`: the customer can see and download it from their shop
+   account (routes/shop-account.ts, GET /shop/account/files). Staff only unless
+   chosen — the default for every file uploaded before the option existed. */
+function fileJson(f: typeof customerFilesTable.$inferSelect) {
+  return {
+    id: f.id, merchantId: f.merchantId, customerId: f.customerId,
+    filename: f.filename, fileKey: f.fileKey, contentType: f.contentType,
+    sizeBytes: f.sizeBytes, url: fileUrl(f.fileKey),
+    visibleToCustomer: f.visibleToCustomer === "true",
+    createdAt: f.createdAt.toISOString(),
+  };
+}
+
 router.get("/customers/:id/files", requireAuth, async (req, res): Promise<void> => {
   const paramsResult = ListCustomerFilesParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
@@ -754,12 +767,7 @@ router.get("/customers/:id/files", requireAuth, async (req, res): Promise<void> 
   const files = await db.select().from(customerFilesTable)
     .where(and(eq(customerFilesTable.merchantId, merchantId), eq(customerFilesTable.customerId, customerId)))
     .orderBy(desc(customerFilesTable.createdAt));
-  res.json(files.map((f) => ({
-    id: f.id, merchantId: f.merchantId, customerId: f.customerId,
-    filename: f.filename, fileKey: f.fileKey, contentType: f.contentType,
-    sizeBytes: f.sizeBytes, url: fileUrl(f.fileKey),
-    createdAt: f.createdAt.toISOString(),
-  })));
+  res.json(files.map(fileJson));
 });
 
 router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void> => {
@@ -767,10 +775,15 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const customerId = paramsResult.data.id;
   const merchantId = req.session.merchantId!;
-  const { filename, fileKey, contentType, sizeBytes } = req.body as { filename?: string; fileKey?: string; contentType?: string; sizeBytes?: number };
+  const { filename, fileKey, contentType, sizeBytes, visibleToCustomer } = req.body as { filename?: string; fileKey?: string; contentType?: string; sizeBytes?: number; visibleToCustomer?: boolean };
   if (!filename || !fileKey || !contentType) { res.status(400).json({ error: "filename, fileKey, and contentType are required" }); return; }
+  // The customer must be this merchant's: a file shown in a shop account has
+  // to belong to that account's business.
+  const [owner] = await db.select({ id: customersTable.id }).from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId))).limit(1);
+  if (!owner) { res.status(404).json({ error: "Customer not found" }); return; }
   const [record] = await db.insert(customerFilesTable)
-    .values({ merchantId, customerId, filename, fileKey, contentType, sizeBytes: sizeBytes ?? 0 })
+    .values({ merchantId, customerId, filename, fileKey, contentType, sizeBytes: sizeBytes ?? 0, visibleToCustomer: visibleToCustomer === true ? "true" : "false" })
     .returning();
 
   // If the merchant opted into "Save all customer files to the cloud" (Sync →
@@ -786,12 +799,26 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
   }
 
   res.status(201).json({
-    id: record.id, merchantId: record.merchantId, customerId: record.customerId,
-    filename: record.filename, fileKey: record.fileKey, contentType: record.contentType,
-    sizeBytes: record.sizeBytes, url: fileUrl(record.fileKey),
-    createdAt: record.createdAt.toISOString(),
+    ...fileJson(record),
     cloudSync: cloud.enabled ? { provider: cloud.storageKey, folder: cloud.folder } : null,
   });
+});
+
+router.patch("/customers/:id/files/:fileId", requireAuth, async (req, res): Promise<void> => {
+  const params = UpdateCustomerFileParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const body = UpdateCustomerFileBody.safeParse(req.body);
+  if (!body.success) { res.status(400).json({ error: "Expected { visibleToCustomer: boolean }" }); return; }
+  const [row] = await db.update(customerFilesTable)
+    .set({ visibleToCustomer: body.data.visibleToCustomer ? "true" : "false" })
+    .where(and(
+      eq(customerFilesTable.id, params.data.fileId),
+      eq(customerFilesTable.customerId, params.data.id),
+      eq(customerFilesTable.merchantId, req.session.merchantId!),
+    ))
+    .returning();
+  if (!row) { res.status(404).json({ error: "File not found" }); return; }
+  res.json(fileJson(row));
 });
 
 router.delete("/customers/:id/files/:fileId", requireAuth, async (req, res): Promise<void> => {

@@ -2891,6 +2891,8 @@ export interface CustomerFile {
   contentType: string;
   sizeBytes: number;
   url: string;
+  /** The customer can see and download this file from their shop account. Otherwise staff only. */
+  visibleToCustomer: boolean;
   createdAt: string;
 }
 
@@ -2899,6 +2901,12 @@ export interface CustomerFileInput {
   fileKey: string;
   contentType: string;
   sizeBytes: number;
+  /** Defaults to false (staff only). */
+  visibleToCustomer?: boolean;
+}
+
+export interface CustomerFileUpdate {
+  visibleToCustomer: boolean;
 }
 
 export interface UploadUrlRequest {

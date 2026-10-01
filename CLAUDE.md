@@ -705,6 +705,20 @@ white. Its dark palette inverts the `--color-stone-*`/`--color-gray-*` scales an
 overrides white *surfaces* only (`--color-white` stays white for text on teal
 buttons); product photos keep a white ground via `.kk-photo`.
 
+### Customer files in the shop account
+
+`customer_files.visible_to_customer` (`scripts/src/add-customer-file-visibility.ts`,
+default `'false'`, so every file uploaded before the option stays staff only).
+POS › Customers › Files asks "Staff only / Customer can see" on upload, and
+each file toggles with `PATCH /customers/:id/files/:fileId`. The shop account's
+"Your files" (`GET /shop/account/files`, `routes/shop-account.ts`) lists only
+visible files on the shopper's own records (`buyerCustomerIds`) and serves them
+itself — uploads otherwise need a staff session — at `/shop/account/files/:id`,
+never exposing the storage key. Only images, PDF and plain text open in the
+browser (`lib/customer-files-shop.ts`); everything else, HTML and SVG included,
+is always a download, so an uploaded page can't run as koastal.com.au. Pinned
+by `shop-files.test.ts` and `shop-portal.test.ts`.
+
 ### Shop account Orders
 
 `GET /shop/account/orders` (`lib/shop-orders.ts`, `shop-orders.test.ts`): an

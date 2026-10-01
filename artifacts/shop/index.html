@@ -21,9 +21,12 @@
     <meta name="twitter:image" content="https://koastal.com.au/api/share-image.png" />
     <!--/share-->
     <meta name="theme-color" content="#007b7d" />
-    <!-- The business logo from Settings › Business Details, served by the API. -->
-    <link rel="icon" href="/api/shop/favicon" />
-    <link rel="apple-touch-icon" href="/api/shop/favicon" />
+    <!-- The website's own icons (artifacts/website/public/images), named from the
+         site root: the shop is served under /shop on the same domain, so one
+         copy serves both and they can't drift apart. -->
+    <link rel="icon" type="image/png" sizes="180x180" href="/images/favicon.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/images/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png" />
     <!-- The site-wide menu (@workspace/site-nav) is set in the website's typeface. -->
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />

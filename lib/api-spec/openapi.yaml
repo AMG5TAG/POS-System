@@ -1047,6 +1047,34 @@ paths:
                 $ref: "#/components/schemas/CustomerFile"
 
   /customers/{id}/files/{fileId}:
+    patch:
+      operationId: updateCustomerFile
+      tags: [customers]
+      summary: Choose whether the customer can see a file in their shop account
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+        - name: fileId
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CustomerFileUpdate"
+      responses:
+        "200":
+          description: Updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CustomerFile"
     delete:
       operationId: deleteCustomerFile
       tags: [customers]
@@ -12868,7 +12896,7 @@ components:
 
     CustomerFile:
       type: object
-      required: [id, merchantId, customerId, filename, fileKey, contentType, sizeBytes, url, createdAt]
+      required: [id, merchantId, customerId, filename, fileKey, contentType, sizeBytes, url, visibleToCustomer, createdAt]
       properties:
         id:
           type: integer
@@ -12886,6 +12914,9 @@ components:
           type: integer
         url:
           type: string
+        visibleToCustomer:
+          type: boolean
+          description: The customer can see and download this file from their shop account. Otherwise staff only.
         createdAt:
           type: string
           format: date-time
@@ -12902,6 +12933,16 @@ components:
           type: string
         sizeBytes:
           type: integer
+        visibleToCustomer:
+          type: boolean
+          description: Defaults to false (staff only).
+
+    CustomerFileUpdate:
+      type: object
+      required: [visibleToCustomer]
+      properties:
+        visibleToCustomer:
+          type: boolean
 
     # ── Object storage schemas ────────────────────────────────────────────────
 

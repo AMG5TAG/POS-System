@@ -103,12 +103,15 @@ export default function ManagementOnlineStoreChannelsPage() {
   };
 
   const skippedTotal = data ? Object.values(data.skipped).reduce((a, b) => a + b, 0) : 0;
+  /* Why listed products are not sent, one line each: what the reason means and
+     what (if anything) to do about it. Order: things the merchant can fix first. */
+  const plural = (n: number, one: string, many: string) => `${n.toLocaleString("en-AU")} ${n === 1 ? one : many}`;
   const skippedLines = data ? ([
-    ["noImage", "have no photo uploaded"],
-    ["noPrice", "have a $0 price"],
-    ["service", "are services (channels don't allow them)"],
-    ["giftCard", "are gift cards or ePay"],
-  ] as const).filter(([k]) => data.skipped[k] > 0).map(([k, label]) => `${data.skipped[k]} ${label}`) : [];
+    ["noImage", (n: number) => plural(n, "product has no photo", "products have no photo"), "Add a photo in Products and it will be included."],
+    ["noPrice", (n: number) => plural(n, "product has a $0 price", "products have a $0 price"), "Set a price and it will be included."],
+    ["service", (n: number) => plural(n, "product is a service", "products are services"), "Shopping channels only list physical products, so repairs and other services stay on your shop only."],
+    ["giftCard", (n: number) => plural(n, "product is an ePay product", "products are ePay products"), "Prepaid cards, recharges and gift cards (the ePay flag on the product). Kept out because shopping channels restrict third-party prepaid and gift cards."],
+  ] as const).filter(([k]) => data.skipped[k] > 0).map(([k, what, why]) => ({ key: k, what: what(data.skipped[k]), why })) : [];
 
   return (
     <AppLayout>
@@ -167,9 +170,16 @@ export default function ManagementOnlineStoreChannelsPage() {
                     <div className="rounded-lg border p-3"><p className="text-2xl font-bold">{skippedTotal}</p><p className="text-xs text-muted-foreground">Listed products left out</p></div>
                   </div>
                   {skippedLines.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
-                      Left out because they {skippedLines.join("; ")}. Channels reject these, and rejected items count against the whole account.
-                    </p>
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-medium">Listed on your shop but not sent to channels:</p>
+                      <ul className="space-y-1.5">
+                        {skippedLines.map((l) => (
+                          <li key={l.key} className="text-xs text-muted-foreground">
+                            <span className="font-medium text-foreground">{l.what}.</span> {l.why}
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
                   )}
                   <p className="text-xs text-muted-foreground">
                     Variants are sent as separate items. A barcode is sent as the GTIN when it's a valid EAN/UPC — products with one are approved faster.

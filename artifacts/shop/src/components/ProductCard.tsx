@@ -28,9 +28,9 @@ export function ProductCard({ p }: { p: ProductSummary }) {
         <ProductImage src={p.imageUrl} alt="" className="group-hover:scale-105 transition" />
       </Link>
       <button type="button" onClick={() => setQuick(true)} aria-label={`Quick view: ${p.name}`}
-        className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white/95 border border-stone-200 shadow-sm text-sm font-medium text-stone-800 hover:bg-brand hover:text-white hover:border-brand transition
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1 h-8 px-3 rounded-full whitespace-nowrap bg-white/95 border border-stone-200 shadow-sm text-xs font-medium text-stone-800 hover:bg-brand hover:text-white hover:border-brand transition
           [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100">
-        <Eye className="w-4 h-4" /> Quick view
+        <Eye className="w-3.5 h-3.5 shrink-0" /> Quick view
       </button>
     </div>
     <Link href={`/product/${p.id}`} className="flex flex-col flex-1">

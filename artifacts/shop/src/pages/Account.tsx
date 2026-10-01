@@ -11,6 +11,7 @@ import { AppointmentsCard } from "@/components/account/AppointmentsCard";
 import { LoyaltyPass } from "@/components/account/LoyaltyPass";
 import { ReferralsCard } from "@/components/account/ReferralsCard";
 import { OrdersCard } from "@/components/account/OrdersCard";
+import { FilesCard } from "@/components/account/FilesCard";
 
 export default function Account() {
   const { customer, loading, setCustomer, logout } = useAuth();
@@ -45,6 +46,7 @@ export default function Account() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
+        <FilesCard />
         <ReferralsCard />
         {overview && (
           <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />

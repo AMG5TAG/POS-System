@@ -19,6 +19,7 @@ import {
   useListCustomerFiles,
   useCreateCustomerFile,
   useDeleteCustomerFile,
+  useUpdateCustomerFile,
   useGetLoyaltySettings,
   useSendTransactionReceipt,
   useSendServiceJobEmail,
@@ -57,7 +58,7 @@ import {
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
   Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown, Filter,
-  Printer, Send,
+  Printer, Send, Eye, EyeOff,
 } from "lucide-react";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
@@ -1204,6 +1205,10 @@ function CustomerDetailInner({
   const deleteNoteMutation = useDeleteCustomerNote();
   const createFileMutation = useCreateCustomerFile();
   const deleteFileMutation = useDeleteCustomerFile();
+  const updateFileMutation = useUpdateCustomerFile();
+  // Who a new upload is for: staff only unless chosen (the shop account's
+  // "Your files" shows only files marked for the customer).
+  const [shareNextFile, setShareNextFile] = useState(false);
   const loyaltyUpdateMutation = useUpdateCustomer();
 
   const programType     = loyaltySettings?.programType ?? "cashback";
@@ -1288,6 +1293,16 @@ function CustomerDetailInner({
     });
   };
 
+  const setFileVisibility = (fileId: number, visibleToCustomer: boolean) => {
+    updateFileMutation.mutate(
+      { id: customer.id, fileId, data: { visibleToCustomer } },
+      {
+        onSuccess: () => { invalidateFiles(); toast.success(visibleToCustomer ? "The customer can now see this file in their account" : "File is now staff only"); },
+        onError: () => toast.error("Couldn't change who can see the file"),
+      },
+    );
+  };
+
   const handleDeleteFile = (fileId: number) => {
     deleteFileMutation.mutate({ id: customer.id, fileId }, {
       onSuccess: () => { toast.success("File removed"); invalidateFiles(); },
@@ -1303,7 +1318,7 @@ function CustomerDetailInner({
       const { objectPath } = await uploadFile(file);
       await new Promise<void>((resolve, reject) => {
         createFileMutation.mutate(
-          { id: customer.id, data: { filename: file.name, fileKey: objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size } },
+          { id: customer.id, data: { filename: file.name, fileKey: objectPath, contentType: file.type || "application/octet-stream", sizeBytes: file.size, visibleToCustomer: shareNextFile } },
           { onSuccess: () => resolve(), onError: reject }
         );
       });
@@ -1313,7 +1328,7 @@ function CustomerDetailInner({
       if (cloud.enabled && cloud.storageKey && cloud.folder.trim()) {
         toast.success(`File uploaded · syncing to cloud (${cloud.folder.trim()})`);
       } else {
-        toast.success("File uploaded");
+        toast.success(shareNextFile ? "File uploaded · the customer can see it in their account" : "File uploaded · staff only");
       }
       invalidateFiles();
     } catch {
@@ -1885,6 +1900,22 @@ function CustomerDetailInner({
           <div className="rounded-xl border border-dashed bg-muted/20 p-4 text-center space-y-2">
             <Upload className="w-6 h-6 text-muted-foreground mx-auto" />
             <p className="text-sm text-muted-foreground">Upload documents, IDs, or images</p>
+            <div className="flex flex-col items-center gap-1.5">
+              <p className="text-xs font-medium">Who can see it?</p>
+              <div role="radiogroup" aria-label="Who can see the uploaded file" className="inline-flex rounded-full border bg-background p-0.5 text-xs">
+                <button type="button" role="radio" aria-checked={!shareNextFile} onClick={() => setShareNextFile(false)}
+                  className={`inline-flex items-center gap-1 h-7 px-3 rounded-full ${!shareNextFile ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  <EyeOff className="w-3.5 h-3.5" /> Staff only
+                </button>
+                <button type="button" role="radio" aria-checked={shareNextFile} onClick={() => setShareNextFile(true)}
+                  className={`inline-flex items-center gap-1 h-7 px-3 rounded-full ${shareNextFile ? "bg-primary text-primary-foreground" : "text-muted-foreground hover:text-foreground"}`}>
+                  <Eye className="w-3.5 h-3.5" /> Customer can see
+                </button>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {shareNextFile ? "Shown in the customer's online account, where they can view and download it." : "Only staff and technicians can see it."}
+              </p>
+            </div>
             <Button
               variant="outline" size="sm" className="gap-1.5"
               onClick={() => fileInputRef.current?.click()}
@@ -1924,8 +1955,22 @@ function CustomerDetailInner({
                     >
                       {f.filename}
                     </a>
-                    <p className="text-xs text-muted-foreground">{formatBytes(f.sizeBytes)} · {new Date(f.createdAt).toLocaleDateString("en-AU")}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatBytes(f.sizeBytes)} · {new Date(f.createdAt).toLocaleDateString("en-AU")} ·{" "}
+                      {f.visibleToCustomer
+                        ? <span className="text-emerald-600 dark:text-emerald-400 font-medium">Customer can see</span>
+                        : <span>Staff only</span>}
+                    </p>
                   </div>
+                  <Button
+                    variant="ghost" size="icon" className="w-7 h-7 shrink-0 text-muted-foreground hover:text-foreground"
+                    title={f.visibleToCustomer ? "Make staff only" : "Let the customer see it"}
+                    aria-label={f.visibleToCustomer ? `Make ${f.filename} staff only` : `Let the customer see ${f.filename}`}
+                    onClick={() => setFileVisibility(f.id, !f.visibleToCustomer)}
+                    disabled={updateFileMutation.isPending}
+                  >
+                    {f.visibleToCustomer ? <Eye className="w-3.5 h-3.5 text-emerald-600" /> : <EyeOff className="w-3.5 h-3.5" />}
+                  </Button>
                   <Button
                     variant="ghost" size="icon" className="w-7 h-7 shrink-0 text-muted-foreground hover:text-destructive"
                     onClick={() => handleDeleteFile(f.id)}

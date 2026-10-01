@@ -67,6 +67,7 @@
     "add-shop-settings-table": "tsx ./src/add-shop-settings-table.ts",
     "add-shop-product-feed": "tsx ./src/add-shop-product-feed.ts",
     "add-shop-events-table": "tsx ./src/add-shop-events-table.ts",
+    "add-customer-file-visibility": "tsx ./src/add-customer-file-visibility.ts",
     "add-pre-order-sales": "tsx ./src/add-pre-order-sales.ts",
     "add-referral-rewards": "tsx ./src/add-referral-rewards.ts"
   },

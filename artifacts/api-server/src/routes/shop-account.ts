@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db, customersTable, appointmentsTable, quotesTable, merchantsTable, referralRewardsTable, transactionsTable, deliveryOrdersTable } from "@workspace/db";
+import { db, customersTable, appointmentsTable, quotesTable, merchantsTable, referralRewardsTable, transactionsTable, deliveryOrdersTable, customerFilesTable } from "@workspace/db";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
@@ -14,6 +14,8 @@ import { ensureReferralCode, findReferrer, referralSettingsFor, refereeProgress,
 import { formatLoyalty } from "../lib/loyalty";
 import { shopOrigin } from "../lib/publicUrl";
 import { issueSetupLink } from "../lib/customerPasswordLinks";
+import { canOpenInline, contentDisposition } from "../lib/customer-files-shop";
+import { ObjectStorageService, ObjectNotFoundError } from "../lib/objectStorage";
 import { IN_STORE_STATUSES, isOnlineOrderSale, saleLines, onlineOrderLines, paymentLabel, orderStatusLabel, tracking } from "../lib/shop-orders";
 
 
@@ -162,6 +164,59 @@ router.get("/shop/account/orders", async (req, res): Promise<void> => {
       lines: onlineOrderLines(o.items),
     })),
   });
+});
+
+/* ── Your files ─────────────────────────────────────────────────────────────── */
+
+/* Files staff attached to the customer's record and marked "customer can see"
+   (POS › Customers › Files). Only those, only on the shopper's own records
+   (buyerCustomerIds), and served through here — uploads otherwise need a staff
+   session. Rules: lib/customer-files-shop.ts. */
+const storage = new ObjectStorageService();
+
+async function visibleFiles(c: { id: number; merchantId: number; email: string | null }) {
+  const ids = await buyerCustomerIds(c.merchantId, c);
+  return db.select().from(customerFilesTable)
+    .where(and(
+      eq(customerFilesTable.merchantId, c.merchantId),
+      inArray(customerFilesTable.customerId, ids),
+      eq(customerFilesTable.visibleToCustomer, "true"),
+    ))
+    .orderBy(desc(customerFilesTable.createdAt));
+}
+
+router.get("/shop/account/files", async (req, res): Promise<void> => {
+  const c = await signedIn(req, res);
+  if (!c) return;
+  const files = await visibleFiles(c);
+  res.json(files.map((f) => ({
+    id: f.id, filename: f.filename, contentType: f.contentType, sizeBytes: f.sizeBytes,
+    createdAt: f.createdAt.toISOString(),
+    canOpen: canOpenInline(f.contentType),
+    url: `/api/shop/account/files/${f.id}`,
+  })));
+});
+
+router.get("/shop/account/files/:id", async (req, res): Promise<void> => {
+  const c = await signedIn(req, res);
+  if (!c) return;
+  const id = Number(req.params.id);
+  const file = Number.isInteger(id) && id > 0 ? (await visibleFiles(c)).find((f) => f.id === id) : undefined;
+  if (!file) { res.status(404).json({ error: "File not found" }); return; }
+  const inline = req.query.download !== "1" && canOpenInline(file.contentType);
+  try {
+    const obj = await storage.getObjectEntityFile(file.fileKey);
+    const [meta] = await obj.getMetadata();
+    res.setHeader("Content-Type", inline ? file.contentType : "application/octet-stream");
+    res.setHeader("Content-Disposition", contentDisposition(file.filename, inline));
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Cache-Control", "private, no-store");
+    if (meta.size) res.setHeader("Content-Length", String(meta.size));
+    obj.createReadStream().on("error", () => res.destroy()).pipe(res);
+  } catch (e) {
+    if (e instanceof ObjectNotFoundError) { res.status(404).json({ error: "File not found" }); return; }
+    throw e;
+  }
 });
 
 /* ── Appointments ────────────────────────────────────────────────────────── */

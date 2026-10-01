@@ -77,6 +77,7 @@ import type {
   Customer,
   CustomerFile,
   CustomerFileInput,
+  CustomerFileUpdate,
   CustomerFilesCloudSettings,
   CustomerFilesCloudSettingsInput,
   CustomerHistory,
@@ -3994,6 +3995,80 @@ export const useCreateCustomerFile = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getCreateCustomerFileMutationOptions(options));
+    }
+
+export const getUpdateCustomerFileUrl = (id: number,
+    fileId: number,) => {
+
+
+
+
+  return `/api/customers/${id}/files/${fileId}`
+}
+
+/**
+ * @summary Choose whether the customer can see a file in their shop account
+ */
+export const updateCustomerFile = async (id: number,
+    fileId: number,
+    customerFileUpdate: CustomerFileUpdate, options?: RequestInit): Promise<CustomerFile> => {
+
+  return customFetch<CustomerFile>(getUpdateCustomerFileUrl(id,fileId),
+  {
+    ...options,
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      customerFileUpdate,)
+  }
+);}
+
+
+
+
+export const getUpdateCustomerFileMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomerFile>>, TError,{id: number;fileId: number;data: BodyType<CustomerFileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof updateCustomerFile>>, TError,{id: number;fileId: number;data: BodyType<CustomerFileUpdate>}, TContext> => {
+
+const mutationKey = ['updateCustomerFile'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof updateCustomerFile>>, {id: number;fileId: number;data: BodyType<CustomerFileUpdate>}> = (props) => {
+          const {id,fileId,data} = props ?? {};
+
+          return  updateCustomerFile(id,fileId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type UpdateCustomerFileMutationResult = NonNullable<Awaited<ReturnType<typeof updateCustomerFile>>>
+    export type UpdateCustomerFileMutationBody = BodyType<CustomerFileUpdate>
+    export type UpdateCustomerFileMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Choose whether the customer can see a file in their shop account
+ */
+export const useUpdateCustomerFile = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof updateCustomerFile>>, TError,{id: number;fileId: number;data: BodyType<CustomerFileUpdate>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof updateCustomerFile>>,
+        TError,
+        {id: number;fileId: number;data: BodyType<CustomerFileUpdate>},
+        TContext
+      > => {
+      return useMutation(getUpdateCustomerFileMutationOptions(options));
     }
 
 export const getDeleteCustomerFileUrl = (id: number,

@@ -172,6 +172,31 @@ describe("orders", () => {
   });
 });
 
+describe("your files", () => {
+  const file = { id: 31, merchantId: 1, customerId: 9, filename: "Warranty.pdf", fileKey: "/objects/merchants/1/uploads/w", contentType: "application/pdf", sizeBytes: 2048, visibleToCustomer: "true", createdAt: new Date("2026-09-01") };
+
+  it("lists the files shared with the customer, with no storage key", async () => {
+    h.session = { portalCustomerId: 9 };
+    h.rows = [[customer], [{ id: 9 }], [file]];
+    const res = await request(app).get("/api/shop/account/files");
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual([{ id: 31, filename: "Warranty.pdf", contentType: "application/pdf", sizeBytes: 2048, createdAt: "2026-09-01T00:00:00.000Z", canOpen: true, url: "/api/shop/account/files/31" }]);
+    expect(JSON.stringify(res.body)).not.toContain("objects/");
+  });
+
+  it("won't serve a file that isn't one of the customer's shared files", async () => {
+    h.session = { portalCustomerId: 9 };
+    h.rows = [[customer], [{ id: 9 }], [file]];
+    const res = await request(app).get("/api/shop/account/files/99");
+    expect(res.status).toBe(404);
+  });
+
+  it("needs a signed-in shopper", async () => {
+    expect((await request(app).get("/api/shop/account/files")).status).toBe(401);
+    expect((await request(app).get("/api/shop/account/files/31")).status).toBe(401);
+  });
+});
+
 describe("quotes", () => {
   // Query order: the shopper, their sibling records (buyerCustomerIds), the quote.
   const signedIn = (q: unknown[]) => { h.session = { portalCustomerId: 9 }; h.rows = [[customer], [{ id: 9 }], q]; };

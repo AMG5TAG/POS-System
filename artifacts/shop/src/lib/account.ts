@@ -65,3 +65,15 @@ export function useOrders() {
     enabled: !!customer,
   });
 }
+
+export interface SharedFile {
+  id: number; filename: string; contentType: string; sizeBytes: number; createdAt: string;
+  /** Images, PDFs and text open in the browser; everything else downloads. */
+  canOpen: boolean;
+  url: string;
+}
+
+export function useFiles() {
+  const { customer } = useAuth();
+  return useQuery({ queryKey: ["shop-files", customer?.id], queryFn: () => api<SharedFile[]>("/shop/account/files"), enabled: !!customer });
+}
