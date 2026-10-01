@@ -469,8 +469,10 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   its own package — it shares no UI code with the POS, only the API. It is
   served under **`/shop`** on koastal.com.au (`SITE_DOMAIN`), beneath the
   Koastal Kollective website, by `artifacts/koapos/server.mjs` — see
-  "Deployment" for why that server exists. The shop artifact has no production
-  service of its own. Its Vite base is `/shop/` for both build and dev, and
+  "Deployment" for why that server exists. Replit routes `/shop` to the shop
+  artifact (its `paths`), not to koapos, so the shop artifact's production
+  service runs that same `server.mjs` on its own port — without one, every
+  `/shop` request was a bare 500 from Replit's router. Its Vite base is `/shop/` for both build and dev, and
   does not come from `BASE_PATH`, which the workspace sets to `/` globally.
   The catalogue is `/products`. Anything that builds a path from
   `window.location` must use the router's path instead, or it carries the base

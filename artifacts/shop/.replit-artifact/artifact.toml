@@ -17,8 +17,21 @@ localPort = 19161
 [services.development]
 run = "pnpm --filter @workspace/shop run dev"
 
-# No production service: in production the shop is served at the root of the
-# shop domain by artifacts/koapos/server.mjs. /shop is the development preview.
+# Replit routes by path, so in production every /shop request on every domain
+# comes HERE, not to the koapos artifact — and with no production service it was
+# a bare 500. It runs the same host-aware server as koapos (server.mjs), which
+# serves the shop under /shop on koastal.com.au. This is the only production
+# build of the shop (koapos's build leaves it out).
+[services.production]
+
+[services.production.build]
+args = [ "pnpm", "--filter", "@workspace/shop", "run", "build" ]
+
+[services.production.run]
+args = [ "node", "artifacts/koapos/server.mjs" ]
+
+[services.production.run.env]
+PORT = "19161"
 
 [services.env]
 PORT = "19161"
