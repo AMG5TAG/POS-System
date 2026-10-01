@@ -184,8 +184,9 @@ export default function GamingPage() {
       {/* ─── Hero image ─── */}
       <section className="relative">
         <img
-          src="/images/custom-gaming-pc.webp"
-          alt="Gaming setup with consoles, controllers and accessories"
+          // PlayStation 5 photo by User_Pascal on Unsplash (Unsplash License).
+          src="/images/gaming-playstation-5.webp"
+          alt="PlayStation 5 console with a DualSense controller"
           className="w-full h-72 md:h-96 object-cover"
         />
         <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/25 pointer-events-none">
