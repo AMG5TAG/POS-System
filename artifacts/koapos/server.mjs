@@ -8,8 +8,8 @@
  *   koastal.com.au (SITE_DOMAIN)   the Koastal Kollective website at "/", and
  *                                  the online shop under /shop
  *   www.koastal.com.au             301 → the same path on koastal.com.au
- *   the website's other domains    the website (koasoft.com.au etc.; its app
- *   (WEBSITE_DOMAINS)              picks a landing page from the hostname)
+ *   koastalkollective.com.au       the website (its app picks a landing page
+ *   (WEBSITE_DOMAINS)              from the hostname: /about)
  *   anything else                  the POS (pos.koastal.com.au, koapos.com.au)
  *
  * Dependency-free on purpose: it only ever serves built files, and it has to
@@ -29,12 +29,9 @@ const list = (v) => v.split(",").map(toHost).filter(Boolean);
 const siteHost = toHost(process.env.SITE_DOMAIN || "koastal.com.au");
 const websiteHosts = new Set([
   siteHost,
-  ...list(process.env.WEBSITE_DOMAINS ?? [
-    "koasoft.com.au", "www.koasoft.com.au",
-    "koastalkollective.com.au", "www.koastalkollective.com.au",
-    "toukleycomputerrepairs.com.au", "www.toukleycomputerrepairs.com.au",
-    "toukleyphonerepairs.com.au", "www.toukleyphonerepairs.com.au",
-  ].join(",")),
+  // koasoft.com.au and the two Toukley domains are forwarded at the registrar
+  // now, so they never reach this deployment.
+  ...list(process.env.WEBSITE_DOMAINS ?? "koastalkollective.com.au,www.koastalkollective.com.au"),
 ]);
 
 const SHOP_PREFIX = "/shop";

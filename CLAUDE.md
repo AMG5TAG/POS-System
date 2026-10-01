@@ -449,9 +449,11 @@ its own conventions hold:
   `artifact.toml`) — a local `pnpm run build` stays silent. The key file in
   `public/` must stay served at `koastal.com.au/<key>.txt`.
 - **Hostnames matter**: `DOMAIN_ENTRY_POINTS` in `src/App.tsx` sends
-  koasoft.com.au, koastalkollective.com.au and the Toukley domains to their
-  landing pages, and `server.mjs`'s `WEBSITE_DOMAINS` must list the same hosts
-  or they get the POS. koastal.com.au is canonical; `www.` 301s to it.
+  koastalkollective.com.au to `/about`, and `server.mjs`'s `WEBSITE_DOMAINS`
+  must list any such host or it gets the POS. koasoft.com.au and the two
+  Toukley domains are forwarded at the registrar instead and never reach the
+  deployment; their `DOMAIN_ENTRY_POINTS` entries are now unused. koastal.com.au
+  is canonical; `www.` 301s to it.
 - GA4 (`G-639QEPSKTL`) is in `index.html`; the app sends page views itself.
 - Pop Culture is written in the future tense on purpose (the range has not
   opened). Koastal Kollective is the only brand name in copy.
