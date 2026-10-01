@@ -3,6 +3,11 @@
 @import "../../../lib/site-nav/src/accessibility.css";
 /* The shared menu (@workspace/site-nav) sits outside this project. */
 @source "../../../lib/site-nav/src";
+/* `dark:` means the website's dark theme (a .dark class on <html>), as it does
+   on the website — never the device's night mode. The shop has no dark theme,
+   so without this the shared menu's `dark:text-white` links turned white on
+   the shop's white drop-downs whenever the phone or computer was in dark mode. */
+@custom-variant dark (&:is(.dark *));
 
 @theme {
   /* Koastal colours: Dark Teal #007b7d (New Tropics 323) and Light Teal

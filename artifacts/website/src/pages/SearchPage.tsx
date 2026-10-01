@@ -44,7 +44,7 @@ function flattenTopics(topics: RelatedTopic[] | undefined): RelatedTopic[] {
 
 export default function SearchPage() {
   useSeo({
-    title: "Koastal Kollective Search | Private Web Search",
+    title: "Koastal Search | Private Web Search",
     description:
       "A safe, private web search page from Koastal Kollective — powered by DuckDuckGo with strict safe search and no tracking. Search the web without the clutter.",
     // A thin proxy over someone else's index — nothing here should compete
@@ -149,7 +149,7 @@ export default function SearchPage() {
         <a href="/" className="mb-6 select-none" aria-label="Koastal Kollective home">
           <div className="flex items-baseline gap-1">
             <span className="text-5xl md:text-6xl font-extrabold text-[#007b7d] tracking-tight">
-              Koastal Kollective
+              Koastal
             </span>
             <span className="text-5xl md:text-6xl font-extrabold text-gray-900 tracking-tight">
               Search

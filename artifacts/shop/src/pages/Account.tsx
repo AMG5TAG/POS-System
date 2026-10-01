@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Redirect } from "wouter";
 import { Link } from "wouter";
-import { Loader2, Package, Wrench, Coins, ShieldCheck, Heart, KeyRound } from "lucide-react";
+import { Loader2, Wrench, Coins, ShieldCheck, Heart, KeyRound } from "lucide-react";
 import { useAccountOverview, type Overview } from "@/lib/loyalty";
 import { api } from "@/lib/api";
 import { useAuth } from "@/lib/auth";
@@ -10,6 +10,7 @@ import { QuotesCard } from "@/components/account/QuotesCard";
 import { AppointmentsCard } from "@/components/account/AppointmentsCard";
 import { LoyaltyPass } from "@/components/account/LoyaltyPass";
 import { ReferralsCard } from "@/components/account/ReferralsCard";
+import { OrdersCard } from "@/components/account/OrdersCard";
 
 export default function Account() {
   const { customer, loading, setCustomer, logout } = useAuth();
@@ -52,9 +53,7 @@ export default function Account() {
 
       <ProfileForm customer={customer} onSaved={setCustomer} />
 
-      <div className="rounded-2xl bg-white border border-stone-200 p-4 flex items-center gap-3 text-sm">
-        <Package className="w-5 h-5 text-stone-400" /><span><span className="font-medium">Orders and invoices</span> <span className="text-stone-500">— coming soon</span></span>
-      </div>
+      <OrdersCard />
     </div>
   );
 }

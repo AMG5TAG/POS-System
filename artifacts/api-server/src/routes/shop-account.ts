@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db, customersTable, appointmentsTable, quotesTable, merchantsTable, referralRewardsTable } from "@workspace/db";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { db, customersTable, appointmentsTable, quotesTable, merchantsTable, referralRewardsTable, transactionsTable, deliveryOrdersTable } from "@workspace/db";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { soleMerchantId } from "../lib/sole-merchant";
@@ -14,6 +14,7 @@ import { ensureReferralCode, findReferrer, referralSettingsFor, refereeProgress,
 import { formatLoyalty } from "../lib/loyalty";
 import { shopOrigin } from "../lib/publicUrl";
 import { issueSetupLink } from "../lib/customerPasswordLinks";
+import { IN_STORE_STATUSES, isOnlineOrderSale, saleLines, onlineOrderLines, paymentLabel, orderStatusLabel, tracking } from "../lib/shop-orders";
 
 
 /**
@@ -104,6 +105,63 @@ router.post("/shop/auth/token/setup", setupLimiter, async (req, res): Promise<vo
     await issueSetupLink(customer, customer.portalPasswordHash ? "reset" : "setup", req.log);
   }
   res.json({ ok: true });
+});
+
+/* ── Orders: in store and online ──────────────────────────────────────────── */
+
+/* The account's Orders card (rules: lib/shop-orders.ts). In-store is every
+   completed or refunded till sale on any of the shopper's POS records, less
+   the sales raised from online orders; online is the shop's orders placed
+   under the shopper's email. */
+const ORDERS_LIMIT = 200;
+router.get("/shop/account/orders", async (req, res): Promise<void> => {
+  const c = await signedIn(req, res);
+  if (!c) return;
+  const ids = await buyerCustomerIds(c.merchantId, c);
+
+  const sales = await db.select({
+    id: transactionsTable.id, receiptNumber: transactionsTable.receiptNumber, status: transactionsTable.status,
+    total: transactionsTable.total, paymentMethod: transactionsTable.paymentMethod, items: transactionsTable.items,
+    idempotencyKey: transactionsTable.idempotencyKey, createdAt: transactionsTable.createdAt,
+  }).from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.merchantId, c.merchantId),
+      inArray(transactionsTable.customerId, ids),
+      inArray(transactionsTable.status, [...IN_STORE_STATUSES]),
+    ))
+    .orderBy(desc(transactionsTable.createdAt))
+    .limit(ORDERS_LIMIT);
+
+  const email = c.email?.trim().toLowerCase();
+  const orders = !email ? [] : await db.select().from(deliveryOrdersTable)
+    .where(and(eq(deliveryOrdersTable.merchantId, c.merchantId), sql`lower(${deliveryOrdersTable.customerEmail}) = ${email}`))
+    .orderBy(desc(deliveryOrdersTable.createdAt))
+    .limit(ORDERS_LIMIT);
+
+  res.json({
+    inStore: sales.filter((t) => !isOnlineOrderSale(t.idempotencyKey)).map((t) => ({
+      id: t.id,
+      receiptNumber: t.receiptNumber,
+      date: t.createdAt.toISOString(),
+      status: t.status,
+      total: parseFloat(t.total),
+      payment: paymentLabel(t.paymentMethod),
+      lines: saleLines(t.items),
+    })),
+    online: orders.map((o) => ({
+      id: o.id,
+      number: o.number || o.orderId,
+      date: o.createdAt.toISOString(),
+      status: o.status,
+      statusLabel: orderStatusLabel(o.status),
+      total: parseFloat(o.total),
+      shippingMethod: o.shippingMethod || null,
+      tracking: tracking(o.trackingCarrier, o.trackingNumber),
+      shippedAt: o.shippedAt?.toISOString() ?? null,
+      deliveredAt: o.deliveredAt?.toISOString() ?? null,
+      lines: onlineOrderLines(o.items),
+    })),
+  });
 });
 
 /* ── Appointments ────────────────────────────────────────────────────────── */

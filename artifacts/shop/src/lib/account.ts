@@ -45,3 +45,23 @@ export function useRespondToQuote() {
     },
   });
 }
+
+export interface OrderLine { name: string; quantity: number; total: number }
+export interface InStoreSale {
+  id: number; receiptNumber: string; date: string; status: "completed" | "refunded" | string;
+  total: number; payment: string; lines: OrderLine[];
+}
+export interface OnlineOrder {
+  id: number; number: string; date: string; status: string; statusLabel: string; total: number;
+  shippingMethod: string | null; tracking: { carrier: string | null; number: string; url: string | null } | null;
+  shippedAt: string | null; deliveredAt: string | null; lines: OrderLine[];
+}
+
+export function useOrders() {
+  const { customer } = useAuth();
+  return useQuery({
+    queryKey: ["shop-orders", customer?.id],
+    queryFn: () => api<{ inStore: InStoreSale[]; online: OnlineOrder[] }>("/shop/account/orders"),
+    enabled: !!customer,
+  });
+}

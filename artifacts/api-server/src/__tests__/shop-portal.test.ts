@@ -147,6 +147,31 @@ describe("signing in from an account link", () => {
   });
 });
 
+describe("orders", () => {
+  it("lists in-store sales without the till sale an online order became, and the shopper's online orders", async () => {
+    h.session = { portalCustomerId: 9 };
+    h.rows = [
+      [customer], [{ id: 9 }],
+      [
+        { id: 1, receiptNumber: "R1", status: "completed", total: "36.00", paymentMethod: "eftpos", idempotencyKey: null, createdAt: new Date("2026-09-01"), items: [{ productName: "Case", quantity: 2, totalPrice: 36, costPrice: 5 }] },
+        { id: 2, receiptNumber: "R2", status: "completed", total: "49.00", paymentMethod: "online", idempotencyKey: "delivery-order:7", createdAt: new Date("2026-09-02"), items: [] },
+      ],
+      [{ id: 7, number: "1007", orderId: "o7", status: "shipped", total: "49.00", shippingMethod: "Standard", trackingCarrier: "auspost", trackingNumber: "33AB", shippedAt: new Date("2026-09-03"), deliveredAt: null, createdAt: new Date("2026-09-02"), items: '[{"name":"Charger","qty":1,"lineTotal":49}]' }],
+    ];
+    const res = await request(app).get("/api/shop/account/orders");
+    expect(res.status).toBe(200);
+    expect(res.body.inStore.map((t: { receiptNumber: string }) => t.receiptNumber)).toEqual(["R1"]);
+    expect(res.body.inStore[0]).toMatchObject({ total: 36, payment: "EFTPOS", lines: [{ name: "Case", quantity: 2, total: 36 }] });
+    expect(JSON.stringify(res.body)).not.toContain("costPrice");
+    expect(res.body.online[0]).toMatchObject({ number: "1007", statusLabel: "On its way", tracking: { carrier: "Australia Post", number: "33AB" } });
+  });
+
+  it("needs a signed-in shopper", async () => {
+    const res = await request(app).get("/api/shop/account/orders");
+    expect(res.status).toBe(401);
+  });
+});
+
 describe("quotes", () => {
   // Query order: the shopper, their sibling records (buyerCustomerIds), the quote.
   const signedIn = (q: unknown[]) => { h.session = { portalCustomerId: 9 }; h.rows = [[customer], [{ id: 9 }], q]; };

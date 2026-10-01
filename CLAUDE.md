@@ -514,7 +514,7 @@ token-for-token against the live one), so its own conventions hold:
   (noindex, out of the sitemap); `/search` is the separate private web search.
 - Pop Culture and Gaming (`/gaming`, and its section on suburb pages) are
   written in the future tense on purpose (neither range has opened; the gaming
-  page's structured data deliberately carries no `offers`). Koastal Kollective is the only brand name in copy.
+  page's structured data deliberately carries no `offers`). Koastal Kollective is the only brand name in copy — except the private web search at `/search`, which is named **Koastal Search** by the owner's choice.
 
 ### Online shop (koastal.com.au/shop)
 
