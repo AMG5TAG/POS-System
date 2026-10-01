@@ -4,6 +4,7 @@ import { scheduleRecurringInvoices } from "./services/recurringInvoiceScheduler"
 import { scheduleInvoiceReminders } from "./services/invoiceReminderScheduler";
 import { scheduleMarketingAutomation } from "./services/marketingAutomationScheduler";
 import { scheduleReferralDigest } from "./services/referralDigestScheduler";
+import { scheduleReferralRewards } from "./services/referralRewards";
 import { scheduleLowStockAlerts } from "./services/lowStockAlertScheduler";
 import { schedulePaymentAttemptsExpiry } from "./services/paymentAttemptsExpiryScheduler";
 import { scheduleLoginAttemptsCleanup } from "./services/loginAttemptsCleanupScheduler";
@@ -58,6 +59,7 @@ async function bootstrap() {
   scheduleInvoiceReminders(logger);
   scheduleMarketingAutomation(logger);
   scheduleReferralDigest(logger);
+  scheduleReferralRewards(logger);
   scheduleLowStockAlerts(logger);
   schedulePaymentAttemptsExpiry(logger);
   schedulePasswordResetTokensCleanup(logger);

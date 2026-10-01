@@ -108,6 +108,9 @@ importers:
       '@workspace/db':
         specifier: workspace:*
         version: link:../../lib/db
+      '@workspace/group-pricing':
+        specifier: workspace:*
+        version: link:../../lib/group-pricing
       '@workspace/integrations-anthropic-ai-server':
         specifier: workspace:*
         version: link:../../lib/integrations-anthropic-ai-server
@@ -419,6 +422,9 @@ importers:
       '@workspace/api-client-react':
         specifier: workspace:*
         version: link:../../lib/api-client-react
+      '@workspace/group-pricing':
+        specifier: workspace:*
+        version: link:../../lib/group-pricing
       '@workspace/phone-shared':
         specifier: workspace:*
         version: link:../../lib/phone-shared
@@ -707,6 +713,9 @@ importers:
 
   artifacts/shop:
     devDependencies:
+      '@fontsource/opendyslexic':
+        specifier: 5.3.0
+        version: 5.3.0
       '@tailwindcss/vite':
         specifier: 'catalog:'
         version: 4.3.0(vite@7.3.3(@types/node@25.6.2)(jiti@2.7.0)(lightningcss@1.32.0)(tsx@4.21.0)(yaml@2.8.4))
@@ -993,6 +1002,8 @@ importers:
       drizzle-kit:
         specifier: ^0.31.10
         version: 0.31.10
+
+  lib/group-pricing: {}
 
   lib/integrations-anthropic-ai-server:
     dependencies:

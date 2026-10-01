@@ -1,3 +1,4 @@
+import { ensureReferralCode } from "../lib/referrals";
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import crypto from "node:crypto";
@@ -372,6 +373,8 @@ router.post("/mail-in/:id/receive", requireAuth, async (req, res): Promise<void>
         portalToken: crypto.randomUUID(),
       }).returning({ id: customersTable.id });
       customerId = c!.id;
+      // Every customer has a referral code to share (lib/referrals.ts).
+      await ensureReferralCode({ id: c!.id, merchantId, firstName: r.firstName, lastName: r.lastName, referralCode: null }).catch(() => {});
       triggerInstantSync(merchantId, "contacts");
     }
 

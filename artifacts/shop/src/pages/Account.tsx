@@ -9,6 +9,7 @@ import { ProfileForm } from "@/components/account/ProfileForm";
 import { QuotesCard } from "@/components/account/QuotesCard";
 import { AppointmentsCard } from "@/components/account/AppointmentsCard";
 import { LoyaltyPass } from "@/components/account/LoyaltyPass";
+import { ReferralsCard } from "@/components/account/ReferralsCard";
 
 export default function Account() {
   const { customer, loading, setCustomer, logout } = useAuth();
@@ -20,7 +21,13 @@ export default function Account() {
   return (
     <div className="mx-auto max-w-6xl px-4 py-8 space-y-6">
       <div className="flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-bold mr-auto">Hi {customer.firstName || "there"}</h1>
+        <h1 className="text-2xl font-bold">Hi {customer.firstName || "there"}</h1>
+        {customer.customerGroup && (
+          <span className="rounded-full bg-brand-50 text-brand px-3 py-1 text-xs font-semibold" title="Your customer group, set by our team">
+            {customer.customerGroup} customer
+          </span>
+        )}
+        <span className="mr-auto" />
         <Link href="/wishlist" className="inline-flex items-center gap-1.5 h-8 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50"><Heart className="w-4 h-4" /> Wishlist</Link>
         <button onClick={() => void logout()} className="h-8 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50">Sign out</button>
       </div>
@@ -36,9 +43,12 @@ export default function Account() {
         <WarrantiesCard warranties={overview?.warranties} />
       </div>
 
-      {overview && (
-        <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />
-      )}
+      <div className="grid lg:grid-cols-2 gap-6 items-start">
+        <ReferralsCard />
+        {overview && (
+          <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />
+        )}
+      </div>
 
       <ProfileForm customer={customer} onSaved={setCustomer} />
 

@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
-import { db, customersTable, appointmentsTable, quotesTable } from "@workspace/db";
+import { db, customersTable, appointmentsTable, quotesTable, merchantsTable, referralRewardsTable } from "@workspace/db";
 import { and, desc, eq, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
 import crypto from "node:crypto";
@@ -9,7 +9,11 @@ import { buyerCustomerIds } from "../lib/shop-reviews";
 import { findCustomerByPortalToken, merchantRequiresPortalPassword, maskContact } from "../lib/portalAuth";
 import { applyEstimateApprovalToJob } from "../services/quoteApproval";
 import { sendApplePass, sendGoogleWalletLink } from "../lib/wallet-pass";
-import { shopCustomer, accountOf } from "./shop";
+import { shopCustomer, accountOf, loyaltySettings } from "./shop";
+import { ensureReferralCode, findReferrer, referralSettingsFor, refereeProgress, referredBy } from "../lib/referrals";
+import { formatLoyalty } from "../lib/loyalty";
+import { shopOrigin } from "../lib/publicUrl";
+
 
 /**
  * The parts of the shop account that used to be the customer portal: signing
@@ -37,6 +41,7 @@ const ipLimiter = (windowMs: number, max: number, message: string, failuresOnly 
   });
 
 const tokenLimiter = ipLimiter(15 * 60 * 1000, 30, "Too many attempts — please try again in 15 minutes.", true);
+const referralLimiter = ipLimiter(15 * 60 * 1000, 60, "Too many requests — please try again shortly.");
 const bookingLimiter = ipLimiter(60 * 60 * 1000, 10, "Too many bookings from this connection — please call us instead.");
 
 /** The signed-in shopper and their merchant, or a 401 already sent. */
@@ -188,6 +193,78 @@ router.post("/shop/account/quotes/:id/respond", async (req, res): Promise<void> 
     .where(and(eq(quotesTable.id, quoteId), eq(quotesTable.merchantId, c.merchantId)));
   if (decision === "accept") await applyEstimateApprovalToJob(c.merchantId, quote, "portal");
   res.json({ id: quoteId, status });
+});
+
+/* ── Referrals ───────────────────────────────────────────────────────────── */
+
+/*
+ * The shopper's referral link and how their referrals are going: who they
+ * referred (first name and last initial), whether each has qualified yet, and
+ * what they have earned — by the POS programme's rules (lib/referrals.ts).
+ * A friend's spend is never shown, only whether it has reached the threshold.
+ */
+router.get("/shop/account/referrals", async (req, res): Promise<void> => {
+  const c = await signedIn(req, res);
+  if (!c) return;
+  const s = await referralSettingsFor(c.merchantId);
+  const code = await ensureReferralCode(c);
+  const ids = await buyerCustomerIds(c.merchantId, c);
+  // Their sibling records' codes count too: a friend may have been given any of them.
+  const codes = (await db.select({ code: customersTable.referralCode }).from(customersTable)
+    .where(and(eq(customersTable.merchantId, c.merchantId), inArray(customersTable.id, ids))))
+    .map((r) => (r.code ?? "").toUpperCase());
+  const now = new Date();
+  const referred = (await referredBy(c.merchantId, ids, [...new Set([code.toUpperCase(), ...codes])])).filter((r) => !ids.includes(r.id));
+  // What the system has actually paid (services/referralRewards.ts).
+  const rewards = referred.length === 0 ? [] : await db.select({
+    refereeId: referralRewardsTable.refereeCustomerId, status: referralRewardsTable.status, referrerValue: referralRewardsTable.referrerValue,
+  }).from(referralRewardsTable)
+    .where(and(eq(referralRewardsTable.merchantId, c.merchantId), inArray(referralRewardsTable.refereeCustomerId, referred.map((r) => r.id))));
+  const rewardOf = new Map(rewards.map((r) => [r.refereeId, r]));
+  const referrals = referred.map((r) => {
+    const rw = rewardOf.get(r.id);
+    const p = refereeProgress(r, s, now);
+    // A paid or recorded reward means it qualified, whatever the totals say now.
+    return rw ? { ...p, qualified: true, expired: false, reward: rw.status as "paid" | "pre_automation" } : { ...p, reward: null };
+  });
+  const l = await loyaltySettings(c.merchantId);
+  const qualified = referrals.filter((r) => r.qualified).length;
+  const paidValue = rewards.filter((r) => r.status === "paid").reduce((sum, r) => sum + Number(r.referrerValue), 0);
+  const fmt = (v: number) => formatLoyalty(l.programType, l.config, v);
+  res.json({
+    enabled: s.enabled,
+    code,
+    url: `${shopOrigin()}/r/${encodeURIComponent(code)}`,
+    rules: {
+      minSpend: s.minSpend, minVisits: s.minVisits, qualifyDays: s.qualifyDays,
+      referrerReward: fmt(s.referrerRewardValue), refereeReward: fmt(s.refereeRewardValue),
+    },
+    referrals,
+    qualified,
+    /* Rewards credited to their loyalty balance by the system. */
+    earned: fmt(paidValue),
+  });
+});
+
+/* The landing page for a referral link: whose it is (first name only — the
+   code is shared on purpose, but nothing more about them should be) and the
+   business. 404 for a code that names nobody. */
+router.get("/shop/referral/:code", referralLimiter, async (req, res): Promise<void> => {
+  const merchantId = await soleMerchantId();
+  if (merchantId == null) { res.status(404).json({ error: "Not found" }); return; }
+  const r = await findReferrer(merchantId, String(req.params.code), []);
+  if (!r) { res.status(404).json({ error: "That referral link isn't valid." }); return; }
+  const s = await referralSettingsFor(merchantId);
+  const l = await loyaltySettings(merchantId);
+  const [m] = await db.select({ businessName: merchantsTable.businessName }).from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  res.json({
+    code: r.referralCode,
+    firstName: r.firstName?.trim() || null,
+    businessName: m?.businessName ?? "Koastal Kollective",
+    refereeReward: s.enabled && s.refereeRewardValue > 0 ? formatLoyalty(l.programType, l.config, s.refereeRewardValue) : null,
+    // The reward lands once they qualify (services/referralRewards.ts), not at sign-up.
+    rules: { minSpend: s.minSpend, minVisits: s.minVisits, qualifyDays: s.qualifyDays },
+  });
 });
 
 /* ── Wallet passes ───────────────────────────────────────────────────────── */

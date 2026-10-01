@@ -1,3 +1,4 @@
+import { referralFieldsFor } from "../lib/referrals";
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
@@ -1214,6 +1215,8 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
 
   const pdfBuffer = await buildInvoicePdf({
     merchantId,
+    // The referral footer's code and link (lib/referrals.ts).
+    ...(await referralFieldsFor(merchantId, inv.customerId)),
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
     createdAt:     inv.createdAt,
@@ -1573,6 +1576,8 @@ export async function sendInvoiceEmailInternal(
     || null;
   const pdfBuffer = settings.attachPdf ? await buildInvoicePdf({
     merchantId,
+    // The referral footer's code and link (lib/referrals.ts).
+    ...(await referralFieldsFor(merchantId, inv.customerId)),
     invoiceNumber: inv.invoiceNumber,
     status:        inv.status ?? "draft",
     createdAt:     inv.createdAt.toISOString(),

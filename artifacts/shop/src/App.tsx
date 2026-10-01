@@ -20,6 +20,7 @@ import Rewards from "@/pages/Rewards";
 import MailIn from "@/pages/MailIn";
 import MailInTrack from "@/pages/MailInTrack";
 import AccountLink, { AccountLinkSetPassword } from "@/pages/AccountLink";
+import Referral from "@/pages/Referral";
 import NotFound from "@/pages/NotFound";
 
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -59,6 +60,8 @@ export default function App() {
                 {/* Account links (the former customer portal): texts, job QR codes, wallet passes. */}
                 <Route path="/c/:token/set-password" component={AccountLinkSetPassword} />
                 <Route path="/c/:token" component={AccountLink} />
+                {/* A customer's referral link, shared from their account. */}
+                <Route path="/r/:code" component={Referral} />
                 <Route component={NotFound} />
               </Switch>
             </Layout>

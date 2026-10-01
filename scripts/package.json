@@ -65,7 +65,8 @@
     "add-trusted-ips-and-dashboard-devices": "tsx ./src/add-trusted-ips-and-dashboard-devices.ts",
     "add-mail-in-tables": "tsx ./src/add-mail-in-tables.ts",
     "add-shop-settings-table": "tsx ./src/add-shop-settings-table.ts",
-    "add-pre-order-sales": "tsx ./src/add-pre-order-sales.ts"
+    "add-pre-order-sales": "tsx ./src/add-pre-order-sales.ts",
+    "add-referral-rewards": "tsx ./src/add-referral-rewards.ts"
   },
   "dependencies": {
     "@workspace/db": "workspace:*",

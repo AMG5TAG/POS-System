@@ -1,0 +1,43 @@
+/*
+ * Styles for the accessibility options (accessibility.tsx), shared by the
+ * website and the shop: each app's index.css imports this file. The classes
+ * are set on <html>. Rules that need one app's own theme (the website's
+ * dark-mode contrast palette) stay in that app's CSS.
+ */
+
+/* Large Text: everything is sized in rem, so scaling the root scales the site. */
+html.kk-large-text {
+  font-size: 112.5%;
+}
+
+/* High Contrast: links underlined; mid-grey text and pale borders, which carry
+   most of both apps' secondary copy, taken to near-black. Light theme only —
+   the website's dark theme has its own contrast palette. */
+html.kk-high-contrast a {
+  text-decoration: underline;
+}
+html.kk-high-contrast:not(.dark) :is(.text-gray-400, .text-gray-500, .text-gray-600, .text-gray-700,
+  .text-stone-400, .text-stone-500, .text-stone-600, .text-stone-700) {
+  color: #111 !important;
+}
+html.kk-high-contrast:not(.dark) :is(.border-gray-100, .border-gray-200, .border-gray-300,
+  .border-stone-100, .border-stone-200, .border-stone-300) {
+  border-color: #555 !important;
+}
+
+/* Dyslexia-Friendly Font. !important because the shared header sets its
+   typeface inline. SVG icons are unaffected; they draw no text. */
+html.kk-dyslexic-font,
+html.kk-dyslexic-font * {
+  font-family: "OpenDyslexic", "Comic Sans MS", sans-serif !important;
+}
+
+/* Reduce Motion */
+html.kk-reduce-motion *,
+html.kk-reduce-motion *::before,
+html.kk-reduce-motion *::after {
+  animation-duration: 0.01ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.01ms !important;
+  scroll-behavior: auto !important;
+}

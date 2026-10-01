@@ -1,5 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
+/* The accessibility options' styles, shared with the shop. */
+@import "../../../lib/site-nav/src/accessibility.css";
 /* The shared menu (@workspace/site-nav) sits outside this project. */
 @source "../../../lib/site-nav/src";
 
@@ -217,16 +219,9 @@
 }
 
 @layer base {
-  /* Large text mode */
-  .text-lg html {
-    font-size: 112.5%;
-  }
-  .text-lg body {
-    font-size: 1rem;
-  }
-
-  /* High contrast mode */
-  .high-contrast {
+  /* High Contrast (the shared rules are in @workspace/site-nav's
+     accessibility.css): this site's theme palette, light and dark. */
+  .kk-high-contrast {
     --background: 0 0% 100%;
     --foreground: 0 0% 0%;
     --card: 0 0% 100%;
@@ -238,7 +233,7 @@
     --muted: 0 0% 90%;
     --muted-foreground: 0 0% 20%;
   }
-  .high-contrast.dark {
+  .kk-high-contrast.dark {
     --background: 0 0% 0%;
     --foreground: 0 0% 100%;
     --card: 0 0% 5%;
@@ -249,27 +244,6 @@
     --secondary: 180 50% 50%;
     --muted: 0 0% 15%;
     --muted-foreground: 0 0% 85%;
-  }
-  .high-contrast a {
-    text-decoration: underline;
-  }
-
-  /* Dyslexia-friendly font (Accessibility menu). !important because the
-     shared header (@workspace/site-nav) sets its typeface inline. SVG icons
-     are unaffected; they draw no text. */
-  .dyslexic-font,
-  .dyslexic-font * {
-    font-family: "OpenDyslexic", "Comic Sans MS", sans-serif !important;
-  }
-
-  /* Reduce motion */
-  .reduce-motion *,
-  .reduce-motion *::before,
-  .reduce-motion *::after {
-    animation-duration: 0.01ms !important;
-    animation-iteration-count: 1 !important;
-    transition-duration: 0.01ms !important;
-    scroll-behavior: auto !important;
   }
 }
 

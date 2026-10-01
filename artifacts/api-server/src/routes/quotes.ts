@@ -1,3 +1,4 @@
+import { referralFieldsFor } from "../lib/referrals";
 import { Router, type IRouter } from "express";
 import { db, quotesTable, customersTable, merchantsTable, businessProfileTable, salesTemplatesTable, salesSettingsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -388,6 +389,8 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
 
   const pdfBuffer = await buildInvoicePdf({
     merchantId,
+    // The referral footer's code and link (lib/referrals.ts).
+    ...(await referralFieldsFor(merchantId, q.customerId)),
     title:         "Quote",
     dueDateLabel:  "Valid until",
     invoiceNumber: q.quoteNumber,
@@ -531,6 +534,8 @@ router.post("/quotes/:id/send-email", requireAuth, async (req, res): Promise<voi
 
   const pdfBuffer = await buildInvoicePdf({
     merchantId,
+    // The referral footer's code and link (lib/referrals.ts).
+    ...(await referralFieldsFor(merchantId, q.customerId)),
     title:         "Quote",
     dueDateLabel:  "Valid until",
     invoiceNumber: q.quoteNumber,

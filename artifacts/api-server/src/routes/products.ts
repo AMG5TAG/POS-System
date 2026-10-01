@@ -1,3 +1,4 @@
+import { reconcileGroupPrices, followPrice } from "@workspace/group-pricing";
 import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable, transactionsTable, invoicesTable, customersTable } from "@workspace/db";
 import type { ProductMediaItem } from "@workspace/db";
@@ -733,28 +734,23 @@ router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
     return;
   }
 
-  if (action === "price_percent") {
-    if (value == null) { res.status(400).json({ error: "value is required for price_percent" }); return; }
-    const idList = sql.join(validIds.map((id) => sql`${id}`), sql`, `);
-    await db.execute(sql`
-      UPDATE products
-      SET price = GREATEST(0, ROUND(price::numeric * (1 + ${value}::numeric / 100.0), 2))
-      WHERE id IN (${idList})
-        AND merchant_id = ${merchantId}
-    `);
-    res.json({ updated: validIds.length, deleted: 0 });
-    return;
-  }
-
-  if (action === "price_flat") {
-    if (value == null) { res.status(400).json({ error: "value is required for price_flat" }); return; }
-    const idList = sql.join(validIds.map((id) => sql`${id}`), sql`, `);
-    await db.execute(sql`
-      UPDATE products
-      SET price = GREATEST(0, ROUND(price::numeric + ${value}::numeric, 2))
-      WHERE id IN (${idList})
-        AND merchant_id = ${merchantId}
-    `);
+  /* Bulk price changes. Each product's customer-group prices follow its new
+     price at the same share (followPrice), as a single edit does — so the
+     prices are worked out here rather than in one UPDATE. */
+  if (action === "price_percent" || action === "price_flat") {
+    if (value == null) { res.status(400).json({ error: `value is required for ${action}` }); return; }
+    const rows = await db.select({ id: productsTable.id, price: productsTable.price, groupPrices: productsTable.groupPrices })
+      .from(productsTable)
+      .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
+    await db.transaction(async (tx) => {
+      for (const r of rows) {
+        const old = parseFloat(r.price) || 0;
+        const next = Math.max(0, Math.round((action === "price_percent" ? old * (1 + value / 100) : old + value) * 100) / 100);
+        await tx.update(productsTable)
+          .set({ price: next.toFixed(2), groupPrices: followPrice(r.groupPrices as Record<string, number> | null, old, next) })
+          .where(and(eq(productsTable.id, r.id), eq(productsTable.merchantId, merchantId)));
+      }
+    });
     res.json({ updated: validIds.length, deleted: 0 });
     return;
   }
@@ -830,6 +826,19 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   if (isEpayRaw !== undefined) updates.isEpay = isEpayRaw ? "true" : "false";
   if (tracksSerial !== undefined) updates.tracksSerial = tracksSerial ? "true" : "false";
   if (groupPrices !== undefined) updates.groupPrices = groupPrices;
+  // Customer-group prices follow the sell price: a price change carries every
+  // group price with it at the same share (Trade $65 on $130 → $70 on $140),
+  // except a group price edited in this same save (reconcileGroupPrices).
+  // This covers the product form, CSV import and any other caller.
+  if (price !== undefined) {
+    const [cur] = await db.select({ price: productsTable.price, groupPrices: productsTable.groupPrices }).from(productsTable)
+      .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+    const oldPrice = cur ? parseFloat(cur.price) : NaN;
+    if (cur && Number.isFinite(oldPrice) && Math.round(oldPrice * 100) !== Math.round(price * 100)) {
+      updates.groupPrices = reconcileGroupPrices(cur.groupPrices as Record<string, number> | null, oldPrice, price,
+        groupPrices === undefined ? undefined : (groupPrices as Record<string, number> | null));
+    }
+  }
   if (tags !== undefined) updates.tags = tags;
   Object.assign(updates, specColumns({ technicalSpecs, weightKg, lengthCm, widthCm, heightCm }));
   if (media !== undefined) updates.media = cleanMedia(media);

@@ -2,7 +2,7 @@ import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from "rea
 import { useLocation } from "wouter";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
-import { computeGroupPrice } from "@/lib/group-pricing";
+import { groupPriceFor, resolveCustomerGroupId } from "@/lib/group-pricing";
 import { takePendingCart } from "@/lib/pending-cart";
 import { distributeQuoteDiscount } from "@/lib/quote-import";
 import { takePendingInvoicePayment, type PendingInvoicePayment } from "@/lib/pending-invoice-payment";
@@ -235,17 +235,6 @@ type RecoveryDraft = {
 };
 
 
-/* Map a customer's saved group (stored as either the group id or its name) to
- * the group id used as the key in product.groupPrices. */
-function resolveCustomerGroupId(
-  customerGroup: string | null | undefined,
-  groups: { id: string; name: string }[],
-): string | null {
-  if (!customerGroup) return null;
-  const cg = customerGroup.trim().toLowerCase();
-  const g = groups.find((x) => x.id.toLowerCase() === cg || x.name.toLowerCase() === cg);
-  return g ? g.id : null;
-}
 
 function formatKode(profit: number): string {
   const n = Math.abs(Math.floor(profit));
@@ -1082,18 +1071,14 @@ export default function POSPage() {
     if (i.customPrice != null) return i.customPrice;
     const gid = customerGroupIdRef.current;
     if (gid) {
-      // Stored group price wins; otherwise fall back to the group's rule so the
-      // charged price matches what the product list / margins show.
-      const stored = (i.product as Product & { groupPrices?: Record<string, number> }).groupPrices?.[gid];
-      if (stored != null) return stored;
-      const rule = (groupPricingRef.current ?? []).find((r) => r.groupId === gid);
-      const computed = rule
-        ? computeGroupPrice(
-            { price: i.product.price ?? 0, costPrice: (i.product as Product & { costPrice?: number | null }).costPrice ?? 0, taxRate: i.product.taxRate ?? 10, categoryId: i.product.categoryId ?? null },
-            rule,
-          )
-        : null;
-      if (computed != null) return computed;
+      // Stored group price wins, else the group's rule — groupPriceFor, the
+      // same function the server checks the sale with (finalizeSale).
+      const p = i.product as Product & { groupPrices?: Record<string, number> | null; costPrice?: number | null };
+      const group = groupPriceFor(
+        { price: p.price ?? 0, costPrice: p.costPrice ?? 0, taxRate: p.taxRate ?? 10, categoryId: p.categoryId ?? null, groupPrices: p.groupPrices },
+        gid, groupPricingRef.current,
+      );
+      if (group != null) return group;
     }
     return i.product.price ?? 0;
   }, []);

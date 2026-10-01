@@ -1,5 +1,7 @@
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
+import { checkReferralAfterSale } from "../services/referralRewards";
+import { groupPriceFor, resolveCustomerGroupId, type GroupPricingRule } from "@workspace/group-pricing";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { loyaltyEarnedFor } from "../lib/loyalty";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -321,6 +323,25 @@ export async function finalizeSale(
     }
   }
 
+  /* The customer's group price. The till charges a customer in a pricing
+     group (Trade, Staff…) their group's price — the product's stored group
+     price, else the group's rule — and every line used to come back repriced
+     to the sell price, so a group-priced sale failed the total check below.
+     The server works the group price out itself with the till's own function
+     (@workspace/group-pricing) and accepts exactly that price, for the sale's
+     own customer: the client is trusted for nothing but the price it asks. */
+  let customerGroupId: string | null = null;
+  let groupRules: GroupPricingRule[] = [];
+  if (scopedCustomer?.customerGroup) {
+    const [cs] = await db.select({ groups: customerSettingsTable.groups, groupPricing: customerSettingsTable.groupPricing })
+      .from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));
+    const parse = <T,>(raw: string | null | undefined, d: T): T => { try { return raw ? (JSON.parse(raw) as T) : d; } catch { return d; } };
+    const groups = parse<Array<{ id: string; name: string }>>(cs?.groups, []);
+    customerGroupId = resolveCustomerGroupId(scopedCustomer.customerGroup, Array.isArray(groups) ? groups : []);
+    const rules = parse<GroupPricingRule[]>(cs?.groupPricing, []);
+    groupRules = Array.isArray(rules) ? rules : [];
+  }
+
   const computedItems: {
     productId: number; productName: string; quantity: number;
     unitPrice: number; totalPrice: number; taxAmount: number;
@@ -370,7 +391,17 @@ export async function finalizeSale(
       // honoured for the same reason: the quote row on file authorises it.
       const askedPrice = Math.max(0, i.unitPrice ?? 0);
       const quotedPrice = quotedCents.get(i.productId)?.has(Math.round(askedPrice * 100)) ?? false;
-      unitPrice  = (openPriced || quotedPrice) ? askedPrice : catalogPrice;
+      // And the customer's group price, worked out here — never a price the
+      // client made up (see customerGroupId above).
+      const groupPrice = groupPriceFor({
+        price: Number.isFinite(catalogPrice) ? catalogPrice : 0,
+        costPrice: product.costPrice != null ? parseFloat(product.costPrice) : 0,
+        taxRate: product.taxRate != null ? parseFloat(product.taxRate) : 10,
+        categoryId: product.categoryId ?? null,
+        groupPrices: (product.groupPrices as Record<string, number> | null) ?? null,
+      }, customerGroupId, groupRules);
+      const groupPriced = groupPrice != null && Math.round(groupPrice * 100) === Math.round(askedPrice * 100);
+      unitPrice  = (openPriced || quotedPrice || groupPriced) ? askedPrice : catalogPrice;
       taxRatePct = product.taxRate != null ? parseFloat(product.taxRate) : 10;
       itemName   = product.name;
     }
@@ -943,6 +974,10 @@ export async function finalizeSale(
       } catch { /* silent */ }
     })();
   }
+
+  // A sale can be what qualifies this customer's referral (or theirs as a
+  // referrer's friend): pay it now rather than at the next daily sweep.
+  checkReferralAfterSale(merchantId, scopedCustomer?.id);
 
   return { ok: true, transaction, customer: scopedCustomer };
 }

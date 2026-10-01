@@ -1,4 +1,5 @@
 import { useState, useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { customerDisplayName } from "@/lib/customer-name";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -12,19 +13,17 @@ import {
   Copy, CheckCircle2, Clock, Search, UserPlus, Star, Info, Sparkles, Loader2,
 } from "lucide-react";
 
-/* ─── Settings (local defaults — referral program config) ──────────────────── */
-
-const SETTINGS = {
-  enabled:             true,
-  minSpend:            50,
-  minVisits:           2,
-  qualifyDays:         90,
-  rewardType:          "points" as const,
-  rewardAmount:        200,
-  rewardLabel:         "200 loyalty points",
-  referrerRewardType:  "points" as const,
-  referrerRewardAmount:500,
-};
+/* ─── Settings ────────────────────────────────────────────────────────────────
+ * The programme's thresholds and rewards are Management › Referrals, read from
+ * GET /referrals/summary — the same settings the shop account and the
+ * automatic rewards (services/referralRewards.ts) use, so this page, the shop
+ * and the payouts count alike. These are that page's defaults, shown until the
+ * summary loads. */
+interface ReferralSummary {
+  settings: { enabled: boolean; minSpend: number; minVisits: number; qualifyDays: number; refereeRewardValue: number; referrerRewardValue: number };
+  rewards: { refereeId: number; referrerId: number | null; status: "paid" | "pre_automation"; referrerValue: number; refereeValue: number; createdAt: string }[];
+}
+const DEFAULT_SETTINGS: ReferralSummary["settings"] = { enabled: true, minSpend: 50, minVisits: 2, qualifyDays: 90, refereeRewardValue: 200, referrerRewardValue: 500 };
 
 /* ─── Helpers ──────────────────────────────────────────────────────────────── */
 
@@ -98,6 +97,18 @@ export default function MarketingReferralsPage() {
 
   const { data, isLoading, refetch } = useListCustomers({ limit: 100000, offset: 0 });
   const customers = data?.items ?? [];
+  const { data: summary } = useQuery({
+    queryKey: ["referrals-summary"],
+    queryFn: async () => {
+      const r = await fetch("/api/referrals/summary", { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load referral settings");
+      return r.json() as Promise<ReferralSummary>;
+    },
+  });
+  const SETTINGS = summary?.settings ?? DEFAULT_SETTINGS;
+  // Recorded rewards by referred customer: "paid" by the system, or
+  // "pre_automation" (qualified before automatic rewards began).
+  const rewardByReferee = useMemo(() => new Map((summary?.rewards ?? []).map((r) => [r.refereeId, r])), [summary]);
 
   /* Build referral code -> referrer name map */
   const codeToName = useMemo(() => {
@@ -114,31 +125,41 @@ export default function MarketingReferralsPage() {
   /* Customers WITHOUT a referral code */
   const notEnrolled = useMemo(() => customers.filter((c) => !c.referralCode), [customers]);
 
-  /* Referred customers: customers with referredBy matching an enrolled code */
-  const referredCustomers = useMemo(() =>
-    customers.filter((c) => c.referredBy && codeToName.has(c.referredBy)),
-    [customers, codeToName],
-  );
+  /* Referred customers: carrying an enrolled referrer's code (referredBy), or
+     their id (referredByCustomerId, set by the shop and the customer form). */
+  const referrerOf = useMemo(() => {
+    const byCode = new Map(enrolled.map((c) => [(c.referralCode ?? "").toUpperCase(), c]));
+    const byId = new Map(customers.map((c) => [c.id, c]));
+    return (r: Customer) => {
+      const id = (r as Customer & { referredByCustomerId?: number | null }).referredByCustomerId;
+      return (id != null ? byId.get(id) : undefined) ?? (r.referredBy ? byCode.get(r.referredBy.toUpperCase()) : undefined);
+    };
+  }, [customers, enrolled]);
+  const referredCustomers = useMemo(() => customers.filter((c) => { const ref = referrerOf(c); return !!ref && ref.id !== c.id; }), [customers, referrerOf]);
+  const isQualifiedNow = (r: Customer) =>
+    rewardByReferee.has(r.id) || (
+      daysSince(r.createdAt) <= SETTINGS.qualifyDays
+      && (r.totalSpent ?? 0) >= SETTINGS.minSpend
+      && (r.visitCount ?? 0) >= SETTINGS.minVisits
+    );
 
   /* Count qualified vs pending per referrer */
   const statsByCustomer = useMemo(() => {
     const stats = new Map<number, { referrals: number; qualified: number; pending: number; points: number }>();
     for (const c of enrolled) stats.set(c.id, { referrals: 0, qualified: 0, pending: 0, points: 0 });
     for (const r of referredCustomers) {
-      const code = r.referredBy!;
-      const referrer = enrolled.find((c) => c.referralCode === code);
+      const referrer = referrerOf(r);
       if (!referrer) continue;
-      const s = stats.get(referrer.id)!;
+      const s = stats.get(referrer.id) ?? { referrals: 0, qualified: 0, pending: 0, points: 0 };
+      stats.set(referrer.id, s);
       s.referrals += 1;
-      const days = daysSince(r.createdAt);
-      const isQualified = ((r.totalSpent ?? 0) >= SETTINGS.minSpend)
-        && ((r.visitCount ?? 0) >= SETTINGS.minVisits)
-        && (days <= SETTINGS.qualifyDays);
-      if (isQualified) { s.qualified += 1; s.points += SETTINGS.referrerRewardAmount; }
-      else s.pending += 1;
+      if (isQualifiedNow(r)) s.qualified += 1; else s.pending += 1;
+      // What was actually credited (services/referralRewards.ts).
+      const rw = rewardByReferee.get(r.id);
+      if (rw?.status === "paid") s.points += rw.referrerValue;
     }
     return stats;
-  }, [enrolled, referredCustomers]);
+  }, [enrolled, referredCustomers, referrerOf, rewardByReferee, SETTINGS]);
 
   const filteredCustomers = enrolled.filter((c) =>
     search.trim().length === 0 ||
@@ -203,7 +224,7 @@ export default function MarketingReferralsPage() {
             { label: "Total referrals",     value: totalReferrals,                   icon: UserPlus,     color: "text-blue-500"    },
             { label: "Qualified",           value: totalQualified,                   icon: CheckCircle2, color: "text-emerald-500" },
             { label: "Pending",             value: totalPending,                     icon: Clock,        color: "text-amber-500"   },
-            { label: "Points awarded",      value: totalPtsEarned.toLocaleString(),  icon: Star,         color: "text-violet-500"  },
+            { label: "Rewards paid",        value: totalPtsEarned.toLocaleString(),  icon: Star,         color: "text-violet-500"  },
           ].map(({ label, value, icon: Icon, color }) => (
             <Card key={label}>
               <CardContent className="pt-4 pb-4">
@@ -309,8 +330,8 @@ export default function MarketingReferralsPage() {
               ) : (
                 referredCustomers.map((r) => {
                   const days = daysSince(r.createdAt);
-                  const isExpired = days > SETTINGS.qualifyDays;
-                  const isQualified = !isExpired && (r.totalSpent ?? 0) >= SETTINGS.minSpend && (r.visitCount ?? 0) >= SETTINGS.minVisits;
+                  const isQualified = isQualifiedNow(r);
+                  const isExpired = !isQualified && days > SETTINGS.qualifyDays;
                   const status: "in progress" | "qualified" | "expired" = isQualified ? "qualified" : isExpired ? "expired" : "in progress";
                   const badgeStyle: Record<typeof status, string> = {
                     "in progress": "bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400",
@@ -323,7 +344,8 @@ export default function MarketingReferralsPage() {
                         <div>
                           <p className="text-sm font-medium">{nameOf(r)}</p>
                           <p className="text-xs text-muted-foreground">
-                            via {codeToName.get(r.referredBy!) ?? r.referredBy} · {new Date(r.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
+                            via {(() => { const ref = referrerOf(r); return ref ? nameOf(ref) : (codeToName.get(r.referredBy ?? "") ?? r.referredBy); })()}
+                            {rewardByReferee.get(r.id)?.status === "paid" ? " · reward paid" : ""} · {new Date(r.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "short" })}
                           </p>
                         </div>
                         <Badge className={cn("text-[10px] border-0 shrink-0", badgeStyle[status])}>

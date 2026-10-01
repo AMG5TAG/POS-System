@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { api } from "@/lib/api";
 import { useAuth, type Account } from "@/lib/auth";
 import { AuthCard, Field, Notice, Submit } from "@/components/Form";
+import { forgetReferral, rememberedReferral } from "@/lib/referral";
 
 export default function Register() {
   const { setCustomer } = useAuth();
@@ -11,14 +12,16 @@ export default function Register() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
+  // A friend's code from their referral link, credited to them on sign-up.
+  const [referral] = useState(rememberedReferral);
   const set = (k: keyof typeof f) => (e: React.ChangeEvent<HTMLInputElement>) => setF({ ...f, [k]: e.target.value });
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      const r = await api<{ status: string; customer?: Account }>("/shop/auth/register", { method: "POST", body: JSON.stringify(f) });
-      if (r.status === "created" && r.customer) { setCustomer(r.customer); navigate("/account"); }
+      const r = await api<{ status: string; customer?: Account }>("/shop/auth/register", { method: "POST", body: JSON.stringify({ ...f, referralCode: referral ?? undefined }) });
+      if (r.status === "created" && r.customer) { forgetReferral(); setCustomer(r.customer); navigate("/account"); }
       else setCheckEmail(true);
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
@@ -36,6 +39,7 @@ export default function Register() {
     <AuthCard title="Create an account" footer={<>Already have an account? <Link href="/account/login" className="text-brand font-medium underline">Sign in</Link></>}>
       <form onSubmit={submit} className="space-y-4">
         {error && <Notice>{error}</Notice>}
+        {referral && <Notice tone="ok">You were referred by a friend (code {referral}) — they'll get the credit when you sign up.</Notice>}
         <div className="grid grid-cols-2 gap-3">
           <Field label="First name" required autoComplete="given-name" value={f.firstName} onChange={set("firstName")} />
           <Field label="Last name" autoComplete="family-name" value={f.lastName} onChange={set("lastName")} />

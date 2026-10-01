@@ -18,6 +18,7 @@ import type { ProductMediaItem } from "@workspace/db";
 import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_MS } from "../lib/warranty";
 import { formatAddressParts } from "../lib/address";
 import { profileRequirements, missingRequired } from "../lib/customer-profile-rules";
+import { ensureReferralCode, findReferrer, normaliseReferralCode } from "../lib/referrals";
 
 /**
  * The online shop's API (koastal.com.au/shop) — public, no staff session.
@@ -460,7 +461,7 @@ router.post("/shop/products/:id/reviews", reviewLimiter, async (req, res): Promi
    POS loyalty settings and lib/loyalty.ts, so the website says what the till
    does. */
 
-async function loyaltySettings(merchantId: number) {
+export async function loyaltySettings(merchantId: number) {
   const [row] = await db.select().from(loyaltySettingsTable).where(eq(loyaltySettingsTable.merchantId, merchantId)).limit(1);
   return {
     programType: row?.programType ?? "cashback",
@@ -680,6 +681,11 @@ export function accountOf(c: typeof customersTable.$inferSelect) {
     whatsapp: c.whatsappSameAsPhone === "true",
     agreedToMarketing: c.agreedToMarketing === "true",
     heardFrom: c.heardFrom ?? "", heardFromDetails: c.heardFromDetails ?? "",
+    /* The referrer's code, when someone referred them (POS `referred_by`). */
+    referredByCode: c.referredBy ?? "",
+    /* Their POS customer group (e.g. Trade), which sets their pricing. Shown
+       on the account, never editable there. */
+    customerGroup: c.customerGroup ?? "",
     loyaltyPoints: c.loyaltyPoints, portalToken: c.portalToken ?? null,
     dateOfBirth: c.dateOfBirth ?? null,
     /* False for a customer who came in on an account link and has never set a
@@ -760,6 +766,8 @@ const RegisterBody = z.object({
   email: Email,
   phone: z.string().trim().max(40).default(""),
   password: Password,
+  /** From a friend's referral link (/r/<code>), kept by the browser until sign-up. */
+  referralCode: z.string().trim().max(40).optional(),
 });
 
 router.post("/shop/auth/register", registerLimiter, async (req, res): Promise<void> => {
@@ -791,9 +799,22 @@ router.post("/shop/auth/register", registerLimiter, async (req, res): Promise<vo
     portalPasswordSetAt: new Date(),
     portalLastLoginAt: new Date(),
   }).returning();
+  // Their own code to share, and — arriving on a friend's link — who referred
+  // them, recorded as the POS records it (referred_by = the referrer's code).
+  let created = customer!;
+  const referralCode = await ensureReferralCode(created);
+  const referrer = b.referralCode ? await findReferrer(merchantId, b.referralCode, [created.id]) : null;
+  const [updated] = await db.update(customersTable).set({
+    referralCode,
+    ...(referrer ? {
+      referredBy: referrer.referralCode, referredByCustomerId: referrer.id, heardFrom: "Friend",
+      heardFromDetails: [referrer.firstName, referrer.lastName].filter(Boolean).join(" ") || null,
+    } : {}),
+  }).where(eq(customersTable.id, created.id)).returning();
+  created = updated ?? created;
   triggerInstantSync(merchantId, "contacts");
-  req.session.portalCustomerId = customer!.id;
-  res.status(201).json({ status: "created", customer: accountOf(customer!) });
+  req.session.portalCustomerId = created.id;
+  res.status(201).json({ status: "created", customer: accountOf(created) });
 });
 
 /** Send a set-up / reset link. Always the same answer, so it can't be used to
@@ -865,6 +886,8 @@ const ProfileBody = z.object({
   agreedToMarketing: z.boolean().optional(),
   heardFrom: z.string().trim().max(80).optional(),
   heardFromDetails: z.string().trim().max(200).optional(),
+  /** "Heard from: Friend" — the friend's referral code. Optional. */
+  friendReferralCode: z.string().trim().max(40).optional(),
 });
 
 /* The business's required fields and "heard from" choices, for the profile form. */
@@ -922,6 +945,20 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
   const heard = b.heardFrom ? reqs.heardFromSources.find((h) => h.name === b.heardFrom) : undefined;
   if (b.heardFrom && !heard && b.heardFrom !== c.heardFrom) { res.status(400).json({ error: "Please choose how you heard about us from the list." }); return; }
 
+  // A friend's referral code links this customer to them as the POS does. Set
+  // once: changing who gets the credit afterwards is for staff.
+  let referral: { referredBy: string; referredByCustomerId: number } | undefined;
+  const friendCode = b.friendReferralCode ? normaliseReferralCode(b.friendReferralCode) : "";
+  if (friendCode && friendCode !== normaliseReferralCode(c.referredBy ?? "")) {
+    if (c.referredBy || c.referredByCustomerId) {
+      res.status(409).json({ error: "You're already linked to a friend's referral. Contact us if it needs changing." });
+      return;
+    }
+    const referrer = await findReferrer(c.merchantId, friendCode, await buyerCustomerIds(c.merchantId, c));
+    if (!referrer) { res.status(400).json({ error: "We couldn't find that referral code — check it, or leave it blank." }); return; }
+    referral = { referredBy: referrer.referralCode!, referredByCustomerId: referrer.id };
+  }
+
   let email: string | undefined;
   if (b.email && b.email !== (c.email ?? "").trim().toLowerCase()) {
     const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
@@ -952,6 +989,7 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     ...(b.whatsapp !== undefined ? { whatsappSameAsPhone: b.whatsapp ? "true" : "false" } : {}),
     ...(b.agreedToMarketing !== undefined ? { agreedToMarketing: b.agreedToMarketing ? "true" : "false" } : {}),
     ...(b.heardFrom !== undefined ? { heardFrom: b.heardFrom || null, heardFromDetails: b.heardFromDetails || null } : {}),
+    ...(referral ?? {}),
     updatedAt: new Date(),
   }).where(eq(customersTable.id, c.id)).returning();
   triggerInstantSync(c.merchantId, "contacts");

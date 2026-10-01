@@ -1,4 +1,6 @@
 @import "tailwindcss";
+/* The accessibility options' styles, shared with the website. */
+@import "../../../lib/site-nav/src/accessibility.css";
 /* The shared menu (@workspace/site-nav) sits outside this project. */
 @source "../../../lib/site-nav/src";
 

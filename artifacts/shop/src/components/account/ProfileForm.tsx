@@ -22,10 +22,12 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
   const { data: fields } = useQuery({ queryKey: ["shop-account-fields"], queryFn: () => api<Fields>("/shop/account/fields"), staleTime: 5 * 60_000 });
   const [f, setF] = useState<Account>(customer);
   const [postalSame, setPostalSame] = useState(empty(customer.shippingAddress) || same(customer.shippingAddress, customer.address));
+  const [friendCode, setFriendCode] = useState(customer.referredByCode);
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "ok" | "error"; text: string } | null>(null);
   useEffect(() => {
     setF(customer);
+    setFriendCode(customer.referredByCode);
     setPostalSame(empty(customer.shippingAddress) || same(customer.shippingAddress, customer.address));
   }, [customer]);
 
@@ -33,7 +35,11 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
   const heard = fields?.heardFromSources ?? [];
   // A source the POS recorded that has since left the list still shows.
   const heardOptions = f.heardFrom && !heard.some((h) => h.name === f.heardFrom) ? [...heard, { name: f.heardFrom, requiresDetails: false }] : heard;
-  const needsDetails = heardOptions.find((h) => h.name === f.heardFrom)?.requiresDetails ?? false;
+  // "Friend" asks for the friend's name and, optionally, their referral code,
+  // which credits them through the POS referral programme.
+  const isFriend = f.heardFrom.trim().toLowerCase() === "friend";
+  const needsDetails = isFriend || (heardOptions.find((h) => h.name === f.heardFrom)?.requiresDetails ?? false);
+  const linked = !!customer.referredByCode;
 
   const set = <K extends keyof Account>(k: K) => (v: Account[K]) => setF({ ...f, [k]: v });
   const addr = (which: "address" | "shippingAddress", k: keyof Address) =>
@@ -52,6 +58,7 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
           address: f.address, shippingAddress: postalSame ? f.address : f.shippingAddress,
           dateOfBirth: f.dateOfBirth ?? "", company: f.company, abn: f.abn, whatsapp: f.whatsapp,
           agreedToMarketing: f.agreedToMarketing, heardFrom: f.heardFrom, heardFromDetails: needsDetails ? f.heardFromDetails : "",
+          friendReferralCode: isFriend && !linked && friendCode.trim() ? friendCode.trim() : undefined,
         }),
       });
       onSaved(r.customer);
@@ -141,7 +148,16 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
                 {heardOptions.map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}
               </select>
             </label>
-            {needsDetails && <Field label="Tell us more" maxLength={200} value={f.heardFromDetails} onChange={(e) => set("heardFromDetails")(e.target.value)} />}
+            {needsDetails && <Field label={isFriend ? "Your friend's name" : "Tell us more"} maxLength={200} value={f.heardFromDetails} onChange={(e) => set("heardFromDetails")(e.target.value)} />}
+            {isFriend && (
+              <div>
+                <Field label="Their referral code (optional)" maxLength={40} placeholder="e.g. SL-AB12" disabled={linked}
+                  value={friendCode} onChange={(e) => setFriendCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))} />
+                <p className="mt-1 text-xs text-stone-500">
+                  {linked ? "Linked — your friend gets the credit. Contact us if it needs changing." : "From their referral link or account. It gets them their referral reward."}
+                </p>
+              </div>
+            )}
           </div>
         )}
       </fieldset>

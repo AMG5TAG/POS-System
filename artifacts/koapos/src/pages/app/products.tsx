@@ -65,7 +65,7 @@ import { formatCurrency } from "@/lib/utils";
 import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
 import { useCustomerSettings, DEFAULT_CUSTOMER_GROUPS } from "@/lib/customer-settings";
-import { computeAllGroupPrices } from "@/lib/group-pricing";
+import { computeAllGroupPrices, followPrice } from "@/lib/group-pricing";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
 import {
   Search, Plus, Pencil, Trash2, Package, Check,
@@ -1292,6 +1292,12 @@ export default function ProductsPage() {
   // alone by the auto pre-fill; every other group is kept filled from its rule
   // (or the sell price when no rule applies).
   const manualGroupsRef = useRef<Set<string>>(new Set());
+  // A product's stored group prices follow its sell price while it is edited
+  // (Trade $65 on $130 shows $70 once the price reads $140) — the same rule the
+  // server applies on save (followPrice, @workspace/group-pricing). A group
+  // stops following once its price is typed over. The price and stored group
+  // prices the dialog opened with are the base.
+  const followGroupsRef = useRef<{ openedPrice: number; stored: Record<string, number>; ids: Set<string> }>({ openedPrice: 0, stored: {}, ids: new Set() });
   const [search, setSearch]             = useState("");
   // Debounced so the (limit:1000) product query fires when typing pauses, not on
   // every keystroke. The input stays bound to `search` for instant feedback.
@@ -1508,7 +1514,14 @@ export default function ProductsPage() {
     setForm((prev) => {
       let changed = false;
       const next = { ...prev.groupPrices };
+      const follow = followGroupsRef.current;
+      const followed = followPrice(follow.stored, follow.openedPrice, isNaN(sell) ? follow.openedPrice : sell) ?? {};
       for (const g of customerGroups) {
+        if (follow.ids.has(g.id) && followed[g.id] != null) {
+          const desired = followed[g.id].toFixed(2);
+          if (next[g.id] !== desired) { next[g.id] = desired; changed = true; }
+          continue;
+        }
         if (manualGroupsRef.current.has(g.id)) continue;
         const ruleVal = ruleGroupDefaults[g.id];
         const desired = ruleVal != null ? ruleVal.toFixed(2) : fallback;
@@ -1638,6 +1651,7 @@ export default function ProductsPage() {
     const startForm = { ...defaultForm, lowStockThreshold: String(defaultLowStock) };
     initialProductFormRef.current = startForm;
     manualGroupsRef.current = new Set();
+    followGroupsRef.current = { openedPrice: 0, stored: {}, ids: new Set() };
     setEditingProduct(null); setForm(startForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
   };
 
@@ -1694,6 +1708,11 @@ export default function ProductsPage() {
     // Treat any price already stored on the product as a manual entry to keep,
     // and pre-fill the rest from rules / sell price.
     manualGroupsRef.current = new Set(Object.keys(ep.groupPrices ?? {}));
+    followGroupsRef.current = {
+      openedPrice: Number(ep.price) || 0,
+      stored: { ...((ep.groupPrices ?? {}) as Record<string, number>) },
+      ids: new Set(Object.keys(ep.groupPrices ?? {})),
+    };
     setForm(editForm);
     const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
     setPcPartType(_c?.partType || "");
@@ -3118,6 +3137,7 @@ export default function ProductsPage() {
                                 const v = e.target.value;
                                 if (v === "") manualGroupsRef.current.delete(group.id);
                                 else manualGroupsRef.current.add(group.id);
+                                followGroupsRef.current.ids.delete(group.id); // typed over: stops following the price
                                 setField("groupPrices", { ...form.groupPrices, [group.id]: v });
                               }}
                               placeholder={ruleGroupDefaults[group.id] != null ? ruleGroupDefaults[group.id].toFixed(2) : (form.price || "0.00")}

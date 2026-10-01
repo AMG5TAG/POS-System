@@ -263,9 +263,9 @@ export default function HomePage() {
                 KOASTAL KOLLECTIVE
               </p>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 leading-tight text-balance">
-                Computer Repairs, Website Design,{" "}
-                <br className="hidden md:block" />
-                Apps & Pop Culture
+                Computers and Media
+                <br />
+                Pop Culture and Gaming
                 <br />
                 on the Central Coast & Lake Macquarie
               </h1>

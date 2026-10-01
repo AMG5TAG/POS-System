@@ -3,7 +3,6 @@ import { useLocation } from "wouter";
 import { Menu, X, Phone, Monitor, Globe } from "lucide-react";
 import { SiteHeader, SiteNavMobile } from "@workspace/site-nav";
 import ThemeToggle from "@/components/ThemeToggle";
-import AccessibilityMenu from "@/components/AccessibilityMenu";
 
 /* The header itself — logo, shop search, phone, shop account and cart, and
    the menu on its own row below — is @workspace/site-nav's SiteHeader, the
@@ -23,7 +22,7 @@ export default function Navbar() {
       <SiteHeader
         className="top-nav"
         logoAlt={logoAlt}
-        extras={<><ThemeToggle /><AccessibilityMenu /></>}
+        extras={<ThemeToggle />}
       />
 
       {/* Mobile Menu overlay (rendered here so it survives the .top-nav hide rule) */}

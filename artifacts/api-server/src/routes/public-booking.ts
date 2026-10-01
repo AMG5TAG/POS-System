@@ -1,3 +1,4 @@
+import { ensureReferralCode } from "../lib/referrals";
 import { Router, type IRouter } from "express";
 import { db, merchantsTable, customersTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
@@ -76,6 +77,8 @@ router.post("/book/:username", async (req, res): Promise<void> => {
       merchantId, firstName, lastName: lastName || "", email: email || null, phone: phone || null,
     }).returning();
     customer = created;
+    // Every customer has a referral code to share (lib/referrals.ts).
+    await ensureReferralCode(created!).catch(() => {});
   }
 
   // Generate the next job number (SJ####).

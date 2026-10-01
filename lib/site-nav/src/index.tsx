@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState, type CSSProperties, type FormEvent, type KeyboardEvent, type MouseEvent, type ReactNode } from "react";
 import { ChevronDown, ChevronLeft, ChevronRight, FileText, Heart, Menu, Phone, Search, ShoppingCart, Star, User, X } from "lucide-react";
 import { loadSiteIndex, searchPages, searchProducts, type PageHit, type ProductHit, type SitePage } from "./site-search";
+import { AccessibilityMenu, AccessibilityOptions } from "./accessibility";
+export { AccessibilityMenu, AccessibilityOptions, useAccessibility } from "./accessibility";
 
 /*
  * The Koastal Kollective menu, shared by the website (artifacts/website) and
@@ -423,6 +425,15 @@ export function SiteNavMobile({ hashBase = "", homeHref = "/", onNavigate, onSho
           </div>
         );
       })}
+      {/* The accessibility options, for phones — where the website hides the
+          header (and its button) behind its own bottom bar. */}
+      <div>
+        <button className={rowClass} aria-expanded={open === "ACCESSIBILITY"} onClick={() => setOpen(open === "ACCESSIBILITY" ? null : "ACCESSIBILITY")}>
+          ACCESSIBILITY
+          <ChevronDown className={`h-4 w-4 transition-transform ${open === "ACCESSIBILITY" ? "rotate-180" : ""}`} />
+        </button>
+        {open === "ACCESSIBILITY" && <AccessibilityOptions className="ml-2 mt-1" />}
+      </div>
     </div>
   );
 }
@@ -656,8 +667,9 @@ const SITE_LOGO = "/images/logo.png";
 
 /* The header both apps render: logo, site search, phone and shop account on
    one row, the menu on the row below (desktop), and a collapsible menu panel
-   on narrower screens. `extras` is for controls only one app can honour (the
-   website's dark mode and accessibility toggles). */
+   on narrower screens. The accessibility options are part of it, so they are
+   on every page of both apps; `extras` is for controls only one app can honour
+   (the website's dark-mode toggle). */
 export function SiteHeader({
   logoSrc = SITE_LOGO, logoFallback, logoAlt, active, hashBase = "", homeHref = "/", onShopNavigate, session, extras, className = "",
 }: {
@@ -717,8 +729,9 @@ export function SiteHeader({
             <ShoppingCart className="w-4 h-4" /><span className="hidden sm:inline">Cart</span>
             {s.cartCount > 0 && <span className={`${badge} bg-[#7bb8bd] text-gray-900`}>{s.cartCount}</span>}
           </a>
-          {/* App-only controls (the website's theme and accessibility), last. */}
+          {/* App-only controls (the website's theme), then accessibility, last. */}
           {extras && <div className="hidden md:flex items-center">{extras}</div>}
+          <AccessibilityMenu />
         </nav>
       </div>
       <div className="hidden lg:flex max-w-7xl mx-auto px-4 pb-2">

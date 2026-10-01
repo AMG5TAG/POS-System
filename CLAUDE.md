@@ -50,7 +50,7 @@ Workflow to change an endpoint: edit `openapi.yaml` → run codegen → implemen
 - `artifacts/api-server` — Express 5 API. `src/app.ts` builds the app; `src/routes/index.ts` mounts ~139 feature routers; `src/services/` holds background schedulers and cross-cutting logic (email, SMS, backups, payments, token vault); `src/lib/` holds shared helpers; `src/middlewares/requireAuth.ts` is the session auth middleware.
 - `artifacts/koapos` — React 19 frontend. Pages in `src/pages/` (marketing + authenticated app), auth in `src/lib/auth.tsx` (AuthProvider + `useAuth`). **`<AppLayout>` is rendered by each page, not above the router**, so every navigation unmounts and remounts the entire chrome — nav, sidebar and all. Nothing in the layout survives a route change by itself: the collapsible sections re-derive their open state from the URL, and the sidebar's scroll offset is carried across in `sessionStorage` by `lib/use-persistent-scroll.ts` (restored in a layout effect, before paint, so the menu never visibly snaps to the top). Anything else that needs to outlive a navigation needs the same treatment, or hoisting out of the layout.
 - `lib/db` — Drizzle schema, one file per domain in `src/schema/` (merchants, products, customers, transactions, staff, …).
-- `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/phone-shared`, `lib/object-storage-web` — shared libraries. Note that cloud-storage integrations do **not** live here: they are in `artifacts/api-server/src/lib/` (`backup-storage/`, `nextcloud.ts`, `objectStorage.ts`) and `src/services/`.
+- `lib/integrations/*`, `lib/sales-documents`, `lib/shortlinks-shared`, `lib/phone-shared`, `lib/group-pricing`, `lib/object-storage-web` — shared libraries. Note that cloud-storage integrations do **not** live here: they are in `artifacts/api-server/src/lib/` (`backup-storage/`, `nextcloud.ts`, `objectStorage.ts`) and `src/services/`.
 - `artifacts/print-bridge` (`@workspace/print-bridge`) — a standalone, dependency-free Node service that runs **on the merchant's till**, not on the server. It is what lets the browser print without the OS print dialog. Not part of the deployed app; built to a single `dist/index.mjs` and installed on each till. See "Printing" below and its own README.
 - `scripts` (`@workspace/scripts`) — one-off migration/seed scripts wired into `db:push`.
 
@@ -458,12 +458,17 @@ token-for-token against the live one), so its own conventions hold:
   on phones the website keeps its own bottom bar. The menu wraps to a second
   row rather than overflow, which a wider face (Large Text, the dyslexia
   font) needs.
-- **Accessibility menu** (website): Large Text, High Contrast, Dyslexia-Friendly
-  Font and Reduce Motion, each a class on `<html>` saved in localStorage
-  (`kk-accessibility`, merged over defaults so older saves gain new keys). The
-  dyslexia font is OpenDyslexic (`@fontsource/opendyslexic`, OFL-1.1),
-  self-hosted, applied with `!important` because the shared header sets its
-  typeface inline.
+- **Accessibility menu** (both apps — it is part of the shared header,
+  `lib/site-nav/src/accessibility.tsx`, plus an ACCESSIBILITY section in the
+  phone menu): Large Text, High Contrast, Dyslexia-Friendly Font and Reduce
+  Motion, each a `kk-*` class on `<html>` saved in localStorage
+  (`kk-accessibility`, merged over defaults so older saves gain new keys).
+  Website and shop share an origin, so one choice holds on both. Styles are
+  `lib/site-nav/src/accessibility.css`, imported by each app's `index.css`
+  (the website adds only its own dark-theme contrast palette). The dyslexia
+  font is OpenDyslexic (`@fontsource/opendyslexic`, OFL-1.1), self-hosted and
+  imported by each app's `main.tsx`, applied with `!important` because the
+  shared header sets its typeface inline.
 - **Link previews are Share.png.** `Share.png` at the root of the
   object-storage bucket is served publicly by `GET /api/share-image.png`
   (`routes/share-image.ts`, read per request, 1h cache — replace the file and
@@ -676,6 +681,11 @@ shop account; nothing of it is left in the POS but a redirect. What moved:
   fields** setting applies here too (`lib/customer-profile-rules.ts`, served to
   the form by `GET /shop/account/fields` and re-checked on save); a field the
   request omits is judged by what is stored, and omitted fields are left alone.
+- **Customer group** shows on the account (read-only; staff set it).
+- **Referrals** — see "Referral programme" below. The account shows the
+  customer's link (`/shop/r/<code>`), everyone they referred with progress,
+  and rewards paid. "Heard from: Friend" on the profile takes the friend's
+  name and an optional code, linked once and never to the customer themself.
 - **Email** can be changed on the profile (the portal allowed it), but never to
   an address another customer record holds: the account gathers records from
   every record sharing its email (`buyerCustomerIds`), so that would hand over
@@ -739,6 +749,70 @@ submitting shopper → newest POS customer with that email → a new one) and
 creates a `KS####` job with `isMailIn`, inbound tracking and return address.
 `received` is reachable no other way (`canStaffSetStatus`). Rules in
 `lib/mail-in.ts`, pinned by `mail-in.test.ts`.
+
+### Customer group pricing
+
+A product's per-group prices are `products.group_prices` (jsonb, group id →
+price); the rules (Customers › Discounts & Pricing) are
+`customer_settings.group_pricing`. The formula lives in
+**`lib/group-pricing`** (`@workspace/group-pricing`), shared by the POS (its
+`lib/group-pricing.ts` re-exports it) and the API, so the till and the server
+agree on a group price to the cent:
+
+- **What a group pays**: `groupPriceFor` — the stored group price, else the
+  group's rule, else the sell price. The till's `unitPriceFor` uses it, and so
+  does `finalizeSale`, which accepts **exactly** that price for the sale's own
+  customer (`resolveCustomerGroupId`, group by id or name). Before this every
+  group-priced sale was repriced to the sell price and refused with a 409.
+- **Group prices follow the sell price** at the same share (`followPrice`:
+  Trade $65 on $130 → $70 on $140). `PATCH /products/:id` applies it whenever
+  the price changes (`reconcileGroupPrices`: a group re-sent unchanged follows,
+  a group edited in the same save keeps the edit), which covers the product
+  form, CSV import and any other caller; the bulk % / flat price changes apply
+  it per product. The product form shows it live (`followGroupsRef`) until a
+  group's price is typed over. A product whose old price was $0 has nothing to
+  scale from and keeps its group prices.
+- Cost changes (PO receiving) don't move group prices — only a cost-based
+  *rule* would, and rules are worked out live at the till anyway.
+
+Pinned by `group-prices-follow.test.ts` and `transactions-group-price.test.ts`.
+
+### Referral programme
+
+One programme, counted the same way in the POS, the shop and on documents.
+`lib/referrals.ts` holds the rules; settings are Management › Referrals
+(`customer_settings.referral_settings`, defaults 50 spend / 2 visits / 90
+days, rewards 200 friend / 500 referrer in the loyalty unit).
+
+- **Codes.** Every customer has a `referral_code` (format `SL-AB12`, unique
+  per business): minted on create in the POS, CSV import, shop sign-up, public
+  booking and mail-in (`ensureReferralCode`), and backfilled by
+  `scripts/src/add-referral-rewards.ts`. The shareable link is
+  `koastal.com.au/shop/r/<code>` — the shop account shows it, and invoice and
+  quote PDFs print it in their referral footer (`referralFieldsFor`).
+- **Who referred whom.** A referred customer carries the referrer's **code** in
+  `referred_by` (what the POS has always matched on) and, when known, their id
+  in `referred_by_customer_id`. The shop sets both (sign-up from a `/r/` link,
+  remembered in localStorage `kk-referral` for 90 days; or "Heard from:
+  Friend" + code on the profile).
+- **Qualifying.** The referred customer spends `minSpend` over `minVisits`
+  visits within `qualifyDays` of joining (`refereeProgress`).
+- **Automatic rewards** (`services/referralRewards.ts`). On qualifying, the
+  referrer and the friend are both credited onto their loyalty balances — at
+  qualification, not at sign-up, so a fake account earns nothing. A
+  `referral_rewards` row per referred customer (unique) is inserted in the same
+  DB transaction as the credits, so nothing is paid twice. Checked right after
+  every sale for its customer (`finalizeSale` → `checkReferralAfterSale`) and
+  by a daily sweep (spend from invoices, laybys). Paid only while both the
+  referral and the loyalty programme are on. Referrals that had already
+  qualified when automation began were recorded `pre_automation` by the
+  script and are never paid (staff may have rewarded them by hand).
+- **Reports.** POS › Marketing › Referrals reads the saved settings and the
+  recorded rewards from `GET /referrals/summary`; the shop account shows paid
+  rewards from the same table. The referrer sees a friend's first name + last
+  initial and whether the spend was reached, never the amount.
+
+Pinned by `shop-referrals.test.ts` and `referral-rewards.test.ts`.
 
 ### Merging brands and suppliers
 

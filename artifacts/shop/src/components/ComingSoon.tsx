@@ -4,6 +4,7 @@ import { Globe, LogIn, User } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useShopInfo } from "@/lib/shop";
 import { curtainCovers } from "@/lib/launch";
+import { rememberedReferral } from "@/lib/referral";
 
 /* Covers the shop until launch (the rules are in lib/launch.ts). Shown while
    the sign-in check is still loading too, so a visitor never glimpses the shop
@@ -13,7 +14,7 @@ export function ComingSoon() {
   const { customer, preview, loading } = useAuth();
   const { data: info } = useShopInfo();
   const [path] = useLocation();
-  const show = curtainCovers(path, !!customer, preview);
+  const show = curtainCovers(path, !!customer, preview, !!rememberedReferral());
 
   useEffect(() => {
     if (!show) return;

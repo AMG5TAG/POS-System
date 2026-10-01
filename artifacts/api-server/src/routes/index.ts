@@ -131,6 +131,7 @@ import warrantiesRouter from "./warranties";
 import publicBusinessRouter from "./public-business";
 import shopRouter from "./shop";
 import shopAccountRouter from "./shop-account";
+import referralsRouter from "./referrals";
 import shareImageRouter from "./share-image";
 import mailInRouter from "./mail-in";
 import shopInvitesRouter from "./shop-invites";
@@ -211,6 +212,7 @@ router.use(publicBusinessRouter);
 // Public: the online shop (koastal.com.au/shop) — catalogue and customer accounts.
 router.use(shopRouter);
 router.use(shopAccountRouter);
+router.use(referralsRouter);
 // Public: the link-preview image for koastal.com.au (Share.png in storage).
 router.use(shareImageRouter);
 router.use(mailInRouter);

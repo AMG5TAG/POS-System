@@ -21,6 +21,10 @@ export interface Account {
   agreedToMarketing: boolean;
   heardFrom: string;
   heardFromDetails: string;
+  /** The referrer's code, once a friend's referral is linked. */
+  referredByCode: string;
+  /** Their POS customer group (e.g. Trade); staff set it. */
+  customerGroup: string;
   loyaltyPoints: number;
   portalToken: string | null;
   /** YYYY-MM-DD; set once by the shopper, for the birthday reward. */
