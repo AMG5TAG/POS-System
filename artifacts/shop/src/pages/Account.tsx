@@ -46,12 +46,13 @@ export default function Account() {
       </div>
 
       <div className="grid lg:grid-cols-2 gap-6 items-start">
-        <FilesCard />
         <ReferralsCard />
         {overview && (
           <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />
         )}
       </div>
+
+      <FilesCard />
 
       <ProfileForm customer={customer} onSaved={setCustomer} />
 
