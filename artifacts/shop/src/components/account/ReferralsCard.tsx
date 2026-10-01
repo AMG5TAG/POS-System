@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Check, Copy, Gift, Loader2, Share2, Users } from "lucide-react";
+import { Check, Copy, Gift, Loader2, Users } from "lucide-react";
+import { ShareMenu } from "./ShareMenu";
 import { useReferrals, type Referee } from "@/lib/referral";
 
 const date = (d: string) => new Date(d).toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric" });
@@ -26,10 +27,8 @@ export function ReferralsCard() {
   const copy = async () => {
     try { await navigator.clipboard.writeText(data.url); setCopied(true); setTimeout(() => setCopied(false), 2000); } catch { /* clipboard blocked */ }
   };
-  const share = async () => {
-    try { await navigator.share({ title: "Koastal Kollective", text: "Here's my referral link for Koastal Kollective:", url: data.url }); }
-    catch { /* cancelled */ }
-  };
+  // What a friend receives, whichever way it is shared.
+  const shareText = `Join me at Koastal Kollective${rules.refereeReward ? ` — you'll get ${rules.refereeReward}` : ""}. Use my referral code ${data.code} or sign up with my link:`;
   const pending = data.referrals.filter((r) => !r.qualified && !r.expired).length;
 
   return (
@@ -47,11 +46,7 @@ export function ReferralsCard() {
         <button onClick={() => void copy()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full border border-stone-300 bg-white text-sm hover:bg-stone-50 shrink-0">
           {copied ? <><Check className="w-4 h-4 text-emerald-600" /> Copied</> : <><Copy className="w-4 h-4" /> Copy</>}
         </button>
-        {typeof navigator !== "undefined" && "share" in navigator && (
-          <button onClick={() => void share()} className="inline-flex items-center gap-1.5 h-8 px-3 rounded-full bg-brand text-white text-sm hover:bg-brand-dark shrink-0">
-            <Share2 className="w-4 h-4" /> Share
-          </button>
-        )}
+        <ShareMenu url={data.url} text={shareText} subject="Join me at Koastal Kollective" />
       </div>
       <p className="text-xs text-stone-500">Your code is <strong className="font-mono">{data.code}</strong> — friends can also quote it in store.</p>
 
