@@ -6,13 +6,14 @@ import { z } from "zod/v4";
 import crypto from "node:crypto";
 import { soleMerchantId } from "../lib/sole-merchant";
 import { buyerCustomerIds } from "../lib/shop-reviews";
-import { findCustomerByPortalToken, merchantRequiresPortalPassword, maskContact } from "../lib/portalAuth";
+import { findCustomerByPortalToken, maskContact } from "../lib/portalAuth";
 import { applyEstimateApprovalToJob } from "../services/quoteApproval";
 import { sendApplePass, sendGoogleWalletLink } from "../lib/wallet-pass";
 import { shopCustomer, accountOf, loyaltySettings } from "./shop";
 import { ensureReferralCode, findReferrer, referralSettingsFor, refereeProgress, referredBy } from "../lib/referrals";
 import { formatLoyalty } from "../lib/loyalty";
 import { shopOrigin } from "../lib/publicUrl";
+import { issueSetupLink } from "../lib/customerPasswordLinks";
 
 
 /**
@@ -41,6 +42,7 @@ const ipLimiter = (windowMs: number, max: number, message: string, failuresOnly 
   });
 
 const tokenLimiter = ipLimiter(15 * 60 * 1000, 30, "Too many attempts — please try again in 15 minutes.", true);
+const setupLimiter = ipLimiter(60 * 60 * 1000, 10, "Too many requests — please try again later.");
 const referralLimiter = ipLimiter(15 * 60 * 1000, 60, "Too many requests — please try again shortly.");
 const bookingLimiter = ipLimiter(60 * 60 * 1000, 10, "Too many bookings from this connection — please call us instead.");
 
@@ -55,31 +57,53 @@ async function signedIn(req: import("express").Request, res: import("express").R
 
 /*
  * The /c/<token> link texted with a repair update, printed on a completed
- * job's QR and carried by the wallet pass. The token admits under the portal's
- * rules (lib/portalAuth.ts): alone while the customer has no password or the
- * business hasn't turned on "require password"; otherwise the customer has to
- * sign in, and the link only says whose account it is. A token never signs
- * anyone in to a different business's customer.
+ * job's QR and carried by the wallet pass. The link says whose account it is;
+ * it never signs anyone in by itself, since a sticker QR is readable by anyone
+ * holding the device. A customer with a password is asked to sign in with it
+ * (`password_required`); one without is asked to set one up
+ * (`setup_required`), and POST /shop/auth/token/setup sends the set-up link to
+ * the contact on file — never to an address the request names. Only a
+ * shopper already signed in as that customer goes straight through. A token
+ * never names another business's customer.
  */
-router.post("/shop/auth/token", tokenLimiter, async (req, res): Promise<void> => {
-  const merchantId = await soleMerchantId();
-  const token = typeof req.body?.token === "string" ? req.body.token.trim() : "";
+async function linkCustomer(merchantId: number | null, raw: unknown) {
+  const token = typeof raw === "string" ? raw.trim() : "";
   const customer = token ? await findCustomerByPortalToken(token) : null;
-  if (merchantId == null || !customer || customer.merchantId !== merchantId) {
+  return merchantId != null && customer && customer.merchantId === merchantId ? customer : null;
+}
+
+router.post("/shop/auth/token", tokenLimiter, async (req, res): Promise<void> => {
+  const customer = await linkCustomer(await soleMerchantId(), req.body?.token);
+  if (!customer) {
     res.status(404).json({ error: "This link is no longer valid. Sign in with your email instead." });
     return;
   }
-  const already = req.session?.portalCustomerId === customer.id;
-  if (!already && customer.portalPasswordHash && await merchantRequiresPortalPassword(merchantId)) {
-    res.status(401).json({
-      error: "Please sign in with your password.",
-      reason: "password_required",
-      contactHint: maskContact(customer.email, customer.phone),
-    });
+  if (req.session?.portalCustomerId === customer.id) {
+    res.json({ customer: accountOf(customer) });
     return;
   }
-  req.session.portalCustomerId = customer.id;
-  res.json({ customer: accountOf(customer) });
+  const contactHint = maskContact(customer.email, customer.phone);
+  if (customer.portalPasswordHash) {
+    res.status(401).json({ error: "Please sign in with your password.", reason: "password_required", contactHint });
+    return;
+  }
+  res.status(401).json({
+    error: "Please set up your account to continue.",
+    reason: "setup_required",
+    contactHint,
+    canSendLink: !!(customer.email || customer.phone),
+  });
+});
+
+/* Sends the set-up link for the customer an account link names, to the
+   contact on file (email, else SMS — issueSetupLink). Same answer whatever
+   happened, so the route can't be used to probe accounts. */
+router.post("/shop/auth/token/setup", setupLimiter, async (req, res): Promise<void> => {
+  const customer = await linkCustomer(await soleMerchantId(), req.body?.token);
+  if (customer && (customer.email || customer.phone)) {
+    await issueSetupLink(customer, customer.portalPasswordHash ? "reset" : "setup", req.log);
+  }
+  res.json({ ok: true });
 });
 
 /* ── Appointments ────────────────────────────────────────────────────────── */

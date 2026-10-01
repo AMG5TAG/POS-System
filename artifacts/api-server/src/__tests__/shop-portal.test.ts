@@ -6,9 +6,10 @@ import express from "express";
  * The customer portal, merged into the shop account (routes/shop-account.ts,
  * routes/shop.ts). Pinned:
  *
- *   - an account link (/c/<token>) signs in under the portal's rules: alone
- *     while the customer has no password or the business doesn't require one,
- *     never once both hold, and never to another business's customer;
+ *   - an account link (/c/<token>) never signs anyone in by itself: a customer
+ *     with a password is asked for it, one without is asked to set one up and
+ *     the set-up link goes only to the contact on file; never another
+ *     business's customer;
  *   - quotes can only be answered while sent and unexpired, and accepting one
  *     drives its repair job forward;
  *   - appointments are booked under the signed-in customer, in the future;
@@ -23,6 +24,7 @@ const h = vi.hoisted(() => ({
   approvals: [] as unknown[],
   required: {} as Record<string, boolean>,
   heardFrom: [] as { name: string; requiresDetails: boolean }[],
+  setupLinks: [] as { id: number; purpose: string }[],
 }));
 
 vi.mock("@workspace/db", async (importOriginal) => {
@@ -40,6 +42,10 @@ vi.mock("@workspace/db", async (importOriginal) => {
   return { ...actual, db: new Proxy({} as any, { get: () => () => chain() }) };
 });
 vi.mock("../lib/sole-merchant", () => ({ soleMerchantId: async () => 1, SOLE_MERCHANT_EMAIL: "owner@koastal.test" }));
+vi.mock("../lib/customerPasswordLinks", async (importOriginal) => ({
+  ...(await importOriginal<Record<string, unknown>>()),
+  issueSetupLink: vi.fn(async (c: { id: number }, purpose: string) => { h.setupLinks.push({ id: c.id, purpose }); }),
+}));
 vi.mock("../services/autoSyncScheduler", () => ({ triggerInstantSync: vi.fn() }));
 vi.mock("../lib/phone", () => ({ normalisePhoneFor: async (_m: number, p: string) => p }));
 vi.mock("../lib/customer-profile-rules", async (importOriginal) => ({
@@ -75,31 +81,48 @@ beforeAll(async () => {
   app.use("/api", shopRouter, accountRouter);
 }, 60000);
 
-beforeEach(() => { h.rows = []; h.values = []; h.sets = []; h.session = {}; h.approvals = []; h.required = {}; h.heardFrom = []; });
+beforeEach(() => { h.rows = []; h.values = []; h.sets = []; h.session = {}; h.approvals = []; h.required = {}; h.heardFrom = []; h.setupLinks = []; });
 
 describe("signing in from an account link", () => {
-  it("admits a customer with no password, and signs them in", async () => {
+  it("asks a customer with no password to set one up, without signing them in", async () => {
     h.rows = [[customer]];
     const res = await request(app).post("/api/shop/auth/token").send({ token: "tok-9" });
-    expect(res.status).toBe(200);
-    expect(res.body.customer.id).toBe(9);
-    expect(h.session.portalCustomerId).toBe(9);
+    expect(res.status).toBe(401);
+    expect(res.body.reason).toBe("setup_required");
+    expect(res.body.canSendLink).toBe(true);
+    expect(res.body.contactHint).toBe("s•••@example.com");
+    expect(h.session.portalCustomerId).toBeUndefined();
   });
 
-  it("admits a customer with a password when the business doesn't require one", async () => {
-    h.rows = [[{ ...customer, portalPasswordHash: "hash" }], [{ require: "false" }]];
+  it("says there is nowhere to send a set-up link when no contact is on file", async () => {
+    h.rows = [[{ ...customer, email: null, phone: null }]];
     const res = await request(app).post("/api/shop/auth/token").send({ token: "tok-9" });
-    expect(res.status).toBe(200);
-    expect(h.session.portalCustomerId).toBe(9);
+    expect(res.status).toBe(401);
+    expect(res.body.canSendLink).toBe(false);
   });
 
-  it("asks for the password once the customer has one and the business requires it", async () => {
-    h.rows = [[{ ...customer, portalPasswordHash: "hash" }], [{ require: "true" }]];
+  it("asks a customer with a password to sign in with it", async () => {
+    h.rows = [[{ ...customer, portalPasswordHash: "hash" }]];
     const res = await request(app).post("/api/shop/auth/token").send({ token: "tok-9" });
     expect(res.status).toBe(401);
     expect(res.body.reason).toBe("password_required");
     expect(res.body.contactHint).toBe("s•••@example.com");
     expect(h.session.portalCustomerId).toBeUndefined();
+  });
+
+  it("sends the set-up link to the contact on file, and never signs in", async () => {
+    h.rows = [[customer]];
+    const res = await request(app).post("/api/shop/auth/token/setup").send({ token: "tok-9", email: "attacker@example.com" });
+    expect(res.status).toBe(200);
+    expect(h.setupLinks).toEqual([{ id: 9, purpose: "setup" }]);
+    expect(h.session.portalCustomerId).toBeUndefined();
+  });
+
+  it("answers the same for an unknown link, sending nothing", async () => {
+    h.rows = [[]];
+    const res = await request(app).post("/api/shop/auth/token/setup").send({ token: "nope" });
+    expect(res.status).toBe(200);
+    expect(h.setupLinks).toEqual([]);
   });
 
   it("lets an already signed-in customer straight through", async () => {

@@ -1,29 +1,22 @@
 import type { Request } from "express";
-import { db, customersTable, merchantsTable } from "@workspace/db";
+import { db, customersTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 
 /**
  * Access control for a customer's account link (/c/<token>).
  *
- * The customer portal now lives in the online shop's account area; its link
- * signs the customer in there (POST /shop/auth/token) under these same rules,
- * and staff hand out wallet passes by token (routes/portal.ts).
+ * The customer portal now lives in the online shop's account area. Its link
+ * never signs anyone in there by itself — POST /shop/auth/token
+ * (routes/shop-account.ts) asks for the shop password, or for one to be set up,
+ * because the same link is printed on a service sticker that stays on the
+ * device. That was a business option ("require a customer password") until it
+ * became the only behaviour; `merchants.require_portal_password` is left in
+ * the table, unread.
  *
- * The portal began as token-only: whoever held the `portalToken` in the URL had
- * full read and write access to that customer. That is acceptable for a link
- * texted to the customer, but not for a QR printed on a service sticker that
- * stays on the device.
- *
- * So a merchant can require a password. The rules, in the order they're applied:
- *
- *   - merchant hasn't opted in    -> token alone admits, exactly as before
- *   - customer has no password yet -> token alone admits, and the account offers set-up
- *   - customer has a password      -> the token only IDENTIFIES the account;
- *                                     a session is required to read or write it
- *
- * The middle rule is what makes this safe to ship: turning the toggle on never
- * locks anybody out, it starts inviting them to set a password. Only once a
- * customer has one does their token stop being a credential.
+ * `resolvePortalAccess` guards the wallet-pass downloads staff hand out by token
+ * (routes/portal.ts): a customer with a password needs a session; one without
+ * is admitted by the token, which is how staff give a pass to a customer who
+ * has not set up an account.
  */
 
 declare module "express-session" {
@@ -46,15 +39,6 @@ export async function findCustomerByPortalToken(token: string): Promise<PortalCu
   return row ?? null;
 }
 
-/** Whether this customer's merchant has opted into portal passwords. */
-export async function merchantRequiresPortalPassword(merchantId: number): Promise<boolean> {
-  const [m] = await db
-    .select({ require: merchantsTable.requirePortalPassword })
-    .from(merchantsTable)
-    .where(eq(merchantsTable.id, merchantId));
-  return m?.require === "true";
-}
-
 /** True when this request already holds a session for this customer. */
 export function isPortalAuthenticated(req: Request, customer: PortalCustomer): boolean {
   return req.session?.portalCustomerId === customer.id;
@@ -70,7 +54,6 @@ export async function resolvePortalAccess(req: Request, token: string): Promise<
 
   if (isPortalAuthenticated(req, customer)) return { ok: true, customer };
   if (!customer.portalPasswordHash) return { ok: true, customer };
-  if (!(await merchantRequiresPortalPassword(customer.merchantId))) return { ok: true, customer };
 
   return {
     ok: false,

@@ -65,6 +65,7 @@
     "add-trusted-ips-and-dashboard-devices": "tsx ./src/add-trusted-ips-and-dashboard-devices.ts",
     "add-mail-in-tables": "tsx ./src/add-mail-in-tables.ts",
     "add-shop-settings-table": "tsx ./src/add-shop-settings-table.ts",
+    "add-shop-product-feed": "tsx ./src/add-shop-product-feed.ts",
     "add-pre-order-sales": "tsx ./src/add-pre-order-sales.ts",
     "add-referral-rewards": "tsx ./src/add-referral-rewards.ts"
   },

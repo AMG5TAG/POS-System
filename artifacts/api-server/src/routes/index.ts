@@ -136,6 +136,7 @@ import shareImageRouter from "./share-image";
 import mailInRouter from "./mail-in";
 import shopInvitesRouter from "./shop-invites";
 import onlineStoreRouter from "./online-store";
+import shopFeedRouter from "./shop-feed";
 
 const router: IRouter = Router();
 
@@ -218,6 +219,8 @@ router.use(shareImageRouter);
 router.use(mailInRouter);
 router.use(shopInvitesRouter);
 router.use(onlineStoreRouter);
+// Public feed for shopping channels (token in the URL) + its staff settings.
+router.use(shopFeedRouter);
 router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);

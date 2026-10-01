@@ -177,6 +177,7 @@ const ManagementCustomersPortalPage = lazyWithRetry(() => import("@/pages/app/ma
 const ManagementOnlineStoreOverviewPage = lazyWithRetry(() => import("@/pages/app/management-online-store-overview"));
 const ManagementOnlineStoreProductsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-products"));
 const ManagementOnlineStoreAccountsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-accounts"));
+const ManagementOnlineStoreChannelsPage = lazyWithRetry(() => import("@/pages/app/management-online-store-channels"));
 const SettingsPricingRulesPage = lazyWithRetry(() => import("@/pages/app/settings-pricing-rules"));
 const SettingsModifierGroupsPage = lazyWithRetry(() => import("@/pages/app/settings-modifier-groups"));
 
@@ -532,6 +533,9 @@ function Router() {
       </Route>
       <Route path="/management/online-store/accounts">
         <ManagementProtectedRoute component={ManagementOnlineStoreAccountsPage} />
+      </Route>
+      <Route path="/management/online-store/channels">
+        <ManagementProtectedRoute component={ManagementOnlineStoreChannelsPage} />
       </Route>
 
       {/* Customers */}

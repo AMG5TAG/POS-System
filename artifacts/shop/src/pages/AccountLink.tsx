@@ -7,15 +7,22 @@ import { AuthCard, Notice } from "@/components/Form";
 
 /* /c/<token> — the account link texted with a repair update, printed on a
    completed job's QR and carried by the wallet pass. It used to open the
-   customer portal; now it signs the customer into this account and opens it.
-   Whether the link alone is enough is the server's call (POST /shop/auth/token,
-   lib/portalAuth.ts): a customer who has set a password, at a business that
-   requires one, is asked to sign in instead. */
+   customer portal; now it leads to this account. The link only says whose
+   account it is — it is also printed on a sticker that stays on the device —
+   so it never signs anyone in (POST /shop/auth/token): a customer with a
+   password signs in with it, one without is sent a set-up link to the contact
+   on file. Someone already signed in as that customer goes straight through. */
 export default function AccountLink() {
   const { token } = useParams<{ token: string }>();
   const { setCustomer } = useAuth();
   const [, navigate] = useLocation();
-  const [state, setState] = useState<{ kind: "working" } | { kind: "password"; hint: string | null } | { kind: "invalid"; message: string }>({ kind: "working" });
+  const [state, setState] = useState<
+    | { kind: "working" }
+    | { kind: "password"; hint: string | null }
+    | { kind: "setup"; hint: string | null; canSend: boolean }
+    | { kind: "invalid"; message: string }
+  >({ kind: "working" });
+  const [sending, setSending] = useState<"idle" | "busy" | "sent">("idle");
   const once = useRef(false);
 
   useEffect(() => {
@@ -24,8 +31,11 @@ export default function AccountLink() {
     api<{ customer: Account }>("/shop/auth/token", { method: "POST", body: JSON.stringify({ token }) })
       .then((r) => { setCustomer(r.customer); navigate("/account", { replace: true }); })
       .catch((err) => {
+        const hint = err instanceof ApiError && typeof err.body.contactHint === "string" ? err.body.contactHint : null;
         if (err instanceof ApiError && err.body.reason === "password_required") {
-          setState({ kind: "password", hint: typeof err.body.contactHint === "string" ? err.body.contactHint : null });
+          setState({ kind: "password", hint });
+        } else if (err instanceof ApiError && err.body.reason === "setup_required") {
+          setState({ kind: "setup", hint, canSend: err.body.canSendLink === true });
         } else {
           setState({ kind: "invalid", message: (err as Error).message });
         }
@@ -43,6 +53,40 @@ export default function AccountLink() {
         </Notice>
         <Link href="/account/login?next=/account" className="flex items-center justify-center w-full h-11 rounded-full bg-brand text-white font-medium hover:bg-brand-dark">Sign in</Link>
         <Link href="/account/forgot" className="block text-center text-sm text-stone-600 hover:underline">Forgot your password?</Link>
+      </AuthCard>
+    );
+  }
+  if (state.kind === "setup") {
+    const send = async () => {
+      setSending("busy");
+      try {
+        await api("/shop/auth/token/setup", { method: "POST", body: JSON.stringify({ token }) });
+        setSending("sent");
+      } catch {
+        setSending("idle");
+      }
+    };
+    return (
+      <AuthCard title="Set up your account">
+        {sending === "sent" ? (
+          <Notice tone="ok">
+            We've sent a set-up link{state.hint ? ` to ${state.hint}` : ""}. Open it to choose your password — then you can see your repairs, quotes and appointments any time.
+          </Notice>
+        ) : state.canSend ? (
+          <>
+            <Notice tone="ok">
+              To keep your details safe, your account needs a password. We'll send a set-up link{state.hint ? ` to ${state.hint}` : " to the contact details we have for you"}.
+            </Notice>
+            <button onClick={() => void send()} disabled={sending === "busy"} className="flex items-center justify-center w-full h-11 rounded-full bg-brand text-white font-medium hover:bg-brand-dark disabled:opacity-50">
+              {sending === "busy" ? "Sending…" : "Send me a set-up link"}
+            </button>
+          </>
+        ) : (
+          <Notice>
+            To keep your details safe, your account needs a password, but we don't have an email or mobile number for you yet. Please contact us and we'll get it set up.
+          </Notice>
+        )}
+        <Link href="/account/login?next=/account" className="block text-center text-sm text-stone-600 hover:underline">Already have a password? Sign in</Link>
       </AuthCard>
     );
   }

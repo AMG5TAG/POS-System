@@ -65,7 +65,9 @@ export default function Product() {
     <div className="mx-auto max-w-7xl px-4 py-8">
       <nav className="text-sm text-stone-500 mb-6">
         <Link href="/products" className="hover:underline">Shop</Link>
-        {p.category && <> / <Link href={`/products?category=${p.category.id}`} className="hover:underline">{p.category.name}</Link></>}
+        {categoryPath.map((c) => (
+          <span key={c.id}> / <Link href={`/products?category=${c.id}`} className="hover:underline">{c.name}</Link></span>
+        ))}
       </nav>
       <div className="grid grid-cols-1 md:grid-cols-[minmax(0,5fr)_minmax(0,7fr)] gap-8 lg:gap-12 items-start">
         {/* A chosen variant's own photo leads; the rest of the gallery follows. */}
@@ -79,14 +81,9 @@ export default function Product() {
           {p.brand && <p className="text-sm uppercase tracking-wide text-stone-500">{p.brand}</p>}
           <div>
             <h1 className="text-3xl font-bold leading-tight break-words">{p.name}</h1>
-            {categoryPath.length > 0 && (
+            {p.category && (
               <p className="mt-1.5 text-sm text-stone-500 break-words">
-                {categoryPath.map((c, i) => (
-                  <span key={c.id}>
-                    {i > 0 && <span className="mx-1.5 text-stone-300">›</span>}
-                    <Link href={`/products?category=${c.id}`} className="hover:text-brand hover:underline">{c.name}</Link>
-                  </span>
-                ))}
+                Category: <Link href={`/products?category=${p.category.id}`} className="hover:text-brand hover:underline">{p.category.name}</Link>
               </p>
             )}
           </div>

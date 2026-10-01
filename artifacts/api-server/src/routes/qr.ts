@@ -42,10 +42,9 @@ router.get("/qr/r/:id", async (req, res): Promise<void> => {
  * portal address) falls back to the Tech App rather than dead-ending: a sticker
  * that opens nothing is worse than one that opens the staff view.
  *
- * Note this hands the portal to whoever scans the sticker, since the token in
- * that url is itself the credential. `merchants.requirePortalPassword` is the
- * intended control — with it on, the token identifies the customer and their
- * password admits them.
+ * Whoever scans the sticker reaches the account *link*, not the account: the
+ * token only says whose account it is, and the customer signs in with their
+ * shop password or is asked to set one up (POST /shop/auth/token).
  */
 router.get("/qr/j/:jobId", async (req, res): Promise<void> => {
   const jobId = parseInt(String(req.params.jobId ?? ""), 10);

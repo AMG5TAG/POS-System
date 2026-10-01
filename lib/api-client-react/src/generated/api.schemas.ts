@@ -677,8 +677,6 @@ export interface Merchant {
   loginNotifyEmailNewLocation?: boolean;
   securityAlertEmail?: boolean;
   passwordChangeAlertEmail?: boolean;
-  /** When true, a customer who has set a portal password must enter it; the portalToken in the URL then identifies the account rather than granting access to it. Customers who have not set one yet are still admitted by the token and are prompted to set a password. */
-  requirePortalPassword?: boolean;
   createdAt: string;
   staffRole?: MerchantStaffRole;
   emailVerified?: boolean;
@@ -722,7 +720,6 @@ export interface MerchantUpdate {
   loginNotifyEmailNewLocation?: boolean;
   securityAlertEmail?: boolean;
   passwordChangeAlertEmail?: boolean;
-  requirePortalPassword?: boolean;
 }
 
 export interface ProductPriceHistoryEntry {

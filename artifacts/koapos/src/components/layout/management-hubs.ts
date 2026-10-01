@@ -7,6 +7,7 @@ import {
   UserCircle, Building2, Receipt, Plug, ArrowLeftRight, FolderSync, MessageSquare, Palette,
   LayoutGrid, MoreHorizontal, Settings, Image as ImageIcon, Store, Paintbrush, KeyRound,
   FolderOpen, ClipboardList, CalendarRange,
+  ShoppingBag,
 } from "lucide-react";
 
 /**
@@ -48,6 +49,7 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Overview",          href: "/management/online-store/overview", icon: Store },
       { name: "Products",          href: "/management/online-store/products", icon: Boxes },
       { name: "Customer Accounts", href: "/management/online-store/accounts", icon: Users },
+      { name: "Shopping Channels", href: "/management/online-store/channels", icon: ShoppingBag },
     ],
   },
   {

@@ -300,9 +300,9 @@ stable for the life of the job and the destination is chosen at scan time: the
 Tech App deep link while the job is open, the customer's shop account once it is
 `completed` (falling back to the Tech App when there is no account link — a
 sticker that opens nothing is worse than one that opens the staff view). Never
-print `techAppJobUrl` directly. That resolver hands the account to whoever scans
-the sticker, since the portal token *is* the credential; `merchants.requirePortalPassword`
-is the intended control. `customerPortalUrl` in `lib/publicUrl.ts` builds the
+print `techAppJobUrl` directly. Whoever scans the sticker reaches the account
+*link*, not the account — the link never signs anyone in (see "Sign-in by
+link" below). `customerPortalUrl` in `lib/publicUrl.ts` builds the
 account link for both the resolver and the status-change SMS (admin and Tech
 App) so the three cannot drift.
 
@@ -648,19 +648,41 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   14 days; email only, never SMS. It needs the exact count typed back and sends
   in the background, paced for the email provider. Pinned by `shop-invites.test.ts`.
 
+### Shopping channels (product feed)
+
+Management › Online Store › Shopping Channels publishes one product feed at
+`koastal.com.au/api/shop/feed/<token>.xml` (`routes/shop-feed.ts`) in Google
+Merchant Center's RSS format — the one format Google Shopping, Meta (Facebook
+& Instagram), Pinterest, TikTok and Microsoft Merchant Center all accept, so a
+new channel is a row in the page's `CHANNELS`, not server code. The token is
+`shop_settings.feed_token` (null = off; "Replace link" mints a new one and kills
+the old; `scripts/src/add-shop-product-feed.ts`). The rules are in
+`lib/product-feed.ts`, away from `db`, pinned by `product-feed.test.ts`: the
+feed is `shopVisible` (out-of-stock items stay in, marked out_of_stock);
+services, ePay, $0 and photo-less products are left out and counted by reason;
+images go through `shopMediaUrl` made absolute; a barcode is a GTIN only with a
+valid check digit; variants are items sharing `item_group_id`. Channels reject
+products whose link lands on the shop's coming-soon curtain, so submit after
+launch.
+
 ### Customer portal → shop account
 
 The customer portal (a POS-domain page at `/c/<token>`) was merged into the
 shop account; nothing of it is left in the POS but a redirect. What moved:
 
-- **Sign-in by link.** `POST /shop/auth/token` (`routes/shop-account.ts`) is the
-  portal's old gate (`resolvePortalAccess` rules, `lib/portalAuth.ts`): the
-  token alone signs in while the customer has no password or
-  `merchants.requirePortalPassword` is off; once both hold it answers 401
-  `password_required` and the shop asks for the password. Never another
-  business's customer. The shop's `/c/:token` page calls it and opens
-  `/account`; `/c/:token/set-password` forwards to `/account/set-password`. A
-  customer signed in by link with no password gets an "Email me a link" prompt.
+- **Sign-in by link.** The token says whose account it is and **never signs
+  anyone in** — the same link is on a sticker that stays on the device.
+  `POST /shop/auth/token` (`routes/shop-account.ts`) answers 401
+  `password_required` (customer has a password: sign in with it) or
+  `setup_required` (none yet: `POST /shop/auth/token/setup` sends a set-up link
+  to the contact on file, email else SMS — never to an address the request
+  names). Only a shopper already signed in as that customer goes through.
+  Never another business's customer. This was the POS's "Password protection"
+  option until it became the only behaviour; `merchants.require_portal_password`
+  is left in the table, unread. The shop's `/c/:token` page shows the sign-in
+  or set-up card; `/c/:token/set-password` forwards to `/account/set-password`.
+  Staff wallet-pass downloads by token (`routes/portal.ts`) still admit a
+  customer with no password (`resolvePortalAccess`).
 - **Quotes** (sent/accepted/declined; a sent one past expiry shows expired):
   approve/decline while sent and unexpired; accepting calls
   `applyEstimateApprovalToJob(…, "portal")`, as the portal did.

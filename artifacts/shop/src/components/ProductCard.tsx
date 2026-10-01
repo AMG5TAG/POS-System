@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { Link } from "wouter";
-import { ImageOff } from "lucide-react";
+import { Eye, ImageOff } from "lucide-react";
 import { money } from "@/lib/format";
 import { formatDay, type ProductSummary } from "@/lib/shop";
 import { WishlistHeart } from "./WishlistHeart";
+import { QuickView } from "./QuickView";
 
 /* A missing or unreachable photo shows the placeholder, never a broken image. */
 export function ProductImage({ src, alt, className = "" }: { src: string | null; alt: string; className?: string }) {
@@ -15,12 +16,24 @@ export function ProductImage({ src, alt, className = "" }: { src: string | null;
 }
 
 export function ProductCard({ p }: { p: ProductSummary }) {
+  const [quick, setQuick] = useState(false);
   return (
     <div className="group relative flex flex-col w-full rounded-2xl bg-white border border-stone-200 overflow-hidden hover:shadow-lg hover:-translate-y-0.5 transition">
     <WishlistHeart productId={p.id} name={p.name} className="absolute top-2.5 right-2.5" />
     {p.preOrder && <span className="absolute top-3 left-3 z-10 rounded-full bg-violet-600 text-white text-[11px] font-bold uppercase tracking-wide px-2.5 py-1">Pre-order</span>}
+    {/* Quick view sits over the photo: shown on hover or keyboard focus where
+        there is a pointer, always on touch screens (no hover to reveal it). */}
+    <div className="relative">
+      <Link href={`/product/${p.id}`} className="block aspect-square bg-white p-4" tabIndex={-1} aria-hidden="true">
+        <ProductImage src={p.imageUrl} alt="" className="group-hover:scale-105 transition" />
+      </Link>
+      <button type="button" onClick={() => setQuick(true)} aria-label={`Quick view: ${p.name}`}
+        className="absolute bottom-2 left-1/2 -translate-x-1/2 z-10 inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-white/95 border border-stone-200 shadow-sm text-sm font-medium text-stone-800 hover:bg-brand hover:text-white hover:border-brand transition
+          [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 focus-visible:opacity-100">
+        <Eye className="w-4 h-4" /> Quick view
+      </button>
+    </div>
     <Link href={`/product/${p.id}`} className="flex flex-col flex-1">
-      <div className="aspect-square bg-white p-4"><ProductImage src={p.imageUrl} alt={p.name} className="group-hover:scale-105 transition" /></div>
       <div className="p-4 pt-0 flex flex-col gap-1 flex-1">
         {p.brand && <p className="text-xs uppercase tracking-wide text-stone-500">{p.brand}</p>}
         <p className="font-medium leading-snug line-clamp-2">{p.name}</p>
@@ -34,6 +47,7 @@ export function ProductCard({ p }: { p: ProductSummary }) {
         </div>
       </div>
     </Link>
+    {quick && <QuickView productId={p.id} onClose={() => setQuick(false)} />}
     </div>
   );
 }

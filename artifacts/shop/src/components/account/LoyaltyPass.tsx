@@ -61,18 +61,21 @@ export function LoyaltyPass({ portalToken, totalSpent, visitCount }: { portalTok
           </dl>
           <p className="text-sm text-stone-600">Show this code in store, or add your card to your phone's wallet. It opens this account, so keep it to yourself.</p>
           {msg && <Notice tone={msg.tone}>{msg.text}</Notice>}
-          <div className="flex flex-wrap gap-2">
-            <button onClick={() => void apple()} disabled={!!busy} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full bg-black text-white text-sm font-medium disabled:opacity-50">
-              <Wallet className="w-4 h-4" /> {busy === "apple" ? "Preparing…" : "Apple Wallet"}
+          {/* The two wallet pills share a row of their own so they always sit side by side. */}
+          <div className="grid grid-cols-2 gap-2 max-w-sm">
+            <button onClick={() => void apple()} disabled={!!busy} className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-full bg-black text-white text-sm font-medium whitespace-nowrap disabled:opacity-50">
+              <Wallet className="w-4 h-4 shrink-0" /> {busy === "apple" ? "Preparing…" : "Apple Wallet"}
             </button>
-            <button onClick={() => void google()} disabled={!!busy} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-stone-300 text-sm font-medium hover:bg-stone-50 disabled:opacity-50">
-              <Wallet className="w-4 h-4" /> {busy === "google" ? "Opening…" : "Google Wallet"}
+            <button onClick={() => void google()} disabled={!!busy} className="inline-flex items-center justify-center gap-1.5 h-9 px-3 rounded-full border border-stone-300 text-sm font-medium whitespace-nowrap hover:bg-stone-50 disabled:opacity-50">
+              <Wallet className="w-4 h-4 shrink-0" /> {busy === "google" ? "Opening…" : "Google Wallet"}
             </button>
-            {link && <>
+          </div>
+          {link && (
+            <div className="flex flex-wrap gap-2">
               <button onClick={() => void copy()} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50"><Copy className="w-4 h-4" /> Copy link</button>
               <button onClick={download} className="inline-flex items-center gap-1.5 h-9 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50"><Download className="w-4 h-4" /> Save QR</button>
-            </>}
-          </div>
+            </div>
+          )}
         </div>
       </div>
     </section>

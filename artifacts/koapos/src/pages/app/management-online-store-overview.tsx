@@ -6,7 +6,7 @@ import { Link } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { ExternalLink, Package, Users, Loader2, Store } from "lucide-react";
+import { ExternalLink, Package, Users, Loader2, Store, ShoppingBag } from "lucide-react";
 
 export interface OnlineStoreSummary {
   shopUrl: string;
@@ -113,6 +113,9 @@ export default function ManagementOnlineStoreOverviewPage() {
               </Link>
               <Link href="/management/online-store/accounts">
                 <Button variant="outline" className="w-full justify-start gap-2"><Users className="w-4 h-4" /> Customer accounts — invite customers to sign in</Button>
+              </Link>
+              <Link href="/management/online-store/channels">
+                <Button variant="outline" className="w-full justify-start gap-2"><ShoppingBag className="w-4 h-4" /> Shopping channels — list products on Google, Facebook & more</Button>
               </Link>
             </CardContent>
           </Card>
