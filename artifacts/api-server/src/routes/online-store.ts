@@ -8,7 +8,7 @@ import { shopOrigin } from "../lib/publicUrl";
 import { shopVisible, notInHiddenCategory, shopListable, shopHidesOutOfStock, inStockSql } from "../lib/shop-visibility";
 
 /**
- * Management › Online Store — the POS side of shop.koastal.com.au.
+ * Management › Online Store — the POS side of koastal.com.au/shop.
  *
  * The shop lists a product when it is active, its `show_online` is on and no
  * category above it is hidden (lib/shop-visibility.ts). This is where both

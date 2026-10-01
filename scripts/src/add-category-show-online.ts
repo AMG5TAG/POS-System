@@ -2,7 +2,7 @@ import { pool } from "@workspace/db";
 
 /**
  * Online shop category visibility: adds categories.show_online ("true"/"false",
- * default "true"), so every category stays on shop.koastal.com.au until it is
+ * default "true"), so every category stays on koastal.com.au/shop until it is
  * hidden under Management › Online Store › Products. Additive only — no
  * existing value changes.
  *

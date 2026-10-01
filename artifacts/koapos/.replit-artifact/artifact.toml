@@ -18,11 +18,14 @@ localPort = 19141
 run = "pnpm --filter @workspace/koapos run dev"
 
 # Not static: Replit routes by path only, so "/" on every domain lands here, and
-# server.mjs picks the shop's build for the shop domain and the POS's otherwise.
+# server.mjs picks the build by host — the Koastal Kollective website and the
+# shop (/shop) on koastal.com.au, the POS otherwise.
+# INDEXNOW_SUBMIT=1 lets the website's postbuild ping IndexNow; only this deploy
+# build sets it, so local builds never call out to search engines.
 [services.production]
 
 [services.production.build]
-args = [ "pnpm", "--filter", "@workspace/koapos", "--filter", "@workspace/shop", "run", "build" ]
+args = [ "env", "INDEXNOW_SUBMIT=1", "pnpm", "--filter", "@workspace/koapos", "--filter", "@workspace/shop", "--filter", "@workspace/website", "run", "build" ]
 
 [services.production.run]
 args = [ "node", "artifacts/koapos/server.mjs" ]

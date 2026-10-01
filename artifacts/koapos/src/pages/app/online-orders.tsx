@@ -21,7 +21,7 @@ import {
   useListDeliveryOrders, useUpdateDeliveryOrder, getListDeliveryOrdersQueryKey, type DeliveryOrder,
 } from "@workspace/api-client-react";
 
-/* Online › Orders — every order placed on the online store (shop.koastal.com.au),
+/* Online › Orders — every order placed on the online store (koastal.com.au/shop),
    with its status, where it is going and how it is being shipped. Orders are
    the delivery_orders rows; marking one paid books it as a sale (server side). */
 

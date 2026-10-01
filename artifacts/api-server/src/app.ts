@@ -11,7 +11,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middlewares/errorHandler";
 import { normalisePhoneFields } from "./middlewares/normalisePhoneFields";
-import { publicOrigin, legacyDomains, shopDomain } from "./lib/publicUrl";
+import { publicOrigin, legacyDomains, siteDomain } from "./lib/publicUrl";
 import { legacyDomainRedirect } from "./middlewares/legacyDomainRedirect";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
 
@@ -82,7 +82,9 @@ if (isProduction) {
   // override), plus the domains it used to live on, which still serve requests.
   allowedOrigins.add(publicOrigin());
   for (const d of legacyDomains()) allowedOrigins.add(`https://${d}`);
-  allowedOrigins.add(`https://${shopDomain()}`);
+  // The website and the shop under it (koastal.com.au, /shop).
+  allowedOrigins.add(`https://${siteDomain()}`);
+  allowedOrigins.add(`https://www.${siteDomain()}`);
   // The branded short-link domain serves the SPA, which calls the API
   // cross-origin to resolve a slug → destination before redirecting.
   allowedOrigins.add(`https://${SHORT_DOMAIN}`);

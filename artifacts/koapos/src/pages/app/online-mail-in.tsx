@@ -92,7 +92,7 @@ export default function OnlineMailInPage() {
             <p className="text-sm text-muted-foreground mt-1">Devices customers are posting in for free diagnostics. Mark one Received when the parcel arrives to book it in as a service job.</p>
           </div>
           <Button variant="outline" size="sm" asChild className="gap-1.5">
-            <a href="https://shop.koastal.com.au/mail-in" target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" /> View shop page</a>
+            <a href="https://koastal.com.au/shop/mail-in" target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5" /> View shop page</a>
           </Button>
         </div>
 

@@ -18,7 +18,7 @@ import type { ProductMediaItem } from "@workspace/db";
 import { productWarrantyExpiry, productWarrantyLabel, repairWarrantyExpiry, DAY_MS } from "../lib/warranty";
 
 /**
- * The online shop's API (shop.koastal.com.au) — public, no staff session.
+ * The online shop's API (koastal.com.au/shop) — public, no staff session.
  *
  * The shop is a second front end on the SAME database as the POS, so nothing is
  * synced: a product's price and stock, a customer and their account are the

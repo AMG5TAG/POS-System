@@ -9,7 +9,7 @@ import { publicOrigin, shopOrigin } from "./publicUrl";
  * One-time links that let a customer set or reset their account password.
  *
  * A customer has ONE account, reached from two places: the customer portal
- * (/c/<token> on the POS domain) and the online shop (shop.koastal.com.au). Both
+ * (/c/<token> on the POS domain) and the online shop (koastal.com.au/shop). Both
  * store the password in customers.portal_password_hash and both use these
  * links; only where the link lands differs (`destination`).
  *

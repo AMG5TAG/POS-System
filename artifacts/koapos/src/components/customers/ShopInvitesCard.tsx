@@ -13,7 +13,7 @@ interface Summary {
   sending: { total: number; sent: number; startedAt: string } | null;
 }
 
-/* Invite customers to their online shop account (shop.koastal.com.au). Every
+/* Invite customers to their online shop account (koastal.com.au/shop). Every
    customer already has an account — an invite is the email with a link to set
    its password. Sending is a bulk email to real people, so it needs the count
    typed back before it goes (see routes/shop-invites.ts). */
@@ -66,7 +66,7 @@ export function ShopInvitesCard() {
       <CardHeader>
         <CardTitle className="flex items-center gap-2"><Globe className="w-4 h-4" /> Online shop accounts</CardTitle>
         <CardDescription>
-          Every customer can sign in at shop.koastal.com.au with their email. An invite emails them a link to set their password.
+          Every customer can sign in at koastal.com.au/shop with their email. An invite emails them a link to set their password.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">

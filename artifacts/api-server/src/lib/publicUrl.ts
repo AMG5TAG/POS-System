@@ -31,16 +31,17 @@ export function legacyDomains(): string[] {
 }
 
 /**
- * The online shop's hostname (shop.koastal.com.au, SHOP_DOMAIN overrides). The
- * shop is served at its root by artifacts/koapos/server.mjs.
+ * The business website's hostname (koastal.com.au, SITE_DOMAIN overrides). The
+ * Koastal Kollective website is served at its root and the online shop under
+ * /shop, both by artifacts/koapos/server.mjs; `www.` 301s to the bare domain.
  */
-export function shopDomain(): string {
-  return toHost(process.env.SHOP_DOMAIN?.trim() || "shop.koastal.com.au").toLowerCase();
+export function siteDomain(): string {
+  return toHost(process.env.SITE_DOMAIN?.trim() || "koastal.com.au").toLowerCase();
 }
 
-/** The shop's origin, for links in customer emails. */
+/** The shop's base URL (no trailing slash), for links in customer emails. */
 export function shopOrigin(): string {
-  return `https://${shopDomain()}`;
+  return `https://${siteDomain()}/shop`;
 }
 
 /** Reduce a full URL or bare host to just its hostname. */

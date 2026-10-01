@@ -521,7 +521,7 @@ function Router() {
       <Route path="/management/marketing-hub">   <Redirect to="/management/marketing-reports/sales-overview" /></Route>
       <Route path="/management/settings-hub">    <Redirect to="/management/settings-integrations/account" />      </Route>
 
-      {/* Online Store (shop.koastal.com.au) */}
+      {/* Online Store (koastal.com.au/shop) */}
       <Route path="/management/online-store"><Redirect to="/management/online-store/overview" /></Route>
       <Route path="/management/online-store/overview">
         <ManagementProtectedRoute component={ManagementOnlineStoreOverviewPage} />

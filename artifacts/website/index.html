@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="en-AU">
+  <head>
+    <meta charset="UTF-8" />
+    <!-- Legacy origin redirect. The canonical origin moved to koastal.com.au
+         with the rebrand. This sits first in <head> so it fires on the parsed
+         HTML, before the stylesheet, fonts or the app bundle are fetched — the
+         hop then costs one HTML response rather than a full page boot, and it
+         still works if the bundle fails to load.
+
+         A 301 in front of the old domain, set at the DNS/host layer, is the
+         real fix: this is a 200 + client hop, which Google treats as weaker
+         than a permanent redirect. Every page also carries a canonical to
+         koastal.com.au, which is what actually consolidates the ranking.
+
+         If koastal.com.au ever stops being the live origin, empty this list. -->
+    <script>
+      (function () {
+        try {
+          var LEGACY = ["koastalkomputers.com.au", "www.koastalkomputers.com.au"];
+          if (LEGACY.indexOf(location.hostname) === -1) return;
+          location.replace(
+            "https://koastal.com.au" + location.pathname + location.search + location.hash
+          );
+        } catch (e) {}
+      })();
+    </script>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1" />
+    <title>Computer Repairs Central Coast | Koastal Kollective</title>
+    <meta name="description" content="Family-run computer, Mac and laptop repairs across the Central Coast and Lake Macquarie. Free diagnostics, no-fix no-fee, no call-out fees. Call 0493 145 179." />
+    <meta name="robots" content="index, follow" />
+    <meta property="og:title" content="Computer Repairs Central Coast | Koastal Kollective" />
+    <meta property="og:description" content="Over 15 years of local experience on The Central Coast & Lake Macquarie. Free diagnostics, no-fix no-fee guarantee, zero call-out fees." />
+    <meta property="og:type" content="website" />
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Koastal Kollective" />
+    <meta name="twitter:description" content="Trusted PC, Mac & Pop Culture on The Central Coast & Lake Macquarie" />
+    <meta property="og:url" content="https://koastal.com.au/" />
+    <meta property="og:image" content="https://koastal.com.au/opengraph.png" />
+    <meta property="og:locale" content="en_AU" />
+    <meta name="twitter:image" content="https://koastal.com.au/opengraph.png" />
+    <link rel="canonical" href="https://koastal.com.au/" />
+    <link rel="icon" type="image/png" sizes="180x180" href="/images/favicon.png" />
+    <link rel="icon" type="image/png" sizes="512x512" href="/images/icon-512.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png" />
+    <meta name="theme-color" content="#007b7d" />
+    <!-- Baseline business identity for crawlers that never run the app. Page
+         level graphs are injected per route by src/lib/structuredData.ts. -->
+    <script type="application/ld+json">
+      {"@context":"https://schema.org","@type":["LocalBusiness","ComputerStore"],"@id":"https://koastal.com.au/#business","name":"Koastal Kollective","url":"https://koastal.com.au/","logo":"https://koastal.com.au/images/logo.png","image":"https://koastal.com.au/images/it-services-section.webp","telephone":"+61493145179","email":"sales@koastal.com.au","priceRange":"$$","currenciesAccepted":"AUD","geo":{"@type":"GeoCoordinates","latitude":-33.151863668688506,"longitude":151.5371856464241},"hasMap":"https://maps.app.goo.gl/V6MedKW2n1fCybob7","sameAs":["https://maps.app.goo.gl/V6MedKW2n1fCybob7","https://www.facebook.com/koastal.com.au","https://www.instagram.com/koastal.com.au","https://www.threads.com/@koastal.com.au","https://bsky.app/profile/koastal.com.au","https://www.tiktok.com/@koastal.com.au","https://www.youtube.com/@koastal-com-au"],"address":{"@type":"PostalAddress","streetAddress":"Shop 1/64 Vales Road","addressLocality":"Mannering Park","addressRegion":"NSW","postalCode":"2259","addressCountry":"AU"},"areaServed":[{"@type":"AdministrativeArea","name":"Central Coast, NSW"},{"@type":"AdministrativeArea","name":"Lake Macquarie, NSW"}],"openingHoursSpecification":[{"@type":"OpeningHoursSpecification","dayOfWeek":["Monday"],"opens":"10:00","closes":"14:30"},{"@type":"OpeningHoursSpecification","dayOfWeek":["Tuesday","Wednesday","Thursday","Friday"],"opens":"10:00","closes":"17:00"}]}
+    </script>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-639QEPSKTL"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      // send_page_view: false — page_view events (including the first load) are
+      // sent from the app so client-side route changes are tracked. See src/lib/analytics.ts.
+      gtag('config', 'G-639QEPSKTL', { send_page_view: false });
+    </script>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module" src="/src/main.tsx"></script>
+  </body>
+</html>

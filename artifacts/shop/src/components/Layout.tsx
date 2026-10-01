@@ -1,6 +1,6 @@
 import { useState, type ReactNode } from "react";
 import { Link, useLocation } from "wouter";
-import { Search, ShoppingCart, User, Menu, X, Phone, Mail, MapPin, Heart } from "lucide-react";
+import { Search, ShoppingCart, User, Menu, X, Phone, Mail, MapPin, Heart, Globe } from "lucide-react";
 import { useWishlist } from "@/lib/wishlist";
 import { useCart } from "@/lib/cart";
 import { useAuth } from "@/lib/auth";
@@ -50,6 +50,11 @@ function Header() {
               </div>
             </form>
             <nav className="ml-auto flex items-center gap-1">
+              {/* The Koastal Kollective website sits above the shop at "/" — a plain
+                  link, since the shop's router is based at /shop. */}
+              <a href="/" className="hidden lg:flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm">
+                <Globe className="w-4 h-4" />Koastal Kollective
+              </a>
               <Link href={customer ? "/account" : "/account/login"} className="flex items-center gap-1.5 px-3 h-10 rounded-full hover:bg-stone-100 text-sm">
                 <User className="w-4 h-4" /><span className="hidden sm:inline">{customer ? customer.firstName || "Account" : "Sign in"}</span>
               </Link>
@@ -110,6 +115,7 @@ function Footer() {
         )}
         <div className="space-y-2">
           <p className="font-semibold">Shop</p>
+          <a href="/" className="block text-stone-600 hover:text-ink">Koastal Kollective website</a>
           <Link href="/products" className="block text-stone-600 hover:text-ink">All products</Link>
           <Link href="/rewards" className="block text-stone-600 hover:text-ink">Rewards</Link>
           <Link href="/mail-in" className="block text-stone-600 hover:text-ink">Mail-in repairs</Link>

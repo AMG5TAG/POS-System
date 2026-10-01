@@ -3,7 +3,7 @@ import { merchantsTable } from "./merchants";
 import { productsTable } from "./products";
 
 /*
- * Product reviews on the online shop (shop.koastal.com.au, routes/shop.ts).
+ * Product reviews on the online shop (koastal.com.au/shop, routes/shop.ts).
  * Only a signed-in customer who has bought the product can write one, one per
  * customer per product (a second submission edits the first). `customer_id`
  * (scripts/src/add-product-specs.ts) is that customer; rows from the removed

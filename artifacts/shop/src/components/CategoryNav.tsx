@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useLocation } from "wouter";
-import { ChevronDown, ChevronLeft, ChevronRight, Home, Mail, Star } from "lucide-react";
+import { ChevronDown, ChevronLeft, ChevronRight, Globe, Home, Mail, Star } from "lucide-react";
 import type { Category } from "@/lib/shop";
 
 /* The shop's category bar, styled after koastal.com.au's menu: a row of
@@ -205,6 +205,8 @@ function MobileCategories({ roots, onNavigate }: { roots: Node[]; onNavigate: ()
       <Link href="/products" onClick={onNavigate} className="block py-2.5 font-semibold">All products</Link>
       {roots.map((r) => row(r, 0))}
       <Link href="/mail-in" onClick={onNavigate} className="flex items-center gap-2 py-2.5 font-semibold text-brand"><Mail className="w-4 h-4" /> Mail-In Repairs</Link>
+      {/* Outside the shop's /shop router base, so a plain link. */}
+      <a href="/" className="flex items-center gap-2 py-2.5 font-semibold"><Globe className="w-4 h-4" /> Koastal Kollective website</a>
     </nav>
   );
 }

@@ -29,7 +29,7 @@ function Title() {
   return null;
 }
 
-/* Served at "/" on the shop domain, and under /shop in development. */
+/* Served under /shop on koastal.com.au (and in development). */
 const base = import.meta.env.BASE_URL.replace(/\/$/, "");
 
 export default function App() {

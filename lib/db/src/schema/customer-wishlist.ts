@@ -4,7 +4,7 @@ import { customersTable } from "./customers";
 import { productsTable } from "./products";
 
 /*
- * Online shop wishlist (shop.koastal.com.au, routes/shop.ts): the heart on a
+ * Online shop wishlist (koastal.com.au/shop, routes/shop.ts): the heart on a
  * product image. One row per customer per product. Created by
  * scripts/src/add-customer-wishlist-table.ts.
  */

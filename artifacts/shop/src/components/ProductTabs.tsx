@@ -1,5 +1,5 @@
 import { useEffect, useState, type FormEvent } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { BadgeCheck, Loader2, Star } from "lucide-react";
 import { api } from "@/lib/api";
@@ -132,8 +132,11 @@ function Reviews({ productId }: { productId: number }) {
 
 /* Who sees the form: only a signed-in customer who bought the product. */
 function ReviewGate({ productId, viewer }: { productId: number; viewer: { signedIn: boolean; canReview: boolean; myReview: { rating: number; title: string; body: string } | null } }) {
+  // The router's path, not window.location's: under /shop the latter carries the
+  // base, and Login would navigate to /shop/shop/....
+  const [path] = useLocation();
   if (!viewer.signedIn) {
-    const next = encodeURIComponent(`${window.location.pathname}#reviews`);
+    const next = encodeURIComponent(`${path}#reviews`);
     return (
       <p className="text-sm text-stone-600 rounded-xl bg-stone-100 p-4">
         Bought this from us? <Link href={`/account/login?next=${next}`} className="text-brand font-medium underline">Sign in</Link> to leave a review.

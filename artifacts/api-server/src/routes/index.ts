@@ -208,7 +208,7 @@ router.use(payrollRouter);
 router.use(qrRouter);
 // Public: the staff apps read the business username here (see the router).
 router.use(publicBusinessRouter);
-// Public: the online shop (shop.koastal.com.au) — catalogue and customer accounts.
+// Public: the online shop (koastal.com.au/shop) — catalogue and customer accounts.
 router.use(shopRouter);
 router.use(mailInRouter);
 router.use(shopInvitesRouter);

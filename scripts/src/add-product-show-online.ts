@@ -2,7 +2,7 @@ import { pool } from "@workspace/db";
 
 /**
  * Online shop visibility: adds products.show_online ("true"/"false", default
- * "true"), so every active product is listed on shop.koastal.com.au until it is
+ * "true"), so every active product is listed on koastal.com.au/shop until it is
  * switched off. Additive only — no existing value changes.
  *
  * Idempotent — safe to run repeatedly and as part of the db:push chain.

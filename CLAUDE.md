@@ -425,7 +425,38 @@ only raises a new row once the last is converted or declined, so summing them
 would add a superseded price to the one that replaced it. The footer sums the
 rows actually on screen, so it follows the tab and the filters.
 
-### Online shop (shop.koastal.com.au)
+### Koastal Kollective website (koastal.com.au)
+
+The business's public website, merged in from its own Replit project
+("Koastal Kollective") so that one deployment serves the website at
+koastal.com.au, the shop under `/shop`, and the POS at pos.koastal.com.au.
+`artifacts/website` (`@workspace/website`) is a static React + Vite site — no
+API, no database. It was copied across unchanged apart from the navbar's SHOP
+item (the built bundle was verified token-for-token against the live one), so
+its own conventions hold:
+
+- **Pre-rendered.** `postbuild` runs `scripts/prerender.mjs` (jsdom, ~275
+  routes, about a minute) and then `write-redirects.mjs` (legacy `/koasoft/*`
+  and `/kollective/*` stubs, from `scripts/redirects.mjs`). Each route is
+  `dist/public/<route>/index.html`, which `server.mjs` serves per path. The
+  prerender fails the build rather than ship an unrendered site.
+  `scripts/generate-sitemap.mjs` (prebuild) finds routes in `src/App.tsx`.
+- **Built for `/`, never a sub-path**: pages name images as `/images/...`.
+  It therefore has no Replit preview path; run it on its own port in dev
+  (`PORT=5000 pnpm --filter @workspace/website run dev`).
+- **IndexNow** (`submit-indexnow.mjs`) pings search engines only when
+  `INDEXNOW_SUBMIT=1`, which only the deploy build sets (koapos
+  `artifact.toml`) — a local `pnpm run build` stays silent. The key file in
+  `public/` must stay served at `koastal.com.au/<key>.txt`.
+- **Hostnames matter**: `DOMAIN_ENTRY_POINTS` in `src/App.tsx` sends
+  koasoft.com.au, koastalkollective.com.au and the Toukley domains to their
+  landing pages, and `server.mjs`'s `WEBSITE_DOMAINS` must list the same hosts
+  or they get the POS. koastal.com.au is canonical; `www.` 301s to it.
+- GA4 (`G-639QEPSKTL`) is in `index.html`; the app sends page views itself.
+- Pop Culture is written in the future tense on purpose (the range has not
+  opened). Koastal Kollective is the only brand name in copy.
+
+### Online shop (koastal.com.au/shop)
 
 A second front end on the SAME database, so nothing is synced: products,
 prices, stock, customers and their accounts are the POS's own rows. It is being
@@ -436,16 +467,18 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
 
 - **App**: `artifacts/shop` (`@workspace/shop`, React + Vite + Tailwind, wouter),
   its own package — it shares no UI code with the POS, only the API. It is
-  served at the **root** of the shop domain (`SHOP_DOMAIN`, default
-  shop.koastal.com.au) by `artifacts/koapos/server.mjs` — see "Deployment" for
-  why that server exists. The shop artifact has no production service of its
-  own; `/shop` is only its development preview. Its Vite base is therefore
-  `/` for a build and `/shop/` for dev, and neither comes from `BASE_PATH`,
-  which the workspace sets to `/` globally. The catalogue is `/products`. A
-  `/shop/...` path on the shop domain 301s to the same path at the root, since
-  set-password emails went out with that prefix for a while. `/api` is the same
-  on both domains, so the shop calls it same-origin and its session cookie is
-  its own.
+  served under **`/shop`** on koastal.com.au (`SITE_DOMAIN`), beneath the
+  Koastal Kollective website, by `artifacts/koapos/server.mjs` — see
+  "Deployment" for why that server exists. The shop artifact has no production
+  service of its own. Its Vite base is `/shop/` for both build and dev, and
+  does not come from `BASE_PATH`, which the workspace sets to `/` globally.
+  The catalogue is `/products`. Anything that builds a path from
+  `window.location` must use the router's path instead, or it carries the base
+  twice. The shop briefly lived at shop.koastal.com.au; that domain was dropped
+  before any customer signed up, so nothing redirects from it. Links in emails
+  come from `shopOrigin()` (`lib/publicUrl.ts`). `/api` is the same on every domain, so
+  the shop calls it same-origin; production CORS must list the site domain
+  (`app.ts`), or every shop POST is refused.
 - **API**: `routes/shop.ts`, public and scoped to `soleMerchantId()` — no request
   can name a merchant. A product is listed when `isActive` and `showOnline`
   (`products.show_online`, default "true", added by
@@ -851,9 +884,12 @@ with `Could not find run command` and nothing in git said what they should be.
 is ignored** — each `artifact.toml`'s `[services.production]` decides what
 serves its paths. `/api` is the API server; every other path, on every domain,
 is the koapos artifact, which runs `artifacts/koapos/server.mjs`: a small
-dependency-free static server that picks the shop's build for the shop domain
-and the POS's for everything else. It exists because the host is the only
-thing that can tell those apart, and only that process sees `/`. Consequence:
+dependency-free static server that picks a build by host: the Koastal
+Kollective website (`artifacts/website`) at koastal.com.au's root and its other
+domains, the shop under `/shop` there, a 301 for `www.`,
+and the POS for everything else (the header comment lists the rules). It exists
+because the host is the only thing that can tell those apart, and only that
+process sees `/`. Consequence:
 the Express code below that serves the SPA and `legacyDomainRedirect` only ever
 see `/api` in production (koapos.com.au page paths are served the POS, not
 301'd). The rest of this section describes the Express side.

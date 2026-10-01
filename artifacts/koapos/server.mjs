@@ -3,13 +3,17 @@
  *
  * Replit routes a deployment by PATH, never by host: "/" is this artifact on
  * every domain attached to the deployment, and the API server only ever sees
- * /api. So this is the one place a request's domain can choose a front end —
- * the online shop's build on SHOP_DOMAIN (default shop.koastal.com.au), the
- * POS's everywhere else. That is what lets the shop live at the root of its own
- * domain instead of under /shop.
+ * /api. So this is the one place a request's domain can choose a front end:
  *
- * Dependency-free on purpose: it only ever serves two directories of built
- * files, and it has to start fast on an autoscale cold start.
+ *   koastal.com.au (SITE_DOMAIN)   the Koastal Kollective website at "/", and
+ *                                  the online shop under /shop
+ *   www.koastal.com.au             301 → the same path on koastal.com.au
+ *   the website's other domains    the website (koasoft.com.au etc.; its app
+ *   (WEBSITE_DOMAINS)              picks a landing page from the hostname)
+ *   anything else                  the POS (pos.koastal.com.au, koapos.com.au)
+ *
+ * Dependency-free on purpose: it only ever serves built files, and it has to
+ * start fast on an autoscale cold start.
  */
 import { createServer } from "node:http";
 import { createReadStream, statSync } from "node:fs";
@@ -20,11 +24,25 @@ const here = path.dirname(fileURLToPath(import.meta.url));
 const port = Number(process.env.PORT) || 19141;
 
 const toHost = (v) => v.trim().toLowerCase().replace(/^https?:\/\//, "").replace(/[/:].*$/, "");
-const shopHost = toHost(process.env.SHOP_DOMAIN || "shop.koastal.com.au");
+const list = (v) => v.split(",").map(toHost).filter(Boolean);
+
+const siteHost = toHost(process.env.SITE_DOMAIN || "koastal.com.au");
+const websiteHosts = new Set([
+  siteHost,
+  ...list(process.env.WEBSITE_DOMAINS ?? [
+    "koasoft.com.au", "www.koasoft.com.au",
+    "koastalkollective.com.au", "www.koastalkollective.com.au",
+    "toukleycomputerrepairs.com.au", "www.toukleycomputerrepairs.com.au",
+    "toukleyphonerepairs.com.au", "www.toukleyphonerepairs.com.au",
+  ].join(",")),
+]);
+
+const SHOP_PREFIX = "/shop";
 
 const sites = {
   pos: path.resolve(process.env.SPA_DIST_DIR?.trim() || path.join(here, "dist/public")),
   shop: path.resolve(process.env.SHOP_DIST_DIR?.trim() || path.join(here, "../shop/dist/public")),
+  website: path.resolve(process.env.WEBSITE_DIST_DIR?.trim() || path.join(here, "../website/dist/public")),
 };
 
 const TYPES = {
@@ -46,6 +64,14 @@ function fileIn(root, urlPath) {
   try { return statSync(abs).isFile() ? abs : null; } catch { return null; }
 }
 
+/* The website is pre-rendered: each route is a real HTML file, so /about is
+   answered by about/index.html (or about.html), not by the SPA shell. */
+function pageIn(root, urlPath) {
+  const p = urlPath.replace(/\/+$/, "");
+  if (!p) return null;
+  return fileIn(root, `${p}/index.html`) || fileIn(root, `${p}.html`);
+}
+
 function send(req, res, file, cacheControl) {
   res.writeHead(200, {
     "Content-Type": TYPES[path.extname(file).toLowerCase()] || "application/octet-stream",
@@ -57,34 +83,47 @@ function send(req, res, file, cacheControl) {
   createReadStream(file).on("error", () => res.destroy()).pipe(res);
 }
 
+function redirect(res, location) {
+  res.writeHead(301, { Location: location }).end();
+}
+
+/* Serve one built SPA. `urlPath` is relative to the build's root. Only /assets
+   is content-hashed by Vite, so only it may be cached for good; index.html
+   names those hashes, and caching it would pin a browser to the last deploy. */
+function serveSite(req, res, root, urlPath, { prerendered = false } = {}) {
+  const index = path.join(root, "index.html");
+  const file = (urlPath === "/" ? null : fileIn(root, urlPath)) || (prerendered ? pageIn(root, urlPath) : null);
+  if (file && file !== index) {
+    const html = file.endsWith(".html");
+    send(req, res, file, urlPath.startsWith("/assets/") ? "public, max-age=31536000, immutable" : html ? "no-cache" : "public, max-age=3600");
+  } else if (urlPath.startsWith("/assets/")) {
+    res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
+  } else {
+    send(req, res, index, "no-cache"); // client-side route
+  }
+}
+
 createServer((req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
     return;
   }
   const url = new URL(req.url || "/", "http://x");
-  const isShop = toHost(req.headers.host || "") === shopHost;
-
-  /* The shop briefly lived under /shop on its own domain, and set-password
-     emails went out carrying that path. Send them to the same page at the root. */
-  if (isShop && /^\/shop(\/|$)/.test(url.pathname)) {
-    res.writeHead(301, { Location: (url.pathname.slice(5) || "/") + url.search }).end();
-    return;
-  }
-
-  const root = isShop ? sites.shop : sites.pos;
-  const index = path.join(root, "index.html");
-  const file = url.pathname === "/" ? null : fileIn(root, url.pathname);
+  const host = toHost(req.headers.host || "");
 
   try {
-    // Only /assets is content-hashed by Vite, so only it may be cached for good.
-    // index.html names those hashes: caching it would pin a till to the last deploy.
-    if (file && file !== index) {
-      send(req, res, file, url.pathname.startsWith("/assets/") ? "public, max-age=31536000, immutable" : "public, max-age=3600");
-    } else if (url.pathname.startsWith("/assets/")) {
-      res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
+    if (host === `www.${siteHost}`) {
+      redirect(res, `https://${siteHost}${url.pathname}${url.search}`);
+    } else if (websiteHosts.has(host)) {
+      if (url.pathname === SHOP_PREFIX) {
+        redirect(res, `${SHOP_PREFIX}/${url.search}`);
+      } else if (url.pathname.startsWith(`${SHOP_PREFIX}/`)) {
+        serveSite(req, res, sites.shop, url.pathname.slice(SHOP_PREFIX.length));
+      } else {
+        serveSite(req, res, sites.website, url.pathname, { prerendered: true });
+      }
     } else {
-      send(req, res, index, "no-cache"); // client-side route
+      serveSite(req, res, sites.pos, url.pathname);
     }
   } catch (err) {
     console.error(err);
@@ -92,5 +131,5 @@ createServer((req, res) => {
     res.end("Server error");
   }
 }).listen(port, "0.0.0.0", () => {
-  console.log(`Serving POS from ${sites.pos}, shop (${shopHost}) from ${sites.shop} on :${port}`);
+  console.log(`Serving website + shop on ${[...websiteHosts].join(", ")}, POS elsewhere, on :${port}`);
 });
