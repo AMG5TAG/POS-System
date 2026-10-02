@@ -144,31 +144,35 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
 
       <fieldset className="space-y-4">
         <legend className="text-sm font-semibold text-stone-700 mb-3">Staying in touch</legend>
-        <label className="flex items-start gap-2 text-sm text-stone-700">
-          <input type="checkbox" checked={f.agreedToMarketing} onChange={(e) => set("agreedToMarketing")(e.target.checked)} className="w-4 h-4 mt-0.5" />
-          <span>Send me offers, news and new arrivals by email and SMS. You can change this any time.</span>
-        </label>
-        {heardOptions.length > 0 && (
-          <div className="grid sm:grid-cols-2 gap-4">
-            <label className="block space-y-1.5">
-              <span className="text-sm font-medium">How did you hear about us?</span>
-              <select value={f.heardFrom} onChange={(e) => setF({ ...f, heardFrom: e.target.value })} className={select}>
-                <option value="">—</option>
-                {heardOptions.map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}
-              </select>
-            </label>
-            {needsDetails && <Field label={isFriend ? "Your friend's name" : "Tell us more"} maxLength={200} value={f.heardFromDetails} onChange={(e) => set("heardFromDetails")(e.target.value)} />}
-            {isFriend && (
-              <div>
-                <Field label="Their referral code (optional)" maxLength={40} placeholder="e.g. SL-AB12" disabled={linked}
-                  value={friendCode} onChange={(e) => setFriendCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))} />
-                <p className="mt-1 text-xs text-stone-500">
-                  {linked ? "Linked — your friend gets the credit. Contact us if it needs changing." : "From their referral link or account. It gets them their referral reward."}
-                </p>
-              </div>
-            )}
-          </div>
-        )}
+        {/* Marketing consent and "how did you hear about us" share a row on
+            large screens; they stack on smaller ones. */}
+        <div className="grid lg:grid-cols-2 gap-4 items-start">
+          <label className="flex items-start gap-2 text-sm text-stone-700">
+            <input type="checkbox" checked={f.agreedToMarketing} onChange={(e) => set("agreedToMarketing")(e.target.checked)} className="w-4 h-4 mt-0.5" />
+            <span>Send me offers, news and new arrivals by email and SMS. You can change this any time.</span>
+          </label>
+          {heardOptions.length > 0 && (
+            <div className="grid sm:grid-cols-2 gap-4">
+              <label className="block space-y-1.5">
+                <span className="text-sm font-medium">How did you hear about us?</span>
+                <select value={f.heardFrom} onChange={(e) => setF({ ...f, heardFrom: e.target.value })} className={select}>
+                  <option value="">—</option>
+                  {heardOptions.map((h) => <option key={h.name} value={h.name}>{h.name}</option>)}
+                </select>
+              </label>
+              {needsDetails && <Field label={isFriend ? "Your friend's name" : "Tell us more"} maxLength={200} value={f.heardFromDetails} onChange={(e) => set("heardFromDetails")(e.target.value)} />}
+              {isFriend && (
+                <div>
+                  <Field label="Their referral code (optional)" maxLength={40} placeholder="e.g. SL-AB12" disabled={linked}
+                    value={friendCode} onChange={(e) => setFriendCode(e.target.value.toUpperCase().replace(/[^A-Z0-9-]/g, ""))} />
+                  <p className="mt-1 text-xs text-stone-500">
+                    {linked ? "Linked — your friend gets the credit. Contact us if it needs changing." : "From their referral link or account. It gets them their referral reward."}
+                  </p>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
       </fieldset>
 
       <button type="submit" disabled={busy} className="h-11 px-6 rounded-full bg-brand text-white font-medium hover:bg-brand-dark disabled:opacity-50">{busy ? "Saving…" : "Save details"}</button>

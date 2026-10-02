@@ -147,7 +147,7 @@ export default function SearchPage() {
       >
         {/* Logo */}
         <a href="/" className="mb-6 select-none" aria-label="Koastal Kollective home">
-          <div className="flex items-baseline gap-1">
+          <div className="flex items-baseline gap-3 md:gap-4">
             <span className="text-5xl md:text-6xl font-extrabold text-[#007b7d] tracking-tight">
               Koastal
             </span>

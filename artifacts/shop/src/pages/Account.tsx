@@ -45,7 +45,9 @@ export default function Account() {
         <WarrantiesCard warranties={overview?.warranties} />
       </div>
 
-      <div className="grid lg:grid-cols-2 gap-6 items-start">
+      {/* Stretched, not items-start: the two cards sit side by side on large
+          screens and should match the taller one's height. */}
+      <div className="grid lg:grid-cols-2 gap-6">
         <ReferralsCard />
         {overview && (
           <LoyaltyPass portalToken={customer.portalToken} totalSpent={overview.loyalty.totalSpent} visitCount={overview.loyalty.visitCount} />

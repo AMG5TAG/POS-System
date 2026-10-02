@@ -1,4 +1,4 @@
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import MailInRepairs from "@/components/MailInRepairs";
 import SocialLinks from "@/components/SocialLinks";
@@ -194,6 +194,29 @@ const services = [
 /* Ranges that have not opened: their blocks carry the Coming Soon overlay. */
 const COMING_SOON = new Set(["pop-culture", "gaming"]);
 
+/* The promotional banner under the hero: Banner.jpg in object storage, served
+   live by the API (/api/site-banner.jpg), so swapping the file in storage
+   changes it with no publish. If the file is gone the section hides itself
+   rather than showing a broken image. */
+function HomeBanner() {
+  const [failed, setFailed] = useState(false);
+  if (failed) return null;
+  return (
+    <section className="bg-gray-50 border-b border-gray-100">
+      <a href="/media/website-design" className="block" aria-label="Website design offer — find out more">
+        <img
+          src="/api/site-banner.jpg"
+          alt="Get a new website — Koastal Kollective website design offer. Call 0493 145 179."
+          width={1920}
+          height={600}
+          className="block w-full h-auto"
+          onError={() => setFailed(true)}
+        />
+      </a>
+    </section>
+  );
+}
+
 export default function HomePage() {
   const reviewsRef = useRef<HTMLDivElement>(null);
 
@@ -284,6 +307,8 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+
+      <HomeBanner />
 
       {/* ─── About Section ─── */}
       <section className="bg-white py-8 border-b border-gray-100">
