@@ -5,6 +5,7 @@ import { db, merchantsTable, customersTable, serviceJobsTable } from "@workspace
 import { eq, and, sql } from "drizzle-orm";
 import { normalisePhoneFor } from "../lib/phone";
 import { phoneMatchKey } from "../lib/phone-match";
+import { soleMerchantId } from "../lib/sole-merchant";
 
 const router: IRouter = Router();
 
@@ -24,9 +25,14 @@ const bookingLimiter = rateLimit({
 /** A trimmed string field, capped so one request can't store megabytes. */
 const field = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
+/** The business behind a booking URL — only ever this install's own. Other
+ *  accounts are still in the database (demo, test), and a booking to one wrote
+ *  a customer and a service job into data nobody here looks at. */
 async function merchantByUsername(username: string) {
+  const sole = await soleMerchantId();
+  if (sole == null) return null;
   const [m] = await db.select({ id: merchantsTable.id, businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
-    .from(merchantsTable).where(eq(merchantsTable.username, username)).limit(1);
+    .from(merchantsTable).where(and(eq(merchantsTable.username, username), eq(merchantsTable.id, sole))).limit(1);
   return m ?? null;
 }
 

@@ -153,9 +153,11 @@ accounts) and all of their data are still in the database.
   `service_settings` and `payment_method_surcharges` still hold data, so their
   Drizzle definitions stay (each marked RETAINED, UNUSED) — removing them would
   make `drizzle-kit push` offer to drop the rows. No code reads them.
-- **Not blocked:** public customer-facing pages of the other accounts (portal,
-  booking) and their background schedulers
-  still run, as they did before. Only signing in was closed off.
+- **Not blocked:** public customer-facing pages of the other accounts (portal)
+  and their background schedulers still run, as they did before. Only signing
+  in was closed off — and the repair booking form (`public-booking.ts`), which
+  now takes bookings for this business only: a booking to another account
+  wrote a customer and a job into data nobody here reads.
 
 ### Printing
 
