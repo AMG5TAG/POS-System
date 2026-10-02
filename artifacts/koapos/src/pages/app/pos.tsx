@@ -3230,6 +3230,16 @@ export default function POSPage() {
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
       ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
       ...(giftCardPayment ? { giftCardPayment } : {}),
+      /* The store-credit leg of a split sale. The server debits it from the
+         customer's balance with the sale (a whole store-credit sale is debited
+         its total without this) and refuses the sale if the balance is short. */
+      ...(() => {
+        if (paymentMethod !== "split") return {};
+        const credit = splitLegs
+          .filter((l) => l.method === "store_credit")
+          .reduce((sum, l) => sum + (parseFloat(l.amount) || 0), 0);
+        return credit > 0 ? { storeCreditPayment: { amount: Math.round(credit * 100) / 100 } } : {};
+      })(),
       // A receipt entered for an earlier day (a deposit that cleared, a manual
       // sale being caught up) is booked to that day so every revenue report reads
       // off the right date. Only sent when actually back-dated — a same-day sale

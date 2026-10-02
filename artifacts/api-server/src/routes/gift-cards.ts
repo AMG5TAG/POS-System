@@ -1,3 +1,4 @@
+import { requireManagerOrApproval, requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, giftCardsTable, giftCardLedgerTable, giftCardSettingsTable } from "@workspace/db";
 import { eq, and, or, ilike, desc, sql } from "drizzle-orm";
@@ -46,7 +47,7 @@ const GiftCardSettingsBody = z.object({
 });
 
 /* ── PUT /api/gift-card-settings ────────────────────────────────────────── */
-router.put("/gift-card-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/gift-card-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = GiftCardSettingsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
@@ -112,7 +113,7 @@ const CreateGiftCardBody = z.object({
 });
 
 /* ── POST /api/gift-cards ───────────────────────────────────────────────── */
-router.post("/gift-cards", requireAuth, async (req, res): Promise<void> => {
+router.post("/gift-cards", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = CreateGiftCardBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.issues[0]?.message ?? "Invalid request body" }); return; }
@@ -254,7 +255,7 @@ const PatchGiftCardBody = z.object({
 });
 
 /* ── PATCH /api/gift-cards/:id ──────────────────────────────────────────── */
-router.patch("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/gift-cards/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -310,7 +311,7 @@ router.patch("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => 
 });
 
 /* ── DELETE /api/gift-cards/:id ─────────────────────────────────────────── */
-router.delete("/gift-cards/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/gift-cards/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

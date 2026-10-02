@@ -623,11 +623,13 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
 - **Accounts.** One password (`customers.portal_password_hash`) and one
   signed-in marker (`req.session.portalCustomerId`). Login is email +
   password, trying each POS customer with that email (the POS has
-  duplicates). **Signing up with an email the POS already knows never sets a
-  password** — it emails a set-up link to that address
-  (`lib/customerPasswordLinks.ts`; every link lands on the shop's
+  duplicates). **Signing up never sets a password or signs anyone in** — for
+  a new email or one the POS already knows, it emails a set-up link to that
+  address (`lib/customerPasswordLinks.ts`; every link lands on the shop's
   `/account/set-password`), because knowing an email must not be enough to
-  claim an account. Pinned by `shop-accounts.test.ts`.
+  claim an account, and an account gathers every record sharing its email.
+  Signing in (password or set-up link) regenerates the session id. Pinned by
+  `shop-accounts.test.ts`.
 
 - **POS side.** Management › Online Store holds the shop's settings: Overview,
   Products (`show_online` per product, `routes/online-store.ts`) and Customer
@@ -774,7 +776,10 @@ shop account; nothing of it is left in the POS but a redirect. What moved:
 - **Email** can be changed on the profile (the portal allowed it), but never to
   an address another customer record holds: the account gathers records from
   every record sharing its email (`buyerCustomerIds`), so that would hand over
-  someone else's history. The birthday keeps the shop's set-once rule.
+  someone else's history. Nor until the new address is proved: saving mails a
+  signed 24-hour link to it (`lib/shop-email-change.ts`, nothing stored) and
+  `GET /shop/auth/confirm-email` applies the change, re-checking it is still
+  free, then redirects to `/account?email=changed|taken|link-expired`. The birthday keeps the shop's set-once rule.
 - Everything is gathered across same-email records (`buyerCustomerIds`), like
   the rest of the account.
 - The service job dialog's **Portal** button (email/SMS the link) called a
@@ -1176,6 +1181,32 @@ push would try to reconcile (and drop) the report views.
 
 Pinned by `security-hardening.test.ts`, `xero-oauth-redirect.test.ts` and the
 bridge's `origin.test.ts`.
+
+**Money integrity** (phase 3). Every way to get value without paying is closed
+inside the DB transaction that records the money, never by a pre-check:
+- **Store credit is a real tender.** A `store_credit` sale debits its total, a
+  split sale its `storeCreditPayment` leg, an invoice payment its store-credit
+  legs — each under a `FOR UPDATE` lock on the customer, re-reading the ledger
+  balance, refused when short. A store-credit payment needs the customer on the
+  sale. Every ledger write (manual adjust, trade-in payout) takes the same lock.
+- **Refund and void reverse everything**: stock, spend, loyalty, store credit
+  spent (returned to the customer), and gift cards sold on the sale (put
+  `on_hold`; a card already spent from blocks the reversal). Void used to only
+  relabel the row.
+- **Loyalty redemption** is conditional on the row update (`loyalty_points >=
+  redeemed`), so two tills can't spend one balance. Invoice loyalty follows the
+  paid state both ways (un-paying or deleting takes it back); flipping an
+  invoice in or out of paid by hand needs a manager or manager PIN.
+- **Trade-in accept** claims the row (`status = 'quoted'` in the update) before
+  paying out, so a double-click pays once; valuations are 0–100,000.
+- **Quotes price only their own customer's sale**; laybys are checked against
+  catalogue price (below it needs manager approval) and their lines must sum to
+  the total. A till can't send a `delivery-order:` idempotency key. Xero sync
+  calls loopback, never the request's Host header.
+- Foreign-id checks: quotes, laybys, trade-ins, modifier links, pre-order
+  delete, discounts; settings bodies go through `stripManagedFields`.
+
+Pinned by `money-integrity.test.ts` (real DB; skipped without `DATABASE_URL`).
 
 **Staff roles are enforced on the server** (`middlewares/requireManagerOrOwner.ts`).
 `session.staffRole` is the *effective* role and every check reads it:

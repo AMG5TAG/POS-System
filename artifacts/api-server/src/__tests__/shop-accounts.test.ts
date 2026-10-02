@@ -9,8 +9,8 @@ import session from "express-session";
  * A shop account IS the POS customer — same row, same password as the portal —
  * so the rules that stop one person claiming another's account are what these
  * tests pin:
- *   - signing up with an email the POS already knows never sets a password; the
- *     set-up link goes to that inbox instead;
+ *   - signing up never sets a password or signs anyone in — for an email the
+ *     POS already knows or a new one, the set-up link goes to that inbox;
  *   - one email can belong to several POS customers, and login finds the one
  *     whose password matches;
  *   - a set-password link works once, and not after it expires.
@@ -86,19 +86,21 @@ describe("POST /api/shop/auth/register", () => {
     expect((issueSetupLink.mock.calls[0] as unknown as unknown[])[1]).toBe("reset");
   });
 
-  it("creates a new POS customer, signed in, for a new email", async () => {
-    h.rows = [[], [customer({ id: 9, email: "new@example.com", portalPasswordHash: "h(secret12)" })]];
-    const res = await request(app).post("/api/shop/auth/register")
-      .send({ firstName: "New", email: "new@example.com", password: "secret12" });
+  it("creates a new POS customer for a new email, but signs nobody in until the emailed link is used", async () => {
+    h.rows = [[], [customer({ id: 9, email: "new@example.com" })]];
+    const agent = request.agent(app);
+    const res = await agent.post("/api/shop/auth/register")
+      .send({ firstName: "New", email: "new@example.com", password: "attacker-pass" });
     expect(res.status).toBe(201);
-    expect(res.body.status).toBe("created");
-    expect(res.body.customer.id).toBe(9);
-    expect(issueSetupLink).not.toHaveBeenCalled();
-  });
-
-  it("rejects a short password", async () => {
-    const res = await request(app).post("/api/shop/auth/register").send({ firstName: "A", email: "a@example.com", password: "short" });
-    expect(res.status).toBe(400);
+    // Signing straight in let anyone open an account on an address they don't
+    // own, and so collect that customer's records when they later came in store.
+    expect(res.body).toEqual({ status: "check-email" });
+    expect(issueSetupLink).toHaveBeenCalledTimes(1);
+    const [target, purpose] = issueSetupLink.mock.calls[0] as unknown as [{ id: number; portalPasswordHash?: unknown }, string];
+    expect(target.id).toBe(9);
+    expect(purpose).toBe("setup");
+    const me = await agent.get("/api/shop/auth/me");
+    expect(me.body.customer ?? null).toBeNull();
   });
 });
 

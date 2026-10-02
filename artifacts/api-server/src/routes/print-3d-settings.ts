@@ -1,3 +1,4 @@
+import { stripManagedFields } from "../lib/settings-body";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, print3dSettingsTable } from "@workspace/db";
@@ -30,7 +31,7 @@ router.get("/print-3d-settings", requireAuth, async (req, res): Promise<void> =>
 router.put("/print-3d-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
-  const patch: Record<string, unknown> = { ...body };
+  const patch: Record<string, unknown> = stripManagedFields({ ...(body as Record<string, unknown>) });
   for (const f of NUMERIC_FIELDS) {
     if (typeof body[f] === "number") patch[f] = String(body[f]);
   }

@@ -85,22 +85,31 @@ router.post("/customers/:customerId/store-credit", requireAuth, async (req, res)
     : type === "adjust" ? rawAmount
     : magnitude;
 
-  const balance = await currentBalance(customerId);
-  if (signed < 0 && balance + signed < -0.0001) {
-    res.status(400).json({ error: "Insufficient store credit balance" }); return;
-  }
-  const balanceAfter = Math.round((balance + signed) * 100) / 100;
-
-  await db.insert(storeCreditLedgerTable).values({
-    merchantId,
-    customerId,
-    type,
-    amount: String(signed),
-    balanceAfter: String(balanceAfter),
-    note: typeof b.note === "string" && b.note.trim() ? b.note.trim() : null,
-    transactionId: b.transactionId != null && Number.isFinite(Number(b.transactionId)) ? Number(b.transactionId) : null,
-    staffId: req.session.staffId ?? null,
+  // Read the balance and write the movement under a lock on the customer, so
+  // two withdrawals at once can't both pass the balance check.
+  const ok = await db.transaction(async (tx) => {
+    await tx.select({ id: customersTable.id }).from(customersTable)
+      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId))).for("update");
+    const [r] = await tx
+      .select({ bal: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}), 0)` })
+      .from(storeCreditLedgerTable)
+      .where(eq(storeCreditLedgerTable.customerId, customerId));
+    const balance = Math.round(parseFloat(r?.bal ?? "0") * 100) / 100;
+    if (signed < 0 && balance + signed < -0.0001) return false;
+    const balanceAfter = Math.round((balance + signed) * 100) / 100;
+    await tx.insert(storeCreditLedgerTable).values({
+      merchantId,
+      customerId,
+      type,
+      amount: String(signed),
+      balanceAfter: String(balanceAfter),
+      note: typeof b.note === "string" && b.note.trim() ? b.note.trim() : null,
+      transactionId: b.transactionId != null && Number.isFinite(Number(b.transactionId)) ? Number(b.transactionId) : null,
+      staffId: req.session.staffId ?? null,
+    });
+    return true;
   });
+  if (!ok) { res.status(400).json({ error: "Insufficient store credit balance" }); return; }
   res.json(await balanceAndEntries(customerId));
 });
 

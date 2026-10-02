@@ -283,6 +283,11 @@ router.delete("/pre-orders/:id", requireAuth, async (req, res): Promise<void> =>
   const { id } = paramsResult.data;
   const mid = req.session.merchantId!;
   await db.transaction(async (tx) => {
+    // Only this business's pre-order: the child rows are keyed by the parent id
+    // alone, so check ownership before deleting them.
+    const [own] = await tx.select({ id: productPreOrdersTable.id }).from(productPreOrdersTable)
+      .where(and(eq(productPreOrdersTable.id, id), eq(productPreOrdersTable.merchantId, mid)));
+    if (!own) return;
     // Child rows first — they FK-reference the parent.
     await tx.delete(productPreOrderItemsTable).where(eq(productPreOrderItemsTable.preOrderId, id));
     await tx.delete(productPreOrdersTable).where(

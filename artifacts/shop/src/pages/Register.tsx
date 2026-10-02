@@ -1,14 +1,11 @@
 import { useState } from "react";
-import { Link, useLocation } from "wouter";
+import { Link } from "wouter";
 import { api } from "@/lib/api";
-import { useAuth, type Account } from "@/lib/auth";
 import { AuthCard, Field, Notice, Submit } from "@/components/Form";
 import { forgetReferral, rememberedReferral } from "@/lib/referral";
 
 export default function Register() {
-  const { setCustomer } = useAuth();
-  const [, navigate] = useLocation();
-  const [f, setF] = useState({ firstName: "", lastName: "", email: "", phone: "", password: "" });
+  const [f, setF] = useState({ firstName: "", lastName: "", email: "", phone: "" });
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [checkEmail, setCheckEmail] = useState(false);
@@ -20,16 +17,19 @@ export default function Register() {
     e.preventDefault();
     setBusy(true); setError(null);
     try {
-      const r = await api<{ status: string; customer?: Account }>("/shop/auth/register", { method: "POST", body: JSON.stringify({ ...f, referralCode: referral ?? undefined }) });
-      if (r.status === "created" && r.customer) { forgetReferral(); setCustomer(r.customer); navigate("/account"); }
-      else setCheckEmail(true);
+      // Never signs in: the password is chosen from the emailed link, which is
+      // what proves the address is theirs. The referral is recorded at sign-up.
+      await api<{ status: string }>("/shop/auth/register", { method: "POST", body: JSON.stringify({ ...f, referralCode: referral ?? undefined }) });
+      forgetReferral();
+      setCheckEmail(true);
     } catch (err) { setError((err as Error).message); } finally { setBusy(false); }
   };
 
   if (checkEmail) {
     return (
       <AuthCard title="Check your email">
-        <p className="text-stone-600">You're already one of our customers, so we've sent a link to <strong>{f.email}</strong> to set your password and finish setting up your online account.</p>
+        <p className="text-stone-600">We've sent a link to <strong>{f.email}</strong>. Open it to choose your password and finish setting up your account.</p>
+        <p className="text-sm text-stone-500">Nothing there? Check your junk folder, or ask for a new link from <Link href="/account/forgot" className="text-brand underline">Forgot password</Link>.</p>
         <Link href="/account/login" className="block text-center text-sm text-brand underline">Back to sign in</Link>
       </AuthCard>
     );
@@ -46,8 +46,7 @@ export default function Register() {
         </div>
         <Field label="Email" type="email" required autoComplete="email" value={f.email} onChange={set("email")} />
         <Field label="Mobile" type="tel" autoComplete="tel" value={f.phone} onChange={set("phone")} />
-        <Field label="Password" type="password" required minLength={8} autoComplete="new-password" value={f.password} onChange={set("password")} />
-        <p className="text-xs text-stone-500">At least 8 characters. Already a customer in store? Use the same email and we'll link your account.</p>
+        <p className="text-xs text-stone-500">We'll email you a link to choose your password. Already a customer in store? Use the same email and we'll link your account.</p>
         <Submit busy={busy}>Create account</Submit>
       </form>
     </AuthCard>

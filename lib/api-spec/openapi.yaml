@@ -11295,6 +11295,16 @@ components:
               type: integer
             amount:
               type: number
+        storeCreditPayment:
+          type: object
+          description: >-
+            The store-credit leg of a split sale, debited from the sale's
+            customer atomically with recording it. A sale paid wholly by store
+            credit (paymentMethod store_credit) is debited its total without it.
+          required: [amount]
+          properties:
+            amount:
+              type: number
         serviceJobId:
           type: ["integer", "null"]
           description: >-

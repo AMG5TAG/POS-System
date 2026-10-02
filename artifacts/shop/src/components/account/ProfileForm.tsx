@@ -50,7 +50,7 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
     e.preventDefault();
     setBusy(true); setMsg(null);
     try {
-      const r = await api<{ customer: Account }>("/shop/account/profile", {
+      const r = await api<{ customer: Account; emailChangePending?: string }>("/shop/account/profile", {
         method: "PATCH",
         body: JSON.stringify({
           firstName: f.firstName, lastName: f.lastName, email: f.email || undefined, phone: f.phone,
@@ -68,7 +68,10 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
         }),
       });
       onSaved(r.customer);
-      setMsg({ tone: "ok", text: "Saved." });
+      // A new email only takes effect from the link sent to it.
+      setMsg({ tone: "ok", text: r.emailChangePending
+        ? `Saved. We've sent a link to ${r.emailChangePending} — open it to switch your account to that email. Until then it stays ${r.customer.email}.`
+        : "Saved." });
     } catch (err) { setMsg({ tone: "error", text: (err as Error).message }); } finally { setBusy(false); }
   };
 

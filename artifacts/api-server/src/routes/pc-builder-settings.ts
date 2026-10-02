@@ -1,3 +1,4 @@
+import { stripManagedFields } from "../lib/settings-body";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, pcBuilderSettingsTable } from "@workspace/db";
@@ -25,7 +26,7 @@ router.get("/pc-builder-settings", requireAuth, async (req, res): Promise<void> 
 router.put("/pc-builder-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
-  const patch: Record<string, unknown> = { ...body };
+  const patch: Record<string, unknown> = stripManagedFields({ ...(body as Record<string, unknown>) });
   if (typeof body.defaultMarkup === "number") patch.defaultMarkup = String(body.defaultMarkup);
   if (typeof body.laborRate === "number")     patch.laborRate = String(body.laborRate);
   const [existing] = await db.select().from(pcBuilderSettingsTable).where(eq(pcBuilderSettingsTable.merchantId, merchantId)).limit(1);

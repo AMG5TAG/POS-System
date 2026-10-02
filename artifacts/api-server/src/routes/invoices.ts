@@ -1,7 +1,7 @@
-import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
+import { allowSensitiveChanges, requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { referralFieldsFor } from "../lib/referrals";
 import { Router, type IRouter } from "express";
-import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
+import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { completeLinkedWork } from "../lib/linked-work";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -637,6 +637,15 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   const bodyParsed = UpdateInvoiceBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { status, notes, dueDate, customerId, items, recurring, discount, paymentSchedule, serviceJobId, appointmentId } = bodyParsed.data;
+  // Marking an invoice paid here records no payment, and un-marking it wipes
+  // the payments: either way it books (or unbooks) money with nothing taken,
+  // so it is a manager's call — or a manager's PIN at the till.
+  if (status) {
+    const [current] = await db.select({ status: invoicesTable.status }).from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, req.session.merchantId!)));
+    if (current && (status === "paid") !== (current.status === "paid")
+      && !allowSensitiveChanges(req, res, [["status", status, current.status]])) return;
+  }
   const updates: Record<string, unknown> = {};
   if (status) {
     updates.status = status;
@@ -757,9 +766,16 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       await applyInvoiceCustomerSpend(tx, mId, updated.customerId, newTotal, 1);
     }
 
-    // ── Credit loyalty when an invoice transitions to paid for the first time ──
-    if (!wasPaid && isPaid && preInv.customerId) {
-      await creditLoyaltyForPaidInvoice(tx, mId, preInv.customerId, parseFloat(preInv.total ?? "0"));
+    // ── Loyalty follows the paid state both ways ──
+    // It used to be credited on every entry into "paid" and never taken back on
+    // leaving it, so toggling paid → sent → paid minted points each time.
+    if (!wasPaid && isPaid && updated.customerId) {
+      await creditLoyaltyForPaidInvoice(tx, mId, updated.customerId, newTotal);
+    } else if (wasPaid && !isPaid && preInv.customerId) {
+      await creditLoyaltyForPaidInvoice(tx, mId, preInv.customerId, oldTotal, -1);
+    } else if (wasPaid && isPaid && (oldTotal !== newTotal || preInv.customerId !== updated.customerId)) {
+      if (preInv.customerId) await creditLoyaltyForPaidInvoice(tx, mId, preInv.customerId, oldTotal, -1);
+      if (updated.customerId) await creditLoyaltyForPaidInvoice(tx, mId, updated.customerId, newTotal);
     }
   });
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
@@ -890,6 +906,27 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     const balance = round2(Math.max(0, total - newPaid));
     const newStatus = fullyPaid ? "paid" : newPaid > 0 ? "partial" : cur.status;
 
+    // Store credit legs come off the invoice customer's balance, atomically with
+    // the payment (they used to be recorded without touching it). Checked before
+    // the gift card below: an early return here still commits, so nothing may
+    // have been written yet.
+    let storeCreditDebit: { customerId: number; balanceAfter: number } | null = null;
+    const storeCreditLeg = round2(legs.filter((l) => l.method === "store_credit").reduce((sum, l) => sum + l.amount, 0));
+    if (storeCreditLeg > 0) {
+      if (!cur.customerId) { payErrorStatus = 400; payErrorMessage = "Paying with store credit needs a customer on the invoice"; return; }
+      await tx.select({ id: customersTable.id }).from(customersTable)
+        .where(and(eq(customersTable.id, cur.customerId), eq(customersTable.merchantId, merchantId))).for("update");
+      const [balRow] = await tx
+        .select({ bal: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}), 0)` })
+        .from(storeCreditLedgerTable)
+        .where(and(eq(storeCreditLedgerTable.customerId, cur.customerId), eq(storeCreditLedgerTable.merchantId, merchantId)));
+      const creditBalance = round2(parseFloat(balRow?.bal ?? "0"));
+      if (storeCreditLeg > creditBalance + 0.005) {
+        payErrorStatus = 400; payErrorMessage = `Not enough store credit — the customer has $${creditBalance.toFixed(2)}`; return;
+      }
+      storeCreditDebit = { customerId: cur.customerId, balanceAfter: round2(creditBalance - storeCreditLeg) };
+    }
+
     // Atomic gift-card debit: lock, validate, decrement the card and write a
     // redemption ledger entry inside the SAME transaction as the invoice
     // payment, so the card is never charged unless the payment is recorded.
@@ -924,6 +961,20 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
         amount: (-applied).toString(),
         balanceAfter: newCardBalance.toString(),
         note: `Redeemed on invoice payment #${id}`,
+      });
+    }
+
+    // Written only now, after the gift card's checks: every early return above
+    // happens before anything is written.
+    if (storeCreditDebit) {
+      await tx.insert(storeCreditLedgerTable).values({
+        merchantId,
+        customerId: storeCreditDebit.customerId,
+        type: "redeem",
+        amount: String(-storeCreditLeg),
+        balanceAfter: String(storeCreditDebit.balanceAfter),
+        note: `Redeemed on invoice payment #${id}`,
+        staffId: req.session.staffId ?? null,
       });
     }
 
@@ -1137,6 +1188,8 @@ router.delete("/invoices/:id", requireAuth, requireManagerOrApproval, async (req
     if (existing.status === "paid") {
       await applyInvoiceStock(tx, merchantId, existing.items, 1);
       await applyInvoiceCustomerSpend(tx, merchantId, existing.customerId, parseFloat(existing.total ?? "0"), -1);
+      // …and takes back the loyalty it earned.
+      if (existing.customerId) await creditLoyaltyForPaidInvoice(tx, merchantId, existing.customerId, parseFloat(existing.total ?? "0"), -1);
     }
     await tx.delete(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   });

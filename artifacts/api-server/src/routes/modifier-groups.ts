@@ -1,6 +1,6 @@
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
-import { db, modifierGroupsTable, modifiersTable, productModifierGroupsTable } from "@workspace/db";
+import { db, modifierGroupsTable, modifiersTable, productModifierGroupsTable, productsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { z } from "zod/v4";
@@ -106,6 +106,9 @@ router.post("/modifier-groups/:groupId/modifiers", requireAuth, requireManagerOr
     sortOrder: z.number().int().optional(),
   }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const [ownGroup] = await db.select({ id: modifierGroupsTable.id }).from(modifierGroupsTable)
+    .where(and(eq(modifierGroupsTable.id, groupId), eq(modifierGroupsTable.merchantId, merchantId)));
+  if (!ownGroup) { res.status(404).json({ error: "Modifier group not found" }); return; }
   const d = parsed.data;
   const [modifier] = await db.insert(modifiersTable).values({
     groupId,
@@ -182,10 +185,17 @@ router.post("/products/:productId/modifier-groups", requireAuth, requireManagerO
   const merchantId = req.session.merchantId!;
   const parsed = z.object({ groupId: z.number().int() }).safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  // Both ends must be this business's before any link is touched.
+  const [prod] = await db.select({ id: productsTable.id }).from(productsTable)
+    .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+  const [grp] = await db.select({ id: modifierGroupsTable.id }).from(modifierGroupsTable)
+    .where(and(eq(modifierGroupsTable.id, parsed.data.groupId), eq(modifierGroupsTable.merchantId, merchantId)));
+  if (!prod || !grp) { res.status(404).json({ error: "Product or modifier group not found" }); return; }
   await db.delete(productModifierGroupsTable).where(
     and(
       eq(productModifierGroupsTable.productId, productId),
       eq(productModifierGroupsTable.groupId, parsed.data.groupId),
+      eq(productModifierGroupsTable.merchantId, merchantId),
     )
   );
   await db.insert(productModifierGroupsTable).values({ productId, groupId: parsed.data.groupId, merchantId });

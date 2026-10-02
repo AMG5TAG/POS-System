@@ -1,6 +1,6 @@
 import { requireManagerOrApproval, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
 import { checkReferralAfterSale } from "../services/referralRewards";
 import { groupPriceFor, resolveCustomerGroupId, type GroupPricingRule } from "@workspace/group-pricing";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
@@ -162,7 +162,7 @@ router.get("/transactions", requireAuth, async (req, res): Promise<void> => {
 
    Behaviour is identical to the original handler — only the request/response
    boundary moved out. */
-export interface FinalizeSaleSyncContext { host: string; cookie: string; }
+export interface FinalizeSaleSyncContext { cookie: string; }
 export interface FinalizeSaleOptions {
   /** Present → fire Xero live sync (needs a session cookie). Omit to skip. */
   syncContext?: FinalizeSaleSyncContext;
@@ -186,7 +186,7 @@ export async function finalizeSale(
     amountTendered, changeDue, items: clientItems,
     customerId, staffId, paymentMethod, notes, loyaltyEarned,
     receiptNumber: providedReceiptNumber,
-    idempotencyKey: rawIdempotencyKey, giftCardPayment,
+    idempotencyKey: rawIdempotencyKey, giftCardPayment, storeCreditPayment,
     requestedDiscountTotal: clientRequestedDiscountTotal,
     discountPct: clientDiscountPct,
     paidAt: rawPaidAt,
@@ -313,7 +313,11 @@ export async function finalizeSale(
       .select()
       .from(quotesTable)
       .where(and(eq(quotesTable.id, importedQuoteId), eq(quotesTable.merchantId, merchantId)));
-    if (quote && QUOTE_PRICING_STATUSES.has(quote.status)) {
+    // A quote prices the sale of the customer it was written for: someone
+    // else's cheap quote (or one to nobody) can't price this sale. A quote with
+    // no customer only prices a sale with no customer.
+    const sameCustomer = (quote?.customerId ?? null) === (customerId ?? null);
+    if (quote && QUOTE_PRICING_STATUSES.has(quote.status) && sameCustomer) {
       for (const raw of (Array.isArray(quote.items) ? quote.items : []) as Array<Record<string, unknown>>) {
         const pid = Number(raw.productId);
         const price = Number(raw.unitPrice);
@@ -591,6 +595,23 @@ export async function finalizeSale(
   });
   void loyaltyEarned; // client value is purely informational — server is authoritative
 
+  // Store credit used to be a label only: a sale "paid by store credit" never
+  // touched the balance, so the same credit paid for sale after sale. It is now
+  // debited from the sale's customer inside the sale's own transaction — the
+  // whole total for a store-credit sale, the stated leg for a split one.
+  const storeCreditApplied = paymentMethod === "store_credit"
+    ? total
+    : round2(Number(storeCreditPayment?.amount ?? 0));
+  if (storeCreditApplied < 0 || !Number.isFinite(storeCreditApplied)) {
+    return { ok: false, status: 400, error: "Store credit amount must be positive" };
+  }
+  if (storeCreditApplied > total + 0.005) {
+    return { ok: false, status: 400, error: "Store credit payment exceeds the sale total" };
+  }
+  if (storeCreditApplied > 0 && !scopedCustomer) {
+    return { ok: false, status: 400, error: "Paying with store credit needs the customer on the sale" };
+  }
+
   // `let` so the sale transaction can be retried with a fresh receipt number if
   // the random one collides with an existing sale (unique index enforces it).
   let receiptNumber = providedReceiptNumber || generateReceiptNumber();
@@ -715,6 +736,33 @@ export async function finalizeSale(
         balanceAfter: newBalance.toString(),
         note: `Redeemed on sale ${receiptNumber}`,
         transactionId: row.id,
+      });
+    }
+
+    // Atomic store-credit debit: lock the customer, re-read the balance from the
+    // ledger under that lock (so two tills can't spend the same credit), and
+    // record the redemption against this sale — or roll the sale back.
+    if (storeCreditApplied > 0 && scopedCustomer) {
+      await tx.select({ id: customersTable.id }).from(customersTable)
+        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, merchantId)))
+        .for("update");
+      const [balRow] = await tx
+        .select({ bal: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}), 0)` })
+        .from(storeCreditLedgerTable)
+        .where(and(eq(storeCreditLedgerTable.customerId, scopedCustomer.id), eq(storeCreditLedgerTable.merchantId, merchantId)));
+      const balance = round2(parseFloat(balRow?.bal ?? "0"));
+      if (storeCreditApplied > balance + 0.005) {
+        throw new HttpError(400, `Not enough store credit — the customer has $${balance.toFixed(2)}`);
+      }
+      await tx.insert(storeCreditLedgerTable).values({
+        merchantId,
+        customerId: scopedCustomer.id,
+        type: "redeem",
+        amount: String(-storeCreditApplied),
+        balanceAfter: String(round2(balance - storeCreditApplied)),
+        note: `Redeemed on sale ${receiptNumber}`,
+        transactionId: row.id,
+        staffId: staffId ?? null,
       });
     }
 
@@ -860,16 +908,26 @@ export async function finalizeSale(
     if (scopedCustomer) {
       const redeemed = paymentMethod === "loyalty" ? requiredLoyaltyPoints : 0;
       const loyaltyDelta = paymentMethod === "loyalty"
-        ? sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${redeemed})`
+        ? sql`${customersTable.loyaltyPoints} - ${redeemed}`
         : sql`${customersTable.loyaltyPoints} + ${sanitizedEarned}`;
-      await tx
+      // The balance check above read the customer before this transaction, so
+      // two tills redeeming at once both passed it (and GREATEST(0, …) quietly
+      // let one balance pay twice). Redemption is now conditional on the
+      // balance still covering it, decided by the row update itself.
+      const updatedCustomer = await tx
         .update(customersTable)
         .set({
           totalSpent:    sql`${customersTable.totalSpent} + ${total}`,
           visitCount:    sql`${customersTable.visitCount} + 1`,
           loyaltyPoints: loyaltyDelta,
         })
-        .where(and(eq(customersTable.id, scopedCustomer.id), eq(customersTable.merchantId, merchantId)));
+        .where(and(
+          eq(customersTable.id, scopedCustomer.id),
+          eq(customersTable.merchantId, merchantId),
+          ...(redeemed > 0 ? [sql`${customersTable.loyaltyPoints} >= ${redeemed}`] : []),
+        ))
+        .returning({ id: customersTable.id });
+      if (redeemed > 0 && updatedCustomer.length === 0) throw new HttpError(400, "Insufficient loyalty balance");
 
       // Tier auto-upgrade: compute new tier based on updated loyaltyPoints + totalSpent
       const tiers = (loyaltyConfig.tiers ?? []) as Array<{
@@ -967,7 +1025,9 @@ export async function finalizeSale(
           .where(and(eq(merchantIntegrationsTable.merchantId, merchantId), eq(merchantIntegrationsTable.integrationKey, "xero")));
         const xeroCreds = xeroRow?.credentials ? JSON.parse(xeroRow.credentials) as { syncSettings?: { syncOnSale?: boolean } } : {};
         if (xeroCreds.syncSettings?.syncOnSale) {
-          await fetch(`https://${syncContext.host}/api/xero/sync-sale`, {
+          // This process itself, on loopback — never the request's Host header,
+          // which the caller controls (it sent their session cookie anywhere).
+          await fetch(`${process.env.API_INTERNAL_ORIGIN?.trim() || `http://127.0.0.1:${process.env.PORT || 8080}`}/api/xero/sync-sale`, {
             method: "POST",
             headers: { "Content-Type": "application/json", Cookie: syncContext.cookie },
             body: JSON.stringify({ transactionId: transaction.id }),
@@ -996,8 +1056,15 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     ? (req.body as { items: Array<{ serials?: unknown }> }).items
     : [];
 
+  // "delivery-order:<id>" keys belong to services/deliveryOrderSale.ts. A till
+  // sending one would make that online order look already booked, so it is
+  // never recorded.
+  if (typeof parsed.data.idempotencyKey === "string" && parsed.data.idempotencyKey.trim().startsWith("delivery-order:")) {
+    res.status(400).json({ error: "Invalid idempotency key" });
+    return;
+  }
   const result = await finalizeSale(req.session.merchantId!, parsed.data, rawItems, {
-    syncContext: { host: String(req.headers.host ?? ""), cookie: String(req.headers.cookie ?? "") },
+    syncContext: { cookie: String(req.headers.cookie ?? "") },
   });
 
   if (!result.ok) {
@@ -1078,6 +1145,68 @@ async function reverseSaleEffects(
     await reconcileOversellLedger(tx, {
       merchantId, productId,
       prevStock: product.stockQuantity, newStock: newQty,
+    });
+  }
+
+  // Gift cards sold on this sale. Refunding the sale while keeping a live card
+  // was a way to turn cash into a card for free; an unspent card is put on hold
+  // with the sale, and a card already spent from blocks the refund (staff
+  // decide how to settle that by hand).
+  const issued = await tx
+    .select({ cardId: giftCardLedgerTable.giftCardId })
+    .from(giftCardLedgerTable)
+    .where(and(
+      eq(giftCardLedgerTable.merchantId, merchantId),
+      eq(giftCardLedgerTable.transactionId, transaction.id),
+      eq(giftCardLedgerTable.type, "issue"),
+    ));
+  for (const { cardId } of issued) {
+    const [card] = await tx.select().from(giftCardsTable)
+      .where(and(eq(giftCardsTable.id, cardId), eq(giftCardsTable.merchantId, merchantId)))
+      .for("update");
+    if (!card || card.status === "on_hold") continue;
+    if (parseFloat(card.currentBalance) < parseFloat(card.initialValue) - 0.005) {
+      throw new HttpError(409, `Gift card ${card.cardNumber} from this sale has already been used — sort the card out before reversing the sale.`);
+    }
+    await tx.update(giftCardsTable).set({ status: "on_hold" }).where(eq(giftCardsTable.id, card.id));
+    await tx.insert(giftCardLedgerTable).values({
+      merchantId,
+      giftCardId: card.id,
+      type: "void",
+      amount: "0",
+      balanceAfter: card.currentBalance,
+      note: `On hold — sale ${transaction.receiptNumber} was reversed`,
+      transactionId: transaction.id,
+    });
+  }
+
+  // Store credit the sale spent goes back to the customer it came from.
+  const spent = await tx
+    .select({ customerId: storeCreditLedgerTable.customerId, amount: storeCreditLedgerTable.amount })
+    .from(storeCreditLedgerTable)
+    .where(and(
+      eq(storeCreditLedgerTable.merchantId, merchantId),
+      eq(storeCreditLedgerTable.transactionId, transaction.id),
+      eq(storeCreditLedgerTable.type, "redeem"),
+    ));
+  for (const s of spent) {
+    const back = Math.abs(parseFloat(s.amount));
+    if (!(back > 0)) continue;
+    await tx.select({ id: customersTable.id }).from(customersTable)
+      .where(and(eq(customersTable.id, s.customerId), eq(customersTable.merchantId, merchantId))).for("update");
+    const [balRow] = await tx
+      .select({ bal: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}), 0)` })
+      .from(storeCreditLedgerTable)
+      .where(and(eq(storeCreditLedgerTable.customerId, s.customerId), eq(storeCreditLedgerTable.merchantId, merchantId)));
+    const balance = parseFloat(balRow?.bal ?? "0");
+    await tx.insert(storeCreditLedgerTable).values({
+      merchantId,
+      customerId: s.customerId,
+      type: "refund",
+      amount: String(back),
+      balanceAfter: String(Math.round((balance + back) * 100) / 100),
+      note: `Returned — sale ${transaction.receiptNumber} was reversed`,
+      transactionId: transaction.id,
     });
   }
 
@@ -1176,17 +1305,31 @@ router.post("/transactions/:id/void", requireAuth, requireManagerOrApproval, asy
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
   const reason = typeof (req.body ?? {}).reason === "string" ? (req.body as { reason: string }).reason : null;
 
-  const [transaction] = await db.select().from(transactionsTable)
-    .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)));
-  if (!transaction) { res.status(404).json({ error: "Transaction not found" }); return; }
-  if (transaction.status === "voided") { res.status(409).json({ error: "Already voided" }); return; }
-  if (transaction.status === "refunded") { res.status(409).json({ error: "Refunded sales can't be voided" }); return; }
-
-  const [updated] = await db.update(transactionsTable)
-    .set({ status: "voided", notes: reason ?? transaction.notes })
-    .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
-    .returning();
-  await cancelSalePreOrders(db, merchantId, id);
+  // A void is a sale that should never have happened: like a refund it puts
+  // the stock, spend, loyalty, store credit and gift cards back (it used to
+  // only relabel the row, so a voided sale still kept the loyalty it earned).
+  // Locked so it can't race a refund or a second void.
+  let updated: typeof transactionsTable.$inferSelect;
+  try {
+    updated = await db.transaction(async (tx) => {
+      const [transaction] = await tx.select().from(transactionsTable)
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .for("update");
+      if (!transaction) throw new HttpError(404, "Transaction not found");
+      if (transaction.status === "voided") throw new HttpError(409, "Already voided");
+      if (transaction.status === "refunded") throw new HttpError(409, "Refunded sales can't be voided");
+      if (transaction.status === "completed") await reverseSaleEffects(tx, merchantId, transaction);
+      await cancelSalePreOrders(tx, merchantId, id);
+      const [row] = await tx.update(transactionsTable)
+        .set({ status: "voided", notes: reason ?? transaction.notes })
+        .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)))
+        .returning();
+      return row!;
+    });
+  } catch (err) {
+    if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+    throw err;
+  }
 
   let cust: typeof customersTable.$inferSelect | null = null;
   if (updated.customerId) {

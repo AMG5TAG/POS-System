@@ -1,6 +1,6 @@
 import { referralFieldsFor } from "../lib/referrals";
 import { Router, type IRouter } from "express";
-import { db, quotesTable, customersTable, merchantsTable, businessProfileTable, salesTemplatesTable, salesSettingsTable } from "@workspace/db";
+import { db, quotesTable, customersTable, merchantsTable, businessProfileTable, salesTemplatesTable, salesSettingsTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
@@ -33,6 +33,17 @@ import {
 import type * as zod from "zod";
 
 const router: IRouter = Router();
+
+/** True when row `id` of `table` belongs to the merchant. */
+async function ownsRow(
+  table: typeof customersTable | typeof serviceJobsTable,
+  merchantId: number,
+  id: number,
+): Promise<boolean> {
+  const [r] = await db.select({ id: table.id }).from(table)
+    .where(and(eq(table.id, id), eq(table.merchantId, merchantId))).limit(1);
+  return !!r;
+}
 
 /**
  * Validate a quote API response against its declared Zod schema before sending.
@@ -167,7 +178,7 @@ async function loadQuoteRow(id: number, merchantId: number): Promise<QuoteJoinRo
   const [row] = await db
     .select({ quote: quotesTable, ...CUSTOMER_COLS })
     .from(quotesTable)
-    .leftJoin(customersTable, eq(quotesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(quotesTable.customerId, customersTable.id), eq(customersTable.merchantId, quotesTable.merchantId)))
     .where(and(eq(quotesTable.id, id), eq(quotesTable.merchantId, merchantId)));
   return row;
 }
@@ -204,7 +215,7 @@ router.get("/quotes", requireAuth, async (req, res): Promise<void> => {
   const rows = await db
     .select({ quote: quotesTable, ...CUSTOMER_COLS })
     .from(quotesTable)
-    .leftJoin(customersTable, eq(quotesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(quotesTable.customerId, customersTable.id), eq(customersTable.merchantId, quotesTable.merchantId)))
     .where(and(...conditions))
     .orderBy(desc(quotesTable.createdAt))
     .limit(limit)
@@ -244,6 +255,14 @@ router.post("/quotes", requireAuth, async (req, res): Promise<void> => {
   const bodyParsed = CreateQuoteBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { customerId, serviceJobId, expiryDate, notes, items: lineItems, quotePrefix, quoteDigits, discount: discountInput } = bodyParsed.data as typeof bodyParsed.data & { serviceJobId?: number | null };
+  // Both must be this business's: a foreign customer id here, read back through
+  // the quote, handed out another account's customer details.
+  if (customerId != null && !(await ownsRow(customersTable, req.session.merchantId!, customerId))) {
+    res.status(400).json({ error: "Customer not found" }); return;
+  }
+  if (serviceJobId != null && !(await ownsRow(serviceJobsTable, req.session.merchantId!, serviceJobId))) {
+    res.status(400).json({ error: "Service job not found" }); return;
+  }
 
   const merchantId = req.session.merchantId!;
   const lines: LineItem[] = (lineItems as LineItem[] | undefined) ?? [];
@@ -308,6 +327,9 @@ router.put("/quotes/:id", requireAuth, async (req, res): Promise<void> => {
   const bodyParsed = UpdateQuoteBody.safeParse(req.body);
   if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
   const { status, notes, expiryDate, customerId, items, discount } = bodyParsed.data;
+  if (customerId != null && !(await ownsRow(customersTable, req.session.merchantId!, customerId))) {
+    res.status(400).json({ error: "Customer not found" }); return;
+  }
   const merchantId = req.session.merchantId!;
 
   const updates: Record<string, unknown> = {};

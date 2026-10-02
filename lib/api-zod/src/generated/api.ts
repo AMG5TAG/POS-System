@@ -2128,6 +2128,9 @@ export const CreateTransactionBody = zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
 }).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.'),
+  "storeCreditPayment": zod.object({
+  "amount": zod.number()
+}).optional().describe('The store-credit leg of a split sale, debited from the sale\'s customer atomically with recording it. A sale paid wholly by store credit (paymentMethod store_credit) is debited its total without it.'),
   "serviceJobId": zod.number().nullish().describe('The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.'),
   "quoteId": zod.number().nullish().describe('The quote whose lines were imported into this sale. A quoted line may carry a price the merchant agreed below (or above) the current catalogue price, so the server re-reads this quote — scoped to the merchant, and only while it is still draft\/sent\/accepted — and accepts those unit prices for the products they were quoted on. Without it the sale is repriced from the catalogue and rejected as a totals mismatch. The client is trusted for nothing but which quote; a price that matches no line on it is still repriced.'),
   "appointmentId": zod.number().nullish().describe('The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.'),

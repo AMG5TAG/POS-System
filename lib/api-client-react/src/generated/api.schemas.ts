@@ -1412,6 +1412,13 @@ export type TransactionInputGiftCardPayment = {
   amount: number;
 };
 
+/**
+ * The store-credit leg of a split sale, debited from the sale's customer atomically with recording it. A sale paid wholly by store credit (paymentMethod store_credit) is debited its total without it.
+ */
+export type TransactionInputStoreCreditPayment = {
+  amount: number;
+};
+
 export interface TransactionInput {
   customerId?: number;
   staffId?: number;
@@ -1434,6 +1441,8 @@ export interface TransactionInput {
   discountPct?: number;
   /** When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction. */
   giftCardPayment?: TransactionInputGiftCardPayment;
+  /** The store-credit leg of a split sale, debited from the sale's customer atomically with recording it. A sale paid wholly by store credit (paymentMethod store_credit) is debited its total without it. */
+  storeCreditPayment?: TransactionInputStoreCreditPayment;
   /**
      * The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.
      * @nullable

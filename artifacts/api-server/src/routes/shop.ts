@@ -20,6 +20,10 @@ import { formatAddressParts } from "../lib/address";
 import { profileRequirements, missingRequired } from "../lib/customer-profile-rules";
 import { ensureReferralCode, findReferrer, normaliseReferralCode } from "../lib/referrals";
 import { checkDeliveryAddress } from "../lib/shipping-region";
+import { emailChangeToken, readEmailChangeToken } from "../lib/shop-email-change";
+import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
+import { shopOrigin } from "../lib/publicUrl";
 
 /**
  * The online shop's API (koastal.com.au/shop) — public, no staff session.
@@ -45,6 +49,12 @@ import { checkDeliveryAddress } from "../lib/shipping-region";
  */
 
 const router: IRouter = Router();
+
+/** A new session id on sign-in, as the POS logins do: a session id planted in
+ *  the browser beforehand (session fixation) must not become signed in. */
+function freshSession(req: import("express").Request): Promise<void> {
+  return new Promise((resolve, reject) => req.session.regenerate((err) => (err ? reject(err) : resolve())));
+}
 
 const LOCALHOST = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const ipLimiter = (windowMs: number, max: number, message: string, failuresOnly = false) =>
@@ -710,6 +720,7 @@ router.post("/shop/auth/login", loginLimiter, async (req, res): Promise<void> =>
   for (const c of candidates) {
     if (c.portalPasswordHash && await verifyPassword(parsed.data.password, c.portalPasswordHash)) {
       await db.update(customersTable).set({ portalLastLoginAt: new Date() }).where(eq(customersTable.id, c.id));
+      await freshSession(req);
       req.session.portalCustomerId = c.id;
       res.json({ customer: accountOf(c) });
       return;
@@ -734,7 +745,9 @@ const RegisterBody = z.object({
   lastName: z.string().trim().max(80).default(""),
   email: Email,
   phone: z.string().trim().max(40).default(""),
-  password: Password,
+  /** No longer used: the password is chosen from the emailed set-up link, which
+   *  is what proves the address is theirs. Accepted so an older page can post. */
+  password: z.string().optional(),
   /** From a friend's referral link (/r/<code>), kept by the browser until sign-up. */
   referralCode: z.string().trim().max(40).optional(),
 });
@@ -764,9 +777,10 @@ router.post("/shop/auth/register", registerLimiter, async (req, res): Promise<vo
     phone: b.phone ? await normalisePhoneFor(merchantId, b.phone) : null,
     heardFrom: "Online shop",
     portalToken: crypto.randomUUID(),
-    portalPasswordHash: await hashPassword(b.password),
-    portalPasswordSetAt: new Date(),
-    portalLastLoginAt: new Date(),
+    // No password yet. It used to be set here and the shopper signed straight
+    // in, so anyone could open an account on an address they don't own — and,
+    // since an account gathers every record with its email, collect a real
+    // customer's repairs, files and quotes when they later came in store.
   }).returning();
   // Their own code to share, and — arriving on a friend's link — who referred
   // them, recorded as the POS records it (referred_by = the referrer's code).
@@ -782,8 +796,10 @@ router.post("/shop/auth/register", registerLimiter, async (req, res): Promise<vo
   }).where(eq(customersTable.id, created.id)).returning();
   created = updated ?? created;
   triggerInstantSync(merchantId, "contacts");
-  req.session.portalCustomerId = created.id;
-  res.status(201).json({ status: "created", customer: accountOf(created) });
+  // The inbox is the proof, exactly as for an email the POS already knows: the
+  // password is set from the link, and only then is anyone signed in.
+  await issueSetupLink(created, "setup", req.log);
+  res.status(201).json({ status: "check-email" });
 });
 
 /** Send a set-up / reset link. Always the same answer, so it can't be used to
@@ -827,6 +843,7 @@ router.post("/shop/auth/set-password", linkLimiter, async (req, res): Promise<vo
     await tx.delete(customerPortalTokensTable)
       .where(and(eq(customerPortalTokensTable.customerId, customer.id), isNull(customerPortalTokensTable.usedAt)));
   });
+  await freshSession(req);
   req.session.portalCustomerId = customer.id;
   res.json({ customer: accountOf({ ...customer, portalPasswordHash: passwordHash }) });
 });
@@ -933,7 +950,9 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
   const delivery = b.shippingAddress ? checkDeliveryAddress(b.shippingAddress) : null;
   if (delivery && !delivery.ok) { res.status(400).json({ error: delivery.error }); return; }
 
-  let email: string | undefined;
+  // A new email is not applied here: a link goes to the new address and the
+  // change happens when it is opened (lib/shop-email-change.ts).
+  let emailChangePending: string | undefined;
   if (b.email && b.email !== (c.email ?? "").trim().toLowerCase()) {
     const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
       .where(and(eq(customersTable.merchantId, c.merchantId), sql`lower(${customersTable.email}) = ${b.email}`, sql`${customersTable.id} <> ${c.id}`))
@@ -942,11 +961,10 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
       res.status(409).json({ error: "That email is already on another account with us. Contact us and we can combine them." });
       return;
     }
-    email = b.email;
+    emailChangePending = b.email;
   }
   const [updated] = await db.update(customersTable).set({
     ...(dateOfBirth ? { dateOfBirth } : {}),
-    ...(email ? { email } : {}),
     firstName: b.firstName, lastName: b.lastName || null,
     phone: b.phone ? await normalisePhoneFor(c.merchantId, b.phone) : null,
     billingStreet: b.address.street || null, billingCity: b.address.city || null, billingState: b.address.state || null,
@@ -967,7 +985,52 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
     updatedAt: new Date(),
   }).where(eq(customersTable.id, c.id)).returning();
   triggerInstantSync(c.merchantId, "contacts");
-  res.json({ customer: accountOf(updated!) });
+  if (emailChangePending) await sendEmailChangeLink(updated!, emailChangePending, req.log);
+  res.json({ customer: accountOf(updated!), ...(emailChangePending ? { emailChangePending } : {}) });
+});
+
+async function sendEmailChangeLink(
+  customer: typeof customersTable.$inferSelect,
+  newEmail: string,
+  log: { warn: (o: unknown, m: string) => void },
+): Promise<void> {
+  const [m] = await db.select({ businessName: merchantsTable.businessName }).from(merchantsTable).where(eq(merchantsTable.id, customer.merchantId));
+  const biz = m?.businessName ?? "Your store";
+  // Built from the configured site, never from request headers.
+  const link = `${new URL(shopOrigin()).origin}/api/shop/auth/confirm-email?token=${encodeURIComponent(emailChangeToken(customer.id, newEmail))}`;
+  void sendEmail(customer.merchantId, {
+    to: newEmail,
+    subject: `Confirm your new email — ${biz}`,
+    html: `
+      <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
+        <h2 style="margin-top:0">Confirm your new email</h2>
+        <p>Someone asked to use this address for their ${escapeHtml(biz)} account. If that was you, confirm it below — until then your account keeps its current email.</p>
+        <p style="margin:24px 0"><a href="${link}" style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">Confirm this email</a></p>
+        <p style="color:#666;font-size:14px">This link expires in 24 hours. If it wasn't you, ignore this email — nothing changes.</p>
+      </div>`,
+    text: `Confirm your new email for your ${biz} account (expires in 24 hours):\n${link}\n\nIf it wasn't you, ignore this email.`,
+  }).then((r) => { if (!r.success) log.warn({ error: r.error }, "Email-change confirmation failed to send"); }).catch(() => {});
+}
+
+/* The link from the email above. The token says who and what; the change is
+   applied only if that address still isn't on another of this business's
+   customer records. Answers with a redirect to the shop account. */
+router.get("/shop/auth/confirm-email", linkLimiter, async (req, res): Promise<void> => {
+  const back = (state: string) => res.redirect(302, `${shopOrigin()}/account?email=${state}`);
+  const t = readEmailChangeToken(req.query.token);
+  const merchantId = await soleMerchantId();
+  if (!t || merchantId == null) { back("link-expired"); return; }
+  const [c] = await db.select().from(customersTable)
+    .where(and(eq(customersTable.id, t.customerId), eq(customersTable.merchantId, merchantId)));
+  if (!c) { back("link-expired"); return; }
+  if ((c.email ?? "").trim().toLowerCase() === t.email) { back("changed"); return; }
+  const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
+    .where(and(eq(customersTable.merchantId, merchantId), sql`lower(${customersTable.email}) = ${t.email}`, sql`${customersTable.id} <> ${c.id}`))
+    .limit(1);
+  if (taken) { back("taken"); return; }
+  await db.update(customersTable).set({ email: t.email, updatedAt: new Date() }).where(eq(customersTable.id, c.id));
+  triggerInstantSync(merchantId, "contacts");
+  back("changed");
 });
 
 export default router;

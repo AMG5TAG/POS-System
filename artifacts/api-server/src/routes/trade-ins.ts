@@ -59,15 +59,29 @@ router.post("/trade-ins", requireAuth, async (req, res): Promise<void> => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const deviceName = typeof b.deviceName === "string" ? b.deviceName.trim() : "";
   if (!deviceName) { res.status(400).json({ error: "Device name is required" }); return; }
+  // A valuation is what the business will pay out: a real, non-negative amount.
+  const valuation = Number(b.valuationAmount ?? 0);
+  if (!Number.isFinite(valuation) || valuation < 0 || valuation > 100_000) {
+    res.status(400).json({ error: "Valuation must be an amount between $0 and $100,000" });
+    return;
+  }
+  // The customer must be this business's (store credit is paid to them).
+  let customerId: number | null = null;
+  if (b.customerId != null && b.customerId !== "") {
+    const [c] = await db.select({ id: customersTable.id }).from(customersTable)
+      .where(and(eq(customersTable.id, Number(b.customerId)), eq(customersTable.merchantId, merchantId)));
+    if (!c) { res.status(400).json({ error: "Customer not found" }); return; }
+    customerId = c.id;
+  }
   await db.insert(tradeInsTable).values({
     merchantId,
-    customerId: b.customerId != null ? Number(b.customerId) : null,
+    customerId,
     staffId: req.session.staffId ?? null,
     deviceName,
     identifier: typeof b.identifier === "string" && b.identifier.trim() ? b.identifier.trim() : null,
     conditionGrade: typeof b.conditionGrade === "string" && GRADES.has(b.conditionGrade) ? b.conditionGrade : "B",
     notes: typeof b.notes === "string" && b.notes.trim() ? b.notes.trim() : null,
-    valuationAmount: String(Number(b.valuationAmount) || 0),
+    valuationAmount: String(Math.round(valuation * 100) / 100),
   });
   res.status(201).json({ items: await listAll(merchantId) });
 });
@@ -82,22 +96,35 @@ router.post("/trade-ins/:id/accept", requireAuth, requireManagerOrApproval, asyn
   const payoutMethod = String((req.body ?? {}).payoutMethod ?? "");
   if (payoutMethod !== "cash" && payoutMethod !== "store_credit") { res.status(400).json({ error: "Invalid payout method" }); return; }
 
+  // Claim the trade-in and pay it out in one transaction: the status flip is
+  // conditional on it still being "quoted", so a double-click (or two tills)
+  // can't pay the same trade-in twice.
   const amount = parseFloat(row.valuationAmount);
-  if (payoutMethod === "store_credit") {
-    if (!row.customerId) { res.status(400).json({ error: "A customer is required for store-credit payout" }); return; }
-    const [bal] = await db.select({ b: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}),0)` })
-      .from(storeCreditLedgerTable).where(eq(storeCreditLedgerTable.customerId, row.customerId));
-    const balanceAfter = Math.round((parseFloat(bal?.b ?? "0") + amount) * 100) / 100;
-    await db.insert(storeCreditLedgerTable).values({
-      merchantId, customerId: row.customerId, type: "issue",
-      amount: String(amount), balanceAfter: String(balanceAfter),
-      note: `Trade-in: ${row.deviceName}`, staffId: req.session.staffId ?? null,
-    });
+  if (payoutMethod === "store_credit" && !row.customerId) {
+    res.status(400).json({ error: "A customer is required for store-credit payout" });
+    return;
   }
-
-  await db.update(tradeInsTable)
-    .set({ status: "accepted", payoutMethod, acceptedAt: new Date() })
-    .where(eq(tradeInsTable.id, id));
+  const claimed = await db.transaction(async (tx) => {
+    const [won] = await tx.update(tradeInsTable)
+      .set({ status: "accepted", payoutMethod, acceptedAt: new Date() })
+      .where(and(eq(tradeInsTable.id, id), eq(tradeInsTable.merchantId, merchantId), eq(tradeInsTable.status, "quoted")))
+      .returning({ id: tradeInsTable.id });
+    if (!won) return false;
+    if (payoutMethod === "store_credit" && row.customerId) {
+      await tx.select({ id: customersTable.id }).from(customersTable)
+        .where(and(eq(customersTable.id, row.customerId), eq(customersTable.merchantId, merchantId))).for("update");
+      const [bal] = await tx.select({ b: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}),0)` })
+        .from(storeCreditLedgerTable).where(eq(storeCreditLedgerTable.customerId, row.customerId));
+      const balanceAfter = Math.round((parseFloat(bal?.b ?? "0") + amount) * 100) / 100;
+      await tx.insert(storeCreditLedgerTable).values({
+        merchantId, customerId: row.customerId, type: "issue",
+        amount: String(amount), balanceAfter: String(balanceAfter),
+        note: `Trade-in: ${row.deviceName}`, staffId: req.session.staffId ?? null,
+      });
+    }
+    return true;
+  });
+  if (!claimed) { res.status(409).json({ error: "Trade-in already actioned" }); return; }
   res.json({ items: await listAll(merchantId) });
 });
 

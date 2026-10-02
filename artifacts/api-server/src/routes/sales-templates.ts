@@ -1,3 +1,4 @@
+import { stripManagedFields } from "../lib/settings-body";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, salesTemplatesTable } from "@workspace/db";
@@ -84,7 +85,12 @@ router.put("/sales-templates/:templateType", requireAuth, requireManagerOrOwner,
     return;
   }
 
-  const body = req.body as Partial<
+  // The Omit is compile-time only: strip the identity columns from what was
+  // actually sent, or a body naming another merchantId moved (or planted) a
+  // template on another account — whose schedulers still send its emails.
+  const { templateType: _ignored, ...rest } = stripManagedFields((req.body ?? {}) as Record<string, unknown>);
+  void _ignored;
+  const body = rest as Partial<
     Omit<typeof salesTemplatesTable.$inferInsert, "id" | "merchantId" | "templateType">
   >;
 

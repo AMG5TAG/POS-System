@@ -104,7 +104,8 @@ router.put("/discounts/:id", requireAuth, requireManagerOrOwner, async (req, res
     endDate: body.endDate ?? null,
     ...(body.isActive ? { isActive: body.isActive } : {}),
   }).where(and(eq(discountsTable.id, id), eq(discountsTable.merchantId, merchantId)));
-  const [row] = await db.select().from(discountsTable).where(eq(discountsTable.id, id));
+  const [row] = await db.select().from(discountsTable).where(and(eq(discountsTable.id, id), eq(discountsTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Discount not found" }); return; }
   res.json(fmt(row));
 });
 

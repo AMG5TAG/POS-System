@@ -1,6 +1,6 @@
 import { hasFreshManagerApproval, isManagerOrOwner, requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
-import { db, laybysTable, laybyPaymentsTable, customersTable, productsTable } from "@workspace/db";
+import { db, laybysTable, laybyPaymentsTable, customersTable, productsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, ilike, or, sql, count, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
@@ -35,6 +35,12 @@ interface LaybyStockLine { productId?: number | null; quantity?: number | null }
 
 /** Snapshot each product-linked layby line item's cost price (server-authoritative)
  *  so completed-layby COGS reflects cost at sale, not the product's later cost. */
+async function isOwnStaff(merchantId: number, staffId: number): Promise<boolean> {
+  const [st] = await db.select({ id: staffTable.id }).from(staffTable)
+    .where(and(eq(staffTable.id, staffId), eq(staffTable.merchantId, merchantId))).limit(1);
+  return !!st;
+}
+
 async function snapshotLaybyItemCosts(merchantId: number, items: unknown): Promise<unknown> {
   if (!Array.isArray(items)) return items;
   const arr = items as Array<Record<string, unknown>>;
@@ -208,6 +214,45 @@ router.post("/laybys", requireAuth, async (req, res) => {
     return;
   }
 
+  // The browser's figures are checked, not trusted: each line must be one of
+  // this business's products at its catalogue price (a lower price needs a
+  // manager or a manager's PIN), and the total must be what the lines add to.
+  if (!Array.isArray(items) || items.length > 200) { res.status(400).json({ error: "Invalid items" }); return; }
+  const lines = items as Array<{ productId?: unknown; quantity?: unknown; price?: unknown }>;
+  const ids = [...new Set(lines.map((l) => Number(l.productId)))];
+  if (ids.some((v) => !Number.isInteger(v) || v <= 0)) { res.status(400).json({ error: "Every layby line must be a product" }); return; }
+  const catalogue = await db.select({ id: productsTable.id, price: productsTable.price }).from(productsTable)
+    .where(and(inArray(productsTable.id, ids), eq(productsTable.merchantId, merchantId)));
+  const priceById = new Map(catalogue.map((p) => [p.id, Math.round(parseFloat(p.price) * 100)]));
+  let linesTotalCents = 0;
+  let belowCatalogue = false;
+  for (const l of lines) {
+    const qty = Number(l.quantity);
+    const cents = Math.round(Number(l.price) * 100);
+    const listCents = priceById.get(Number(l.productId));
+    if (listCents === undefined) { res.status(400).json({ error: "Product not found" }); return; }
+    if (!Number.isInteger(qty) || qty <= 0 || qty > 10_000 || !Number.isFinite(cents) || cents < 0) {
+      res.status(400).json({ error: "Invalid quantity or price" }); return;
+    }
+    if (cents < listCents) belowCatalogue = true;
+    linesTotalCents += cents * qty;
+  }
+  if (Math.abs(Math.round(totalAmount * 100) - linesTotalCents) > 1) {
+    res.status(400).json({ error: "The layby total doesn't match its items" }); return;
+  }
+  if (belowCatalogue && !isManagerOrOwner(req) && !hasFreshManagerApproval(req)) {
+    res.status(403).json({
+      error: "A manager or owner needs to approve a layby below the catalogue price — ask them to enter their PIN.",
+      code: "manager_approval_required",
+    });
+    return;
+  }
+  if (customerId != null) {
+    const [c] = await db.select({ id: customersTable.id }).from(customersTable)
+      .where(and(eq(customersTable.id, Number(customerId)), eq(customersTable.merchantId, merchantId)));
+    if (!c) { res.status(400).json({ error: "Customer not found" }); return; }
+  }
+
   // A deposit covering the full amount completes the layby immediately, which
   // (like a POS sale) deducts stock and rolls into the customer's spend.
   const completedOnCreate = depositAmount >= totalAmount;
@@ -222,7 +267,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
       .values({
         merchantId,
         customerId: customerId ?? null,
-        staffId: typeof staffId === "number" ? staffId : null,
+        staffId: typeof staffId === "number" && (await isOwnStaff(merchantId, staffId)) ? staffId : null,
         reference,
         items: itemsWithCost,
         totalAmount: String(totalAmount),
@@ -252,7 +297,7 @@ router.post("/laybys", requireAuth, async (req, res) => {
 
   let customer: CustomerRow | undefined;
   if (customerId) {
-    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, customerId));
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
     customer = c;
   }
 
@@ -338,7 +383,7 @@ router.patch("/laybys/:id", requireAuth, async (req, res) => {
 
   let customer: CustomerRow | undefined;
   if (updated.customerId) {
-    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, updated.customerId));
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
     customer = c;
   }
 
@@ -469,7 +514,7 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
 
   let customer: CustomerRow | undefined;
   if (updated.customerId) {
-    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, updated.customerId));
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
     customer = c;
   }
 
@@ -512,7 +557,7 @@ router.post("/laybys/:id/cancel", requireAuth, requireManagerOrApproval, async (
 
   let customer: CustomerRow | undefined;
   if (updated.customerId) {
-    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, updated.customerId));
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
     customer = c;
   }
 
@@ -559,7 +604,7 @@ router.post("/laybys/:id/complete", requireAuth, requireManagerOrApproval, async
 
   let customer: CustomerRow | undefined;
   if (updated.customerId) {
-    const [c] = await db.select().from(customersTable).where(eq(customersTable.id, updated.customerId));
+    const [c] = await db.select().from(customersTable).where(and(eq(customersTable.id, updated.customerId), eq(customersTable.merchantId, merchantId)));
     customer = c;
   }
 

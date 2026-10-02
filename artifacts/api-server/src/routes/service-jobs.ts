@@ -139,8 +139,10 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
 
   const today = new Date().toISOString().split("T")[0];
 
-  const jobPrefix = typeof body.jobNumberPrefix === "string" && body.jobNumberPrefix ? body.jobNumberPrefix : "SJ";
-  const jobDigits = typeof body.jobNumberDigits === "number" && body.jobNumberDigits > 0 ? body.jobNumberDigits : 4;
+  // Bounded: an unchecked jobNumberDigits of, say, 400,000,000 built a
+  // 400 MB string in padStart and could take the API down.
+  const jobPrefix = typeof body.jobNumberPrefix === "string" && /^[A-Za-z0-9-]{1,10}$/.test(body.jobNumberPrefix) ? body.jobNumberPrefix : "SJ";
+  const jobDigits = typeof body.jobNumberDigits === "number" && Number.isInteger(body.jobNumberDigits) && body.jobNumberDigits >= 1 && body.jobNumberDigits <= 10 ? body.jobNumberDigits : 4;
 
   // Pre-fill the repair warranty window from the merchant's Service Options
   // default unless the caller supplied an explicit value.

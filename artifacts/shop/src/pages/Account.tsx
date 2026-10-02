@@ -12,10 +12,19 @@ import { LoyaltyPass } from "@/components/account/LoyaltyPass";
 import { ReferralsCard } from "@/components/account/ReferralsCard";
 import { OrdersCard } from "@/components/account/OrdersCard";
 import { FilesCard } from "@/components/account/FilesCard";
+import { Notice } from "@/components/Form";
+
+/* Where the new-email confirmation link (GET /shop/auth/confirm-email) lands. */
+const EMAIL_CHANGE_RESULT: Record<string, { tone: "ok" | "error"; text: string }> = {
+  changed: { tone: "ok", text: "Your email has been updated." },
+  taken: { tone: "error", text: "That email is already on another account with us, so it wasn't changed. Contact us and we can combine them." },
+  "link-expired": { tone: "error", text: "That link has expired or isn't valid. Save the new email on your profile again for a fresh one." },
+};
 
 export default function Account() {
   const { customer, loading, setCustomer, logout } = useAuth();
   const { data: overview } = useAccountOverview();
+  const [emailResult] = useState(() => EMAIL_CHANGE_RESULT[new URLSearchParams(window.location.search).get("email") ?? ""]);
 
   if (loading) return <div className="py-32 flex justify-center"><Loader2 className="w-6 h-6 animate-spin text-stone-400" /></div>;
   if (!customer) return <Redirect to="/account/login?next=/account" />;
@@ -33,6 +42,8 @@ export default function Account() {
         <Link href="/wishlist" className="inline-flex items-center gap-1.5 h-8 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50"><Heart className="w-4 h-4" /> Wishlist</Link>
         <button onClick={() => void logout()} className="h-8 px-4 rounded-full border border-stone-300 text-sm hover:bg-stone-50">Sign out</button>
       </div>
+
+      {emailResult && <Notice tone={emailResult.tone}>{emailResult.text}</Notice>}
 
       {!customer.hasPassword && <PasswordPrompt email={customer.email} />}
 
