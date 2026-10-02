@@ -2128,6 +2128,7 @@ export const CreateTransactionBody = zod.object({
   "cardId": zod.number(),
   "amount": zod.number()
 }).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.'),
+  "discountApproval": zod.string().optional().describe('From POST \/transactions\/discount-check: a manager approved this cart\'s discount over the cashier\'s role limit. Valid only for the same lines, customer and quote, for 30 minutes.'),
   "storeCreditPayment": zod.object({
   "amount": zod.number()
 }).optional().describe('The store-credit leg of a split sale, debited from the sale\'s customer atomically with recording it. A sale paid wholly by store credit (paymentMethod store_credit) is debited its total without it.'),
@@ -2136,6 +2137,69 @@ export const CreateTransactionBody = zod.object({
   "appointmentId": zod.number().nullish().describe('The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.'),
   "preOrderId": zod.number().nullish().describe('The pre-order this sale collects (the balance on a deposit pre-order). It is marked Collected with this sale, and its product line does not open a new pre-order.'),
   "paidAt": zod.string().optional().describe('Optional accounting date for the sale. The transaction\'s createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of \"now\". Used for tenders that actually landed on an earlier day, e.g. a direct deposit \/ bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future.')
+})
+
+
+/**
+ * Run when the till opens payment, so a discount over the role's limit is approved with a manager's PIN before any money moves. Answers 403 manager_approval_required when it needs one; once approved, returns a token tied to this exact cart that the sale carries as `discountApproval` (valid 30 minutes).
+ * @summary Check a sale's discount against the signed-in role's limit, before payment
+ */
+
+export const checkTransactionDiscountBodyItemsItemUnitPriceMin = 0;
+
+
+
+
+export const CheckTransactionDiscountBody = zod.object({
+  "customerId": zod.number().optional(),
+  "staffId": zod.number().optional(),
+  "items": zod.array(zod.object({
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number().min(1),
+  "unitPrice": zod.number().min(checkTransactionDiscountBodyItemsItemUnitPriceMin),
+  "totalPrice": zod.number(),
+  "taxAmount": zod.number().optional(),
+  "discount": zod.number().optional(),
+  "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
+  "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
+  "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
+  "preOrderDeposit": zod.object({
+  "productId": zod.number(),
+  "quantity": zod.number().min(1)
+}).nullish().describe('Marks this line (productId 0) as a deposit on a pre-order product rather than the product itself: the server opens a pre-order for `quantity` of `productId` with this line\'s total as the amount paid. No stock moves until the balance is taken at collection.')
+})),
+  "paymentMethod": zod.enum(['cash', 'card', 'eftpos', 'split', 'voucher', 'other', 'direct_deposit', 'store_credit', 'laybuy', 'loyalty', 'zip', 'afterpay', 'klarna']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "discountTotal": zod.number().optional(),
+  "total": zod.number(),
+  "amountTendered": zod.number().optional(),
+  "changeDue": zod.number().optional(),
+  "notes": zod.string().optional(),
+  "loyaltyEarned": zod.number().optional(),
+  "receiptNumber": zod.string().optional(),
+  "idempotencyKey": zod.string().optional().describe('Optional client-generated key. Retrying a create with the same key returns the original transaction instead of recording a duplicate.'),
+  "requestedDiscountTotal": zod.number().optional().describe('The total dollar discount the cashier originally attempted to apply before any role-limit clamping. When this exceeds discountTotal by more than rounding noise the server infers a clamp occurred and persists discountCapped on the saved record.'),
+  "discountPct": zod.number().optional().describe('When the overall cart discount was entered as a percentage, the numeric percentage value (e.g. 10 for 10%). Omit or leave undefined for dollar-amount discounts. Stored on the transaction so reprinted receipts can render \"10% discount\" instead of the plain \"Discount\".'),
+  "giftCardPayment": zod.object({
+  "cardId": zod.number(),
+  "amount": zod.number()
+}).optional().describe('When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction.'),
+  "discountApproval": zod.string().optional().describe('From POST \/transactions\/discount-check: a manager approved this cart\'s discount over the cashier\'s role limit. Valid only for the same lines, customer and quote, for 30 minutes.'),
+  "storeCreditPayment": zod.object({
+  "amount": zod.number()
+}).optional().describe('The store-credit leg of a split sale, debited from the sale\'s customer atomically with recording it. A sale paid wholly by store credit (paymentMethod store_credit) is debited its total without it.'),
+  "serviceJobId": zod.number().nullish().describe('The service job this sale is billing. The job is marked completed when the sale is recorded. Authoritative — when omitted the server falls back to the `[Service #...]` marker in notes, which is how older clients and parked BNPL sales carry the link.'),
+  "quoteId": zod.number().nullish().describe('The quote whose lines were imported into this sale. A quoted line may carry a price the merchant agreed below (or above) the current catalogue price, so the server re-reads this quote — scoped to the merchant, and only while it is still draft\/sent\/accepted — and accepts those unit prices for the products they were quoted on. Without it the sale is repriced from the catalogue and rejected as a totals mismatch. The client is trusted for nothing but which quote; a price that matches no line on it is still repriced.'),
+  "appointmentId": zod.number().nullish().describe('The appointment this sale is billing. The appointment is marked completed when the sale is recorded. Falls back to the `[Appt #...]` notes marker when omitted.'),
+  "preOrderId": zod.number().nullish().describe('The pre-order this sale collects (the balance on a deposit pre-order). It is marked Collected with this sale, and its product line does not open a new pre-order.'),
+  "paidAt": zod.string().optional().describe('Optional accounting date for the sale. The transaction\'s createdAt — and therefore the sale date used by every revenue report (view_daily_sales_summary, payment-method breakdown) — is set to this date instead of \"now\". Used for tenders that actually landed on an earlier day, e.g. a direct deposit \/ bank transfer recorded at the register after it cleared. Accepts a plain date (YYYY-MM-DD) or an ISO date-time; must not be in the future.')
+})
+
+export const CheckTransactionDiscountResponse = zod.object({
+  "ok": zod.boolean(),
+  "discountApproval": zod.string().optional()
 })
 
 

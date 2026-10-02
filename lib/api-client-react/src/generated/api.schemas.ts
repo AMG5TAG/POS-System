@@ -1441,6 +1441,8 @@ export interface TransactionInput {
   discountPct?: number;
   /** When the sale is settled wholly or partly with a gift card, debit the card atomically as part of recording the transaction. */
   giftCardPayment?: TransactionInputGiftCardPayment;
+  /** From POST /transactions/discount-check: a manager approved this cart's discount over the cashier's role limit. Valid only for the same lines, customer and quote, for 30 minutes. */
+  discountApproval?: string;
   /** The store-credit leg of a split sale, debited from the sale's customer atomically with recording it. A sale paid wholly by store credit (paymentMethod store_credit) is debited its total without it. */
   storeCreditPayment?: TransactionInputStoreCreditPayment;
   /**
@@ -6838,6 +6840,11 @@ from?: string;
  * ISO date string (YYYY-MM-DD) — filter transactions on or before this date
  */
 to?: string;
+};
+
+export type CheckTransactionDiscount200 = {
+  ok: boolean;
+  discountApproval?: string;
 };
 
 export type VoidTransactionBody = {

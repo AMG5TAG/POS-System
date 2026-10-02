@@ -997,7 +997,7 @@ async function sendEmailChangeLink(
   const [m] = await db.select({ businessName: merchantsTable.businessName }).from(merchantsTable).where(eq(merchantsTable.id, customer.merchantId));
   const biz = m?.businessName ?? "Your store";
   // Built from the configured site, never from request headers.
-  const link = `${new URL(shopOrigin()).origin}/api/shop/auth/confirm-email?token=${encodeURIComponent(emailChangeToken(customer.id, newEmail))}`;
+  const link = `${new URL(shopOrigin()).origin}/api/shop/auth/confirm-email?token=${encodeURIComponent(emailChangeToken(customer.id, newEmail, customer.updatedAt))}`;
   void sendEmail(customer.merchantId, {
     to: newEmail,
     subject: `Confirm your new email — ${biz}`,
@@ -1024,6 +1024,9 @@ router.get("/shop/auth/confirm-email", linkLimiter, async (req, res): Promise<vo
     .where(and(eq(customersTable.id, t.customerId), eq(customersTable.merchantId, merchantId)));
   if (!c) { back("link-expired"); return; }
   if ((c.email ?? "").trim().toLowerCase() === t.email) { back("changed"); return; }
+  // Any save since the link was sent (a different address asked for, say)
+  // supersedes it.
+  if ((c.updatedAt?.getTime() ?? 0) !== t.recordUpdatedAt) { back("link-expired"); return; }
   const [taken] = await db.select({ id: customersTable.id }).from(customersTable)
     .where(and(eq(customersTable.merchantId, merchantId), sql`lower(${customersTable.email}) = ${t.email}`, sql`${customersTable.id} <> ${c.id}`))
     .limit(1);

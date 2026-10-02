@@ -119,7 +119,7 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { id?: string; type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; reverses?: string; idempotencyKey?: string };
+type InvoiceEvent = { id?: string; type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; reverses?: string; idempotencyKey?: string; storeCreditCustomerId?: number };
 
 // A planned instalment on an invoice's payment schedule. Coverage is derived
 // from amountPaid, so only the plan (label/amount/dueDate) is stored.
@@ -279,6 +279,55 @@ async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: num
       .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} + ${earned * sign})` })
       .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
   }
+}
+
+/* ── Store credit spent on an invoice ────────────────────────────────────────
+ * A store-credit payment leg's event names the customer it was debited from
+ * (`storeCreditCustomerId`). Reversing that leg, un-paying the invoice or
+ * deleting it gives back whatever of it hasn't been given back yet — every
+ * return is an event carrying `reverses`, so it can never be paid out twice
+ * (un-pay, mark paid by hand, un-pay again returns nothing the second time). */
+function storeCreditOutstanding(events: InvoiceEvent[]): Array<{ eventId: string; customerId: number; amount: number }> {
+  const out: Array<{ eventId: string; customerId: number; amount: number }> = [];
+  for (const e of events) {
+    if (e.type !== "payment" || !e.id || !e.storeCreditCustomerId) continue;
+    const returned = events
+      .filter((r) => r.reverses === e.id)
+      .reduce((sum, r) => sum + Math.abs(r.amount ?? 0), 0);
+    const left = round2((e.amount ?? 0) - returned);
+    if (left > 0.004) out.push({ eventId: e.id, customerId: e.storeCreditCustomerId, amount: left });
+  }
+  return out;
+}
+
+/** Credit `amount` back to the customer's store-credit balance under a lock. */
+async function returnStoreCredit(tx: DbExecutor, merchantId: number, customerId: number, amount: number, note: string, staffId: number | null): Promise<void> {
+  await tx.select({ id: customersTable.id }).from(customersTable)
+    .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId))).for("update");
+  const [balRow] = await tx
+    .select({ bal: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}), 0)` })
+    .from(storeCreditLedgerTable)
+    .where(and(eq(storeCreditLedgerTable.customerId, customerId), eq(storeCreditLedgerTable.merchantId, merchantId)));
+  await tx.insert(storeCreditLedgerTable).values({
+    merchantId, customerId, type: "refund",
+    amount: String(amount),
+    balanceAfter: String(round2(parseFloat(balRow?.bal ?? "0") + amount)),
+    note, staffId,
+  });
+}
+
+/** Return every store-credit leg still outstanding; the events to append. */
+async function returnAllInvoiceStoreCredit(tx: DbExecutor, merchantId: number, invoiceLabel: string, events: InvoiceEvent[], why: string, staffId: number | null): Promise<InvoiceEvent[]> {
+  const markers: InvoiceEvent[] = [];
+  for (const leg of storeCreditOutstanding(events)) {
+    await returnStoreCredit(tx, merchantId, leg.customerId, leg.amount, `Returned — invoice ${invoiceLabel} ${why}`, staffId);
+    markers.push({
+      id: crypto.randomUUID(), type: "store-credit-returned", timestamp: new Date().toISOString(),
+      detail: `Store credit of $${leg.amount.toFixed(2)} returned to the customer (invoice ${why})`,
+      amount: -leg.amount, method: "store_credit", reverses: leg.eventId,
+    });
+  }
+  return markers;
 }
 
 /* ── Invoice stock + customer-spend side effects ─────────────────────────────
@@ -714,11 +763,18 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
     // drive stock + customer spend, treating invoices like POS sales) are
     // computed atomically against the pre-update state.
     const [preInv] = await tx
-      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items })
+      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items, events: invoicesTable.events, invoiceNumber: invoicesTable.invoiceNumber })
       .from(invoicesTable)
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, mId)))
       .for("update");
     if (!preInv) return;
+
+    // Clearing the recorded payments gives back the store credit they spent.
+    if (updates.amountPaid === "0") {
+      const preEvents = (preInv.events as InvoiceEvent[] | null) ?? [];
+      const markers = await returnAllInvoiceStoreCredit(tx, mId, preInv.invoiceNumber, preEvents, `set to ${String(updates.status)}`, req.session.staffId ?? null);
+      if (markers.length) updates.events = [...preEvents, ...markers];
+    }
 
     const [updated] = await tx
       .update(invoicesTable)
@@ -995,6 +1051,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
         detail: `Payment of $${leg.amount.toFixed(2)} recorded${i === 0 ? ` ${settleNote}` : leg.method ? ` (${leg.method})` : ""}${i === 0 ? noteSuffix : ""}`,
         amount: leg.amount,
         ...(leg.method ? { method: leg.method } : {}),
+        ...(leg.method === "store_credit" && storeCreditDebit ? { storeCreditCustomerId: storeCreditDebit.customerId } : {}),
         ...(i === 0 && idempotencyKey ? { idempotencyKey } : {}),
       };
     });
@@ -1112,6 +1169,13 @@ router.post("/invoices/:id/payment/reverse", requireAuth, requireManagerOrApprov
     // naturally ("Visa payment reversed") and lets reporting net it off by method.
     const existingEvents = (cur.events as InvoiceEvent[] | null) ?? [];
     const reversedLeg = eventId ? existingEvents.find((e) => e.id === eventId) : undefined;
+    // Reversing a store-credit leg puts the credit back on the balance it came
+    // off — up to what of that leg hasn't already been returned.
+    const creditLeft = reversedLeg ? storeCreditOutstanding(existingEvents).find((l) => l.eventId === reversedLeg.id) : undefined;
+    if (creditLeft) {
+      await returnStoreCredit(tx, merchantId, creditLeft.customerId, Math.min(reverseAmount, creditLeft.amount),
+        `Returned — invoice #${id} payment reversed`, req.session.staffId ?? null);
+    }
     const ts = new Date().toISOString();
     const detail = `Payment of $${reverseAmount.toFixed(2)} reversed${reversedLeg?.method ? ` (${reversedLeg.method})` : ""}${reason ? ` — ${reason}` : ""}`;
     const reversalEvent: InvoiceEvent = {
@@ -1179,11 +1243,13 @@ router.delete("/invoices/:id", requireAuth, requireManagerOrApproval, async (req
   const merchantId = req.session.merchantId!;
   await db.transaction(async (tx) => {
     const [existing] = await tx
-      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items })
+      .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items, events: invoicesTable.events, invoiceNumber: invoicesTable.invoiceNumber })
       .from(invoicesTable)
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
       .for("update");
     if (!existing) return;
+    // Store credit spent on it goes back to the customer, paid or partly paid.
+    await returnAllInvoiceStoreCredit(tx, merchantId, existing.invoiceNumber, (existing.events as InvoiceEvent[] | null) ?? [], "deleted", req.session.staffId ?? null);
     // Deleting a paid invoice reverses its stock + spend effects (mirrors POS).
     if (existing.status === "paid") {
       await applyInvoiceStock(tx, merchantId, existing.items, 1);

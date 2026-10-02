@@ -779,7 +779,8 @@ shop account; nothing of it is left in the POS but a redirect. What moved:
   someone else's history. Nor until the new address is proved: saving mails a
   signed 24-hour link to it (`lib/shop-email-change.ts`, nothing stored) and
   `GET /shop/auth/confirm-email` applies the change, re-checking it is still
-  free, then redirects to `/account?email=changed|taken|link-expired`. The birthday keeps the shop's set-once rule.
+  free and that the record hasn't been saved since the link was sent (so
+  asking for a second address voids the first link), then redirects to `/account?email=changed|taken|link-expired`. The birthday keeps the shop's set-once rule.
 - Everything is gathered across same-email records (`buyerCustomerIds`), like
   the rest of the account.
 - The service job dialog's **Portal** button (email/SMS the link) called a
@@ -1193,6 +1194,12 @@ inside the DB transaction that records the money, never by a pre-check:
   spent (returned to the customer), and gift cards sold on the sale (put
   `on_hold`; a card already spent from blocks the reversal). Void used to only
   relabel the row.
+- **Store credit spent on an invoice comes back** when that payment is
+  reversed, the invoice is set back to unpaid, or it is deleted. Each
+  store-credit payment event names the customer debited
+  (`storeCreditCustomerId`); every return is an event carrying `reverses`, so
+  toggling paid ↔ unpaid returns it once. (Gift cards spent on an invoice are
+  not yet returned this way.)
 - **Loyalty redemption** is conditional on the row update (`loyalty_points >=
   redeemed`), so two tills can't spend one balance. Invoice loyalty follows the
   paid state both ways (un-paying or deleting takes it back); flipping an
@@ -1206,7 +1213,8 @@ inside the DB transaction that records the money, never by a pre-check:
 - Foreign-id checks: quotes, laybys, trade-ins, modifier links, pre-order
   delete, discounts; settings bodies go through `stripManagedFields`.
 
-Pinned by `money-integrity.test.ts` (real DB; skipped without `DATABASE_URL`).
+Pinned by `money-integrity.test.ts` (real DB; skipped without `DATABASE_URL`)
+and `discount-limits.test.ts`.
 
 **Staff roles are enforced on the server** (`middlewares/requireManagerOrOwner.ts`).
 `session.staffRole` is the *effective* role and every check reads it:
@@ -1232,10 +1240,21 @@ Pinned by `money-integrity.test.ts` (real DB; skipped without `DATABASE_URL`).
   contact or address fields. Owner password change/reset ends every other
   owner-password session (`destroyOwnerSessions`); a staff reset or
   deactivation ends their email logins.
-- Not yet enforced server-side: the role discount limits (`roleDiscountLimits`
-  — automatic promotions and quote imports also arrive as line discounts, so a
-  blunt cap would refuse legitimate sales). If `forceStaffLogin` is off, a till
-  opened with the owner's password stays an owner session — keep it on.
+- **Role discount limits** (`roleDiscountLimits`) are enforced on the server
+  by allowance (`lib/discount-limits.ts`, loaded by `lib/discount-authority.ts`):
+  every discount arrives as a line `discount`, so the server subtracts what it
+  can account for itself — a pricing rule live within 30 minutes of now in
+  business time, the customer's loyalty tier, the imported quote's discount —
+  and judges only the rest against the lower of the role's threshold and cap.
+  Over it is a 403 `manager_approval_required`, never a refusal. The till runs
+  `POST /transactions/discount-check` when Charge opens payment, so the PIN is
+  asked for before any card is charged; the approval comes back as a token
+  bound to that cart (lines, customer, quote) for 30 minutes and rides on the
+  sale as `discountApproval`. Checked in `POST /transactions` and
+  `POST /payments/:provider/create` (a terminal/BNPL sale is finalised later
+  without a session). Owners are never limited.
+- If `forceStaffLogin` is off, a till opened with the owner's password stays an
+  owner session — keep it on.
 
 Pinned by `staff-roles.test.ts`.
 

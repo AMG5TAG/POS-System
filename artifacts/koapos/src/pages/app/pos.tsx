@@ -3008,6 +3008,85 @@ export default function POSPage() {
     }
   };
 
+  /* The sale's lines as the server receives them, with the cart-level and tier
+     discounts spread over the lines. Shared by checkout and the discount check
+     run when payment opens, so the two describe the same cart. */
+  const buildTxItems = () => {
+    // Distribute cart-level (overall) and tier discounts proportionally across
+    // all items so the server's recomputed total matches the client total.
+    // Without this, the server ignores the overall discount and rejects with 409.
+    const _totalOverallDiscount = overallDiscountAmt + tierDiscountAmt;
+    const _afterItemDiscounts = cartSubtotal - itemDiscountTotal;
+    let _allocated = 0;
+    return cart.map((i, idx) => {
+      const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
+      const lineGross = (unitPriceFor(i)) * i.quantity;
+      const lineAfterItemDisc = Math.max(0, lineGross + modAdj * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
+      let proportional: number;
+      if (idx === cart.length - 1) {
+        // Last item absorbs any rounding remainder so the sum is exact
+        proportional = Math.max(0, Math.round((_totalOverallDiscount - _allocated) * 100) / 100);
+      } else {
+        proportional = _totalOverallDiscount > 0 && _afterItemDiscounts > 0
+          ? Math.round(_totalOverallDiscount * (lineAfterItemDisc / _afterItemDiscounts) * 100) / 100
+          : 0;
+        _allocated += proportional;
+      }
+      const totalDiscount = Math.round((i.itemDiscount + (i.pricingRuleDiscount ?? 0) + proportional) * 100) / 100;
+      const lineTotal = Math.round((lineGross + modAdj * i.quantity - totalDiscount) * 100) / 100;
+      const taxRate = i.product.taxRate ?? 10;
+      return {
+        // Gift card items must use productId:0 (custom item path on server) so
+        // the server doesn't attempt a DB lookup for the synthetic product ID.
+        productId: (i.giftCardNumber || i.preOrderDeposit) ? 0 : i.product.id,
+        productName: i.product.name,
+        quantity: i.quantity,
+        unitPrice: unitPriceFor(i),
+        totalPrice: lineTotal,
+        taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
+        discount: totalDiscount > 0 ? totalDiscount : undefined,
+        ...(i.modifiers?.length ? { modifiers: i.modifiers.map(m => m.id) } : {}),
+        ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
+        ...(i.serials?.length ? { serials: i.serials } : {}),
+        ...(i.preOrderDeposit ? { preOrderDeposit: { productId: i.preOrderDeposit.product.id, quantity: i.preOrderDeposit.quantity } } : {}),
+      };
+    });
+  };
+
+  /* A manager's approval of this cart's discount, from the check run when the
+     Charge button opens payment (POST /transactions/discount-check). Bound by
+     the server to these exact lines, customer and quote for 30 minutes, so the
+     PIN is asked for before any card is charged and not again at the end. */
+  const discountApprovalRef = useRef<string | null>(null);
+  const checkDiscountBeforePayment = async (): Promise<boolean> => {
+    discountApprovalRef.current = null;
+    let res: Response;
+    try {
+      res = await fetch("/api/transactions/discount-check", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          items: buildTxItems(), paymentMethod: "cash", subtotal, taxTotal, total,
+          customerId: selectedCustomer?.id, quoteId: importedQuoteId ?? undefined,
+        }),
+      });
+    } catch {
+      return true; // offline/flaky: the sale itself is still checked
+    }
+    if (res.ok) {
+      const body = await res.json().catch(() => null) as { discountApproval?: string } | null;
+      discountApprovalRef.current = body?.discountApproval ?? null;
+      return true;
+    }
+    if (res.status === 403) {
+      const body = await res.json().catch(() => null) as { error?: string } | null;
+      toast.error(body?.error ?? "This discount needs a manager's approval.");
+      return false;
+    }
+    return true;
+  };
+
   const handleCheckout = (
     paymentMethod: TransactionInputPaymentMethod,
     amountTendered: number,
@@ -3144,45 +3223,8 @@ export default function POSPage() {
       return;
     }
 
-    // Distribute cart-level (overall) and tier discounts proportionally across
-    // all items so the server's recomputed total matches the client total.
-    // Without this, the server ignores the overall discount and rejects with 409.
-    const _totalOverallDiscount = overallDiscountAmt + tierDiscountAmt;
-    const _afterItemDiscounts = cartSubtotal - itemDiscountTotal;
-    let _allocated = 0;
-    const txItems = cart.map((i, idx) => {
-      const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
-      const lineGross = (unitPriceFor(i)) * i.quantity;
-      const lineAfterItemDisc = Math.max(0, lineGross + modAdj * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
-      let proportional: number;
-      if (idx === cart.length - 1) {
-        // Last item absorbs any rounding remainder so the sum is exact
-        proportional = Math.max(0, Math.round((_totalOverallDiscount - _allocated) * 100) / 100);
-      } else {
-        proportional = _totalOverallDiscount > 0 && _afterItemDiscounts > 0
-          ? Math.round(_totalOverallDiscount * (lineAfterItemDisc / _afterItemDiscounts) * 100) / 100
-          : 0;
-        _allocated += proportional;
-      }
-      const totalDiscount = Math.round((i.itemDiscount + (i.pricingRuleDiscount ?? 0) + proportional) * 100) / 100;
-      const lineTotal = Math.round((lineGross + modAdj * i.quantity - totalDiscount) * 100) / 100;
-      const taxRate = i.product.taxRate ?? 10;
-      return {
-        // Gift card items must use productId:0 (custom item path on server) so
-        // the server doesn't attempt a DB lookup for the synthetic product ID.
-        productId: (i.giftCardNumber || i.preOrderDeposit) ? 0 : i.product.id,
-        productName: i.product.name,
-        quantity: i.quantity,
-        unitPrice: unitPriceFor(i),
-        totalPrice: lineTotal,
-        taxAmount: Math.round(lineTotal * (taxRate / (100 + taxRate)) * 100) / 100,
-        discount: totalDiscount > 0 ? totalDiscount : undefined,
-        ...(i.modifiers?.length ? { modifiers: i.modifiers.map(m => m.id) } : {}),
-        ...(i.giftCardNumber ? { giftCardIssue: true as const, giftCardNumber: i.giftCardNumber } : {}),
-        ...(i.serials?.length ? { serials: i.serials } : {}),
-        ...(i.preOrderDeposit ? { preOrderDeposit: { productId: i.preOrderDeposit.product.id, quantity: i.preOrderDeposit.quantity } } : {}),
-      };
-    });
+    const txItems = buildTxItems();
+
     const notesParts = [
       linkedService ? `[Service #${linkedService.jobNumber}: ${linkedService.deviceType || linkedService.deviceDescription || "service"}]` : null,
       linkedAppointment ? `[Appt #${linkedAppointment.id}: ${linkedAppointment.title}]` : null,
@@ -3227,6 +3269,7 @@ export default function POSPage() {
       preOrderId: collectingPreOrder?.id ?? undefined,
       receiptNumber,
       idempotencyKey,
+      ...(discountApprovalRef.current ? { discountApproval: discountApprovalRef.current } : {}),
       ...(discountExcessAmount > 0 ? { requestedDiscountTotal: discountTotal + tierDiscountAmt + discountExcessAmount } : {}),
       ...(overallDiscountMode === "percent" && overallDiscountAmt > 0 ? { discountPct: parseFloat(overallDiscountPctInput) || undefined } : {}),
       ...(giftCardPayment ? { giftCardPayment } : {}),
@@ -4314,7 +4357,10 @@ export default function POSPage() {
                     toast.error("Pre-orders need a customer — add one to the sale so we can tell them when it arrives.");
                     return;
                   }
-                  setPaymentModalOpen(true);
+                  // A discount over the cashier's limit is approved here, before
+                  // any money moves.
+                  if (invoicePay) { setPaymentModalOpen(true); return; }
+                  void checkDiscountBeforePayment().then((ok) => { if (ok) setPaymentModalOpen(true); });
                 }}
               >
                 Charge {formatCurrency(effectiveTotal)}

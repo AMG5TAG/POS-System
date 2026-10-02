@@ -61,6 +61,7 @@ import type {
   CategoryUpdate,
   ChangeEmailInput,
   ChangePasswordInput,
+  CheckTransactionDiscount200,
   ClockInInput,
   ClockOutInput,
   ComposeEmail200,
@@ -5431,6 +5432,78 @@ export const useCreateTransaction = <TError = ErrorType<ErrorEnvelope>,
         TContext
       > => {
       return useMutation(getCreateTransactionMutationOptions(options));
+    }
+
+export const getCheckTransactionDiscountUrl = () => {
+
+
+
+
+  return `/api/transactions/discount-check`
+}
+
+/**
+ * Run when the till opens payment, so a discount over the role's limit is approved with a manager's PIN before any money moves. Answers 403 manager_approval_required when it needs one; once approved, returns a token tied to this exact cart that the sale carries as `discountApproval` (valid 30 minutes).
+ * @summary Check a sale's discount against the signed-in role's limit, before payment
+ */
+export const checkTransactionDiscount = async (transactionInput: TransactionInput, options?: RequestInit): Promise<CheckTransactionDiscount200> => {
+
+  return customFetch<CheckTransactionDiscount200>(getCheckTransactionDiscountUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      transactionInput,)
+  }
+);}
+
+
+
+
+export const getCheckTransactionDiscountMutationOptions = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkTransactionDiscount>>, TError,{data: BodyType<TransactionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof checkTransactionDiscount>>, TError,{data: BodyType<TransactionInput>}, TContext> => {
+
+const mutationKey = ['checkTransactionDiscount'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof checkTransactionDiscount>>, {data: BodyType<TransactionInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  checkTransactionDiscount(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type CheckTransactionDiscountMutationResult = NonNullable<Awaited<ReturnType<typeof checkTransactionDiscount>>>
+    export type CheckTransactionDiscountMutationBody = BodyType<TransactionInput>
+    export type CheckTransactionDiscountMutationError = ErrorType<ErrorEnvelope>
+
+    /**
+ * @summary Check a sale's discount against the signed-in role's limit, before payment
+ */
+export const useCheckTransactionDiscount = <TError = ErrorType<ErrorEnvelope>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof checkTransactionDiscount>>, TError,{data: BodyType<TransactionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof checkTransactionDiscount>>,
+        TError,
+        {data: BodyType<TransactionInput>},
+        TContext
+      > => {
+      return useMutation(getCheckTransactionDiscountMutationOptions(options));
     }
 
 export const getGetTransactionUrl = (id: number,) => {

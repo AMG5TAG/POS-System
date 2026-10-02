@@ -9,18 +9,22 @@ import session from "express-session";
  *  - store credit was a payment *label* — the balance never went down;
  *  - a trade-in could be paid out twice by a double-click;
  *  - toggling an invoice paid → sent → paid credited loyalty every time;
- *  - two tills could spend one loyalty balance at once.
+ *  - two tills could spend one loyalty balance at once;
+ *  - a role's discount limit was enforced only by the till;
+ *  - store credit spent on an invoice was lost when the payment was reversed,
+ *    the invoice un-paid or deleted.
  * Fixtures are created on an existing merchant and removed afterwards.
  */
 
 const hasDb = !!process.env.DATABASE_URL;
 
-const h = vi.hoisted(() => ({ merchantId: 0 }));
+const h = vi.hoisted(() => ({ merchantId: 0, role: "owner", approved: false }));
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     const s = (req as unknown as { session: Record<string, unknown> }).session;
     s.merchantId = h.merchantId;
-    s.staffRole = "owner";
+    s.staffRole = h.role;
+    if (h.approved) s.managerApproval = { staffId: 0, staffName: "Test manager", until: Date.now() + 60_000 };
     next();
   },
   invalidateMerchantStatusCache: () => {},
@@ -155,6 +159,125 @@ describe.skipIf(!hasDb)("money integrity (real DB)", () => {
   it("refuses a negative trade-in valuation", async () => {
     const res = await request(app).post("/api/trade-ins").send({ deviceName: "Audit phone 2", valuationAmount: -100 });
     expect(res.status).toBe(400);
+  });
+
+  const creditInvoice = async (customerId: number, total: number) => {
+    const [inv] = await db.insert(t.invoicesTable).values({
+      merchantId: h.merchantId, customerId, invoiceNumber: `TEST-SC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, status: "sent",
+      subtotal: String(total), taxTotal: "0", total: String(total), amountPaid: "0",
+      items: [{ description: "Audit work", quantity: 1, unitPrice: total, taxRate: 0 }],
+    }).returning();
+    created.invoices.push(inv.id);
+    return inv;
+  };
+  const payWithCredit = (invoiceId: number, credit: number, cash = 0) => request(app).post(`/api/invoices/${invoiceId}/payment`).send({
+    amount: credit + cash,
+    payments: [{ method: "store_credit", amount: credit }, ...(cash > 0 ? [{ method: "cash", amount: cash }] : [])],
+  });
+
+  it("returns invoice store credit when that payment is reversed", async () => {
+    const c = await newCustomer();
+    await db.insert(t.storeCreditLedgerTable).values({ merchantId: h.merchantId, customerId: c.id, type: "issue", amount: "40", balanceAfter: "40" });
+    const inv = await creditInvoice(c.id, 100);
+    const paid = await payWithCredit(inv.id, 30, 70);
+    expect(paid.status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(10);
+
+    const leg = (paid.body.events as Array<{ id: string; type: string; method?: string }>).find((e) => e.type === "payment" && e.method === "store_credit")!;
+    const rev = await request(app).post(`/api/invoices/${inv.id}/payment/reverse`).send({ amount: 30, eventId: leg.id });
+    expect(rev.status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(40);
+
+    // The leg is settled: un-paying the invoice afterwards returns nothing more.
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "sent" })).status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(40);
+  });
+
+  it("returns invoice store credit once when the invoice is un-paid, however often it is toggled", async () => {
+    const c = await newCustomer();
+    await db.insert(t.storeCreditLedgerTable).values({ merchantId: h.merchantId, customerId: c.id, type: "issue", amount: "50", balanceAfter: "50" });
+    const inv = await creditInvoice(c.id, 50);
+    expect((await payWithCredit(inv.id, 50)).status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(0);
+
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "sent" })).status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(50);
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "paid" })).status).toBe(200);
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "sent" })).status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(50);
+  });
+
+  it("returns invoice store credit when the invoice is deleted", async () => {
+    const c = await newCustomer();
+    await db.insert(t.storeCreditLedgerTable).values({ merchantId: h.merchantId, customerId: c.id, type: "issue", amount: "20", balanceAfter: "20" });
+    const inv = await creditInvoice(c.id, 60);
+    expect((await payWithCredit(inv.id, 20)).status).toBe(200);
+    expect(await creditBalance(c.id)).toBe(0);
+    expect((await request(app).delete(`/api/invoices/${inv.id}`)).status).toBe(204);
+    expect(await creditBalance(c.id)).toBe(20);
+  });
+
+  describe("role discount limits", () => {
+    let savedLimits: string | null = null;
+    let createdSettings = false;
+    beforeAll(async () => {
+      const [row] = await db.select({ l: t.posSettingsTable.roleDiscountLimits }).from(t.posSettingsTable)
+        .where(orm.eq(t.posSettingsTable.merchantId, h.merchantId));
+      const limits = JSON.stringify({ cashier: { hardCap: 20, approvalThreshold: 10 } });
+      if (row) {
+        savedLimits = row.l;
+        await db.update(t.posSettingsTable).set({ roleDiscountLimits: limits }).where(orm.eq(t.posSettingsTable.merchantId, h.merchantId));
+      } else {
+        createdSettings = true;
+        await db.insert(t.posSettingsTable).values({ merchantId: h.merchantId, roleDiscountLimits: limits });
+      }
+    });
+    afterAll(async () => {
+      h.role = "owner"; h.approved = false;
+      if (createdSettings) await db.delete(t.posSettingsTable).where(orm.eq(t.posSettingsTable.merchantId, h.merchantId));
+      else await db.update(t.posSettingsTable).set({ roleDiscountLimits: savedLimits ?? "{}" }).where(orm.eq(t.posSettingsTable.merchantId, h.merchantId));
+    });
+
+    // $20 item; a $10 discount is 50% of the sale.
+    const discounted = (discount: number, extra: Record<string, unknown> = {}) => ({
+      items: [{ productId, productName: "Audit item", quantity: 1, unitPrice: PRICE, totalPrice: PRICE - discount, discount }],
+      paymentMethod: "cash", subtotal: PRICE - discount, taxTotal: 0, total: PRICE - discount, amountTendered: PRICE - discount, ...extra,
+    });
+    const record = async (body: Record<string, unknown>) => {
+      const res = await request(app).post("/api/transactions").send(body);
+      if (res.status === 201) created.tx.push(res.body.id);
+      return res;
+    };
+
+    it("asks a cashier for a manager's PIN over the limit, and lets a small discount through", async () => {
+      h.role = "cashier"; h.approved = false;
+      const over = await record(discounted(10));
+      expect(over.status).toBe(403);
+      expect(over.body.code).toBe("manager_approval_required");
+      expect((await record(discounted(1))).status).toBe(201);
+    });
+
+    it("never limits the owner", async () => {
+      h.role = "owner"; h.approved = false;
+      expect((await record(discounted(10))).status).toBe(201);
+    });
+
+    it("carries a manager's approval from the payment-time check to that cart only", async () => {
+      h.role = "cashier"; h.approved = false;
+      expect((await request(app).post("/api/transactions/discount-check").send(discounted(10))).status).toBe(403);
+
+      h.approved = true;
+      const check = await request(app).post("/api/transactions/discount-check").send(discounted(10));
+      expect(check.status).toBe(200);
+      const token = check.body.discountApproval as string;
+      expect(token).toBeTruthy();
+
+      // The approval window is long gone by the end of a slow card payment…
+      h.approved = false;
+      // …but the token still covers this cart, and only this cart.
+      expect((await record(discounted(15, { discountApproval: token }))).status).toBe(403);
+      expect((await record(discounted(10, { discountApproval: token }))).status).toBe(201);
+    });
   });
 
   it("credits invoice loyalty once, not once per paid ↔ unpaid toggle", async () => {

@@ -1636,6 +1636,43 @@ paths:
               schema:
                 $ref: "#/components/schemas/ErrorEnvelope"
 
+  /transactions/discount-check:
+    post:
+      operationId: checkTransactionDiscount
+      tags: [transactions]
+      summary: Check a sale's discount against the signed-in role's limit, before payment
+      description: >-
+        Run when the till opens payment, so a discount over the role's limit is
+        approved with a manager's PIN before any money moves. Answers 403
+        manager_approval_required when it needs one; once approved, returns a
+        token tied to this exact cart that the sale carries as
+        `discountApproval` (valid 30 minutes).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/TransactionInput"
+      responses:
+        "200":
+          description: Within the limit, or approved
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                  discountApproval:
+                    type: string
+        "403":
+          description: Over the role's limit — a manager's PIN is needed
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorEnvelope"
+
   /transactions/{id}:
     get:
       operationId: getTransaction
@@ -11295,6 +11332,12 @@ components:
               type: integer
             amount:
               type: number
+        discountApproval:
+          type: string
+          description: >-
+            From POST /transactions/discount-check: a manager approved this
+            cart's discount over the cashier's role limit. Valid only for the
+            same lines, customer and quote, for 30 minutes.
         storeCreditPayment:
           type: object
           description: >-

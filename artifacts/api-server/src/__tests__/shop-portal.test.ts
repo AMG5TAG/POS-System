@@ -310,11 +310,13 @@ describe("changing email", () => {
 
 describe("confirming a new email", () => {
   const confirm = (token: string) => request(app).get(`/api/shop/auth/confirm-email?token=${encodeURIComponent(token)}`);
+  const savedAt = new Date("2026-10-01T00:00:00Z");
+  const sent = { ...customer, updatedAt: savedAt };
   const tokenFor = async (id: number, email: string, at?: number) =>
-    (await import("../lib/shop-email-change")).emailChangeToken(id, email, at);
+    (await import("../lib/shop-email-change")).emailChangeToken(id, email, savedAt, at);
 
   it("applies the change from the link", async () => {
-    h.rows = [[customer], []];
+    h.rows = [[sent], []];
     const res = await confirm(await tokenFor(9, "new@example.com"));
     expect(res.status).toBe(302);
     expect(res.headers.location).toMatch(/\/shop\/account\?email=changed$/);
@@ -322,16 +324,23 @@ describe("confirming a new email", () => {
   });
 
   it("refuses it if another customer took the address meanwhile", async () => {
-    h.rows = [[customer], [{ id: 12 }]];
+    h.rows = [[sent], [{ id: 12 }]];
     const res = await confirm(await tokenFor(9, "new@example.com"));
     expect(res.headers.location).toMatch(/email=taken$/);
+    expect(h.sets).toEqual([]);
+  });
+
+  it("is void once the record has been saved again (another address asked for since)", async () => {
+    h.rows = [[{ ...customer, updatedAt: new Date(savedAt.getTime() + 60_000) }], []];
+    const res = await confirm(await tokenFor(9, "new@example.com"));
+    expect(res.headers.location).toMatch(/email=link-expired$/);
     expect(h.sets).toEqual([]);
   });
 
   it("refuses a tampered or expired link", async () => {
     const good = await tokenFor(9, "new@example.com");
     const [payload, mac] = good.split(".");
-    const forged = Buffer.from(JSON.stringify({ c: 10, e: "new@example.com", x: Date.now() + 1e6 })).toString("base64url");
+    const forged = Buffer.from(JSON.stringify({ c: 10, e: "new@example.com", u: savedAt.getTime(), x: Date.now() + 1e6 })).toString("base64url");
     for (const t of [`${forged}.${mac}`, `${payload}.${mac![0] === "A" ? "B" : "A"}${mac!.slice(1)}`, await tokenFor(9, "new@example.com", Date.now() - 25 * 3600_000)]) {
       const res = await confirm(t);
       expect(res.headers.location).toMatch(/email=link-expired$/);

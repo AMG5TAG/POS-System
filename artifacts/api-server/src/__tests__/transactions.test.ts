@@ -28,6 +28,13 @@ vi.mock("@workspace/db", () => {
   };
 });
 
+// Role discount limits are pinned by discount-limits.test.ts and
+// money-integrity.test.ts; this file is about body validation.
+vi.mock("../lib/discount-authority", () => ({
+  enforceDiscountLimit: async () => true,
+  discountApprovalToken: () => "token",
+}));
+
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (_req: any, _res: any, next: any) => next(),
   invalidateMerchantStatusCache: () => {},

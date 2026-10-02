@@ -1,3 +1,4 @@
+import { enforceDiscountLimit } from "../lib/discount-authority";
 import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter, type Request } from "express";
 import crypto from "crypto";
@@ -142,6 +143,12 @@ router.post("/payments/:provider/create", requireAuth, async (req, res): Promise
   const parsed = CreateTransactionBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   if (parsed.data.items.length === 0) { res.status(400).json({ error: "Sale must include at least one item" }); return; }
+  // Checked now, while the cashier's session is here: the sale is finalised
+  // later by a webhook or status poll that has none.
+  if (typeof parsed.data.idempotencyKey === "string" && parsed.data.idempotencyKey.trim().startsWith("delivery-order:")) {
+    res.status(400).json({ error: "Invalid idempotency key" }); return;
+  }
+  if (!(await enforceDiscountLimit(req, res, parsed.data))) return;
 
   const provider = getPaymentProvider(providerKey);
   if (!provider) { res.status(500).json({ error: `${label} provider unavailable` }); return; }

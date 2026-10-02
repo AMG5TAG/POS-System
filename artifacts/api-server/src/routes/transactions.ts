@@ -2,6 +2,7 @@ import { requireManagerOrApproval, requireOwner } from "../middlewares/requireMa
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
 import { checkReferralAfterSale } from "../services/referralRewards";
+import { enforceDiscountLimit, discountApprovalToken } from "../lib/discount-authority";
 import { groupPriceFor, resolveCustomerGroupId, type GroupPricingRule } from "@workspace/group-pricing";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { loyaltyEarnedFor } from "../lib/loyalty";
@@ -1044,6 +1045,18 @@ export async function finalizeSale(
   return { ok: true, transaction, customer: scopedCustomer };
 }
 
+/* Checked when the till opens payment, so a discount over the role's limit is
+   approved before any money moves (lib/discount-authority.ts). Over the limit
+   with no approval → 403 manager_approval_required; the till's fetch wrapper
+   asks for a PIN and calls again, and the approval comes back as a token for
+   this cart. */
+router.post("/transactions/discount-check", requireAuth, async (req, res): Promise<void> => {
+  const parsed = CreateTransactionBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  if (!(await enforceDiscountLimit(req, res, parsed.data))) return;
+  res.json({ ok: true, discountApproval: discountApprovalToken(req.session.merchantId!, parsed.data) });
+});
+
 router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateTransactionBody.safeParse(req.body);
   if (!parsed.success) {
@@ -1063,6 +1076,8 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     res.status(400).json({ error: "Invalid idempotency key" });
     return;
   }
+  // The role's discount limit, which the till used to be alone in enforcing.
+  if (!(await enforceDiscountLimit(req, res, parsed.data))) return;
   const result = await finalizeSale(req.session.merchantId!, parsed.data, rawItems, {
     syncContext: { cookie: String(req.headers.cookie ?? "") },
   });
