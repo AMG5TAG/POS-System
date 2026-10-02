@@ -65,6 +65,12 @@ describe("GET /api/xero/auth/callback — redirects land on the wizard with a re
     expect(res.headers.location).toBe(`${WIZARD_PATH}?error=invalid_state`);
   });
 
+  it("refuses a bare merchant id as state — anyone could attach their own Xero org", async () => {
+    const res = await request(app).get("/api/xero/auth/callback?code=abc&state=1");
+    expect(res.status).toBe(302);
+    expect(res.headers.location).toBe(`${WIZARD_PATH}?error=invalid_state`);
+  });
+
   it("never redirects to a legacy query-stripping alias", async () => {
     const res = await request(app).get("/api/xero/auth/callback?error=access_denied");
     expect(res.headers.location).not.toMatch(/^\/management\/xero(\?|$)/);

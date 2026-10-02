@@ -1145,6 +1145,38 @@ Adding the table is the standalone idempotent script
 `drizzle-kit push`, for the same reason every other `add-*-table` script exists:
 push would try to reconcile (and drop) the report views.
 
+### Security guards (from the 2026-10 audit)
+
+- **Staff PINs** go through `lib/pin-guard.ts` (`reservePinAttempt`), never an
+  in-memory counter: each attempt is reserved in `login_attempts` *before* the
+  bcrypt compare (so parallel bursts are counted), a correct PIN releases it.
+  Scope `public` (Tech App / Mobile POS: per IP, then per business) and
+  `session` (verify-pin, timesheet clock-in/out/status: per business) are
+  separate so the internet can't lock out the till. A new PIN check must use it.
+- **OAuth `state`** is `createOAuthState(purpose, merchantId)` /
+  `verifyOAuthState` (`lib/oauth-state.ts`), signed and expiring. The callbacks
+  have no session (SameSite=Strict), and a bare merchant id let anyone attach
+  their own Xero/payroll/Google account.
+- **Anything rendered as HTML is escaped.** Print popups are `about:blank`
+  windows on the POS origin, so they use `escHtml` (`koapos/src/lib/html-escape.ts`);
+  API HTML uses `escapeHtml` and gets a no-script CSP from
+  `middlewares/htmlResponseCsp.ts`. Shop customers can write names, appointment
+  titles and notes, so those fields are attacker-controlled.
+- **Stored files are served by type allowlist** (`lib/safe-content-type.ts`):
+  anything a browser could run (HTML, SVG, XML) is an `application/octet-stream`
+  download, because the upload URL does not pin the type. Customer-file keys
+  must be the business's own (`lib/object-keys.ts`).
+- **CORS**: `koastal.com.au` is accepted only on its own host, never on the POS
+  host (same *site*, so the staff cookie would ride along); refused origins
+  get 403 before any handler runs. `server.mjs` sends `frame-ancestors 'self'`,
+  Referrer-Policy and HSTS on every page.
+- **Print Bridge** trusts only the POS origins (the old `*.replit.app` /
+  `*.replit.dev` defaults are stripped from stored configs) and answers only
+  requests whose Host is loopback (DNS rebinding).
+
+Pinned by `security-hardening.test.ts`, `xero-oauth-redirect.test.ts` and the
+bridge's `origin.test.ts`.
+
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.
 - Boolean fields are stored as text `"true"`/`"false"` (a Drizzle text-column limitation) — compare/serialize accordingly.

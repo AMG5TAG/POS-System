@@ -37,6 +37,23 @@ const websiteHosts = new Set([
 
 const SHOP_PREFIX = "/shop";
 
+/* Sent with every response, on every host.
+ *  - Framing only by our own pages: the POS can't be loaded invisibly inside
+ *    another site to trick a signed-in staff member into clicks (clickjacking).
+ *    (frame-ancestors is the only CSP directive set — a script policy would
+ *    need the GA tag and every inline script audited first.)
+ *  - Referrer: the shop's /c/<token> account links must not travel to other
+ *    sites in the Referer header.
+ *  - HSTS: always HTTPS. Not includeSubDomains — other koastal.com.au hosts
+ *    aren't ours to commit. */
+const SECURITY_HEADERS = [
+  ["Content-Security-Policy", "frame-ancestors 'self'"],
+  ["X-Frame-Options", "SAMEORIGIN"],
+  ["Referrer-Policy", "strict-origin-when-cross-origin"],
+  ["Strict-Transport-Security", "max-age=31536000"],
+  ["X-Content-Type-Options", "nosniff"],
+];
+
 const sites = {
   pos: path.resolve(process.env.SPA_DIST_DIR?.trim() || path.join(here, "dist/public")),
   shop: path.resolve(process.env.SHOP_DIST_DIR?.trim() || path.join(here, "../shop/dist/public")),
@@ -149,6 +166,7 @@ createServer((req, res) => {
   }
   const url = new URL(req.url || "/", "http://x");
   const host = toHost(req.headers.host || "");
+  for (const [name, value] of SECURITY_HEADERS) res.setHeader(name, value);
 
   try {
     if (host === `www.${siteHost}`) {

@@ -76,7 +76,9 @@ export function withProductShare(html, product, opts) {
   if (start < 0 || end < start) return html;
   const { title, block } = productShareBlock(product, opts);
   const page = html.slice(0, start) + `<!--share-->\n${block}\n    ` + html.slice(end);
-  return page.replace(/<title>[^<]*<\/title>/, `<title>${esc(title)}</title>`);
+  // A function, not a string: "$&" or "$'" in a product name would otherwise
+  // be read as a replacement pattern and splice page content into the title.
+  return page.replace(/<title>[^<]*<\/title>/, () => `<title>${esc(title)}</title>`);
 }
 
 /* /product/<id> below the shop's /shop base, else null. */

@@ -91,6 +91,13 @@ function copiesOf(body: Record<string, unknown>): number {
   return Math.max(1, Math.min(20, Math.floor(n)));
 }
 
+/** True when the Host header addresses this machine's loopback on our port. */
+export function hostIsLoopback(host: string | undefined, port: number): boolean {
+  if (!host) return false;
+  const h = host.trim().toLowerCase();
+  return [`127.0.0.1:${port}`, `localhost:${port}`, `[::1]:${port}`].includes(h);
+}
+
 export function createBridgeServer(getConfig: () => BridgeConfig, pairing: PairingWindow) {
   const log = (...args: unknown[]) => {
     if (getConfig().debug) console.log("[bridge]", ...args);
@@ -138,6 +145,15 @@ export function createBridgeServer(getConfig: () => BridgeConfig, pairing: Pairi
       const route = url.pathname.replace(/\/+$/, "") || "/";
       const originOk = !origin || isOriginAllowed(origin, cfg.allowedOrigins);
 
+      // DNS rebinding: a page on attacker.com that re-points its own hostname at
+      // 127.0.0.1 talks to this server "same-origin" — its requests carry no
+      // foreign Origin, so the allow-list never sees them. The Host header still
+      // names attacker.com, so only answer requests addressed to loopback.
+      if (!hostIsLoopback(req.headers.host, cfg.port)) {
+        res.writeHead(421, { "content-type": "text/plain" }).end("Misdirected request");
+        return;
+      }
+
       // Health is reachable from any origin (it leaks nothing); everything else
       // requires the origin allow-list plus the bearer token.
       applyCors(req, res, originOk || route === "/v1/health");
@@ -170,15 +186,24 @@ export function createBridgeServer(getConfig: () => BridgeConfig, pairing: Pairi
             version: BRIDGE_VERSION,
             platform: process.platform,
             originAllowed: originOk,
-            pairingOpen: pairing.isOpen(),
-            // Lets the app warn that printers shared from another PC won't be
-            // visible before someone spends an afternoon wondering why.
-            runningAsService: await isRunningAsSystem(),
+            // Only an allowed origin learns more than "a bridge is here": an
+            // open pairing window or the service account is reconnaissance.
+            ...(originOk
+              ? {
+                  pairingOpen: pairing.isOpen(),
+                  // Lets the app warn that printers shared from another PC won't be
+                  // visible before someone spends an afternoon wondering why.
+                  runningAsService: await isRunningAsSystem(),
+                }
+              : {}),
           });
           return;
         }
 
         if (route === "/v1/pair" && req.method === "POST") {
+          // Hand the token only to a browser page on an allowed origin; a
+          // request with no Origin at all is not a browser page.
+          if (!origin) throw new HttpError(403, "Pairing must come from the POS in a browser.");
           if (!pairing.isOpen()) {
             throw new HttpError(
               403,

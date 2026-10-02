@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from "react";
+import { escHtml } from "@/lib/html-escape";
 import { useLocation } from "wouter";
 import { useMapUrl } from "@/lib/map-provider";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
@@ -274,20 +275,20 @@ function printAppointment(appt: Appointment, hw?: HardwareCfg) {
       .sub   { font-size: 12px; color: #666; margin-top: 2px; }
       @media print { body { margin: 0; } }
     </style></head><body>
-    <h1>${appt.title || "Appointment"}</h1>
-    <p class="ref">${apptRefCode(appt.id)} · ${appt.status ?? "Scheduled"}</p>
+    <h1>${escHtml(appt.title || "Appointment")}</h1>
+    <p class="ref">${apptRefCode(appt.id)} · ${escHtml(appt.status ?? "Scheduled")}</p>
     <div class="block">
       <div class="label">Start</div><div class="value">${fmt(appt.scheduledAt)}</div>
       ${appt.endAt ? `<div class="label" style="margin-top:8px">End</div><div class="value">${fmt(appt.endAt)}</div>` : ""}
       ${appt.durationMinutes ? `<div class="sub">Duration: ${formatDuration(appt.durationMinutes)}</div>` : ""}
     </div>
     ${appt.customerName ? `<div class="block">
-      <div class="label">Customer</div><div class="value">${appt.customerName}</div>
-      ${appt.customerPhone ? `<div class="sub">${appt.customerPhone}</div>` : ""}
-      ${appt.customerEmail ? `<div class="sub">${appt.customerEmail}</div>` : ""}
+      <div class="label">Customer</div><div class="value">${escHtml(appt.customerName)}</div>
+      ${appt.customerPhone ? `<div class="sub">${escHtml(appt.customerPhone)}</div>` : ""}
+      ${appt.customerEmail ? `<div class="sub">${escHtml(appt.customerEmail)}</div>` : ""}
     </div>` : ""}
-    ${appt.staffName ? `<div class="block"><div class="label">Staff</div><div class="value">${appt.staffName}</div></div>` : ""}
-    ${appt.notes ? `<div class="block"><div class="label">Notes</div><div class="value" style="font-weight:normal">${appt.notes}</div></div>` : ""}
+    ${appt.staffName ? `<div class="block"><div class="label">Staff</div><div class="value">${escHtml(appt.staffName)}</div></div>` : ""}
+    ${appt.notes ? `<div class="block"><div class="label">Notes</div><div class="value" style="font-weight:normal;white-space:pre-wrap">${escHtml(appt.notes)}</div></div>` : ""}
     </body></html>
   `;
 

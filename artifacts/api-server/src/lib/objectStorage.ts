@@ -1,4 +1,5 @@
 import { Storage, File } from "@google-cloud/storage";
+import { servedContentType } from "./safe-content-type";
 import { Readable } from "stream";
 import { randomUUID } from "crypto";
 import {
@@ -99,8 +100,10 @@ export class ObjectStorageService {
     const nodeStream = file.createReadStream();
     const webStream = Readable.toWeb(nodeStream) as ReadableStream;
 
+    const served = servedContentType(metadata.contentType as string | undefined);
     const headers: Record<string, string> = {
-      "Content-Type": (metadata.contentType as string) || "application/octet-stream",
+      "Content-Type": served.contentType,
+      ...(served.inline ? {} : { "Content-Disposition": "attachment" }),
       "Cache-Control":
         `${isPublic ? "public" : "private"}, max-age=${cacheTtlSec}` +
         (immutable ? ", immutable" : ""),

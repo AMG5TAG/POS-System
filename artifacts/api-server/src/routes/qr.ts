@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db, qrCodesTable, qrSettingsTable, qrSavedTemplatesTable, productsTable, customersTable, serviceJobsTable, merchantsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -8,6 +9,21 @@ import { recordMarketingEvent } from "../lib/marketingEvents";
 import { publicOrigin, customerPortalUrl, techAppJobUrl } from "../lib/publicUrl";
 
 const router: IRouter = Router();
+
+/* /qr/j/:jobId takes a sequential id and, for a completed job, answers with the
+   customer's account link — so unthrottled it could be walked to harvest them.
+   A sticker is scanned a handful of times; this leaves staff scanning a pile
+   of stickers plenty of room. */
+const LOCALHOST = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+const jobQrLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 60,
+  message: "Too many scans from this connection — please try again shortly.",
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  skip: (req) => LOCALHOST.has(req.ip ?? ""),
+});
 
 // Public, unauthenticated dynamic-QR redirect. A "trackable" QR encodes
 // /api/qr/r/:id instead of its raw destination, so each scan hits us first —
@@ -46,7 +62,7 @@ router.get("/qr/r/:id", async (req, res): Promise<void> => {
  * token only says whose account it is, and the customer signs in with their
  * shop password or is asked to set one up (POST /shop/auth/token).
  */
-router.get("/qr/j/:jobId", async (req, res): Promise<void> => {
+router.get("/qr/j/:jobId", jobQrLimiter, async (req, res): Promise<void> => {
   const jobId = parseInt(String(req.params.jobId ?? ""), 10);
   if (isNaN(jobId)) { res.redirect(302, publicOrigin(req)); return; }
 

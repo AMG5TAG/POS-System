@@ -1,4 +1,5 @@
 import type { Request, Response } from "express";
+import { servedContentType } from "./safe-content-type";
 import { db, productsTable, productVariantsTable, categoriesTable, type ProductMediaItem } from "@workspace/db";
 import { and, eq, inArray, isNotNull } from "drizzle-orm";
 import { ObjectStorageService, ObjectNotFoundError } from "./objectStorage";
@@ -87,7 +88,11 @@ export async function serveShopMedia(req: Request, res: Response, merchantId: nu
     const file = await storage.getObjectEntityFile(`/objects/${path}`);
     const [meta] = await file.getMetadata();
     const size = Number(meta.size ?? 0);
-    res.setHeader("Content-Type", (meta.contentType as string) || "application/octet-stream");
+    // Served on koastal.com.au, beside the shopper's session: never as a page.
+    const served = servedContentType(meta.contentType as string | undefined);
+    res.setHeader("Content-Type", served.contentType);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    if (!served.inline) res.setHeader("Content-Disposition", "attachment");
     res.setHeader("Accept-Ranges", "bytes");
     res.setHeader("Cache-Control", path.includes("/assets/") ? "public, max-age=31536000, immutable" : "public, max-age=3600");
     if (meta.etag) res.setHeader("ETag", String(meta.etag));

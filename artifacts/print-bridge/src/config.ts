@@ -26,7 +26,8 @@ export interface BridgeConfig {
   /**
    * Web origins allowed to talk to this bridge. Entries may be exact
    * (`https://pos.example.com`) or a leading-wildcard host
-   * (`https://*.replit.app`). `http://localhost:*` is always allowed so the
+   * (`https://*.example.com`) — never a shared hosting domain, whose
+   * subdomains belong to strangers. `http://localhost:*` is always allowed so the
    * dev frontend works without configuration.
    */
   allowedOrigins: string[];
@@ -40,9 +41,10 @@ export interface BridgeConfig {
 
 const DEFAULTS: Omit<BridgeConfig, "token"> = {
   port: DEFAULT_PORT,
+  // Only the POS itself. These once also listed https://*.replit.app and
+  // *.replit.dev, which trusted every site anyone hosts on Replit: any of them
+  // opened in the till's browser during the pairing window was handed the token.
   allowedOrigins: [
-    "https://*.replit.app",
-    "https://*.replit.dev",
     "https://pos.koastal.com.au",
     "https://koapos.com.au",
   ],
@@ -79,6 +81,11 @@ function env(name: string): string | undefined {
  *  own domains, so an upgraded bridge keeps working after a domain move. */
 const REQUIRED_ORIGINS = ["https://pos.koastal.com.au", "https://koapos.com.au"];
 
+/** Former defaults that every till wrote into its config on first run. They are
+ *  dropped from stored configs on load; an origin a merchant added by hand is
+ *  kept. */
+const RETIRED_DEFAULT_ORIGINS = new Set(["https://*.replit.app", "https://*.replit.dev"]);
+
 export function configPath(): string {
   return path.join(configDir(), "print-bridge.json");
 }
@@ -109,7 +116,7 @@ export function loadConfig(): BridgeConfig {
     token: typeof stored.token === "string" && stored.token.length >= 16 ? stored.token : newToken(),
     allowedOrigins: [...new Set([
       ...(Array.isArray(stored.allowedOrigins) && stored.allowedOrigins.length
-        ? stored.allowedOrigins
+        ? stored.allowedOrigins.filter((o) => !RETIRED_DEFAULT_ORIGINS.has(String(o).trim()))
         : DEFAULTS.allowedOrigins),
       ...REQUIRED_ORIGINS,
     ])],

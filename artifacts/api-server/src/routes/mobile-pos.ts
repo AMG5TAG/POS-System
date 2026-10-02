@@ -1,6 +1,7 @@
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable, posFavouritesTable } from "@workspace/db";
 import { matchStaffByPin } from "../lib/staff-pin";
+import { reservePinAttempt, retryMessage } from "../lib/pin-guard";
 import { withUniqueRetry, nextSequential } from "../lib/document-numbers";
 import { eq, and, desc, sql, ilike, or, inArray } from "drizzle-orm";
 import { completeLinkedWork } from "../lib/linked-work";
@@ -28,23 +29,6 @@ declare module "express-session" {
 }
 
 const router: IRouter = Router();
-
-/* ── PIN rate limiting (mirrors the tech app) ────────────────────────── */
-const PIN_MAX_FAILS = 5;
-const PIN_WINDOW_MS = 60_000;
-const pinFailures = new Map<number, { fails: number; resetAt: number }>();
-
-function pinRateLimited(merchantId: number): boolean {
-  const entry = pinFailures.get(merchantId);
-  if (!entry || Date.now() > entry.resetAt) return false;
-  return entry.fails >= PIN_MAX_FAILS;
-}
-function recordPinFailure(merchantId: number): void {
-  const now = Date.now();
-  const entry = pinFailures.get(merchantId);
-  if (!entry || now > entry.resetAt) pinFailures.set(merchantId, { fails: 1, resetAt: now + PIN_WINDOW_MS });
-  else entry.fails += 1;
-}
 
 /* ── Settings ────────────────────────────────────────────────────────── */
 async function getMobilePosSettings(merchantId: number) {
@@ -106,13 +90,15 @@ router.post("/mobile-pos/b/:username/login", async (req, res): Promise<void> => 
   if (!parsed.success) { res.status(400).json({ error: "PIN is required" }); return; }
   const settings = await getMobilePosSettings(merchant.id);
   if (!settings.enabled) { res.status(403).json({ error: "The Mobile POS app is currently disabled for this business" }); return; }
-  if (pinRateLimited(merchant.id)) { res.status(429).json({ error: "Too many attempts — try again in a minute" }); return; }
+  const attempt = await reservePinAttempt("public", merchant.id, req.ip);
+  if (!attempt.ok) { res.status(429).json({ error: retryMessage(attempt.retryAfter) }); return; }
   const staff = await db
     .select()
     .from(staffTable)
     .where(and(eq(staffTable.merchantId, merchant.id), eq(staffTable.isActive, "true")));
   const match = await matchStaffByPin(staff, parsed.data.pin);
-  if (!match) { recordPinFailure(merchant.id); res.status(401).json({ error: "Invalid PIN" }); return; }
+  if (!match) { res.status(401).json({ error: "Invalid PIN" }); return; }
+  await attempt.release();
   req.session.mpos = { staffId: match.id, merchantId: merchant.id };
   res.json({
     staff: { id: match.id, name: match.name, role: match.role },

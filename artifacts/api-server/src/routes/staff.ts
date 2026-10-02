@@ -12,6 +12,7 @@ import {
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
 import { hashPin, matchStaffByPin } from "../lib/staff-pin";
+import { reservePinAttempt } from "../lib/pin-guard";
 
 const router: IRouter = Router();
 
@@ -41,29 +42,6 @@ function formatStaff(s: typeof staffTable.$inferSelect) {
     superRate: s.superRate ?? null,
     createdAt: s.createdAt.toISOString(),
   };
-}
-
-/* ── PIN verification rate limiter ──
-   In-memory failed-attempt counter per merchant: after MAX_FAILS wrong PINs
-   within WINDOW_MS, verification is refused until the window expires. */
-const PIN_MAX_FAILS = 10;
-const PIN_WINDOW_MS = 60_000;
-const pinFailures = new Map<number, { fails: number; resetAt: number }>();
-
-function pinRateLimited(merchantId: number): boolean {
-  const entry = pinFailures.get(merchantId);
-  if (!entry || Date.now() > entry.resetAt) return false;
-  return entry.fails >= PIN_MAX_FAILS;
-}
-
-function recordPinFailure(merchantId: number): void {
-  const now = Date.now();
-  const entry = pinFailures.get(merchantId);
-  if (!entry || now > entry.resetAt) {
-    pinFailures.set(merchantId, { fails: 1, resetAt: now + PIN_WINDOW_MS });
-  } else {
-    entry.fails += 1;
-  }
 }
 
 router.get("/staff", requireAuth, async (req, res): Promise<void> => {
@@ -134,7 +112,8 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
     res.status(400).json({ error: parsed.error.message });
     return;
   }
-  if (pinRateLimited(merchantId)) {
+  const attempt = await reservePinAttempt("session", merchantId, req.ip);
+  if (!attempt.ok) {
     res.json({ ok: false, reason: "rate_limited" });
     return;
   }
@@ -145,10 +124,10 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
     .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.isActive, "true")));
   const match = await matchStaffByPin(staff, pin);
   if (!match) {
-    recordPinFailure(merchantId);
     res.json({ ok: false, reason: "invalid" });
     return;
   }
+  await attempt.release();
   if (requireManager && match.role !== "manager" && match.role !== "owner") {
     res.json({ ok: false, reason: "role" });
     return;

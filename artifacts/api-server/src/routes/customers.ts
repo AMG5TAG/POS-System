@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { isOwnObjectKey } from "../lib/object-keys";
 import {
   db,
   customersTable, customerNotesTable, customerFilesTable,
@@ -777,6 +778,7 @@ router.post("/customers/:id/files", requireAuth, async (req, res): Promise<void>
   const merchantId = req.session.merchantId!;
   const { filename, fileKey, contentType, sizeBytes, visibleToCustomer } = req.body as { filename?: string; fileKey?: string; contentType?: string; sizeBytes?: number; visibleToCustomer?: boolean };
   if (!filename || !fileKey || !contentType) { res.status(400).json({ error: "filename, fileKey, and contentType are required" }); return; }
+  if (!isOwnObjectKey(fileKey, merchantId)) { res.status(400).json({ error: "That file was not uploaded to this account" }); return; }
   // The customer must be this merchant's: a file shown in a shop account has
   // to belong to that account's business.
   const [owner] = await db.select({ id: customersTable.id }).from(customersTable)

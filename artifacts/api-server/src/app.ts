@@ -11,6 +11,7 @@ import router from "./routes";
 import { logger } from "./lib/logger";
 import { errorHandler } from "./middlewares/errorHandler";
 import { normalisePhoneFields } from "./middlewares/normalisePhoneFields";
+import { htmlResponseCsp } from "./middlewares/htmlResponseCsp";
 import { publicOrigin, legacyDomains, siteDomain } from "./lib/publicUrl";
 import { legacyDomainRedirect } from "./middlewares/legacyDomainRedirect";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
@@ -97,19 +98,47 @@ if (isProduction) {
   }
 }
 
+/* The website and shop (koastal.com.au) only ever call /api on their own host,
+   which is same-origin. They are listed above so that same-origin calls (a
+   POST still carries an Origin header) pass — but they must not be accepted on
+   the POS host: koastal.com.au and pos.koastal.com.au are the same *site*, so
+   the SameSite=Strict staff cookie would ride along, and any script on the
+   public website (a third-party tag, an injected page) could read the POS API
+   as whoever is signed in on that browser. So a site origin is allowed only
+   when the request is addressed to the site itself. */
+const siteOnlyOrigins = new Set([`https://${siteDomain()}`, `https://www.${siteDomain()}`]);
+
+function corsOriginAllowed(req: express.Request): boolean {
+  const origin = req.headers.origin;
+  if (!origin) return true;
+  if (!allowedOrigins.has(origin)) return false;
+  if (!siteOnlyOrigins.has(origin)) return true;
+  // The host the browser addressed: req.hostname honours the trusted proxy's
+  // X-Forwarded-Host, the raw Host header covers a proxy that passes it as-is.
+  const hosts = [req.hostname, (req.headers.host ?? "").replace(/:\d+$/, "")]
+    .map((h) => String(h ?? "").toLowerCase());
+  return hosts.some((h) => origin === `https://${h}`);
+}
+
+// A browser request from a refused origin is not processed at all — not just
+// denied its response — or a plain cross-site form POST would still run.
+// (It used to be refused with an Error, which errorHandler logged as a 500.)
+if (isProduction) {
+  app.use((req, res, next) => {
+    if (corsOriginAllowed(req)) { next(); return; }
+    res.status(403).json({ error: "Origin not allowed" });
+  });
+}
+
 app.use(
-  cors({
-    origin: isProduction
-      ? (origin, callback) => {
-          if (!origin || allowedOrigins.has(origin)) {
-            callback(null, true);
-          } else {
-            callback(new Error("Not allowed by CORS"));
-          }
-        }
-      : true,
-    credentials: true,
-  })
+  cors(isProduction
+    ? (req, callback) => {
+        callback(null, {
+          origin: corsOriginAllowed(req as express.Request),
+          credentials: true,
+        });
+      }
+    : { origin: true, credentials: true })
 );
 
 app.use(
@@ -142,6 +171,9 @@ app.use(express.urlencoded({ extended: true, limit: "10mb" }));
 // parsers and the routers so every handler below sees a number that already
 // carries its country code — see middlewares/normalisePhoneFields.ts.
 app.use("/api", normalisePhoneFields);
+
+// Any HTML/SVG the API itself renders gets a no-script CSP (see the middleware).
+app.use("/api", htmlResponseCsp);
 
 app.use("/api", router);
 

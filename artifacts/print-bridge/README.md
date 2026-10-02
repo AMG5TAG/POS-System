@@ -122,9 +122,8 @@ first run under the new name reads it from there, so the till stays paired:
 {
   "port": 17777,
   "token": "…",                       // pairing secret; `rotate` replaces it
-  "allowedOrigins": [                 // one leading "*." wildcard is supported
-    "https://*.replit.app",
-    "https://pos.koastal.com.au"
+  "allowedOrigins": [                 // one leading "*." wildcard is supported —
+    "https://pos.koastal.com.au"      // never a shared host such as *.replit.app
   ],
   "chromePath": "",                   // blank = auto-detect Edge/Chrome
   "pdfPrinterPath": "",               // blank = auto-detect SumatraPDF/PDFtoPrinter

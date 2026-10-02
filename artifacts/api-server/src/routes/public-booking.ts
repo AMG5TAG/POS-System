@@ -1,11 +1,28 @@
 import { ensureReferralCode } from "../lib/referrals";
 import { Router, type IRouter } from "express";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db, merchantsTable, customersTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
 import { normalisePhoneFor } from "../lib/phone";
 import { phoneMatchKey } from "../lib/phone-match";
 
 const router: IRouter = Router();
+
+/* Public and unauthenticated: every POST writes a customer and a service job,
+   so it gets the same per-IP budget as the shop's appointment requests. */
+const LOCALHOST = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+const bookingLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000,
+  max: 10,
+  message: { error: "Too many bookings from this connection — please call us instead." },
+  standardHeaders: true,
+  legacyHeaders: false,
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  skip: (req) => LOCALHOST.has(req.ip ?? ""),
+});
+
+/** A trimmed string field, capped so one request can't store megabytes. */
+const field = (v: unknown, max: number): string => (typeof v === "string" ? v.trim().slice(0, max) : "");
 
 async function merchantByUsername(username: string) {
   const [m] = await db.select({ id: merchantsTable.id, businessName: merchantsTable.businessName, logoUrl: merchantsTable.logoUrl })
@@ -31,24 +48,25 @@ router.get("/book/:username", async (req, res): Promise<void> => {
 
 // POST /book/:username — public repair booking. Creates/links a customer and a
 // pending service job; the shop follows up with a quote.
-router.post("/book/:username", async (req, res): Promise<void> => {
-  const m = await merchantByUsername(req.params.username);
+router.post("/book/:username", bookingLimiter, async (req, res): Promise<void> => {
+  const m = await merchantByUsername(String(req.params.username));
   if (!m) { res.status(404).json({ error: "Shop not found" }); return; }
   const merchantId = m.id;
 
   const b = (req.body ?? {}) as Record<string, unknown>;
-  const firstName = typeof b.firstName === "string" ? b.firstName.trim() : "";
-  const lastName  = typeof b.lastName === "string" ? b.lastName.trim() : "";
-  const email     = typeof b.email === "string" ? b.email.trim() : "";
+  const firstName = field(b.firstName, 80);
+  const lastName  = field(b.lastName, 80);
+  const email     = field(b.email, 254);
   // Public route: no session, so the normalisation middleware doesn't run here.
   // The shop is known from the URL, so its country code is applied directly.
-  const phone     = await normalisePhoneFor(merchantId, typeof b.phone === "string" ? b.phone : "");
-  const deviceType = typeof b.deviceType === "string" ? b.deviceType.trim() : "";
-  const deviceDescription = typeof b.deviceDescription === "string" ? b.deviceDescription.trim() : "";
-  const faultDescription  = typeof b.faultDescription === "string" ? b.faultDescription.trim() : "";
+  const phone     = await normalisePhoneFor(merchantId, field(b.phone, 40));
+  const deviceType = field(b.deviceType, 60);
+  const deviceDescription = field(b.deviceDescription, 500);
+  const faultDescription  = field(b.faultDescription, 2000);
 
   if (!firstName) { res.status(400).json({ error: "Your name is required" }); return; }
   if (!email && !phone) { res.status(400).json({ error: "An email or phone is required" }); return; }
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) { res.status(400).json({ error: "Please check your email address" }); return; }
   if (!faultDescription) { res.status(400).json({ error: "Please describe the fault" }); return; }
 
   // Find an existing customer by email or phone, else create one.

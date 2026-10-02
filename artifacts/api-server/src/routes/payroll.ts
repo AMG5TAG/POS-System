@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
 import {
   db,
   merchantIntegrationsTable,
@@ -224,7 +225,7 @@ router.get("/payroll/auth/start", requireAuth, async (req, res): Promise<void> =
   }
   const proto = (req.headers["x-forwarded-proto"] as string | undefined) ?? "https";
   const redirectUri = buildCallbackUrl(proto, req.headers.host ?? "");
-  const url = buildAuthorizeUrl(cfg, redirectUri, String(merchantId));
+  const url = buildAuthorizeUrl(cfg, redirectUri, createOAuthState("payroll", merchantId));
   if (!url) {
     res.redirect("/settings/payroll?error=not_configured");
     return;
@@ -238,8 +239,10 @@ router.get("/payroll/auth/callback", async (req, res): Promise<void> => {
     res.redirect("/settings/payroll?error=oauth_denied");
     return;
   }
-  const merchantId = parseInt(state ?? "", 10);
-  if (Number.isNaN(merchantId)) {
+  // Signed by /payroll/auth/start (lib/oauth-state.ts) — a bare id would let
+  // anyone attach their own payroll org to this business.
+  const merchantId = verifyOAuthState("payroll", state);
+  if (merchantId === null) {
     res.redirect("/settings/payroll?error=invalid_state");
     return;
   }

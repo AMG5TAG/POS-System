@@ -325,7 +325,9 @@ router.get("/storage/objects/*path", requireActiveAuth, async (req: Request, res
       ))
       .limit(1);
     if (named?.filename) {
-      res.setHeader("Content-Disposition", contentDispositionFor(named.filename));
+      // Keep downloadObject's verdict: a type unsafe to render stays a download.
+      const disposition = /^attachment/.test(response.headers.get("content-disposition") ?? "") ? "attachment" : "inline";
+      res.setHeader("Content-Disposition", contentDispositionFor(named.filename, disposition));
     }
 
     const etag = response.headers.get("etag");

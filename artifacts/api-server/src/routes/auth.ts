@@ -1,6 +1,6 @@
 import { Router, type IRouter, type Request, type Response, type NextFunction } from "express";
 import rateLimit from "express-rate-limit";
-import { randomBytes, createHash, createHmac } from "crypto";
+import { randomBytes, createHash, createHmac, timingSafeEqual } from "crypto";
 import { db, merchantsTable, authEventsTable, passwordResetTokensTable, accountHoldTokensTable, trustedIpsTable } from "@workspace/db";
 import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { z } from "zod/v4";
@@ -1077,9 +1077,17 @@ router.post("/auth/logout", async (req, res): Promise<void> => {
 
 /* ── Email verification ──────────────────────────────────────────────────── */
 
+/* The key used to be EMAIL_VERIFY_SECRET or a hardcoded string — which this
+   repo publishes — and production never set the variable, so anyone could
+   mint a link. Falls back to a key derived from SESSION_SECRET, which
+   production is guaranteed to have (app.ts refuses to boot without it). */
+function verifySecret(): string {
+  return process.env.EMAIL_VERIFY_SECRET
+    ?? `email-verify:${process.env.SESSION_SECRET ?? "koapos-dev-secret"}`;
+}
+
 function makeVerifyToken(merchantId: number): string {
-  const secret = process.env.EMAIL_VERIFY_SECRET ?? "koapos-dev-verify";
-  const hmac = createHmac("sha256", secret).update(String(merchantId)).digest("hex");
+  const hmac = createHmac("sha256", verifySecret()).update(String(merchantId)).digest("hex");
   return `${merchantId}.${hmac}`;
 }
 
@@ -1087,9 +1095,9 @@ function parseVerifyToken(token: string): number | null {
   const [idStr, hmac] = token.split(".");
   const id = parseInt(idStr ?? "", 10);
   if (!idStr || !hmac || isNaN(id)) return null;
-  const expected = createHmac("sha256", process.env.EMAIL_VERIFY_SECRET ?? "koapos-dev-verify")
-    .update(String(id)).digest("hex");
-  if (hmac !== expected) return null;
+  const expected = Buffer.from(createHmac("sha256", verifySecret()).update(String(id)).digest("hex"));
+  const given = Buffer.from(hmac);
+  if (given.length !== expected.length || !timingSafeEqual(given, expected)) return null;
   return id;
 }
 

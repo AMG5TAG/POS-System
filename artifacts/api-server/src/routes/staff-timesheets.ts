@@ -3,14 +3,24 @@ import { db, staffTimesheetsTable, staffTable } from "@workspace/db";
 import { and, eq, gte, lte, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { matchStaffByPin } from "../lib/staff-pin";
+import { reservePinAttempt, retryMessage } from "../lib/pin-guard";
 
 const router: IRouter = Router();
 
 /** Find a merchant's staff member by PIN. PINs are hashed at rest, so we load
  *  the merchant's staff and compare rather than querying `WHERE pin = ?`. */
-async function lookupStaffByPin(merchantId: number, pin: string) {
-  const staff = await db.select().from(staffTable).where(eq(staffTable.merchantId, merchantId));
-  return matchStaffByPin(staff, pin);
+async function lookupStaffByPin(merchantId: number, pin: string, ip: string | undefined) {
+  // Same brute-force guard as the till's PIN switch: without it this was an
+  // unlimited "whose PIN is this?" oracle. Deactivated staff never match.
+  const attempt = await reservePinAttempt("session", merchantId, ip);
+  if (!attempt.ok) return { retryAfter: attempt.retryAfter };
+  const staff = await db
+    .select()
+    .from(staffTable)
+    .where(and(eq(staffTable.merchantId, merchantId), eq(staffTable.isActive, "true")));
+  const member = await matchStaffByPin(staff, pin);
+  if (member) await attempt.release();
+  return { member };
 }
 
 const serialize = (row: typeof staffTimesheetsTable.$inferSelect) => ({
@@ -65,8 +75,8 @@ router.get("/staff-timesheets/status", requireAuth, async (req, res): Promise<vo
   const pad = (n: number) => String(n).padStart(2, "0");
   const dateStr = `${today.getFullYear()}-${pad(today.getMonth() + 1)}-${pad(today.getDate())}`;
 
-  const member = await lookupStaffByPin(merchantId, pin.trim());
-
+  const { member, retryAfter } = await lookupStaffByPin(merchantId, pin.trim(), req.ip);
+  if (retryAfter) { res.status(429).json({ error: retryMessage(retryAfter) }); return; }
   if (!member) { res.status(404).json({ error: "No staff found with that PIN" }); return; }
 
   const [openEntry] = await db
@@ -102,8 +112,8 @@ router.post("/staff-timesheets/clock-in", requireAuth, async (req, res): Promise
   const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-  const member = await lookupStaffByPin(merchantId, pin.trim());
-
+  const { member, retryAfter } = await lookupStaffByPin(merchantId, pin.trim(), req.ip);
+  if (retryAfter) { res.status(429).json({ error: retryMessage(retryAfter) }); return; }
   if (!member) { res.status(404).json({ error: "No staff found with that PIN" }); return; }
 
   // Check if already clocked in today
@@ -144,8 +154,8 @@ router.post("/staff-timesheets/clock-out", requireAuth, async (req, res): Promis
   const dateStr = `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
   const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}`;
 
-  const member = await lookupStaffByPin(merchantId, pin.trim());
-
+  const { member, retryAfter } = await lookupStaffByPin(merchantId, pin.trim(), req.ip);
+  if (retryAfter) { res.status(429).json({ error: retryMessage(retryAfter) }); return; }
   if (!member) { res.status(404).json({ error: "No staff found with that PIN" }); return; }
 
   const [openEntry] = await db

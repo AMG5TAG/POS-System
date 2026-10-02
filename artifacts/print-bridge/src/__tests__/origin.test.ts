@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isOriginAllowed } from "../config.js";
+import { hostIsLoopback } from "../server.js";
 
 /**
  * The origin allow-list is the bridge's outer perimeter: any website the till's
@@ -41,5 +42,19 @@ describe("isOriginAllowed", () => {
     expect(isOriginAllowed(undefined, allowed)).toBe(false);
     expect(isOriginAllowed("not a url", allowed)).toBe(false);
     expect(isOriginAllowed("https://pos.koastal.com.au", [])).toBe(false);
+  });
+});
+
+describe("hostIsLoopback (DNS-rebinding guard)", () => {
+  it("accepts the loopback names on our port", () => {
+    expect(hostIsLoopback("127.0.0.1:17777", 17777)).toBe(true);
+    expect(hostIsLoopback("localhost:17777", 17777)).toBe(true);
+    expect(hostIsLoopback("[::1]:17777", 17777)).toBe(true);
+  });
+  it("refuses any other host, port or a missing header", () => {
+    expect(hostIsLoopback("attacker.com:17777", 17777)).toBe(false);
+    expect(hostIsLoopback("127.0.0.1:8080", 17777)).toBe(false);
+    expect(hostIsLoopback("127.0.0.1", 17777)).toBe(false);
+    expect(hostIsLoopback(undefined, 17777)).toBe(false);
   });
 });

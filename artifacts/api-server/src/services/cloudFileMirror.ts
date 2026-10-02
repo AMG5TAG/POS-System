@@ -1,4 +1,5 @@
 import { db, customerFilesCloudSettingsTable } from "@workspace/db";
+import { isReadableObjectKey } from "../lib/object-keys";
 import { eq } from "drizzle-orm";
 import { getNextcloudCredentials, NextcloudNotConnectedError } from "./nextcloudAuth";
 import { uploadBuffer as uploadToNextcloud } from "../lib/nextcloud";
@@ -70,6 +71,9 @@ export async function mirrorCustomerFileToCloud(
       return { mirrored: false, reason: "no_storage_selected" };
     }
 
+    if (!isReadableObjectKey(input.fileKey, merchantId)) {
+      return { mirrored: false, reason: "foreign_object" };
+    }
     // Pull the uploaded bytes back from object storage.
     const objectFile = await new ObjectStorageService().getObjectEntityFile(input.fileKey);
     const [bytes] = await objectFile.download();

@@ -201,7 +201,7 @@ export async function probeBridge(): Promise<BridgeStatus> {
     reachable: true,
     originAllowed: health.originAllowed,
     paired: false,
-    pairingOpen: health.pairingOpen,
+    pairingOpen: health.pairingOpen === true,
     runningAsService: health.runningAsService === true,
     version: health.version,
     platform: health.platform,

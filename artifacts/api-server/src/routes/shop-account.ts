@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { isReadableObjectKey } from "../lib/object-keys";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db, customersTable, appointmentsTable, quotesTable, merchantsTable, referralRewardsTable, transactionsTable, deliveryOrdersTable, customerFilesTable } from "@workspace/db";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
@@ -202,7 +203,7 @@ router.get("/shop/account/files/:id", async (req, res): Promise<void> => {
   if (!c) return;
   const id = Number(req.params.id);
   const file = Number.isInteger(id) && id > 0 ? (await visibleFiles(c)).find((f) => f.id === id) : undefined;
-  if (!file) { res.status(404).json({ error: "File not found" }); return; }
+  if (!file || !isReadableObjectKey(file.fileKey, c.merchantId)) { res.status(404).json({ error: "File not found" }); return; }
   const inline = req.query.download !== "1" && canOpenInline(file.contentType);
   try {
     const obj = await storage.getObjectEntityFile(file.fileKey);

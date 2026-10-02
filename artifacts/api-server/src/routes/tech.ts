@@ -4,6 +4,7 @@ import { eq, and, or, asc, desc, ilike } from "drizzle-orm";
 import { z } from "zod/v4";
 import { customerDisplayName } from "../lib/customer-name";
 import { matchStaffByPin } from "../lib/staff-pin";
+import { reservePinAttempt, retryMessage } from "../lib/pin-guard";
 import { sendSms } from "../services/sms";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { customerPortalUrl } from "../lib/publicUrl";
@@ -33,27 +34,6 @@ declare module "express-session" {
 }
 
 const router: IRouter = Router();
-
-/* ── PIN rate limiting (mirrors staff verify-pin) ────────────────────── */
-const PIN_MAX_FAILS = 5;
-const PIN_WINDOW_MS = 60_000;
-const pinFailures = new Map<number, { fails: number; resetAt: number }>();
-
-function pinRateLimited(merchantId: number): boolean {
-  const entry = pinFailures.get(merchantId);
-  if (!entry || Date.now() > entry.resetAt) return false;
-  return entry.fails >= PIN_MAX_FAILS;
-}
-
-function recordPinFailure(merchantId: number): void {
-  const now = Date.now();
-  const entry = pinFailures.get(merchantId);
-  if (!entry || now > entry.resetAt) {
-    pinFailures.set(merchantId, { fails: 1, resetAt: now + PIN_WINDOW_MS });
-  } else {
-    entry.fails += 1;
-  }
-}
 
 /* ── Helpers ─────────────────────────────────────────────────────────── */
 
@@ -210,8 +190,9 @@ router.post("/tech/b/:username/login", async (req, res): Promise<void> => {
     res.status(403).json({ error: "The Tech App is currently disabled for this business" });
     return;
   }
-  if (pinRateLimited(merchant.id)) {
-    res.status(429).json({ error: "Too many attempts — try again in a minute" });
+  const attempt = await reservePinAttempt("public", merchant.id, req.ip);
+  if (!attempt.ok) {
+    res.status(429).json({ error: retryMessage(attempt.retryAfter) });
     return;
   }
   const staff = await db
@@ -220,10 +201,10 @@ router.post("/tech/b/:username/login", async (req, res): Promise<void> => {
     .where(and(eq(staffTable.merchantId, merchant.id), eq(staffTable.isActive, "true")));
   const match = await matchStaffByPin(staff, parsed.data.pin);
   if (!match) {
-    recordPinFailure(merchant.id);
     res.status(401).json({ error: "Invalid PIN" });
     return;
   }
+  await attempt.release();
   req.session.tech = { staffId: match.id, merchantId: merchant.id };
   logTechEvent(merchant.id, match.id, match.name, "login", "Signed in to the Tech App");
   res.json({
@@ -401,7 +382,11 @@ router.post("/tech/service-jobs/:id/notes", async (req, res): Promise<void> => {
 
 const TechAddPhotosBody = z.object({
   /* Data URIs, same storage format the admin Service Job dialog uses. */
-  photos: z.array(z.string().regex(/^data:[\w.+-]+\/[\w.+-]+;base64,/)).min(1).max(12),
+  /* Only what the picker offers (photos, videos, PDF). The type is what a
+     browser later renders it as on the POS origin, so no HTML/XHTML/SVG. */
+  photos: z.array(z.string().regex(
+    /^data:(?:image\/(?:jpe?g|png|webp|gif|heic|heif|avif|bmp)|video\/(?:mp4|webm|quicktime|3gpp|x-m4v)|application\/pdf);base64,/i,
+  )).min(1).max(12),
 });
 
 router.post("/tech/service-jobs/:id/photos", async (req, res): Promise<void> => {

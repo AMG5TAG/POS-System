@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { escHtml } from "@/lib/html-escape";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListForms,
@@ -114,12 +115,12 @@ export default function CustomersFormsPage() {
       .map(([key, val]) => {
         const field = fields.find(f => f.id === key || f.label === key);
         const label = field?.label ?? key;
-        return `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px;color:#555;width:40%">${label}</td><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">${String(val ?? "—")}</td></tr>`;
+        return `<tr><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px;color:#555;width:40%">${escHtml(label)}</td><td style="padding:6px 12px;border-bottom:1px solid #eee;font-size:13px">${escHtml(String(val ?? "—"))}</td></tr>`;
       })
       .join("");
     const w = window.open("", "_blank");
     if (!w) return;
-    w.document.write(`<!DOCTYPE html><html><head><title>${getFormName(sub.formId)}</title></head><body style="font-family:sans-serif;padding:24px;max-width:640px;margin:auto"><h2>${getFormName(sub.formId)}</h2><p style="color:#888;font-size:12px">${new Date(sub.createdAt).toLocaleString("en-AU")}</p><table style="width:100%;border-collapse:collapse;margin-top:16px">${rows}</table></body></html>`);
+    w.document.write(`<!DOCTYPE html><html><head><title>${escHtml(getFormName(sub.formId))}</title></head><body style="font-family:sans-serif;padding:24px;max-width:640px;margin:auto"><h2>${escHtml(getFormName(sub.formId))}</h2><p style="color:#888;font-size:12px">${new Date(sub.createdAt).toLocaleString("en-AU")}</p><table style="width:100%;border-collapse:collapse;margin-top:16px">${rows}</table></body></html>`);
     w.document.close();
     w.focus();
     w.print();

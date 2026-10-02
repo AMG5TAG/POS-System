@@ -1,3 +1,4 @@
+import { escHtml } from "./html-escape";
 import type { DailyClose } from "@workspace/api-client-react";
 import type { HardwareCfg } from "@/lib/hardware-config";
 import { printDocument } from "@/lib/print-router";
@@ -56,8 +57,8 @@ export function printDailyClose(row: DailyClose, businessName?: string, hw?: Har
 <body>
   <h1>End of Day Report</h1>
   <div class="subtitle">
-    ${businessName ? `<strong>${businessName}</strong> &nbsp;·&nbsp; ` : ""}${fmtDate(row.closeDate)}<br/>
-    ${row.closedByName ? `Closed by ${row.closedByName} &nbsp;·&nbsp; ` : ""}Saved at ${fmtDateTime(row.createdAt)}
+    ${businessName ? `<strong>${escHtml(businessName)}</strong> &nbsp;·&nbsp; ` : ""}${fmtDate(row.closeDate)}<br/>
+    ${row.closedByName ? `Closed by ${escHtml(row.closedByName)} &nbsp;·&nbsp; ` : ""}Saved at ${fmtDateTime(row.createdAt)}
   </div>
 
   <div class="section">
@@ -89,7 +90,7 @@ export function printDailyClose(row: DailyClose, businessName?: string, hw?: Har
   ${row.notes ? `
   <div class="section">
     <div class="section-title">Notes</div>
-    <p style="padding:10px;background:#fafafa;border-radius:4px;line-height:1.5;">${row.notes}</p>
+    <p style="padding:10px;background:#fafafa;border-radius:4px;line-height:1.5;white-space:pre-wrap;">${escHtml(row.notes)}</p>
   </div>` : ""}
 
   <div class="footer">

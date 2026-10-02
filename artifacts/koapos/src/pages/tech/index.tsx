@@ -180,7 +180,11 @@ async function fileToDataUri(file: File): Promise<string> {
 function openDataUri(src: string) {
   try {
     const comma = src.indexOf(",");
-    const mime = src.slice(5, src.indexOf(";"));
+    // A blob: URL runs as this origin, so the stored type must never pick what
+    // the browser renders — an "attachment" typed text/html or xhtml would be a
+    // script running with the POS session. Only a PDF opens; anything else is
+    // handed over as a download.
+    const mime = src.slice(5, src.indexOf(";")) === "application/pdf" ? "application/pdf" : "application/octet-stream";
     const bytes = Uint8Array.from(atob(src.slice(comma + 1)), (c) => c.charCodeAt(0));
     window.open(URL.createObjectURL(new Blob([bytes], { type: mime })), "_blank");
   } catch { /* malformed data URI — nothing to open */ }

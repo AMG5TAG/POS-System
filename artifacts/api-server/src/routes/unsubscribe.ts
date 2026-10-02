@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { escapeHtml } from "../lib/html-escape";
 import { db, customersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import { createHmac } from "crypto";
@@ -65,7 +66,7 @@ router.get("/unsubscribe", async (req, res): Promise<void> => {
     <!DOCTYPE html><html><head><meta charset="utf-8"><title>Unsubscribed</title></head>
     <body style="font-family:sans-serif;padding:40px;max-width:480px;margin:auto;text-align:center;">
       <h2 style="color:#16a34a;">You have been unsubscribed</h2>
-      <p>Hi${customer.firstName ? ` ${customer.firstName}` : ""}, you have been successfully removed from our marketing list.</p>
+      <p>Hi${customer.firstName ? ` ${escapeHtml(customer.firstName)}` : ""}, you have been successfully removed from our marketing list.</p>
       <p style="color:#6b7280;font-size:13px;">You will no longer receive promotional emails. Transactional emails (invoices, service job updates) may still be sent.</p>
     </body></html>
   `);

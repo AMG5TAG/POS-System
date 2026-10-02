@@ -18,12 +18,12 @@ import { eq } from "drizzle-orm";
  * Both forms are emitted: a sanitised ASCII fallback for old clients and the
  * RFC 5987 encoded form that carries the exact original.
  */
-export function contentDispositionFor(filename: string): string {
+export function contentDispositionFor(filename: string, disposition: "inline" | "attachment" = "inline"): string {
   const ascii = filename
     .replace(/[^\x20-\x7e]/g, "_")
     .replace(/["\\]/g, "_")
     .slice(0, 255);
-  return `inline; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
+  return `${disposition}; filename="${ascii}"; filename*=UTF-8''${encodeURIComponent(filename)}`;
 }
 
 /**

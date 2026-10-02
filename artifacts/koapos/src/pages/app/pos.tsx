@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect, useRef, useCallback, Fragment } from "react";
+import { escHtml } from "@/lib/html-escape";
 import { useLocation } from "wouter";
 import { useCustomerSettings } from "@/lib/customer-settings";
 import { useDefaultProductImage, productImageSrc } from "@/lib/product-image";
@@ -755,13 +756,13 @@ export default function POSPage() {
         @media print{body{padding:8px}}
       </style>
     </head><body>
-      <p class="center bold upper">${bizName}</p>
+      <p class="center bold upper">${escHtml(bizName)}</p>
       <p class="center small gray">${dateStr} · ${timeStr}</p>
       <p class="center bdr-b mb">CASH MOVEMENT</p>
       <div class="row"><span class="gray">Type</span><span class="bold">OPENING FLOAT</span></div>
-      <div class="row"><span class="gray">Staff</span><span>${staff}</span></div>
+      <div class="row"><span class="gray">Staff</span><span>${escHtml(staff)}</span></div>
       <div class="row bdr-t mt"><span class="gray">Amount</span><span class="bold">$${float.toFixed(2)}</span></div>
-      ${note ? `<p class="small gray mt">Note: ${note}</p>` : ""}
+      ${note ? `<p class="small gray mt">Note: ${escHtml(note)}</p>` : ""}
       <p class="center small gray mt bdr-t">Keep this receipt for your records.</p>
     </body></html>`);
     w.document.close();
@@ -885,11 +886,11 @@ export default function POSPage() {
         @media print{body{padding:8px}}
       </style>
     </head><body>
-      <p class="center bold upper">${bizName}</p>
+      <p class="center bold upper">${escHtml(bizName)}</p>
       <p class="center small gray">${dateStr} · ${timeStr}</p>
       <p class="center bdr-b mb">END-OF-DAY RECONCILIATION</p>
       <div class="row"><span class="gray">Session</span><span>${openTime} — ${timeStr}</span></div>
-      <div class="row"><span class="gray">Staff</span><span>${staff}</span></div>
+      <div class="row"><span class="gray">Staff</span><span>${escHtml(staff)}</span></div>
       <div class="row"><span class="gray">Transactions</span><span>${z.txCount ?? 0}</span></div>
 
       <div class="head bdr-t">SALES</div>
@@ -914,7 +915,7 @@ export default function POSPage() {
       <div class="row"><span class="gray">Terminal total</span><span>$${eftposDeclared.toFixed(2)}</span></div>
       <div class="row bold"><span>Variance</span><span>${eftposVariance >= 0 ? "+" : ""}$${eftposVariance.toFixed(2)}</span></div>
 
-      ${note ? `<p class="small gray mt">Note: ${note}</p>` : ""}
+      ${note ? `<p class="small gray mt">Note: ${escHtml(note)}</p>` : ""}
       <p class="center small gray mt bdr-t">Keep this receipt for your records.</p>
     </body></html>`);
     w.document.close();

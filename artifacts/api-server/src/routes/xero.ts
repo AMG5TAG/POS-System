@@ -1,4 +1,5 @@
 import { SelectXeroTenantBody, UpdateXeroMappingsBody } from "@workspace/api-zod";
+import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
 import { Router } from "express";
 import {
   db,
@@ -370,7 +371,7 @@ router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
     client_id:     clientId,
     redirect_uri:  buildCallbackUrl(req),
     scope:         XERO_SCOPES,
-    state:         String(req.session.merchantId!),
+    state:         createOAuthState("xero", req.session.merchantId!),
   });
 
   res.redirect(`${XERO_AUTH_URL}?${params.toString()}`);
@@ -386,8 +387,10 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
     return;
   }
 
-  const merchantId = parseInt(state ?? "", 10);
-  if (isNaN(merchantId)) {
+  // Signed by /xero/auth/start — never trust a bare merchant id here (see
+  // lib/oauth-state.ts): this callback has no session to check it against.
+  const merchantId = verifyOAuthState("xero", state);
+  if (merchantId === null) {
     res.redirect(`${XERO_WIZARD_PATH}?error=invalid_state`);
     return;
   }

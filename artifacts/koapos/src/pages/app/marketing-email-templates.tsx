@@ -195,7 +195,7 @@ function TemplateEditorDialog({
     setBody(initialBody);
     setPreview(false);
     setTimeout(() => {
-      if (editorRef.current) editorRef.current.innerHTML = initialBody;
+      if (editorRef.current) editorRef.current.innerHTML = DOMPurify.sanitize(initialBody);
     }, 0);
   }, [open, initial]);
 

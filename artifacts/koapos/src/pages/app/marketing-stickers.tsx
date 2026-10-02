@@ -321,25 +321,25 @@ export default function MarketingStickersPage() {
     for (const el of layout.elements) {
       const common = `position:absolute;left:${el.x}%;top:${el.y}%;width:${el.w}%;`;
       if (el.type === "text") {
-        parts.push(`<div style="${common}font-size:${el.fontSizeMm ?? 3}mm;font-weight:${el.bold ? 700 : 400};text-align:${el.align};color:${el.color};line-height:1.1;white-space:pre-wrap;word-break:break-word;">${escapeHtml(resolveInline(el.content ?? "", subs))}</div>`);
+        parts.push(`<div style="${common}font-size:${el.fontSizeMm ?? 3}mm;font-weight:${el.bold ? 700 : 400};text-align:${escapeHtml(String(el.align))};color:${escapeHtml(String(el.color))};line-height:1.1;white-space:pre-wrap;word-break:break-word;">${escapeHtml(resolveInline(el.content ?? "", subs))}</div>`);
       } else if (el.type === "image" && el.src) {
-        parts.push(`<img src="${el.src}" style="${common}height:auto;" />`);
+        parts.push(`<img src="${escapeHtml(String(el.src))}" style="${common}height:auto;" />`);
       } else if (el.type === "qr") {
         const url = await QRCode.toDataURL(resolveInline(el.content ?? " ", subs) || " ", { margin: 0 });
         parts.push(`<img src="${url}" style="${common}height:auto;" />`);
       } else if (el.type === "barcode") {
         parts.push(`<img src="${barcodeDataUrl(resolveInline(el.content ?? "0", subs))}" style="${common}height:auto;" />`);
       } else if (el.type === "rect") {
-        const border = (el.borderWidthMm ?? 0) > 0 ? `${el.borderWidthMm}mm solid ${el.borderColor}` : "none";
-        parts.push(`<div style="${common}height:${el.h ?? 20}%;background:${el.fill};border:${border};box-sizing:border-box;"></div>`);
+        const border = (el.borderWidthMm ?? 0) > 0 ? `${el.borderWidthMm}mm solid ${escapeHtml(String(el.borderColor))}` : "none";
+        parts.push(`<div style="${common}height:${el.h ?? 20}%;background:${escapeHtml(String(el.fill))};border:${border};box-sizing:border-box;"></div>`);
       } else if (el.type === "line") {
-        parts.push(`<div style="${common}height:${el.thicknessMm ?? 0.5}mm;background:${el.color};"></div>`);
+        parts.push(`<div style="${common}height:${el.thicknessMm ?? 0.5}mm;background:${escapeHtml(String(el.color))};"></div>`);
       }
     }
     const html = `<!doctype html><html><head><meta charset="utf-8"><style>
       @page { size: ${effW}mm ${effH}mm; margin: 0; }
       html,body { margin:0; padding:0; }
-      .label { position:relative; width:${effW}mm; height:${effH}mm; overflow:hidden; background:${layout.bg}; font-family: system-ui, sans-serif; }
+      .label { position:relative; width:${effW}mm; height:${effH}mm; overflow:hidden; background:${escapeHtml(String(layout.bg))}; font-family: system-ui, sans-serif; }
     </style></head><body><div class="label">${parts.join("")}</div>
     </body></html>`;
 

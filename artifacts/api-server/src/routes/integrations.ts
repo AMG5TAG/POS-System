@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
 import { db, merchantIntegrationsTable, oauthTokenVaultTable, merchantAutoSyncSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
@@ -125,7 +126,7 @@ function manageUrl(key: string): string {
 
 async function buildOAuthStartUrl(key: string, req: import("express").Request, merchantId: number): Promise<string | null> {
   const cb = cbUrl(key, req);
-  const state = String(req.session.merchantId);
+  const state = createOAuthState(`integration:${key}`, merchantId);
 
   if (key in GOOGLE_SCOPES) {
     const cid = process.env.GOOGLE_CLIENT_ID; if (!cid) return null;
@@ -315,7 +316,7 @@ router.get("/integrations/oauth/apple/start", requireAuth, async (req, res): Pro
  * Body fields sent by Apple:
  *   code        — authorization code for token exchange
  *   id_token    — signed JWT; payload contains sub (user ID) and email
- *   state       — merchantId passed in the start URL
+ *   state       — signed state from the start URL (lib/oauth-state.ts)
  *   user        — JSON string with name info (first-time auth only)
  *   error       — set when the user cancels or an error occurs
  */
@@ -328,8 +329,8 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
     return;
   }
 
-  const merchantId = parseInt(state, 10);
-  if (isNaN(merchantId)) {
+  const merchantId = verifyOAuthState("integration:apple_account", state);
+  if (merchantId === null) {
     res.redirect("/management/sync?error=apple_invalid_state");
     return;
   }
@@ -424,8 +425,8 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
   const { key } = req.params;
   const { code, state, error, realmId } = req.query as Record<string, string>;
   if (error || !code || !state) { res.redirect(`${manageUrl(key)}?error=${key}_oauth_denied`); return; }
-  const merchantId = parseInt(state, 10);
-  if (isNaN(merchantId)) { res.redirect(`${manageUrl(key)}?error=${key}_invalid_state`); return; }
+  const merchantId = verifyOAuthState(`integration:${key}`, state);
+  if (merchantId === null) { res.redirect(`${manageUrl(key)}?error=${key}_invalid_state`); return; }
   // Xero has a dedicated route with full tenant-selection flow — hand off there
   if (key === "xero") { res.redirect(`/api/xero/auth/start`); return; }
 
