@@ -1,4 +1,5 @@
 import MediaLayout from "@/components/MediaLayout";
+import SiteBanner from "@/components/SiteBanner";
 import { useSeo } from "@/lib/useSeo";
 import { CheckCircle2, Smartphone, Gauge, Search, Wand2, Layers, ShoppingCart } from "lucide-react";
 
@@ -88,6 +89,8 @@ export default function WebsiteDesignPage() {
       title={<>Websites that look great and actually convert</>}
       intro="We design and build mobile-first websites that load fast, rank well and turn visitors into customers."
     >
+      <SiteBanner />
+
       <section className="py-14 bg-white">
         <div className="max-w-6xl mx-auto px-4">
           <p className="text-[#007b7d] font-bold tracking-[0.2em] text-xs uppercase mb-3 text-center">
