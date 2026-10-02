@@ -39,7 +39,7 @@ describe.skipIf(!hasDb)("foreign ids are refused (real DB)", () => {
     app = express();
     app.use(express.json());
     app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-    for (const r of ["appointments", "service-jobs", "service-plans", "products", "purchase-orders"]) {
+    for (const r of ["appointments", "service-jobs", "service-plans", "products", "purchase-orders", "invoices"]) {
       app.use("/api", (await import(`../routes/${r}`)).default);
     }
   }, 120_000);
@@ -65,6 +65,37 @@ describe.skipIf(!hasDb)("foreign ids are refused (real DB)", () => {
     for (const [method, path, body] of calls) {
       const res = await (request(app) as unknown as Record<string, (p: string) => request.Test>)[method]!(path).send(body);
       expect([path, res.status, res.body.error]).toEqual([path, 400, expect.stringMatching(/not found/)]);
+    }
+  });
+
+  it("never shows another business's customer through a row already pointing at one", async () => {
+    const t = await import("@workspace/db");
+    const { eq, ne } = await import("drizzle-orm");
+    // Another business's customer, and an invoice of ours naming them — what a
+    // row saved before the write checks looks like. Businesses can't be deleted
+    // (a trigger refuses), so this borrows one that already exists rather than
+    // creating one, and skips when there is none.
+    const [other] = await t.db.select({ id: t.merchantsTable.id }).from(t.merchantsTable)
+      .where(ne(t.merchantsTable.id, h.merchantId)).limit(1);
+    if (!other) return;
+    const [theirs] = await t.db.insert(t.customersTable).values({
+      merchantId: other!.id, firstName: "Foreign", lastName: "Customer", email: "foreign@example.invalid", phone: "+61400000999",
+    }).returning({ id: t.customersTable.id });
+    const [inv] = await t.db.insert(t.invoicesTable).values({
+      merchantId: h.merchantId, customerId: theirs!.id, invoiceNumber: `TEST-OWN-${Date.now()}`, status: "draft",
+      subtotal: "0", taxTotal: "0", total: "0", amountPaid: "0", items: [],
+    }).returning({ id: t.invoicesTable.id });
+    try {
+      const one = await request(app).get(`/api/invoices/${inv!.id}`);
+      expect(one.status).toBe(200);
+      expect([one.body.customerEmail, one.body.customerPhone]).toEqual([null, null]);
+      expect(String(one.body.customerName ?? "")).not.toContain("Foreign");
+      const list = await request(app).get("/api/invoices?limit=200");
+      const row = (list.body.items as Array<{ id: number; customerEmail: string | null }>).find((r) => r.id === inv!.id);
+      if (row) expect(row.customerEmail).toBeNull();
+    } finally {
+      await t.db.delete(t.invoicesTable).where(eq(t.invoicesTable.id, inv!.id));
+      await t.db.delete(t.customersTable).where(eq(t.customersTable.id, theirs!.id));
     }
   });
 });

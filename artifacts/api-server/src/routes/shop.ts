@@ -200,7 +200,7 @@ router.get("/shop/products", async (req, res): Promise<void> => {
       preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
     })
     .from(productsTable)
-    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(brandsTable, and(eq(brandsTable.id, productsTable.brandId), eq(brandsTable.merchantId, productsTable.merchantId)))
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
     .where(where).orderBy(...order).limit(pageSize).offset((page - 1) * pageSize);
 
@@ -271,8 +271,8 @@ router.get("/shop/products/:id", async (req, res): Promise<void> => {
   const [p] = await db
     .select({ product: productsTable, categoryName: categoriesTable.name, brandName: brandsTable.name, typeTracksStock: productTypesTable.trackStock, isService: productTypesTable.isService })
     .from(productsTable)
-    .leftJoin(categoriesTable, eq(categoriesTable.id, productsTable.categoryId))
-    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(categoriesTable, and(eq(categoriesTable.id, productsTable.categoryId), eq(categoriesTable.merchantId, productsTable.merchantId)))
+    .leftJoin(brandsTable, and(eq(brandsTable.id, productsTable.brandId), eq(brandsTable.merchantId, productsTable.merchantId)))
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
     .where(and(visible(merchantId), eq(productsTable.id, id)));
   if (!p) { res.status(404).json({ error: "Not found" }); return; }
@@ -339,7 +339,7 @@ router.get("/shop/products/:id/related", async (req, res): Promise<void> => {
       preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
     })
     .from(productsTable)
-    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(brandsTable, and(eq(brandsTable.id, productsTable.brandId), eq(brandsTable.merchantId, productsTable.merchantId)))
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
     .where(and(shopListable(merchantId, await shopHidesOutOfStock(merchantId)), sql`${productsTable.id} <> ${id}`, or(...tiers)))
     .orderBy(rank, desc(productsTable.createdAt))
@@ -605,7 +605,7 @@ router.get("/shop/wishlist", async (req, res): Promise<void> => {
       preOrder: productsTable.preOrder, preOrderReleaseDate: productsTable.preOrderReleaseDate, preOrderEtaDate: productsTable.preOrderEtaDate,
     })
     .from(productsTable)
-    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(brandsTable, and(eq(brandsTable.id, productsTable.brandId), eq(brandsTable.merchantId, productsTable.merchantId)))
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
     .where(and(visible(merchantId), inArray(productsTable.id, ids)));
   const byId = new Map(rows.map((r) => [r.id, r]));

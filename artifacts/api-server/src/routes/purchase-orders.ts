@@ -200,7 +200,7 @@ async function getPOWithItems(id: number, merchantId: number) {
   ]);
   let supplierName: string | null = null;
   if (po.supplierId) {
-    const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, po.supplierId));
+    const [s] = await db.select().from(suppliersTable).where(and(eq(suppliersTable.id, po.supplierId), eq(suppliersTable.merchantId, po.merchantId)));
     supplierName = s?.name ?? null;
   }
   const oversellByProduct = await getOversellByProduct(
@@ -223,7 +223,7 @@ router.get("/purchase-orders", requireAuth, async (req, res) => {
     const items = await db.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, po.id));
     let supplierName: string | null = null;
     if (po.supplierId) {
-      const [s] = await db.select().from(suppliersTable).where(eq(suppliersTable.id, po.supplierId));
+      const [s] = await db.select().from(suppliersTable).where(and(eq(suppliersTable.id, po.supplierId), eq(suppliersTable.merchantId, po.merchantId)));
       supplierName = s?.name ?? null;
     }
     return fmtPO(po, items, supplierName);

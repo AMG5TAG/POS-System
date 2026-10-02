@@ -524,7 +524,7 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(...conditions))
     .orderBy(asc(invoicesTable.dueDate), desc(invoicesTable.createdAt))
     .limit(limit)
@@ -560,7 +560,7 @@ router.get("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
@@ -667,7 +667,7 @@ router.post("/invoices", requireAuth, async (req, res): Promise<void> => {
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(eq(invoicesTable.id, inv.id));
 
   const createInvoiceBody = row
@@ -736,7 +736,7 @@ router.patch("/invoices/:id/viewed", requireAuth, async (req, res): Promise<void
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   const markViewedBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
@@ -921,7 +921,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       customerEmail: customersTable.email,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(eq(invoicesTable.id, id));
 
   const updateInvoiceBody = row
@@ -1189,7 +1189,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
   const paymentBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
@@ -1318,7 +1318,7 @@ router.post("/invoices/:id/payment/reverse", requireAuth, requireManagerOrApprov
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
   const reverseBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
@@ -1380,7 +1380,7 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
@@ -1662,7 +1662,7 @@ export async function sendInvoiceEmailInternal(
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
   if (!row) return { success: false, notFound: true };
@@ -1969,7 +1969,7 @@ router.post("/invoices/:id/event", requireAuth, async (req, res): Promise<void> 
       customerBillingPostcode: customersTable.billingPostcode,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
   if (!row) { res.status(404).json({ error: "Not found" }); return; }
   const addEventBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);

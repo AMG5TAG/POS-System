@@ -831,7 +831,7 @@ router.get("/dashboard/calendar", requireAuth, async (req, res): Promise<void> =
   // Get customer names for appointments
   const apptCustomerIds = [...new Set(appts.filter((a) => a.customerId).map((a) => a.customerId!))];
   const apptCustomers = apptCustomerIds.length > 0
-    ? await db.select().from(customersTable).where(inArray(customersTable.id, apptCustomerIds))
+    ? await db.select().from(customersTable).where(and(eq(customersTable.merchantId, merchantId), inArray(customersTable.id, apptCustomerIds)))
     : [];
   const apptCustomerMap = new Map(apptCustomers.map((c) => [c.id, c]));
 

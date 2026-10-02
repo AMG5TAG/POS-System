@@ -672,8 +672,8 @@ router.get("/products/:id", requireAuth, async (req, res): Promise<void> => {
     .where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
   if (!product) { res.status(404).json({ error: "Product not found" }); return; }
   const [category, ptRecord, digitalCodeCount] = await Promise.all([
-    product.categoryId ? db.select().from(categoriesTable).where(eq(categoriesTable.id, product.categoryId)).then(([c]) => c ?? null) : Promise.resolve(null),
-    product.productTypeId ? db.select().from(productTypesTable).where(eq(productTypesTable.id, product.productTypeId)).then(([t]) => t ?? null) : Promise.resolve(null),
+    product.categoryId ? db.select().from(categoriesTable).where(and(eq(categoriesTable.id, product.categoryId), eq(categoriesTable.merchantId, product.merchantId))).then(([c]) => c ?? null) : Promise.resolve(null),
+    product.productTypeId ? db.select().from(productTypesTable).where(and(eq(productTypesTable.id, product.productTypeId), eq(productTypesTable.merchantId, product.merchantId))).then(([t]) => t ?? null) : Promise.resolve(null),
     db.select({ count: sql<number>`count(*)::int` }).from(digitalCodesTable).where(
       and(eq(digitalCodesTable.productId, product.id), eq(digitalCodesTable.merchantId, req.session.merchantId!), eq(digitalCodesTable.isUsed, "false"))
     ).then(([r]) => r?.count ?? 0),
@@ -1130,7 +1130,7 @@ router.get("/products/:id/sales-history", requireAuth, async (req, res): Promise
       first: customersTable.firstName, last: customersTable.lastName, company: customersTable.company,
     })
       .from(transactionsTable)
-      .leftJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+      .leftJoin(customersTable, and(eq(transactionsTable.customerId, customersTable.id), eq(customersTable.merchantId, transactionsTable.merchantId)))
       .where(and(eq(transactionsTable.merchantId, merchantId), sql`${transactionsTable.items} @> ${contains}::jsonb`)),
     db.select({
       id: invoicesTable.id, reference: invoicesTable.invoiceNumber, status: invoicesTable.status,
@@ -1138,7 +1138,7 @@ router.get("/products/:id/sales-history", requireAuth, async (req, res): Promise
       first: customersTable.firstName, last: customersTable.lastName, company: customersTable.company,
     })
       .from(invoicesTable)
-      .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+      .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
       .where(and(eq(invoicesTable.merchantId, merchantId), sql`${invoicesTable.items}::jsonb @> ${contains}::jsonb`)),
   ]);
 

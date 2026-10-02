@@ -188,7 +188,7 @@ async function processMerchant(merchantId: number, settings: Settings, logger: L
       customerEmail: customersTable.email,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(
       and(
         eq(invoicesTable.merchantId, merchantId),

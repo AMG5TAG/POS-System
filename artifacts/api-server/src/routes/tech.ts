@@ -698,7 +698,7 @@ router.patch("/tech/appointments/:id", async (req, res): Promise<void> => {
   if (appt.staffId) {
     if (appt.staffId === tech.staffId) staffName = tech.staffName;
     else {
-      const [s] = await db.select({ name: staffTable.name }).from(staffTable).where(eq(staffTable.id, appt.staffId));
+      const [s] = await db.select({ name: staffTable.name }).from(staffTable).where(and(eq(staffTable.id, appt.staffId), eq(staffTable.merchantId, appt.merchantId)));
       staffName = s?.name ?? null;
     }
   }

@@ -287,7 +287,7 @@ router.get("/mobile-pos/invoices", async (req, res): Promise<void> => {
       firstName: customersTable.firstName, lastName: customersTable.lastName, company: customersTable.company,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(eq(invoicesTable.merchantId, mpos.merchantId))
     .orderBy(desc(invoicesTable.createdAt))
     .limit(100);

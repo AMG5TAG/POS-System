@@ -355,7 +355,7 @@ async function runNewServiceJob(
       customerId: customersTable.id,
     })
     .from(serviceJobsTable)
-    .leftJoin(customersTable, eq(serviceJobsTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(serviceJobsTable.customerId, customersTable.id), eq(customersTable.merchantId, serviceJobsTable.merchantId)))
     .where(and(eq(serviceJobsTable.merchantId, merchantId), gte(serviceJobsTable.createdAt, since)));
 
   let sent = 0;
@@ -398,7 +398,7 @@ async function runInvoiceOverdue(
       customerId: customersTable.id,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(
       and(
         eq(invoicesTable.merchantId, merchantId),
@@ -469,7 +469,7 @@ async function runDaysAfterSale(
       customerId: customersTable.id,
     })
     .from(transactionsTable)
-    .innerJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+    .innerJoin(customersTable, and(eq(transactionsTable.customerId, customersTable.id), eq(customersTable.merchantId, transactionsTable.merchantId)))
     .where(
       and(
         eq(transactionsTable.merchantId, merchantId),
@@ -595,7 +595,7 @@ async function runWarrantyExpiring(
         customerId: customersTable.id,
       })
       .from(transactionsTable)
-      .innerJoin(customersTable, eq(transactionsTable.customerId, customersTable.id))
+      .innerJoin(customersTable, and(eq(transactionsTable.customerId, customersTable.id), eq(customersTable.merchantId, transactionsTable.merchantId)))
       .where(and(
         eq(transactionsTable.merchantId, merchantId),
         gte(transactionsTable.createdAt, earliestSale),
@@ -638,7 +638,7 @@ async function runWarrantyExpiring(
       customerId: customersTable.id,
     })
     .from(serviceJobsTable)
-    .leftJoin(customersTable, eq(serviceJobsTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(serviceJobsTable.customerId, customersTable.id), eq(customersTable.merchantId, serviceJobsTable.merchantId)))
     .where(and(eq(serviceJobsTable.merchantId, merchantId), gt(serviceJobsTable.repairWarrantyDays, 0), isNotNull(serviceJobsTable.completedAt)));
 
   for (const row of jobs) {

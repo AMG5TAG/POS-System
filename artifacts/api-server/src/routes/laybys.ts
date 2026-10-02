@@ -171,7 +171,7 @@ router.get("/laybys", requireAuth, async (req, res) => {
       customer: customersTable,
     })
     .from(laybysTable)
-    .leftJoin(customersTable, eq(laybysTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(laybysTable.customerId, customersTable.id), eq(customersTable.merchantId, laybysTable.merchantId)))
     .where(and(...conditions))
     .orderBy(desc(laybysTable.createdAt))
     .limit(parseInt(limit, 10))
@@ -314,7 +314,7 @@ router.get("/laybys/:id", requireAuth, async (req, res) => {
   const [row] = await db
     .select({ layby: laybysTable, customer: customersTable })
     .from(laybysTable)
-    .leftJoin(customersTable, eq(laybysTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(laybysTable.customerId, customersTable.id), eq(customersTable.merchantId, laybysTable.merchantId)))
     .where(and(eq(laybysTable.id, id), eq(laybysTable.merchantId, merchantId)));
 
   if (!row) {

@@ -23,7 +23,7 @@ export async function sendInvoiceSms(
       businessName: merchantsTable.businessName,
     })
     .from(invoicesTable)
-    .leftJoin(customersTable, eq(invoicesTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .leftJoin(merchantsTable, eq(invoicesTable.merchantId, merchantsTable.id))
     .where(and(eq(invoicesTable.id, invoiceId), eq(invoicesTable.merchantId, merchantId)));
 

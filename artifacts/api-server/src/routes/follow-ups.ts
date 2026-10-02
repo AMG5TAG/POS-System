@@ -249,7 +249,7 @@ async function loadDueItems(
         agreedToMarketing: customersTable.agreedToMarketing,
       })
       .from(serviceJobsTable)
-      .leftJoin(customersTable, eq(serviceJobsTable.customerId, customersTable.id))
+      .leftJoin(customersTable, and(eq(serviceJobsTable.customerId, customersTable.id), eq(customersTable.merchantId, serviceJobsTable.merchantId)))
       .where(and(
         eq(serviceJobsTable.merchantId, merchantId),
         eq(serviceJobsTable.status, "completed"),
@@ -292,7 +292,7 @@ async function loadDueItems(
         agreedToMarketing: customersTable.agreedToMarketing,
       })
       .from(appointmentsTable)
-      .leftJoin(customersTable, eq(appointmentsTable.customerId, customersTable.id))
+      .leftJoin(customersTable, and(eq(appointmentsTable.customerId, customersTable.id), eq(customersTable.merchantId, appointmentsTable.merchantId)))
       .where(and(
         eq(appointmentsTable.merchantId, merchantId),
         eq(appointmentsTable.status, "completed"),

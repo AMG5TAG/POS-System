@@ -41,7 +41,7 @@ export async function loadFeedProducts(merchantId: number): Promise<FeedProduct[
   const rows = await db
     .select({ p: productsTable, brandName: brandsTable.name, typeTracksStock: productTypesTable.trackStock, isService: productTypesTable.isService })
     .from(productsTable)
-    .leftJoin(brandsTable, eq(brandsTable.id, productsTable.brandId))
+    .leftJoin(brandsTable, and(eq(brandsTable.id, productsTable.brandId), eq(brandsTable.merchantId, productsTable.merchantId)))
     .leftJoin(productTypesTable, eq(productTypesTable.id, productsTable.productTypeId))
     .where(shopVisible(merchantId))
     .orderBy(asc(productsTable.id));

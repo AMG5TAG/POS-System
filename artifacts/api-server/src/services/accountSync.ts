@@ -254,7 +254,7 @@ async function syncAppleCalendar(merchantId: number, logger: Logger): Promise<Ca
               custBillingStreet: customersTable.billingStreet, custBillingCity: customersTable.billingCity,
               custBillingState: customersTable.billingState, custBillingPostcode: customersTable.billingPostcode })
     .from(appointmentsTable)
-    .leftJoin(customersTable, eq(appointmentsTable.customerId, customersTable.id))
+    .leftJoin(customersTable, and(eq(appointmentsTable.customerId, customersTable.id), eq(customersTable.merchantId, appointmentsTable.merchantId)))
     .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now)))
     .orderBy(appointmentsTable.scheduledAt))
     .filter((r) => r.appt.status !== "cancelled");

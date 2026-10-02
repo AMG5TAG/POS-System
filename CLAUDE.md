@@ -1224,7 +1224,15 @@ inside the DB transaction that records the money, never by a pre-check:
   appointments, service jobs, service plans, products (category, brand) and
   purchase orders (supplier) do. A stored foreign id is what let the calendar,
   follow-ups, invoices and the reminder schedulers show or message another
-  business's customer, so check on write.
+  business's customer, so check on write. Readers are scoped too, so a row
+  saved before the checks can't leak: every `customersTable` join on a row's
+  `customerId` also requires `customersTable.merchantId` to equal that row's
+  `merchantId` (invoices, laybys, follow-ups, products, mobile POS and the
+  invoice/marketing schedulers and account sync), as do the calendar's customer
+  lookup and the staff, supplier, category, product-type and brand lookups that
+  echo names. `owned-ids.test.ts` pins the invoice case. Its test borrows an
+  existing other business rather than creating one: `prevent_merchant_delete`
+  refuses to delete a merchant row (suspend it instead).
 - **Public routes mount before the blanket guard.** A router with a pathless
   `router.use(requireAuth)` (customer-files-cloud) guards every router mounted
   after it in `routes/index.ts`. The unsubscribe link sat after it and 401'd
