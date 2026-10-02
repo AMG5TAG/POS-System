@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, cashDrawerEntriesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -50,7 +51,7 @@ router.post("/cash-drawer", requireAuth, async (req, res) => {
 });
 
 // DELETE /cash-drawer/:id
-router.delete("/cash-drawer/:id", requireAuth, async (req, res) => {
+router.delete("/cash-drawer/:id", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeleteCashDrawerEntryParams.parse({ id: Number(req.params.id) });
   await db.delete(cashDrawerEntriesTable)

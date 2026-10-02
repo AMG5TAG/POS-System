@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, pricingRulesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -27,7 +28,7 @@ router.get("/pricing-rules", requireAuth, async (req, res): Promise<void> => {
   res.json({ rules: rules.map(r => ({ ...r, discountValue: parseFloat(r.discountValue ?? "0") })) });
 });
 
-router.post("/pricing-rules", requireAuth, async (req, res): Promise<void> => {
+router.post("/pricing-rules", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = PricingRuleBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const merchantId = req.session.merchantId!;
@@ -48,7 +49,7 @@ router.post("/pricing-rules", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json({ ...rule, discountValue: parseFloat(rule.discountValue ?? "0") });
 });
 
-router.patch("/pricing-rules/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/pricing-rules/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const ruleId = parseInt(String(req.params.id), 10);
   if (isNaN(ruleId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
@@ -73,7 +74,7 @@ router.patch("/pricing-rules/:id", requireAuth, async (req, res): Promise<void> 
   res.json({ ...rule, discountValue: parseFloat(rule.discountValue ?? "0") });
 });
 
-router.delete("/pricing-rules/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/pricing-rules/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const ruleId = parseInt(String(req.params.id), 10);
   if (isNaN(ruleId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;

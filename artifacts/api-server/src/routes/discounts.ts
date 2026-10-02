@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, discountsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -43,7 +44,7 @@ router.get("/discounts", requireAuth, async (req, res) => {
 });
 
 // POST /discounts
-router.post("/discounts", requireAuth, async (req, res) => {
+router.post("/discounts", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreateDiscountBody.parse(req.body);
   const [row] = await db.insert(discountsTable).values({
@@ -84,7 +85,7 @@ router.post("/discounts/validate", requireAuth, async (req, res) => {
 });
 
 // PUT /discounts/:id
-router.put("/discounts/:id", requireAuth, async (req, res) => {
+router.put("/discounts/:id", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = UpdateDiscountParams.parse({ id: Number(req.params.id) });
   const body = UpdateDiscountBody.parse(req.body);
@@ -108,7 +109,7 @@ router.put("/discounts/:id", requireAuth, async (req, res) => {
 });
 
 // DELETE /discounts/:id
-router.delete("/discounts/:id", requireAuth, async (req, res) => {
+router.delete("/discounts/:id", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeleteDiscountParams.parse({ id: Number(req.params.id) });
   await db.delete(discountsTable)

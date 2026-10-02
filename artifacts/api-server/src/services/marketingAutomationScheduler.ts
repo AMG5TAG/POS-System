@@ -18,12 +18,19 @@ import { sendEmail } from "./email";
 import { sendSms } from "./sms";
 import type { Logger } from "pino";
 import { publicOrigin } from "../lib/publicUrl";
+import { escapeHtml } from "../lib/html-escape";
 
 type Rule = typeof marketingAutomationRulesTable.$inferSelect;
 
 /** Substitute template variables in text */
 function applyVars(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{(\w+)\}\}/g, (_, key) => vars[key] ?? `{{${key}}}`);
+}
+
+/** Substitute template variables into an HTML body: the merchant's template
+ *  stays HTML, but each substituted value (customer name, …) is escaped. */
+function applyVarsHtml(html: string, vars: Record<string, string>): string {
+  return html.replace(/\{\{(\w+)\}\}/g, (_, key) => (vars[key] != null ? escapeHtml(vars[key]) : `{{${key}}}`));
 }
 
 /** Generate a signed unsubscribe token for a customer (no DB table needed). */
@@ -44,9 +51,9 @@ function unsubscribeUrl(merchantId: number, customerId: number): string {
 function legalEmailFooter(bizName: string, bizAddress: string, unsub: string): string {
   return `
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;line-height:1.6;">
-  <p>${bizName}${bizAddress ? ` · ${bizAddress}` : ""}</p>
-  <p>You are receiving this email because you are a customer of ${bizName}.</p>
-  <p><a href="${unsub}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a> from marketing emails.</p>
+  <p>${escapeHtml(bizName)}${bizAddress ? ` · ${escapeHtml(bizAddress)}` : ""}</p>
+  <p>You are receiving this email because you are a customer of ${escapeHtml(bizName)}.</p>
+  <p><a href="${escapeHtml(unsub)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a> from marketing emails.</p>
 </div>`;
 }
 
@@ -223,12 +230,12 @@ async function runBirthday(
     const discount = rule.birthdayDiscount?.trim() ?? "";
     const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, birthday_discount: discount };
     const subject = applyVars(rule.templateSubject ?? `Happy Birthday from ${biz.name}!`, vars);
-    let html = applyVars(rule.templateBody ?? `<p>Happy Birthday, ${firstName}! 🎂 Thank you for being a valued customer.</p>`, vars);
+    let html = applyVarsHtml(rule.templateBody ?? `<p>Happy Birthday, ${escapeHtml(firstName)}! 🎂 Thank you for being a valued customer.</p>`, vars);
     let text = applyVars(`Happy Birthday, {{first_name}}! Thank you for being a valued customer of {{business_name}}.`, vars);
     // Append the discount/gift line when set but not already woven into the template.
     const bodyTemplate = rule.templateBody ?? "";
     if (discount && !bodyTemplate.includes("{{birthday_discount}}")) {
-      html += `<p>🎁 ${discount}</p>`;
+      html += `<p>🎁 ${escapeHtml(discount)}</p>`;
       text += ` 🎁 ${discount}`;
     }
     const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
@@ -272,7 +279,7 @@ async function runAnniversary(
     const years = today.getFullYear() - c.createdAt.getFullYear();
     const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, years: String(years) };
     const subject = applyVars(rule.templateSubject ?? `Happy ${years > 0 ? `${years}-year` : ""} Anniversary, {{first_name}}!`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Happy anniversary! It's been ${years > 0 ? `${years} year${years > 1 ? "s" : ""}` : "a while"} since you joined us. We appreciate your loyalty! 🎉</p>`, vars);
+    const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Happy anniversary! It's been ${years > 0 ? `${years} year${years > 1 ? "s" : ""}` : "a while"} since you joined us. We appreciate your loyalty! 🎉</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, happy anniversary! Thank you for being a part of {{business_name}}.`, vars);
     const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "customer", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
@@ -317,7 +324,7 @@ async function runNewProduct(
       const firstName = c.firstName ?? "Valued Customer";
       const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name, product_name: product.name, product_price: `$${parseFloat(product.price).toFixed(2)}` };
       const subject = applyVars(rule.templateSubject ?? `New arrival: {{product_name}}`, vars);
-      const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>We just added <strong>{{product_name}}</strong> to our range at {{business_name}}. Check it out!</p>`, vars);
+      const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>We just added <strong>{{product_name}}</strong> to our range at {{business_name}}. Check it out!</p>`, vars);
       const text = applyVars(`Hi {{first_name}}, we just added {{product_name}} at {{business_name}}. Come check it out!`, vars);
       const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
       await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "product", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
@@ -361,7 +368,7 @@ async function runNewServiceJob(
     const firstName = row.customerFirstName ?? "Valued Customer";
     const vars = { first_name: firstName, last_name: row.customerLastName ?? "", business_name: biz.name, job_number: row.job.jobNumber, device: (row.job as unknown as { deviceType?: string }).deviceType ?? "device", status: row.job.status };
     const subject = applyVars(rule.templateSubject ?? `Your service job {{job_number}} has been received`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thank you for bringing your <strong>{{device}}</strong> to <strong>{{business_name}}</strong>. Your service job <strong>{{job_number}}</strong> has been received and is now in our queue.</p><p>We'll keep you updated on the progress. Thank you for choosing us!</p>`, vars);
+    const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thank you for bringing your <strong>{{device}}</strong> to <strong>{{business_name}}</strong>. Your service job <strong>{{job_number}}</strong> has been received and is now in our queue.</p><p>We'll keep you updated on the progress. Thank you for choosing us!</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, your service job {{job_number}} has been received at {{business_name}}. We'll keep you updated!`, vars);
     // New service job is transactional (not marketing) — no opt-in check, no marketing footer
     const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, biz, row.customerId ?? null, false, phone);
@@ -417,7 +424,7 @@ async function runInvoiceOverdue(
     const total = parseFloat(String(row.invoice.total)).toFixed(2);
     const vars = { first_name: firstName, last_name: row.customerLastName ?? "", business_name: biz.name, invoice_number: row.invoice.invoiceNumber, due_date: dueStr, total: `$${total}` };
     const subject = applyVars(rule.templateSubject ?? `Reminder: Invoice {{invoice_number}} is overdue`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that Invoice <strong>{{invoice_number}}</strong> for <strong>{{total}}</strong> was due on <strong>{{due_date}}</strong> and remains unpaid.</p><p>Please contact <strong>{{business_name}}</strong> at your earliest convenience to arrange payment. Thank you!</p>`, vars);
+    const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that Invoice <strong>{{invoice_number}}</strong> for <strong>{{total}}</strong> was due on <strong>{{due_date}}</strong> and remains unpaid.</p><p>Please contact <strong>{{business_name}}</strong> at your earliest convenience to arrange payment. Thank you!</p>`, vars);
     const text = applyVars(`Hi {{first_name}}, Invoice {{invoice_number}} for {{total}} was due {{due_date}} and is still unpaid. Please contact {{business_name}} to arrange payment.`, vars);
     // Invoice reminders are transactional — no opt-in check, no marketing footer
     const result = await dispatchMessage(merchantId, rule, email ?? null, subject, html, text, biz, row.customerId ?? null, false, phone);
@@ -481,7 +488,7 @@ async function runDaysAfterSale(
     const firstName = row.firstName ?? "Valued Customer";
     const vars = { first_name: firstName, last_name: row.lastName ?? "", business_name: biz.name, days: String(delayDays) };
     const subject = applyVars(rule.templateSubject ?? `Thanks for shopping with ${biz.name}`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thanks for your recent purchase at {{business_name}}. We hope you're enjoying it!</p>`, vars);
+    const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>Thanks for your recent purchase at {{business_name}}. We hope you're enjoying it!</p>`, vars);
     const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, thanks for your recent purchase at {{business_name}}!`), vars);
     const result = await dispatchMessage(merchantId, rule, row.email ?? null, subject, html, text, biz, row.customerId, true, row.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: row.customerId, recordType: "transaction", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });
@@ -551,7 +558,7 @@ async function runWarrantyExpiring(
       days_left: String(daysLeft),
     };
     const subject = applyVars(rule.templateSubject ?? `Your warranty on {{item_name}} is expiring soon`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that the warranty on your <strong>{{item_name}}</strong> from {{business_name}} expires on <strong>{{expiry_date}}</strong> ({{days_left}} days away).</p><p>If you're experiencing any issues, please get in touch before the warranty ends.</p>`, vars);
+    const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p><p>This is a friendly reminder that the warranty on your <strong>{{item_name}}</strong> from {{business_name}} expires on <strong>{{expiry_date}}</strong> ({{days_left}} days away).</p><p>If you're experiencing any issues, please get in touch before the warranty ends.</p>`, vars);
     const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, the warranty on your {{item_name}} from {{business_name}} expires on {{expiry_date}} ({{days_left}} days away). Get in touch if you have any issues.`), vars);
     // Transactional reminder about a customer's own purchase — no marketing footer.
     const result = await dispatchMessage(merchantId, rule, opts.email, subject, html, text, biz, opts.customerId, false, opts.phone);
@@ -685,7 +692,7 @@ async function runScheduledTime(
     const firstName = c.firstName ?? "Valued Customer";
     const vars = { first_name: firstName, last_name: c.lastName ?? "", business_name: biz.name };
     const subject = applyVars(rule.templateSubject ?? `A message from ${biz.name}`, vars);
-    const html = applyVars(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p>`, vars);
+    const html = applyVarsHtml(rule.templateBody ?? `<p>Hi <strong>{{first_name}}</strong>,</p>`, vars);
     const text = applyVars(bodyToText(rule.templateBody, `Hi {{first_name}}, a message from {{business_name}}.`), vars);
     const result = await dispatchMessage(merchantId, rule, c.email ?? null, subject, html, text, biz, c.id, true, c.phone ?? null);
     await logDispatch({ merchantId, ruleId: rule.id, customerId: c.id, recordType: "scheduled", recordId: dedupeKey, channel: rule.channel, status: result.success ? "sent" : "failed", error: result.error });

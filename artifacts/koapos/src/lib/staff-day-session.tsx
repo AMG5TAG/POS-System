@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 /* ── Day staff session ─────────────────────────────────────────────────────
  *
  * Tracks which staff member is signed in "for the day" on THIS device.
@@ -67,6 +68,10 @@ const StaffSessionContext = createContext<StaffSessionContextValue>({
 });
 
 export function StaffSessionProvider({ children }: { children: React.ReactNode }) {
+  /* The server moves the session's role to the day staff member's (and back
+     on sign-out), so /auth/me — what the nav reads — has to be re-fetched. */
+  const queryClient = useQueryClient();
+  const refreshMe = useCallback(() => { void queryClient.invalidateQueries({ queryKey: ["me"] }); }, [queryClient]);
   /* Hydrated synchronously from localStorage so a refresh keeps the day login
      without ever flashing the forced PIN dialog. */
   const [dayStaff, setDayStaff] = useState<DayStaffSession | null>(() => loadDayStaff());
@@ -82,6 +87,7 @@ export function StaffSessionProvider({ children }: { children: React.ReactNode }
     };
     saveDayStaff(session);
     setDayStaff(session);
+    refreshMe();
 
     /* Log the login to the server (audit trail) — non-critical, fire & forget. */
     let registerId = "default";
@@ -92,7 +98,7 @@ export function StaffSessionProvider({ children }: { children: React.ReactNode }
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ registerId, staffId: staff.id, staffName: staff.name }),
     }).catch(() => {});
-  }, []);
+  }, [refreshMe]);
 
   const signOutForDay = useCallback(() => {
     clearDayStaff();
@@ -104,8 +110,8 @@ export function StaffSessionProvider({ children }: { children: React.ReactNode }
     fetch("/api/staff/end-day-session", {
       method: "POST",
       credentials: "include",
-    }).catch(() => {});
-  }, []);
+    }).then(refreshMe, () => {});
+  }, [refreshMe]);
 
   return (
     <StaffSessionContext.Provider value={{ dayStaff, signInForDay, signOutForDay }}>

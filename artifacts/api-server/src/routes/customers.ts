@@ -15,7 +15,7 @@ import { phoneMatchKey } from "../lib/phone-match";
 import crypto from "node:crypto";
 import multer from "multer";
 import { requireAuth } from "../middlewares/requireAuth";
-import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { allowSensitiveChanges, requireManagerOrApproval, requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { customerPortalUrl } from "../lib/publicUrl";
 import { registerCustomerQr, registerCustomerQrsBatch, registerQrBestEffort } from "../services/entityQr";
 import {
@@ -288,7 +288,7 @@ const CUSTOMER_HEADER_MAP: Record<string, string> = {
 
 const uploadMemory = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
-router.post("/customers/import", requireAuth, uploadMemory.single("file"), async (req, res): Promise<void> => {
+router.post("/customers/import", requireAuth, requireManagerOrOwner, uploadMemory.single("file"), async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
 
   if (!req.file) {
@@ -547,6 +547,18 @@ router.patch("/customers/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateCustomerBody.safeParse(sanitiseCustomerBody(req.body));
   if (!parsed.success) { res.status(400).json({ error: zodErrorMessage(parsed.error) }); return; }
   const merchantId = req.session.merchantId!;
+  // Loyalty balance and group (trade pricing) are worth money: changing them
+  // takes a manager or a manager's PIN at the till.
+  const sent = parsed.data as Record<string, unknown>;
+  if (sent.loyaltyPoints !== undefined || sent.customerGroup !== undefined || sent.tierName !== undefined) {
+    const [stored] = await db.select({ loyaltyPoints: customersTable.loyaltyPoints, customerGroup: customersTable.customerGroup, tierName: customersTable.tierName })
+      .from(customersTable).where(and(eq(customersTable.id, params.data.id), eq(customersTable.merchantId, merchantId)));
+    if (stored && !allowSensitiveChanges(req, res, [
+      ["loyaltyPoints", sent.loyaltyPoints, stored.loyaltyPoints],
+      ["customerGroup", sent.customerGroup, stored.customerGroup],
+      ["tierName", sent.tierName, stored.tierName],
+    ])) return;
+  }
   try {
     const patch = { ...parsed.data };
     if (patch.referralCode) {
@@ -1102,7 +1114,7 @@ router.post("/customers/bulk-execute-merge", requireAuth, requireManagerOrOwner,
 });
 
 /* ── POST /customers/:id/birthday-reward ────────────────────────────────── */
-router.post("/customers/:id/birthday-reward", requireAuth, async (req, res): Promise<void> => {
+router.post("/customers/:id/birthday-reward", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const customerId = parseInt(String(req.params.id), 10);
   if (isNaN(customerId)) { res.status(400).json({ error: "Invalid id" }); return; }

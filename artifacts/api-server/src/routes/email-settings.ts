@@ -1,9 +1,11 @@
+import { requireManagerOrOwner, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, emailSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateEmailSettingsBody, TestEmailSettingsBody, ComposeEmailBody } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 
 const router: IRouter = Router();
 
@@ -36,7 +38,7 @@ router.get("/settings/email", requireAuth, async (req, res) => {
 });
 
 // PUT /settings/email
-router.put("/settings/email", requireAuth, async (req, res) => {
+router.put("/settings/email", requireAuth, requireOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = UpdateEmailSettingsBody.parse(req.body);
   const [existing] = await db.select().from(emailSettingsTable).where(eq(emailSettingsTable.merchantId, merchantId));
@@ -61,7 +63,7 @@ router.put("/settings/email", requireAuth, async (req, res) => {
 });
 
 // POST /settings/email/test
-router.post("/settings/email/test", requireAuth, async (req, res) => {
+router.post("/settings/email/test", requireAuth, requireOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { to } = TestEmailSettingsBody.parse(req.body);
   const result = await sendEmail(merchantId, {
@@ -83,10 +85,10 @@ router.post("/settings/email/test", requireAuth, async (req, res) => {
 });
 
 // POST /email/compose
-router.post("/email/compose", requireAuth, async (req, res) => {
+router.post("/email/compose", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { to, subject, body } = ComposeEmailBody.parse(req.body);
-  const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;white-space:pre-wrap;">${body.replace(/\n/g, "<br>")}</div>`;
+  const html = `<div style="font-family:sans-serif;max-width:600px;margin:0 auto;padding:24px;white-space:pre-wrap;">${escapeHtml(body).replace(/\n/g, "<br>")}</div>`;
   const result = await sendEmail(merchantId, { to, subject, html, text: body });
   if (!result.success) {
     res.status(400).json({ error: result.error ?? "Failed to send email" });

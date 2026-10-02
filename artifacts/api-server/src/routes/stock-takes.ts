@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, stockTakesTable, stockTakeLinesTable, productsTable, categoriesTable } from "@workspace/db";
 import { eq, and, inArray } from "drizzle-orm";
@@ -248,7 +249,7 @@ router.patch("/stock-takes/:id", requireAuth, async (req, res): Promise<void> =>
 
 /* ── Submit / Apply ─────────────────────────────────────────────────────── */
 
-router.post("/stock-takes/:id/submit", requireAuth, async (req, res): Promise<void> => {
+router.post("/stock-takes/:id/submit", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const paramsResult = SubmitStockTakeParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }

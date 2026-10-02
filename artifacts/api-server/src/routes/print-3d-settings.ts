@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, print3dSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -26,7 +27,7 @@ router.get("/print-3d-settings", requireAuth, async (req, res): Promise<void> =>
   res.json(serialize(row));
 });
 
-router.put("/print-3d-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/print-3d-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
   const patch: Record<string, unknown> = { ...body };

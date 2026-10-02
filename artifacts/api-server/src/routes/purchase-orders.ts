@@ -16,6 +16,7 @@ import {
   SendPurchaseOrderEmailParams,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 
 const router: IRouter = Router();
 
@@ -753,8 +754,8 @@ router.post("/purchase-orders/:id/email", requireAuth, async (req, res): Promise
 
   const itemRows = (po.items ?? []).map((i) => `
     <tr style="border-bottom:1px solid #eee;">
-      <td style="padding:7px 10px;">${i.productName}</td>
-      <td style="padding:7px 10px;text-align:center;">${i.quantity}</td>
+      <td style="padding:7px 10px;">${escapeHtml(i.productName)}</td>
+      <td style="padding:7px 10px;text-align:center;">${escapeHtml(String(i.quantity))}</td>
       <td style="padding:7px 10px;text-align:right;">${fmt(i.unitCost ?? 0)}</td>
       <td style="padding:7px 10px;text-align:right;">${fmt((i.quantity ?? 1) * (i.unitCost ?? 0))}</td>
     </tr>`).join("");
@@ -764,14 +765,14 @@ router.post("/purchase-orders/:id/email", requireAuth, async (req, res): Promise
   <div style="border-bottom:2px solid #f0c040;padding-bottom:12px;margin-bottom:20px;display:flex;justify-content:space-between;align-items:flex-start;">
     <div>
       <h2 style="margin:0;font-size:20px;">PURCHASE ORDER</h2>
-      <p style="margin:4px 0 0;font-size:13px;color:#666;">#${po.poNumber}</p>
+      <p style="margin:4px 0 0;font-size:13px;color:#666;">#${escapeHtml(po.poNumber)}</p>
     </div>
     <div style="text-align:right;font-size:12px;color:#555;">
-      <p style="margin:0;">From: <strong>${bizName}</strong></p>
+      <p style="margin:0;">From: <strong>${escapeHtml(bizName)}</strong></p>
       <p style="margin:2px 0 0;">Date: ${fmtDate(new Date().toISOString().slice(0, 10))}</p>
-      <p style="margin:2px 0 0;">Status: <strong>${po.status}</strong></p>
-      ${po.orderNumber ? `<p style="margin:2px 0 0;">Order #: ${po.orderNumber}</p>` : ""}
-      ${po.expectedDate ? `<p style="margin:2px 0 0;">Expected: ${fmtDate(po.expectedDate)}</p>` : ""}
+      <p style="margin:2px 0 0;">Status: <strong>${escapeHtml(po.status)}</strong></p>
+      ${po.orderNumber ? `<p style="margin:2px 0 0;">Order #: ${escapeHtml(po.orderNumber)}</p>` : ""}
+      ${po.expectedDate ? `<p style="margin:2px 0 0;">Expected: ${escapeHtml(fmtDate(po.expectedDate))}</p>` : ""}
     </div>
   </div>
   <table style="width:100%;border-collapse:collapse;margin-bottom:16px;">
@@ -793,8 +794,8 @@ router.post("/purchase-orders/:id/email", requireAuth, async (req, res): Promise
       <tr style="border-top:2px solid #222;"><td style="padding:6px 10px;font-weight:700;font-size:14px;">Total (inc GST)</td><td style="padding:6px 10px;text-align:right;font-weight:700;font-size:14px;">${fmt(grandTotal)}</td></tr>
     </table>
   </div>
-  ${po.notes ? `<div style="border-top:1px solid #eee;padding-top:12px;"><p style="margin:0;font-size:11px;text-transform:uppercase;color:#888;">Notes</p><p style="margin:4px 0 0;white-space:pre-wrap;font-size:13px;">${po.notes}</p></div>` : ""}
-  <p style="margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:8px;">Sent from ${bizName} via KoaPOS.</p>
+  ${po.notes ? `<div style="border-top:1px solid #eee;padding-top:12px;"><p style="margin:0;font-size:11px;text-transform:uppercase;color:#888;">Notes</p><p style="margin:4px 0 0;white-space:pre-wrap;font-size:13px;">${escapeHtml(po.notes)}</p></div>` : ""}
+  <p style="margin-top:24px;font-size:11px;color:#aaa;border-top:1px solid #eee;padding-top:8px;">Sent from ${escapeHtml(bizName)} via KoaPOS.</p>
 </body></html>`;
 
   const plainText = `Purchase Order #${po.poNumber} from ${bizName}\n\nStatus: ${po.status}\nDate: ${fmtDate(new Date().toISOString().slice(0, 10))}\n\nItems:\n${(po.items ?? []).map((i) => `- ${i.productName} x${i.quantity} @ ${fmt(i.unitCost ?? 0)} = ${fmt((i.quantity ?? 1) * (i.unitCost ?? 0))}`).join("\n")}\n\nSubtotal (ex GST): ${fmt(itemsSubtotal)}\nGST (10%): ${fmt(itemsGst)}\n${deliveryIncGst > 0 ? `Delivery (inc GST): ${fmt(deliveryIncGst)}\n` : ""}Total (inc GST): ${fmt(grandTotal)}${po.notes ? `\n\nNotes:\n${po.notes}` : ""}\n\nSent from ${bizName} via KoaPOS.`;

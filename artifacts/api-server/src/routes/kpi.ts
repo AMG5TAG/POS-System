@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, kpiSettingsTable, kpiTargetsTable, kpiHistoryTable, merchantsTable } from "@workspace/db";
 import { eq, and, ne, desc } from "drizzle-orm";
@@ -25,7 +26,7 @@ router.get("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.put("/kpi-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/kpi-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = PatchKpiSettings.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -49,7 +50,7 @@ router.get("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   res.json({ items: items.map(r => ({ ...r, target: parseFloat(r.target as unknown as string) })), total: items.length });
 });
 
-router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
+router.post("/kpi-targets", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { targetId, name, metric, categoryId = "", period = "monthly", target = 0, staffIds = "[]", reward = "null", notes = "", isActive = "true", startDate = null, endDate = null, repeats = "false" } = req.body;
   if (!targetId || !name || !metric) { res.status(400).json({ error: "targetId, name, and metric are required" }); return; }
@@ -57,7 +58,7 @@ router.post("/kpi-targets", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
-router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/kpi-targets/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -92,7 +93,7 @@ router.patch("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> =>
   res.json({ ...row, target: parseFloat(row.target as unknown as string) });
 });
 
-router.delete("/kpi-targets/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/kpi-targets/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

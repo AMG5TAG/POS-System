@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, tradeInsTable, customersTable, productsTable, storeCreditLedgerTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -72,7 +73,7 @@ router.post("/trade-ins", requireAuth, async (req, res): Promise<void> => {
 });
 
 // POST /trade-ins/:id/accept — pay the customer (cash or store credit).
-router.post("/trade-ins/:id/accept", requireAuth, async (req, res): Promise<void> => {
+router.post("/trade-ins/:id/accept", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   const row = await one(merchantId, id);

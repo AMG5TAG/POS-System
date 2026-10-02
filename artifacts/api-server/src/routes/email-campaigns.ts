@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, emailCampaignsTable, customersTable, merchantsTable, businessProfileTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
@@ -7,6 +8,7 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
 import { audienceWhere } from "../lib/campaign-audience";
+import { escapeHtml } from "../lib/html-escape";
 
 function makeUnsubToken(merchantId: number, customerId: number): string {
   const secret = process.env.UNSUBSCRIBE_SECRET ?? process.env.SESSION_SECRET ?? "koapos-unsub-secret";
@@ -18,9 +20,9 @@ function makeUnsubToken(merchantId: number, customerId: number): string {
 function campaignFooterHtml(bizName: string, bizAddress: string, unsub: string): string {
   return `
 <div style="margin-top:32px;padding-top:16px;border-top:1px solid #e5e7eb;font-size:11px;color:#9ca3af;line-height:1.6;">
-  <p>${bizName}${bizAddress ? ` · ${bizAddress}` : ""}</p>
+  <p>${escapeHtml(bizName)}${bizAddress ? ` · ${escapeHtml(bizAddress)}` : ""}</p>
   <p>You are receiving this email because you opted in to marketing communications.</p>
-  <p><a href="${unsub}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a> from marketing emails.</p>
+  <p><a href="${escapeHtml(unsub)}" style="color:#6b7280;text-decoration:underline;">Unsubscribe</a> from marketing emails.</p>
 </div>`;
 }
 
@@ -108,7 +110,7 @@ router.get("/email-campaigns/audience-count", requireAuth, async (req, res): Pro
   res.json({ count: n });
 });
 
-router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<void> => {
+router.post("/email-campaigns/:id/send", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -147,10 +149,14 @@ router.post("/email-campaigns/:id/send", requireAuth, async (req, res): Promise<
     if (!c.email) continue;
     const firstName = c.firstName ?? "Valued Customer";
     const personalBody = row.body
-      .replace(/\{\{first_name\}\}/g, firstName)
-      .replace(/\{\{business_name\}\}/g, bizName);
+      .replace(/\{\{first_name\}\}/g, () => firstName)
+      .replace(/\{\{business_name\}\}/g, () => bizName);
+    // The campaign body is the merchant's HTML; only the substituted values are escaped.
+    const personalHtml = row.body
+      .replace(/\{\{first_name\}\}/g, () => escapeHtml(firstName))
+      .replace(/\{\{business_name\}\}/g, () => escapeHtml(bizName));
     const unsub = `${baseUrl}/api/unsubscribe?t=${makeUnsubToken(merchantId, c.id)}`;
-    const html = personalBody + campaignFooterHtml(bizName, bizAddress, unsub);
+    const html = personalHtml + campaignFooterHtml(bizName, bizAddress, unsub);
     const text = personalBody.replace(/<[^>]+>/g, "") + `\n\nTo unsubscribe: ${unsub}`;
     const result = await sendEmail(merchantId, { to: c.email, subject: row.subject, html, text });
     if (result.success) sent++; else failed++;

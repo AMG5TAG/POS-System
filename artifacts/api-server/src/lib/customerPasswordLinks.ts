@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { sendEmail } from "../services/email";
 import { sendSms } from "../services/sms";
 import { shopOrigin } from "./publicUrl";
+import { escapeHtml } from "./html-escape";
 
 /**
  * One-time links that let a customer set or reset their account password.
@@ -72,12 +73,12 @@ export async function issueSetupLink(
       subject: `${heading} — ${bizName}`,
       html: `
         <div style="font-family:sans-serif;max-width:520px;margin:0 auto;color:#111">
-          <h2 style="margin-top:0">${heading}</h2>
-          <p>${lead}</p>
+          <h2 style="margin-top:0">${escapeHtml(heading)}</h2>
+          <p>${escapeHtml(lead)}</p>
           <p style="margin:24px 0">
             <a href="${link}"
                style="display:inline-block;padding:12px 24px;background:#2563eb;color:#fff;text-decoration:none;border-radius:6px;font-weight:600">
-              ${heading}
+              ${escapeHtml(heading)}
             </a>
           </p>
           <p style="color:#666;font-size:14px">${expiry} If you didn't expect it, you can safely ignore this email — nothing changes.</p>

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { SelectXeroTenantBody, UpdateXeroMappingsBody } from "@workspace/api-zod";
 import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
 import { Router } from "express";
@@ -355,7 +356,7 @@ router.get("/xero/status", requireAuth, async (req, res): Promise<void> => {
 
 /* ── GET /api/xero/auth/start ─────────────────────────────────────────────── */
 
-router.get("/xero/auth/start", requireAuth, async (req, res): Promise<void> => {
+router.get("/xero/auth/start", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const cc = await getXeroClientCreds(req.session.merchantId!);
   if (!cc) {
     // Platform Xero app isn't configured (no XERO_CLIENT_ID/SECRET). Send the user
@@ -457,7 +458,7 @@ router.get("/xero/auth/callback", async (req, res): Promise<void> => {
 
 /* ── DELETE /api/xero/disconnect ─────────────────────────────────────────── */
 
-router.delete("/xero/disconnect", requireAuth, async (req, res): Promise<void> => {
+router.delete("/xero/disconnect", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   await db
     .delete(merchantIntegrationsTable)
@@ -472,7 +473,7 @@ router.delete("/xero/disconnect", requireAuth, async (req, res): Promise<void> =
 
 /* ── GET /api/xero/tenants ───────────────────────────────────────────────── */
 
-router.get("/xero/tenants", requireAuth, async (req, res): Promise<void> => {
+router.get("/xero/tenants", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const row = await getRow(merchantId);
   if (!row?.accessToken) { res.status(401).json({ error: "Not connected" }); return; }
@@ -492,7 +493,7 @@ router.get("/xero/tenants", requireAuth, async (req, res): Promise<void> => {
 
 /* ── POST /api/xero/tenant ───────────────────────────────────────────────── */
 
-router.post("/xero/tenant", requireAuth, async (req, res): Promise<void> => {
+router.post("/xero/tenant", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = SelectXeroTenantBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -508,7 +509,7 @@ router.post("/xero/tenant", requireAuth, async (req, res): Promise<void> => {
 
 /* ── GET /api/xero/accounts ──────────────────────────────────────────────── */
 
-router.get("/xero/accounts", requireAuth, async (req, res): Promise<void> => {
+router.get("/xero/accounts", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
   if (!auth) { res.status(401).json({ error: "Not connected or no tenant selected" }); return; }
@@ -526,7 +527,7 @@ router.get("/xero/accounts", requireAuth, async (req, res): Promise<void> => {
 
 /* ── GET /api/xero/mappings ──────────────────────────────────────────────── */
 
-router.get("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
+router.get("/xero/mappings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const creds      = (await getCreds(merchantId)) ?? {};
   res.json({ mappings: creds.mappings ?? {}, syncSettings: creds.syncSettings ?? {} });
@@ -534,7 +535,7 @@ router.get("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
 
 /* ── PUT /api/xero/mappings ──────────────────────────────────────────────── */
 
-router.put("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
+router.put("/xero/mappings", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = UpdateXeroMappingsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -561,7 +562,7 @@ router.put("/xero/mappings", requireAuth, async (req, res): Promise<void> => {
  *   "overwrite" — only the single most-recent note is sent
  */
 
-router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> => {
+router.post("/xero/sync/contacts", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
   if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
@@ -784,7 +785,7 @@ router.post("/xero/sync/contacts", requireAuth, async (req, res): Promise<void> 
    Each KoaPOS transaction becomes one Xero invoice with line items.
    ─────────────────────────────────────────────────────────────────────────── */
 
-router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<void> => {
+router.post("/xero/sync/transactions", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
   if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
@@ -903,7 +904,7 @@ router.post("/xero/sync/transactions", requireAuth, async (req, res): Promise<vo
 
 /* ── POST /api/xero/sync/purchase-orders ─────────────────────────────────── */
 
-router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise<void> => {
+router.post("/xero/sync/purchase-orders", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
   if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
@@ -992,7 +993,7 @@ router.post("/xero/sync/purchase-orders", requireAuth, async (req, res): Promise
 
 /* ── GET /api/xero/sync/log ──────────────────────────────────────────────── */
 
-router.get("/xero/sync/log", requireAuth, async (req, res): Promise<void> => {
+router.get("/xero/sync/log", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const creds      = (await getCreds(merchantId)) ?? {};
   res.json(creds.syncLog ?? []);

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, priceTiersTable, productPriceTiersTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -49,7 +50,7 @@ router.get("/price-tiers", requireAuth, async (req, res) => {
 });
 
 // POST /price-tiers
-router.post("/price-tiers", requireAuth, async (req, res) => {
+router.post("/price-tiers", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreatePriceTierBody.parse(req.body);
   const [t] = await db.insert(priceTiersTable).values({
@@ -70,7 +71,7 @@ router.post("/price-tiers", requireAuth, async (req, res) => {
 });
 
 // PUT /price-tiers/:id
-router.put("/price-tiers/:id", requireAuth, async (req, res) => {
+router.put("/price-tiers/:id", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = UpdatePriceTierParams.parse({ id: Number(req.params.id) });
   const body = UpdatePriceTierBody.parse(req.body);
@@ -99,7 +100,7 @@ router.put("/price-tiers/:id", requireAuth, async (req, res) => {
 });
 
 // DELETE /price-tiers/:id
-router.delete("/price-tiers/:id", requireAuth, async (req, res) => {
+router.delete("/price-tiers/:id", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { id } = DeletePriceTierParams.parse({ id: Number(req.params.id) });
   // Confirm ownership before deleting child overrides keyed only on tierId.

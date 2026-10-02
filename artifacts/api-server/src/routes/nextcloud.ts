@@ -1,3 +1,4 @@
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 /**
  * Nextcloud connect routes — Login Flow v2.
  *
@@ -66,7 +67,7 @@ async function markConnected(merchantId: number): Promise<void> {
    Body: { serverUrl }  →  { loginUrl } */
 router.post(
   "/integrations/nextcloud/login-flow/start",
-  requireAuth,
+  requireAuth, requireOwner,
   async (req, res): Promise<void> => {
     const serverUrl = String((req.body as { serverUrl?: unknown })?.serverUrl ?? "");
 
@@ -88,7 +89,7 @@ router.post(
    →  { status: "pending" | "connected" | "expired", accountHandle?, serverUrl? } */
 router.post(
   "/integrations/nextcloud/login-flow/poll",
-  requireAuth,
+  requireAuth, requireOwner,
   async (req, res): Promise<void> => {
     const merchantId = req.session.merchantId!;
     const pending = req.session.nextcloudLoginFlow;
@@ -146,7 +147,7 @@ router.post(
    Drops a flow the merchant abandoned, so a later attempt starts clean. */
 router.post(
   "/integrations/nextcloud/login-flow/cancel",
-  requireAuth,
+  requireAuth, requireOwner,
   async (req, res): Promise<void> => {
     delete req.session.nextcloudLoginFlow;
     res.json({ ok: true });

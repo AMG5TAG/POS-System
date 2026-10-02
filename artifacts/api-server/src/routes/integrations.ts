@@ -1,3 +1,4 @@
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
 import { db, merchantIntegrationsTable, oauthTokenVaultTable, merchantAutoSyncSettingsTable } from "@workspace/db";
@@ -220,7 +221,7 @@ router.get("/integrations", requireAuth, async (req, res): Promise<void> => {
 
 /* ── POST /integrations/:key/connect ──────────────────────────────────────── */
 
-router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise<void> => {
+router.post("/integrations/:key/connect", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const key = String(req.params.key) as IntegrationKey;
   const intg = INTEGRATIONS.find((i) => i.key === key);
@@ -265,7 +266,7 @@ router.post("/integrations/:key/connect", requireAuth, async (req, res): Promise
 
 /* ── DELETE /integrations/:key ─────────────────────────────────────────────── */
 
-router.delete("/integrations/:key", requireAuth, async (req, res): Promise<void> => {
+router.delete("/integrations/:key", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const key = String(req.params.key);
   const intg = INTEGRATIONS.find((i) => i.key === key);
@@ -302,7 +303,7 @@ async function standDownAutoSync(merchantId: number, key: string, log: { info: (
 
 /* ── GET /integrations/oauth/apple/start ───────────────────────────────────── */
 
-router.get("/integrations/oauth/apple/start", requireAuth, async (req, res): Promise<void> => {
+router.get("/integrations/oauth/apple/start", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const url = await buildOAuthStartUrl("apple_account", req, req.session.merchantId!);
   if (!url) { res.redirect("/management/sync?error=apple_oauth_not_configured"); return; }
   res.redirect(url);
@@ -412,7 +413,7 @@ router.post("/integrations/oauth/apple/callback", async (req, res): Promise<void
 
 /* ── GET /integrations/oauth/:key/start ────────────────────────────────────── */
 
-router.get("/integrations/oauth/:key/start", requireAuth, async (req, res): Promise<void> => {
+router.get("/integrations/oauth/:key/start", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const key = String(req.params.key);
   const url = await buildOAuthStartUrl(key, req, req.session.merchantId!);
   if (!url) { res.redirect(`${manageUrl(key)}?error=${key}_oauth_not_configured`); return; }
@@ -464,7 +465,7 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
    the batch. Large note payloads are silently truncated to 2 000 characters.
    ─────────────────────────────────────────────────────────────────────────── */
 
-router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promise<void> => {
+router.post("/integrations/contacts/sync", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const {
     provider,
@@ -527,7 +528,7 @@ router.post("/integrations/contacts/sync", requireAuth, async (req, res): Promis
    iCloud calendar (CalDAV). Idempotent via stable event uids.
    Body: { provider: "apple_icloud" }
    ─────────────────────────────────────────────────────────────────────────── */
-router.post("/integrations/calendar/sync", requireAuth, async (req, res): Promise<void> => {
+router.post("/integrations/calendar/sync", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { provider } = req.body as { provider?: string };
   if (!isSyncProvider(provider)) {

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, loyaltySettingsTable, customersTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -76,7 +77,7 @@ router.get("/loyalty/settings", requireAuth, async (req, res): Promise<void> => 
   res.json(formatSettings(row));
 });
 
-router.put("/loyalty/settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/loyalty/settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = UpdateLoyaltySettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

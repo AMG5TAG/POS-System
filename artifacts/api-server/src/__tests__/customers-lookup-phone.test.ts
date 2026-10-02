@@ -68,7 +68,11 @@ vi.mock("drizzle-orm", () => ({
 }));
 
 vi.mock("../middlewares/requireAuth", () => ({ requireAuth: (_q: any, _r: any, n: any) => n() }));
-vi.mock("../middlewares/requireManagerOrOwner", () => ({ requireManagerOrOwner: (_q: any, _r: any, n: any) => n() }));
+vi.mock("../middlewares/requireManagerOrOwner", () => ({
+  requireManagerOrOwner: (_q: any, _r: any, n: any) => n(),
+  requireManagerOrApproval: (_q: any, _r: any, n: any) => n(),
+  allowSensitiveChanges: () => true,
+}));
 vi.mock("../lib/objectStorage", () => ({ ObjectStorageService: class {} }));
 vi.mock("../services/entityQr", () => ({
   registerCustomerQr: vi.fn(), registerCustomerQrsBatch: vi.fn(), registerQrBestEffort: vi.fn(),

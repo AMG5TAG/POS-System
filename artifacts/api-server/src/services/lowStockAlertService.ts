@@ -2,6 +2,7 @@ import { db, lowStockAlertSettingsTable, lowStockAlertLogTable, productsTable, m
 import { eq, and } from "drizzle-orm";
 import { sendEmail } from "./email";
 import { publicOrigin } from "../lib/publicUrl";
+import { escapeHtml } from "../lib/html-escape";
 import type { Logger } from "pino";
 
 export interface LowStockItem {
@@ -19,8 +20,8 @@ function getInventoryUrl(): string {
 function buildEmailHtml(items: LowStockItem[], merchantName: string): string {
   const rows = items.map((item) => `
     <tr>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${item.productName}</td>
-      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#666;">${item.sku ?? "—"}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;">${escapeHtml(item.productName)}</td>
+      <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#666;">${escapeHtml(item.sku ?? "—")}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-weight:600;color:#e53e3e;">${item.stockQuantity}</td>
       <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;color:#888;">${item.threshold}</td>
     </tr>`).join("");
@@ -32,7 +33,7 @@ function buildEmailHtml(items: LowStockItem[], merchantName: string): string {
   <div style="max-width:600px;margin:32px auto;background:#ffffff;border-radius:8px;overflow:hidden;box-shadow:0 1px 3px rgba(0,0,0,.1);">
     <div style="background:#efbf04;padding:24px 32px;">
       <h1 style="margin:0;font-size:20px;color:#1a1a1a;">⚠️ Low Stock Alert</h1>
-      <p style="margin:4px 0 0;font-size:14px;color:#4a4a1a;">${merchantName}</p>
+      <p style="margin:4px 0 0;font-size:14px;color:#4a4a1a;">${escapeHtml(merchantName)}</p>
     </div>
     <div style="padding:24px 32px;">
       <p style="color:#555;font-size:14px;margin-top:0;">

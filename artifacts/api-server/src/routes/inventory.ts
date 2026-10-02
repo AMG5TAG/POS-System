@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, productsTable, productTypesTable } from "@workspace/db";
 import { eq, and, ne, sql, ilike } from "drizzle-orm";
@@ -87,7 +88,7 @@ router.get("/inventory/overview", requireAuth, async (req, res): Promise<void> =
   });
 });
 
-router.patch("/inventory/:productId", requireAuth, async (req, res): Promise<void> => {
+router.patch("/inventory/:productId", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const params = UpdateInventoryParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });

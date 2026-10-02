@@ -37,7 +37,7 @@ beforeAll(async () => {
   app = express();
   app.use(express.json());
   app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-  app.use((_req, _res, next) => { (_req as any).session.merchantId = 1; next(); });
+  app.use((_req, _res, next) => { (_req as any).session.merchantId = 1; (_req as any).session.staffRole = "owner"; next(); });
   app.use("/api", inventoryRouter);
 });
 

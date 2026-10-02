@@ -52,6 +52,17 @@ export function applyShortcodes(text: string, vars: Vars): string {
   return text.replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key: string) => vars[key] ?? whole);
 }
 
+/** Same, for an HTML body: the merchant's template stays HTML, but every value
+ *  substituted into it is escaped, and a review link must be http(s). */
+export function applyShortcodesHtml(html: string, vars: Vars): string {
+  return html.replace(/\{\{\s*(\w+)\s*\}\}/g, (whole, key: string) => {
+    const v = vars[key];
+    if (v == null) return whole;
+    if (key === "review_link" && v && !/^https?:\/\//i.test(v.trim())) return "";
+    return escapeHtml(v);
+  });
+}
+
 /** Plain-text rendering of an HTML body, for SMS and the email text part. */
 export function htmlToText(html: string): string {
   return html
@@ -548,11 +559,11 @@ router.post("/follow-ups/preview", requireAuth, async (req, res): Promise<void> 
   if ("error" in content) { res.status(400).json({ error: content.error }); return; }
 
   const vars = varsFor(item, biz, settings.reviewUrl);
-  const html = applyShortcodes(content.body, vars);
+  const html = applyShortcodesHtml(content.body, vars);
   res.json({
     subject: applyShortcodes(content.subject, vars),
     html,
-    text: htmlToText(html),
+    text: htmlToText(applyShortcodes(content.body, vars)),
     sms: applyShortcodes(content.smsBody || htmlToText(content.body), vars),
     recipientEmail: item.email,
     recipientPhone: item.phone,
@@ -636,9 +647,9 @@ router.post("/follow-ups/send", requireAuth, async (req, res): Promise<void> => 
         await logSend({ merchantId, item, templateId: content.templateId, channel: "email", status: "skipped", recipient: "", subject: "", body: "", error: "No email address on file" });
       } else {
         const subject = applyShortcodes(content.subject, vars);
-        const rendered = applyShortcodes(content.body, vars);
+        const rendered = applyShortcodesHtml(content.body, vars);
         const html = rendered + footerHtml(biz.name, biz.address, unsub);
-        const text = htmlToText(rendered) + `\n\nTo unsubscribe: ${unsub}`;
+        const text = htmlToText(applyShortcodes(content.body, vars)) + `\n\nTo unsubscribe: ${unsub}`;
         const result = await sendEmail(merchantId, { to: item.email, subject, html, text });
         if (result.success) sent++; else failed++;
         results.push({ ...target, channel: "email", status: result.success ? "sent" : "failed", error: result.error });

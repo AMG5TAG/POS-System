@@ -1,3 +1,4 @@
+import { requireManagerOrApproval, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
 import { checkReferralAfterSale } from "../services/referralRewards";
@@ -17,6 +18,7 @@ import {
   ModifyCompletedSaleBody,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 import { maybeQueueImmediateAlert } from "../services/lowStockAlertService";
 import { isUniqueViolation } from "../lib/document-numbers";
 import { reconcileOversellLedger } from "../lib/oversellLedger";
@@ -1115,7 +1117,7 @@ async function reverseSaleEffects(
   }
 }
 
-router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<void> => {
+router.post("/transactions/:id/refund", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const params = RefundTransactionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -1168,7 +1170,7 @@ router.post("/transactions/:id/refund", requireAuth, async (req, res): Promise<v
 
 // POST /transactions/:id/void — cancel a completed sale (e.g. mistaken entry).
 // Distinct from a refund: marks the sale void rather than recording a money-out.
-router.post("/transactions/:id/void", requireAuth, async (req, res): Promise<void> => {
+router.post("/transactions/:id/void", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -1200,7 +1202,7 @@ router.post("/transactions/:id/void", requireAuth, async (req, res): Promise<voi
 // annotated (comp an item, attach a customer, connect it to the job it settled)
 // without ever changing the money collected — added items are forced to $0, so
 // subtotal/tax/total are untouched. Refunded/voided sales cannot be modified.
-router.post("/transactions/:id/modify", requireAuth, async (req, res): Promise<void> => {
+router.post("/transactions/:id/modify", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const params = ModifyCompletedSaleParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
@@ -1343,7 +1345,7 @@ router.post("/transactions/:id/modify", requireAuth, async (req, res): Promise<v
   }
 });
 
-router.delete("/transactions/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/transactions/:id", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const params = DeleteTransactionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -1383,8 +1385,8 @@ router.post("/transactions/:id/send-receipt", requireAuth, async (req, res): Pro
   const itemsRaw = tx.items as Array<{ name: string; qty: number; price: number; total: number }> | null;
   const itemRows = (itemsRaw ?? []).map(i =>
     `<tr>
-      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;">${i.name}</td>
-      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:center;">${i.qty}</td>
+      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;">${escapeHtml(i.name)}</td>
+      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:center;">${escapeHtml(String(i.qty))}</td>
       <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:right;">$${Number(i.total ?? i.price * i.qty).toFixed(2)}</td>
     </tr>`
   ).join("");
@@ -1424,8 +1426,8 @@ router.post("/transactions/:id/send-receipt", requireAuth, async (req, res): Pro
 
   const html = `
     <div style="font-family:sans-serif;max-width:520px;margin:0 auto;padding:32px 24px;color:#222;">
-      <h2 style="margin:0 0 4px;">${bizName}</h2>
-      <p style="margin:0 0 24px;color:#888;font-size:13px;">Receipt #${tx.receiptNumber ?? tx.id}</p>
+      <h2 style="margin:0 0 4px;">${escapeHtml(bizName)}</h2>
+      <p style="margin:0 0 24px;color:#888;font-size:13px;">Receipt #${escapeHtml(String(tx.receiptNumber ?? tx.id))}</p>
       <table style="width:100%;border-collapse:collapse;font-size:14px;">
         <thead>
           <tr>

@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
 import { db, serviceJobsTable, customersTable, merchantsTable, quotesTable } from "@workspace/db";
@@ -339,7 +340,7 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   res.json(formatJob(job, customer));
 });
 
-router.delete("/service-jobs/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/service-jobs/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const paramsResult = DeleteServiceJobParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;

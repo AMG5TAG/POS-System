@@ -1,3 +1,4 @@
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, merchantsTable } from "@workspace/db";
 import { eq, and, ne } from "drizzle-orm";
@@ -53,7 +54,7 @@ router.get("/merchants/me", requireAuth, async (req, res): Promise<void> => {
   res.json(formatMerchant(merchant));
 });
 
-router.patch("/merchants/me", requireAuth, async (req, res): Promise<void> => {
+router.patch("/merchants/me", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const parsed = UpdateMerchantBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

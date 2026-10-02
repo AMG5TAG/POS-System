@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, productTypesTable } from "@workspace/db";
 import { eq, and, asc, sql } from "drizzle-orm";
@@ -15,7 +16,7 @@ router.get("/product-types", requireAuth, async (req, res): Promise<void> => {
   res.json({ items: types, total: types.length });
 });
 
-router.post("/product-types/reorder", requireAuth, async (req, res): Promise<void> => {
+router.post("/product-types/reorder", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const { ids } = req.body as { ids: number[] };
   if (!Array.isArray(ids) || ids.some((id) => typeof id !== "number")) {
     res.status(400).json({ error: "ids must be an array of integers" });
@@ -37,7 +38,7 @@ router.post("/product-types/reorder", requireAuth, async (req, res): Promise<voi
   res.sendStatus(204);
 });
 
-router.post("/product-types", requireAuth, async (req, res): Promise<void> => {
+router.post("/product-types", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const { name, slug, description, trackStock, printCode, isActive, sortOrder, requiresShipping, hasVariants, isDigital, isService, isComposite } = req.body;
   if (!name) { res.status(400).json({ error: "name is required" }); return; }
 
@@ -64,7 +65,7 @@ router.post("/product-types", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(type);
 });
 
-router.patch("/product-types/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/product-types/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const paramsResult = UpdateProductTypeParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
@@ -87,7 +88,7 @@ router.patch("/product-types/:id", requireAuth, async (req, res): Promise<void> 
   res.json(type);
 });
 
-router.delete("/product-types/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/product-types/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const paramsResult = DeleteProductTypeParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;

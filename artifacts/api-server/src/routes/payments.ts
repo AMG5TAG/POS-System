@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter, type Request } from "express";
 import crypto from "crypto";
 import { db, paymentAttemptsTable, transactionsTable, customersTable, type PaymentAttempt, type PaymentStatus } from "@workspace/db";
@@ -216,7 +217,7 @@ router.get("/payments/:id/status", requireAuth, async (req, res): Promise<void> 
 
 /* ── POST /payments/:id/refund ─────────────────────────────────────────────────
    Reverse a captured Zip payment and mark the underlying sale refunded. */
-router.post("/payments/:id/refund", requireAuth, async (req, res): Promise<void> => {
+router.post("/payments/:id/refund", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid payment id" }); return; }

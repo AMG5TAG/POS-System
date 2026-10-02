@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, invoiceSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -104,7 +105,7 @@ router.get("/invoice-settings", requireAuth, async (req, res): Promise<void> => 
   res.json(formatSettings(row));
 });
 
-router.put("/invoice-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/invoice-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = UpdateInvoiceSettingsBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

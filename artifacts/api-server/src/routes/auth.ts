@@ -6,12 +6,13 @@ import { eq, desc, and, gt, sql } from "drizzle-orm";
 import { z } from "zod/v4";
 import { hashPassword, verifyPassword } from "../lib/auth";
 import { LoginBody, ChangePasswordBody, ChangeEmailBody, UpdateAuthEventBody, ForgotPasswordBody, ResetPasswordBody } from "@workspace/api-zod";
-import { requireAuth, invalidateMerchantStatusCache } from "../middlewares/requireAuth";
+import { requireAuth, invalidateMerchantStatusCache, destroyOwnerSessions } from "../middlewares/requireAuth";
 import { isSoleMerchantEmail } from "../lib/sole-merchant";
 import { checkAccountLock, recordFailedAttempt, clearFailedAttempts, checkAndApplyAnomalyHold, LOCKOUT_MS } from "../lib/accountLimiter";
 import { sendEmail, sendSystemEmail } from "../services/email";
 import { validateABN } from "../lib/abn";
 import { publicOrigin } from "../lib/publicUrl";
+import { escapeHtml } from "../lib/html-escape";
 
 
 const FAILED_LOGIN_NOTIFY_COOLDOWN_MS = parseInt(
@@ -152,11 +153,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
               </tr>
               <tr>
                 <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
-                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(ipLabel)}</td>
               </tr>
               <tr>
                 <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
-                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(browserLabel)}</td>
               </tr>
             </table>
             <p style="color:#666;font-size:14px">
@@ -215,11 +216,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
               </tr>
               <tr>
                 <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
-                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(ipLabel)}</td>
               </tr>
               <tr>
                 <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
-                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+                <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(browserLabel)}</td>
               </tr>
             </table>
             <p style="color:#666;font-size:14px">
@@ -275,7 +276,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
                 <table style="border-collapse:collapse;width:100%;margin:16px 0">
                   <tr>
                     <td style="padding:8px 12px;background:#f4f4f5;font-weight:600;width:40%">IP address</td>
-                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ip ?? "Unknown"}</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(ip ?? "Unknown")}</td>
                   </tr>
                   <tr>
                     <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Lock duration</td>
@@ -408,11 +409,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
             </tr>
             <tr>
               <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
-              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(ipLabel)}</td>
             </tr>
             <tr>
               <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
-              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(browserLabel)}</td>
             </tr>
           </table>
           <p><strong>If this was you</strong> — you can dismiss this alert in <strong>Account → Recent Sign-ins</strong>.</p>
@@ -442,11 +443,11 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
             </tr>
             <tr>
               <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
-              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(ipLabel)}</td>
             </tr>
             <tr>
               <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
-              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+              <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(browserLabel)}</td>
             </tr>
           </table>
           <p style="color:#666;font-size:14px">
@@ -469,6 +470,7 @@ router.post("/auth/login", authLimiter, async (req, res): Promise<void> => {
   });
   req.session.merchantId = merchant.id;
   req.session.staffRole = "owner";
+  req.session.authKind = "owner";
   res.json(formatMerchant(merchant, "owner"));
 });
 
@@ -518,7 +520,7 @@ router.get("/auth/events/flagged-count", requireAuth, async (req, res): Promise<
    owner's own sign-in history. */
 
 function requireOwner(req: Request, res: Response, next: NextFunction): void {
-  if (req.session.staffRole && req.session.staffRole !== "owner") {
+  if (req.session.staffRole !== "owner") {
     res.status(403).json({ error: "Only the owner can change trusted IPs" });
     return;
   }
@@ -676,11 +678,11 @@ router.patch("/auth/events/:id", requireAuth, async (req, res): Promise<void> =>
                   </tr>
                   <tr>
                     <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">IP address</td>
-                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${ipLabel}</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(ipLabel)}</td>
                   </tr>
                   <tr>
                     <td style="padding:8px 12px;background:#f4f4f5;font-weight:600">Browser</td>
-                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${browserLabel}</td>
+                    <td style="padding:8px 12px;border-top:1px solid #e4e4e7">${escapeHtml(browserLabel)}</td>
                   </tr>
                 </table>
                 <p><strong>If this sign-in was not you</strong>, we strongly recommend changing your password immediately to secure your account.</p>
@@ -864,11 +866,14 @@ router.post("/auth/reset-password", resetPasswordLimiter, async (req, res): Prom
   // Clear account lockout so the merchant can sign in immediately
   await clearFailedAttempts(merchant.email);
   invalidateMerchantStatusCache(record.merchantId);
+  // A reset is how an owner takes the account back: end every session that
+  // was opened with the old password.
+  await destroyOwnerSessions(record.merchantId).catch((err) => req.log.error({ err }, "Could not end old sessions after password reset"));
 
   res.json({ ok: true });
 });
 
-router.post("/auth/change-password", requireAuth, async (req, res): Promise<void> => {
+router.post("/auth/change-password", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const parsed = ChangePasswordBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
@@ -883,6 +888,8 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
   }
   const passwordHash = await hashPassword(newPassword);
   await db.update(merchantsTable).set({ passwordHash, updatedAt: new Date() }).where(eq(merchantsTable.id, merchantId));
+  // Every other session opened with the old password ends; this one stays.
+  await destroyOwnerSessions(merchantId, req.sessionID).catch((err) => req.log.error({ err }, "Could not end old sessions after password change"));
 
   if (merchant.passwordChangeAlertEmail === "true") {
     const changeTime = new Date().toLocaleString("en-AU", { timeZone: merchant.timezone ?? "Australia/Sydney", hour12: true });
@@ -892,7 +899,7 @@ router.post("/auth/change-password", requireAuth, async (req, res): Promise<void
       html: `
         <div style="font-family:sans-serif;max-width:600px;margin:0 auto">
           <h2 style="margin-top:0">Password changed</h2>
-          <p>The password for your KoaPOS account (<strong>${merchant.email}</strong>) was just changed.</p>
+          <p>The password for your KoaPOS account (<strong>${escapeHtml(merchant.email)}</strong>) was just changed.</p>
           <table style="border-collapse:collapse;width:100%;margin:16px 0">
             <tr><td style="padding:6px 12px;font-weight:600;width:120px">Time</td><td style="padding:6px 12px">${changeTime}</td></tr>
           </table>

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, locationsTable } from "@workspace/db";
 import { eq, and, asc } from "drizzle-orm";
@@ -45,7 +46,7 @@ router.get("/locations", requireAuth, async (req, res): Promise<void> => {
 });
 
 // POST /locations — add a store/branch.
-router.post("/locations", requireAuth, async (req, res): Promise<void> => {
+router.post("/locations", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   await ensureLocations(merchantId); // guarantee a default exists first
   const b = (req.body ?? {}) as Record<string, unknown>;
@@ -63,7 +64,7 @@ router.post("/locations", requireAuth, async (req, res): Promise<void> => {
 });
 
 // PUT /locations/:id — edit, or set as default (only one default at a time).
-router.put("/locations/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/locations/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   const b = (req.body ?? {}) as Record<string, unknown>;
@@ -89,7 +90,7 @@ router.put("/locations/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 // DELETE /locations/:id — cannot delete the default or the last location.
-router.delete("/locations/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/locations/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   const rows = await ensureLocations(merchantId);

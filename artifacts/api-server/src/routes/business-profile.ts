@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, businessProfileTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -49,7 +50,7 @@ router.get("/business-profile", requireAuth, async (req, res): Promise<void> => 
   res.json(row ? fmt(row) : DEFAULTS);
 });
 
-router.put("/business-profile", requireAuth, async (req, res): Promise<void> => {
+router.put("/business-profile", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 

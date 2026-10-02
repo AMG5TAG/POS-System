@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, salesSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -38,7 +39,7 @@ router.get("/sales-settings", requireAuth, async (req, res): Promise<void> => {
 });
 
 // PUT /sales-settings — upsert; only provided fields are applied.
-router.put("/sales-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/sales-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = normalizeBody((req.body ?? {}) as Record<string, unknown>);
   const [existing] = await db.select().from(salesSettingsTable).where(eq(salesSettingsTable.merchantId, merchantId)).limit(1);

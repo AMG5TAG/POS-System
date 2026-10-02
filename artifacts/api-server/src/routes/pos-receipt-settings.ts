@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, posReceiptSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ router.get("/pos-receipt-settings", requireAuth, async (req, res): Promise<void>
   res.json(row);
 });
 
-router.put("/pos-receipt-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/pos-receipt-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = stripManagedFields(req.body ?? {}) as Partial<typeof posReceiptSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(posReceiptSettingsTable).where(eq(posReceiptSettingsTable.merchantId, merchantId)).limit(1);

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, laybySettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ router.get("/layby-settings", requireAuth, async (req, res): Promise<void> => {
   res.json({ ...row, minimumDepositValue: parseFloat(row.minimumDepositValue as unknown as string) });
 });
 
-router.put("/layby-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/layby-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = stripManagedFields(req.body ?? {}) as Partial<typeof laybySettingsTable.$inferInsert>;
   const [existing] = await db.select().from(laybySettingsTable).where(eq(laybySettingsTable.merchantId, merchantId)).limit(1);

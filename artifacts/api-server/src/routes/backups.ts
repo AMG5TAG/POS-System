@@ -3,7 +3,7 @@ import { db, merchantBackupsTable, merchantBackupConfigsTable, merchantBackupSch
 import type { MerchantBackup, BackupStorageDestination, MerchantBackupSchedule } from "@workspace/db";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
-import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 import {
   ListBackupsQueryParams,
   UpdateBackupConfigBody,
@@ -69,7 +69,7 @@ async function getOrInitConfig(merchantId: number) {
 }
 
 // GET /backups — history (paginated)
-router.get("/backups", requireAuth, requireManagerOrOwner, async (req, res) => {
+router.get("/backups", requireAuth, requireOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { limit, offset } = ListBackupsQueryParams.parse(req.query);
   const take = Math.min(limit ?? 50, 200);
@@ -92,7 +92,7 @@ router.get("/backups", requireAuth, requireManagerOrOwner, async (req, res) => {
 });
 
 // POST /backups — trigger an immediate backup
-router.post("/backups", requireAuth, requireManagerOrOwner, async (req, res) => {
+router.post("/backups", requireAuth, requireOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const config = await getOrInitConfig(merchantId);
   if (!config?.encryptionPasswordEnc) {
@@ -123,7 +123,7 @@ router.post("/backups", requireAuth, requireManagerOrOwner, async (req, res) => 
 router.get(
   "/backups/config",
   requireAuth,
-  requireManagerOrOwner,
+  requireOwner,
   async (req, res) => {
     const merchantId = req.session.merchantId!;
     const row = await getOrInitConfig(merchantId);
@@ -135,7 +135,7 @@ router.get(
 router.put(
   "/backups/config",
   requireAuth,
-  requireManagerOrOwner,
+  requireOwner,
   async (req, res) => {
     const merchantId = req.session.merchantId!;
     const body = UpdateBackupConfigBody.parse(req.body);
@@ -183,7 +183,7 @@ router.put(
 router.post(
   "/backups/:id/restore",
   requireAuth,
-  requireManagerOrOwner,
+  requireOwner,
   async (req, res) => {
     const merchantId = req.session.merchantId!;
     const { id } = RestoreBackupParams.parse(req.params);
@@ -258,7 +258,7 @@ router.post(
 
 // GET /backups/:id/download — stream the encrypted backup archive to the browser
 // so the merchant can keep an offline copy (still restorable with their password).
-router.get("/backups/:id/download", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+router.get("/backups/:id/download", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { id } = RestoreBackupParams.parse(req.params);
 
@@ -323,7 +323,7 @@ function parseScheduleBody(body: unknown): { error: string } | { label: string; 
 }
 
 // GET /backups/schedules — list named schedules
-router.get("/backups/schedules", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+router.get("/backups/schedules", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const rows = await db
     .select()
@@ -334,7 +334,7 @@ router.get("/backups/schedules", requireAuth, requireManagerOrOwner, async (req,
 });
 
 // POST /backups/schedules — create
-router.post("/backups/schedules", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+router.post("/backups/schedules", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = parseScheduleBody(req.body);
   if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
@@ -343,7 +343,7 @@ router.post("/backups/schedules", requireAuth, requireManagerOrOwner, async (req
 });
 
 // PUT /backups/schedules/:id — update
-router.put("/backups/schedules/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+router.put("/backups/schedules/:id", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }
@@ -359,7 +359,7 @@ router.put("/backups/schedules/:id", requireAuth, requireManagerOrOwner, async (
 });
 
 // DELETE /backups/schedules/:id
-router.delete("/backups/schedules/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
+router.delete("/backups/schedules/:id", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   if (!Number.isInteger(id)) { res.status(400).json({ error: "Invalid schedule id" }); return; }

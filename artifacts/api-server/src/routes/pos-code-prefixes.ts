@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, posCodePrefixesTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ router.get("/pos-code-prefixes", requireAuth, async (req, res): Promise<void> =>
   res.json(row);
 });
 
-router.put("/pos-code-prefixes", requireAuth, async (req, res): Promise<void> => {
+router.put("/pos-code-prefixes", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = stripManagedFields(req.body ?? {}) as Partial<typeof posCodePrefixesTable.$inferInsert>;
   const [existing] = await db.select().from(posCodePrefixesTable).where(eq(posCodePrefixesTable.merchantId, merchantId)).limit(1);

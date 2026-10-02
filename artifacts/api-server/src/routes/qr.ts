@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import { db, qrCodesTable, qrSettingsTable, qrSavedTemplatesTable, productsTable, customersTable, serviceJobsTable, merchantsTable } from "@workspace/db";
@@ -109,7 +110,7 @@ router.get("/qr-codes", requireAuth, async (req, res): Promise<void> => {
   res.json({ items, total: items.length });
 });
 
-router.post("/qr-codes", requireAuth, async (req, res): Promise<void> => {
+router.post("/qr-codes", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { entryId, label, url = "", qrType = "website", content = "{}", settings = "{}" } = req.body;
   if (!entryId || !label) { res.status(400).json({ error: "entryId and label are required" }); return; }
@@ -134,7 +135,7 @@ router.get("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.patch("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/qr-codes/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -150,7 +151,7 @@ router.patch("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.delete("/qr-codes/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/qr-codes/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -168,7 +169,7 @@ router.get("/qr-settings", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.put("/qr-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/qr-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = stripManagedFields(req.body ?? {}) as Partial<typeof qrSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(qrSettingsTable).where(eq(qrSettingsTable.merchantId, merchantId)).limit(1);

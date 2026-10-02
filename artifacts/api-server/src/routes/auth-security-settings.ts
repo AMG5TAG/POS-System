@@ -1,3 +1,4 @@
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, merchantSecuritySettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -26,7 +27,7 @@ router.get("/auth/security-settings", requireAuth, async (req, res): Promise<voi
   res.json(row);
 });
 
-router.patch("/auth/security-settings", requireAuth, async (req, res): Promise<void> => {
+router.patch("/auth/security-settings", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = UpdateSecuritySettingsBody.safeParse(req.body);
   if (!parsed.success) {

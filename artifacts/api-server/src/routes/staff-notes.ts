@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, staffNotesTable } from "@workspace/db";
 import { and, eq } from "drizzle-orm";
@@ -25,10 +26,17 @@ router.get("/staff-notes", requireAuth, async (req, res): Promise<void> => {
     .from(staffNotesTable)
     .where(eq(staffNotesTable.merchantId, merchantId))
     .orderBy(staffNotesTable.createdAt);
-  res.json({ items: rows.map(serialize) });
+  // "Management" and "Owner only" notes were filtered in the browser alone, so
+  // any cashier could read them straight from this response.
+  const role = req.session.staffRole;
+  const visible = rows.filter((n) =>
+    n.visibleTo === "management" ? role === "owner" || role === "manager"
+    : n.visibleTo === "owner" ? role === "owner"
+    : true);
+  res.json({ items: visible.map(serialize) });
 });
 
-router.post("/staff-notes", requireAuth, async (req, res): Promise<void> => {
+router.post("/staff-notes", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { title, content, isImportant, isPinned, visibleTo, createdBy } = req.body as {
     title: string; content: string; isImportant?: boolean; isPinned?: boolean;
@@ -49,7 +57,7 @@ router.post("/staff-notes", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(serialize(created!));
 });
 
-router.put("/staff-notes/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/staff-notes/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -71,7 +79,7 @@ router.put("/staff-notes/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(serialize(updated));
 });
 
-router.delete("/staff-notes/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/staff-notes/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }

@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, tagsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -28,7 +29,7 @@ router.patch("/tags/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(tag);
 });
 
-router.delete("/tags/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/tags/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const paramsResult = DeleteTagParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;

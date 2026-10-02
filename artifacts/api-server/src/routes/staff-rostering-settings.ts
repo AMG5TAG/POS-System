@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, staffRosteringSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ router.get("/staff-rostering-settings", requireAuth, async (req, res): Promise<v
   res.json(row);
 });
 
-router.put("/staff-rostering-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/staff-rostering-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = stripManagedFields(req.body ?? {}) as Partial<typeof staffRosteringSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(staffRosteringSettingsTable).where(eq(staffRosteringSettingsTable.merchantId, merchantId)).limit(1);

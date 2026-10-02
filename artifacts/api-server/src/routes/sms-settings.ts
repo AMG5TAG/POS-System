@@ -1,3 +1,4 @@
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, smsSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -39,7 +40,7 @@ router.get("/settings/sms", requireAuth, async (req, res): Promise<void> => {
 });
 
 // PUT /settings/sms
-router.put("/settings/sms", requireAuth, async (req, res): Promise<void> => {
+router.put("/settings/sms", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { smsEnabled, autoNotifyOnStatus } = req.body as { smsEnabled?: boolean; autoNotifyOnStatus?: boolean };
   const existing = await getRow(merchantId);
@@ -57,7 +58,7 @@ router.put("/settings/sms", requireAuth, async (req, res): Promise<void> => {
 });
 
 // POST /settings/sms/connect
-router.post("/settings/sms/connect", requireAuth, async (req, res): Promise<void> => {
+router.post("/settings/sms/connect", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { accountSid, authToken, fromNumber } = req.body as { accountSid: string; authToken: string; fromNumber: string };
   if (!accountSid?.trim() || !authToken?.trim() || !fromNumber?.trim()) {
@@ -76,14 +77,14 @@ router.post("/settings/sms/connect", requireAuth, async (req, res): Promise<void
 });
 
 // DELETE /settings/sms/disconnect
-router.delete("/settings/sms/disconnect", requireAuth, async (req, res): Promise<void> => {
+router.delete("/settings/sms/disconnect", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   await deleteVault(merchantId, PROVIDER);
   res.status(204).end();
 });
 
 // POST /settings/sms/test
-router.post("/settings/sms/test", requireAuth, async (req, res): Promise<void> => {
+router.post("/settings/sms/test", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { to } = req.body as { to?: string };
   if (!to?.trim()) { res.status(400).json({ error: "Phone number is required" }); return; }

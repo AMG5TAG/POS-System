@@ -1,3 +1,4 @@
+import { hasFreshManagerApproval, isManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, storeCreditLedgerTable, customersTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
@@ -64,6 +65,15 @@ router.post("/customers/:customerId/store-credit", requireAuth, async (req, res)
   const b = (req.body ?? {}) as Record<string, unknown>;
   const type = typeof b.type === "string" && TYPES.has(b.type) ? b.type : null;
   if (!type) { res.status(400).json({ error: "Invalid type" }); return; }
+  // Spending credit is everyday till work; creating it (issue, refund, adjust)
+  // is handing out money, so it takes a manager or a manager's PIN.
+  if (type !== "redeem" && type !== "expire" && !isManagerOrOwner(req) && !hasFreshManagerApproval(req)) {
+    res.status(403).json({
+      error: "A manager or owner needs to approve adding store credit — ask them to enter their PIN.",
+      code: "manager_approval_required",
+    });
+    return;
+  }
   const rawAmount = Number(b.amount);
   if (!Number.isFinite(rawAmount) || rawAmount === 0) { res.status(400).json({ error: "Amount must be non-zero" }); return; }
 

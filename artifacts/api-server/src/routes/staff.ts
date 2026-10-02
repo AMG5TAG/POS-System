@@ -1,7 +1,7 @@
 import { Router, type IRouter } from "express";
 import { db, staffTable, transactionsTable, merchantsTable } from "@workspace/db";
 import { eq, and, gte, lte } from "drizzle-orm";
-import { requireAuth } from "../middlewares/requireAuth";
+import { requireAuth, invalidateStaffStatusCache, destroyStaffEmailSessions } from "../middlewares/requireAuth";
 import {
   CreateStaffBody,
   GetStaffMemberParams,
@@ -11,8 +11,11 @@ import {
   VerifyStaffPinBody,
 } from "@workspace/api-zod";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 import { hashPin, matchStaffByPin } from "../lib/staff-pin";
 import { reservePinAttempt } from "../lib/pin-guard";
+import { sessionRole } from "../lib/auth";
+import { MANAGER_APPROVAL_MS, requireManagerOrOwner, isManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 
 const router: IRouter = Router();
 
@@ -44,21 +47,55 @@ function formatStaff(s: typeof staffTable.$inferSelect) {
   };
 }
 
+/** What a cashier sees of a colleague: enough to pick them at the till, not
+ *  their pay, birthday, contact details or address. Their own row is whole. */
+function staffFor(req: import("express").Request) {
+  if (isManagerOrOwner(req)) return formatStaff;
+  return (s: typeof staffTable.$inferSelect) => {
+    const full = formatStaff(s);
+    if (s.id === req.session.staffId) return full;
+    return {
+      ...full,
+      email: null, phone: null, dateOfBirth: null, company: null, abn: null,
+      billingAddress: null, postalAddress: null, payRate: null, loadingRate: null, superRate: null,
+    };
+  };
+}
+
+/* Who may change whom. Managers look after cashiers; only the owner may touch
+   an owner or manager, or hand out either role — otherwise a manager (or, as
+   it was, any cashier) could promote themselves or re-PIN their boss. Nobody
+   changes their own role or deactivates themselves. */
+function canEditStaff(req: import("express").Request, target: { id: number; role: string } | null, nextRole?: string | null): string | null {
+  const actor = req.session.staffRole;
+  const elevated = (r: string | null | undefined) => r === "owner" || r === "manager";
+  if (actor !== "owner") {
+    if (target && elevated(target.role)) return "Only the owner can change a manager or owner";
+    if (nextRole && elevated(nextRole)) return "Only the owner can give someone a manager or owner role";
+  }
+  if (target && target.id === req.session.staffId && nextRole && nextRole !== target.role) {
+    return "You can't change your own role";
+  }
+  return null;
+}
+
 router.get("/staff", requireAuth, async (req, res): Promise<void> => {
   const staff = await db
     .select()
     .from(staffTable)
     .where(eq(staffTable.merchantId, req.session.merchantId!))
     .orderBy(staffTable.name);
-  res.json(staff.map(formatStaff));
+  res.json(staff.map(staffFor(req)));
 });
 
-router.post("/staff", requireAuth, async (req, res): Promise<void> => {
+router.post("/staff", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = CreateStaffBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
     return;
   }
+  const refused = canEditStaff(req, null, (parsed.data as { role?: string }).role);
+  if (refused) { res.status(403).json({ error: refused }); return; }
   const { firstName, lastName, isActive, ...rest } = parsed.data as typeof parsed.data & { isActive?: boolean };
   // Hash the PIN before it ever touches the DB (the plaintext is still used for
   // the welcome email below, which reads parsed.data.pin directly).
@@ -88,13 +125,13 @@ router.post("/staff", requireAuth, async (req, res): Promise<void> => {
       subject: `Welcome to ${businessName} — your POS login PIN`,
       html: `
         <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111">
-          <h2 style="margin-bottom:4px">Welcome, ${firstName}!</h2>
-          <p style="color:#555;margin-top:0">You've been added as a staff member at <strong>${businessName}</strong>.</p>
+          <h2 style="margin-bottom:4px">Welcome, ${escapeHtml(firstName)}!</h2>
+          <p style="color:#555;margin-top:0">You've been added as a staff member at <strong>${escapeHtml(businessName)}</strong>.</p>
           <p>Your PIN to sign into the POS system is:</p>
-          <div style="font-size:32px;font-weight:700;letter-spacing:12px;text-align:center;background:#f4f4f5;border-radius:8px;padding:20px 0;margin:16px 0">${pin}</div>
+          <div style="font-size:32px;font-weight:700;letter-spacing:12px;text-align:center;background:#f4f4f5;border-radius:8px;padding:20px 0;margin:16px 0">${escapeHtml(pin)}</div>
           <p style="color:#555;font-size:13px">Use this PIN when prompted at the POS register to switch to your account. Keep it private.</p>
           <hr style="border:none;border-top:1px solid #e4e4e7;margin:24px 0"/>
-          <p style="color:#999;font-size:12px">This message was sent by ${businessName} via KoaPOS. If you were not expecting this email, please disregard it.</p>
+          <p style="color:#999;font-size:12px">This message was sent by ${escapeHtml(businessName)} via KoaPOS. If you were not expecting this email, please disregard it.</p>
         </div>
       `,
       text: `Welcome, ${firstName}!\n\nYou've been added as a staff member at ${businessName}.\n\nYour POS PIN is: ${pin}\n\nUse this PIN at the register to switch to your account. Keep it private.`,
@@ -136,8 +173,20 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
   // server-side attribution (daily closes, stock takes, customer merges) credits
   // them. Only the day-login flow sets establishDaySession; per-sale staff
   // switches and approval prompts verify a PIN without claiming the day session.
+  // The day's staff member is who is using this till, so the session takes
+  // their role: every server-side role check reads staffRole, and leaving it at
+  // the owner's (whose password opened the till) made each cashier an owner to
+  // the API. A PIN is the staff member's own credential, so it sets the role
+  // in either direction.
   if (establishDaySession) {
     req.session.staffId = match.id;
+    req.session.staffRole = sessionRole(match.role);
+    delete req.session.managerApproval;
+  } else if (requireManager || match.role === "manager" || match.role === "owner") {
+    // A manager's PIN typed in for one approval (a discount, a refund) — or to
+    // put a sale under their name — lets this till do manager-only things for a
+    // moment, without signing the cashier out.
+    req.session.managerApproval = { staffId: match.id, staffName: match.name, until: Date.now() + MANAGER_APPROVAL_MS };
   }
   res.json({ ok: true, staff: formatStaff(match) });
 });
@@ -147,7 +196,21 @@ router.post("/staff/verify-pin", requireAuth, async (req, res): Promise<void> =>
 // server-side attribution (daily closes, stock takes, customer merges) falls
 // back to the merchant owner until another staff signs in for the day.
 router.post("/staff/end-day-session", requireAuth, async (req, res): Promise<void> => {
-  delete req.session.staffId;
+  delete req.session.managerApproval;
+  if (req.session.authKind === "staff-email" && req.session.loginStaffId) {
+    // Back to the staff member who signed in with their own email; requireAuth
+    // re-reads their current role on the next request.
+    req.session.staffId = req.session.loginStaffId;
+    const [me] = await db.select({ role: staffTable.role }).from(staffTable)
+      .where(and(eq(staffTable.id, req.session.loginStaffId), eq(staffTable.merchantId, req.session.merchantId!)));
+    req.session.staffRole = sessionRole(me?.role);
+  } else {
+    // A shared till opened with the owner's password, now with nobody signed in
+    // for the day: least privilege until someone enters a PIN. Otherwise ending
+    // the day would hand whoever is standing there the owner's role.
+    delete req.session.staffId;
+    req.session.staffRole = "cashier";
+  }
   res.json({ ok: true });
 });
 
@@ -304,10 +367,10 @@ router.get("/staff/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Staff member not found" });
     return;
   }
-  res.json(formatStaff(member));
+  res.json(staffFor(req)(member));
 });
 
-router.patch("/staff/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/staff/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const params = UpdateStaffParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
@@ -316,6 +379,15 @@ router.patch("/staff/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateStaffBody.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });
+    return;
+  }
+  const [target] = await db.select({ id: staffTable.id, role: staffTable.role }).from(staffTable)
+    .where(and(eq(staffTable.id, params.data.id), eq(staffTable.merchantId, req.session.merchantId!)));
+  if (!target) { res.status(404).json({ error: "Staff member not found" }); return; }
+  const refused = canEditStaff(req, target, (parsed.data as { role?: string }).role);
+  if (refused) { res.status(403).json({ error: refused }); return; }
+  if (target.id === req.session.staffId && (parsed.data as { isActive?: boolean }).isActive === false) {
+    res.status(403).json({ error: "You can't deactivate yourself" });
     return;
   }
   const { isActive, firstName, lastName, name, ...rest } = parsed.data as typeof parsed.data & {
@@ -352,18 +424,29 @@ router.patch("/staff/:id", requireAuth, async (req, res): Promise<void> => {
     res.status(404).json({ error: "Staff member not found" });
     return;
   }
+  // Sessions re-read the staff row: a role change or deactivation applies now.
+  invalidateStaffStatusCache(member.id);
+  if (member.isActive !== "true") await destroyStaffEmailSessions(member.id).catch(() => {});
   res.json(formatStaff(member));
 });
 
-router.delete("/staff/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/staff/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const params = DeleteStaffParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const [target] = await db.select({ id: staffTable.id, role: staffTable.role }).from(staffTable)
+    .where(and(eq(staffTable.id, params.data.id), eq(staffTable.merchantId, req.session.merchantId!)));
+  if (!target) { res.sendStatus(204); return; }
+  const refused = canEditStaff(req, target);
+  if (refused) { res.status(403).json({ error: refused }); return; }
+  if (target.id === req.session.staffId) { res.status(403).json({ error: "You can't delete yourself" }); return; }
   await db
     .delete(staffTable)
     .where(and(eq(staffTable.id, params.data.id), eq(staffTable.merchantId, req.session.merchantId!)));
+  invalidateStaffStatusCache(target.id);
+  await destroyStaffEmailSessions(target.id).catch(() => {});
   res.sendStatus(204);
 });
 

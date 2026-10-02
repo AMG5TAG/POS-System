@@ -1,3 +1,4 @@
+import { managerOnlyFields } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, posSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -23,7 +24,16 @@ router.get("/pos-settings", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.put("/pos-settings", requireAuth, async (req, res): Promise<void> => {
+/* The till's own preferences (grid, quick view, active register) are anyone's;
+   what money can be taken by, discount limits, forced staff login and printer
+   routing are a manager's. */
+const POS_SETTINGS_MANAGER_FIELDS = [
+  "enabledPaymentMethods", "enabledIntegrationPayments", "customPaymentMethods",
+  "forceStaffLogin", "promptCloseAllRegisters", "staffLoginMessage",
+  "hardwareConfig", "enabledShortcuts", "roleDiscountLimits",
+] as const;
+
+router.put("/pos-settings", requireAuth, managerOnlyFields(POS_SETTINGS_MANAGER_FIELDS), async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const {
     enabledPaymentMethods,

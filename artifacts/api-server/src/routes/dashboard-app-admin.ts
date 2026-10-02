@@ -7,6 +7,7 @@ import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 import { sendSms } from "../services/sms";
 import { publicDomain } from "../lib/publicUrl";
 
@@ -118,7 +119,7 @@ router.put("/dashboard-app/settings", requireAuth, requireManagerOrOwner, async 
 
 /* ── Link info ───────────────────────────────────────────────────────── */
 
-router.get("/dashboard-app/link", requireAuth, async (req, res): Promise<void> => {
+router.get("/dashboard-app/link", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const settings = await getOrCreateSettings(req.session.merchantId!);
   const [merchant] = await db
     .select({ username: merchantsTable.username })
@@ -267,10 +268,10 @@ router.post("/dashboard-app/send-link", requireAuth, requireManagerOrOwner, asyn
       subject: `${businessName} — Dashboard link`,
       html: `
         <p>Hi,</p>
-        <p>Here is the live <strong>${businessName}</strong> Dashboard — a read-only view of today's activity.</p>
-        <p><a href="${url}">${url}</a></p>
+        <p>Here is the live <strong>${escapeHtml(businessName)}</strong> Dashboard — a read-only view of today's activity.</p>
+        <p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>
         <p>Open it on any screen; no sign-in is required. Tip: add it to your home screen or pin it on a wall display.</p>
-        <p>— ${businessName}</p>
+        <p>— ${escapeHtml(businessName)}</p>
       `,
       text: `Here is the live ${businessName} Dashboard (read-only, no sign-in required).\n\n${url}`,
     });

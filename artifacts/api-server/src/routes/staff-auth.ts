@@ -9,7 +9,13 @@ import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { sendEmail } from "../services/email";
 import { publicOrigin } from "../lib/publicUrl";
-import { isSoleMerchantEmail } from "../lib/sole-merchant";
+import { isSoleMerchantEmail, soleMerchantId } from "../lib/sole-merchant";
+import { checkAccountLock, recordFailedAttempt, clearFailedAttempts } from "../lib/accountLimiter";
+import { destroyStaffEmailSessions, invalidateStaffStatusCache } from "../middlewares/requireAuth";
+
+/* bcrypt cost-10 hash of a random string: compared against when no account
+   matches, so a wrong email takes as long as a wrong password. */
+const DUMMY_HASH = "$2a$10$CwTycUXWue0Thq9StjUM0uJ8.Y1t9Vbq3sF6pXxEJ0Xk3Q6s0W9cS";
 
 /**
  * Staff email + password sign-in (the "hybrid" auth model).
@@ -62,30 +68,49 @@ router.post("/staff-auth/login", loginLimiter, async (req, res): Promise<void> =
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const email = parsed.data.email.trim().toLowerCase();
 
-  // Find active staff with email login enabled. Email isn't globally unique, so
-  // verify the password against each candidate and take the first that matches.
-  const candidates = await db
+  // Per-account lockout on top of the per-IP limiter, so guessing one staff
+  // member's password from many addresses still stops (lib/accountLimiter.ts).
+  const lockKey = `staff:${email}`;
+  const lock = await checkAccountLock(lockKey);
+  if (lock.locked) {
+    res.status(429).json({ error: "Too many failed sign-ins — try again later or reset your password." });
+    return;
+  }
+
+  // Only this business's staff (other accounts' rows are still in the
+  // database). Email isn't unique, so verify against each candidate.
+  const businessId = await soleMerchantId();
+  const candidates = businessId == null ? [] : await db
     .select()
     .from(staffTable)
-    .where(and(eq(staffTable.email, email), eq(staffTable.isActive, "true")));
+    .where(and(eq(staffTable.email, email), eq(staffTable.isActive, "true"), eq(staffTable.merchantId, businessId)));
 
   let matched: typeof staffTable.$inferSelect | null = null;
   for (const s of candidates) {
     if (s.passwordHash && (await verifyPassword(parsed.data.password, s.passwordHash))) { matched = s; break; }
   }
-  if (!matched) { res.status(401).json({ error: "Invalid email or password" }); return; }
+  if (!candidates.some((s) => s.passwordHash)) await verifyPassword(parsed.data.password, DUMMY_HASH);
+  if (!matched) {
+    await recordFailedAttempt(lockKey);
+    res.status(401).json({ error: "Invalid email or password" });
+    return;
+  }
 
   const [merchant] = await db.select().from(merchantsTable).where(eq(merchantsTable.id, matched.merchantId));
   if (!merchant || merchant.status !== "active" || !isSoleMerchantEmail(merchant.email)) {
-    res.status(403).json({ error: "This business account is not active. Please contact your manager." });
+    // Same answer as a wrong password: a 403 here confirmed the password.
+    res.status(401).json({ error: "Invalid email or password" });
     return;
   }
+  await clearFailedAttempts(lockKey);
 
   const staffRole = role(matched.role);
   await new Promise<void>((resolve, reject) => { req.session.regenerate((err) => (err ? reject(err) : resolve())); });
   req.session.merchantId = merchant.id;
   req.session.staffId = matched.id;
   req.session.staffRole = staffRole;
+  req.session.authKind = "staff-email";
+  req.session.loginStaffId = matched.id;
   res.json(formatMerchant(merchant, staffRole));
 });
 
@@ -140,11 +165,14 @@ router.post("/staff-auth/forgot-password", resetLimiter, async (req, res): Promi
   const parsed = StaffForgotBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const email = parsed.data.email.trim().toLowerCase();
-  const [staff] = await db
-    .select({ id: staffTable.id, email: staffTable.email })
+  // Only staff the owner/manager already enabled (they have a password): a
+  // reset must not let a PIN-only staff member give themselves remote access.
+  const businessId = await soleMerchantId();
+  const [staff] = businessId == null ? [] : await db
+    .select({ id: staffTable.id, email: staffTable.email, passwordHash: staffTable.passwordHash })
     .from(staffTable)
-    .where(and(eq(staffTable.email, email), eq(staffTable.isActive, "true")));
-  if (staff?.email && staff.id) {
+    .where(and(eq(staffTable.email, email), eq(staffTable.isActive, "true"), eq(staffTable.merchantId, businessId)));
+  if (staff?.email && staff.id && staff.passwordHash) {
     await issueStaffResetToken(staff.id, staff.email.trim().toLowerCase(), "We received a request to reset your KoaPOS staff password.");
   }
   res.json({ ok: true });
@@ -162,10 +190,18 @@ router.post("/staff-auth/reset-password", resetLimiter, async (req, res): Promis
   if (record.expiresAt < new Date()) { res.status(400).json({ error: "This link has expired. Please request a new one." }); return; }
 
   const passwordHash = await hashPassword(parsed.data.newPassword);
-  await db.transaction(async (tx) => {
+  // Claim the token atomically so two submissions can't both use it.
+  const claimed = await db.transaction(async (tx) => {
+    const [gone] = await tx.delete(staffPasswordResetTokensTable)
+      .where(eq(staffPasswordResetTokensTable.id, record.id)).returning({ id: staffPasswordResetTokensTable.id });
+    if (!gone) return false;
     await tx.update(staffTable).set({ passwordHash }).where(eq(staffTable.id, record.staffId));
-    await tx.delete(staffPasswordResetTokensTable).where(eq(staffPasswordResetTokensTable.id, record.id));
+    return true;
   });
+  if (!claimed) { res.status(400).json({ error: "This link has already been used. Please request a new one." }); return; }
+  // Whoever held a session under the old password loses it.
+  await destroyStaffEmailSessions(record.staffId).catch(() => {});
+  invalidateStaffStatusCache(record.staffId);
   res.json({ ok: true });
 });
 

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, regionalExtSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -16,7 +17,7 @@ router.get("/regional-ext-settings", requireAuth, async (req, res): Promise<void
   res.json(row);
 });
 
-router.put("/regional-ext-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/regional-ext-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = stripManagedFields(req.body ?? {}) as Partial<typeof regionalExtSettingsTable.$inferInsert>;
   const [existing] = await db.select().from(regionalExtSettingsTable).where(eq(regionalExtSettingsTable.merchantId, merchantId)).limit(1);

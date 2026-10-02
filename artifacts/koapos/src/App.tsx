@@ -9,6 +9,7 @@ import { AppThemeProvider } from "@/lib/app-theme";
 import { ButtonStyleProvider } from "@/lib/button-style";
 import { NavLayoutProvider } from "@/lib/nav-layout";
 import { StaffSessionProvider } from "@/lib/staff-day-session";
+import { ManagerApprovalHost, installManagerApprovalFetch } from "@/lib/manager-approval";
 import { AccessibilityProvider } from "@/lib/accessibility";
 import { Toaster } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
@@ -206,6 +207,10 @@ const queryClient = new QueryClient({
    stay on "/" with nothing left to resolve the spinner. As a protected path, the
    first 401 simply goes to /login. */
 const PUBLIC_PATHS = ["/login", "/forgot-password", "/reset-password", "/staff-reset-password", "/terms", "/privacy"];
+
+// Manager-only till actions answer 403 manager_approval_required; this turns
+// that into a PIN prompt and a retry everywhere (lib/manager-approval.tsx).
+installManagerApprovalFetch();
 
 setOnUnauthorized(() => {
   queryClient.clear();
@@ -1069,6 +1074,7 @@ function App() {
                           <RoutePrefetcher />
                           <Router />
                           <Toaster />
+                          <ManagerApprovalHost />
                         </AIProvider>
                       </AppThemeProvider>
                     </BrandColorProvider>

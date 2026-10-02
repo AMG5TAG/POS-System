@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, scheduledReportsTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -37,7 +38,7 @@ router.get("/scheduled-reports", requireAuth, async (req, res): Promise<void> =>
 });
 
 // POST /scheduled-reports
-router.post("/scheduled-reports", requireAuth, async (req, res): Promise<void> => {
+router.post("/scheduled-reports", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const b = (req.body ?? {}) as Record<string, unknown>;
   const name = typeof b.name === "string" ? b.name.trim() : "";
@@ -57,7 +58,7 @@ router.post("/scheduled-reports", requireAuth, async (req, res): Promise<void> =
 });
 
 // PUT /scheduled-reports/:id — edit / toggle enabled.
-router.put("/scheduled-reports/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/scheduled-reports/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   const b = (req.body ?? {}) as Record<string, unknown>;
@@ -75,7 +76,7 @@ router.put("/scheduled-reports/:id", requireAuth, async (req, res): Promise<void
 });
 
 // DELETE /scheduled-reports/:id
-router.delete("/scheduled-reports/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/scheduled-reports/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   await db.delete(scheduledReportsTable)

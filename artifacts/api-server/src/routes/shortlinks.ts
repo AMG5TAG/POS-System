@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, shortlinksTable, shortlinkSettingsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -18,7 +19,7 @@ router.get("/shortlinks", requireAuth, async (req, res): Promise<void> => {
   res.json({ items, total: items.length });
 });
 
-router.post("/shortlinks", requireAuth, async (req, res): Promise<void> => {
+router.post("/shortlinks", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { linkId, label, longUrl, slug, tags = "" } = req.body as { linkId: string; label: string; longUrl: string; slug: string; baseDomain?: string; tags?: string };
   if (!linkId || !label || !longUrl || !slug) { res.status(400).json({ error: "linkId, label, longUrl, and slug are required" }); return; }
@@ -75,7 +76,7 @@ router.get("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(row);
 });
 
-router.patch("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/shortlinks/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -102,7 +103,7 @@ router.patch("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => 
   }
 });
 
-router.delete("/shortlinks/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/shortlinks/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -120,7 +121,7 @@ router.get("/shortlink-settings", requireAuth, async (req, res): Promise<void> =
   res.json(row);
 });
 
-router.put("/shortlink-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/shortlink-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { baseDomain, prefix } = req.body;
   const [existing] = await db.select().from(shortlinkSettingsTable).where(eq(shortlinkSettingsTable.merchantId, merchantId)).limit(1);

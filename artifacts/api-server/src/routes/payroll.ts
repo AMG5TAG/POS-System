@@ -1,3 +1,4 @@
+import { requireManagerOrOwner, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
 import {
@@ -215,7 +216,7 @@ router.get("/payroll/status", requireAuth, async (req, res): Promise<void> => {
 
 /* ── OAuth start / callback (browser redirects; not in generated client) ── */
 
-router.get("/payroll/auth/start", requireAuth, async (req, res): Promise<void> => {
+router.get("/payroll/auth/start", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const providerKey = await activeProviderKey(merchantId);
   const cfg = getOAuthConfig(providerKey);
@@ -310,7 +311,7 @@ router.get("/payroll/auth/callback", async (req, res): Promise<void> => {
   res.redirect("/staff/payroll?success=connected");
 });
 
-router.delete("/payroll/disconnect", requireAuth, async (req, res): Promise<void> => {
+router.delete("/payroll/disconnect", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const providerKey = await activeProviderKey(merchantId);
   await db
@@ -333,7 +334,7 @@ router.delete("/payroll/disconnect", requireAuth, async (req, res): Promise<void
 
 /* ── GET / PUT /payroll/settings ───────────────────────────────────────── */
 
-router.get("/payroll/settings", requireAuth, async (req, res): Promise<void> => {
+router.get("/payroll/settings", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const s = await ensureSettings(merchantId);
   res.json({
@@ -346,7 +347,7 @@ router.get("/payroll/settings", requireAuth, async (req, res): Promise<void> => 
   });
 });
 
-router.put("/payroll/settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/payroll/settings", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { providerKey, region, payCalendarId, accountMappings } = req.body as {
     providerKey?: string;
@@ -382,7 +383,7 @@ router.put("/payroll/settings", requireAuth, async (req, res): Promise<void> => 
 
 /* ── POST /payroll/sync/employees ──────────────────────────────────────── */
 
-router.post("/payroll/sync/employees", requireAuth, async (req, res): Promise<void> => {
+router.post("/payroll/sync/employees", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
@@ -456,7 +457,7 @@ router.post("/payroll/sync/employees", requireAuth, async (req, res): Promise<vo
 
 /* ── POST /payroll/sync/timesheets ─────────────────────────────────────── */
 
-router.post("/payroll/sync/timesheets", requireAuth, async (req, res): Promise<void> => {
+router.post("/payroll/sync/timesheets", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { periodStart, periodEnd } = req.body as { periodStart?: string; periodEnd?: string };
   if (!periodStart || !periodEnd) {
@@ -518,7 +519,7 @@ router.post("/payroll/sync/timesheets", requireAuth, async (req, res): Promise<v
 
 /* ── GET / POST /payroll/pay-runs ──────────────────────────────────────── */
 
-router.get("/payroll/pay-runs", requireAuth, async (req, res): Promise<void> => {
+router.get("/payroll/pay-runs", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const rows = await db
     .select()
@@ -528,7 +529,7 @@ router.get("/payroll/pay-runs", requireAuth, async (req, res): Promise<void> => 
   res.json({ items: rows.map(serializePayRun) });
 });
 
-router.post("/payroll/pay-runs", requireAuth, async (req, res): Promise<void> => {
+router.post("/payroll/pay-runs", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { periodStart, periodEnd, paymentDate } = req.body as {
     periodStart?: string;
@@ -618,7 +619,7 @@ async function refreshPayslips(
   return db.select().from(payrollPayslipsTable).where(eq(payrollPayslipsTable.payRunId, payRun.id));
 }
 
-router.get("/payroll/pay-runs/:id", requireAuth, async (req, res): Promise<void> => {
+router.get("/payroll/pay-runs/:id", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (!Number.isFinite(id)) {
@@ -653,7 +654,7 @@ router.get("/payroll/pay-runs/:id", requireAuth, async (req, res): Promise<void>
   res.json({ payRun: serializePayRun(run), payslips: payslips.map(serializePayslip) });
 });
 
-router.post("/payroll/pay-runs/:id/post", requireAuth, async (req, res): Promise<void> => {
+router.post("/payroll/pay-runs/:id/post", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (!Number.isFinite(id)) {
@@ -708,7 +709,7 @@ router.post("/payroll/pay-runs/:id/post", requireAuth, async (req, res): Promise
 
 /* ── GET /payroll/payslips ─────────────────────────────────────────────── */
 
-router.get("/payroll/payslips", requireAuth, async (req, res): Promise<void> => {
+router.get("/payroll/payslips", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { payRunId, staffId } = req.query as { payRunId?: string; staffId?: string };
   const conditions = [eq(payrollPayslipsTable.merchantId, merchantId)];
@@ -724,7 +725,7 @@ router.get("/payroll/payslips", requireAuth, async (req, res): Promise<void> => 
 
 /* ── GET /payroll/leave-balances ───────────────────────────────────────── */
 
-router.get("/payroll/leave-balances", requireAuth, async (req, res): Promise<void> => {
+router.get("/payroll/leave-balances", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { staffId } = req.query as { staffId?: string };
 
@@ -780,7 +781,7 @@ router.get("/payroll/leave-balances", requireAuth, async (req, res): Promise<voi
 
 /* ── POST /payroll/sync/journal — push posted pay run to Xero accounting ── */
 
-router.post("/payroll/sync/journal", requireAuth, async (req, res): Promise<void> => {
+router.post("/payroll/sync/journal", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { payRunId } = req.body as { payRunId?: number };
   if (!payRunId) {

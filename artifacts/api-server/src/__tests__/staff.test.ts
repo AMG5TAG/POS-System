@@ -23,6 +23,8 @@ vi.mock("@workspace/db", () => {
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (_req: any, _res: any, next: any) => next(),
   invalidateMerchantStatusCache: () => {},
+  invalidateStaffStatusCache: () => {},
+  destroyStaffEmailSessions: async () => {},
 }));
 
 let app: express.Express;
@@ -33,7 +35,9 @@ beforeAll(async () => {
   app = express();
   app.use(express.json());
   app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-  app.use((_req, _res, next) => { (_req as any).session.merchantId = 1; next(); });
+  // Staff management is owner/manager only (staff-roles.test.ts covers who may
+  // change whom); these tests are about validation, so they run as the owner.
+  app.use((_req, _res, next) => { (_req as any).session.merchantId = 1; (_req as any).session.staffRole = "owner"; next(); });
   app.use("/api", staffRouter);
 });
 

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, rosterShiftsTable, leaveRequestsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -13,7 +14,7 @@ router.get("/roster-shifts", requireAuth, async (req, res): Promise<void> => {
   res.json({ items, total: items.length });
 });
 
-router.post("/roster-shifts", requireAuth, async (req, res): Promise<void> => {
+router.post("/roster-shifts", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { shiftId, staffId, date, startTime = "09:00", endTime = "17:00", note = "" } = req.body as {
     shiftId: string; staffId: string; date: string;
@@ -29,7 +30,7 @@ router.post("/roster-shifts", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
-router.delete("/roster-shifts/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/roster-shifts/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -65,7 +66,7 @@ router.post("/leave-requests", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
-router.patch("/leave-requests/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/leave-requests/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

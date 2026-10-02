@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, marketingAutomationRulesTable, marketingAutomationLogTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
@@ -41,7 +42,7 @@ router.get("/marketing-automation", requireAuth, async (req, res): Promise<void>
 });
 
 // POST /marketing-automation
-router.post("/marketing-automation", requireAuth, async (req, res): Promise<void> => {
+router.post("/marketing-automation", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { name, triggerEvent, channel, templateId, templateName, templateSubject, templateBody, isActive, delayDays, scheduledAt, birthdayDiscount, birthdayDaysBefore } = req.body;
   if (!name || !triggerEvent || !channel) {
@@ -73,7 +74,7 @@ router.post("/marketing-automation", requireAuth, async (req, res): Promise<void
 });
 
 // PUT /marketing-automation/:id
-router.put("/marketing-automation/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/marketing-automation/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -106,7 +107,7 @@ router.put("/marketing-automation/:id", requireAuth, async (req, res): Promise<v
 });
 
 // DELETE /marketing-automation/:id
-router.delete("/marketing-automation/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/marketing-automation/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -122,7 +123,7 @@ router.delete("/marketing-automation/:id", requireAuth, async (req, res): Promis
 });
 
 // POST /marketing-automation/:id/run  — manual trigger
-router.post("/marketing-automation/:id/run", requireAuth, async (req, res): Promise<void> => {
+router.post("/marketing-automation/:id/run", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

@@ -30,6 +30,7 @@ vi.mock("@workspace/db", () => {
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     (req as express.Request & { session: { merchantId?: number } }).session.merchantId = 1;
+    (req as unknown as { session: { staffRole?: string } }).session.staffRole = "owner";
     next();
   },
   invalidateMerchantStatusCache: () => {},

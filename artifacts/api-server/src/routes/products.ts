@@ -1,3 +1,4 @@
+import { allowSensitiveChanges, requireManagerOrApproval, requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { reconcileGroupPrices, followPrice } from "@workspace/group-pricing";
 import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable, transactionsTable, invoicesTable, customersTable } from "@workspace/db";
@@ -248,7 +249,7 @@ router.patch("/categories/:id", requireAuth, async (req, res): Promise<void> => 
   res.json(formatCategory(cat));
 });
 
-router.delete("/categories/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/categories/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const params = DeleteCategoryParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   await db
@@ -425,7 +426,7 @@ router.get("/products/tags", requireAuth, async (req, res): Promise<void> => {
   res.json({ items, total: items.length });
 });
 
-router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void> => {
+router.post("/products/tags/rename", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const parsed = RenameProductTagBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { oldName, newName } = parsed.data;
@@ -446,7 +447,7 @@ router.post("/products/tags/rename", requireAuth, async (req, res): Promise<void
   res.json({ updated: result.rowCount ?? 0 });
 });
 
-router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void> => {
+router.post("/products/tags/merge", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const parsed = MergeProductTagsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { sourceTags, targetName } = parsed.data;
@@ -477,7 +478,7 @@ router.post("/products/tags/merge", requireAuth, async (req, res): Promise<void>
   res.json({ updated: result.rowCount ?? 0 });
 });
 
-router.post("/products/tags/delete", requireAuth, async (req, res): Promise<void> => {
+router.post("/products/tags/delete", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const parsed = DeleteProductTagBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { name } = parsed.data;
@@ -517,7 +518,7 @@ const PRODUCT_HEADER_MAP: Record<string, string> = {
 const uploadMemoryProducts = multer({ storage: multer.memoryStorage(), limits: { fileSize: 5 * 1024 * 1024 } });
 
 // IMPORTANT: registered before /products/:id so "import" is not captured as :id param
-router.post("/products/import", requireAuth, uploadMemoryProducts.single("file"), async (req, res): Promise<void> => {
+router.post("/products/import", requireAuth, requireManagerOrOwner, uploadMemoryProducts.single("file"), async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
 
   if (!req.file) {
@@ -683,7 +684,7 @@ const EpayBySupplierBody = z.object({
   isEpay: z.boolean(),
 });
 
-router.patch("/products/epay-by-supplier", requireAuth, async (req, res): Promise<void> => {
+router.patch("/products/epay-by-supplier", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const parsed = EpayBySupplierBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { supplier, isEpay } = parsed.data;
@@ -711,7 +712,7 @@ const BulkProductsBody = z.object({
   productTypeId: z.number().int().positive().nullable().optional(),
 });
 
-router.patch("/products/bulk", requireAuth, async (req, res): Promise<void> => {
+router.patch("/products/bulk", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const parsed = BulkProductsBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
@@ -794,6 +795,18 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, preOrder, preOrderReleaseDate, preOrderEtaDate, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
+
+  // Prices are a manager's call (or a manager's PIN at the till): a cashier
+  // repricing an item before ringing it up is the obvious fraud.
+  if (price !== undefined || costPrice !== undefined || groupPrices !== undefined) {
+    const [stored] = await db.select({ price: productsTable.price, costPrice: productsTable.costPrice, groupPrices: productsTable.groupPrices })
+      .from(productsTable).where(and(eq(productsTable.id, params.data.id), eq(productsTable.merchantId, req.session.merchantId!)));
+    if (stored && !allowSensitiveChanges(req, res, [
+      ["price", price, stored.price],
+      ["costPrice", costPrice, stored.costPrice],
+      ["groupPrices", groupPrices, stored.groupPrices],
+    ])) return;
+  }
 
   // Reject a SKU that already exists on a DIFFERENT product for this merchant
   // (case-insensitive), matching the create path. Only runs when the SKU is
@@ -916,7 +929,7 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(formatProduct(product, null, patchPtRecord));
 });
 
-router.delete("/products/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/products/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const params = DeleteProductParams.safeParse(req.params);
   if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
   await db
@@ -1004,7 +1017,7 @@ router.patch("/products/:productId/variants/:id", requireAuth, async (req, res):
   res.json(formatVariant(updated));
 });
 
-router.delete("/products/:productId/variants/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/products/:productId/variants/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const paramsParsed = DeleteProductVariantParams.safeParse(req.params);
   if (!paramsParsed.success) { res.status(400).json({ error: paramsParsed.error.message }); return; }
   const { productId, id } = paramsParsed.data;

@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, lowStockAlertSettingsTable, lowStockAlertLogTable } from "@workspace/db";
 import { eq, desc, sql } from "drizzle-orm";
@@ -47,7 +48,7 @@ const UpdateSchema = z.object({
   globalThreshold: z.number().int().min(0).nullable().optional(),
 });
 
-router.put("/low-stock-alert-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/low-stock-alert-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const parsed = UpdateSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: parsed.error.message });

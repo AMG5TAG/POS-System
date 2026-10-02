@@ -1,3 +1,4 @@
+import { isManagerOrOwner, requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, posRegisterSessionsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, isNull } from "drizzle-orm";
@@ -90,6 +91,17 @@ router.patch("/pos-register-sessions/:id", requireAuth, async (req, res): Promis
   const parsed = PatchPosRegisterSession.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
 
+  // Closing the register (counting the drawer) is the cashier's job; rewriting
+  // a session that is already closed would hide a shortfall, so that is a
+  // manager's.
+  const [existing] = await db.select({ closedAt: posRegisterSessionsTable.closedAt }).from(posRegisterSessionsTable)
+    .where(and(eq(posRegisterSessionsTable.id, id), eq(posRegisterSessionsTable.merchantId, merchantId)));
+  if (!existing) { res.status(404).json({ error: "Not found" }); return; }
+  if (existing.closedAt && !isManagerOrOwner(req)) {
+    res.status(403).json({ error: "Only a manager or owner can change a closed register session", code: "manager_required" });
+    return;
+  }
+
   const update = { ...parsed.data };
   // When paymentTotals is provided, keep cashCounted and eftposDeclared in sync
   if (update.paymentTotals) {
@@ -107,7 +119,7 @@ router.patch("/pos-register-sessions/:id", requireAuth, async (req, res): Promis
   res.json(row);
 });
 
-router.delete("/pos-register-sessions/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/pos-register-sessions/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

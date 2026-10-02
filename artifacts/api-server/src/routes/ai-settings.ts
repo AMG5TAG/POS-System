@@ -1,3 +1,4 @@
+import { requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router } from "express";
 import { db, aiSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -13,7 +14,7 @@ router.get("/ai/settings", async (req, res) => {
   return res.json({ aiEnabled: row?.aiEnabled ?? true });
 });
 
-router.put("/ai/settings", async (req, res) => {
+router.put("/ai/settings", requireOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { aiEnabled } = req.body as { aiEnabled: boolean };
   const existing = await db.select({ id: aiSettingsTable.id })

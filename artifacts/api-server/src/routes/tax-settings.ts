@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, taxSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -46,7 +47,7 @@ router.get("/settings/tax", requireAuth, async (req, res) => {
 });
 
 // PUT /settings/tax
-router.put("/settings/tax", requireAuth, async (req, res) => {
+router.put("/settings/tax", requireAuth, requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = UpdateTaxSettingsBody.parse(req.body);
   const [existing] = await db.select().from(taxSettingsTable).where(eq(taxSettingsTable.merchantId, merchantId));

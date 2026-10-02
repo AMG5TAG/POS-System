@@ -58,7 +58,7 @@ router.get("/customer-settings", requireAuth, async (req, res): Promise<void> =>
   res.json(row ? fmt(row) : DEFAULTS);
 });
 
-router.put("/customer-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/customer-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
 

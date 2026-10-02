@@ -27,7 +27,7 @@ vi.mock("@workspace/db", () => {
 });
 
 vi.mock("../middlewares/requireAuth", () => ({
-  requireAuth: (req: any, _res: any, next: any) => { req.session = { merchantId: 1 }; next(); },
+  requireAuth: (req: any, _res: any, next: any) => { req.session = { merchantId: 1, staffRole: "owner" }; next(); },
   invalidateMerchantStatusCache: () => {},
 }));
 

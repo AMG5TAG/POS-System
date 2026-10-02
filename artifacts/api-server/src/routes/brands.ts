@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { db, brandsTable, productsTable, productTypesTable } from "@workspace/db";
 import { eq, and, ilike, count, sql, or, notInArray, gt, inArray } from "drizzle-orm";
 import { z } from "zod/v4";
-import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { requireManagerOrApproval, requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { requireAuth } from "../middlewares/requireAuth";
 import { UpdateBrandParams, DeleteBrandParams } from "@workspace/api-zod";
 
@@ -110,7 +110,7 @@ router.patch("/brands/:id", requireAuth, async (req, res): Promise<void> => {
   res.json(brand);
 });
 
-router.delete("/brands/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/brands/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const paramsResult = DeleteBrandParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;

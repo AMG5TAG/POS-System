@@ -7,6 +7,7 @@ import { CreateAppointmentBody, UpdateAppointmentBody, DeleteAppointmentParams, 
 import { sendSms } from "../services/sms";
 import { sendEmail } from "../services/email";
 import { generateIcs } from "../services/icsGenerator";
+import { escapeHtml } from "../lib/html-escape";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 
 const router: IRouter = Router();
@@ -169,16 +170,16 @@ async function sendAppointmentNotifications(opts: {
       endAt: opts.endAt,
     });
 
-    const staffLine = opts.staffName ? `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">With</td><td style="padding:4px 0;font-size:14px;">${opts.staffName}</td></tr>` : "";
-    const notesLine = opts.notes ? `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">Notes</td><td style="padding:4px 0;font-size:14px;">${opts.notes}</td></tr>` : "";
-    const locationLine = location ? `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">Location</td><td style="padding:4px 0;font-size:14px;">${location}</td></tr>` : "";
+    const staffLine = opts.staffName ? `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">With</td><td style="padding:4px 0;font-size:14px;">${escapeHtml(opts.staffName)}</td></tr>` : "";
+    const notesLine = opts.notes ? `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">Notes</td><td style="padding:4px 0;font-size:14px;">${escapeHtml(opts.notes)}</td></tr>` : "";
+    const locationLine = location ? `<tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">Location</td><td style="padding:4px 0;font-size:14px;">${escapeHtml(location)}</td></tr>` : "";
 
     const html = `
 <div style="font-family:sans-serif;max-width:480px;margin:0 auto;color:#111;">
   <h2 style="font-size:20px;margin-bottom:4px;">Appointment Confirmed</h2>
   <p style="color:#555;margin-top:0;">Reference: <strong>${ref}</strong></p>
-  <p style="font-size:15px;">Hi ${firstName},</p>
-  <p style="font-size:15px;">Your appointment with <strong>${businessName}</strong> has been confirmed.</p>
+  <p style="font-size:15px;">Hi ${escapeHtml(firstName)},</p>
+  <p style="font-size:15px;">Your appointment with <strong>${escapeHtml(businessName)}</strong> has been confirmed.</p>
   <table style="border-collapse:collapse;margin:16px 0;">
     <tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">Date &amp; Time</td><td style="padding:4px 0;font-size:14px;font-weight:600;">${dateStr}</td></tr>
     <tr><td style="padding:4px 12px 4px 0;color:#666;font-size:14px;">Duration</td><td style="padding:4px 0;font-size:14px;">${duration}</td></tr>
@@ -188,7 +189,7 @@ async function sendAppointmentNotifications(opts: {
   </table>
   <p style="font-size:14px;color:#555;">A calendar invitation is attached — add it to your calendar for automatic reminders.</p>
   <p style="font-size:14px;color:#555;">If you need to reschedule, please contact us as soon as possible.</p>
-  <p style="font-size:13px;color:#888;margin-top:24px;">${businessName}</p>
+  <p style="font-size:13px;color:#888;margin-top:24px;">${escapeHtml(businessName)}</p>
 </div>`.trim();
 
     const text = `Hi ${firstName},\n\nYour appointment with ${businessName} is confirmed.\n\nDate: ${dateStr}\nDuration: ${duration}${opts.staffName ? `\nWith: ${opts.staffName}` : ""}${location ? `\nLocation: ${location}` : ""}${opts.notes ? `\nNotes: ${opts.notes}` : ""}\n\nRef: ${ref}\n\nA calendar invitation is attached.\n\n${businessName}`;

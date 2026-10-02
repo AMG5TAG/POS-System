@@ -1,9 +1,16 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router } from "express";
 import { db, ipCamerasTable, cameraSnapshotsTable, cameraSettingsTable, posSecurityCapturesTable } from "@workspace/db";
 import { eq, and, desc } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 
 const router = Router();
+
+/* A camera's password is written, never read back: any signed-in staff member
+   can list cameras (the till shows the feeds), and the feeds don't need it.
+   The edit form gets this placeholder, and sending it back changes nothing. */
+const MASK = "****";
+const publicCamera = <T extends { password?: string | null }>(c: T) => ({ ...c, password: c.password ? MASK : null });
 
 router.use(requireAuth);
 
@@ -15,11 +22,11 @@ router.get("/cameras", async (req, res) => {
     .from(ipCamerasTable)
     .where(eq(ipCamerasTable.merchantId, merchantId))
     .orderBy(ipCamerasTable.sortOrder, ipCamerasTable.createdAt);
-  return res.json(cameras);
+  return res.json(cameras.map(publicCamera));
 });
 
 /* ── Create camera ──────────────────────────────────────────────────────── */
-router.post("/cameras", async (req, res) => {
+router.post("/cameras", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { name, streamUrl, port, username, password, status, sortOrder } = req.body as {
     name: string; streamUrl: string; port?: string; username?: string;
@@ -35,7 +42,7 @@ router.post("/cameras", async (req, res) => {
     status: status ?? "active",
     sortOrder: sortOrder ?? 0,
   }).returning();
-  return res.status(201).json(camera);
+  return res.status(201).json(publicCamera(camera!));
 });
 
 /* ── Get camera settings ────────────────────────────────────────────────── */
@@ -64,7 +71,7 @@ router.get("/cameras/settings", async (req, res) => {
 });
 
 /* ── Update camera settings ─────────────────────────────────────────────── */
-router.put("/cameras/settings", async (req, res) => {
+router.put("/cameras/settings", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { pipEnabled, pipCameraId, allowedRoles, posWebcamEnabled, posWebcamDeviceId } = req.body as {
     pipEnabled?: string; pipCameraId?: number | null; allowedRoles?: string;
@@ -114,9 +121,9 @@ router.put("/cameras/settings", async (req, res) => {
 });
 
 /* ── Update camera ──────────────────────────────────────────────────────── */
-router.put("/cameras/:id", async (req, res) => {
+router.put("/cameras/:id", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   const { name, streamUrl, port, username, password, status, sortOrder } = req.body as {
     name?: string; streamUrl?: string; port?: string; username?: string;
@@ -128,20 +135,20 @@ router.put("/cameras/:id", async (req, res) => {
       ...(streamUrl !== undefined ? { streamUrl } : {}),
       ...(port !== undefined ? { port: port ?? null } : {}),
       ...(username !== undefined ? { username: username ?? null } : {}),
-      ...(password !== undefined ? { password: password ?? null } : {}),
+      ...(password !== undefined && password !== MASK ? { password: password ?? null } : {}),
       ...(status !== undefined ? { status } : {}),
       ...(sortOrder !== undefined ? { sortOrder } : {}),
     })
     .where(and(eq(ipCamerasTable.id, id), eq(ipCamerasTable.merchantId, merchantId)))
     .returning();
   if (!camera) return res.status(404).json({ error: "Camera not found" });
-  return res.json(camera);
+  return res.json(publicCamera(camera));
 });
 
 /* ── Delete camera ──────────────────────────────────────────────────────── */
-router.delete("/cameras/:id", async (req, res) => {
+router.delete("/cameras/:id", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   await db.delete(ipCamerasTable)
     .where(and(eq(ipCamerasTable.id, id), eq(ipCamerasTable.merchantId, merchantId)));
@@ -213,9 +220,9 @@ router.post("/camera-snapshots", async (req, res) => {
 });
 
 /* ── Delete snapshot ────────────────────────────────────────────────────── */
-router.delete("/camera-snapshots/:id", async (req, res) => {
+router.delete("/camera-snapshots/:id", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   await db.delete(cameraSnapshotsTable)
     .where(and(eq(cameraSnapshotsTable.id, id), eq(cameraSnapshotsTable.merchantId, merchantId)));
@@ -223,7 +230,7 @@ router.delete("/camera-snapshots/:id", async (req, res) => {
 });
 
 /* ── List POS security captures ─────────────────────────────────────────── */
-router.get("/pos-security-captures", async (req, res) => {
+router.get("/pos-security-captures", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const rows = await db
     .select()
@@ -254,9 +261,9 @@ router.post("/pos-security-captures", async (req, res) => {
 });
 
 /* ── Delete POS security capture ────────────────────────────────────────── */
-router.delete("/pos-security-captures/:id", async (req, res) => {
+router.delete("/pos-security-captures/:id", requireManagerOrOwner, async (req, res) => {
   const merchantId = req.session.merchantId!;
-  const id = parseInt(req.params.id, 10);
+  const id = parseInt(String(req.params.id), 10);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
   await db.delete(posSecurityCapturesTable)
     .where(and(eq(posSecurityCapturesTable.id, id), eq(posSecurityCapturesTable.merchantId, merchantId)));

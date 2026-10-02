@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, landingPagesTable, merchantsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -91,7 +92,7 @@ router.get("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   res.json({ items, total: items.length });
 });
 
-router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
+router.post("/landing-pages", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = PostLandingPage.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -105,7 +106,7 @@ router.post("/landing-pages", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(row);
 });
 
-router.patch("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/landing-pages/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -118,7 +119,7 @@ router.patch("/landing-pages/:id", requireAuth, async (req, res): Promise<void> 
   res.json(row);
 });
 
-router.delete("/landing-pages/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/landing-pages/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

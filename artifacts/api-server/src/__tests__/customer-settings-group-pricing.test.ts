@@ -100,7 +100,7 @@ beforeEach(async () => {
   app = express();
   app.use(express.json());
   app.use(session({ secret: "test", resave: false, saveUninitialized: false }));
-  app.use((req: any, _res, next) => { req.session.merchantId = 1; next(); });
+  app.use((req: any, _res, next) => { req.session.merchantId = 1; req.session.staffRole = "owner"; next(); });
   app.use("/api", router);
 });
 

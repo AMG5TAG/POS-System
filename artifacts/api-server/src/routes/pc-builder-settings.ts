@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, pcBuilderSettingsTable } from "@workspace/db";
 import { eq } from "drizzle-orm";
@@ -21,7 +22,7 @@ router.get("/pc-builder-settings", requireAuth, async (req, res): Promise<void> 
   res.json(serialize(row));
 });
 
-router.put("/pc-builder-settings", requireAuth, async (req, res): Promise<void> => {
+router.put("/pc-builder-settings", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
   const patch: Record<string, unknown> = { ...body };

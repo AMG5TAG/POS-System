@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 import { sendSms } from "../services/sms";
 import { publicDomain } from "../lib/publicUrl";
 
@@ -104,10 +105,10 @@ router.post("/mobile-pos-app/send-link", requireAuth, requireManagerOrOwner, asy
       subject: `${businessName} — Mobile POS access`,
       html: `
         <p>Hi,</p>
-        <p>You've been given access to the <strong>${businessName}</strong> Mobile POS — a phone-friendly till for ringing up sales, viewing invoices and browsing products.</p>
-        <p><a href="${url}">${url}</a></p>
+        <p>You've been given access to the <strong>${escapeHtml(businessName)}</strong> Mobile POS — a phone-friendly till for ringing up sales, viewing invoices and browsing products.</p>
+        <p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>
         <p>Open the link on your phone and sign in with your staff PIN. Tip: add it to your home screen for quick access.</p>
-        <p>— ${businessName}</p>
+        <p>— ${escapeHtml(businessName)}</p>
       `,
       text: `You've been given access to the ${businessName} Mobile POS.\n\n${url}\n\nOpen the link on your phone and sign in with your staff PIN.`,
     });

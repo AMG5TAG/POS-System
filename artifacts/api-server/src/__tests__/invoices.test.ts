@@ -19,6 +19,7 @@ const h = vi.hoisted(() => ({ merchantId: 0 }));
 vi.mock("../middlewares/requireAuth", () => ({
   requireAuth: (req: express.Request, _res: express.Response, next: express.NextFunction) => {
     (req as express.Request & { session: { merchantId?: number } }).session.merchantId = h.merchantId;
+    (req as unknown as { session: { staffRole?: string } }).session.staffRole = "owner";
     next();
   },
   invalidateMerchantStatusCache: () => {},

@@ -1,3 +1,4 @@
+import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { referralFieldsFor } from "../lib/referrals";
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
@@ -10,6 +11,7 @@ import { publicOrigin } from "../lib/publicUrl";
 import { buildInvoicePdf } from "../services/invoicePdf";
 import { phoneFormatterFor } from "../lib/phone";
 import { customQrEmailBlock } from "../lib/custom-qr-email";
+import { escapeHtml } from "../lib/html-escape";
 import { mergeEmailTemplate, savedEmailTemplate } from "../lib/email-template";
 import { computeNextSendDate } from "../services/recurringInvoiceScheduler";
 import { getInvoiceSettings } from "./invoice-settings";
@@ -1009,7 +1011,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
 });
 
 // POST /invoices/:id/payment/reverse — reverse or correct a recorded payment
-router.post("/invoices/:id/payment/reverse", requireAuth, async (req, res): Promise<void> => {
+router.post("/invoices/:id/payment/reverse", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const paramsResult = ReverseInvoicePaymentParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
@@ -1119,7 +1121,7 @@ router.post("/invoices/:id/payment/reverse", requireAuth, async (req, res): Prom
 });
 
 // DELETE /invoices/:id
-router.delete("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/invoices/:id", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
   const paramsResult = DeleteInvoiceParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
@@ -1360,6 +1362,25 @@ function applyQuickCodes(text: string, vars: Record<string, string>): string {
   return text.replace(/\{\{\s*([a-z0-9_.]+)\s*\}\}/gi, (_m, key: string) => vars[key.toLowerCase()] ?? "");
 }
 
+/** Only links/images a mail client can safely follow — never a javascript: payload.
+ *  A bare domain ("example.com.au") is treated as https. */
+function safeEmailHref(url: string | null | undefined): string {
+  const u = (url ?? "").trim();
+  if (!u) return "";
+  if (/^https?:\/\//i.test(u)) return u;
+  if (/^[a-z][a-z0-9+.-]*:/i.test(u)) return "";
+  return `https://${u.replace(/^\/+/, "")}`;
+}
+function safeEmailImgSrc(url: string | null | undefined): string {
+  const u = (url ?? "").trim();
+  return /^(https?:|data:image\/)/i.test(u) ? u : "";
+}
+/** A CSS colour safe to drop into a style attribute; anything else falls back. */
+function safeCssColor(c: string | null | undefined, fallback: string): string {
+  const v = (c ?? "").trim();
+  return /^(#[0-9a-f]{3,8}|[a-z]+|rgba?\([\d\s.,%]+\))$/i.test(v) ? v : fallback;
+}
+
 /** Build the quick-code token map for an invoice from its resolved parts. */
 function buildInvoiceQuickCodeVars(p: {
   invoiceNumber: string;
@@ -1451,7 +1472,7 @@ export async function sendInvoiceEmailInternal(
 
   const invoiceTplOpts = (invoiceTplRow?.options ?? {}) as Record<string, unknown>;
   const tplId            = tpl.templateId ?? "e-pro";
-  const brandColor       = tpl.brandColor ?? "#4f46e5";
+  const brandColor       = safeCssColor(tpl.brandColor, "#4f46e5");
   const totalStr         = `$${parseFloat(inv.total).toFixed(2)}`;
   const invoiceDateStr = inv.createdAt
     ? new Date(inv.createdAt).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
@@ -1478,16 +1499,25 @@ export async function sendInvoiceEmailInternal(
   const resolve = (s: string) => applyQuickCodes(s, quickCodeVars);
   const resolveNullable = (s: string | null | undefined): string | null =>
     typeof s === "string" ? resolve(s) : (s ?? null);
+  // For the HTML body: the merchant's template stays as written, but every value
+  // substituted into it (customer name, business name, …) is escaped.
+  const h = escapeHtml;
+  const quickCodeVarsHtml = Object.fromEntries(Object.entries(quickCodeVars).map(([k, v]) => [k, h(v)]));
+  const resolveHtml = (s: string) => applyQuickCodes(s, quickCodeVarsHtml);
 
   const dueDateStr = inv.dueDate
     ? new Date(inv.dueDate).toLocaleDateString("en-AU", { day: "numeric", month: "long", year: "numeric" })
     : "";
   const phVars = { number: inv.invoiceNumber, business: bizName, total: totalStr, dueDate: dueDateStr || "—" };
+  const phVarsHtml = { number: h(inv.invoiceNumber), business: h(bizName), total: totalStr, dueDate: h(dueDateStr || "—") };
   const settingsSubject = settings.emailSubject.trim()
     ? applyInvoicePlaceholders(settings.emailSubject, phVars)
     : `Invoice ${inv.invoiceNumber} from ${bizName}`;
   const settingsMessage = settings.emailMessage.trim()
     ? applyInvoicePlaceholders(settings.emailMessage, phVars)
+    : "";
+  const settingsMessageHtml = settings.emailMessage.trim()
+    ? applyInvoicePlaceholders(settings.emailMessage, phVarsHtml)
     : "";
 
   const baseSubject = resolve(tpl.subjectLine || settingsSubject);
@@ -1496,37 +1526,46 @@ export async function sendInvoiceEmailInternal(
     : kind === "debt_collection" ? `Debt Collection Notice: ${baseSubject}`
     : baseSubject;
   const greeting = resolve(tpl.customGreeting || (cName ? `Hi ${cName.split(" ")[0]},` : "Hi,"));
+  const greetingHtml = tpl.customGreeting ? resolveHtml(tpl.customGreeting) : (cName ? `Hi ${h(cName.split(" ")[0])},` : "Hi,");
   const signOff  = resolve(tpl.customSignOff  || `— The team at ${bizName}`);
-  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage)
-    : kind === "reminder"
-      ? `This is a friendly reminder that invoice ${inv.invoiceNumber} for ${totalStr} is due${dueDateStr ? ` on ${dueDateStr}` : " soon"}.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+  const signOffHtml = tpl.customSignOff ? resolveHtml(tpl.customSignOff) : `— The team at ${h(bizName)}`;
+  const kindMessage = (num: string, biz: string, setMsg: string) =>
+    kind === "reminder"
+      ? `This is a friendly reminder that invoice ${num} for ${totalStr} is due${dueDateStr ? ` on ${dueDateStr}` : " soon"}.${setMsg ? `\n\n${setMsg}` : ""}`
     : kind === "overdue"
-      ? `Invoice ${inv.invoiceNumber} for ${totalStr} is now overdue${dueDateStr ? ` (was due ${dueDateStr})` : ""}. Please arrange payment at your earliest convenience.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
+      ? `Invoice ${num} for ${totalStr} is now overdue${dueDateStr ? ` (was due ${dueDateStr})` : ""}. Please arrange payment at your earliest convenience.${setMsg ? `\n\n${setMsg}` : ""}`
     : kind === "debt_collection"
-      ? `Our records show one or more of your invoices with ${bizName} remain unpaid and are now significantly overdue. This is a formal notice that your account is being escalated to debt collection. Please arrange payment immediately to avoid further action.${settingsMessage ? `\n\n${settingsMessage}` : ""}`
-    : settingsMessage;
+      ? `Our records show one or more of your invoices with ${biz} remain unpaid and are now significantly overdue. This is a formal notice that your account is being escalated to debt collection. Please arrange payment immediately to avoid further action.${setMsg ? `\n\n${setMsg}` : ""}`
+    : setMsg;
+  const cMsg     = tpl.customMessage ? resolve(tpl.customMessage)
+    : kindMessage(inv.invoiceNumber, bizName, settingsMessage);
+  const cMsgHtml = tpl.customMessage ? resolveHtml(tpl.customMessage)
+    : kindMessage(h(inv.invoiceNumber), h(bizName), settingsMessageHtml);
   const thankYou = resolve(tpl.thankYouMsg || "Thank you for your business!");
-  const footer   = tpl.footerText ? resolve(tpl.footerText) : "";
+  const thankYouHtml = tpl.thankYouMsg ? resolveHtml(tpl.thankYouMsg) : "Thank you for your business!";
+  // The merchant's footer is deliberately raw HTML; only the substituted values are escaped.
+  const footer   = tpl.footerText ? resolveHtml(tpl.footerText) : "";
 
   const itemRows = lines.map((l) =>
     `<tr>
-      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;">${l.description}</td>
-      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:center;">${l.quantity}</td>
+      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;">${h(l.description)}</td>
+      <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:center;">${h(String(l.quantity))}</td>
       <td style="padding:6px 0;border-bottom:1px solid #f0f0f0;text-align:right;">$${(l.quantity * l.unitPrice).toFixed(2)}</td>
     </tr>`
   ).join("");
 
-  const logoBlock = (tpl.showLogo !== false && tpl.logo)
-    ? `<img src="${tpl.logo}" alt="${bizName}" style="max-height:48px;max-width:140px;display:block;margin-bottom:8px"/>`
+  const logoSrc = safeEmailImgSrc(tpl.logo);
+  const logoBlock = (tpl.showLogo !== false && logoSrc)
+    ? `<img src="${h(logoSrc)}" alt="${h(bizName)}" style="max-height:48px;max-width:140px;display:block;margin-bottom:8px"/>`
     : "";
 
   const socialsBlock = tpl.showSocialLinks && tpl.socialLinks ? (() => {
     const s = tpl.socialLinks!;
     const parts: string[] = [];
-    if (s.facebook)  parts.push(`fb/ ${s.facebook}`);
-    if (s.instagram) parts.push(`ig/ @${s.instagram}`);
-    if (s.twitter)   parts.push(`x/ @${s.twitter}`);
-    if (s.linkedin)  parts.push(`in/ ${s.linkedin}`);
+    if (s.facebook)  parts.push(`fb/ ${h(s.facebook)}`);
+    if (s.instagram) parts.push(`ig/ @${h(s.instagram)}`);
+    if (s.twitter)   parts.push(`x/ @${h(s.twitter)}`);
+    if (s.linkedin)  parts.push(`in/ ${h(s.linkedin)}`);
     return parts.length ? `<p style="margin-top:12px;font-size:11px;color:#aaa;text-align:center;">${parts.join(" · ")}</p>` : "";
   })() : "";
 
@@ -1535,16 +1574,16 @@ export async function sendInvoiceEmailInternal(
   const isCasual  = tplId === "e-casual";
 
   const headerHtml = isMinimal
-    ? `<h2 style="margin:0 0 4px;font-family:monospace;font-size:16px;">${bizName}</h2>`
+    ? `<h2 style="margin:0 0 4px;font-family:monospace;font-size:16px;">${h(bizName)}</h2>`
     : isCasual
-      ? `<div style="text-align:center;margin-bottom:16px;">${logoBlock ? `<div style="display:flex;justify-content:center">${logoBlock}</div>` : ""}<h2 style="margin:0;font-size:20px;color:${brandColor};">${bizName}</h2>${tpl.tagline ? `<p style="margin:2px 0 0;color:#888;font-size:12px;font-style:italic">${tpl.tagline}</p>` : ""}</div>`
-      : `<div style="border-bottom:3px solid ${brandColor};padding-bottom:12px;margin-bottom:20px;">${logoBlock}<h2 style="margin:0;font-size:18px;">${bizName}</h2></div>`;
+      ? `<div style="text-align:center;margin-bottom:16px;">${logoBlock ? `<div style="display:flex;justify-content:center">${logoBlock}</div>` : ""}<h2 style="margin:0;font-size:20px;color:${brandColor};">${h(bizName)}</h2>${tpl.tagline ? `<p style="margin:2px 0 0;color:#888;font-size:12px;font-style:italic">${h(tpl.tagline)}</p>` : ""}</div>`
+      : `<div style="border-bottom:3px solid ${brandColor};padding-bottom:12px;margin-bottom:20px;">${logoBlock}<h2 style="margin:0;font-size:18px;">${h(bizName)}</h2></div>`;
 
   const html = `
     <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;padding:32px 24px;color:#222;">
       ${headerHtml}
-      <p style="margin:0 0 12px;font-size:14px;">${greeting}</p>
-      ${cMsg ? `<p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#444;">${cMsg.replace(/\n/g, "<br>")}</p>` : `<p style="margin:0 0 16px;font-size:13px;color:#555;">Your invoice <strong>${inv.invoiceNumber}</strong> is attached below.</p>`}
+      <p style="margin:0 0 12px;font-size:14px;">${greetingHtml}</p>
+      ${cMsgHtml ? `<p style="margin:0 0 16px;font-size:13px;line-height:1.6;color:#444;">${cMsgHtml.replace(/\n/g, "<br>")}</p>` : `<p style="margin:0 0 16px;font-size:13px;color:#555;">Your invoice <strong>${h(inv.invoiceNumber)}</strong> is attached below.</p>`}
       <table style="width:100%;border-collapse:collapse;font-size:14px;margin:16px 0;">
         <thead>
           <tr>
@@ -1561,10 +1600,10 @@ export async function sendInvoiceEmailInternal(
         ${inv.discountTotal ? `<div style="color:#d97706;">Discount: −$${parseFloat(inv.discountTotal).toFixed(2)}</div>` : ""}
         <div style="font-size:16px;font-weight:bold;margin-top:8px;color:${brandColor};">Total: ${totalStr}</div>
       </div>
-      ${inv.notes ? `<p style="margin-top:24px;font-size:13px;color:#555;border-top:1px solid #eee;padding-top:16px;">${inv.notes}</p>` : ""}
-      <p style="margin-top:28px;font-size:13px;color:#444;">${signOff}</p>
-      <p style="margin-top:24px;font-size:13px;font-weight:600;text-align:center;color:${brandColor};">${thankYou}</p>
-      ${tpl.showWebsite && tpl.website ? `<p style="margin-top:8px;font-size:12px;text-align:center;"><a href="${tpl.website}" style="color:${brandColor};">${tpl.website}</a></p>` : ""}
+      ${inv.notes ? `<p style="margin-top:24px;font-size:13px;color:#555;border-top:1px solid #eee;padding-top:16px;">${h(inv.notes)}</p>` : ""}
+      <p style="margin-top:28px;font-size:13px;color:#444;">${signOffHtml}</p>
+      <p style="margin-top:24px;font-size:13px;font-weight:600;text-align:center;color:${brandColor};">${thankYouHtml}</p>
+      ${tpl.showWebsite && safeEmailHref(tpl.website) ? `<p style="margin-top:8px;font-size:12px;text-align:center;"><a href="${h(safeEmailHref(tpl.website))}" style="color:${brandColor};">${h(tpl.website)}</a></p>` : ""}
       ${customQrEmailBlock(emailTplOpts)}
       ${socialsBlock}
       ${footer ? `<p style="margin-top:20px;padding-top:12px;border-top:1px solid #eee;font-size:11px;color:#aaa;text-align:center;">${footer}</p>` : ""}

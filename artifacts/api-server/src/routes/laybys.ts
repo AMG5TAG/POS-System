@@ -1,3 +1,4 @@
+import { hasFreshManagerApproval, isManagerOrOwner, requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, laybysTable, laybyPaymentsTable, customersTable, productsTable } from "@workspace/db";
 import { eq, and, desc, ilike, or, sql, count, inArray } from "drizzle-orm";
@@ -286,6 +287,15 @@ router.patch("/laybys/:id", requireAuth, async (req, res) => {
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
   const { dueDate, notes, status } = req.body;
+  // Changing a layby's status (completing hands the goods over) is a manager's
+  // call; due date and notes are anyone's.
+  if (status !== undefined && !isManagerOrOwner(req) && !hasFreshManagerApproval(req)) {
+    res.status(403).json({
+      error: "A manager or owner needs to approve this — ask them to enter their PIN.",
+      code: "manager_approval_required",
+    });
+    return;
+  }
 
   // A direct status change can complete a layby (which drives stock + customer
   // spend) — compute it atomically under a row lock. Completion is terminal:
@@ -467,7 +477,7 @@ router.post("/laybys/:id/payments", requireAuth, async (req, res) => {
 });
 
 // POST /laybys/:id/cancel
-router.post("/laybys/:id/cancel", requireAuth, async (req, res) => {
+router.post("/laybys/:id/cancel", requireAuth, requireManagerOrApproval, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const paramsResult = CancelLaybyParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
@@ -510,7 +520,7 @@ router.post("/laybys/:id/cancel", requireAuth, async (req, res) => {
 });
 
 // POST /laybys/:id/complete
-router.post("/laybys/:id/complete", requireAuth, async (req, res) => {
+router.post("/laybys/:id/complete", requireAuth, requireManagerOrApproval, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const paramsResult = CompleteLaybyParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }

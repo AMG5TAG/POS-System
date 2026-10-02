@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, modifierGroupsTable, modifiersTable, productModifierGroupsTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -29,7 +30,7 @@ router.get("/modifier-groups", requireAuth, async (req, res): Promise<void> => {
 });
 
 /* ── POST /modifier-groups ───────────────────────────────────────────────── */
-router.post("/modifier-groups", requireAuth, async (req, res): Promise<void> => {
+router.post("/modifier-groups", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const parsed = z.object({
     name: z.string().min(1),
@@ -50,7 +51,7 @@ router.post("/modifier-groups", requireAuth, async (req, res): Promise<void> => 
 });
 
 /* ── PATCH /modifier-groups/:id ──────────────────────────────────────────── */
-router.patch("/modifier-groups/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/modifier-groups/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const groupId = parseInt(String(req.params.id), 10);
   if (isNaN(groupId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
@@ -77,7 +78,7 @@ router.patch("/modifier-groups/:id", requireAuth, async (req, res): Promise<void
 });
 
 /* ── DELETE /modifier-groups/:id ─────────────────────────────────────────── */
-router.delete("/modifier-groups/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/modifier-groups/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const groupId = parseInt(String(req.params.id), 10);
   if (isNaN(groupId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
@@ -94,7 +95,7 @@ router.delete("/modifier-groups/:id", requireAuth, async (req, res): Promise<voi
 });
 
 /* ── POST /modifier-groups/:groupId/modifiers ────────────────────────────── */
-router.post("/modifier-groups/:groupId/modifiers", requireAuth, async (req, res): Promise<void> => {
+router.post("/modifier-groups/:groupId/modifiers", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const groupId = parseInt(String(req.params.groupId), 10);
   if (isNaN(groupId)) { res.status(400).json({ error: "Invalid groupId" }); return; }
   const merchantId = req.session.merchantId!;
@@ -122,7 +123,7 @@ router.post("/modifier-groups/:groupId/modifiers", requireAuth, async (req, res)
 });
 
 /* ── PATCH /modifiers/:id ────────────────────────────────────────────────── */
-router.patch("/modifiers/:id", requireAuth, async (req, res): Promise<void> => {
+router.patch("/modifiers/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const modifierId = parseInt(String(req.params.id), 10);
   if (isNaN(modifierId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
@@ -152,7 +153,7 @@ router.patch("/modifiers/:id", requireAuth, async (req, res): Promise<void> => {
 });
 
 /* ── DELETE /modifiers/:id ───────────────────────────────────────────────── */
-router.delete("/modifiers/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/modifiers/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const modifierId = parseInt(String(req.params.id), 10);
   if (isNaN(modifierId)) { res.status(400).json({ error: "Invalid id" }); return; }
   const merchantId = req.session.merchantId!;
@@ -175,7 +176,7 @@ router.get("/products/:productId/modifier-groups", requireAuth, async (req, res)
 });
 
 /* ── POST /products/:productId/modifier-groups ───────────────────────────── */
-router.post("/products/:productId/modifier-groups", requireAuth, async (req, res): Promise<void> => {
+router.post("/products/:productId/modifier-groups", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const productId = parseInt(String(req.params.productId), 10);
   if (isNaN(productId)) { res.status(400).json({ error: "Invalid productId" }); return; }
   const merchantId = req.session.merchantId!;
@@ -192,7 +193,7 @@ router.post("/products/:productId/modifier-groups", requireAuth, async (req, res
 });
 
 /* ── DELETE /products/:productId/modifier-groups/:groupId ───────────────── */
-router.delete("/products/:productId/modifier-groups/:groupId", requireAuth, async (req, res): Promise<void> => {
+router.delete("/products/:productId/modifier-groups/:groupId", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const productId = parseInt(String(req.params.productId), 10);
   const groupId   = parseInt(String(req.params.groupId), 10);
   if (isNaN(productId)) { res.status(400).json({ error: "Invalid productId" }); return; }

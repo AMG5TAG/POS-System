@@ -1177,6 +1177,37 @@ push would try to reconcile (and drop) the report views.
 Pinned by `security-hardening.test.ts`, `xero-oauth-redirect.test.ts` and the
 bridge's `origin.test.ts`.
 
+**Staff roles are enforced on the server** (`middlewares/requireManagerOrOwner.ts`).
+`session.staffRole` is the *effective* role and every check reads it:
+- Owner login → `owner`; staff email login → that staff member's role
+  (`authKind`, `loginStaffId` record who signed in). A till's day sign-in
+  (`verify-pin` + `establishDaySession`) sets the role to the PIN's owner;
+  ending the day drops an owner-opened till to `cashier` until someone PINs in.
+  `requireAuth` re-reads the session's staff row (30s cache): deactivation ends
+  an email-login session, a role change applies on the next request.
+- Gates: `requireOwner` (credentials, integrations, payroll, backups, security,
+  business identity, deleting a sale), `requireManagerOrOwner` (settings,
+  staff, marketing sends, catalogue structure), `requireManagerOrApproval`
+  (till actions: refund, void, modify, store credit issue/adjust, trade-in
+  accept, layby complete/status, stock overwrite, deletes). Approval = a
+  manager/owner PIN at that till in the last 2 minutes (`managerApproval`);
+  the 403 carries `code: "manager_approval_required"`, and the POS answers it
+  with a PIN prompt and a retry (`koapos/src/lib/manager-approval.tsx` wraps
+  `window.fetch`). Field-level: `managerOnlyFields` (pos-settings) and
+  `allowSensitiveChanges` (product price/cost/group prices, customer loyalty/
+  group/tier — compared with the stored value, since edit forms resend all).
+- Only the owner may create, edit or delete an owner/manager or grant those
+  roles; nobody changes their own role. Cashiers get colleagues without pay,
+  contact or address fields. Owner password change/reset ends every other
+  owner-password session (`destroyOwnerSessions`); a staff reset or
+  deactivation ends their email logins.
+- Not yet enforced server-side: the role discount limits (`roleDiscountLimits`
+  — automatic promotions and quote imports also arrive as line discounts, so a
+  blunt cap would refuse legitimate sales). If `forceStaffLogin` is off, a till
+  opened with the owner's password stays an owner session — keep it on.
+
+Pinned by `staff-roles.test.ts`.
+
 ### Data conventions (important, non-obvious)
 - Numeric DB columns (price, total, …) are Postgres `numeric`; route handlers return them via `parseFloat()`.
 - Boolean fields are stored as text `"true"`/`"false"` (a Drizzle text-column limitation) — compare/serialize accordingly.

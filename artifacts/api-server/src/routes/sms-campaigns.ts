@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, smsCampaignsTable, customersTable } from "@workspace/db";
 import { eq, and, sql } from "drizzle-orm";
@@ -83,7 +84,7 @@ router.get("/sms-campaigns/audience-count", requireAuth, async (req, res): Promi
   res.json({ count: n });
 });
 
-router.post("/sms-campaigns/:id/send", requireAuth, async (req, res): Promise<void> => {
+router.post("/sms-campaigns/:id/send", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id as string, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

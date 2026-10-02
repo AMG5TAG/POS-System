@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, staffTimesheetsTable, staffTable } from "@workspace/db";
 import { and, eq, gte, lte, isNull } from "drizzle-orm";
@@ -49,7 +50,7 @@ router.get("/staff-timesheets", requireAuth, async (req, res): Promise<void> => 
 });
 
 // Create entry manually (admin, no PIN required)
-router.post("/staff-timesheets", requireAuth, async (req, res): Promise<void> => {
+router.post("/staff-timesheets", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { staffId, staffName, date, clockIn, clockOut } = req.body as {
     staffId: number; staffName: string; date: string; clockIn: string; clockOut?: string | null;
@@ -185,7 +186,7 @@ router.post("/staff-timesheets/clock-out", requireAuth, async (req, res): Promis
   res.json(serialize(updated!));
 });
 
-router.put("/staff-timesheets/:id", requireAuth, async (req, res): Promise<void> => {
+router.put("/staff-timesheets/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }
@@ -206,7 +207,7 @@ router.put("/staff-timesheets/:id", requireAuth, async (req, res): Promise<void>
   res.json(serialize(updated));
 });
 
-router.delete("/staff-timesheets/:id", requireAuth, async (req, res): Promise<void> => {
+router.delete("/staff-timesheets/:id", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(String(req.params.id ?? ""), 10);
   if (!Number.isFinite(id)) { res.status(400).json({ error: "Invalid id" }); return; }

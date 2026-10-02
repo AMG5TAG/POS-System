@@ -5,6 +5,7 @@ import { z } from "zod/v4";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { sendEmail } from "../services/email";
+import { escapeHtml } from "../lib/html-escape";
 import { sendSms } from "../services/sms";
 import { publicDomain } from "../lib/publicUrl";
 
@@ -127,10 +128,10 @@ router.post("/tech-app/send-link", requireAuth, requireManagerOrOwner, async (re
       subject: `${businessName} — Tech App access`,
       html: `
         <p>Hi,</p>
-        <p>You've been given access to the <strong>${businessName}</strong> Tech App — a mobile companion for viewing and scanning service jobs.</p>
-        <p><a href="${url}">${url}</a></p>
+        <p>You've been given access to the <strong>${escapeHtml(businessName)}</strong> Tech App — a mobile companion for viewing and scanning service jobs.</p>
+        <p><a href="${escapeHtml(url)}">${escapeHtml(url)}</a></p>
         <p>Open the link on your phone and sign in with your staff PIN. Tip: add it to your home screen for quick access.</p>
-        <p>— ${businessName}</p>
+        <p>— ${escapeHtml(businessName)}</p>
       `,
       text: `You've been given access to the ${businessName} Tech App.\n\n${url}\n\nOpen the link on your phone and sign in with your staff PIN.`,
     });

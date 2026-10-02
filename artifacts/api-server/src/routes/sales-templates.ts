@@ -1,3 +1,4 @@
+import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
 import { db, salesTemplatesTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
@@ -72,7 +73,7 @@ router.get("/sales-templates/active", requireAuth, async (req, res): Promise<voi
   res.json({ items: rows, total: rows.length });
 });
 
-router.put("/sales-templates/:templateType", requireAuth, async (req, res): Promise<void> => {
+router.put("/sales-templates/:templateType", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const { templateType } = req.params as { templateType: string };
 
