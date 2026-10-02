@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import rateLimit, { ipKeyGenerator } from "express-rate-limit";
 import {
   db,
   merchantsTable,
@@ -24,7 +25,21 @@ import { eq, and } from "drizzle-orm";
 
 const router: IRouter = Router();
 
-router.get("/public/b/:username/products/:id", async (req, res): Promise<void> => {
+/* Product ids are sequential, so without a limit the whole in-store catalogue —
+   including products kept off the online shop — could be walked page by page.
+   Someone scanning stickers in the shop never comes near 60 in 10 minutes.
+   (Products hidden from the shop are still served here on purpose: they sit on
+   the shelf with a QR sticker on them.) */
+const LOCALHOST = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
+const productPageLimiter = rateLimit({
+  windowMs: 10 * 60 * 1000, max: 60,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: "Too many requests — please try again shortly." },
+  keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
+  skip: (req) => LOCALHOST.has(req.ip ?? ""),
+});
+
+router.get("/public/b/:username/products/:id", productPageLimiter, async (req, res): Promise<void> => {
   const username = String(req.params.username || "").trim().toLowerCase();
   const productId = Number.parseInt(String(req.params.id), 10);
   if (!username || !Number.isFinite(productId)) {
@@ -65,8 +80,8 @@ router.get("/public/b/:username/products/:id", async (req, res): Promise<void> =
       warrantyUnit: productsTable.warrantyUnit,
     })
     .from(productsTable)
-    .leftJoin(categoriesTable, eq(productsTable.categoryId, categoriesTable.id))
-    .leftJoin(brandsTable, eq(productsTable.brandId, brandsTable.id))
+    .leftJoin(categoriesTable, and(eq(productsTable.categoryId, categoriesTable.id), eq(categoriesTable.merchantId, productsTable.merchantId)))
+    .leftJoin(brandsTable, and(eq(productsTable.brandId, brandsTable.id), eq(brandsTable.merchantId, productsTable.merchantId)))
     .where(and(
       eq(productsTable.merchantId, merchant.id),
       eq(productsTable.id, productId),

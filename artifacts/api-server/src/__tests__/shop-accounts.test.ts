@@ -112,11 +112,13 @@ describe("POST /api/shop/auth/login", () => {
     expect(res.body.customer.id).toBe(2);
   });
 
-  it("tells an in-store customer with no password yet to set one up", async () => {
+  it("doesn't reveal that an email belongs to an in-store customer with no password", async () => {
     h.rows = [[customer({ id: 1 })]];
-    const res = await request(app).post("/api/shop/auth/login").send({ email: "sam@example.com", password: "anything" });
-    expect(res.status).toBe(401);
-    expect(res.body.needsSetup).toBe(true);
+    const known = await request(app).post("/api/shop/auth/login").send({ email: "sam@example.com", password: "anything" });
+    h.rows = [[]];
+    const unknown = await request(app).post("/api/shop/auth/login").send({ email: "nobody@example.com", password: "anything" });
+    expect(known.status).toBe(401);
+    expect(known.body).toEqual(unknown.body);
   });
 
   it("gives the same answer for a wrong password as for an unknown email", async () => {

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { foreignIdError } from "../lib/owned-ids";
 import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable, productOversellLedgerTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -234,13 +235,21 @@ router.get("/purchase-orders", requireAuth, async (req, res) => {
 router.post("/purchase-orders", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreatePurchaseOrderBody.parse(req.body);
+  {
+    const foreign = await foreignIdError(merchantId, { supplierId: body.supplierId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   // A client-supplied PO number is used verbatim (no retry — a duplicate is a
   // client error surfaced as 409); an auto number is max+1 and retried on the
   // unique-index conflict so concurrent creates land on distinct numbers.
   const autoNumber = !body.poNumber;
-  const poPrefix = (body as { poNumberPrefix?: string }).poNumberPrefix ?? "KP";
-  const poDigits = (body as { poNumberDigits?: number }).poNumberDigits ?? 5;
+  const rawPrefix = (body as { poNumberPrefix?: unknown }).poNumberPrefix;
+  const poPrefix = typeof rawPrefix === "string" && /^[A-Za-z0-9-]{1,10}$/.test(rawPrefix) ? rawPrefix : "KP";
+  // Bounded, as service-job numbers are: an unchecked digit count builds a
+  // string of that length in padStart and can take the API down.
+  const rawDigits = (body as { poNumberDigits?: unknown }).poNumberDigits;
+  const poDigits = typeof rawDigits === "number" && Number.isInteger(rawDigits) && rawDigits >= 1 && rawDigits <= 10 ? rawDigits : 5;
   let poNumber = body.poNumber ?? "";
 
   const itemsSubtotal = (body.items ?? []).reduce((s, i) => s + (i.quantity ?? 1) * (i.unitCost ?? 0), 0);
@@ -352,6 +361,10 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   const [owned] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!owned) { res.status(404).json({ error: "Not found" }); return; }
+  {
+    const foreign = await foreignIdError(merchantId, { supplierId: body.supplierId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
   // A PO can only be marked complete once goods have actually been received.
   // Receiving flows through POST /:id/receive (which raises `received`); guard the
   // generic status edit so a PO can't be flipped to received with nothing received.

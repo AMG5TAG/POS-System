@@ -291,6 +291,16 @@ describe("changing email", () => {
     expect(h.emails[0]!.html).toContain("/api/shop/auth/confirm-email?token=");
   });
 
+  it("caps confirmation emails at five an hour per account", async () => {
+    const statuses: number[] = [];
+    for (let i = 0; i < 6; i++) {
+      h.session = { portalCustomerId: 77 };
+      h.rows = [[{ ...customer, id: 77 }], [], [{ ...customer, id: 77 }], [{ businessName: "Koastal" }]];
+      statuses.push((await request(app).patch("/api/shop/account/profile").send(profile({ email: `n${i}@example.com` }))).status);
+    }
+    expect(statuses).toEqual([200, 200, 200, 200, 200, 429]);
+  });
+
   it("refuses an address another customer holds", async () => {
     h.session = { portalCustomerId: 9 };
     h.rows = [[customer], [{ id: 12 }]];

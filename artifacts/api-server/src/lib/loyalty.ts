@@ -196,3 +196,10 @@ export function loyaltyProgramInfo(programType: string, config: LoyaltyConfig, e
   }
   return { enabled, type: programType, name: loyaltyName(programType, config), unit, monetary: isMonetaryProgram(programType), headline, details, birthdayBonus: !!birthday };
 }
+
+/** Why a refund, void or invoice reversal was refused: it would take back
+ *  loyalty the customer has already spent. Reversals take it back in full or
+ *  not at all — clamping at zero let the customer keep what they had spent. */
+export function loyaltySpentMessage(earned: number): string {
+  return `The customer has already spent the ${earned} loyalty this earned, so it can't be taken back. Adjust their loyalty balance first, then try again.`;
+}

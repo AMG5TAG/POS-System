@@ -1,4 +1,5 @@
 import { allowSensitiveChanges, requireManagerOrApproval, requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
+import { foreignIdError } from "../lib/owned-ids";
 import { reconcileGroupPrices, followPrice } from "@workspace/group-pricing";
 import { Router, type IRouter } from "express";
 import { db, productsTable, categoriesTable, digitalCodesTable, productVariantsTable, productPriceHistoryTable, productTypesTable, productSerialsTable, lowStockAlertSettingsTable, transactionsTable, invoicesTable, customersTable } from "@workspace/db";
@@ -329,6 +330,10 @@ router.post("/products", requireAuth, async (req, res): Promise<void> => {
   const parsed = CreateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, preOrder, preOrderReleaseDate, preOrderEtaDate, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
+  {
+    const foreign = await foreignIdError(req.session.merchantId!, { categoryId: rest.categoryId, brandId: (rest as { brandId?: unknown }).brandId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   // Reject a SKU that already exists for this merchant (case-insensitive, like
   // the CSV import path). SKU has no DB unique constraint, so this is enforced
@@ -757,6 +762,8 @@ router.patch("/products/bulk", requireAuth, requireManagerOrApproval, async (req
   }
 
   if (action === "set_category") {
+    const foreign = await foreignIdError(merchantId, { categoryId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
     await db.update(productsTable)
       .set({ categoryId: categoryId ?? null })
       .where(and(inArray(productsTable.id, validIds), eq(productsTable.merchantId, merchantId)));
@@ -795,6 +802,10 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   const parsed = UpdateProductBody.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
   const { price, costPrice, taxRate, trackInventory, isActive, excludeFromLoyalty, preOrder, preOrderReleaseDate, preOrderEtaDate, groupPrices, isEpay: isEpayRaw, tracksSerial, tags, productTypeId, technicalSpecs, weightKg, lengthCm, widthCm, heightCm, media, ...rest } = parsed.data;
+  {
+    const foreign = await foreignIdError(req.session.merchantId!, { categoryId: rest.categoryId, brandId: (rest as { brandId?: unknown }).brandId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   // Prices are a manager's call (or a manager's PIN at the till): a cashier
   // repricing an item before ringing it up is the obvious fraud.

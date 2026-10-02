@@ -23,7 +23,9 @@ export default function Login() {
       navigate(next.startsWith("/") ? next : "/account");
     } catch (err) {
       setError((err as Error).message);
-      setNeedsSetup(err instanceof ApiError && err.body.needsSetup === true);
+      // The server answers every failed sign-in the same way (it won't say
+      // whether an email is a customer's), so the set-up hint follows any 401.
+      setNeedsSetup(err instanceof ApiError && err.status === 401);
     } finally { setBusy(false); }
   };
 
@@ -32,7 +34,7 @@ export default function Login() {
       <form onSubmit={submit} className="space-y-4">
         {error && <Notice>{error}</Notice>}
         {needsSetup && (
-          <Notice tone="ok">You're already a customer — use <Link href={`/account/forgot?email=${encodeURIComponent(email)}`} className="underline font-medium">set up my password</Link> and we'll email you a link.</Notice>
+          <Notice tone="ok">Shopped with us in store but never signed in online? <Link href={`/account/forgot?email=${encodeURIComponent(email)}`} className="underline font-medium">Set up your password</Link> and we'll email you a link.</Notice>
         )}
         <Field label="Email" type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} />
         <Field label="Password" type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} />

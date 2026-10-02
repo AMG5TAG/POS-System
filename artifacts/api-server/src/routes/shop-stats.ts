@@ -24,12 +24,33 @@ const router: IRouter = Router();
 
 const LOCALHOST = new Set(["127.0.0.1", "::1", "::ffff:127.0.0.1"]);
 const trackLimiter = rateLimit({
-  windowMs: 10 * 60 * 1000, max: 600,
+  // The shop sends at most one batch per 1.5s while someone is active, and a
+  // mobile carrier puts many shoppers behind one address — so generous, but
+  // no longer the ~1.7M rows a day one IP could write at 600 requests/10 min.
+  windowMs: 10 * 60 * 1000, max: 300,
   standardHeaders: true, legacyHeaders: false,
   message: { error: "Too many requests" },
   keyGenerator: (req) => ipKeyGenerator(req.ip ?? ""),
   skip: (req) => LOCALHOST.has(req.ip ?? ""),
 });
+
+/* Rows stored per IP per hour. Past this the events are dropped (still 204) —
+   statistics are approximate anyway, and the table has no pruning. In-process
+   and soft, which is all a counter of page views needs. */
+export const EVENTS_PER_IP_PER_HOUR = 1500;
+const eventBudget = new Map<string, { hour: number; used: number }>();
+export function takeEventBudget(key: string, wanted: number, now = Date.now()): number {
+  const hour = Math.floor(now / 3_600_000);
+  const cur = eventBudget.get(key);
+  const used = cur && cur.hour === hour ? cur.used : 0;
+  if (!cur || cur.hour !== hour) {
+    // A new hour: forget everyone else's old buckets too, so the map stays small.
+    for (const [k, v] of eventBudget) if (v.hour !== hour) eventBudget.delete(k);
+  }
+  const granted = Math.max(0, Math.min(wanted, EVENTS_PER_IP_PER_HOUR - used));
+  eventBudget.set(key, { hour, used: used + granted });
+  return granted;
+}
 
 const ipSecret = () => process.env.SESSION_SECRET || "koapos-shop-stats-dev";
 const ownHosts = () => [siteDomain(), "koastal.com.au", "koastalkollective.com.au", "pos.koastal.com.au"];
@@ -44,8 +65,10 @@ router.post("/shop/track", trackLimiter, async (req, res): Promise<void> => {
   const merchantId = await soleMerchantId();
   if (merchantId == null) return;
   const ipHash = hashIp(req.ip, ipSecret());
+  const granted = takeEventBudget(ipHash, parsed.data.events.length);
+  if (granted === 0) return;
   const device = deviceOf(ua);
-  const rows = parsed.data.events.map((e) => ({
+  const rows = parsed.data.events.slice(0, granted).map((e) => ({
     merchantId,
     type: e.type,
     path: e.path.slice(0, 300),

@@ -3,6 +3,7 @@ import { Router, type IRouter } from "express";
 import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
 import { checkReferralAfterSale } from "../services/referralRewards";
 import { enforceDiscountLimit, discountApprovalToken } from "../lib/discount-authority";
+import { loyaltySpentMessage } from "../lib/loyalty";
 import { groupPriceFor, resolveCustomerGroupId, type GroupPricingRule } from "@workspace/group-pricing";
 import { eq, and, sql, desc, inArray, gte, lte } from "drizzle-orm";
 import { loyaltyEarnedFor } from "../lib/loyalty";
@@ -1253,10 +1254,19 @@ async function reverseSaleEffects(
   } else {
     const earned = parseFloat(transaction.loyaltyEarned ?? "0") || 0;
     if (earned > 0) {
-      await tx
+      // Taken back in full or not at all. Clamping at zero let a customer spend
+      // what a sale earned and keep it when the sale was refunded; now the
+      // reversal waits until staff settle the balance by hand.
+      const taken = await tx
         .update(customersTable)
-        .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} - ${earned})` })
-        .where(and(eq(customersTable.id, transaction.customerId), eq(customersTable.merchantId, merchantId)));
+        .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} - ${earned}` })
+        .where(and(
+          eq(customersTable.id, transaction.customerId),
+          eq(customersTable.merchantId, merchantId),
+          sql`${customersTable.loyaltyPoints} >= ${earned}`,
+        ))
+        .returning({ id: customersTable.id });
+      if (taken.length === 0) throw new HttpError(409, loyaltySpentMessage(earned));
     }
   }
 }

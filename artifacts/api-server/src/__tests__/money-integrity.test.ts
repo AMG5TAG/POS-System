@@ -12,7 +12,7 @@ import session from "express-session";
  *  - two tills could spend one loyalty balance at once;
  *  - a role's discount limit was enforced only by the till;
  *  - store credit spent on an invoice was lost when the payment was reversed,
- *    the invoice un-paid or deleted.
+ *    the invoice un-paid or deleted — and so was gift-card balance.
  * Fixtures are created on an existing merchant and removed afterwards.
  */
 
@@ -40,7 +40,7 @@ describe.skipIf(!hasDb)("money integrity (real DB)", () => {
   /* eslint-enable @typescript-eslint/no-explicit-any */
   let app: express.Express;
   let finalizeSale: typeof import("../routes/transactions")["finalizeSale"];
-  const created = { customers: [] as number[], products: [] as number[], tx: [] as number[], invoices: [] as number[], tradeIns: [] as number[] };
+  const created = { cards: [] as number[], customers: [] as number[], products: [] as number[], tx: [] as number[], invoices: [] as number[], tradeIns: [] as number[] };
 
   const PRICE = 20;
   let productId = 0;
@@ -91,6 +91,10 @@ describe.skipIf(!hasDb)("money integrity (real DB)", () => {
     if (created.tx.length) {
       await db.delete(t.storeCreditLedgerTable).where(inArray(t.storeCreditLedgerTable.transactionId, created.tx));
       await db.delete(t.transactionsTable).where(inArray(t.transactionsTable.id, created.tx));
+    }
+    if (created.cards.length) {
+      await db.delete(t.giftCardLedgerTable).where(inArray(t.giftCardLedgerTable.giftCardId, created.cards));
+      await db.delete(t.giftCardsTable).where(inArray(t.giftCardsTable.id, created.cards));
     }
     if (created.tradeIns.length) await db.delete(t.tradeInsTable).where(inArray(t.tradeInsTable.id, created.tradeIns));
     if (created.invoices.length) await db.delete(t.invoicesTable).where(inArray(t.invoicesTable.id, created.invoices));
@@ -161,7 +165,7 @@ describe.skipIf(!hasDb)("money integrity (real DB)", () => {
     expect(res.status).toBe(400);
   });
 
-  const creditInvoice = async (customerId: number, total: number) => {
+  const creditInvoice = async (customerId: number | null, total: number) => {
     const [inv] = await db.insert(t.invoicesTable).values({
       merchantId: h.merchantId, customerId, invoiceNumber: `TEST-SC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`, status: "sent",
       subtotal: String(total), taxTotal: "0", total: String(total), amountPaid: "0",
@@ -215,6 +219,82 @@ describe.skipIf(!hasDb)("money integrity (real DB)", () => {
     expect(await creditBalance(c.id)).toBe(0);
     expect((await request(app).delete(`/api/invoices/${inv.id}`)).status).toBe(204);
     expect(await creditBalance(c.id)).toBe(20);
+  });
+
+  const newCard = async (balance: number) => {
+    const [card] = await db.insert(t.giftCardsTable).values({
+      merchantId: h.merchantId, cardNumber: `TEST-GC-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      initialValue: String(balance), currentBalance: String(balance), status: "active",
+    }).returning();
+    created.cards.push(card.id);
+    return card;
+  };
+  const cardState = async (id: number) => {
+    const [c] = await db.select({ b: t.giftCardsTable.currentBalance, s: t.giftCardsTable.status }).from(t.giftCardsTable).where(orm.eq(t.giftCardsTable.id, id));
+    return { balance: parseFloat(c.b), status: c.s };
+  };
+
+  it("puts gift-card spend back when an invoice is un-paid or deleted, once", async () => {
+    const card = await newCard(30);
+    const inv = await creditInvoice(null, 30);
+    const pay = await request(app).post(`/api/invoices/${inv.id}/payment`).send({ amount: 30, method: "other", giftCardPayment: { cardId: card.id, amount: 30 } });
+    expect(pay.status).toBe(200);
+    expect(await cardState(card.id)).toEqual({ balance: 0, status: "redeemed" });
+
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "sent" })).status).toBe(200);
+    expect(await cardState(card.id)).toEqual({ balance: 30, status: "active" });
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "paid" })).status).toBe(200);
+    expect((await request(app).delete(`/api/invoices/${inv.id}`)).status).toBe(204);
+    expect((await cardState(card.id)).balance).toBe(30);
+  });
+
+  it("puts back only the gift-card spend a reversal takes below", async () => {
+    const card = await newCard(50);
+    const inv = await creditInvoice(null, 100);
+    // $40 from the card, $60 cash.
+    expect((await request(app).post(`/api/invoices/${inv.id}/payment`).send({ amount: 100, method: "other", giftCardPayment: { cardId: card.id, amount: 40 } })).status).toBe(200);
+    expect((await cardState(card.id)).balance).toBe(10);
+    // Reversing $50 leaves $50 paid — still covers the $40 from the card.
+    expect((await request(app).post(`/api/invoices/${inv.id}/payment/reverse`).send({ amount: 50 })).status).toBe(200);
+    expect((await cardState(card.id)).balance).toBe(10);
+    // Another $30 leaves $20 paid: $20 of the card spend comes back.
+    expect((await request(app).post(`/api/invoices/${inv.id}/payment/reverse`).send({ amount: 30 })).status).toBe(200);
+    expect((await cardState(card.id)).balance).toBe(30);
+  });
+
+  const setPoints = (id: number, points: number) =>
+    db.update(t.customersTable).set({ loyaltyPoints: points }).where(orm.eq(t.customersTable.id, id));
+  const pointsOf = async (id: number) =>
+    Number((await db.select({ p: t.customersTable.loyaltyPoints }).from(t.customersTable).where(orm.eq(t.customersTable.id, id)))[0].p);
+
+  it("refuses to un-pay an invoice whose loyalty the customer has spent, and changes nothing", async () => {
+    const c = await newCustomer({ loyaltyPoints: 0 });
+    const inv = await creditInvoice(c.id, 1000);
+    expect((await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "paid" })).status).toBe(200);
+    if (await pointsOf(c.id) === 0) return; // loyalty programme off on this database
+    await setPoints(c.id, 0); // spent it
+
+    const res = await request(app).patch(`/api/invoices/${inv.id}`).send({ status: "sent" });
+    expect(res.status).toBe(409);
+    expect(res.body.error).toMatch(/already spent/);
+    const [after] = await db.select({ status: t.invoicesTable.status }).from(t.invoicesTable).where(orm.eq(t.invoicesTable.id, inv.id));
+    expect(after.status).toBe("paid");
+    expect((await request(app).delete(`/api/invoices/${inv.id}`)).status).toBe(409);
+  });
+
+  it("refuses to refund a sale whose loyalty the customer has spent", async () => {
+    const c = await newCustomer({ loyaltyPoints: 0 });
+    const res = await finalizeSale(h.merchantId, sale(c.id, { paymentMethod: "cash", amountTendered: PRICE }), []);
+    expect(res.ok).toBe(true);
+    if (!res.ok) return;
+    created.tx.push(res.transaction.id);
+    if (await pointsOf(c.id) === 0) return; // nothing earned on this database
+    await setPoints(c.id, 0);
+
+    const refund = await request(app).post(`/api/transactions/${res.transaction.id}/refund`).send({ reason: "audit test" });
+    expect(refund.status).toBe(409);
+    const [after] = await db.select({ status: t.transactionsTable.status }).from(t.transactionsTable).where(orm.eq(t.transactionsTable.id, res.transaction.id));
+    expect(after.status).toBe("completed");
   });
 
   describe("role discount limits", () => {

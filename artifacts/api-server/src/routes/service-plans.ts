@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { foreignIdError } from "../lib/owned-ids";
 import { db, servicePlansTable, customersTable, invoicesTable } from "@workspace/db";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -62,6 +63,10 @@ router.post("/service-plans", requireAuth, async (req, res): Promise<void> => {
   const b = (req.body ?? {}) as Record<string, unknown>;
   const name = typeof b.name === "string" ? b.name.trim() : "";
   if (!name) { res.status(400).json({ error: "Plan name is required" }); return; }
+  {
+    const foreign = await foreignIdError(merchantId, { customerId: b.customerId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
   const cycle = typeof b.billingCycle === "string" && CYCLES.has(b.billingCycle) ? b.billingCycle : "monthly";
   const start = typeof b.startDate === "string" && b.startDate ? b.startDate : new Date().toISOString().split("T")[0];
   await db.insert(servicePlansTable).values({
@@ -83,6 +88,10 @@ router.put("/service-plans/:id", requireAuth, async (req, res): Promise<void> =>
   const merchantId = req.session.merchantId!;
   const id = Number(req.params.id);
   const b = (req.body ?? {}) as Record<string, unknown>;
+  {
+    const foreign = await foreignIdError(merchantId, { customerId: b.customerId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
   const patch: Partial<typeof servicePlansTable.$inferInsert> = {};
   if (typeof b.name === "string" && b.name.trim()) patch.name = b.name.trim();
   if (b.feeAmount != null) patch.feeAmount = String(Number(b.feeAmount) || 0);

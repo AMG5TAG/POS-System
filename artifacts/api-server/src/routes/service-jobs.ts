@@ -1,4 +1,5 @@
 import { requireManagerOrApproval } from "../middlewares/requireManagerOrOwner";
+import { foreignIdError } from "../lib/owned-ids";
 import { Router, type IRouter } from "express";
 import crypto from "node:crypto";
 import { db, serviceJobsTable, customersTable, merchantsTable, quotesTable } from "@workspace/db";
@@ -136,6 +137,10 @@ router.get("/service-jobs", requireAuth, async (req, res): Promise<void> => {
 router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
+  {
+    const foreign = await foreignIdError(merchantId, { customerId: body.customerId, staffId: body.staffId, referredByCustomerId: body.referredByCustomerId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   const today = new Date().toISOString().split("T")[0];
 
@@ -214,6 +219,10 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
   const body = req.body as Record<string, unknown>;
+  {
+    const foreign = await foreignIdError(merchantId, { customerId: body.customerId, staffId: body.staffId, referredByCustomerId: body.referredByCustomerId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   const updates: Record<string, unknown> = {};
   if (typeof body.status === "string") updates.status = body.status;

@@ -2,7 +2,7 @@ import { Router, type IRouter } from "express";
 import { escapeHtml } from "../lib/html-escape";
 import { db, customersTable } from "@workspace/db";
 import { eq, and } from "drizzle-orm";
-import { createHmac } from "crypto";
+import { createHmac, timingSafeEqual } from "crypto";
 
 const router: IRouter = Router();
 
@@ -15,7 +15,8 @@ function verifyToken(token: string): { merchantId: number; customerId: number } 
     const secret = process.env.UNSUBSCRIBE_SECRET ?? process.env.SESSION_SECRET ?? "koapos-unsub-secret";
     const payload = `${merchantIdStr}:${customerIdStr}`;
     const expected = createHmac("sha256", secret).update(payload).digest("hex").slice(0, 16);
-    if (sig !== expected) return null;
+    // Constant-time. The 16-hex signature is what links already sent carry.
+    if (!sig || sig.length !== expected.length || !timingSafeEqual(Buffer.from(sig), Buffer.from(expected))) return null;
     return { merchantId: parseInt(merchantIdStr, 10), customerId: parseInt(customerIdStr, 10) };
   } catch {
     return null;

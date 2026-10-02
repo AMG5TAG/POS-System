@@ -4,6 +4,7 @@ import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { completeLinkedWork } from "../lib/linked-work";
+import { loyaltySpentMessage } from "../lib/loyalty";
 import { requireAuth } from "../middlewares/requireAuth";
 import { customerDisplayName } from "../lib/customer-name";
 import { sendEmail } from "../services/email";
@@ -119,7 +120,7 @@ function computeTotals(lines: LineItem[], discount?: Discount | null) {
 
   return { total, taxTotal, subtotal, discountAmount };
 }
-type InvoiceEvent = { id?: string; type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; reverses?: string; idempotencyKey?: string; storeCreditCustomerId?: number };
+type InvoiceEvent = { id?: string; type: string; timestamp: string; detail?: string; method?: string; amount?: number; surchargeAmount?: number; reverses?: string; idempotencyKey?: string; storeCreditCustomerId?: number; giftCardId?: number };
 
 // A planned instalment on an invoice's payment schedule. Coverage is derived
 // from amountPaid, so only the plan (label/amount/dueDate) is stored.
@@ -274,11 +275,24 @@ async function creditLoyaltyForPaidInvoice(executor: DbExecutor, merchantId: num
     }
   }
   if (earned > 0) {
-    await executor
+    // Taken back in full or not at all: a customer who has spent what the
+    // invoice earned blocks the reversal until staff settle the balance.
+    const moved = await executor
       .update(customersTable)
-      .set({ loyaltyPoints: sql`GREATEST(0, ${customersTable.loyaltyPoints} + ${earned * sign})` })
-      .where(and(eq(customersTable.id, customerId), eq(customersTable.merchantId, merchantId)));
+      .set({ loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${earned * sign}` })
+      .where(and(
+        eq(customersTable.id, customerId),
+        eq(customersTable.merchantId, merchantId),
+        ...(sign < 0 ? [sql`${customersTable.loyaltyPoints} >= ${earned}`] : []),
+      ))
+      .returning({ id: customersTable.id });
+    if (sign < 0 && moved.length === 0) throw new LoyaltySpentError(earned);
   }
+}
+
+/** Thrown inside a transaction to roll it back; routes answer 409. */
+class LoyaltySpentError extends Error {
+  constructor(public earned: number) { super(loyaltySpentMessage(earned)); }
 }
 
 /* ── Store credit spent on an invoice ────────────────────────────────────────
@@ -316,9 +330,61 @@ async function returnStoreCredit(tx: DbExecutor, merchantId: number, customerId:
   });
 }
 
-/** Return every store-credit leg still outstanding; the events to append. */
-async function returnAllInvoiceStoreCredit(tx: DbExecutor, merchantId: number, invoiceLabel: string, events: InvoiceEvent[], why: string, staffId: number | null): Promise<InvoiceEvent[]> {
+/* Gift cards spent on an invoice, likewise. A gift-card payment is recorded as
+ * its own `gift-card-redeemed` event (not a `payment` event, so the report
+ * views — which count payment events by method — don't count it twice) naming
+ * the card; returns carry `reverses` the same way. */
+function giftCardOutstanding(events: InvoiceEvent[]): Array<{ eventId: string; cardId: number; amount: number }> {
+  const out: Array<{ eventId: string; cardId: number; amount: number }> = [];
+  for (const e of events) {
+    if (e.type !== "gift-card-redeemed" || !e.id || !e.giftCardId) continue;
+    const returned = events.filter((r) => r.reverses === e.id).reduce((sum, r) => sum + Math.abs(r.amount ?? 0), 0);
+    const left = round2((e.amount ?? 0) - returned);
+    if (left > 0.004) out.push({ eventId: e.id, cardId: e.giftCardId, amount: left });
+  }
+  return out;
+}
+
+/** Put `amount` back on a gift card under a lock; a card emptied by the
+ *  payment becomes usable again. Any other status (on hold, void) is kept. */
+async function returnToGiftCard(tx: DbExecutor, merchantId: number, cardId: number, amount: number, note: string): Promise<void> {
+  const [card] = await tx.select().from(giftCardsTable)
+    .where(and(eq(giftCardsTable.id, cardId), eq(giftCardsTable.merchantId, merchantId))).for("update");
+  if (!card) return;
+  const balance = round2(parseFloat(card.currentBalance) + amount);
+  await tx.update(giftCardsTable)
+    .set({ currentBalance: String(balance), status: card.status === "redeemed" ? "active" : card.status })
+    .where(eq(giftCardsTable.id, card.id));
+  await tx.insert(giftCardLedgerTable).values({
+    merchantId, giftCardId: card.id, type: "refund",
+    amount: String(amount), balanceAfter: String(balance), note,
+  });
+}
+
+/** Return gift-card spend, newest first, until `amount` is covered. */
+async function returnGiftCardSpend(tx: DbExecutor, merchantId: number, events: InvoiceEvent[], amount: number, note: string): Promise<InvoiceEvent[]> {
   const markers: InvoiceEvent[] = [];
+  let left = round2(amount);
+  for (const g of giftCardOutstanding(events).reverse()) {
+    if (left <= 0.004) break;
+    const back = round2(Math.min(left, g.amount));
+    await returnToGiftCard(tx, merchantId, g.cardId, back, note);
+    markers.push({
+      id: crypto.randomUUID(), type: "gift-card-returned", timestamp: new Date().toISOString(),
+      detail: `$${back.toFixed(2)} returned to the gift card`, amount: -back, method: "gift_card", reverses: g.eventId,
+    });
+    left = round2(left - back);
+  }
+  return markers;
+}
+
+/** Return every store-credit leg and gift-card spend still outstanding; the
+ *  events to append. */
+async function returnInvoiceTenders(tx: DbExecutor, merchantId: number, invoiceLabel: string, events: InvoiceEvent[], why: string, staffId: number | null): Promise<InvoiceEvent[]> {
+  const giftTotal = giftCardOutstanding(events).reduce((sum, g) => sum + g.amount, 0);
+  const markers: InvoiceEvent[] = giftTotal > 0
+    ? await returnGiftCardSpend(tx, merchantId, events, giftTotal, `Returned — invoice ${invoiceLabel} ${why}`)
+    : [];
   for (const leg of storeCreditOutstanding(events)) {
     await returnStoreCredit(tx, merchantId, leg.customerId, leg.amount, `Returned — invoice ${invoiceLabel} ${why}`, staffId);
     markers.push({
@@ -758,6 +824,7 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
   // a non-paid state and double-credit loyalty.
   let inv: typeof invoicesTable.$inferSelect | undefined;
   const mId = req.session.merchantId!;
+  let loyaltyBlocked = "";
   await db.transaction(async (tx) => {
     // Always read the current row under lock so paid-state transitions (which
     // drive stock + customer spend, treating invoices like POS sales) are
@@ -769,10 +836,11 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       .for("update");
     if (!preInv) return;
 
-    // Clearing the recorded payments gives back the store credit they spent.
+    // Clearing the recorded payments gives back the store credit and gift-card
+    // balance they spent.
     if (updates.amountPaid === "0") {
       const preEvents = (preInv.events as InvoiceEvent[] | null) ?? [];
-      const markers = await returnAllInvoiceStoreCredit(tx, mId, preInv.invoiceNumber, preEvents, `set to ${String(updates.status)}`, req.session.staffId ?? null);
+      const markers = await returnInvoiceTenders(tx, mId, preInv.invoiceNumber, preEvents, `set to ${String(updates.status)}`, req.session.staffId ?? null);
       if (markers.length) updates.events = [...preEvents, ...markers];
     }
 
@@ -833,7 +901,11 @@ router.patch("/invoices/:id", requireAuth, async (req, res): Promise<void> => {
       if (preInv.customerId) await creditLoyaltyForPaidInvoice(tx, mId, preInv.customerId, oldTotal, -1);
       if (updated.customerId) await creditLoyaltyForPaidInvoice(tx, mId, updated.customerId, newTotal);
     }
+  }).catch((err: unknown) => {
+    if (err instanceof LoyaltySpentError) { loyaltyBlocked = err.message; return; }
+    throw err;
   });
+  if (loyaltyBlocked) { res.status(409).json({ error: loyaltyBlocked }); return; }
   if (!inv) { res.status(404).json({ error: "Invoice not found" }); return; }
 
   // When this update marks the invoice Paid, complete any linked service job / appointment.
@@ -986,6 +1058,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     // Atomic gift-card debit: lock, validate, decrement the card and write a
     // redemption ledger entry inside the SAME transaction as the invoice
     // payment, so the card is never charged unless the payment is recorded.
+    let giftCardEvent: InvoiceEvent | null = null;
     if (giftCardPayment) {
       const cardId = Number(giftCardPayment.cardId);
       const applied = round2(Number(giftCardPayment.amount));
@@ -1018,6 +1091,11 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
         balanceAfter: newCardBalance.toString(),
         note: `Redeemed on invoice payment #${id}`,
       });
+      giftCardEvent = {
+        id: crypto.randomUUID(), type: "gift-card-redeemed", timestamp: new Date().toISOString(),
+        detail: `$${applied.toFixed(2)} paid from gift card ${card.cardNumber}`,
+        amount: applied, method: "gift_card", giftCardId: card.id,
+      };
     }
 
     // Written only now, after the gift card's checks: every early return above
@@ -1058,6 +1136,7 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
     const events: InvoiceEvent[] = [
       ...((cur.events as InvoiceEvent[] | null) ?? []),
       ...legEvents,
+      ...(giftCardEvent ? [giftCardEvent] : []),
     ];
 
     await tx
@@ -1138,6 +1217,7 @@ router.post("/invoices/:id/payment/reverse", requireAuth, requireManagerOrApprov
   let payErrorMessage = "";
   // Read-modify-write under a row lock, mirroring the payment route, so a
   // reversal can't race a concurrent payment and corrupt amountPaid / status.
+  let loyaltyBlocked = "";
   await db.transaction(async (tx) => {
     const [cur] = await tx
       .select({
@@ -1188,13 +1268,20 @@ router.post("/invoices/:id/payment/reverse", requireAuth, requireManagerOrApprov
       ...(eventId ? { reverses: eventId } : {}),
     };
 
+    // Gift-card spend can't exceed what is still paid: whatever a reversal
+    // takes below it goes back on the card.
+    const giftLeft = giftCardOutstanding(existingEvents).reduce((sum, g) => sum + g.amount, 0);
+    const giftMarkers = giftLeft > newPaid + 0.004
+      ? await returnGiftCardSpend(tx, merchantId, existingEvents, round2(giftLeft - newPaid), `Returned — invoice #${id} payment reversed`)
+      : [];
+
     await tx
       .update(invoicesTable)
       .set({
         amountPaid: String(newPaid),
         status: newStatus,
         paidAt: stillFullyPaid ? new Date() : null,
-        events: [...existingEvents, reversalEvent],
+        events: [...existingEvents, reversalEvent, ...giftMarkers],
       })
       .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
 
@@ -1207,7 +1294,11 @@ router.post("/invoices/:id/payment/reverse", requireAuth, requireManagerOrApprov
         await creditLoyaltyForPaidInvoice(tx, merchantId, cur.customerId, total, -1);
       }
     }
+  }).catch((err: unknown) => {
+    if (err instanceof LoyaltySpentError) { loyaltyBlocked = err.message; return; }
+    throw err;
   });
+  if (loyaltyBlocked) { res.status(409).json({ error: loyaltyBlocked }); return; }
 
   if (notFound) { res.status(404).json({ error: "Invoice not found" }); return; }
   if (payErrorStatus) { res.status(payErrorStatus).json({ error: payErrorMessage }); return; }
@@ -1241,6 +1332,7 @@ router.delete("/invoices/:id", requireAuth, requireManagerOrApproval, async (req
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
   const merchantId = req.session.merchantId!;
+  let loyaltyBlocked = "";
   await db.transaction(async (tx) => {
     const [existing] = await tx
       .select({ status: invoicesTable.status, customerId: invoicesTable.customerId, total: invoicesTable.total, items: invoicesTable.items, events: invoicesTable.events, invoiceNumber: invoicesTable.invoiceNumber })
@@ -1249,7 +1341,7 @@ router.delete("/invoices/:id", requireAuth, requireManagerOrApproval, async (req
       .for("update");
     if (!existing) return;
     // Store credit spent on it goes back to the customer, paid or partly paid.
-    await returnAllInvoiceStoreCredit(tx, merchantId, existing.invoiceNumber, (existing.events as InvoiceEvent[] | null) ?? [], "deleted", req.session.staffId ?? null);
+    await returnInvoiceTenders(tx, merchantId, existing.invoiceNumber, (existing.events as InvoiceEvent[] | null) ?? [], "deleted", req.session.staffId ?? null);
     // Deleting a paid invoice reverses its stock + spend effects (mirrors POS).
     if (existing.status === "paid") {
       await applyInvoiceStock(tx, merchantId, existing.items, 1);
@@ -1258,7 +1350,11 @@ router.delete("/invoices/:id", requireAuth, requireManagerOrApproval, async (req
       if (existing.customerId) await creditLoyaltyForPaidInvoice(tx, merchantId, existing.customerId, parseFloat(existing.total ?? "0"), -1);
     }
     await tx.delete(invoicesTable).where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  }).catch((err: unknown) => {
+    if (err instanceof LoyaltySpentError) { loyaltyBlocked = err.message; return; }
+    throw err;
   });
+  if (loyaltyBlocked) { res.status(409).json({ error: loyaltyBlocked }); return; }
   res.sendStatus(204);
 });
 

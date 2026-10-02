@@ -1,3 +1,4 @@
+import { rotateSessionKeeping } from "../lib/session-rotate";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, merchantsTable, staffTable, serviceJobsTable, customersTable, appointmentsTable, techAppSettingsTable, techAppEventsTable, qrCodesTable } from "@workspace/db";
 import { eq, and, or, asc, desc, ilike } from "drizzle-orm";
@@ -205,6 +206,7 @@ router.post("/tech/b/:username/login", async (req, res): Promise<void> => {
     return;
   }
   await attempt.release();
+  await rotateSessionKeeping(req);
   req.session.tech = { staffId: match.id, merchantId: merchant.id };
   logTechEvent(merchant.id, match.id, match.name, "login", "Signed in to the Tech App");
   res.json({

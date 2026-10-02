@@ -172,6 +172,9 @@ router.use(publicBookingRouter);
 // below). A pathless requireAuth in a root-mounted sub-router runs for every
 // later request, so mounting these after it 401s their public endpoints.
 router.use(pwaRouter);
+// Opened from marketing emails by people with no session. It sat after the
+// blanket guard and answered every unsubscribe link with a 401.
+router.use(unsubscribeRouter);
 router.use(portalRouter);
 router.use(productsPublicRouter);
 router.use(techRouter);
@@ -303,7 +306,6 @@ router.use(pricingRulesRouter);
 router.use(modifierGroupsRouter);
 router.use(authSecuritySettingsRouter);
 router.use(backupsRouter);
-router.use(unsubscribeRouter);
 router.use(staffTimesheetsRouter);
 
 export default router;

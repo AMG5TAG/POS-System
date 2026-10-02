@@ -1,3 +1,4 @@
+import { rotateSessionKeeping } from "../lib/session-rotate";
 import { Router, type IRouter, type Request, type Response } from "express";
 import { db, merchantsTable, staffTable, productsTable, customersTable, invoicesTable, transactionsTable, serviceJobsTable, appointmentsTable, mobilePosAppSettingsTable, posFavouritesTable } from "@workspace/db";
 import { matchStaffByPin } from "../lib/staff-pin";
@@ -99,6 +100,7 @@ router.post("/mobile-pos/b/:username/login", async (req, res): Promise<void> => 
   const match = await matchStaffByPin(staff, parsed.data.pin);
   if (!match) { res.status(401).json({ error: "Invalid PIN" }); return; }
   await attempt.release();
+  await rotateSessionKeeping(req);
   req.session.mpos = { staffId: match.id, merchantId: merchant.id };
   res.json({
     staff: { id: match.id, name: match.name, role: match.role },

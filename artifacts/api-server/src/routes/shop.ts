@@ -726,12 +726,9 @@ router.post("/shop/auth/login", loginLimiter, async (req, res): Promise<void> =>
       return;
     }
   }
-  // A known customer who has never set a password gets a hint (and can use
-  // "forgot password" to receive a set-up link) — the same answer otherwise.
-  if (candidates.length > 0 && candidates.every((c) => !c.portalPasswordHash)) {
-    res.status(401).json({ error: "Incorrect email or password.", needsSetup: true });
-    return;
-  }
+  // One answer for every failure. A "you're a customer, set a password" hint
+  // here told anyone which emails belong to in-store customers; the page now
+  // offers the set-up link after any failed sign-in instead.
   deny();
 });
 
@@ -961,6 +958,10 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
       res.status(409).json({ error: "That email is already on another account with us. Contact us and we can combine them." });
       return;
     }
+    if (!emailChangeAllowed(c.id)) {
+      res.status(429).json({ error: "Too many email changes — please try again in an hour." });
+      return;
+    }
     emailChangePending = b.email;
   }
   const [updated] = await db.update(customersTable).set({
@@ -988,6 +989,20 @@ router.patch("/shop/account/profile", async (req, res): Promise<void> => {
   if (emailChangePending) await sendEmailChangeLink(updated!, emailChangePending, req.log);
   res.json({ customer: accountOf(updated!), ...(emailChangePending ? { emailChangePending } : {}) });
 });
+
+/* Each email change mails a link to an address the shopper chooses, from the
+   business's own sender. Without a cap one account could send any number of
+   them; 5 an hour is plenty for typos. Per process — a soft limit, which is
+   all mail volume needs. */
+const EMAIL_CHANGE_LIMIT = 5;
+const emailChangeSends = new Map<number, number[]>();
+function emailChangeAllowed(customerId: number, now = Date.now()): boolean {
+  const recent = (emailChangeSends.get(customerId) ?? []).filter((t) => now - t < 60 * 60 * 1000);
+  if (recent.length >= EMAIL_CHANGE_LIMIT) { emailChangeSends.set(customerId, recent); return false; }
+  recent.push(now);
+  emailChangeSends.set(customerId, recent);
+  return true;
+}
 
 async function sendEmailChangeLink(
   customer: typeof customersTable.$inferSelect,

@@ -1,4 +1,5 @@
 import { Router, type IRouter } from "express";
+import { foreignIdError } from "../lib/owned-ids";
 import { db, appointmentsTable, customersTable, staffTable, merchantsTable, serviceJobsTable } from "@workspace/db";
 import { eq, and, gte, lt, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -212,6 +213,10 @@ router.post("/appointments", requireAuth, async (req, res): Promise<void> => {
   }
   const merchantId = req.session.merchantId!;
   const { scheduledAt, endAt, title, customerId, staffId, serviceJobId, status, notes, sendSms: sendSmsFlag, sendEmail: sendEmailFlag } = parsed.data;
+  {
+    const foreign = await foreignIdError(merchantId, { customerId, staffId, serviceJobId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   const start = new Date(scheduledAt);
   const end = new Date(endAt);
@@ -292,6 +297,10 @@ router.patch("/appointments/:id", requireAuth, async (req, res): Promise<void> =
   }
   const merchantId = req.session.merchantId!;
   const { scheduledAt, endAt, ...rest } = parsed.data;
+  {
+    const foreign = await foreignIdError(merchantId, { customerId: rest.customerId, staffId: rest.staffId, serviceJobId: rest.serviceJobId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
 
   const updates: Record<string, unknown> = { ...rest };
   if (scheduledAt) updates.scheduledAt = new Date(scheduledAt);

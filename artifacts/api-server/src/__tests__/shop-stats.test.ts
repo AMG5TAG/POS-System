@@ -5,7 +5,7 @@ vi.mock("@workspace/db", async (importOriginal) => {
   process.env.DATABASE_URL ||= "postgres://user:pass@localhost:5432/test";
   return importOriginal();
 });
-const { fillSeries } = await import("../routes/shop-stats");
+const { fillSeries, takeEventBudget, EVENTS_PER_IP_PER_HOUR } = await import("../routes/shop-stats");
 
 /**
  * Online shop statistics. Pinned: raw IPs are never stored (only a keyed,
@@ -83,5 +83,16 @@ describe("chart series", () => {
 
   it("has 24 hours for the one-day view", () => {
     expect(fillSeries([], 1, true, new Date("2026-10-01T02:00:00Z"))).toHaveLength(24);
+  });
+});
+
+describe("tracking budget per IP", () => {
+  it("stores up to the hourly cap, then drops, and starts again next hour", () => {
+    const t0 = Date.UTC(2026, 9, 2, 5, 0, 0);
+    expect(takeEventBudget("ip-a", EVENTS_PER_IP_PER_HOUR - 5, t0)).toBe(EVENTS_PER_IP_PER_HOUR - 5);
+    expect(takeEventBudget("ip-a", 20, t0 + 1000)).toBe(5);
+    expect(takeEventBudget("ip-a", 20, t0 + 2000)).toBe(0);
+    expect(takeEventBudget("ip-b", 20, t0 + 2000)).toBe(20);
+    expect(takeEventBudget("ip-a", 20, t0 + 3_600_000)).toBe(20);
   });
 });

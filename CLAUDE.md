@@ -1198,10 +1198,16 @@ inside the DB transaction that records the money, never by a pre-check:
   reversed, the invoice is set back to unpaid, or it is deleted. Each
   store-credit payment event names the customer debited
   (`storeCreditCustomerId`); every return is an event carrying `reverses`, so
-  toggling paid ↔ unpaid returns it once. (Gift cards spent on an invoice are
-  not yet returned this way.)
+  toggling paid ↔ unpaid returns it once. Gift cards likewise: a gift-card
+  payment is its own `gift-card-redeemed` event (not `payment`, which the report
+  views count by method), un-paying or deleting puts it back on the card, and a
+  partial reversal puts back whatever it takes below the gift-card spend.
 - **Loyalty redemption** is conditional on the row update (`loyalty_points >=
-  redeemed`), so two tills can't spend one balance. Invoice loyalty follows the
+  redeemed`), so two tills can't spend one balance. Taking loyalty back is all
+  or nothing: a refund, void, invoice un-pay/reversal or delete that would take
+  back points the customer has already spent is refused (409,
+  `loyaltySpentMessage` in `lib/loyalty.ts`) until staff adjust the balance —
+  clamping at zero used to let them keep what they had spent. Invoice loyalty follows the
   paid state both ways (un-paying or deleting takes it back); flipping an
   invoice in or out of paid by hand needs a manager or manager PIN.
 - **Trade-in accept** claims the row (`status = 'quoted'` in the update) before
@@ -1211,7 +1217,27 @@ inside the DB transaction that records the money, never by a pre-check:
   the total. A till can't send a `delivery-order:` idempotency key. Xero sync
   calls loopback, never the request's Host header.
 - Foreign-id checks: quotes, laybys, trade-ins, modifier links, pre-order
-  delete, discounts; settings bodies go through `stripManagedFields`.
+  delete, discounts; settings bodies go through `stripManagedFields`. New code
+  uses `foreignIdError` (`lib/owned-ids.ts`, pinned by `owned-ids.test.ts`) —
+  appointments, service jobs, service plans, products (category, brand) and
+  purchase orders (supplier) do. A stored foreign id is what let the calendar,
+  follow-ups, invoices and the reminder schedulers show or message another
+  business's customer, so check on write.
+- **Public routes mount before the blanket guard.** A router with a pathless
+  `router.use(requireAuth)` (customer-files-cloud) guards every router mounted
+  after it in `routes/index.ts`. The unsubscribe link sat after it and 401'd
+  every recipient; `public-mounts.test.ts` now requests public routes through
+  the real index with no session — add new public routes to it.
+- **Smaller public-surface rules.** Shop sign-in answers every failure the same
+  way (the page offers the set-up link after any failed attempt — it no longer
+  says which emails are in-store customers). `/shop/track` is 300 requests / 10
+  min per IP and stores at most 1,500 events per IP per hour
+  (`takeEventBudget`), dropping the rest silently. The product QR page
+  (`/public/b/:username/products/:id`) is 60 / 10 min per IP — it still serves
+  products hidden from the online shop, on purpose, since they carry shelf
+  stickers. Tech App and Mobile POS PIN logins rotate the session id with
+  `rotateSessionKeeping` (`lib/session-rotate.ts`), which keeps the session's
+  contents: a plain regenerate would sign the POS out in the same browser.
 
 Pinned by `money-integrity.test.ts` (real DB; skipped without `DATABASE_URL`)
 and `discount-limits.test.ts`.
