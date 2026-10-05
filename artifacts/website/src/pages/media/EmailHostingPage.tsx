@@ -1,5 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import { CheckCircle2, ShoppingCart } from "lucide-react";
 
 /* Email hosting is sold from the "Email Hosting" category of the online shop
@@ -173,8 +174,20 @@ export default function EmailHostingPage() {
   useSeo({
     title: "Business Email Hosting | Microsoft 365 & Google",
     description:
-      "Set up Microsoft 365 or Google Workspace for your business with Koastal Kollective. Custom domain email, cloud storage, meetings and ongoing Australian-based support.",
+      "Microsoft 365 or Google Workspace set up for your business: email on your own domain, cloud storage, meetings and ongoing Australian-based support.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/media/email-hosting",
+      serviceType: "Business Email Hosting",
+      name: "Business Email Hosting",
+      description: "Microsoft 365 and Google Workspace email on your own domain, set up and supported locally.",
+      breadcrumbName: "Email Hosting",
+      parent: { name: "Media", path: "/media" },
+    }),
+    "media-email-hosting",
+  );
 
   return (
     <MediaLayout

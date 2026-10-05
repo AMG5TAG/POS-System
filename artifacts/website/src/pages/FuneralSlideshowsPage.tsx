@@ -8,6 +8,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
@@ -108,6 +109,17 @@ export default function FuneralSlideshowsPage() {
     title: "Funeral & Memorial Slideshows Central Coast",
     description: "Memorial and funeral slideshows made on the Central Coast. Music, photo restoration and chapel-ready formats — handled gently, and quickly.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/funeral-slideshows",
+      serviceType: "Memorial Slideshow Production",
+      name: "Funeral & Memorial Slideshows Central Coast",
+      description: "Memorial and funeral slideshows with music, photo restoration and chapel-ready formats.",
+      breadcrumbName: "Funeral Slideshows",
+    }),
+    "funeral-slideshows",
+  );
 
   useEffect(() => {
     const container = reviewsRef.current;

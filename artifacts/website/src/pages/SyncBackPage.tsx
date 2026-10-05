@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 
 const advantages = [
   {
@@ -110,6 +111,17 @@ export default function SyncBackPage() {
     title: "SyncBack Backup Software | Koastal Kollective",
     description: "SyncBack backup software through Koastal Kollective. Licences, setup and local Central Coast support — never lose your files or photos again.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/syncback",
+      serviceType: "Backup Software Licensing & Setup",
+      name: "SyncBack Backup Software",
+      description: "SyncBack backup licences, setup and local support.",
+      breadcrumbName: "SyncBack",
+    }),
+    "syncback",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

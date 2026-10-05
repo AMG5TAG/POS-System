@@ -490,6 +490,21 @@ token-for-token against the live one), so its own conventions hold:
   `dist/public/<route>/index.html`, which `server.mjs` serves per path. The
   prerender fails the build rather than ship an unrendered site.
   `scripts/generate-sitemap.mjs` (prebuild) finds routes in `src/App.tsx`.
+- **Suburb pages are the hub towns within 20 km of the workshop** (33, in
+  `src/data/suburbs.ts`; coordinates and the retired list in
+  `src/data/service-area.json`). The other 208 suburbs were one template with
+  the name swapped — doorway pages. A retired suburb inside 20 km 301s to its
+  nearest hub, which names it under "Also covering"; one beyond 20 km 301s to
+  its region page (`central-coast` / `lake-macquarie`), which lists it.
+  `suburbPath()` resolves a retired name the same way, so no link hops a
+  redirect. Unique copy per hub
+  goes in `src/data/suburb-content.ts`; never fill it by copying one suburb's
+  text into another. The full 20 km list (102) is `service-area-20km.csv`.
+- **The server answers 404 and 301 for the website.** `server.mjs` serves the
+  pre-rendered `/404` page with a 404 status for any path with no page (it
+  used to send the homepage with a 200 — soft 404s), 301s the paths in the
+  build's `redirects.json` (retired suburbs, KoaSOFT/Kollective), and 301s a
+  trailing slash to the canonical path.
 - **Built for `/`, never a sub-path**: pages name images as `/images/...`.
   It therefore has no Replit preview path; run it on its own port in dev
   (`PORT=5000 pnpm --filter @workspace/website run dev`).

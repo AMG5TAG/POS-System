@@ -1,0 +1,1215 @@
+{
+ "workshop": {
+  "lat": -33.151863668688506,
+  "lon": 151.5371856464241
+ },
+ "hubs": {
+  "Mannering Park": {
+   "lat": -33.15392,
+   "lon": 151.53802,
+   "km": 0.2
+  },
+  "Wyee": {
+   "lat": -33.18167,
+   "lon": 151.48444,
+   "km": 5.9
+  },
+  "Morisset": {
+   "lat": -33.10666,
+   "lon": 151.48766,
+   "km": 6.8
+  },
+  "Bonnells Bay": {
+   "lat": -33.10785,
+   "lon": 151.52917,
+   "km": 5
+  },
+  "Cooranbong": {
+   "lat": -33.07581,
+   "lon": 151.454,
+   "km": 11.5
+  },
+  "Dora Creek": {
+   "lat": -33.08416,
+   "lon": 151.50188,
+   "km": 8.2
+  },
+  "Rathmines": {
+   "lat": -33.03953,
+   "lon": 151.59565,
+   "km": 13.6
+  },
+  "Wangi Wangi": {
+   "lat": -33.07048,
+   "lon": 151.59595,
+   "km": 10.6
+  },
+  "Toronto": {
+   "lat": -33.01344,
+   "lon": 151.5942,
+   "km": 16.3
+  },
+  "Swansea": {
+   "lat": -33.08665,
+   "lon": 151.63461,
+   "km": 11.6
+  },
+  "Caves Beach": {
+   "lat": -33.11229,
+   "lon": 151.645,
+   "km": 11
+  },
+  "Belmont": {
+   "lat": -33.03317,
+   "lon": 151.65856,
+   "km": 17.4
+  },
+  "Catherine Hill Bay": {
+   "lat": -33.15563,
+   "lon": 151.62735,
+   "km": 8.4
+  },
+  "Gwandalan": {
+   "lat": -33.14023,
+   "lon": 151.58488,
+   "km": 4.6
+  },
+  "Summerland Point": {
+   "lat": -33.13167,
+   "lon": 151.56778,
+   "km": 3.6
+  },
+  "Chain Valley Bay": {
+   "lat": -33.1688,
+   "lon": 151.5748,
+   "km": 4
+  },
+  "Lake Munmorah": {
+   "lat": -33.19361,
+   "lon": 151.57194,
+   "km": 5.7
+  },
+  "Doyalson": {
+   "lat": -33.19833,
+   "lon": 151.51777,
+   "km": 5.5
+  },
+  "San Remo": {
+   "lat": -33.21389,
+   "lon": 151.52167,
+   "km": 7
+  },
+  "Budgewoi": {
+   "lat": -33.23781,
+   "lon": 151.56467,
+   "km": 9.9
+  },
+  "Buff Point": {
+   "lat": -33.23167,
+   "lon": 151.53444,
+   "km": 8.9
+  },
+  "Blue Haven": {
+   "lat": -33.21081,
+   "lon": 151.50411,
+   "km": 7.2
+  },
+  "Charmhaven": {
+   "lat": -33.22302,
+   "lon": 151.5058,
+   "km": 8.4
+  },
+  "Lake Haven": {
+   "lat": -33.24,
+   "lon": 151.50111,
+   "km": 10.4
+  },
+  "Gorokan": {
+   "lat": -33.25625,
+   "lon": 151.51403,
+   "km": 11.8
+  },
+  "Toukley": {
+   "lat": -33.26333,
+   "lon": 151.53139,
+   "km": 12.4
+  },
+  "Norah Head": {
+   "lat": -33.28167,
+   "lon": 151.56778,
+   "km": 14.7
+  },
+  "Wyong": {
+   "lat": -33.28251,
+   "lon": 151.42567,
+   "km": 17.9
+  },
+  "Kanwal": {
+   "lat": -33.265,
+   "lon": 151.48444,
+   "km": 13.5
+  },
+  "Hamlyn Terrace": {
+   "lat": -33.25444,
+   "lon": 151.47278,
+   "km": 12.9
+  },
+  "Warnervale": {
+   "lat": -33.24833,
+   "lon": 151.43111,
+   "km": 14.6
+  },
+  "Wadalba": {
+   "lat": -33.27333,
+   "lon": 151.46778,
+   "km": 15
+  },
+  "Woongarrah": {
+   "lat": -33.23167,
+   "lon": 151.46778,
+   "km": 11
+  }
+ },
+ "retired": {
+  "alison": {
+   "name": "Alison",
+   "to": "Wyong",
+   "km": 18
+  },
+  "avoca-beach": {
+   "name": "Avoca Beach",
+   "km": 36.1,
+   "region": "central-coast"
+  },
+  "adamstown-heights": {
+   "name": "Adamstown Heights",
+   "km": 27.8,
+   "region": "lake-macquarie"
+  },
+  "arcadia-vale": {
+   "name": "Arcadia Vale",
+   "to": "Wangi Wangi",
+   "km": 11.1
+  },
+  "argenton": {
+   "name": "Argenton",
+   "km": 25.7,
+   "region": "lake-macquarie"
+  },
+  "awaba": {
+   "name": "Awaba",
+   "to": "Toronto",
+   "km": 15.9
+  },
+  "bar-point": {
+   "name": "Bar Point",
+   "km": 53.2,
+   "region": "central-coast"
+  },
+  "bateau-bay": {
+   "name": "Bateau Bay",
+   "km": 26,
+   "region": "central-coast"
+  },
+  "bensville": {
+   "name": "Bensville",
+   "km": 41.1,
+   "region": "central-coast"
+  },
+  "berkeley-vale": {
+   "name": "Berkeley Vale",
+   "km": 23,
+   "region": "central-coast"
+  },
+  "blackwall": {
+   "name": "Blackwall",
+   "km": 43.7,
+   "region": "central-coast"
+  },
+  "blue-bay": {
+   "name": "Blue Bay",
+   "km": 22.6,
+   "region": "central-coast"
+  },
+  "booker-bay": {
+   "name": "Booker Bay",
+   "km": 43.9,
+   "region": "central-coast"
+  },
+  "bouddi": {
+   "name": "Bouddi",
+   "km": 42.6,
+   "region": "central-coast"
+  },
+  "box-head": {
+   "name": "Box Head",
+   "km": 46.2,
+   "region": "central-coast"
+  },
+  "budgewoi-peninsula": {
+   "name": "Budgewoi Peninsula",
+   "to": "Lake Munmorah",
+   "km": 8.3
+  },
+  "bushells-ridge": {
+   "name": "Bushells Ridge",
+   "to": "Wyee",
+   "km": 8.3
+  },
+  "balcolyn": {
+   "name": "Balcolyn",
+   "to": "Bonnells Bay",
+   "km": 6.5
+  },
+  "balmoral": {
+   "name": "Balmoral",
+   "to": "Rathmines",
+   "km": 12.4
+  },
+  "barnsley": {
+   "name": "Barnsley",
+   "km": 24.9,
+   "region": "lake-macquarie"
+  },
+  "belmont-north": {
+   "name": "Belmont North",
+   "to": "Belmont",
+   "km": 19.8
+  },
+  "belmont-south": {
+   "name": "Belmont South",
+   "to": "Belmont",
+   "km": 15.9
+  },
+  "bennetts-green": {
+   "name": "Bennetts Green",
+   "km": 22.7,
+   "region": "lake-macquarie"
+  },
+  "blackalls-park": {
+   "name": "Blackalls Park",
+   "to": "Toronto",
+   "km": 17.4
+  },
+  "blacksmiths": {
+   "name": "Blacksmiths",
+   "to": "Swansea",
+   "km": 14.1
+  },
+  "bolton-point": {
+   "name": "Bolton Point",
+   "to": "Toronto",
+   "km": 18.1
+  },
+  "boolaroo": {
+   "name": "Boolaroo",
+   "km": 24.3,
+   "region": "lake-macquarie"
+  },
+  "booragul": {
+   "name": "Booragul",
+   "km": 20.9,
+   "region": "lake-macquarie"
+  },
+  "brightwaters": {
+   "name": "Brightwaters",
+   "to": "Bonnells Bay",
+   "km": 4.2
+  },
+  "buttaba": {
+   "name": "Buttaba",
+   "to": "Rathmines",
+   "km": 12
+  },
+  "calga": {
+   "name": "Calga",
+   "km": 43,
+   "region": "central-coast"
+  },
+  "canton-beach": {
+   "name": "Canton Beach",
+   "to": "Toukley",
+   "km": 13.5
+  },
+  "cedar-brush-creek": {
+   "name": "Cedar Brush Creek",
+   "km": 24.3,
+   "region": "central-coast"
+  },
+  "central-mangrove": {
+   "name": "Central Mangrove",
+   "km": 32.5,
+   "region": "central-coast"
+  },
+  "cheero-point": {
+   "name": "Cheero Point",
+   "km": 51.1,
+   "region": "central-coast"
+  },
+  "chittaway-bay": {
+   "name": "Chittaway Bay",
+   "km": 21.6,
+   "region": "central-coast"
+  },
+  "chittaway-point": {
+   "name": "Chittaway Point",
+   "km": 20.6,
+   "region": "central-coast"
+  },
+  "cogra-bay": {
+   "name": "Cogra Bay",
+   "km": 50.2,
+   "region": "central-coast"
+  },
+  "colongra": {
+   "name": "Colongra",
+   "to": "San Remo",
+   "km": 6.1
+  },
+  "copacabana": {
+   "name": "Copacabana",
+   "km": 38.8,
+   "region": "central-coast"
+  },
+  "crangan-bay": {
+   "name": "Crangan Bay",
+   "to": "Chain Valley Bay",
+   "km": 5.7
+  },
+  "cameron-park": {
+   "name": "Cameron Park",
+   "km": 28.3,
+   "region": "lake-macquarie"
+  },
+  "cams-wharf": {
+   "name": "Cams Wharf",
+   "to": "Caves Beach",
+   "km": 7.8
+  },
+  "cardiff": {
+   "name": "Cardiff",
+   "km": 25.7,
+   "region": "lake-macquarie"
+  },
+  "cardiff-heights": {
+   "name": "Cardiff Heights",
+   "km": 27.3,
+   "region": "lake-macquarie"
+  },
+  "cardiff-south": {
+   "name": "Cardiff South",
+   "km": 25,
+   "region": "lake-macquarie"
+  },
+  "carey-bay": {
+   "name": "Carey Bay",
+   "to": "Rathmines",
+   "km": 15.2
+  },
+  "charlestown": {
+   "name": "Charlestown",
+   "km": 25.5,
+   "region": "lake-macquarie"
+  },
+  "coal-point": {
+   "name": "Coal Point",
+   "to": "Rathmines",
+   "km": 14.4
+  },
+  "croudace-bay": {
+   "name": "Croudace Bay",
+   "to": "Belmont",
+   "km": 19.2
+  },
+  "daleys-point": {
+   "name": "Daleys Point",
+   "km": 43,
+   "region": "central-coast"
+  },
+  "davistown": {
+   "name": "Davistown",
+   "km": 40.2,
+   "region": "central-coast"
+  },
+  "dooralong": {
+   "name": "Dooralong",
+   "to": "Warnervale",
+   "km": 17.6
+  },
+  "doyalson-north": {
+   "name": "Doyalson North",
+   "to": "Doyalson",
+   "km": 4
+  },
+  "durren-durren": {
+   "name": "Durren Durren",
+   "to": "Warnervale",
+   "km": 14.6
+  },
+  "dudley": {
+   "name": "Dudley",
+   "km": 24.8,
+   "region": "lake-macquarie"
+  },
+  "east-gosford": {
+   "name": "East Gosford",
+   "km": 35.6,
+   "region": "central-coast"
+  },
+  "empire-bay": {
+   "name": "Empire Bay",
+   "km": 41.5,
+   "region": "central-coast"
+  },
+  "erina": {
+   "name": "Erina",
+   "km": 34.7,
+   "region": "central-coast"
+  },
+  "erina-heights": {
+   "name": "Erina Heights",
+   "km": 32.7,
+   "region": "central-coast"
+  },
+  "ettalong-beach": {
+   "name": "Ettalong Beach",
+   "km": 44.6,
+   "region": "central-coast"
+  },
+  "edgeworth": {
+   "name": "Edgeworth",
+   "km": 27.3,
+   "region": "lake-macquarie"
+  },
+  "eleebana": {
+   "name": "Eleebana",
+   "to": "Toronto",
+   "km": 19.6
+  },
+  "eraring": {
+   "name": "Eraring",
+   "to": "Dora Creek",
+   "km": 9.8
+  },
+  "forresters-beach": {
+   "name": "Forresters Beach",
+   "km": 28.9,
+   "region": "central-coast"
+  },
+  "fountaindale": {
+   "name": "Fountaindale",
+   "km": 24.9,
+   "region": "central-coast"
+  },
+  "fassifern": {
+   "name": "Fassifern",
+   "to": "Toronto",
+   "km": 18.8
+  },
+  "fennell-bay": {
+   "name": "Fennell Bay",
+   "to": "Toronto",
+   "km": 18.4
+  },
+  "fishing-point": {
+   "name": "Fishing Point",
+   "to": "Rathmines",
+   "km": 12.3
+  },
+  "floraville": {
+   "name": "Floraville",
+   "to": "Belmont",
+   "km": 19.6
+  },
+  "freemans-waterhole": {
+   "name": "Freemans Waterhole",
+   "to": "Toronto",
+   "km": 19.3
+  },
+  "glenning-valley": {
+   "name": "Glenning Valley",
+   "km": 24.5,
+   "region": "central-coast"
+  },
+  "glenworth-valley": {
+   "name": "Glenworth Valley",
+   "km": 43.9,
+   "region": "central-coast"
+  },
+  "gosford": {
+   "name": "Gosford",
+   "km": 35.3,
+   "region": "central-coast"
+  },
+  "green-point": {
+   "name": "Green Point",
+   "km": 38.5,
+   "region": "central-coast"
+  },
+  "greengrove": {
+   "name": "Greengrove",
+   "km": 43.4,
+   "region": "central-coast"
+  },
+  "gunderman": {
+   "name": "Gunderman",
+   "km": 54.1,
+   "region": "central-coast"
+  },
+  "garden-suburb": {
+   "name": "Garden Suburb",
+   "km": 26.4,
+   "region": "lake-macquarie"
+  },
+  "gateshead": {
+   "name": "Gateshead",
+   "km": 23.8,
+   "region": "lake-macquarie"
+  },
+  "glendale": {
+   "name": "Glendale",
+   "km": 27,
+   "region": "lake-macquarie"
+  },
+  "halekulani": {
+   "name": "Halekulani",
+   "to": "Buff Point",
+   "km": 7.6
+  },
+  "halloran": {
+   "name": "Halloran",
+   "to": "Warnervale",
+   "km": 12.6
+  },
+  "hardys-bay": {
+   "name": "Hardys Bay",
+   "km": 45,
+   "region": "central-coast"
+  },
+  "holgate": {
+   "name": "Holgate",
+   "km": 30.7,
+   "region": "central-coast"
+  },
+  "horsfield-bay": {
+   "name": "Horsfield Bay",
+   "km": 43.8,
+   "region": "central-coast"
+  },
+  "highfields": {
+   "name": "Highfields",
+   "km": 27.4,
+   "region": "lake-macquarie"
+  },
+  "hillsborough": {
+   "name": "Hillsborough",
+   "km": 25.3,
+   "region": "lake-macquarie"
+  },
+  "holmesville": {
+   "name": "Holmesville",
+   "km": 26.6,
+   "region": "lake-macquarie"
+  },
+  "jilliby": {
+   "name": "Jilliby",
+   "to": "Warnervale",
+   "km": 17.8
+  },
+  "kangy-angy": {
+   "name": "Kangy Angy",
+   "km": 22.6,
+   "region": "central-coast"
+  },
+  "kariong": {
+   "name": "Kariong",
+   "km": 38.8,
+   "region": "central-coast"
+  },
+  "kiar": {
+   "name": "Kiar",
+   "to": "Woongarrah",
+   "km": 10.7
+  },
+  "killarney-vale": {
+   "name": "Killarney Vale",
+   "km": 24.8,
+   "region": "central-coast"
+  },
+  "killcare": {
+   "name": "Killcare",
+   "km": 44.8,
+   "region": "central-coast"
+  },
+  "killcare-heights": {
+   "name": "Killcare Heights",
+   "km": 44,
+   "region": "central-coast"
+  },
+  "kincumber": {
+   "name": "Kincumber",
+   "km": 37.3,
+   "region": "central-coast"
+  },
+  "kincumber-south": {
+   "name": "Kincumber South",
+   "km": 39.4,
+   "region": "central-coast"
+  },
+  "kingfisher-shores": {
+   "name": "Kingfisher Shores",
+   "to": "Chain Valley Bay",
+   "km": 2.5
+  },
+  "koolewong": {
+   "name": "Koolewong",
+   "km": 40.4,
+   "region": "central-coast"
+  },
+  "kulnura": {
+   "name": "Kulnura",
+   "km": 31,
+   "region": "central-coast"
+  },
+  "kahibah": {
+   "name": "Kahibah",
+   "km": 26.6,
+   "region": "lake-macquarie"
+  },
+  "kilaben-bay": {
+   "name": "Kilaben Bay",
+   "to": "Toronto",
+   "km": 14.9
+  },
+  "killingworth": {
+   "name": "Killingworth",
+   "km": 24.4,
+   "region": "lake-macquarie"
+  },
+  "kotara-south": {
+   "name": "Kotara South",
+   "km": 26.5,
+   "region": "lake-macquarie"
+  },
+  "lemon-tree": {
+   "name": "Lemon Tree",
+   "to": "Cooranbong",
+   "km": 15.8
+  },
+  "lisarow": {
+   "name": "Lisarow",
+   "km": 29.6,
+   "region": "central-coast"
+  },
+  "little-jilliby": {
+   "name": "Little Jilliby",
+   "to": "Warnervale",
+   "km": 19.2
+  },
+  "little-wobby": {
+   "name": "Little Wobby",
+   "km": 51.6,
+   "region": "central-coast"
+  },
+  "long-jetty": {
+   "name": "Long Jetty",
+   "km": 23.3,
+   "region": "central-coast"
+  },
+  "lower-mangrove": {
+   "name": "Lower Mangrove",
+   "km": 45.7,
+   "region": "central-coast"
+  },
+  "lakelands": {
+   "name": "Lakelands",
+   "km": 23.7,
+   "region": "lake-macquarie"
+  },
+  "little-pelican": {
+   "name": "Little Pelican",
+   "to": "Swansea",
+   "km": 12.7
+  },
+  "macmasters-beach": {
+   "name": "MacMasters Beach",
+   "km": 40,
+   "region": "central-coast"
+  },
+  "magenta": {
+   "name": "Magenta",
+   "to": "Norah Head",
+   "km": 16.3
+  },
+  "mangrove-creek": {
+   "name": "Mangrove Creek",
+   "km": 42.2,
+   "region": "central-coast"
+  },
+  "mangrove-mountain": {
+   "name": "Mangrove Mountain",
+   "km": 36.2,
+   "region": "central-coast"
+  },
+  "mardi": {
+   "name": "Mardi",
+   "to": "Wyong",
+   "km": 19.4
+  },
+  "marlow": {
+   "name": "Marlow",
+   "km": 49.4,
+   "region": "central-coast"
+  },
+  "matcham": {
+   "name": "Matcham",
+   "km": 31,
+   "region": "central-coast"
+  },
+  "mooney-mooney": {
+   "name": "Mooney Mooney",
+   "km": 51.7,
+   "region": "central-coast"
+  },
+  "mooney-mooney-creek": {
+   "name": "Mooney Mooney Creek",
+   "km": 45.8,
+   "region": "central-coast"
+  },
+  "mount-elliot": {
+   "name": "Mount Elliot",
+   "km": 30.9,
+   "region": "central-coast"
+  },
+  "mount-white": {
+   "name": "Mount White",
+   "km": 46.6,
+   "region": "central-coast"
+  },
+  "moonee": {
+   "name": "Moonee",
+   "to": "Catherine Hill Bay",
+   "km": 8.6
+  },
+  "macquarie-hills": {
+   "name": "Macquarie Hills",
+   "km": 24.5,
+   "region": "lake-macquarie"
+  },
+  "mandalong": {
+   "name": "Mandalong",
+   "to": "Morisset",
+   "km": 10.6
+  },
+  "marks-point": {
+   "name": "Marks Point",
+   "to": "Belmont",
+   "km": 14.8
+  },
+  "marmong-point": {
+   "name": "Marmong Point",
+   "km": 20.4,
+   "region": "lake-macquarie"
+  },
+  "martinsville": {
+   "name": "Martinsville",
+   "to": "Cooranbong",
+   "km": 15.9
+  },
+  "mirrabooka": {
+   "name": "Mirrabooka",
+   "to": "Bonnells Bay",
+   "km": 4.9
+  },
+  "morisset-park": {
+   "name": "Morisset Park",
+   "to": "Bonnells Bay",
+   "km": 3.4
+  },
+  "mount-hutton": {
+   "name": "Mount Hutton",
+   "km": 22.6,
+   "region": "lake-macquarie"
+  },
+  "murrays-beach": {
+   "name": "Murrays Beach",
+   "to": "Caves Beach",
+   "km": 8.3
+  },
+  "myuna-bay": {
+   "name": "Myuna Bay",
+   "to": "Dora Creek",
+   "km": 10
+  },
+  "narara": {
+   "name": "Narara",
+   "km": 32.9,
+   "region": "central-coast"
+  },
+  "niagara-park": {
+   "name": "Niagara Park",
+   "km": 30.9,
+   "region": "central-coast"
+  },
+  "noraville": {
+   "name": "Noraville",
+   "to": "Norah Head",
+   "km": 12.7
+  },
+  "north-avoca": {
+   "name": "North Avoca",
+   "km": 35.2,
+   "region": "central-coast"
+  },
+  "north-gosford": {
+   "name": "North Gosford",
+   "km": 34,
+   "region": "central-coast"
+  },
+  "new-lambton-heights": {
+   "name": "New Lambton Heights",
+   "km": 29.2,
+   "region": "lake-macquarie"
+  },
+  "nords-wharf": {
+   "name": "Nords Wharf",
+   "to": "Gwandalan",
+   "km": 6.5
+  },
+  "ourimbah": {
+   "name": "Ourimbah",
+   "km": 28.5,
+   "region": "central-coast"
+  },
+  "palm-grove": {
+   "name": "Palm Grove",
+   "km": 28.5,
+   "region": "central-coast"
+  },
+  "palmdale": {
+   "name": "Palmdale",
+   "km": 25.5,
+   "region": "central-coast"
+  },
+  "patonga": {
+   "name": "Patonga",
+   "km": 50.9,
+   "region": "central-coast"
+  },
+  "pearl-beach": {
+   "name": "Pearl Beach",
+   "km": 48.3,
+   "region": "central-coast"
+  },
+  "peats-ridge": {
+   "name": "Peats Ridge",
+   "km": 34.5,
+   "region": "central-coast"
+  },
+  "phegans-bay": {
+   "name": "Phegans Bay",
+   "km": 42.9,
+   "region": "central-coast"
+  },
+  "picketts-valley": {
+   "name": "Picketts Valley",
+   "km": 35.9,
+   "region": "central-coast"
+  },
+  "point-clare": {
+   "name": "Point Clare",
+   "km": 37.6,
+   "region": "central-coast"
+  },
+  "point-frederick": {
+   "name": "Point Frederick",
+   "km": 37.1,
+   "region": "central-coast"
+  },
+  "pretty-beach": {
+   "name": "Pretty Beach",
+   "km": 45.4,
+   "region": "central-coast"
+  },
+  "pelican": {
+   "name": "Pelican",
+   "to": "Swansea",
+   "km": 13.5
+  },
+  "pinny-beach": {
+   "name": "Pinny Beach",
+   "to": "Caves Beach",
+   "km": 10.1
+  },
+  "ravensdale": {
+   "name": "Ravensdale",
+   "km": 22,
+   "region": "central-coast"
+  },
+  "rocky-point": {
+   "name": "Rocky Point",
+   "to": "Wadalba",
+   "km": 16.9
+  },
+  "rankin-park": {
+   "name": "Rankin Park",
+   "km": 28.5,
+   "region": "lake-macquarie"
+  },
+  "redhead": {
+   "name": "Redhead",
+   "km": 22.3,
+   "region": "lake-macquarie"
+  },
+  "ryhope": {
+   "name": "Ryhope",
+   "to": "Toronto",
+   "km": 18
+  },
+  "st-huberts-island": {
+   "name": "St Huberts Island",
+   "km": 42.2,
+   "region": "central-coast"
+  },
+  "saratoga": {
+   "name": "Saratoga",
+   "km": 40,
+   "region": "central-coast"
+  },
+  "shelly-beach": {
+   "name": "Shelly Beach",
+   "km": 24.8,
+   "region": "central-coast"
+  },
+  "somersby": {
+   "name": "Somersby",
+   "km": 33.4,
+   "region": "central-coast"
+  },
+  "spencer": {
+   "name": "Spencer",
+   "km": 49.8,
+   "region": "central-coast"
+  },
+  "springfield": {
+   "name": "Springfield",
+   "km": 34,
+   "region": "central-coast"
+  },
+  "seahampton": {
+   "name": "Seahampton",
+   "km": 30.1,
+   "region": "lake-macquarie"
+  },
+  "silverwater": {
+   "name": "Silverwater",
+   "to": "Bonnells Bay",
+   "km": 5.8
+  },
+  "speers-point": {
+   "name": "Speers Point",
+   "km": 22.6,
+   "region": "lake-macquarie"
+  },
+  "sunshine": {
+   "name": "Sunshine",
+   "to": "Bonnells Bay",
+   "km": 4.9
+  },
+  "swansea-heads": {
+   "name": "Swansea Heads",
+   "to": "Swansea",
+   "km": 13.5
+  },
+  "tacoma": {
+   "name": "Tacoma",
+   "to": "Wadalba",
+   "km": 16.6
+  },
+  "tacoma-south": {
+   "name": "Tacoma South",
+   "to": "Wadalba",
+   "km": 17.8
+  },
+  "tascott": {
+   "name": "Tascott",
+   "km": 39.5,
+   "region": "central-coast"
+  },
+  "terrigal": {
+   "name": "Terrigal",
+   "km": 34.1,
+   "region": "central-coast"
+  },
+  "the-entrance": {
+   "name": "The Entrance",
+   "km": 21.7,
+   "region": "central-coast"
+  },
+  "the-entrance-north": {
+   "name": "The Entrance North",
+   "km": 20.1,
+   "region": "central-coast"
+  },
+  "toowoon-bay": {
+   "name": "Toowoon Bay",
+   "km": 23.7,
+   "region": "central-coast"
+  },
+  "tuggerah": {
+   "name": "Tuggerah",
+   "km": 20.1,
+   "region": "central-coast"
+  },
+  "tuggerawong": {
+   "name": "Tuggerawong",
+   "to": "Wadalba",
+   "km": 15.2
+  },
+  "tumbi-umbi": {
+   "name": "Tumbi Umbi",
+   "km": 25.3,
+   "region": "central-coast"
+  },
+  "ten-mile-hollow": {
+   "name": "Ten Mile Hollow",
+   "km": 46,
+   "region": "central-coast"
+  },
+  "teralba": {
+   "name": "Teralba",
+   "km": 21.6,
+   "region": "lake-macquarie"
+  },
+  "tingira-heights": {
+   "name": "Tingira Heights",
+   "km": 20.8,
+   "region": "lake-macquarie"
+  },
+  "umina-beach": {
+   "name": "Umina Beach",
+   "km": 45.9,
+   "region": "central-coast"
+  },
+  "upper-mangrove": {
+   "name": "Upper Mangrove",
+   "km": 41.9,
+   "region": "central-coast"
+  },
+  "wagstaffe": {
+   "name": "Wagstaffe",
+   "km": 45.1,
+   "region": "central-coast"
+  },
+  "wallarah": {
+   "name": "Wallarah",
+   "to": "Woongarrah",
+   "km": 10.4
+  },
+  "wamberal": {
+   "name": "Wamberal",
+   "km": 32.3,
+   "region": "central-coast"
+  },
+  "watanobbi": {
+   "name": "Watanobbi",
+   "to": "Wyong",
+   "km": 16.6
+  },
+  "wendoree-park": {
+   "name": "Wendoree Park",
+   "km": 48.7,
+   "region": "central-coast"
+  },
+  "west-gosford": {
+   "name": "West Gosford",
+   "km": 35.7,
+   "region": "central-coast"
+  },
+  "wondabyne": {
+   "name": "Wondabyne",
+   "km": 46.7,
+   "region": "central-coast"
+  },
+  "woy-woy": {
+   "name": "Woy Woy",
+   "km": 42.2,
+   "region": "central-coast"
+  },
+  "woy-woy-bay": {
+   "name": "Woy Woy Bay",
+   "km": 42.3,
+   "region": "central-coast"
+  },
+  "wyoming": {
+   "name": "Wyoming",
+   "km": 32.8,
+   "region": "central-coast"
+  },
+  "wyong-creek": {
+   "name": "Wyong Creek",
+   "km": 23.8,
+   "region": "central-coast"
+  },
+  "wyongah": {
+   "name": "Wyongah",
+   "to": "Kanwal",
+   "km": 14.4
+  },
+  "wakefield": {
+   "name": "Wakefield",
+   "km": 20.2,
+   "region": "lake-macquarie"
+  },
+  "warners-bay": {
+   "name": "Warners Bay",
+   "km": 22.4,
+   "region": "lake-macquarie"
+  },
+  "west-wallsend": {
+   "name": "West Wallsend",
+   "km": 28,
+   "region": "lake-macquarie"
+  },
+  "whitebridge": {
+   "name": "Whitebridge",
+   "km": 25.9,
+   "region": "lake-macquarie"
+  },
+  "windale": {
+   "name": "Windale",
+   "km": 22.3,
+   "region": "lake-macquarie"
+  },
+  "windermere-park": {
+   "name": "Windermere Park",
+   "to": "Bonnells Bay",
+   "km": 4.1
+  },
+  "woodrising": {
+   "name": "Woodrising",
+   "to": "Toronto",
+   "km": 19.4
+  },
+  "wyee-point": {
+   "name": "Wyee Point",
+   "to": "Mannering Park",
+   "km": 1.7
+  },
+  "yarramalong": {
+   "name": "Yarramalong",
+   "km": 24.8,
+   "region": "central-coast"
+  },
+  "yattalunga": {
+   "name": "Yattalunga",
+   "km": 38.6,
+   "region": "central-coast"
+  },
+  "yarrawonga-park": {
+   "name": "Yarrawonga Park",
+   "to": "Bonnells Bay",
+   "km": 5.7
+  }
+ }
+}

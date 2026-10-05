@@ -170,7 +170,7 @@ export default function ComputerRepairsPage() {
 
   useSeo({
     title: "Computer Repairs Central Coast & Lake Macquarie",
-    description: `Fast, local computer repairs from Mannering Park. No-fix no-fee, free diagnostics, ${yearsExperience} years experience serving the Central Coast & Lake Macquarie. Call 0493 145 179.`,
+    description: `Fast, local computer repairs from Mannering Park. Free diagnostics, no fix no fee, ${yearsExperience} years serving the Central Coast & Lake Macquarie. Call 0493 145 179.`,
   });
 
   useEffect(() => {

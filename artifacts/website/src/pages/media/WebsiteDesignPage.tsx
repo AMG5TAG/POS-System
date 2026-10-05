@@ -1,6 +1,7 @@
 import MediaLayout from "@/components/MediaLayout";
 import SiteBanner from "@/components/SiteBanner";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import { CheckCircle2, Smartphone, Gauge, Search, Wand2, Layers, ShoppingCart } from "lucide-react";
 
 const features = [
@@ -82,6 +83,18 @@ export default function WebsiteDesignPage() {
     description:
       "Affordable, conversion-focused website design from Koastal Kollective. Mobile-first, lightning fast, SEO built in. Packages from Bronze to Diamond.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/media/website-design",
+      serviceType: "Website Design",
+      name: "Website Design Central Coast",
+      description: "Mobile-first websites built to load fast, rank well and convert.",
+      breadcrumbName: "Website Design",
+      parent: { name: "Media", path: "/media" },
+    }),
+    "media-website-design",
+  );
 
   return (
     <MediaLayout

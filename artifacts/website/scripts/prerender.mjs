@@ -30,7 +30,6 @@ import { fileURLToPath } from "node:url";
 import { dirname, resolve, join } from "node:path";
 import { build } from "esbuild";
 import { JSDOM, VirtualConsole } from "jsdom";
-import { readSuburbs, slugify } from "./suburbs.mjs";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(__dirname, "..");
@@ -67,10 +66,12 @@ if (process.env.PRERENDER === "0") {
  * URLs belong.
  */
 function noindexRoutes() {
-  const suburbs = readSuburbs();
   return [
     "/search",
     "/site-search",
+    // The not-found page. The server sends it, with a 404 status, for any
+    // path that has no page (artifacts/koapos/server.mjs).
+    "/404",
   ];
 }
 

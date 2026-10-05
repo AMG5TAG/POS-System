@@ -2,6 +2,7 @@ import { Link } from "wouter";
 import { Globe, Server, Smartphone, Megaphone, Search, Code2 } from "lucide-react";
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
+import { pageGraph, useStructuredData } from "@/lib/structuredData";
 
 const services = [
   {
@@ -46,8 +47,19 @@ export default function MediaHomePage() {
   useSeo({
     title: "Websites, Apps, Hosting & SEO | Koastal Kollective",
     description:
-      "Koastal Kollective builds beautiful websites, mobile apps, hosting and SEO campaigns for Australian businesses — Central Coast, Lake Macquarie and Australia-wide.",
+      "Websites, mobile apps, hosting and SEO for Australian businesses, built locally by Koastal Kollective on the Central Coast & Lake Macquarie.",
   });
+
+  useStructuredData(
+    pageGraph({
+      path: "/media",
+      type: "CollectionPage",
+      name: "Websites, Apps, Hosting & SEO",
+      description: "Website design, app development, domains, hosting and business email from Koastal Kollective.",
+      breadcrumbName: "Media",
+    }),
+    "media",
+  );
 
   return (
     <MediaLayout

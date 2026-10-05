@@ -1,4 +1,5 @@
 import { Switch, Route, Router as WouterRouter, useLocation } from "wouter";
+import { retiredSuburbTarget } from "@/data/suburbs";
 import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -73,11 +74,14 @@ function legacyTarget(path: string): string | null {
   // The per-suburb Kollective pages were retired; suburbs live only under
   // /computer-repairs now.
   const kollective = path.match(/^\/kollective\/(.+)$/);
-  if (kollective) return `/computer-repairs/${kollective[1]}`;
+  if (kollective) return retiredSuburbTarget(kollective[1]) ?? `/computer-repairs/${kollective[1]}`;
   const webServices = path.match(/^\/koasoft\/web-services\/(.+)$/);
   // The per-suburb Media pages were retired; their content now lives on the
   // combined suburb page.
-  if (webServices) return `/computer-repairs/${webServices[1]}`;
+  if (webServices) return retiredSuburbTarget(webServices[1]) ?? `/computer-repairs/${webServices[1]}`;
+  // Suburbs without a page of their own go to their nearest hub suburb.
+  const suburb = path.match(/^\/computer-repairs\/([^/]+)\/?$/);
+  if (suburb) return retiredSuburbTarget(suburb[1]);
   if (path === "/koasoft") return "/media";
   if (path.startsWith("/koasoft/")) return `/media/${path.slice("/koasoft/".length)}`;
   return null;

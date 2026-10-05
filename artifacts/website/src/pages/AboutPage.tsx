@@ -6,6 +6,7 @@ import { Mail, Phone, MapPin, MessageCircle, Clock, ExternalLink, Monitor, Globe
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { yearsExperience } from "@/lib/experience";
 import { useSeo } from "@/lib/useSeo";
+import { pageGraph, useStructuredData } from "@/lib/structuredData";
 
 const G1 = "#007b7d";
 const G2 = "#7bb8bd";
@@ -72,6 +73,17 @@ export default function AboutPage() {
     description:
       "Computer repairs, web design and app development, pop culture and collectables, plus Direktories business listings — Central Coast & Lake Macquarie.",
   });
+
+  useStructuredData(
+    pageGraph({
+      path: "/about",
+      type: "AboutPage",
+      name: "About Koastal Kollective",
+      description: "Family-run computer repair and IT business in Mannering Park, serving the Central Coast and Lake Macquarie since 2011.",
+      breadcrumbName: "About",
+    }),
+    "about",
+  );
 
   const reviewsRef = useRef<HTMLDivElement>(null);
 

@@ -86,7 +86,7 @@ export default function PopCulturePage() {
   useSeo({
     title: "Pop Culture Collectables Central Coast | Koastal Kollective",
     description:
-      "Pop culture merchandise, trading cards, collectables, statues and art coming soon to Koastal Kollective in Mannering Park — serving collectors across the Central Coast & Lake Macquarie.",
+      "Pop culture merchandise, trading cards, collectables, statues and art — coming soon to Koastal Kollective in Mannering Park, Central Coast & Lake Macquarie.",
   });
 
   // Deliberately no `offers`: an OfferCatalog would assert these are available

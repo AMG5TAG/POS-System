@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 
 const advantages = [
   {
@@ -110,6 +111,17 @@ export default function AdGuardPage() {
     title: "AdGuard Ad Blocker | Koastal Kollective",
     description: "AdGuard licences from Koastal Kollective — block ads, trackers and malicious sites on every device. Local Central Coast setup help included.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/adguard",
+      serviceType: "Ad Blocker Licensing & Setup",
+      name: "AdGuard Ad Blocker",
+      description: "AdGuard licences with local setup help, blocking ads, trackers and malicious sites on every device.",
+      breadcrumbName: "AdGuard",
+    }),
+    "adguard",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

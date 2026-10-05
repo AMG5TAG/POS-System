@@ -103,9 +103,9 @@ export default function GamingPage() {
   const reviewsRef = useRef<HTMLDivElement>(null);
 
   useSeo({
-    title: "Gaming, Consoles & Trade-Ins Central Coast | Koastal Kollective",
+    title: "Gaming & Trade-Ins Central Coast | Koastal Kollective",
     description:
-      "Video games, game consoles, accessories, tested second-hand units and trade-ins coming soon to Koastal Kollective in Mannering Park — serving gamers across the Central Coast & Lake Macquarie.",
+      "Video games, consoles, accessories, tested second-hand units and trade-ins — coming soon to Koastal Kollective in Mannering Park on the Central Coast.",
   });
 
   // Deliberately no `offers`: an OfferCatalog would assert these are available

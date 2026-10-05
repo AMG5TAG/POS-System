@@ -10,7 +10,10 @@ import {
   Globe, Server, Shirt, Layers, Boxes, Frame,
   Gamepad2, Headphones, Recycle, ArrowLeftRight, Joystick,
 } from "lucide-react";
-import { findSuburbBySlug, suburbs, suburbPath } from "@/data/suburbs";
+import {
+  findSuburbBySlug, suburbs, suburbPath, suburbDistance, nearbySuburbs, alsoCovering,
+} from "@/data/suburbs";
+import { suburbContent } from "@/data/suburb-content";
 import { REGIONS } from "@/data/regions";
 import NotFound from "@/pages/not-found";
 import { useSeo } from "@/lib/useSeo";
@@ -171,6 +174,34 @@ const aboutStats = [
 ];
 
 
+/** Localities this page covers, and the nearest other suburb pages. */
+function SuburbCoverage({ suburb }: { suburb: string }) {
+  const covering = alsoCovering(suburb);
+  const nearby = nearbySuburbs(suburb);
+  return (
+    <div className="space-y-4 text-center">
+      <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+        Around {suburb}
+      </h2>
+      {covering.length > 0 && (
+        <p>
+          This page also covers {covering.length === 1 ? covering[0] : `${covering.slice(0, -1).join(", ")} and ${covering[covering.length - 1]}`}
+          {" "}— the same free diagnostic, no-fix no-fee guarantee and free pickup apply.
+        </p>
+      )}
+      <p className="text-base">
+        Nearby:{" "}
+        {nearby.map((name, i) => (
+          <span key={name}>
+            {i > 0 && " · "}
+            <Link href={suburbPath(name)} className="font-semibold text-[#007b7d] hover:underline">{name}</Link>
+          </span>
+        ))}
+      </p>
+    </div>
+  );
+}
+
 export default function SuburbPage() {
   const [, params] = useRoute<{ suburb: string }>("/computer-repairs/:suburb");
   const slug = params?.suburb ?? "";
@@ -178,13 +209,23 @@ export default function SuburbPage() {
 
   const reviewsRef = useRef<HTMLDivElement>(null);
   const [location] = useLocation();
+  const content = (suburb && suburbContent[suburb]) || {};
+  const distance = suburb ? suburbDistance(suburb) : null;
+  // The workshop's own suburb has no meaningful "N km away".
+  const atWorkshop = !!distance && distance.km < 1;
+  const whereFromUs = distance
+    ? atWorkshop
+      ? "home of our workshop"
+      : `${Math.round(distance.km)} km from our Mannering Park workshop`
+    : "";
 
   useSeo({
     title: suburb
-      ? `Computer Repairs ${suburb} | Free Diagnostic`
+      ? content.title ?? `Computer Repairs ${suburb} | Free Diagnostic`
       : "Page Not Found | Koastal Kollective",
     description: suburb
-      ? `Local computer & laptop repairs, website design and app development in ${suburb}. Free diagnostic, no-fix no-fee, ${yearsExperience} years experience. Call 0493 145 179.`
+      ? content.description ??
+        `Computer, laptop & Mac repairs in ${suburb}, ${whereFromUs}. Free diagnostic, no fix no fee, no call-out fee. Call 0493 145 179.`
       : "That page doesn't exist. Head back to Koastal Kollective for computer repairs across the Central Coast & Lake Macquarie.",
     ogImage: "https://koastal.com.au/api/share-image.png",
     // An unresolved slug renders <NotFound />, but hooks cannot be conditional
@@ -248,8 +289,16 @@ export default function SuburbPage() {
                 <span className="text-gray-900 font-semibold">{suburb}</span>
               </nav>
               <h1 className="text-3xl md:text-4xl lg:text-5xl font-bold text-gray-900 leading-tight">
-                Trusted PC and Mac Repairs and Custom Built Gaming Computers for {suburb}
+                Computer, Mac and Laptop Repairs in {suburb}
               </h1>
+              {distance && (
+                <p className="mt-3 text-gray-600 flex items-center justify-center gap-1.5">
+                  <MapPin className="h-4 w-4 text-[#007b7d]" />
+                  {atWorkshop
+                    ? `${suburb} is home to our workshop at 1/64 Vales Road`
+                    : `${Math.round(distance.km)} km ${distance.direction} of our Mannering Park workshop`}
+                </p>
+              )}
             </div>
           </div>
         </div>
@@ -259,6 +308,14 @@ export default function SuburbPage() {
       <section className="py-12">
         <div className="max-w-4xl mx-auto px-4 space-y-10 text-base md:text-lg text-gray-700 leading-relaxed">
 
+          {content.intro ? (
+            <div className="space-y-4 text-center">
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
+                Local Computer Repairs for {suburb}
+              </h2>
+              {content.intro.map((para, i) => <p key={i}>{para}</p>)}
+            </div>
+          ) : (
           <div className="space-y-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
               Trusted Computer and Laptop Repairs for {suburb}
@@ -272,6 +329,23 @@ export default function SuburbPage() {
               a dedicated 10% pension discount for our senior customers.
             </p>
           </div>
+          )}
+
+          {content.sections?.map((sec) => (
+            <div key={sec.heading} className="space-y-4 text-center">
+              <h2 className="text-2xl md:text-3xl font-bold text-gray-900">{sec.heading}</h2>
+              {sec.body.map((para, i) => <p key={i}>{para}</p>)}
+            </div>
+          ))}
+
+          {content.review && (
+            <figure className="text-center">
+              <blockquote className="italic text-gray-700">&ldquo;{content.review.quote}&rdquo;</blockquote>
+              <figcaption className="mt-2 text-sm font-bold text-gray-900">– {content.review.author}</figcaption>
+            </figure>
+          )}
+
+          <SuburbCoverage suburb={suburb} />
 
           <div className="space-y-4 text-center">
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900">
@@ -854,7 +928,7 @@ export default function SuburbPage() {
         <div className="max-w-7xl mx-auto px-4">
           <div className="text-center mb-6">
             <h2 className="text-2xl md:text-3xl font-bold text-gray-900 mb-1">
-              We Also Service These Areas
+              Our Suburb Pages
             </h2>
             <p className="text-[#007b7d] text-sm mt-2 font-semibold">
               CLICK A SUBURB TO LEARN MORE

@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 
 const advantages = [
   {
@@ -110,6 +111,17 @@ export default function MacPawPage() {
     title: "MacPaw CleanMyMac & Setapp | Koastal Kollective",
     description: "MacPaw CleanMyMac and Setapp through Koastal Kollective. Genuine licences, installation help and local Mac support on the Central Coast.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/macpaw",
+      serviceType: "Mac Software Licensing & Setup",
+      name: "MacPaw CleanMyMac & Setapp",
+      description: "Genuine MacPaw CleanMyMac and Setapp licences with installation help and local Mac support.",
+      breadcrumbName: "MacPaw",
+    }),
+    "macpaw",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

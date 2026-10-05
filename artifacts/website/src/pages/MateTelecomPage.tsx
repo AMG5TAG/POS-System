@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 
 const REFERRAL = "https://www.letsbemates.com.au/mate/koastalkomputers-mate/";
 
@@ -120,6 +121,17 @@ export default function MateTelecomPage() {
     title: "MATE Telecom NBN | Sign Up via Koastal Kollective",
     description: "Sign up to MATE Telecom NBN through your local Central Coast IT shop. No contracts, unlimited data, Aussie support and expert local setup.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/mate-telecom",
+      serviceType: "NBN Sign-Up & Setup",
+      name: "MATE Telecom NBN",
+      description: "MATE Telecom NBN sign-up through a local IT shop, with expert local setup.",
+      breadcrumbName: "MATE Telecom",
+    }),
+    "mate-telecom",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

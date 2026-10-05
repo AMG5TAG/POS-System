@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
@@ -164,6 +165,17 @@ export default function StarlinkPage() {
     title: "Starlink Installation Central Coast | Satellite Internet",
     description: "Starlink satellite internet supply and installation on the Central Coast. Genuine kit, professional roof mount and full home network setup.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/starlink",
+      serviceType: "Satellite Internet Installation",
+      name: "Starlink Installation Central Coast",
+      description: "Starlink satellite internet supply, professional roof mounting and full home network setup.",
+      breadcrumbName: "Starlink",
+    }),
+    "starlink",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
@@ -199,6 +200,17 @@ export default function DigitalConversionsPage() {
     title: "Digital Conversions Central Coast | Photo, Film & Tape",
     description: "Photos, slides, cassettes, vinyl, VHS & cine film converted to digital on the Central Coast. Restoration available — keep your family memories alive.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/digital-conversions",
+      serviceType: "Media Digitisation",
+      name: "Digital Conversions Central Coast",
+      description: "Photos, slides, cassettes, vinyl, VHS and cine film converted to digital.",
+      breadcrumbName: "Digital Conversions",
+    }),
+    "digital-conversions",
+  );
 
   useEffect(() => {
     const container = reviewsRef.current;

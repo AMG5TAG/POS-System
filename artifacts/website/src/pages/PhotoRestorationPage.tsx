@@ -10,6 +10,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
@@ -108,6 +109,17 @@ export default function PhotoRestorationPage() {
     title: "Photo Restoration Central Coast | Old Photo Repair",
     description: "Faded, torn and water-damaged photo restoration on the Central Coast. Skilled retouching, colour correction and reprints of your family photos.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/photo-restoration",
+      serviceType: "Photo Restoration",
+      name: "Photo Restoration Central Coast",
+      description: "Restoration of faded, torn and water-damaged photos, with colour correction and reprints.",
+      breadcrumbName: "Photo Restoration",
+    }),
+    "photo-restoration",
+  );
 
   useEffect(() => {
     const container = reviewsRef.current;

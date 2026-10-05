@@ -24,3 +24,12 @@ export function readSuburbs() {
   }
   return names;
 }
+
+/**
+ * Suburbs that no longer have a page, as { slug: { name, km, to | region } }:
+ * `to` is the hub suburb it redirects to, `region` the region page slug. See src/data/suburbs.ts.
+ */
+export function readRetiredSuburbs() {
+  const json = JSON.parse(readFileSync(resolve(__dirname, "..", "src", "data", "service-area.json"), "utf8"));
+  return json.retired;
+}

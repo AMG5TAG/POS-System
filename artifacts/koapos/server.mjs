@@ -87,8 +87,8 @@ function pageIn(root, urlPath) {
   return fileIn(root, `${p}/index.html`) || fileIn(root, `${p}.html`);
 }
 
-function send(req, res, file, cacheControl) {
-  res.writeHead(200, {
+function send(req, res, file, cacheControl, status = 200) {
+  res.writeHead(status, {
     "Content-Type": TYPES[path.extname(file).toLowerCase()] || "application/octet-stream",
     "Content-Length": statSync(file).size,
     "Cache-Control": cacheControl,
@@ -108,14 +108,35 @@ function redirect(res, location) {
 function serveSite(req, res, root, urlPath, { prerendered = false } = {}) {
   const index = path.join(root, "index.html");
   const file = (urlPath === "/" ? null : fileIn(root, urlPath)) || (prerendered ? pageIn(root, urlPath) : null);
+  const notFound = prerendered ? fileIn(root, "/404/index.html") : null;
   if (file && file !== index) {
     const html = file.endsWith(".html");
     send(req, res, file, urlPath.startsWith("/assets/") ? "public, max-age=31536000, immutable" : html ? "no-cache" : "public, max-age=3600");
   } else if (urlPath.startsWith("/assets/")) {
     res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
+  } else if (notFound && urlPath !== "/") {
+    // Every page of a pre-rendered site is a file, so no file means no page.
+    // Answering with the homepage and a 200 made every mistyped or retired URL
+    // a soft 404 that Google kept in its index.
+    send(req, res, notFound, "no-cache", 404);
   } else {
     send(req, res, index, "no-cache"); // client-side route
   }
+}
+
+/* The website's redirects (retired suburb pages, the KoaSOFT and Kollective
+   paths), written by its build as redirects.json: path -> path. Answered here
+   with a real 301 rather than the build's meta-refresh stubs. Read once. */
+let websiteRedirects;
+function websiteRedirect(urlPath) {
+  if (websiteRedirects === undefined) {
+    try {
+      websiteRedirects = new Map(Object.entries(JSON.parse(readFileSync(path.join(sites.website, "redirects.json"), "utf8"))));
+    } catch {
+      websiteRedirects = new Map();
+    }
+  }
+  return websiteRedirects.get(urlPath.replace(/\/+$/, "")) ?? null;
 }
 
 /* A product page's link preview needs the product (share-meta.mjs). The API
@@ -186,7 +207,15 @@ createServer((req, res) => {
           serveSite(req, res, sites.shop, shopPath);
         }
       } else {
-        serveSite(req, res, sites.website, url.pathname, { prerendered: true });
+        const moved = websiteRedirect(url.pathname);
+        if (moved) {
+          redirect(res, `${moved}${url.search}`);
+        } else if (url.pathname.length > 1 && url.pathname.endsWith("/") && pageIn(sites.website, url.pathname)) {
+          // One URL per page: /about/ → /about, matching the canonical.
+          redirect(res, `${url.pathname.replace(/\/+$/, "")}${url.search}`);
+        } else {
+          serveSite(req, res, sites.website, url.pathname, { prerendered: true });
+        }
       }
     } else {
       serveSite(req, res, sites.pos, url.pathname);

@@ -1,5 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import { Apple, Smartphone, Layers, Cloud, Lock, Zap, CheckCircle2, ShoppingCart } from "lucide-react";
 
 const features = [
@@ -30,6 +31,18 @@ export default function AppsPage() {
     description:
       "Native iOS, Android and cross-platform app development from Koastal Kollective. Australian team, fixed-price quotes within 24 hours.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/media/apps",
+      serviceType: "Mobile App Development",
+      name: "iOS & Android App Development",
+      description: "Custom web apps and native iPhone, iPad and Android apps, with App Store and Google Play submission.",
+      breadcrumbName: "Apps",
+      parent: { name: "Media", path: "/media" },
+    }),
+    "media-apps",
+  );
 
   return (
     <MediaLayout

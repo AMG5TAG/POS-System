@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import { yearsExperience } from "@/lib/experience";
 
 const advantages = [
@@ -114,6 +115,17 @@ export default function SolvUpPage() {
     title: "SolvUp Repairs Central Coast | JB Hi-Fi & Officeworks",
     description: "Authorised SolvUp repair partner on the Central Coast. Out-of-warranty fixes for devices bought from JB Hi-Fi, Officeworks and other major retailers.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/solvup",
+      serviceType: "Out-of-Warranty Device Repair",
+      name: "SolvUp Repairs Central Coast",
+      description: "Authorised SolvUp repair partner for devices bought from JB Hi-Fi, Officeworks and other retailers.",
+      breadcrumbName: "SolvUp",
+    }),
+    "solvup",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

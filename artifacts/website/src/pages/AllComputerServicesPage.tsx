@@ -9,8 +9,9 @@ import {
   Cpu, Database, Cloud, Settings, Wrench, Package, Headphones,
   FileSearch, ArrowUpCircle, Globe, Tv, FolderOpen, Unlock,
 } from "lucide-react";
-import { suburbs, suburbPath } from "@/data/suburbs";
+import { suburbs, suburbPath, isSuburbPage } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { pageGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
@@ -184,6 +185,17 @@ export default function AllComputerServicesPage() {
     description: "Every IT service in one place — laptop, desktop, Mac, gaming, virus removal, data recovery and on-site support across the Central Coast.",
   });
 
+  useStructuredData(
+    pageGraph({
+      path: "/computer-services",
+      type: "CollectionPage",
+      name: "All Computer Services",
+      description: "Every IT service Koastal Kollective offers across the Central Coast and Lake Macquarie.",
+      breadcrumbName: "Computer Services",
+    }),
+    "computer-services",
+  );
+
   useEffect(() => {
     const container = reviewsRef.current;
     if (!container) return;
@@ -347,7 +359,7 @@ export default function AllComputerServicesPage() {
             We provide <strong>in-store computer repairs</strong> from our Mannering Park workshop and <strong>on-site IT support</strong> to homes and businesses across the entire region. Whether you're in <strong>Gosford, Wyong, Tuggerah, Terrigal, Erina, Narara, Hamlyn Terrace, Warnervale, Toukley, Budgewoi, Lake Haven, Charmhaven, Gorokan, Kanwal, Kincumber, Green Point, Macmasters Beach, Copacabana, Avoca Beach, Wamberal, Forresters Beach, Springfield, Holgate, Matcham, Fountaindale, Mount Elliot</strong> or anywhere else on the Central Coast — we're your local computer repair experts. We also cover <strong>Lake Macquarie</strong> suburbs including <strong>Macquarie Hills, Cardiff, Glendale, Boolaroo, Speers Point, Eleebana, Valentine, Belmont, Swansea, Caves Beach and Catherine Hill Bay</strong>.
           </p>
           <div className="flex flex-wrap justify-center gap-2">
-            {majorSuburbs.map((s) => (
+            {majorSuburbs.filter(isSuburbPage).map((s) => (
               <Link
                 key={s}
                 href={suburbPath(s)}

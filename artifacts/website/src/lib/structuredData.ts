@@ -78,6 +78,55 @@ interface ServiceGraphInput {
   description: string;
   breadcrumbName: string;
   offers?: Array<string>;
+  /** A section page between Home and this one in the breadcrumb (e.g. Media). */
+  parent?: { name: string; path: string };
+}
+
+function breadcrumbs(items: Array<{ name: string; path: string }>) {
+  return {
+    "@type": "BreadcrumbList",
+    itemListElement: [{ name: "Home", path: "/" }, ...items].map((it, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      name: it.name,
+      item: `${SITE}${it.path}`,
+    })),
+  };
+}
+
+/** A page that is not itself a service: About, a portfolio, a section hub. */
+export function pageGraph({
+  path,
+  type,
+  name,
+  description,
+  breadcrumbName,
+  parent,
+}: {
+  path: string;
+  type: "AboutPage" | "CollectionPage" | "WebPage";
+  name: string;
+  description: string;
+  breadcrumbName: string;
+  parent?: { name: string; path: string };
+}) {
+  const url = `${SITE}${path}`;
+  return {
+    "@context": "https://schema.org",
+    "@graph": [
+      LOCAL_BUSINESS,
+      {
+        "@type": type,
+        "@id": `${url}#webpage`,
+        url,
+        name,
+        description,
+        about: { "@id": `${SITE}/#business` },
+        inLanguage: "en-AU",
+      },
+      breadcrumbs([...(parent ? [parent] : []), { name: breadcrumbName, path }]),
+    ],
+  };
 }
 
 export function serviceGraph({
@@ -87,6 +136,7 @@ export function serviceGraph({
   description,
   breadcrumbName,
   offers,
+  parent,
 }: ServiceGraphInput) {
   const url = `${SITE}${path}`;
   return {
@@ -117,13 +167,7 @@ export function serviceGraph({
             }
           : {}),
       },
-      {
-        "@type": "BreadcrumbList",
-        itemListElement: [
-          { "@type": "ListItem", position: 1, name: "Home", item: `${SITE}/` },
-          { "@type": "ListItem", position: 2, name: breadcrumbName, item: url },
-        ],
-      },
+      breadcrumbs([...(parent ? [parent] : []), { name: breadcrumbName, path }]),
     ],
   };
 }

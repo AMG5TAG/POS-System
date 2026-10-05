@@ -1,5 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
+import { pageGraph, useStructuredData } from "@/lib/structuredData";
 import { ExternalLink } from "lucide-react";
 
 type Project = {
@@ -134,8 +135,20 @@ export default function PortfolioPage() {
   useSeo({
     title: "Portfolio — Websites, Apps & Hosting | Koastal Kollective",
     description:
-      "Recent work from Koastal Kollective — The Corner Cafe, Australian Poker Series, Koastal Kollective, Direktories, Ladder Finance, Stain Busters, KKamera and more.",
+      "Recent websites and apps by Koastal Kollective — The Corner Cafe, Australian Poker Series, Direktories, Ladder Finance, Stain Busters, KKamera and more.",
   });
+
+  useStructuredData(
+    pageGraph({
+      path: "/media/portfolio",
+      type: "CollectionPage",
+      name: "Portfolio",
+      description: "Websites and apps built by Koastal Kollective.",
+      breadcrumbName: "Portfolio",
+      parent: { name: "Media", path: "/media" },
+    }),
+    "media-portfolio",
+  );
 
   return (
     <MediaLayout

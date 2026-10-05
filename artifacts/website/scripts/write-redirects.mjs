@@ -40,6 +40,8 @@ async function main() {
     await mkdir(dirname(out), { recursive: true });
     await writeFile(out, stub(to), "utf8");
   }
+  // Read by artifacts/koapos/server.mjs to answer with a real 301.
+  await writeFile(join(DIST, "redirects.json"), JSON.stringify(Object.fromEntries(pairs)), "utf8");
   console.log(`redirects: wrote ${pairs.length} redirect stubs -> ${DIST}`);
 }
 

@@ -1,5 +1,6 @@
 import MediaLayout from "@/components/MediaLayout";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import { Globe2, Shield, Server, RefreshCw, Lock, Cloud, CheckCircle2, ShoppingCart } from "lucide-react";
 
 const features = [
@@ -39,8 +40,20 @@ export default function DomainsPage() {
   useSeo({
     title: "Domains & Web Hosting Australia | Koastal Kollective",
     description:
-      "Domain registration and managed hosting from Koastal Kollective. Sydney and Melbourne data centres, free SSL, daily backups, DDoS protection and a 99.99% uptime SLA.",
+      "Domain registration and managed hosting in Sydney and Melbourne data centres — free SSL, daily backups, DDoS protection and a 99.99% uptime SLA.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/media/domains",
+      serviceType: "Domain Registration & Web Hosting",
+      name: "Domains & Web Hosting",
+      description: "Australian-managed domain registration and hosting in Sydney and Melbourne data centres.",
+      breadcrumbName: "Domains",
+      parent: { name: "Media", path: "/media" },
+    }),
+    "media-domains",
+  );
 
   return (
     <MediaLayout

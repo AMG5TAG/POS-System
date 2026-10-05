@@ -9,6 +9,7 @@ import {
 } from "lucide-react";
 import { suburbs, suburbPath } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
+import { serviceGraph, useStructuredData } from "@/lib/structuredData";
 import MediaPromo from "@/components/MediaPromo";
 import { yearsExperience } from "@/lib/experience";
 
@@ -112,6 +113,17 @@ export default function KasperskyPage() {
     title: "Kaspersky Antivirus | Koastal Kollective",
     description: "Kaspersky antivirus through Koastal Kollective. Licences, installation and local Central Coast support — keep your PC, Mac and family devices protected.",
   });
+
+  useStructuredData(
+    serviceGraph({
+      path: "/kaspersky",
+      serviceType: "Antivirus Licensing & Installation",
+      name: "Kaspersky Antivirus",
+      description: "Kaspersky antivirus licences, installation and local support for PC, Mac and family devices.",
+      breadcrumbName: "Kaspersky",
+    }),
+    "kaspersky",
+  );
 
   useEffect(() => {
     if (!reviewsRef.current) return;

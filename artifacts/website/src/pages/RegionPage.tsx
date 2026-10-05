@@ -8,7 +8,7 @@ import {
 } from "lucide-react";
 import NotFound from "@/pages/not-found";
 import { findRegionBySlug, regionPath, type Region } from "@/data/regions";
-import { suburbPath } from "@/data/suburbs";
+import { suburbPath, isSuburbPage } from "@/data/suburbs";
 import { useSeo } from "@/lib/useSeo";
 import { LOCAL_BUSINESS, useStructuredData } from "@/lib/structuredData";
 import { yearsExperience } from "@/lib/experience";
@@ -236,8 +236,8 @@ export default function RegionPage() {
             {suburbCount} {region.name} suburbs we cover
           </h2>
           <p className="text-gray-600 mb-8 max-w-2xl">
-            Grouped the way locals actually think about the region. Click a suburb for details on
-            repairs there.
+            Grouped the way locals actually think about the region. Linked suburbs have a page of
+            their own with details on repairs there.
           </p>
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-8">
             {region.groups.map((group) => (
@@ -248,9 +248,14 @@ export default function RegionPage() {
                 <ul className="space-y-1">
                   {group.suburbs.map((name) => (
                     <li key={name}>
-                      <Link href={suburbPath(name)} className="text-sm text-[#007b7d] hover:text-[#005f61] hover:underline font-semibold transition-colors">
-                        {name}
-                      </Link>
+                      {/* Only hub suburbs have a page; the rest are listed as covered. */}
+                      {isSuburbPage(name) ? (
+                        <Link href={suburbPath(name)} className="text-sm text-[#007b7d] hover:text-[#005f61] hover:underline font-semibold transition-colors">
+                          {name}
+                        </Link>
+                      ) : (
+                        <span className="text-sm text-gray-700">{name}</span>
+                      )}
                     </li>
                   ))}
                 </ul>
