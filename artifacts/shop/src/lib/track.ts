@@ -16,6 +16,17 @@ type ShopEvent = {
   referrer?: string;
 };
 
+declare global {
+  interface Window { gtag?: (...args: unknown[]) => void }
+}
+
+/* Google Analytics (the GA4 property is configured in index.html with
+   send_page_view off). The SPA sends page_view itself so client-side route
+   changes count, plus GA's recommended view_item / add_to_cart / search. */
+function ga(event: string, params: Record<string, unknown>) {
+  try { if (typeof window.gtag === "function") window.gtag("event", event, params); } catch { /* never break the shop */ }
+}
+
 const KEY = "kk-visitor";
 let queue: ShopEvent[] = [];
 let timer: ReturnType<typeof setTimeout> | null = null;
@@ -68,11 +79,26 @@ export function trackPageView(path: string) {
   const referrer = firstView && document.referrer ? document.referrer.slice(0, 500) : undefined;
   firstView = false;
   track({ type: "page_view", path, referrer });
+  ga("page_view", {
+    page_path: window.location.pathname + window.location.search,
+    page_location: window.location.href,
+    page_title: document.title,
+  });
 }
 
-export const trackProductView = (path: string, productId: number) => track({ type: "product_view", path, productId });
-export const trackAddToCart = (productId: number) => track({ type: "add_to_cart", path: currentPath(), productId });
-export const trackSearch = (term: string) => { if (term.trim()) track({ type: "search", path: currentPath(), target: term.trim().slice(0, 200) }); };
+export const trackProductView = (path: string, productId: number) => {
+  track({ type: "product_view", path, productId });
+  ga("view_item", { items: [{ item_id: String(productId) }] });
+};
+export const trackAddToCart = (productId: number) => {
+  track({ type: "add_to_cart", path: currentPath(), productId });
+  ga("add_to_cart", { items: [{ item_id: String(productId) }] });
+};
+export const trackSearch = (term: string) => {
+  if (!term.trim()) return;
+  track({ type: "search", path: currentPath(), target: term.trim().slice(0, 200) });
+  ga("search", { search_term: term.trim().slice(0, 100) });
+};
 
 function currentPath() {
   return window.location.pathname.replace(/^\/shop(?=\/|$)/, "") || "/";

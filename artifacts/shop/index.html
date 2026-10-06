@@ -35,6 +35,17 @@
          first paint so a dark-mode visitor never sees a white flash. Mirrors
          applyTheme in lib/site-nav/src/theme.tsx. -->
     <script>try{var m=localStorage.getItem("kk-theme")||"system";if(m==="dark"||(m==="system"&&window.matchMedia("(prefers-color-scheme: dark)").matches))document.documentElement.classList.add("dark")}catch(e){}</script>
+    <!-- Google Analytics: the same GA4 property as the website
+         (artifacts/website/index.html), so a visit that crosses from the site
+         into /shop stays one journey. send_page_view is off because the SPA
+         sends page_view itself on every route change (src/lib/track.ts). -->
+    <script async src="https://www.googletagmanager.com/gtag/js?id=G-4TX95M36H4"></script>
+    <script>
+      window.dataLayer = window.dataLayer || [];
+      function gtag(){dataLayer.push(arguments);}
+      gtag('js', new Date());
+      gtag('config', 'G-4TX95M36H4', { send_page_view: false });
+    </script>
   </head>
   <body>
     <div id="root"></div>

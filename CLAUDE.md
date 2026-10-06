@@ -518,7 +518,10 @@ token-for-token against the live one), so its own conventions hold:
   Toukley domains are forwarded at the registrar instead and never reach the
   deployment; their `DOMAIN_ENTRY_POINTS` entries are now unused. koastal.com.au
   is canonical; `www.` 301s to it.
-- GA4 (`G-639QEPSKTL`) is in `index.html`; the app sends page views itself.
+- GA4 (`G-4TX95M36H4`, which replaced `G-639QEPSKTL`) is configured in
+  `index.html` of both the website and the shop (`send_page_view: false`);
+  each app sends page views itself on route change (website
+  `src/lib/analytics.ts`, shop `src/lib/track.ts`). The POS has no analytics.
 - **Site search** (header box, `lib/site-nav/src/site-search.ts`): the
   website's pages and the shop's products together. Pages come from
   `/search-index.json`, which `scripts/build-search-index.mjs` (postbuild, after

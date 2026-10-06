@@ -5,8 +5,9 @@
 // including the first load — is sent from here. That gives us one consistent
 // source of truth that also covers client-side (SPA) navigation, which the
 // stock snippet does not track on its own.
+// The shop (artifacts/shop/index.html) configures the same property.
 
-export const GA_MEASUREMENT_ID = "G-639QEPSKTL";
+export const GA_MEASUREMENT_ID = "G-4TX95M36H4";
 
 type GtagArgs =
   | ["js", Date]
