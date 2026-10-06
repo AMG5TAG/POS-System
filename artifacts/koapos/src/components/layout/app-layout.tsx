@@ -106,6 +106,7 @@ const ONLINE_SUBNAV: NavItem[] = [
 
 const MARKETING_SUBNAV: NavItem[] = [
   { name: "Overview",      href: "/marketing/overview",                      icon: BarChart2 },
+  { name: "Google",        href: "/marketing/google",                        icon: Globe },
   {
     name: "Email",
     icon: Mail,
@@ -250,6 +251,7 @@ const SEARCH_INDEX = [
   { label: "Reports",             href: "/management/marketing-reports/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
   { label: "Marketing · Overview",             href: "/marketing/overview",                          icon: BarChart2,  group: "Marketing" },
+  { label: "Marketing · Google (Search, Analytics, Maps, Reviews)", href: "/marketing/google",          icon: Globe,      group: "Marketing" },
   { label: "Marketing · Email Campaigns",       href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
   { label: "Marketing · Email Templates",      href: "/marketing/email/templates",          icon: FileText,   group: "Marketing" },
   { label: "Marketing · SMS Campaigns",        href: "/marketing/sms/campaigns",            icon: Send,       group: "Marketing" },

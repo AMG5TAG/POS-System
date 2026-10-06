@@ -356,6 +356,44 @@ export async function readVault(merchantId: number, provider: string): Promise<{
   };
 }
 
+/** A usable OAuth grant with its expiry and scope, or null when there is no
+    connection or it has been invalidated (`disconnectedReason`). For callers
+    that refresh their own access tokens (services/googleApi.ts). */
+export async function readVaultGrant(merchantId: number, provider: string): Promise<{
+  accessToken: string; refreshToken: string; tokenExpiresAt: Date | null; scope: string | null; accountHandle: string | null;
+} | null> {
+  const [row] = await db
+    .select()
+    .from(oauthTokenVaultTable)
+    .where(and(eq(oauthTokenVaultTable.merchantId, merchantId), eq(oauthTokenVaultTable.provider, provider)))
+    .limit(1);
+  if (!row || row.disconnectedReason || !row.connectedAt) return null;
+  return {
+    accessToken:    row.encryptedAccessToken  ? decryptToken(row.encryptedAccessToken)  : "",
+    refreshToken:   row.encryptedRefreshToken ? decryptToken(row.encryptedRefreshToken) : "",
+    tokenExpiresAt: row.tokenExpiresAt ?? null,
+    scope:          row.scope ?? null,
+    accountHandle:  row.accountHandle ?? null,
+  };
+}
+
+/** Stores a refreshed access token without touching anything else on the row
+    (upsertVault would reset connectedAt, the handle and the refresh token). */
+export async function updateVaultAccessToken(merchantId: number, provider: string, accessToken: string, tokenExpiresAt: Date | null): Promise<void> {
+  await db.update(oauthTokenVaultTable)
+    .set({ encryptedAccessToken: encryptToken(accessToken), tokenExpiresAt })
+    .where(and(eq(oauthTokenVaultTable.merchantId, merchantId), eq(oauthTokenVaultTable.provider, provider)));
+}
+
+/** Marks a grant unusable (e.g. the person revoked it at Google) so the
+    Integrations page asks for a reconnect. The tokens are left for the next
+    connect to overwrite. */
+export async function markVaultDisconnected(merchantId: number, provider: string, reason: string): Promise<void> {
+  await db.update(oauthTokenVaultTable)
+    .set({ disconnectedReason: reason, disconnectedAt: new Date() })
+    .where(and(eq(oauthTokenVaultTable.merchantId, merchantId), eq(oauthTokenVaultTable.provider, provider)));
+}
+
 export async function deleteVault(merchantId: number, provider: string): Promise<void> {
   await db.delete(oauthTokenVaultTable).where(and(
     eq(oauthTokenVaultTable.merchantId, merchantId),

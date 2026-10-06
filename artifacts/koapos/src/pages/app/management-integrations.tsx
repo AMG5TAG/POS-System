@@ -121,7 +121,7 @@ const LOGO_MAP: Record<string, LogoCfg> = {
   google_pay:           { type: "img",  bg: "bg-white border",  src: SI("googlepay",     "000000") },
   /* Marketing */
   google_ads:           { type: "img",  bg: "bg-white border",  src: SI("googleads",     "4285F4") },
-  google_business:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
+  google_insights:      { type: "img",  bg: "bg-white border",  src: SI("google",        "4285F4") },
   mailchimp:            { type: "img",  bg: "bg-[#FFE01B]",     src: SI("mailchimp",     "000000") },
 };
 

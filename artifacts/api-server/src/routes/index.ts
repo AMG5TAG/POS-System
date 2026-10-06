@@ -138,6 +138,7 @@ import shopInvitesRouter from "./shop-invites";
 import onlineStoreRouter from "./online-store";
 import shopFeedRouter from "./shop-feed";
 import shopStatsRouter from "./shop-stats";
+import googleInsightsRouter from "./google-insights";
 
 const router: IRouter = Router();
 
@@ -227,6 +228,7 @@ router.use(onlineStoreRouter);
 router.use(shopFeedRouter);
 // Public shop tracking beacon + the Online Store › Statistics report.
 router.use(shopStatsRouter);
+router.use(googleInsightsRouter);
 router.use(shortlinksRouter);
 router.use(customerFilesCloudRouter);
 router.use(nextcloudRouter);

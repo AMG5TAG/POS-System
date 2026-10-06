@@ -925,6 +925,27 @@ days, rewards 200 friend / 500 referrer in the loyalty unit).
 
 Pinned by `shop-referrals.test.ts` and `referral-rewards.test.ts`.
 
+### Marketing › Google (Search Console, Analytics, Business Profile)
+
+`/marketing/google` (`pages/app/marketing-google.tsx`) shows Search Console,
+GA4 and Business Profile (Maps) figures and Google reviews, with replies.
+One Google sign-in covers all three: the `google_insights` integration
+(scopes in `GOOGLE_INSIGHTS_SCOPES`, `lib/google-insights.ts`), which replaced
+a `google_business` entry that connected but never read anything. It needs
+`GOOGLE_CLIENT_ID`/`GOOGLE_CLIENT_SECRET`; the redirect URI is
+`https://<host>/api/integrations/oauth/google_insights/callback`, and the
+callback lands on `/marketing/google`. Tokens live in the vault;
+`services/googleApi.ts` refreshes the hourly access token (one refresh per
+merchant at a time) and marks the row `google_revoked` when Google refuses
+(revoked, or a "Testing" OAuth app's 7-day refresh token expiring — keep the
+consent screen In production). The only thing stored is the choice of site,
+property and listing, as JSON in the integration row's `credentials`
+(cleared on disconnect). Figures are fetched on demand and cached 10 minutes.
+Every failure carries a `code` (`classifyGoogleError`) that the page turns
+into one action: enable the API, reconnect with every box ticked, or wait for
+Google to approve Business Profile API access (quota 0 until then). Replies
+post publicly on Google. Pinned by `google-insights.test.ts`.
+
 ### Merging brands and suppliers
 
 `POST /brands/merge` and `/suppliers/merge` (`{targetId, sourceIds, dryRun}`)

@@ -162,6 +162,7 @@ const ManagementDashboardAppPage = lazyWithRetry(() => import("@/pages/app/manag
 const ManagementLegalPage = lazyWithRetry(() => import("@/pages/app/management-legal"));
 const ManagementGiftCardsPage = lazyWithRetry(() => import("@/pages/app/management-gift-cards"));
 const MarketingReferralsPage = lazyWithRetry(() => import("@/pages/app/marketing-referrals"));
+const MarketingGooglePage = lazyWithRetry(() => import("@/pages/app/marketing-google"));
 const LandingPagePublicView = lazyWithRetry(() => import("@/pages/marketing/landing-page-public"));
 const ProductPublicView = lazyWithRetry(() => import("@/pages/marketing/product-public"));
 const PosEodPage = lazyWithRetry(() => import("@/pages/app/pos-eod"));
@@ -879,6 +880,9 @@ function Router() {
       </Route>
       <Route path="/marketing/referrals">
         <ProtectedRoute component={MarketingReferralsPage} />
+      </Route>
+      <Route path="/marketing/google">
+        <ManagementProtectedRoute component={MarketingGooglePage} />
       </Route>
       <Route path="/marketing/automation">
         <ManagementProtectedRoute component={ManagementMarketingAutomationPage} />

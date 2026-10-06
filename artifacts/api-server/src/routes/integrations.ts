@@ -5,7 +5,9 @@ import { db, merchantIntegrationsTable, oauthTokenVaultTable, merchantAutoSyncSe
 import { eq, and } from "drizzle-orm";
 import crypto from "crypto";
 import { requireAuth } from "../middlewares/requireAuth";
-import { upsertVault, deleteVault, upsertCredentialVault } from "../services/tokenVault";
+import { upsertVault, deleteVault, upsertCredentialVault, readVault } from "../services/tokenVault";
+import { GOOGLE_INSIGHTS_SCOPE_STRING } from "../lib/google-insights";
+import { clearGoogleCache } from "../services/googleApi";
 import { syncContacts, syncCalendar, isSyncProvider, AccountNotConnectedError, syncProviderLabel } from "../services/accountSync";
 import { verifyAppleCredentials } from "../services/appleDav";
 
@@ -32,7 +34,10 @@ export const INTEGRATIONS = [
 
   /* ── MARKETING ─────────────────────────────────────────────────────────── */
   { key: "google_ads",          label: "Google Ads",              section: "marketing", category: "Marketing", description: "Create, manage, and track ad campaigns tied to your KoaPOS product catalogue.",                    authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
-  { key: "google_business",     label: "Google Business Profile", section: "marketing", category: "Marketing", description: "Keep your Google Maps listing accurate with hours, offers, and posts.",                       authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
+  // One Google sign-in for Search Console, Analytics and Business Profile —
+  // read by Marketing › Google (routes/google-insights.ts). It replaced a
+  // "Google Business Profile" entry that connected but never read anything.
+  { key: "google_insights",     label: "Google Search, Analytics & Maps", section: "marketing", category: "Marketing", description: "See your Google Search Console, Google Analytics and Google Business Profile (Maps) figures and reviews under Marketing › Google.", authType: "oauth" as const, oauthProvider: "google"    as const, useVault: true  },
 
   /* ── CLOUD STORAGE & PRODUCTIVITY ─────────────────────────────────────── */
   { key: "apple_account",       label: "Apple Account",       section: "cloud", category: "Cloud Storage & Productivity", description: "Sign in with Apple — lets staff/customers authenticate with their Apple ID. (Contacts & Calendar sync is the separate Apple iCloud connection.)", authType: "oauth" as const, oauthProvider: "apple" as const, useVault: true  },
@@ -105,7 +110,7 @@ function decodeAppleIdToken(idToken: string): { sub?: string; email?: string } {
 /* ── OAuth URL builders ─────────────────────────────────────────────────────── */
 
 const GOOGLE_SCOPES: Record<string, string> = {
-  google_business:  "https://www.googleapis.com/auth/business.manage",
+  google_insights:  GOOGLE_INSIGHTS_SCOPE_STRING,
   google_ads:       "https://www.googleapis.com/auth/adwords",
 };
 
@@ -122,6 +127,7 @@ const SYNC_INTEGRATION_KEYS = new Set([
   "apple_account",
 ]);
 function manageUrl(key: string): string {
+  if (key === "google_insights") return "/marketing/google";
   return SYNC_INTEGRATION_KEYS.has(key) ? "/management/sync" : "/management/integrations";
 }
 
@@ -143,10 +149,11 @@ async function buildOAuthStartUrl(key: string, req: import("express").Request, m
 
 /* ── Token exchange ──────────────────────────────────────────────────────────── */
 
-async function exchangeToken(key: string, code: string, cb: string, merchantId: number, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string }> {
-  if (key === "google_business" || key === "google_ads") {
-    const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number };
+async function exchangeToken(key: string, code: string, cb: string, merchantId: number, extra?: Record<string, string>): Promise<{ accessToken: string; refreshToken: string; expiresAt: Date | null; accountId?: string; accountHandle?: string; scope?: string }> {
+  if (key === "google_insights" || key === "google_ads") {
+    const d = await fetch("https://oauth2.googleapis.com/token", { method: "POST", headers: { "Content-Type": "application/x-www-form-urlencoded" }, body: new URLSearchParams({ code, client_id: process.env.GOOGLE_CLIENT_ID ?? "", client_secret: process.env.GOOGLE_CLIENT_SECRET ?? "", redirect_uri: cb, grant_type: "authorization_code" }) }).then((r) => r.json()) as { access_token?: string; refresh_token?: string; expires_in?: number; scope?: string };
     const accessToken = d.access_token ?? "";
+    if (!accessToken) throw new Error("Google token exchange returned no access token");
     let accountId: string | undefined, accountHandle: string | undefined;
     if (accessToken) {
       if (key === "google_ads") {
@@ -162,7 +169,8 @@ async function exchangeToken(key: string, code: string, cb: string, merchantId: 
         accountId = profile.sub; accountHandle = profile.email;
       }
     }
-    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle };
+    // Google returns the scopes actually granted — the consent screen lets each be unticked.
+    return { accessToken, refreshToken: d.refresh_token ?? "", expiresAt: d.expires_in ? new Date(Date.now() + d.expires_in * 1000) : null, accountId, accountHandle, scope: d.scope };
   }
   throw new Error(`No token exchange handler for: ${key}`);
 }
@@ -270,6 +278,14 @@ router.delete("/integrations/:key", requireAuth, requireOwner, async (req, res):
   const merchantId = req.session.merchantId!;
   const key = String(req.params.key);
   const intg = INTEGRATIONS.find((i) => i.key === key);
+  if (key === "google_insights") {
+    // Best effort: also withdraw the grant at Google, so the connection no
+    // longer appears under the person's Google account's third-party access.
+    const grant = await readVault(merchantId, key).catch(() => null);
+    const token = grant?.refreshToken || grant?.accessToken;
+    if (token) await fetch(`https://oauth2.googleapis.com/revoke?${new URLSearchParams({ token })}`, { method: "POST", signal: AbortSignal.timeout(5000) }).catch(() => undefined);
+    clearGoogleCache(merchantId);
+  }
   if (intg?.useVault) await deleteVault(merchantId, key);
   const existing = await getRow(merchantId, key);
   if (existing) { await db.update(merchantIntegrationsTable).set({ status: "disconnected", credentials: null, accessToken: null, refreshToken: null, connectedAt: null }).where(eq(merchantIntegrationsTable.id, existing.id)); }
@@ -434,12 +450,13 @@ router.get("/integrations/oauth/:key/callback", async (req, res): Promise<void> 
   try {
     const cb = cbUrl(key, req);
     const extra = realmId ? { realmId } : undefined;
-    const { accessToken, refreshToken, expiresAt, accountId, accountHandle } = await exchangeToken(key, code, cb, merchantId, extra);
+    const { accessToken, refreshToken, expiresAt, accountId, accountHandle, scope } = await exchangeToken(key, code, cb, merchantId, extra);
     const intg = INTEGRATIONS.find((i) => i.key === key);
 
     if (intg?.useVault) {
-      await upsertVault(merchantId, { provider: key, accessToken, refreshToken: refreshToken || undefined, tokenExpiresAt: expiresAt ?? undefined, accountId, accountHandle });
+      await upsertVault(merchantId, { provider: key, accessToken, refreshToken: refreshToken || undefined, tokenExpiresAt: expiresAt ?? undefined, accountId, accountHandle, scope });
     }
+    if (key === "google_insights") clearGoogleCache(merchantId);
 
     const existing = await getRow(merchantId, key);
     if (existing) { await db.update(merchantIntegrationsTable).set({ status: "connected", ...(!intg?.useVault ? { accessToken, refreshToken, tokenExpiresAt: expiresAt } : {}), connectedAt: new Date() }).where(eq(merchantIntegrationsTable.id, existing.id)); }
