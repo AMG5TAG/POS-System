@@ -2,7 +2,7 @@ import { allowSensitiveChanges, requireManagerOrApproval } from "../middlewares/
 import { referralFieldsFor } from "../lib/referrals";
 import { Router, type IRouter } from "express";
 import { db, invoicesTable, customersTable, merchantsTable, businessProfileTable, loyaltySettingsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, salesTemplatesTable, serviceJobsTable, appointmentsTable, productsTable, staffTable } from "@workspace/db";
-import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, inArray } from "drizzle-orm";
 import { completeLinkedWork } from "../lib/linked-work";
 import { loyaltySpentMessage } from "../lib/loyalty";
 import { requireAuth } from "../middlewares/requireAuth";
@@ -526,7 +526,9 @@ router.get("/invoices", requireAuth, async (req, res): Promise<void> => {
     .from(invoicesTable)
     .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
     .where(and(...conditions))
-    .orderBy(asc(invoicesTable.dueDate), desc(invoicesTable.createdAt))
+    // Newest first, so a limit drops the oldest invoices and never the one
+    // just raised (ordering by due date hid new invoices past the first page).
+    .orderBy(desc(invoicesTable.createdAt), desc(invoicesTable.id))
     .limit(limit)
     .offset(offset);
 
