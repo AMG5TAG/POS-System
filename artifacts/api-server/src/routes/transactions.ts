@@ -174,6 +174,18 @@ export type FinalizeSaleResult =
   | { ok: true; transaction: typeof transactionsTable.$inferSelect; customer: typeof customersTable.$inferSelect | null }
   | { ok: false; status: number; error: string; expected?: unknown };
 
+/* Whether a sold line takes a code from the product's digital code pool. Only a
+ * digital_code-type product does, and not one marked "Physical or Printed Card"
+ * (ePay): that card's code is issued by the third-party terminal at the time of
+ * sale, so it has no pool and the sale must not be refused for an empty one. */
+export function drawsFromCodePool(
+  product: { isEpay?: string | null },
+  pt: { isDigital?: boolean | null; printCode?: boolean | null } | undefined,
+): boolean {
+  if (product.isEpay === "true") return false;
+  return !!pt && !!pt.isDigital && !!pt.printCode;
+}
+
 export async function finalizeSale(
   merchantId: number,
   body: CreateTransactionInput,
@@ -810,8 +822,7 @@ export async function finalizeSale(
       if (item.digitalCodes && item.digitalCodes.length > 0) continue; // already assigned on retry
       const product = productMap.get(item.productId);
       if (!product || !product.productTypeId) continue;
-      const pt = productTypeMap.get(product.productTypeId);
-      if (!pt || !pt.isDigital || !pt.printCode) continue; // digital_code type
+      if (!drawsFromCodePool(product, productTypeMap.get(product.productTypeId))) continue;
       // Reserve one code per unit sold
       const needed = item.quantity;
       const codes = await tx
