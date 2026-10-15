@@ -1158,6 +1158,12 @@ export interface Customer {
   /** @nullable */
   abn?: string | null;
   /** @nullable */
+  businessAddress?: string | null;
+  /** @nullable */
+  businessPhone?: string | null;
+  /** @nullable */
+  businessEmail?: string | null;
+  /** @nullable */
   referredBy?: string | null;
   /** @nullable */
   whatsappSameAsPhone?: string | null;
@@ -1214,6 +1220,9 @@ export interface CustomerInput {
   dateOfBirth?: string;
   company?: string;
   abn?: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  businessEmail?: string;
   referredBy?: string;
   whatsappSameAsPhone?: string;
   billingStreet?: string;
@@ -1247,6 +1256,9 @@ export interface CustomerUpdate {
   dateOfBirth?: string;
   company?: string;
   abn?: string;
+  businessAddress?: string;
+  businessPhone?: string;
+  businessEmail?: string;
   referredBy?: string;
   whatsappSameAsPhone?: string;
   billingStreet?: string;

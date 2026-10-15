@@ -125,7 +125,7 @@ export function ProfileForm({ customer, onSaved }: { customer: Account; onSaved:
               {customer.dateOfBirth ? "Set — contact us if it needs correcting." : "For your birthday reward. Once saved it can't be changed online."}
             </p>
           </div>
-          <Field label={`Company${star("company")}`} autoComplete="organization" required={!!req?.company} value={f.company} onChange={(e) => set("company")(e.target.value)} />
+          <Field label={`Business name${star("company")}`} autoComplete="organization" required={!!req?.company} value={f.company} onChange={(e) => set("company")(e.target.value)} />
           <Field label={`ABN${star("abn")}`} inputMode="numeric" maxLength={14} placeholder="11 digits" required={!!req?.abn} value={f.abn} onChange={(e) => set("abn")(e.target.value)} />
         </div>
       </fieldset>

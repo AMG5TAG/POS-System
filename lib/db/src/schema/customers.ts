@@ -23,6 +23,11 @@ export const customersTable = pgTable("customers", {
   // New fields
   company: text("company"),
   abn: text("abn"),
+  // The customer's business contact details, beside their own. Only asked for
+  // when a business name (company) is entered; all optional.
+  businessAddress: text("business_address"),
+  businessPhone: text("business_phone"),
+  businessEmail: text("business_email"),
   referredBy: text("referred_by"),
   whatsappSameAsPhone: text("whatsapp_same_as_phone"),
   billingStreet: text("billing_street"),

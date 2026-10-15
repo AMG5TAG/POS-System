@@ -33,6 +33,20 @@ describe("customerToVCard", () => {
     expect(v).toContain("NOTE:Line1\\nLine2");
   });
 
+  it("adds the business email, phone and address as work entries", () => {
+    const v = customerToVCard({
+      ...baseCustomer,
+      businessEmail: "accounts@koaco.com.au",
+      businessPhone: "+61243000000",
+      businessAddress: "5 Trade Rd, Gosford NSW 2250",
+    } as CustomerArg);
+    expect(v).toContain("EMAIL;TYPE=INTERNET,WORK:accounts@koaco.com.au");
+    expect(v).toContain("TEL;TYPE=WORK,VOICE:+61243000000");
+    expect(v).toContain("ADR;TYPE=WORK:;;5 Trade Rd\\, Gosford NSW 2250;;;;");
+    // The customer's own address becomes their home one beside it.
+    expect(v).toContain("ADR;TYPE=HOME:;;1 Test St;Sydney;NSW;2000;Australia");
+  });
+
   it("falls back to the email for the display name when unnamed", () => {
     const v = customerToVCard({ ...baseCustomer, firstName: null, lastName: null } as CustomerArg);
     expect(v).toContain("FN:sarah@example.com");

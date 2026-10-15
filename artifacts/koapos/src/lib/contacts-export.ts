@@ -40,6 +40,8 @@ function customerToVCard(c: Customer): string {
   if (c.email) lines.push(`EMAIL;TYPE=INTERNET:${esc(c.email)}`);
   if (c.phone) lines.push(`TEL;TYPE=WORK,VOICE:${esc(c.phone)}`);
   if (c.company) lines.push(`ORG:${esc(c.company)}`);
+  if (c.businessEmail) lines.push(`EMAIL;TYPE=INTERNET,WORK:${esc(c.businessEmail)}`);
+  if (c.businessPhone) lines.push(`TEL;TYPE=WORK,VOICE:${esc(c.businessPhone)}`);
 
   const addrParts = [
     "",                       // PO Box
@@ -50,9 +52,11 @@ function customerToVCard(c: Customer): string {
     c.billingPostcode ?? "",
     c.billingCountry ?? "Australia",
   ];
+  const businessAddress = c.businessAddress?.trim();
   if (addrParts.some(Boolean)) {
-    lines.push(`ADR;TYPE=WORK:${addrParts.map(esc).join(";")}`);
+    lines.push(`ADR;TYPE=${businessAddress ? "HOME" : "WORK"}:${addrParts.map(esc).join(";")}`);
   }
+  if (businessAddress) lines.push(`ADR;TYPE=WORK:;;${esc(businessAddress)};;;;`);
 
   const notes: string[] = [];
   if (c.customerGroup) notes.push(`Group: ${c.customerGroup}`);
@@ -143,7 +147,7 @@ export function exportOutlookCSV(customers: Customer[], filename = "koapos-outlo
 // ─── Generic CSV ──────────────────────────────────────────────────────────────
 
 const GENERIC_HEADERS = [
-  "First Name", "Last Name", "Email", "Phone", "Company", "ABN",
+  "First Name", "Last Name", "Email", "Phone", "Business Name", "ABN",
   "Billing Street", "Billing City", "Billing State", "Billing Postcode", "Billing Country",
   "Customer Group", "Loyalty Points", "Total Spent", "Visit Count", "Notes", "Date of Birth",
 ];

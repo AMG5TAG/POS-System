@@ -134,7 +134,7 @@ const REQUIRED_FIELD_LABELS: { key: keyof CustomerRequiredFields; label: string;
   { key: "email",          label: "Email Address" },
   { key: "phone",          label: "Phone Number" },
   { key: "dateOfBirth",    label: "Date of Birth" },
-  { key: "company",        label: "Company / Business Name" },
+  { key: "company",        label: "Business Name" },
   { key: "abn",            label: "ABN",            hint: "Australian Business Number" },
   { key: "billingAddress", label: "Billing Address" },
 ];

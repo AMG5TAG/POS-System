@@ -26,7 +26,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
-import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch, Phone } from "lucide-react";
+import { User, MapPin, Settings2, AlertTriangle, Check, ChevronsUpDown, X, UserSearch, Phone, Building2 } from "lucide-react";
 import { Stepper, type StepperStep } from "@/components/ui/stepper";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -45,6 +45,7 @@ type CustomerForm = {
   firstName: string; lastName: string; email: string; phone: string;
   whatsappSameAsPhone: boolean; dateOfBirth: string; company: string;
   abn: string; referredBy: string; referralCode: string;
+  businessAddress: string; businessPhone: string; businessEmail: string;
   billingStreet: string; billingCity: string;
   billingState: string; billingPostcode: string; billingCountry: string;
   addShipping: boolean; shippingSameAsBilling: boolean;
@@ -59,6 +60,7 @@ const defaultForm: CustomerForm = {
   firstName: "", lastName: "", email: "", phone: "",
   whatsappSameAsPhone: false, dateOfBirth: "", company: "",
   abn: "", referredBy: "", referralCode: "",
+  businessAddress: "", businessPhone: "", businessEmail: "",
   billingStreet: "", billingCity: "",
   billingState: "", billingPostcode: "", billingCountry: "Australia",
   addShipping: true, shippingSameAsBilling: true,
@@ -163,6 +165,8 @@ export function AddCustomerWizard({
         whatsappSameAsPhone: c.whatsappSameAsPhone === "true",
         dateOfBirth: c.dateOfBirth || "", company: c.company || "",
         abn: c.abn || "", referredBy: c.referredBy || "", referralCode: c.referralCode || "",
+        businessAddress: c.businessAddress || "", businessPhone: c.businessPhone || "",
+        businessEmail: c.businessEmail || "",
         billingStreet: c.billingStreet || "", billingCity: c.billingCity || "",
         billingState: c.billingState || "", billingPostcode: c.billingPostcode || "",
         billingCountry: c.billingCountry || "Australia",
@@ -198,12 +202,23 @@ export function AddCustomerWizard({
   const setField = <K extends keyof CustomerForm>(key: K, value: CustomerForm[K]) =>
     setForm((prev) => ({ ...prev, [key]: value }));
 
+  /* Business contact details only belong to a customer with a business name,
+     so they're asked for (and sent) only once one is entered. An emptied field
+     is sent as "" when editing so it actually clears; with no business name
+     they're left out, which leaves anything stored untouched. */
+  const hasBusiness = form.company.trim() !== "";
+  const businessField = (v: string) =>
+    !hasBusiness ? undefined : v.trim() || (editingCustomer ? "" : undefined);
+
   const buildPayload = () => ({
     firstName: form.firstName || undefined, lastName: form.lastName || undefined,
     email: form.email || undefined, phone: form.phone || undefined,
     whatsappSameAsPhone: form.whatsappSameAsPhone ? "true" : "false",
     dateOfBirth: form.dateOfBirth || undefined, company: form.company || undefined,
     abn: form.abn || undefined, referredBy: form.referredBy || undefined, referralCode: form.referralCode || undefined,
+    businessAddress: businessField(form.businessAddress),
+    businessPhone: businessField(form.businessPhone),
+    businessEmail: businessField(form.businessEmail),
     billingStreet: form.billingStreet || undefined, billingCity: form.billingCity || undefined,
     billingState: form.billingState || undefined, billingPostcode: form.billingPostcode || undefined,
     billingCountry: form.billingCountry || undefined,
@@ -361,10 +376,43 @@ export function AddCustomerWizard({
                 <Field label="Date of Birth">
                   <Input type="date" value={form.dateOfBirth} onChange={(e) => setField("dateOfBirth", e.target.value)} />
                 </Field>
-                <Field label="Company">
-                  <Input value={form.company} onChange={(e) => setField("company", e.target.value)} placeholder="Acme Corp" />
+                <Field label="Business Name">
+                  <Input value={form.company} onChange={(e) => setField("company", e.target.value)} placeholder="Acme Pty Ltd" />
                 </Field>
               </FieldRow>
+              {hasBusiness && (
+                <div className="rounded-xl border bg-muted/30 p-3 space-y-3">
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5" /> Business contact <span className="normal-case font-normal tracking-normal">(optional)</span>
+                  </p>
+                  <Field label="Business Address">
+                    <Input
+                      value={form.businessAddress}
+                      onChange={(e) => setField("businessAddress", e.target.value)}
+                      placeholder="5 Trade Rd, Gosford NSW 2250"
+                    />
+                  </Field>
+                  <FieldRow>
+                    <Field label="Business Phone">
+                      <Input
+                        type="tel"
+                        name="businessPhone"
+                        value={form.businessPhone}
+                        onChange={(e) => setField("businessPhone", e.target.value)}
+                        placeholder="02 4300 0000"
+                      />
+                    </Field>
+                    <Field label="Business Email">
+                      <Input
+                        type="email"
+                        value={form.businessEmail}
+                        onChange={(e) => setField("businessEmail", e.target.value)}
+                        placeholder="accounts@acme.com.au"
+                      />
+                    </Field>
+                  </FieldRow>
+                </div>
+              )}
               <FieldRow>
                 <Field label="ABN">
                   <Input
@@ -628,7 +676,7 @@ export function AddCustomerWizard({
                   {form.firstName && <span>Name: <strong>{form.firstName} {form.lastName}</strong></span>}
                   {form.email && <span>Email: <strong>{form.email}</strong></span>}
                   {form.phone && <span>Phone: <strong>{form.phone}</strong></span>}
-                  {form.company && <span>Company: <strong>{form.company}</strong></span>}
+                  {form.company && <span>Business Name: <strong>{form.company}</strong></span>}
                 </div>
               </div>
               <div className="space-y-1.5">

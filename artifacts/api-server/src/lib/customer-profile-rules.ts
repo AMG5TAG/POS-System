@@ -16,7 +16,7 @@ export const REQUIRED_LABELS: Record<RequiredKey, string> = {
   email: "email",
   phone: "mobile number",
   dateOfBirth: "birthday",
-  company: "company",
+  company: "business name",
   abn: "ABN",
   billingAddress: "address",
 };

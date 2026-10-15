@@ -216,7 +216,7 @@ const MERGE_TEXT_FIELDS: { key: keyof Customer; label: string }[] = [
   { key: "lastName",     label: "Last Name" },
   { key: "email",        label: "Email" },
   { key: "phone",        label: "Phone" },
-  { key: "company",      label: "Company" },
+  { key: "company",      label: "Business Name" },
   { key: "abn",          label: "ABN" },
   { key: "dateOfBirth",  label: "Date of Birth" },
   { key: "notes",        label: "Notes" },
@@ -1433,7 +1433,10 @@ function CustomerDetailInner({
           <div className="rounded-xl border bg-muted/20 divide-y">
             <InfoRow icon={Mail}      label="Email"   value={customer.email} onClick={customer.email ? () => { setComposeSubject(""); setComposeBody(""); setComposeOpen(true); } : undefined} />
             <InfoRow icon={Phone}     label="Phone"   value={formatPhoneForDisplay(customer.phone)} href={customer.phone ? telHref(customer.phone) : undefined} />
-            <InfoRow icon={Building2} label="Company" value={customer.company} />
+            <InfoRow icon={Building2} label="Business Name" value={customer.company} />
+            <InfoRow icon={Phone}     label="Business Phone"   value={formatPhoneForDisplay(customer.businessPhone)} href={customer.businessPhone ? telHref(customer.businessPhone) : undefined} />
+            <InfoRow icon={Mail}      label="Business Email"   value={customer.businessEmail} href={customer.businessEmail ? `mailto:${customer.businessEmail}` : undefined} />
+            <InfoRow icon={MapPin}    label="Business Address" value={customer.businessAddress} href={customer.businessAddress ? mapUrl(customer.businessAddress) : undefined} />
           </div>
           <div className="rounded-xl border bg-muted/20 divide-y">
             <InfoRow icon={Star}  label="Loyalty Points" value={customer.loyaltyPoints ?? 0} />
@@ -3059,7 +3062,7 @@ export default function CustomersPage() {
                     <SortTh {...sh("Name", "name")} />
                     <SortTh {...sh("Email", "email", "hidden sm:table-cell")} />
                     <th className="p-3 text-left font-medium whitespace-nowrap hidden md:table-cell">Phone</th>
-                    <SortTh {...sh("Company", "company", "hidden lg:table-cell")} />
+                    <SortTh {...sh("Business Name", "company", "hidden lg:table-cell")} />
                     <th className="p-3 text-left font-medium whitespace-nowrap hidden xl:table-cell">Address</th>
                     <th className="p-3 text-left font-medium whitespace-nowrap hidden lg:table-cell">Group</th>
                     <SortTh {...sh("Loyalty", "loyaltyPoints", "hidden md:table-cell")} />

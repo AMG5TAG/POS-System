@@ -56,6 +56,10 @@ export function customerToVCard(c: CustomerRow, note?: string | null, photo?: VC
   if (c.email) lines.push(`EMAIL;TYPE=INTERNET:${esc(c.email)}`);
   if (c.phone) lines.push(`TEL;TYPE=CELL,VOICE:${esc(c.phone)}`);
   if (c.company) lines.push(`ORG:${esc(c.company)}`);
+  // Business contact details sit beside the customer's own, typed WORK so
+  // Apple Contacts labels them "work" rather than merging them in.
+  if (c.businessEmail) lines.push(`EMAIL;TYPE=INTERNET,WORK:${esc(c.businessEmail)}`);
+  if (c.businessPhone) lines.push(`TEL;TYPE=WORK,VOICE:${esc(c.businessPhone)}`);
 
   const street = c.billingStreet ?? c.address ?? "";
   const addrParts = [
@@ -67,8 +71,15 @@ export function customerToVCard(c: CustomerRow, note?: string | null, photo?: VC
     c.billingPostcode ?? "",
     c.billingCountry ?? (street ? "Australia" : ""),
   ];
+  // With a business address on file the customer's own address is their
+  // home one; without, it keeps the WORK label it has always synced with.
+  const businessAddress = c.businessAddress?.trim();
   if (addrParts.some(Boolean)) {
-    lines.push(`ADR;TYPE=WORK:${addrParts.map(esc).join(";")}`);
+    lines.push(`ADR;TYPE=${businessAddress ? "HOME" : "WORK"}:${addrParts.map(esc).join(";")}`);
+  }
+  if (businessAddress) {
+    // Stored as one free-text line, so it goes in the street component whole.
+    lines.push(`ADR;TYPE=WORK:;;${esc(businessAddress)};;;;`);
   }
 
   if (note && note.trim()) lines.push(`NOTE:${esc(note)}`);

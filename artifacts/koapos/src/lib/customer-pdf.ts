@@ -311,7 +311,7 @@ export async function exportCustomerPDF(opts: ExportOptions): Promise<void> {
   const infoFields: [string, string | null | undefined][] = [
     ["Email",          customer.email],
     ["Phone",          formatPhoneForDisplay(customer.phone)],
-    ["Company",        customer.company],
+    ["Business Name",  customer.company],
     ["ABN",            customer.abn],
     ["Date of Birth",  customer.dateOfBirth],
     ["Referred By",    customer.referredBy],

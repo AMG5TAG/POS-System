@@ -10949,6 +10949,12 @@ components:
           type: ["string", "null"]
         abn:
           type: ["string", "null"]
+        businessAddress:
+          type: ["string", "null"]
+        businessPhone:
+          type: ["string", "null"]
+        businessEmail:
+          type: ["string", "null"]
         referredBy:
           type: ["string", "null"]
         whatsappSameAsPhone:
@@ -11019,6 +11025,12 @@ components:
           type: string
         abn:
           type: string
+        businessAddress:
+          type: string
+        businessPhone:
+          type: string
+        businessEmail:
+          type: string
         referredBy:
           type: string
         whatsappSameAsPhone:
@@ -11080,6 +11092,12 @@ components:
         company:
           type: string
         abn:
+          type: string
+        businessAddress:
+          type: string
+        businessPhone:
+          type: string
+        businessEmail:
           type: string
         referredBy:
           type: string

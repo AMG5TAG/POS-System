@@ -58,6 +58,9 @@ function sanitiseCustomerBody(raw: Record<string, unknown>): Record<string, unkn
   if (typeof body.email === "string") {
     body.email = body.email.trim().toLowerCase() || undefined;
   }
+  if (typeof body.businessEmail === "string") {
+    body.businessEmail = body.businessEmail.trim().toLowerCase();
+  }
   if (typeof body.dateOfBirth === "string") {
     body.dateOfBirth = parseDateToISO(body.dateOfBirth) ?? undefined;
   }
@@ -126,6 +129,9 @@ function formatCustomer(c: typeof customersTable.$inferSelect) {
     createdAt: c.createdAt.toISOString(),
     company: c.company ?? null,
     abn: c.abn ?? null,
+    businessAddress: c.businessAddress ?? null,
+    businessPhone: c.businessPhone ?? null,
+    businessEmail: c.businessEmail ?? null,
     referredBy: c.referredBy ?? null,
     whatsappSameAsPhone: c.whatsappSameAsPhone ?? null,
     billingStreet: c.billingStreet ?? null,
@@ -607,6 +613,9 @@ router.delete("/customers/:id", requireAuth, requireManagerOrOwner, async (req, 
       dateOfBirth: null,
       company:   null,
       abn:       null,
+      businessAddress: null,
+      businessPhone:   null,
+      businessEmail:   null,
       notes:     null,
       billingStreet: null, billingCity: null, billingState: null,
       billingPostcode: null, billingCountry: null,

@@ -250,7 +250,7 @@ export const STICKER_TYPES: StickerType[] = [
     defaultSize: "S0722520",
     fields: [
       { key: "showName",    label: "Name",                      defaultValue: "true", type: "toggle" },
-      { key: "showCompany", label: "Company",                   defaultValue: "true", type: "toggle" },
+      { key: "showCompany", label: "Business Name",             defaultValue: "true", type: "toggle" },
       { key: "showStreet",  label: "Street",                    defaultValue: "true", type: "toggle" },
       { key: "showSuburb",  label: "Suburb / State / Postcode", defaultValue: "true", type: "toggle" },
       { key: "showBarcode", label: "Barcode",                   defaultValue: "false", type: "toggle" },
