@@ -143,7 +143,7 @@ export function classifyGoogleError(httpStatus: number, body: unknown): Classifi
   if (typeof b.error === "string") {
     // OAuth token endpoint shape: { error: "invalid_grant", error_description }
     if (b.error === "invalid_grant" || b.error === "unauthorized_client") {
-      return { code: "not_connected", status: 401, message: "Google access was revoked or has expired. Reconnect Google." };
+      return { code: "not_connected", status: 409, message: "Google access was revoked or has expired. Reconnect Google." };
     }
     return { code: "google_error", status: 502, message: b.error_description || b.error };
   }
@@ -153,7 +153,7 @@ export function classifyGoogleError(httpStatus: number, body: unknown): Classifi
   const reason = info?.reason ?? "";
   const meta = info?.metadata ?? {};
 
-  if (httpStatus === 401) return { code: "not_connected", status: 401, message: "Google access was revoked or has expired. Reconnect Google." };
+  if (httpStatus === 401) return { code: "not_connected", status: 409, message: "Google access was revoked or has expired. Reconnect Google." };
   if (reason === "SERVICE_DISABLED" || /has not been used in project|is disabled/i.test(message)) {
     const activationUrl = meta.activationUrl ?? message.match(/https:\/\/console\.(?:developers|cloud)\.google\.com\/\S+/)?.[0]?.replace(/[.,]$/, "");
     return { code: "api_disabled", status: 503, message: `${meta.serviceTitle ?? "This Google API"} is not enabled in your Google Cloud project.`, activationUrl };

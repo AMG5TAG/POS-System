@@ -534,7 +534,7 @@ router.post("/integrations/contacts/sync", requireAuth, requireOwner, async (req
       message: parts.length ? `Contacts sync: ${parts.join(", ")}.` : "Nothing to sync.",
     });
   } catch (err) {
-    if (err instanceof AccountNotConnectedError) { res.status(401).json({ error: err.message }); return; }
+    if (err instanceof AccountNotConnectedError) { res.status(409).json({ error: err.message, code: "not_connected" }); return; }
     req.log.error({ merchantId, provider, err }, "Contacts sync failed");
     res.status(502).json({ error: "Contact sync failed — please reconnect the account on the Sync page and try again." });
   }
@@ -564,7 +564,7 @@ router.post("/integrations/calendar/sync", requireAuth, requireOwner, async (req
         : `Synced ${result.synced} appointment${result.synced !== 1 ? "s" : ""}${result.failed > 0 ? ` (${result.failed} failed)` : ""}`,
     });
   } catch (err) {
-    if (err instanceof AccountNotConnectedError) { res.status(401).json({ error: err.message }); return; }
+    if (err instanceof AccountNotConnectedError) { res.status(409).json({ error: err.message, code: "not_connected" }); return; }
     req.log.error({ merchantId, provider, err }, "Calendar sync failed");
     res.status(502).json({ error: "Calendar sync failed — please reconnect the account on the Sync page and try again." });
   }

@@ -141,7 +141,7 @@ async function settle<T>(p: Promise<T>) {
 
 router.get("/google-insights/options", ...guard, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
-  if (!(await readVaultGrant(merchantId, KEY).catch(() => null))) { res.status(401).json({ error: "Google isn't connected.", code: "not_connected" }); return; }
+  if (!(await readVaultGrant(merchantId, KEY).catch(() => null))) { res.status(409).json({ error: "Google isn't connected.", code: "not_connected" }); return; }
   const [sites, properties, locations] = await Promise.all([
     settle(listSites(merchantId)), settle(listProperties(merchantId)), settle(listLocations(merchantId)),
   ]);
@@ -151,7 +151,7 @@ router.get("/google-insights/options", ...guard, async (req, res): Promise<void>
 router.put("/google-insights/selection", ...guard, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const row = await integrationRow(merchantId);
-  if (!row || !(await readVaultGrant(merchantId, KEY).catch(() => null))) { res.status(401).json({ error: "Google isn't connected.", code: "not_connected" }); return; }
+  if (!row || !(await readVaultGrant(merchantId, KEY).catch(() => null))) { res.status(409).json({ error: "Google isn't connected.", code: "not_connected" }); return; }
   // Merge over what is saved, so choosing a property leaves the site alone.
   const next = cleanSelection({ ...parseSelection(row.credentials), ...((req.body ?? {}) as Record<string, unknown>) });
   await db.update(merchantIntegrationsTable).set({ credentials: JSON.stringify(next) }).where(eq(merchantIntegrationsTable.id, row.id));

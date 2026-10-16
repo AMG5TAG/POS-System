@@ -388,7 +388,7 @@ router.post("/payroll/sync/employees", requireAuth, requireOwner, async (req, re
   const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
-    res.status(401).json({ error: "Payroll provider not connected" });
+    res.status(409).json({ error: "Payroll provider not connected", code: "not_connected" });
     return;
   }
   const provider = getPayrollProvider(providerKey);
@@ -467,7 +467,7 @@ router.post("/payroll/sync/timesheets", requireAuth, requireOwner, async (req, r
   const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
-    res.status(401).json({ error: "Payroll provider not connected" });
+    res.status(409).json({ error: "Payroll provider not connected", code: "not_connected" });
     return;
   }
   const provider = getPayrollProvider(providerKey)!;
@@ -543,7 +543,7 @@ router.post("/payroll/pay-runs", requireAuth, requireOwner, async (req, res): Pr
   const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
-    res.status(401).json({ error: "Payroll provider not connected" });
+    res.status(409).json({ error: "Payroll provider not connected", code: "not_connected" });
     return;
   }
   const provider = getPayrollProvider(providerKey)!;
@@ -672,7 +672,7 @@ router.post("/payroll/pay-runs/:id/post", requireAuth, requireOwner, async (req,
   const providerKey = await activeProviderKey(merchantId);
   const auth = await withFreshPayrollAuth(merchantId);
   if (!auth) {
-    res.status(401).json({ error: "Payroll provider not connected" });
+    res.status(409).json({ error: "Payroll provider not connected", code: "not_connected" });
     return;
   }
   const provider = getPayrollProvider(providerKey)!;

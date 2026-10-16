@@ -1,7 +1,7 @@
 import { requireManagerOrOwner, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { SelectXeroTenantBody, UpdateXeroMappingsBody } from "@workspace/api-zod";
 import { createOAuthState, verifyOAuthState } from "../lib/oauth-state";
-import { Router } from "express";
+import { Router, type Response as Response_ } from "express";
 import {
   db,
   merchantIntegrationsTable,
@@ -134,21 +134,41 @@ async function saveCreds(merchantId: number, creds: XeroCredentials): Promise<vo
     );
 }
 
+/* A Xero-side failure must never reach the browser as a 401: the POS reads any
+   401 as "your session has expired" and signs the user out (setOnUnauthorized
+   in App.tsx), so opening the Xero page with a lapsed Xero token logged the
+   owner out of the POS. "Not connected" and Xero refusing our token are 409s. */
+function sendNotConnected(res: Response_, error = "Xero is not connected"): void {
+  res.status(409).json({ error, code: "xero_not_connected" });
+}
+function upstreamStatus(status: number): number {
+  return status === 401 ? 409 : status;
+}
+
 async function withFreshToken(
   merchantId: number,
 ): Promise<{ accessToken: string; tenantId: string } | null> {
   const row = await getRow(merchantId);
-  if (!row || !row.accessToken) return null;
-
+  if (!row) return null;
   const creds = row.credentials ? (JSON.parse(row.credentials) as XeroCredentials) : {};
   const tenantId = creds.tenantId;
   if (!tenantId) return null;
+  const accessToken = await freshAccessToken(merchantId, row);
+  return accessToken ? { accessToken, tenantId } : null;
+}
 
-  /* Refresh if expiring within 3 minutes */
+/* The access token, refreshed when it expires within 3 minutes. Needs no
+   tenant, so the organisation picker can use it before one is chosen. */
+async function freshAccessToken(
+  merchantId: number,
+  row: NonNullable<Awaited<ReturnType<typeof getRow>>>,
+): Promise<string | null> {
+  if (!row.accessToken) return null;
+
   const now = new Date();
   const expiresAt = row.tokenExpiresAt;
   if (expiresAt && expiresAt.getTime() - now.getTime() > 3 * 60 * 1000) {
-    return { accessToken: row.accessToken, tenantId };
+    return row.accessToken;
   }
 
   const cc = await getXeroClientCreds(merchantId);
@@ -184,7 +204,7 @@ async function withFreshToken(
       ),
     );
 
-  return { accessToken: data.access_token, tenantId };
+  return data.access_token;
 }
 
 async function appendSyncLog(
@@ -476,16 +496,17 @@ router.delete("/xero/disconnect", requireAuth, requireOwner, async (req, res): P
 router.get("/xero/tenants", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const row = await getRow(merchantId);
-  if (!row?.accessToken) { res.status(401).json({ error: "Not connected" }); return; }
+  const accessToken = row ? await freshAccessToken(merchantId, row) : null;
+  if (!accessToken) { sendNotConnected(res); return; }
 
   const r = await fetch(XERO_CONNECTIONS, {
     headers: {
-      Authorization:  `Bearer ${row.accessToken}`,
+      Authorization:  `Bearer ${accessToken}`,
       "Content-Type": "application/json",
     },
   });
 
-  if (!r.ok) { res.status(r.status).json({ error: "Failed to fetch tenants" }); return; }
+  if (!r.ok) { res.status(upstreamStatus(r.status)).json({ error: "Failed to fetch tenants" }); return; }
 
   const tenants = (await r.json()) as Array<{ tenantId: string; tenantName: string; tenantType: string }>;
   res.json(tenants);
@@ -512,13 +533,13 @@ router.post("/xero/tenant", requireAuth, requireOwner, async (req, res): Promise
 router.get("/xero/accounts", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
-  if (!auth) { res.status(401).json({ error: "Not connected or no tenant selected" }); return; }
+  if (!auth) { sendNotConnected(res, "Xero is not connected or no organisation is selected"); return; }
 
   const r = await fetch(`${XERO_API}/Accounts?where=Status%3D%3D%22ACTIVE%22`, {
     headers: xeroHeaders(auth),
   });
 
-  if (!r.ok) { res.status(r.status).json({ error: "Failed to fetch accounts" }); return; }
+  if (!r.ok) { res.status(upstreamStatus(r.status)).json({ error: "Failed to fetch accounts" }); return; }
 
   type XeroAccount = { AccountID: string; Code: string; Name: string; Type: string; Status: string };
   const data = (await r.json()) as { Accounts: XeroAccount[] };
@@ -565,7 +586,7 @@ router.put("/xero/mappings", requireAuth, requireOwner, async (req, res): Promis
 router.post("/xero/sync/contacts", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
-  if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
+  if (!auth) { sendNotConnected(res); return; }
 
   // Read sync settings to determine notes behaviour
   const creds         = await getCreds(merchantId);
@@ -776,7 +797,7 @@ router.post("/xero/sync/contacts", requireAuth, requireOwner, async (req, res): 
     ...(syncStatus === "error" ? { error: msg } : { message: msg }),
   });
 
-  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
+  if (!r.ok) { res.status(upstreamStatus(r.status)).json({ error: msg }); return; }
   res.json({ ok: true, synced: syncedCount, failed: failedCount, notesSynced, notesFailed, message: msg });
 });
 
@@ -788,7 +809,7 @@ router.post("/xero/sync/contacts", requireAuth, requireOwner, async (req, res): 
 router.post("/xero/sync/transactions", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
-  if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
+  if (!auth) { sendNotConnected(res); return; }
 
   const creds = (await getCreds(merchantId)) ?? {};
   const revenueCode = creds.mappings?.revenueAccount ?? "200";
@@ -898,7 +919,7 @@ router.post("/xero/sync/transactions", requireAuth, requireOwner, async (req, re
 
   await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "transactions", synced: toCreate.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
-  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
+  if (!r.ok) { res.status(upstreamStatus(r.status)).json({ error: msg }); return; }
   res.json({ ok: true, synced: toCreate.length, skipped, message: msg });
 });
 
@@ -907,7 +928,7 @@ router.post("/xero/sync/transactions", requireAuth, requireOwner, async (req, re
 router.post("/xero/sync/purchase-orders", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
-  if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
+  if (!auth) { sendNotConnected(res); return; }
 
   const pos = await db
     .select()
@@ -987,7 +1008,7 @@ router.post("/xero/sync/purchase-orders", requireAuth, requireOwner, async (req,
 
   await appendSyncLog(merchantId, { timestamp: new Date().toISOString(), type: "purchase_orders", synced: toCreate.length, ...(status === "error" ? { error: msg } : { message: msg }) });
 
-  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
+  if (!r.ok) { res.status(upstreamStatus(r.status)).json({ error: msg }); return; }
   res.json({ ok: true, synced: toCreate.length, skipped, message: msg });
 });
 
@@ -1007,7 +1028,7 @@ router.get("/xero/sync/log", requireAuth, requireManagerOrOwner, async (req, res
 router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const auth       = await withFreshToken(merchantId);
-  if (!auth) { res.status(401).json({ error: "Not connected" }); return; }
+  if (!auth) { sendNotConnected(res); return; }
 
   const { transactionId } = req.body as { transactionId?: number };
   if (!transactionId) { res.status(400).json({ error: "transactionId required" }); return; }
@@ -1099,7 +1120,7 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
     ...(status === "error" ? { error: msg } : { message: msg }),
   });
 
-  if (!r.ok) { res.status(r.status).json({ error: msg }); return; }
+  if (!r.ok) { res.status(upstreamStatus(r.status)).json({ error: msg }); return; }
   res.json({ ok: true, message: msg });
 });
 
