@@ -15,6 +15,7 @@ import {
   type XeroMappingsUpdate,
 } from "@workspace/api-client-react";
 import { useLocation } from "wouter";
+import { useQueryClient } from "@tanstack/react-query";
 import { AppLayout } from "@/components/layout/app-layout";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -242,6 +243,7 @@ export default function ManagementXeroPage() {
   const syncContactsMutation     = useSyncXeroContacts();
   const syncPurchaseOrdersMutation = useSyncXeroPurchaseOrders();
   const disconnectMutation = useDisconnectXero();
+  const queryClient = useQueryClient();
 
   /* ── One-time initialisation from status ─────────────────────────────── */
 
@@ -358,6 +360,11 @@ export default function ManagementXeroPage() {
         setStep(2);
         initializedRef.current = false;
         void refetchStatus();
+        // The Integrations list caches its rows for 30s; without this it kept
+        // showing Xero as Connected after a disconnect.
+        void queryClient.invalidateQueries({ queryKey: ["integrations"] });
+        queryClient.removeQueries({ queryKey: ["xero-tenants"] });
+        queryClient.removeQueries({ queryKey: ["xero-accounts"] });
       },
       onError: () => toast.error("Failed to disconnect Xero."),
       onSettled: () => setDisconnecting(false),
