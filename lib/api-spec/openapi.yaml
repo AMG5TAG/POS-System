@@ -8818,8 +8818,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/XeroTenant"
-        "401":
-          description: Not connected
+        "409":
+          description: Xero not connected (code xero_not_connected). Never 401 — the POS signs out on any 401.
 
   /xero/tenant:
     post:
@@ -8854,8 +8854,8 @@ paths:
                 type: array
                 items:
                   $ref: "#/components/schemas/XeroAccount"
-        "401":
-          description: Not connected or no tenant selected
+        "409":
+          description: Xero not connected or no organisation selected (code xero_not_connected)
 
   /xero/mappings:
     get:
@@ -8912,8 +8912,8 @@ paths:
                 $ref: "#/components/schemas/SyncContactsResult"
         "400":
           description: Invalid provider
-        "401":
-          description: Provider not connected
+        "409":
+          description: Provider not connected (code not_connected)
 
   /integrations/customer-files-cloud:
     get:
@@ -9030,8 +9030,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/XeroSyncResult"
-        "401":
-          description: Not connected
+        "409":
+          description: Xero not connected (code xero_not_connected)
 
   /xero/sync/transactions:
     post:
@@ -9045,8 +9045,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/XeroSyncResult"
-        "401":
-          description: Not connected
+        "409":
+          description: Xero not connected (code xero_not_connected)
 
   /xero/sync/purchase-orders:
     post:
@@ -9060,8 +9060,8 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/XeroSyncResult"
-        "401":
-          description: Not connected
+        "409":
+          description: Xero not connected (code xero_not_connected)
 
   /xero/sync/log:
     get:

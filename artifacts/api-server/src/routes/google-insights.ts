@@ -69,7 +69,7 @@ function sendError(res: Response, err: unknown, req: Request): void {
     letting Google answer with a scope error per call. */
 async function requireProduct(merchantId: number, product: InsightsProduct): Promise<void> {
   const grant = await readVaultGrant(merchantId, KEY);
-  if (!grant) throw new GoogleApiError({ code: "not_connected", status: 401, message: "Google isn't connected. Connect it under Management › Integrations." });
+  if (!grant) throw new GoogleApiError({ code: "not_connected", status: 409, message: "Google isn't connected. Connect it under Management › Integrations." });
   if (!grantedProducts(grant.scope)[product]) {
     throw new GoogleApiError({ code: "scope_missing", status: 403, message: "Google wasn't given access to this. Reconnect Google and leave every box ticked." });
   }

@@ -186,6 +186,7 @@ describe("access tokens", () => {
     const err = await googleJson(1, "https://example.test/a").catch((e: InstanceType<typeof GoogleApiError>) => e) as InstanceType<typeof GoogleApiError>;
     expect(err).toBeInstanceOf(GoogleApiError);
     expect(err.info.code).toBe("not_connected");
+    expect(err.info.status).toBe(409);
     expect(vault.disconnected).toEqual(["google_revoked"]);
   });
 
@@ -193,5 +194,7 @@ describe("access tokens", () => {
     vault.grant = null;
     const err = await googleJson(1, "https://example.test/a").catch((e: InstanceType<typeof GoogleApiError>) => e) as InstanceType<typeof GoogleApiError>;
     expect(err.info.code).toBe("not_connected");
+    // Never 401: the POS signs the owner out on any 401 (see xero-no-401.test.ts).
+    expect(err.info.status).toBe(409);
   });
 });

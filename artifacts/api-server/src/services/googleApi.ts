@@ -21,7 +21,7 @@ export class GoogleApiError extends Error {
   }
 }
 
-const notConnected = () => new GoogleApiError({ code: "not_connected", status: 401, message: "Google isn't connected. Connect it under Management › Integrations." });
+const notConnected = () => new GoogleApiError({ code: "not_connected", status: 409, message: "Google isn't connected. Connect it under Management › Integrations." });
 
 const refreshing = new Map<number, Promise<string>>();
 
