@@ -520,6 +520,9 @@ export default function POSPage() {
   /* receipt */
   const [receiptOpen, setReceiptOpen] = useState(false);
   const [completedTx, setCompletedTx] = useState<Transaction | null>(null);
+  /* True when the completion dialog is showing a settled invoice payment, so it
+     offers a way back to the Invoices page it came from. */
+  const [completedWasInvoice, setCompletedWasInvoice] = useState(false);
   const [completedTotal, setCompletedTotal] = useState(0);
   const [completedCart, setCompletedCart] = useState<CartItem[]>([]);
   const [completedPaymentMethod, setCompletedPaymentMethod] = useState<string>("card");
@@ -2864,6 +2867,7 @@ export default function POSPage() {
     setCompletedOverallDiscountPct(snap.overallDiscountPct);
     clearCart();
     setCompletedTx(data);
+    setCompletedWasInvoice(false);
     setCompletedTotal(snap.total);
     setReceiptEmail(snap.customer?.email ?? "");
     setReceiptPhone(snap.customer?.phone ?? "");
@@ -3168,6 +3172,7 @@ export default function POSPage() {
               : undefined,
           } as Transaction);
           setCompletedTotal(amount);
+          setCompletedWasInvoice(true);
           /* Prefill from the invoiced customer so Email / SMS receipt works
              without retyping (mirrors the cart-sale path below). */
           setReceiptEmail(inv.customerEmail ?? "");
@@ -5225,7 +5230,16 @@ export default function POSPage() {
             </div>
           )}
 
-          <DialogFooter>
+          <DialogFooter className="flex-col gap-2 sm:flex-col sm:space-x-0">
+            {completedWasInvoice && (
+              <Button
+                variant="outline"
+                className="w-full"
+                onClick={() => { setReceiptOpen(false); setLocation("/pos/invoices"); }}
+              >
+                Return to Invoices
+              </Button>
+            )}
             <Button className="w-full" onClick={() => setReceiptOpen(false)}>
               New Sale
             </Button>
