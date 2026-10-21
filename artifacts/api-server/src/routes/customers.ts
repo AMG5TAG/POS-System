@@ -198,8 +198,10 @@ router.get("/customers", requireAuth, async (req, res): Promise<void> => {
     // Match each whitespace-separated token against the full name independently
     // so word order doesn't matter ("John Smith" and "Smith John" both match).
     // concat_ws skips null name parts; a single token also covers first/last
-    // name on its own. Falls back to the raw term for email/phone lookups.
-    const fullName = sql`concat_ws(' ', ${customersTable.firstName}, ${customersTable.lastName})`;
+    // name on its own. The business name (company) is part of the same string,
+    // so "acme" or "john acme" finds a contact by the business they work for.
+    // Falls back to the raw term for email/phone lookups.
+    const fullName = sql`concat_ws(' ', ${customersTable.firstName}, ${customersTable.lastName}, ${customersTable.company})`;
     // Full address spanning legacy free-text + billing + shipping parts, so a
     // search can span columns ("smith sydney 2000" matches street + city +
     // postcode). Token-matched like the name so word order doesn't matter.

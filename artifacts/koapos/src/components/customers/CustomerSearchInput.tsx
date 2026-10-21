@@ -204,7 +204,7 @@ export function CustomerSearchInput({
                   />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm font-medium truncate">{displayName(c)}</p>
-                    <p className="text-xs text-muted-foreground truncate">{c.email || formatPhoneForDisplay(c.phone) || "—"}</p>
+                    <p className="text-xs text-muted-foreground truncate">{[displayName(c) !== c.company?.trim() ? c.company?.trim() : null, c.email || formatPhoneForDisplay(c.phone)].filter(Boolean).join(" · ") || "—"}</p>
                   </div>
                   {c.warningNote && <AlertTriangle className="w-3.5 h-3.5 text-destructive shrink-0" />}
                 </button>

@@ -1926,11 +1926,13 @@ export default function POSPage() {
 
   /* Filtered customers for inline dropdown */
   const filteredCustomers = useMemo(() => {
-    const q = customerSearch.toLowerCase();
+    const q = customerSearch.trim().toLowerCase();
+    const tokens = q.split(/\s+/).filter(Boolean);
     return (customers).filter(c => {
-      const name = `${c.firstName ?? ""} ${c.lastName ?? ""}`.toLowerCase();
-      const company = (c.company ?? "").toLowerCase();
-      return !q || name.includes(q) || company.includes(q) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
+      // Word by word over name + business name, as the server matches, so
+      // "john acme" isn't hidden here after the server returned it.
+      const nameAndCompany = `${c.firstName ?? ""} ${c.lastName ?? ""} ${c.company ?? ""}`.toLowerCase();
+      return !q || tokens.every(t => nameAndCompany.includes(t)) || (c.email ?? "").toLowerCase().includes(q) || (c.phone ?? "").toLowerCase().includes(q);
     });
   }, [customers, customerSearch]);
 
@@ -3874,7 +3876,7 @@ export default function POSPage() {
                           />
                           <div className="flex-1 min-w-0">
                             <p className="text-sm font-medium truncate">{name}</p>
-                            <p className="text-xs text-muted-foreground truncate">{c.email || formatPhoneForDisplay(c.phone) || "—"}</p>
+                            <p className="text-xs text-muted-foreground truncate">{[name !== c.company?.trim() ? c.company?.trim() : null, c.email || formatPhoneForDisplay(c.phone)].filter(Boolean).join(" · ") || "—"}</p>
                           </div>
                           <div className="flex items-center gap-1 shrink-0">
                             {c.tierName && <span className="text-[10px] font-medium text-violet-600 bg-violet-50 px-1 rounded">{c.tierName}</span>}
