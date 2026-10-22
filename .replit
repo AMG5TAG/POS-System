@@ -29,10 +29,6 @@ args = "api-server"
 
 [[workflows.workflow.tasks]]
 task = "workflow.run"
-args = "mockup-sandbox"
-
-[[workflows.workflow.tasks]]
-task = "workflow.run"
 args = "api-contract-tests"
 
 # PORT and BASE_PATH are set inline on each command rather than as Secrets, for
@@ -50,14 +46,6 @@ author = "agent"
 [[workflows.workflow.tasks]]
 task = "shell.exec"
 args = "PORT=8080 pnpm --filter @workspace/api-server run dev"
-
-[[workflows.workflow]]
-name = "mockup-sandbox"
-author = "agent"
-
-[[workflows.workflow.tasks]]
-task = "shell.exec"
-args = "PORT=8081 BASE_PATH=/__mockup pnpm --filter @workspace/mockup-sandbox run dev"
 
 [[workflows.workflow]]
 name = "api-contract-tests"
