@@ -33,39 +33,58 @@ function authHeaders(): Record<string, string> {
   return { Accept: "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) };
 }
 
-interface AddressrSearch {
-  _embedded?: { addresses?: { sla?: string; _links?: { self?: { href?: string } } }[] };
-}
+/* Two response shapes are in the wild. Older Addressr builds wrap search results
+   in HAL (`_embedded.addresses`, id in `_links.self.href`); the hosted RapidAPI
+   service returns a bare array with the id as `pid`. Accept both — reading only
+   the HAL shape is what left the hosted lookup silently returning no results. */
+interface AddressrHit { sla?: string; pid?: string; _links?: { self?: { href?: string } } }
+type AddressrSearch = AddressrHit[] | { _embedded?: { addresses?: AddressrHit[] } };
+
+/* `street.type` and `state` likewise come as a plain string or as a
+   `{code, name}` object depending on the build. */
+type Coded = string | { code?: string; name?: string };
 interface AddressrDetail {
   sla?: string;
+  smla?: string[];
   structured?: {
     number?: unknown;
-    street?: { name?: string; type?: string };
+    flat?: { number?: unknown };
+    street?: { name?: string; type?: Coded };
     locality?: { name?: string };
     state?: { abbreviation?: string; name?: string };
     postcode?: string | number;
   };
 }
 
-function mapSearch(data: AddressrSearch): { id: string; label: string }[] {
-  const list = data?._embedded?.addresses ?? [];
+function codedName(v: Coded | undefined): string {
+  return typeof v === "string" ? v : v?.name ?? "";
+}
+
+function numberOf(v: unknown): string {
+  if (typeof v === "object" && v !== null) return String((v as { number?: unknown }).number ?? "");
+  return v == null ? "" : String(v);
+}
+
+export function mapSearch(data: AddressrSearch): { id: string; label: string }[] {
+  const list = Array.isArray(data) ? data : data?._embedded?.addresses ?? [];
   return list
     .slice(0, 8)
     .map((a) => ({
-      id: (a?._links?.self?.href ?? "").split("?")[0].split("/").filter(Boolean).pop() ?? "",
+      id: a?.pid ?? (a?._links?.self?.href ?? "").split("?")[0].split("/").filter(Boolean).pop() ?? "",
       label: a?.sla ?? "",
     }))
     .filter((x) => x.id && x.label);
 }
 
-function mapDetail(d: AddressrDetail): { street: string; city: string; state: string; postcode: string } {
+export function mapDetail(d: AddressrDetail): { street: string; city: string; state: string; postcode: string } {
   const s = d?.structured ?? {};
-  const numRaw = s.number as unknown;
-  const num = typeof numRaw === "object" && numRaw !== null
-    ? String((numRaw as { number?: unknown }).number ?? "")
-    : String(numRaw ?? "");
-  const streetName = [s.street?.name, s.street?.type].filter(Boolean).join(" ").trim();
-  const street = [num, streetName].filter(Boolean).join(" ").trim();
+  const num = numberOf(s.number);
+  const flat = numberOf(s.flat?.number);
+  const streetName = [s.street?.name, codedName(s.street?.type)].filter(Boolean).join(" ").trim();
+  /* The short multi-line address's first line is already "1/200 GEORGE ST" —
+     unit included, which the structured parts would otherwise lose. */
+  const street = d?.smla?.[0]?.trim()
+    || [[flat, num].filter(Boolean).join("/"), streetName].filter(Boolean).join(" ").trim();
   return {
     street: street || (d?.sla ?? "").split(",")[0].trim(),
     city: s.locality?.name ?? "",
