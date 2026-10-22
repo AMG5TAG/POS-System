@@ -4,21 +4,31 @@ import { requireAuth } from "../middlewares/requireAuth";
 /**
  * Address autocomplete proxy — a cheaper alternative to Google Places Autocomplete.
  *
- * Backed by a self-hosted **Addressr** instance (https://github.com/mountain-pass/addressr)
- * over the free Geoscape **G-NAF** dataset. Keeping the lookup server-side hides the
- * Addressr host/key from the browser and avoids CORS.
+ * Backed by **Addressr** (https://github.com/mountain-pass/addressr) over the free
+ * Geoscape **G-NAF** dataset — either the hosted service on RapidAPI or a
+ * self-hosted instance. Keeping the lookup server-side hides the key from the
+ * browser and avoids CORS.
  *
- * Env (feature disabled — endpoints report `enabled:false` — when unset):
- *   ADDRESSR_BASE_URL   e.g. https://addressr.internal
- *   ADDRESSR_API_KEY    optional bearer token if your instance is protected
+ * Env (feature disabled — endpoints report `enabled:false` — when neither is set):
+ *   ADDRESSR_RAPIDAPI_KEY  hosted Addressr on RapidAPI; the base URL defaults to
+ *                          https://addressr.p.rapidapi.com
+ *   ADDRESSR_BASE_URL      a self-hosted instance, e.g. https://addressr.internal
+ *   ADDRESSR_API_KEY       optional bearer token if that instance is protected
  *
  * The normalisation in mapSearch/mapDetail targets a standard Addressr (HAL+JSON)
  * build. If your instance's JSON differs, adjust those two functions only.
  */
-const BASE = (process.env.ADDRESSR_BASE_URL ?? "").replace(/\/$/, "");
+const RAPIDAPI_KEY = process.env.ADDRESSR_RAPIDAPI_KEY ?? "";
+const BASE = (process.env.ADDRESSR_BASE_URL || (RAPIDAPI_KEY ? "https://addressr.p.rapidapi.com" : "")).replace(/\/$/, "");
 const isEnabled = (): boolean => BASE.length > 0;
 
+/** A lookup runs while someone is typing; a slow provider must not hang the request. */
+const LOOKUP_TIMEOUT_MS = 5000;
+
 function authHeaders(): Record<string, string> {
+  if (RAPIDAPI_KEY) {
+    return { Accept: "application/json", "X-RapidAPI-Key": RAPIDAPI_KEY, "X-RapidAPI-Host": new URL(BASE).host };
+  }
   const key = process.env.ADDRESSR_API_KEY;
   return { Accept: "application/json", ...(key ? { Authorization: `Bearer ${key}` } : {}) };
 }
@@ -76,7 +86,7 @@ router.get("/address/search", requireAuth, async (req, res): Promise<void> => {
   const q = String(req.query.q ?? "").trim();
   if (q.length < 3) { res.json({ enabled: true, results: [] }); return; }
   try {
-    const r = await fetch(`${BASE}/addresses/?q=${encodeURIComponent(q)}`, { headers: authHeaders() });
+    const r = await fetch(`${BASE}/addresses?q=${encodeURIComponent(q)}`, { headers: authHeaders(), signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) });
     if (!r.ok) { res.status(502).json({ enabled: true, results: [], error: "lookup_failed" }); return; }
     res.json({ enabled: true, results: mapSearch(await r.json() as AddressrSearch) });
   } catch {
@@ -89,7 +99,7 @@ router.get("/address/detail", requireAuth, async (req, res): Promise<void> => {
   const id = String(req.query.id ?? "").trim();
   if (!id) { res.status(400).json({ error: "missing id" }); return; }
   try {
-    const r = await fetch(`${BASE}/addresses/${encodeURIComponent(id)}`, { headers: authHeaders() });
+    const r = await fetch(`${BASE}/addresses/${encodeURIComponent(id)}`, { headers: authHeaders(), signal: AbortSignal.timeout(LOOKUP_TIMEOUT_MS) });
     if (!r.ok) { res.status(502).json({ error: "lookup_failed" }); return; }
     res.json(mapDetail(await r.json() as AddressrDetail));
   } catch {
