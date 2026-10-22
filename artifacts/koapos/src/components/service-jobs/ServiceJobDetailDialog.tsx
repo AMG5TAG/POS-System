@@ -36,6 +36,7 @@ import { DeviceHistoryDialog } from "@/components/service-jobs/DeviceHistoryDial
 import { History, ListChecks, Clock, PenLine, Truck, Wallet, Send, Lock } from "lucide-react";
 import { ServiceJobDepositPanel } from "@/components/service-jobs/ServiceJobDepositPanel";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
+import { CustomerSearchInput } from "@/components/customers/CustomerSearchInput";
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
@@ -120,7 +121,7 @@ const SERVICE_JOB_SECTIONS = {
 } as const;
 
 export function ServiceJobDetailDialog({
-  job,
+  job: jobProp,
   onClose,
   onDelete,
   deleteIsPending,
@@ -131,6 +132,16 @@ export function ServiceJobDetailDialog({
   const queryClient  = useQueryClient();
   const updateMutation = useUpdateServiceJob();
   const fileInputRef   = useRef<HTMLInputElement>(null);
+
+  /* Changing the customer applies the saved job's customer fields here at once:
+     not every parent refreshes `jobProp` from its list (the dashboard panel
+     holds a snapshot), and the contact shown is who Send/SMS will reach. */
+  type CustomerFields = Pick<ServiceJob, "customerId" | "customerName" | "customerPhone" | "customerEmail">;
+  const [customerPatch, setCustomerPatch] = useState<{ jobId: number; fields: CustomerFields } | null>(null);
+  const [changingCustomer, setChangingCustomer] = useState(false);
+  const job = jobProp && customerPatch?.jobId === jobProp.id && jobProp.customerId !== customerPatch.fields.customerId
+    ? { ...jobProp, ...customerPatch.fields }
+    : jobProp;
 
   /* Which job sections show. These were per-merchant toggles under Service
      Options; that page is gone, and the layout the business had chosen is
@@ -217,6 +228,7 @@ export function ServiceJobDetailDialog({
     setLocalPhotos(Array.isArray(job.photos) ? (job.photos as string[]).filter(Boolean) : []);
     setLightboxSrc(null);
     setShowAll(false);
+    setChangingCustomer(false);
     setTab("details");
   }, [job?.id]);
 
@@ -249,6 +261,27 @@ export function ServiceJobDetailDialog({
           else if (status === "cancelled") toast.success("Service job cancelled — moved to Service History");
         },
         onError: () => toast.error("Failed to update status"),
+      }
+    );
+  };
+
+  const handleCustomerChange = (customerId: string) => {
+    setChangingCustomer(false);
+    const next = customerId ? Number(customerId) : null;
+    if (next === (job.customerId ?? null)) return;
+    updateMutation.mutate(
+      { id: job.id, data: { customerId: next } as never },
+      {
+        onSuccess: (saved) => {
+          const s = saved as ServiceJob;
+          setCustomerPatch({
+            jobId: job.id,
+            fields: { customerId: s.customerId, customerName: s.customerName, customerPhone: s.customerPhone, customerEmail: s.customerEmail },
+          });
+          invalidate();
+          toast.success(next ? `Customer changed to ${s.customerName ?? "selected customer"}` : "Customer removed from job");
+        },
+        onError: () => toast.error("Failed to change customer"),
       }
     );
   };
@@ -425,7 +458,31 @@ export function ServiceJobDetailDialog({
               <div className="flex items-center gap-2 px-4 py-2.5 border-b bg-muted/30 rounded-t-xl">
                 <User className="w-3.5 h-3.5 text-primary" />
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer</span>
+                {job.status !== "completed" && (
+                  <Button
+                    variant="ghost" size="sm"
+                    className="ml-auto h-6 px-2 text-xs"
+                    onClick={() => setChangingCustomer((v) => !v)}
+                    disabled={updateMutation.isPending}
+                  >
+                    {changingCustomer ? "Cancel" : "Change"}
+                  </Button>
+                )}
               </div>
+              {changingCustomer && (
+                <div className="px-4 py-3 space-y-1.5">
+                  <CustomerSearchInput
+                    value={job.customerId ? String(job.customerId) : ""}
+                    onChange={(id) => handleCustomerChange(id)}
+                    placeholder="Search name, business, email or phone…"
+                    allowNone
+                    noneLabel="No customer"
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    The job's existing quotes stay with the customer they were raised for.
+                  </p>
+                </div>
+              )}
               <div className="grid grid-cols-2 divide-x">
                 <div className="divide-y">
                   <DetailRow icon={User}     label="Name"        value={job.customerName} />
