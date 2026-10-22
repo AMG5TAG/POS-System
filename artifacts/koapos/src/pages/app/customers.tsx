@@ -3253,6 +3253,28 @@ export default function CustomersPage() {
         } : undefined}
       />
 
+      {/* Single delete confirmation (row actions menu) */}
+      <Dialog
+        open={deleteDialogOpen}
+        onOpenChange={(open) => { setDeleteDialogOpen(open); if (!open) setDeletingCustomer(null); }}
+      >
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Delete {deletingCustomer ? customerDisplayName(deletingCustomer) : "customer"}?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This cannot be undone. A customer with sales history is anonymised rather than removed, so
+            their past sales stay on record without their personal details.
+          </p>
+          <DialogFooter className="gap-2 mt-2">
+            <Button variant="outline" onClick={() => setDeleteDialogOpen(false)}>Cancel</Button>
+            <Button variant="destructive" onClick={() => handleDelete()} disabled={deleteMutation.isPending}>
+              Delete Customer
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       {/* Bulk delete confirmation */}
       <Dialog open={bulkDeleteConfirm} onOpenChange={setBulkDeleteConfirm}>
         <DialogContent className="max-w-sm">
