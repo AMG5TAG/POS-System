@@ -16,7 +16,7 @@ import {
 import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
-  Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall, Check,
+  Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall, MessageSquare, Check,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -24,7 +24,7 @@ import { cn, telHref } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
 import { SendButton } from "@/components/send/send-dialog";
 import { useTabArrowKeys } from "@/lib/use-tab-arrow-keys";
-import { parseNotes, appendNote, callTimes, CALL_NOTE_TEXT } from "@/lib/service-job-notes";
+import { parseNotes, appendNote, callTimes, messageTimes, CALL_NOTE_TEXT, MESSAGE_NOTE_TEXT } from "@/lib/service-job-notes";
 import { ServiceJobQuotePanel } from "@/components/service-jobs/ServiceJobQuotePanel";
 import { ServiceJobLinesPanel } from "@/components/service-jobs/ServiceJobLinesPanel";
 import { ServiceJobChecklistPanel } from "@/components/service-jobs/ServiceJobChecklistPanel";
@@ -299,14 +299,14 @@ export function ServiceJobDetailDialog({
   };
 
   const calls = callTimes(job.notes);
-  const lastCalledAt = calls.length ? calls[calls.length - 1] : null;
+  const messages = messageTimes(job.notes);
 
-  const handleLogCall = () => {
+  const logContact = (text: string, what: "call" | "message") => {
     updateMutation.mutate(
-      { id: job.id, data: { notes: appendNote(job.notes, CALL_NOTE_TEXT) } as never },
+      { id: job.id, data: { notes: appendNote(job.notes, text) } as never },
       {
-        onSuccess: () => { invalidate(); toast.success("Call logged"); },
-        onError: () => toast.error("Failed to log call"),
+        onSuccess: () => { invalidate(); toast.success(what === "call" ? "Call logged" : "Message logged"); },
+        onError: () => toast.error(`Failed to log ${what}`),
       }
     );
   };
@@ -728,41 +728,29 @@ export function ServiceJobDetailDialog({
                 <span className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Notes</span>
               </div>
               <div className="p-4 space-y-3">
-                {/* One-click log for the note a repair shop writes most: ringing
-                    the customer. Chasing a customer takes more than one call, so
-                    every press logs another — the tick is an indicator that the
-                    customer has been rung at least once, not a control, which is
-                    why this is a button rather than a real checkbox. Notes are
-                    append-only, so a call can be logged but never unsaid. */}
-                <button
-                  type="button"
-                  onClick={handleLogCall}
+                {/* One-click logs for the notes a repair shop writes most:
+                    ringing and messaging the customer. Chasing a customer takes
+                    more than one try, so every press logs another — the tick
+                    shows it has happened at least once, and when last. Notes
+                    are append-only, so a contact can be logged but never unsaid. */}
+                <ContactLogButton
+                  times={calls}
+                  icon={PhoneCall}
+                  doneLabel="Called customer"
+                  todoLabel="Customer called"
+                  noun="call"
                   disabled={updateMutation.isPending}
-                  title={lastCalledAt ? "Log another call" : "Log a call to the customer"}
-                  className="flex w-full items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:opacity-60"
-                >
-                  {/* Drawn rather than a real Checkbox: Radix renders one as a
-                      <button>, which cannot legally nest inside this one. */}
-                  <span
-                    aria-hidden
-                    className={cn(
-                      "grid h-4 w-4 shrink-0 place-content-center rounded-sm border border-primary shadow",
-                      lastCalledAt && "bg-primary text-primary-foreground",
-                    )}
-                  >
-                    {lastCalledAt && <Check className="h-3.5 w-3.5" />}
-                  </span>
-                  <PhoneCall className="w-3.5 h-3.5 text-primary shrink-0" />
-                  <span className="text-sm min-w-0 flex-1">
-                    {lastCalledAt ? "Called customer" : "Customer called"}
-                    {lastCalledAt && (
-                      <span className="text-muted-foreground">
-                        {` — ${lastCalledAt}`}
-                        {calls.length > 1 && ` (${calls.length} calls)`}
-                      </span>
-                    )}
-                  </span>
-                </button>
+                  onLog={() => logContact(CALL_NOTE_TEXT, "call")}
+                />
+                <ContactLogButton
+                  times={messages}
+                  icon={MessageSquare}
+                  doneLabel="Messaged customer"
+                  todoLabel="Customer messaged"
+                  noun="message"
+                  disabled={updateMutation.isPending}
+                  onLog={() => logContact(MESSAGE_NOTE_TEXT, "message")}
+                />
 
                 {/* Append note input */}
                 <div className="flex gap-2 items-start">
@@ -987,5 +975,53 @@ export function ServiceJobDetailDialog({
 
       <DeviceHistoryDialog serial={job?.serialNumber ?? null} open={historyOpen} onClose={() => setHistoryOpen(false)} />
     </>
+  );
+}
+
+/* A tick-box row that logs a timestamped contact note on each press. The tick
+   is an indicator that the customer has been contacted at least once, not a
+   control, which is why this is a button rather than a real checkbox. */
+function ContactLogButton({
+  times, icon: Icon, doneLabel, todoLabel, noun, disabled, onLog,
+}: {
+  times: string[];
+  icon: React.ComponentType<{ className?: string }>;
+  doneLabel: string;
+  todoLabel: string;
+  noun: string;
+  disabled: boolean;
+  onLog: () => void;
+}) {
+  const last = times.length ? times[times.length - 1] : null;
+  return (
+    <button
+      type="button"
+      onClick={onLog}
+      disabled={disabled}
+      title={last ? `Log another ${noun}` : `Log a ${noun} to the customer`}
+      className="flex w-full items-center gap-2.5 rounded-lg border bg-background px-3 py-2.5 text-left transition-colors hover:bg-muted/40 disabled:opacity-60"
+    >
+      {/* Drawn rather than a real Checkbox: Radix renders one as a
+          <button>, which cannot legally nest inside this one. */}
+      <span
+        aria-hidden
+        className={cn(
+          "grid h-4 w-4 shrink-0 place-content-center rounded-sm border border-primary shadow",
+          last && "bg-primary text-primary-foreground",
+        )}
+      >
+        {last && <Check className="h-3.5 w-3.5" />}
+      </span>
+      <Icon className="w-3.5 h-3.5 text-primary shrink-0" />
+      <span className="text-sm min-w-0 flex-1">
+        {last ? doneLabel : todoLabel}
+        {last && (
+          <span className="text-muted-foreground">
+            {` — ${last}`}
+            {times.length > 1 && ` (${times.length} ${noun}s)`}
+          </span>
+        )}
+      </span>
+    </button>
   );
 }

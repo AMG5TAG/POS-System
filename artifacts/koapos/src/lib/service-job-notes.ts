@@ -10,6 +10,9 @@ export const NOTE_SEP = "\n\n---\n\n";
    one and the list column that counts them must agree on it exactly. */
 export const CALL_NOTE_TEXT = "Called customer";
 
+/* The same for a message sent to the customer (SMS, email, WhatsApp…). */
+export const MESSAGE_NOTE_TEXT = "Messaged customer";
+
 export function parseNotes(raw: string | null | undefined): string[] {
   if (!raw?.trim()) return [];
   return raw.split("---").map((s) => s.trim()).filter(Boolean);
@@ -26,12 +29,19 @@ export function appendNote(existing: string | null | undefined, text: string): s
   return [...parseNotes(existing), entry].join(NOTE_SEP);
 }
 
-/* Timestamps of every logged call, oldest first. Derived from the notes rather
-   than a flag stored beside them, so it cannot disagree with the job's own log. */
-export function callTimes(notes: string | null | undefined): string[] {
+/* Timestamps of every note whose text is exactly `text`, oldest first. Derived
+   from the notes rather than a flag stored beside them, so it cannot disagree
+   with the job's own log. */
+function loggedTimes(notes: string | null | undefined, text: string): string[] {
   return parseNotes(notes).reduce<string[]>((acc, n) => {
     const m = n.match(/^\[([^\]]+)\]\s*(.+)$/);
-    if (m && m[2].trim() === CALL_NOTE_TEXT) acc.push(m[1]);
+    if (m && m[2].trim() === text) acc.push(m[1]);
     return acc;
   }, []);
 }
+
+/* Every logged call, oldest first. */
+export const callTimes = (notes: string | null | undefined) => loggedTimes(notes, CALL_NOTE_TEXT);
+
+/* Every logged message, oldest first. */
+export const messageTimes = (notes: string | null | undefined) => loggedTimes(notes, MESSAGE_NOTE_TEXT);

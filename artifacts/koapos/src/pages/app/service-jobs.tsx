@@ -42,7 +42,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
-import { callTimes } from "@/lib/service-job-notes";
+import { callTimes, messageTimes } from "@/lib/service-job-notes";
 import { SendButton } from "@/components/send/send-dialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
 import { ServiceJobSheet, type ServiceSheetBranding, type ServiceSheetData } from "@/components/printing/ServiceJobSheet";
@@ -55,8 +55,8 @@ import {
 
 /* ─── Status config ─────────────────────────────────────────────────────── */
 
-/* The Called column only means anything once the job is waiting to be picked
-   up — that is the point at which someone has to ring the customer. */
+/* The Called and Messaged columns only mean anything once the job is waiting
+   to be picked up — that is the point at which someone has to chase the customer. */
 const AWAITING_PICKUP = "awaiting-pickup";
 
 const STATUS_CONFIG: Record<string, { label: string; className: string }> = {
@@ -760,6 +760,7 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Quoted",      "quoted")} />
                         <SortableHeader {...sh("Quote",       "quoteTotal", "text-right")} />
                         <th className="px-3 py-3 text-left font-medium select-none">Called</th>
+                        <th className="px-3 py-3 text-left font-medium select-none">Messaged</th>
                         <th className="px-3 py-3" />
                       </tr>
                     </thead>
@@ -767,6 +768,7 @@ export default function ServiceJobsPage() {
                       {sorted.map((job) => {
                         const { label, className } = getStatus(job.status);
                         const calls = callTimes(job.notes);
+                        const messages = messageTimes(job.notes);
                         const isChecked = selected.has(job.id);
                         const isCompleted = job.status === "completed";
                         return (
@@ -886,6 +888,27 @@ export default function ServiceJobsPage() {
                               )}
                             </td>
 
+                            {/* Same rule as Called, for messages sent. */}
+                            <td className="px-3 py-3 whitespace-nowrap">
+                              {job.status !== AWAITING_PICKUP ? null : messages.length ? (
+                                <span
+                                  title={`Messaged ${messages[messages.length - 1]}${messages.length > 1 ? ` (${messages.length} messages)` : ""}`}
+                                  aria-label="Customer messaged"
+                                  className="inline-flex"
+                                >
+                                  <Check className="w-4 h-4 text-emerald-600" />
+                                </span>
+                              ) : (
+                                <span
+                                  title="Customer not messaged yet"
+                                  aria-label="Customer not messaged yet"
+                                  className="inline-flex"
+                                >
+                                  <X className="w-4 h-4 text-muted-foreground/60" />
+                                </span>
+                              )}
+                            </td>
+
                             <td className="px-3 py-3 whitespace-nowrap" onClick={(e) => e.stopPropagation()}>
                               <div className="flex items-center gap-2">
                                 <SendButton
@@ -944,7 +967,7 @@ export default function ServiceJobsPage() {
                         <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
                           {formatCurrency(quotedSum)}
                         </td>
-                        <td colSpan={2} />
+                        <td colSpan={3} />
                       </tr>
                     </tfoot>
                   </table>
