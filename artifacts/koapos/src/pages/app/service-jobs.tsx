@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from "react";
+import { createPortal } from "react-dom";
 import { Link, useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
@@ -1006,7 +1007,12 @@ export default function ServiceJobsPage() {
         // the markup only needs one copy. The browser dialog prints the page once,
         // so every copy has to be laid out here.
         const domCopies = isServiceJobRouteSilent(hardware, pj) ? 1 : printState.copies;
-        return (
+        // Portalled out of #root so the app can be taken out of the printed page
+        // entirely. While the jobs list was still laid out behind it, Chrome
+        // paginated the whole list and repeated the position:fixed sheet on every
+        // one of those pages — a long list meant a print preview that hung, and
+        // extra copies could never spill past the first page.
+        return createPortal(
           <>
             {/* Screen: hide the print areas so they don't appear in the UI.
                Print: show only the area matching the chosen paper. */}
@@ -1020,10 +1026,11 @@ export default function ServiceJobsPage() {
                 body[data-print="sj-sheet"] #sj-sheet-print-area *,
                 body[data-print="sj-docket"] #sj-docket-print-area,
                 body[data-print="sj-docket"] #sj-docket-print-area * { visibility: visible !important; }
+                body[data-print="sj-sheet"] #root,
+                body[data-print="sj-docket"] #root { display: none !important; }
                 body[data-print="sj-sheet"] #sj-sheet-print-area,
                 body[data-print="sj-docket"] #sj-docket-print-area {
                   display: block !important;
-                  position: fixed !important; left: 0 !important; top: 0 !important;
                   box-sizing: border-box !important;
                 }
                 body[data-print="sj-sheet"] #sj-sheet-print-area { width: 210mm !important; }
@@ -1068,7 +1075,8 @@ export default function ServiceJobsPage() {
                 ))}
               </div>
             )}
-          </>
+          </>,
+          document.body,
         );
       })()}
     </AppLayout>
