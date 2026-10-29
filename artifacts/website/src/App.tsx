@@ -28,7 +28,6 @@ import StarlinkPage from "@/pages/StarlinkPage";
 import MacPawPage from "@/pages/MacPawPage";
 import AdGuardPage from "@/pages/AdGuardPage";
 import SyncBackPage from "@/pages/SyncBackPage";
-import MateTelecomPage from "@/pages/MateTelecomPage";
 import SolvUpPage from "@/pages/SolvUpPage";
 import SearchPage from "@/pages/SearchPage";
 import SiteSearchPage from "@/pages/SiteSearchPage";
@@ -82,6 +81,8 @@ function legacyTarget(path: string): string | null {
   // Suburbs without a page of their own go to their nearest hub suburb.
   const suburb = path.match(/^\/computer-repairs\/([^/]+)\/?$/);
   if (suburb) return retiredSuburbTarget(suburb[1]);
+  // No longer MATE dealers; the old partner page goes to our own NBN service.
+  if (path === "/mate-telecom") return "/nbn-wifi-setup";
   if (path === "/koasoft") return "/media";
   if (path.startsWith("/koasoft/")) return `/media/${path.slice("/koasoft/".length)}`;
   return null;
@@ -318,14 +319,6 @@ function Router() {
         component={() => (
           <Layout>
             <SyncBackPage />
-          </Layout>
-        )}
-      />
-      <Route
-        path="/mate-telecom"
-        component={() => (
-          <Layout>
-            <MateTelecomPage />
           </Layout>
         )}
       />
