@@ -79,6 +79,11 @@ export function ServiceJobQuotePanel({
   const [editingId, setEditingId] = useState<number | null>(null);
   const [lines, setLines] = useState<Line[]>([]);
   const [notes, setNotes] = useState("");
+  // A discount off the whole quote, as the Quotes page has. It is stored on the
+  // quote (not as a negative line), so the till's import spreads it over the
+  // lines it rings up — see `distributeQuoteDiscount`.
+  const [discountType, setDiscountType] = useState<"fixed" | "percent">("fixed");
+  const [discountValue, setDiscountValue] = useState("");
   const [dirty, setDirty] = useState(false);
 
   /* Load the job's open quote into the draft so the panel opens on what the
@@ -90,10 +95,14 @@ export function ServiceJobQuotePanel({
       setEditingId(openQuote.id);
       setLines(openQuote.items?.length ? openQuote.items.map((l) => ({ ...l })) : []);
       setNotes(openQuote.notes ?? "");
+      setDiscountType(openQuote.discountType === "percent" ? "percent" : "fixed");
+      setDiscountValue(openQuote.discountValue ? String(openQuote.discountValue) : "");
     } else {
       setEditingId(null);
       setLines([]);
       setNotes("");
+      setDiscountType("fixed");
+      setDiscountValue("");
     }
   }, [openQuote, isLoading, dirty]);
 
@@ -154,11 +163,21 @@ export function ServiceJobQuotePanel({
     edit(() => setLines((prev) => prev.filter((_, idx) => idx !== i)));
 
   // GST-inclusive pricing, matching the Quotes page: unitPrice includes tax.
-  const total = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
-  const taxTotal = lines.reduce(
+  // The discount comes off the gross and GST scales with it — the same sums as
+  // `computeTotals` in the quotes route, so the panel shows what gets saved.
+  const linesGross = lines.reduce((s, l) => s + l.quantity * l.unitPrice, 0);
+  const rawTax = lines.reduce(
     (s, l) => s + l.quantity * l.unitPrice * (l.taxRate / (100 + l.taxRate)),
     0,
   );
+  const discountNum = Math.max(0, parseFloat(discountValue) || 0);
+  const discountAmount = Math.round(
+    (discountType === "percent"
+      ? linesGross * Math.min(discountNum, 100) / 100
+      : Math.min(discountNum, linesGross)) * 100,
+  ) / 100;
+  const total = Math.round((linesGross - discountAmount) * 100) / 100;
+  const taxTotal = linesGross > 0 ? rawTax * (total / linesGross) : 0;
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: getListQuotesQueryKey(listParams) });
@@ -177,12 +196,15 @@ export function ServiceJobQuotePanel({
       taxRate: Number(l.taxRate),
       ...(l.productId != null ? { productId: l.productId, productName: l.productName ?? l.description } : {}),
     }));
+    // Always sent, so clearing the box clears a saved discount — the update
+    // route keeps the stored one when `discount` is omitted.
+    const discount = { type: discountType, value: discountNum };
 
     try {
       if (editingId != null) {
         await updateQuote.mutateAsync({
           id: editingId,
-          data: { items, notes: notes.trim() } as never,
+          data: { items, notes: notes.trim(), discount } as never,
         });
         toast.success("Quote updated");
       } else {
@@ -192,6 +214,7 @@ export function ServiceJobQuotePanel({
             serviceJobId: jobId,
             items,
             notes: notes.trim() || undefined,
+            ...(discountNum > 0 ? { discount } : {}),
           } as never,
         });
         setEditingId((created as { id?: number })?.id ?? null);
@@ -217,6 +240,7 @@ export function ServiceJobQuotePanel({
 
   const startNew = () => edit(() => {
     setEditingId(null); setLines([]); setNotes("");
+    setDiscountType("fixed"); setDiscountValue("");
   });
 
   const saving = createQuote.isPending || updateQuote.isPending;
@@ -331,6 +355,36 @@ export function ServiceJobQuotePanel({
       {/* Totals + actions */}
       {lines.length > 0 && (
         <div className="rounded-lg bg-muted/40 px-3 py-2.5 text-sm space-y-1">
+          <div className="flex items-center justify-between gap-2 text-xs">
+            <span className="text-muted-foreground">Discount</span>
+            <div className="flex items-center gap-1.5">
+              {!readOnly ? (
+                <>
+                  <div className="flex rounded-md border overflow-hidden">
+                    {(["fixed", "percent"] as const).map((t) => (
+                      <button key={t} type="button"
+                        className={cn("h-7 w-7 text-xs", discountType === t ? "bg-primary text-primary-foreground" : "bg-background hover:bg-muted")}
+                        onClick={() => edit(() => setDiscountType(t))}>
+                        {t === "fixed" ? "$" : "%"}
+                      </button>
+                    ))}
+                  </div>
+                  <Input
+                    type="number" min={0} max={discountType === "percent" ? 100 : undefined} step={0.01}
+                    className="h-7 w-20 text-xs tabular-nums"
+                    placeholder="0"
+                    value={discountValue}
+                    onChange={(e) => edit(() => setDiscountValue(e.target.value))}
+                  />
+                </>
+              ) : discountAmount > 0 && discountType === "percent" ? (
+                <span className="text-muted-foreground">{discountNum}%</span>
+              ) : null}
+              <span className="w-20 text-right tabular-nums text-amber-600">
+                {discountAmount > 0 ? `−${formatCurrency(discountAmount)}` : formatCurrency(0)}
+              </span>
+            </div>
+          </div>
           <div className="flex justify-between text-xs text-muted-foreground">
             <span>Includes GST</span><span className="tabular-nums">{formatCurrency(taxTotal)}</span>
           </div>
