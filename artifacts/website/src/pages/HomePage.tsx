@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
 import SiteFooter from "@/components/SiteFooter";
 import MailInRepairs from "@/components/MailInRepairs";
-import SiteBanner from "@/components/SiteBanner";
 import SocialLinks from "@/components/SocialLinks";
 import { Link } from "wouter";
 import { MessageCircle, MapPin, Mail, Phone, Clock, ExternalLink } from "lucide-react";
@@ -285,8 +284,6 @@ export default function HomePage() {
           </div>
         </div>
       </section>
-
-      <SiteBanner href="/media/website-design" />
 
       {/* ─── About Section ─── */}
       <section className="bg-white py-8 border-b border-gray-100">

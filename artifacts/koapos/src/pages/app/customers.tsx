@@ -972,14 +972,19 @@ function InfoRow({ icon: Icon, label, value, href, onClick, className }: {
   className?: string;
 }) {
   if (!value && value !== 0) return null;
+  // Only web links (maps) get a new tab. A tel:/mailto: link opened with
+  // target="_blank" spawns an empty tab that hands off to the OS dialer, and
+  // Chrome on Windows can hang or crash doing it — open those in place.
+  const external = !!href && /^https?:/i.test(href);
   return (
     <div className="flex items-start gap-3 px-4 py-3">
       <Icon className="w-4 h-4 text-muted-foreground mt-0.5 shrink-0" />
       <div className={cn("text-sm min-w-0", className)}>
         <p className="text-xs text-muted-foreground">{label}</p>
         {href ? (
-          <a href={href} target="_blank" rel="noopener noreferrer" className="font-medium truncate flex items-center gap-1 text-primary hover:underline">
-            {value} <ExternalLink className="w-3 h-3 shrink-0" />
+          <a href={href} {...(external ? { target: "_blank", rel: "noopener noreferrer" } : {})}
+            className="font-medium truncate flex items-center gap-1 text-primary hover:underline">
+            {value} {external && <ExternalLink className="w-3 h-3 shrink-0" />}
           </a>
         ) : onClick ? (
           <button type="button" onClick={onClick} className="font-medium truncate flex items-center gap-1 text-primary hover:underline text-left">
