@@ -778,22 +778,24 @@ export function ServiceJobDetailDialog({
                 )}
 
                 {/* Append note input */}
-                <div className="flex gap-2 items-start">
+                <div className="space-y-2">
                   <Textarea
                     value={newNoteText}
                     onChange={(e) => setNewNoteText(e.target.value)}
                     placeholder="Type a note to append…"
-                    rows={2}
-                    className="resize-none flex-1"
+                    rows={5}
+                    className="resize-none w-full"
                   />
+                  <div className="flex justify-end">
                   <Button
                     size="sm"
-                    className="shrink-0 h-auto py-2 px-3 text-xs"
+                    className="h-auto py-2 px-3 text-xs"
                     onClick={handleAppendNote}
                     disabled={!newNoteText.trim() || updateMutation.isPending}
                   >
                     Append Note
                   </Button>
+                  </div>
                 </div>
                 {/* Existing notes — newest first */}
                 {parseNotes(job.notes).length > 0 && (

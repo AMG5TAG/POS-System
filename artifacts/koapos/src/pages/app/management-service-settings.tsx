@@ -84,7 +84,7 @@ export default function ManagementServiceSettingsPage() {
             <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="grid grid-cols-1 gap-6 items-start">
             <Card>
               <CardHeader>
                 <CardTitle className="flex items-center gap-2"><StickyNote className="w-5 h-5 text-primary" /> Custom notes</CardTitle>
@@ -99,7 +99,7 @@ export default function ManagementServiceSettingsPage() {
                     value={draft}
                     onChange={(e) => setDraft(e.target.value)}
                     placeholder="e.g. Waiting on parts from supplier"
-                    rows={2}
+                    rows={5}
                     maxLength={2000}
                     className="resize-none flex-1"
                   />
@@ -119,7 +119,7 @@ export default function ManagementServiceSettingsPage() {
                             <Textarea
                               value={editText}
                               onChange={(e) => setEditText(e.target.value)}
-                              rows={2}
+                              rows={5}
                               maxLength={2000}
                               className="resize-none flex-1"
                               autoFocus
