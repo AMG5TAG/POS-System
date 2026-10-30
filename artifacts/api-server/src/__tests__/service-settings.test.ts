@@ -24,8 +24,20 @@ describe("cleanCustomNotes", () => {
       { id: "a", text: "duplicate" },
       { id: "c", text: "Backup taken" },
     ])).toEqual([
-      { id: "a", text: "Waiting on parts" },
-      { id: "c", text: "Backup taken" },
+      { id: "a", title: "", text: "Waiting on parts" },
+      { id: "c", title: "", text: "Backup taken" },
+    ]);
+  });
+
+  it("trims and caps titles, and treats a missing one as blank", () => {
+    expect(cleanCustomNotes([
+      { id: "a", title: "  Parts  ", text: "Waiting on parts" },
+      { id: "b", title: 42, text: "Backup taken" },
+      { id: "c", title: "t".repeat(200), text: "x" },
+    ])).toEqual([
+      { id: "a", title: "Parts", text: "Waiting on parts" },
+      { id: "b", title: "", text: "Backup taken" },
+      { id: "c", title: "t".repeat(80), text: "x" },
     ]);
   });
 

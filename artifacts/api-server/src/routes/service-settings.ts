@@ -11,10 +11,11 @@ const router: IRouter = Router();
    `service_settings`; `config` may still carry the section toggles of the
    removed Service Options page, which a save keeps untouched. */
 
-export type ServiceCustomNote = { id: string; text: string };
+export type ServiceCustomNote = { id: string; title: string; text: string };
 
 const MAX_NOTES = 100;
 const MAX_NOTE_LENGTH = 2000;
+const MAX_TITLE_LENGTH = 80;
 
 /** Trim, drop blanks and duplicate ids, and cap — a stored config may be
  *  partial or hand-edited, so the read path cleans as hard as the write. */
@@ -26,9 +27,12 @@ export function cleanCustomNotes(raw: unknown): ServiceCustomNote[] {
     if (!n || typeof n !== "object") continue;
     const id = typeof (n as { id?: unknown }).id === "string" ? (n as { id: string }).id.trim() : "";
     const text = typeof (n as { text?: unknown }).text === "string" ? (n as { text: string }).text.trim() : "";
+    // Optional: notes saved before titles existed have none, and the job
+    // dialog falls back to the note's text for their button.
+    const title = typeof (n as { title?: unknown }).title === "string" ? (n as { title: string }).title.trim() : "";
     if (!id || !text || seen.has(id)) continue;
     seen.add(id);
-    out.push({ id: id.slice(0, 64), text: text.slice(0, MAX_NOTE_LENGTH) });
+    out.push({ id: id.slice(0, 64), title: title.slice(0, MAX_TITLE_LENGTH), text: text.slice(0, MAX_NOTE_LENGTH) });
     if (out.length >= MAX_NOTES) break;
   }
   return out;

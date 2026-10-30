@@ -422,7 +422,8 @@ chooser.
 Services (`routes/service-settings.ts`, `GET/PUT /service-settings`). They
 live in `service_settings.config.customNotes` — the table the old Service
 Options page wrote, whose leftover section booleans a save merges over and
-keeps. In a job's Notes section each one is a button that drops its text into
+keeps. Each has a title and a text; in a job's Notes section each one is a button,
+labelled with its title, that drops its text into
 the note box rather than appending it outright: notes are append-only, and a
 preset often needs a detail added first. Pinned by `service-settings.test.ts`.
 

@@ -3168,6 +3168,7 @@ export const UpdateInvoiceSettingsResponse = zod.object({
 export const GetServiceSettingsResponse = zod.object({
   "customNotes": zod.array(zod.object({
   "id": zod.string(),
+  "title": zod.string().optional().describe('Short name shown on the note\'s button in a service job. Blank on notes saved before titles existed.'),
   "text": zod.string()
 }))
 })
@@ -3183,6 +3184,7 @@ export const updateServiceSettingsBodyCustomNotesMax = 100;
 export const UpdateServiceSettingsBody = zod.object({
   "customNotes": zod.array(zod.object({
   "id": zod.string(),
+  "title": zod.string().optional().describe('Short name shown on the note\'s button in a service job. Blank on notes saved before titles existed.'),
   "text": zod.string()
 })).max(updateServiceSettingsBodyCustomNotesMax).optional()
 })
@@ -3190,6 +3192,7 @@ export const UpdateServiceSettingsBody = zod.object({
 export const UpdateServiceSettingsResponse = zod.object({
   "customNotes": zod.array(zod.object({
   "id": zod.string(),
+  "title": zod.string().optional().describe('Short name shown on the note\'s button in a service job. Blank on notes saved before titles existed.'),
   "text": zod.string()
 }))
 })

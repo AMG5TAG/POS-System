@@ -13566,8 +13566,11 @@ components:
       type: object
       required: [id, text]
       properties:
-        id:   { type: string }
-        text: { type: string }
+        id:    { type: string }
+        title:
+          type: string
+          description: Short name shown on the note's button in a service job. Blank on notes saved before titles existed.
+        text:  { type: string }
     ServiceSettings:
       type: object
       required: [customNotes]

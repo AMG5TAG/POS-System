@@ -771,7 +771,8 @@ export function ServiceJobDetailDialog({
                         title={n.text}
                         onClick={() => setNewNoteText((cur) => (cur.trim() ? `${cur.trimEnd()}\n${n.text}` : n.text))}
                       >
-                        <span className="line-clamp-2">{n.text}</span>
+                        {/* Older notes saved before titles existed show their text. */}
+                        <span className="line-clamp-2">{n.title || n.text}</span>
                       </Button>
                     ))}
                   </div>

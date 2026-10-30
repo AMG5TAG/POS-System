@@ -3302,6 +3302,8 @@ export interface LoyaltySettingsInput {
 
 export interface ServiceCustomNote {
   id: string;
+  /** Short name shown on the note's button in a service job. Blank on notes saved before titles existed. */
+  title?: string;
   text: string;
 }
 
