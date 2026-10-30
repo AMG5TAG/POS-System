@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import {
   useUpdateServiceJob,
+  useGetServiceSettings,
   getListServiceJobsQueryKey,
   ServiceJob,
 } from "@workspace/api-client-react";
@@ -150,6 +151,9 @@ export function ServiceJobDetailDialog({
 
   const [localStatus, setLocalStatus] = useState<string>(job?.status ?? "pending");
   const [newNoteText, setNewNoteText] = useState("");
+  // Custom notes from Management › Invoices & Services › Services.
+  const { data: serviceSettings } = useGetServiceSettings();
+  const customNotes = serviceSettings?.customNotes ?? [];
   const [localPhotos, setLocalPhotos] = useState<string[]>([]);
   const [lightboxSrc, setLightboxSrc] = useState<string | null>(null);
   const [uploading,   setUploading]   = useState(false);
@@ -751,6 +755,27 @@ export function ServiceJobDetailDialog({
                   disabled={updateMutation.isPending}
                   onLog={() => logContact(MESSAGE_NOTE_TEXT, "message")}
                 />
+
+                {/* Custom notes: a press drops the text into the note box
+                    rather than appending it outright, since notes can't be
+                    unsaid and a preset often needs a detail added. */}
+                {customNotes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {customNotes.map((n) => (
+                      <Button
+                        key={n.id}
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        className="h-auto py-1 px-2.5 text-xs font-normal max-w-full whitespace-normal text-left"
+                        title={n.text}
+                        onClick={() => setNewNoteText((cur) => (cur.trim() ? `${cur.trimEnd()}\n${n.text}` : n.text))}
+                      >
+                        <span className="line-clamp-2">{n.text}</span>
+                      </Button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Append note input */}
                 <div className="flex gap-2 items-start">

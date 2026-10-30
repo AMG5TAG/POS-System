@@ -57,6 +57,7 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
     name: "Invoices & Services", icon: Receipt, defaultHref: "/management/invoices-services/invoices",
     children: [
       { name: "Invoices",        href: "/management/invoices-services/invoices",        icon: FileText },
+      { name: "Services",        href: "/management/invoices-services/services",        icon: Wrench },
     ],
   },
   {

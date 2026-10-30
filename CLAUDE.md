@@ -149,8 +149,8 @@ accounts) and all of their data are still in the database.
   rejects a username change, because every printed sticker and sent portal
   link carries it.
 - **Retained tables.** `online_store_settings`, `online_store_thirdparty`,
-  `storefront_api_keys`, `product_reviews`, `marketplace_connections`,
-  `service_settings` and `payment_method_surcharges` still hold data, so their
+  `storefront_api_keys`, `product_reviews`, `marketplace_connections`
+  and `payment_method_surcharges` still hold data, so their
   Drizzle definitions stay (each marked RETAINED, UNUSED) — removing them would
   make `drizzle-kit push` offer to drop the rows. No code reads them.
 - **Not blocked:** public customer-facing pages of the other accounts (portal)
@@ -417,6 +417,14 @@ Service Options page — Quote, Warranty and Notes on; Parts & Labour, Approval 
 Deposit, Diagnostics, Technician Time, Sign-off and Shipping off. Warranty
 windows are `SERVICE_WARRANTY_DEFAULTS` (14 days) and Print always opens the
 chooser.
+
+**Custom notes** are preset texts set under Management › Invoices & Services ›
+Services (`routes/service-settings.ts`, `GET/PUT /service-settings`). They
+live in `service_settings.config.customNotes` — the table the old Service
+Options page wrote, whose leftover section booleans a save merges over and
+keeps. In a job's Notes section each one is a button that drops its text into
+the note box rather than appending it outright: notes are append-only, and a
+preset often needs a detail added first. Pinned by `service-settings.test.ts`.
 
 The jobs list shows what each job was quoted (`quoteTotal`, beside the
 quoted/not-quoted tick) and totals the column in a footer row. Both come from

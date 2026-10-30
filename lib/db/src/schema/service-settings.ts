@@ -1,17 +1,14 @@
 import { pgTable, serial, timestamp, integer, jsonb } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
-/*
- * RETAINED, UNUSED: Management › Service Options was removed from the
- * single-business install (its choices are now fixed in code), but this
- * table still holds data, so its definition stays — dropping it here
- * would make `drizzle-kit push` offer to delete those rows. No code reads it.
- */
 /**
- * Per-merchant toggles for which sections appear in the service job menu
- * (ServiceJobDetailDialog). One row per merchant; the JSON `config` holds the
- * eight section booleans. Absent keys default to visible, so an empty/missing
- * row means "show everything" (the pre-feature behaviour).
+ * Per-merchant service job settings, edited under Management › Invoices &
+ * Services › Services (`routes/service-settings.ts`). The JSON `config` holds
+ * `customNotes` — the preset notes offered in a job's Notes section.
+ *
+ * Rows may also still carry the eight section booleans of the removed Service
+ * Options page. Nothing reads them (sections are fixed in code,
+ * `SERVICE_JOB_SECTIONS`); a save merges over them rather than dropping them.
  */
 export const serviceSettingsTable = pgTable("service_settings", {
   id: serial("id").primaryKey(),

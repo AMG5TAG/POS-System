@@ -3300,6 +3300,20 @@ export interface LoyaltySettingsInput {
   naming?: LoyaltyNaming;
 }
 
+export interface ServiceCustomNote {
+  id: string;
+  text: string;
+}
+
+export interface ServiceSettings {
+  customNotes: ServiceCustomNote[];
+}
+
+export interface ServiceSettingsInput {
+  /** @maxItems 100 */
+  customNotes?: ServiceCustomNote[];
+}
+
 /**
  * Default delivery channel pre-selected when sending an invoice.
  */

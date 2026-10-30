@@ -3163,6 +3163,39 @@ export const UpdateInvoiceSettingsResponse = zod.object({
 
 
 /**
+ * @summary Get merchant service job settings
+ */
+export const GetServiceSettingsResponse = zod.object({
+  "customNotes": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string()
+}))
+})
+
+
+/**
+ * @summary Update merchant service job settings
+ */
+export const updateServiceSettingsBodyCustomNotesMax = 100;
+
+
+
+export const UpdateServiceSettingsBody = zod.object({
+  "customNotes": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string()
+})).max(updateServiceSettingsBodyCustomNotesMax).optional()
+})
+
+export const UpdateServiceSettingsResponse = zod.object({
+  "customNotes": zod.array(zod.object({
+  "id": zod.string(),
+  "text": zod.string()
+}))
+})
+
+
+/**
  * Returns the top 10 customers by loyalty points for the merchant.
  * @summary Top loyalty earners
  */

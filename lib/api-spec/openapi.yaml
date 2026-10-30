@@ -38,6 +38,8 @@ tags:
     description: Service job management
   - name: invoice-settings
     description: Per-merchant invoicing defaults, reminders and sending options
+  - name: service-settings
+    description: Per-merchant service job settings (custom notes)
   - name: Storage
     description: Object storage upload and serving endpoints.
   - name: cameras
@@ -1993,6 +1995,36 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/InvoiceSettings"
+
+  /service-settings:
+    get:
+      operationId: getServiceSettings
+      tags: [service-settings]
+      summary: Get merchant service job settings
+      responses:
+        "200":
+          description: Service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
+    put:
+      operationId: updateServiceSettings
+      tags: [service-settings]
+      summary: Update merchant service job settings
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ServiceSettingsInput"
+      responses:
+        "200":
+          description: Updated service settings
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ServiceSettings"
 
   /loyalty/leaderboard:
     get:
@@ -13528,8 +13560,30 @@ components:
           $ref: "#/components/schemas/LoyaltyNaming"
 
     # ── Service Settings ──────────────────────────────────────────────────────
-    # Booleans toggling each section of the service job menu. All optional;
-    # an omitted key defaults to true (section visible).
+    # Custom notes offered in a service job's Notes section, set under
+    # Management › Invoices & Services › Services.
+    ServiceCustomNote:
+      type: object
+      required: [id, text]
+      properties:
+        id:   { type: string }
+        text: { type: string }
+    ServiceSettings:
+      type: object
+      required: [customNotes]
+      properties:
+        customNotes:
+          type: array
+          items:
+            $ref: "#/components/schemas/ServiceCustomNote"
+    ServiceSettingsInput:
+      type: object
+      properties:
+        customNotes:
+          type: array
+          maxItems: 100
+          items:
+            $ref: "#/components/schemas/ServiceCustomNote"
     InvoiceSettings:
       type: object
       required:
