@@ -6273,6 +6273,15 @@ export interface InvoicePaymentInput {
 
 export type InvoicePaymentResult = Invoice;
 
+export interface InvoicePaidDateInput {
+  paidAt: string;
+  /**
+     * @minLength 1
+     * @maxLength 500
+     */
+  reason: string;
+}
+
 export interface InvoicePaymentReverseInput {
   /** @minimum 0 */
   amount: number;

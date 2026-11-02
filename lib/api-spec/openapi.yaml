@@ -8247,6 +8247,39 @@ paths:
         "404":
           description: Invoice not found
 
+  /invoices/{id}/paid-date:
+    post:
+      operationId: changeInvoicePaidDate
+      tags: [invoices]
+      summary: Change the date a fully paid invoice was paid (with a reason)
+      description: >
+        Moves the invoice's paidAt, and with it the sale date every revenue
+        report files it under. A reason is required and is recorded in the
+        invoice's activity as a `paid-date-changed` event.
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/InvoicePaidDateInput"
+      responses:
+        "200":
+          description: Updated invoice
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Invoice"
+        "400":
+          description: Validation error (missing reason, bad or future date, invoice not paid)
+        "404":
+          description: Invoice not found
+
   /invoices/{id}/payment/reverse:
     post:
       operationId: reverseInvoicePayment
@@ -16997,6 +17030,16 @@ components:
     # Reverse (or correct) a previously recorded payment. `amount` is the value to
     # un-apply from the invoice's amountPaid; `eventId` optionally targets the
     # specific payment event being reversed (for the activity trail).
+    InvoicePaidDateInput:
+      type: object
+      required: [paidAt, reason]
+      properties:
+        # A plain date (YYYY-MM-DD, anchored at noon UTC like a backdated
+        # payment) or an ISO date-time; must not be in the future.
+        paidAt: { type: string }
+        # Why the date changed — required, recorded in the invoice's activity.
+        reason: { type: string, minLength: 1, maxLength: 500 }
+
     InvoicePaymentReverseInput:
       type: object
       required: [amount]

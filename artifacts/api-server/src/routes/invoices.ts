@@ -45,6 +45,9 @@ import {
   MarkInvoiceViewedResponse,
   RecordInvoicePaymentResponse,
   AddInvoiceEventResponse,
+  ChangeInvoicePaidDateBody,
+  ChangeInvoicePaidDateParams,
+  ChangeInvoicePaidDateResponse,
 } from "@workspace/api-zod";
 import type * as zod from "zod";
 
@@ -208,6 +211,17 @@ function fmt(
     customerAddress,
     customerCompany: cCompany ?? null,
   };
+}
+
+/** A paid date from the client: a bare YYYY-MM-DD is anchored at noon UTC so
+ *  `(paid_at)::date` lands on the chosen calendar day in every real (±12h)
+ *  timezone. Future dates are refused (a day's grace for timezones). */
+function parsePaidAt(input: string): { date: Date } | { error: string } {
+  const raw = input.trim();
+  const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw);
+  if (Number.isNaN(d.getTime())) return { error: "Invalid paidAt date" };
+  if (d.getTime() > Date.now() + 86_400_000) return { error: "paidAt cannot be in the future" };
+  return { date: d };
 }
 
 async function appendInvoiceEvent(id: number, merchantId: number, event: InvoiceEvent) {
@@ -954,17 +968,9 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   // chosen calendar day in every real (±12h) timezone. Future dates are rejected.
   let settledAt: Date | undefined;
   if (typeof rawPaidAt === "string" && rawPaidAt.trim() !== "") {
-    const raw = rawPaidAt.trim();
-    const d = new Date(/^\d{4}-\d{2}-\d{2}$/.test(raw) ? `${raw}T12:00:00Z` : raw);
-    if (Number.isNaN(d.getTime())) {
-      res.status(400).json({ error: "Invalid paidAt date" });
-      return;
-    }
-    if (d.getTime() > Date.now() + 86_400_000) {
-      res.status(400).json({ error: "paidAt cannot be in the future" });
-      return;
-    }
-    settledAt = d;
+    const parsed = parsePaidAt(rawPaidAt);
+    if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
+    settledAt = parsed.date;
   }
   const idempotencyKey =
     typeof rawIdempotencyKey === "string" && rawIdempotencyKey.trim() !== ""
@@ -1197,6 +1203,70 @@ router.post("/invoices/:id/payment", requireAuth, async (req, res): Promise<void
   const paymentBody = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
   assertValidInvoiceResponse(RecordInvoicePaymentResponse, paymentBody, "POST /invoices/:id/payment");
   res.json(paymentBody);
+});
+
+// POST /invoices/:id/paid-date — move a paid invoice's paid date, with a reason.
+// paidAt is the sale date every revenue report files the invoice under, so this
+// moves revenue between days: a manager's call (or a manager PIN at the till),
+// and the reason is kept in the invoice's activity alongside the old and new date.
+router.post("/invoices/:id/paid-date", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
+  const paramsResult = ChangeInvoicePaidDateParams.safeParse(req.params);
+  if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
+  const { id } = paramsResult.data;
+  const merchantId = req.session.merchantId!;
+  const bodyParsed = ChangeInvoicePaidDateBody.safeParse(req.body);
+  if (!bodyParsed.success) { res.status(400).json({ error: bodyParsed.error.message }); return; }
+  const reason = bodyParsed.data.reason.trim();
+  if (!reason) { res.status(400).json({ error: "A reason for changing the paid date is required" }); return; }
+  const parsed = parsePaidAt(bodyParsed.data.paidAt);
+  if ("error" in parsed) { res.status(400).json({ error: parsed.error }); return; }
+  const newPaidAt = parsed.date;
+
+  const dayOf = (d: Date) => d.toLocaleDateString("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "Australia/Sydney" });
+  let failure: { status: number; error: string } | null = null;
+  await db.transaction(async (tx) => {
+    const [inv] = await tx
+      .select({ status: invoicesTable.status, paidAt: invoicesTable.paidAt, events: invoicesTable.events })
+      .from(invoicesTable)
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)))
+      .for("update");
+    if (!inv) { failure = { status: 404, error: "Invoice not found" }; return; }
+    if (inv.status !== "paid" || !inv.paidAt) {
+      failure = { status: 400, error: "Only a fully paid invoice has a paid date to change" };
+      return;
+    }
+    const event: InvoiceEvent = {
+      type: "paid-date-changed",
+      timestamp: new Date().toISOString(),
+      detail: `from ${dayOf(inv.paidAt)} to ${dayOf(newPaidAt)} — ${reason}`,
+    };
+    await tx.update(invoicesTable)
+      .set({ paidAt: newPaidAt, events: [...((inv.events as InvoiceEvent[] | null) ?? []), event] })
+      .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  });
+  if (failure) { const f = failure as { status: number; error: string }; res.status(f.status).json({ error: f.error }); return; }
+
+  const [row] = await db
+    .select({
+      invoice: invoicesTable,
+      customerFirstName: customersTable.firstName,
+      customerLastName: customersTable.lastName,
+      customerEmail: customersTable.email,
+      customerPhone: customersTable.phone,
+      customerAddress: customersTable.address,
+      customerCompany: customersTable.company,
+      customerBillingStreet: customersTable.billingStreet,
+      customerBillingCity: customersTable.billingCity,
+      customerBillingState: customersTable.billingState,
+      customerBillingPostcode: customersTable.billingPostcode,
+    })
+    .from(invoicesTable)
+    .leftJoin(customersTable, and(eq(invoicesTable.customerId, customersTable.id), eq(customersTable.merchantId, invoicesTable.merchantId)))
+    .where(and(eq(invoicesTable.id, id), eq(invoicesTable.merchantId, merchantId)));
+  if (!row) { res.status(404).json({ error: "Invoice not found" }); return; }
+  const body = fmt(row.invoice, row.customerFirstName, row.customerLastName, row.customerEmail, row.customerPhone, row.customerAddress, row.customerCompany, row.customerBillingStreet, row.customerBillingCity, row.customerBillingState, row.customerBillingPostcode);
+  assertValidInvoiceResponse(ChangeInvoicePaidDateResponse, body, "POST /invoices/:id/paid-date");
+  res.json(body);
 });
 
 // POST /invoices/:id/payment/reverse — reverse or correct a recorded payment

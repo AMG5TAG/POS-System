@@ -1094,6 +1094,14 @@ the **stored** value, never the display one. The base `Input` shows the
 normalised number in the merchant's display format on blur, which is why the
 field can read `0412345678` while the database holds `+61412345678`.
 
+**Desktop browsers never follow a `tel:`/`sms:` link.** Chrome on Windows hands
+it to the OS (Phone Link, Teams, the "pick an app" prompt) and can hang or crash
+doing it — opening it in place rather than a new tab was not enough. A single
+capture-phase listener, `installPhoneLinkGuard` (`lib/phone-link-guard.ts`,
+installed in `main.tsx`), copies the number and shows a toast instead, on every
+page. Android, iPhone and iPad dial normally. Keep building links with
+`telHref`; the guard is what makes them safe on a desktop.
+
 Printed and emailed documents follow it too, which is why the server needs the
 setting as well: `phoneFormatterFor(merchantId)` in `api-server/src/lib/phone.ts`
 resolves it once per document (not per field — a merchant's setting cannot change

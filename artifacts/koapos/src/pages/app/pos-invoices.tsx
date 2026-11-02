@@ -6,7 +6,7 @@ import {
   useListProducts, useGetMerchant, useGetLoyaltySettings, LoyaltySettings,
   useListInvoices, useCreateInvoice, useUpdateInvoice, useDeleteInvoice,
   useAddInvoiceEvent, useSendInvoiceEmail, useGetInvoice, getGetInvoiceQueryKey,
-  useRecordInvoicePayment, useReverseInvoicePayment,
+  useRecordInvoicePayment, useReverseInvoicePayment, useChangeInvoicePaidDate,
   ListInvoicesStatus, getListInvoicesQueryKey, useGetRegionalExtSettings,
   getInvoicePdf, type Transaction,
   useListServiceJobs, useListAppointments,
@@ -312,6 +312,12 @@ export default function POSInvoicesPage() {
   /* Reverse-payment confirmation — the payment event being un-applied. */
   const [reverseTarget, setReverseTarget] = useState<{ invoiceId: number; event: InvoiceEvent } | null>(null);
   const [reverseSaving, setReverseSaving] = useState(false);
+  /* Change-paid-date dialog. Moves the sale date reports file the invoice under,
+     so the server requires a reason and keeps it in the invoice's activity. */
+  const [paidDateTarget, setPaidDateTarget] = useState<Invoice | null>(null);
+  const [paidDateValue, setPaidDateValue] = useState("");
+  const [paidDateReason, setPaidDateReason] = useState("");
+  const [paidDateSaving, setPaidDateSaving] = useState(false);
   const [editOpen, setEditOpen] = useState(false);
   const [editingInvoice, setEditingInvoice] = useState<Invoice | null>(null);
   const [editForm, setEditForm] = useState({ customerId: "", dueDate: "", notes: "" });
@@ -575,6 +581,7 @@ export default function POSInvoicesPage() {
   const sendEmailMutation = useSendInvoiceEmail();
   const recordPaymentMutation = useRecordInvoicePayment();
   const reversePaymentMutation = useReverseInvoicePayment();
+  const changePaidDateMutation = useChangeInvoicePaidDate();
 
   /* Tenders offered in the Record Payment dialog, mirroring the POS register
      this terminal is signed in to: the enabled built-in methods (localStorage,
@@ -1153,6 +1160,32 @@ export default function POSInvoicesPage() {
       toast.error("Failed to reverse payment");
     } finally {
       setReverseSaving(false);
+    }
+  };
+
+  /* Change the paid date of a fully paid invoice — a reason is required. */
+  const openPaidDate = (inv: Invoice) => {
+    setPaidDateTarget(inv);
+    setPaidDateValue(inv.paidAt ? localISODate(inv.paidAt) : todayLocalISODate());
+    setPaidDateReason("");
+  };
+  const savePaidDate = async () => {
+    if (!paidDateTarget) return;
+    const reason = paidDateReason.trim();
+    if (!paidDateValue || !reason) return;
+    setPaidDateSaving(true);
+    try {
+      await changePaidDateMutation.mutateAsync({ id: paidDateTarget.id, data: { paidAt: paidDateValue, reason } });
+      toast.success("Paid date changed");
+      queryClient.invalidateQueries({ queryKey: getGetInvoiceQueryKey(paidDateTarget.id) });
+      invalidateInvoices();
+      invalidateSalesKpiQueries(queryClient);
+      setPaidDateTarget(null);
+    } catch (err) {
+      const msg = (err as { data?: { error?: string } })?.data?.error;
+      toast.error(msg ?? "Failed to change the paid date");
+    } finally {
+      setPaidDateSaving(false);
     }
   };
 
@@ -1823,7 +1856,15 @@ export default function POSInvoicesPage() {
                   {detailInvoice.paidAt && (
                     <div>
                       <p className="text-xs text-muted-foreground uppercase tracking-wide">Paid At</p>
-                      <p className="font-medium mt-0.5 text-green-600">{formatDate(detailInvoice.paidAt)}</p>
+                      <p className="font-medium mt-0.5 text-green-600 flex items-center gap-1.5 flex-wrap">
+                        {formatDate(detailInvoice.paidAt)}
+                        {detailInvoice.status === "paid" && (
+                          <Button size="sm" variant="ghost" className="h-6 px-1.5 text-xs gap-1 text-muted-foreground"
+                            onClick={() => openPaidDate(detailInvoice)}>
+                            <Pencil className="w-3 h-3" /> Change
+                          </Button>
+                        )}
+                      </p>
                     </div>
                   )}
                 </div>
@@ -2019,6 +2060,7 @@ export default function POSInvoicesPage() {
                             {ev.type === "download" && <Download className="w-3.5 h-3.5" />}
                             {ev.type === "print" && <Printer className="w-3.5 h-3.5" />}
                             {ev.type === "sms" && <MessageSquare className="w-3.5 h-3.5" />}
+                            {ev.type === "paid-date-changed" && <CalendarClock className="w-3.5 h-3.5" />}
                           </span>
                           <span className="flex-1 min-w-0">
                             <span className="text-foreground font-medium">
@@ -2027,9 +2069,10 @@ export default function POSInvoicesPage() {
                                 : ev.type === "download" ? "Downloaded PDF"
                                 : ev.type === "print" ? "Printed"
                                 : ev.type === "sms" ? "SMS sent"
+                                : ev.type === "paid-date-changed" ? "Paid date changed"
                                 : ev.type}
                             </span>
-                            {ev.detail && <span className="ml-1">→ {ev.detail}</span>}
+                            {ev.detail && <span className="ml-1">{ev.type === "paid-date-changed" ? ev.detail : `→ ${ev.detail}`}</span>}
                             <span className="ml-2 text-muted-foreground/70">{formatDate(ev.timestamp)}</span>
                           </span>
                         </div>
@@ -2173,6 +2216,37 @@ export default function POSInvoicesPage() {
               </div>
             );
           })()}
+        </DialogContent>
+      </Dialog>
+
+      {/* ─── Change paid date ─── */}
+      <Dialog open={!!paidDateTarget} onOpenChange={(o) => { if (!o && !paidDateSaving) setPaidDateTarget(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Change paid date{paidDateTarget ? ` — ${paidDateTarget.invoiceNumber}` : ""}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <p className="text-sm text-muted-foreground">
+              Reports count this invoice as a sale on the day it was paid, so this moves its revenue to the new date.
+              The change and your reason are kept in the invoice's activity.
+            </p>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Date paid</Label>
+              <Input type="date" value={paidDateValue} max={todayLocalISODate()}
+                onChange={(e) => setPaidDateValue(e.target.value)} />
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs">Reason <span className="text-destructive">*</span></Label>
+              <Textarea value={paidDateReason} onChange={(e) => setPaidDateReason(e.target.value)} maxLength={500} rows={3}
+                placeholder="e.g. Bank transfer cleared on this day; recorded late" />
+            </div>
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" disabled={paidDateSaving} onClick={() => setPaidDateTarget(null)}>Cancel</Button>
+              <Button disabled={paidDateSaving || !paidDateValue || !paidDateReason.trim()} onClick={() => void savePaidDate()}>
+                {paidDateSaving ? <Loader2 className="w-4 h-4 animate-spin" /> : "Change date"}
+              </Button>
+            </div>
+          </div>
         </DialogContent>
       </Dialog>
 

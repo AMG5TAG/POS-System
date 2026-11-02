@@ -11478,6 +11478,92 @@ export const RecordInvoicePaymentResponse = zod.object({
 
 
 /**
+ * Moves the invoice's paidAt, and with it the sale date every revenue report files it under. A reason is required and is recorded in the invoice's activity as a `paid-date-changed` event.
+
+ * @summary Change the date a fully paid invoice was paid (with a reason)
+ */
+export const ChangeInvoicePaidDateParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const changeInvoicePaidDateBodyReasonMax = 500;
+
+
+
+export const ChangeInvoicePaidDateBody = zod.object({
+  "paidAt": zod.string(),
+  "reason": zod.string().min(1).max(changeInvoicePaidDateBodyReasonMax)
+})
+
+export const changeInvoicePaidDateResponseItemsItemQuantityMin = 0.0001;
+
+export const changeInvoicePaidDateResponseItemsItemUnitPriceMin = 0;
+
+export const changeInvoicePaidDateResponseItemsItemTaxRateMin = 0;
+export const changeInvoicePaidDateResponseItemsItemTaxRateMax = 100;
+
+export const changeInvoicePaidDateResponseItemsItemCostPriceMin = 0;
+
+export const changeInvoicePaidDateResponsePaymentScheduleItemAmountMin = 0;
+
+
+
+export const ChangeInvoicePaidDateResponse = zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "invoiceNumber": zod.string(),
+  "status": zod.enum(['draft', 'sent', 'partial', 'paid', 'overdue', 'cancelled']),
+  "subtotal": zod.number(),
+  "taxTotal": zod.number(),
+  "total": zod.number(),
+  "amountPaid": zod.number(),
+  "discountType": zod.string().nullish(),
+  "discountValue": zod.number().nullish(),
+  "discountTotal": zod.number().nullish(),
+  "items": zod.array(zod.object({
+  "description": zod.string(),
+  "quantity": zod.number().min(changeInvoicePaidDateResponseItemsItemQuantityMin),
+  "unitPrice": zod.number().min(changeInvoicePaidDateResponseItemsItemUnitPriceMin),
+  "taxRate": zod.number().min(changeInvoicePaidDateResponseItemsItemTaxRateMin).max(changeInvoicePaidDateResponseItemsItemTaxRateMax),
+  "productId": zod.number().nullish(),
+  "costPrice": zod.number().min(changeInvoicePaidDateResponseItemsItemCostPriceMin).nullish()
+})),
+  "events": zod.array(zod.object({
+  "id": zod.string().nullish(),
+  "type": zod.string(),
+  "timestamp": zod.coerce.date(),
+  "detail": zod.string().nullish(),
+  "method": zod.string().nullish(),
+  "amount": zod.number().nullish(),
+  "reverses": zod.string().nullish(),
+  "idempotencyKey": zod.string().nullish()
+})),
+  "paymentSchedule": zod.array(zod.object({
+  "label": zod.string().nullish(),
+  "amount": zod.number().min(changeInvoicePaidDateResponsePaymentScheduleItemAmountMin),
+  "dueDate": zod.coerce.date().nullish()
+})).nullish(),
+  "notes": zod.string().nullish(),
+  "dueDate": zod.coerce.date().nullish(),
+  "paidAt": zod.coerce.date().nullish(),
+  "viewedAt": zod.coerce.date().nullish(),
+  "isRecurring": zod.boolean(),
+  "recurringFrequency": zod.string().nullish(),
+  "recurringOccurrences": zod.number().nullish(),
+  "recurringStartDate": zod.coerce.date().nullish(),
+  "nextSendDate": zod.coerce.date().nullish(),
+  "customerName": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerAddress": zod.string().nullish(),
+  "customerCompany": zod.string().nullish(),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
  * @summary Reverse or correct a recorded payment against an invoice
  */
 export const ReverseInvoicePaymentParams = zod.object({

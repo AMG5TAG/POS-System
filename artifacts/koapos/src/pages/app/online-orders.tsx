@@ -9,7 +9,7 @@ import { Separator } from "@/components/ui/separator";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { cn, formatCurrency } from "@/lib/utils";
+import { cn, formatCurrency, telHref } from "@/lib/utils";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
 import {
   ORDER_STATUSES, OPEN_ORDER_STATUSES, orderStatusMeta, CARRIERS, carrierName, trackingUrl,
@@ -220,7 +220,7 @@ function OrderDialog({ order, onClose, onSave, saving }: {
             <p className="text-xs font-semibold uppercase text-muted-foreground">Customer</p>
             <p className="font-medium">{order.customer || "—"}</p>
             {order.customerEmail && <p className="flex items-center gap-1.5"><Mail className="w-3.5 h-3.5 text-muted-foreground" /><a className="hover:underline" href={`mailto:${order.customerEmail}`}>{order.customerEmail}</a></p>}
-            {order.phone && <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-muted-foreground" /><a className="hover:underline" href={`tel:${order.phone}`}>{formatPhoneForDisplay(order.phone)}</a></p>}
+            {order.phone && <p className="flex items-center gap-1.5"><Phone className="w-3.5 h-3.5 text-muted-foreground" /><a className="hover:underline" href={telHref(order.phone)}>{formatPhoneForDisplay(order.phone)}</a></p>}
           </div>
           <div className="space-y-1.5">
             <p className="text-xs font-semibold uppercase text-muted-foreground">Delivery</p>

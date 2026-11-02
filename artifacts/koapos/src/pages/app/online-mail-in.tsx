@@ -11,7 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
-import { cn } from "@/lib/utils";
+import { cn, telHref } from "@/lib/utils";
 import { formatPhoneForDisplay } from "@/lib/phone-format";
 import { CARRIERS, carrierName, trackingUrl } from "@/lib/order-tracking";
 import { useAuth } from "@/lib/use-auth";
@@ -192,7 +192,7 @@ function DetailDialog({ r, onClose, onChanged }: { r: MailIn; onClose: () => voi
             <p className="text-xs font-semibold uppercase text-muted-foreground">Customer</p>
             <p className="font-medium">{fullName(r)}</p>
             <p><a href={`mailto:${r.email}`} className="text-primary hover:underline">{r.email}</a></p>
-            <p><a href={`tel:${r.phone}`} className="text-primary hover:underline">{formatPhoneForDisplay(r.phone)}</a></p>
+            <p><a href={telHref(r.phone)} className="text-primary hover:underline">{formatPhoneForDisplay(r.phone)}</a></p>
             <p className="text-muted-foreground">{r.street}, {r.suburb} {r.state} {r.postcode}</p>
           </div>
           <div className="space-y-1">

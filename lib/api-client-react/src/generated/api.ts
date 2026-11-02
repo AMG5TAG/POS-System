@@ -185,6 +185,7 @@ import type {
   InvoiceEventInput,
   InvoiceInput,
   InvoiceList,
+  InvoicePaidDateInput,
   InvoicePaymentInput,
   InvoicePaymentReverseInput,
   InvoiceSettings,
@@ -32375,6 +32376,80 @@ export const useRecordInvoicePayment = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getRecordInvoicePaymentMutationOptions(options));
+    }
+
+export const getChangeInvoicePaidDateUrl = (id: number,) => {
+
+
+
+
+  return `/api/invoices/${id}/paid-date`
+}
+
+/**
+ * Moves the invoice's paidAt, and with it the sale date every revenue report files it under. A reason is required and is recorded in the invoice's activity as a `paid-date-changed` event.
+
+ * @summary Change the date a fully paid invoice was paid (with a reason)
+ */
+export const changeInvoicePaidDate = async (id: number,
+    invoicePaidDateInput: InvoicePaidDateInput, options?: RequestInit): Promise<Invoice> => {
+
+  return customFetch<Invoice>(getChangeInvoicePaidDateUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      invoicePaidDateInput,)
+  }
+);}
+
+
+
+
+export const getChangeInvoicePaidDateMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeInvoicePaidDate>>, TError,{id: number;data: BodyType<InvoicePaidDateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof changeInvoicePaidDate>>, TError,{id: number;data: BodyType<InvoicePaidDateInput>}, TContext> => {
+
+const mutationKey = ['changeInvoicePaidDate'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof changeInvoicePaidDate>>, {id: number;data: BodyType<InvoicePaidDateInput>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  changeInvoicePaidDate(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ChangeInvoicePaidDateMutationResult = NonNullable<Awaited<ReturnType<typeof changeInvoicePaidDate>>>
+    export type ChangeInvoicePaidDateMutationBody = BodyType<InvoicePaidDateInput>
+    export type ChangeInvoicePaidDateMutationError = ErrorType<void>
+
+    /**
+ * @summary Change the date a fully paid invoice was paid (with a reason)
+ */
+export const useChangeInvoicePaidDate = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof changeInvoicePaidDate>>, TError,{id: number;data: BodyType<InvoicePaidDateInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof changeInvoicePaidDate>>,
+        TError,
+        {id: number;data: BodyType<InvoicePaidDateInput>},
+        TContext
+      > => {
+      return useMutation(getChangeInvoicePaidDateMutationOptions(options));
     }
 
 export const getReverseInvoicePaymentUrl = (id: number,) => {
