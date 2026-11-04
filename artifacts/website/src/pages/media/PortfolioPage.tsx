@@ -75,28 +75,12 @@ const softwareAndApps: Project[] = [
     items: ["Location-specific directory", "Live app", "Integrated web search", "Payments and subscriptions"],
   },
   {
-    name: "KoaPOS",
-    tag: "Website + Mobile App",
-    status: "Work in progress",
-    image: "/images/portfolio-koapos.webp",
-    url: "https://koapos.com.au/",
-    items: ["Fully customised POS system", "Tailored for different markets", "Web + mobile app", "Ongoing support"],
-  },
-  {
     name: "KKamera",
     tag: "Mobile App + Hosting",
     status: "Work in progress",
     image: "/images/portfolio-kkamera.webp",
     url: "https://kkamera.app/",
     items: ["Cloud-based photography app", "Built from the ground up", "App Store & Google Play", "E2E encryption"],
-  },
-  {
-    name: "KoaPOKER",
-    tag: "Website + Mobile App",
-    status: "Work in progress",
-    image: "/images/portfolio-koapoker.webp",
-    url: "https://koapoker.com.au/",
-    items: ["Poker tournament management", "Customer integration", "Player scoreboards", "Live streaming + social"],
   },
 ];
 

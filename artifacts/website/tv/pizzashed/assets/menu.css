@@ -1,0 +1,111 @@
+/* Shared style for the pizzashed menu boards (TV1, TV2, TV3).
+ *
+ * Each board is drawn on a fixed 1920×1080 stage which the page scales to fit
+ * the screen, so every position below is in pixels of a 1080p TV.
+ *
+ * The photos, leaves and grey brush strokes are the background image
+ * (assets/bgN.jpg). Everything else — banners, item names, prices,
+ * descriptions — is text in the page and can be edited there.
+ */
+
+@font-face { font-family: "Menu Title"; src: url("fonts/urbanist.woff2") format("woff2"); font-weight: 600 800; font-display: block; }
+@font-face { font-family: "Menu Body"; src: url("fonts/poppins-500.woff2") format("woff2"); font-weight: 500; font-display: block; }
+@font-face { font-family: "Menu Body"; src: url("fonts/poppins-500-italic.woff2") format("woff2"); font-weight: 500; font-style: italic; font-display: block; }
+
+:root {
+  --yellow: #f6c201;
+  --yellow-dark: #8f6f00;
+  --white: #dbdbdb;
+  --black: #0b0b0b;
+}
+
+body { background: var(--black); }
+
+.stage {
+  position: absolute;
+  left: 50%; top: 50%;
+  width: 1920px; height: 1080px;
+  transform: translate(-50%, -50%) scale(var(--fit, 1));
+  background: var(--black) center / 100% 100% no-repeat;
+  overflow: hidden;
+  font-family: "Menu Body", system-ui, sans-serif;
+
+  /* Sizes and spacing. Set here for the whole board, or on one section's
+     style="" to change just that section. */
+  --name-size: 30px;   /* item name and price */
+  --name-lh: 35px;     /* line spacing of a two-line name */
+  --desc-size: 21px;
+  --desc-w: auto;      /* where descriptions wrap (auto: the section's width) */
+  --desc-lh: 28px;
+  --first-gap: 10px;   /* banner → first item */
+  --gap: 10px;         /* name → description */
+  --item-gap: 13px;    /* one item → the next */
+}
+
+/* ---- A section: a red banner and the items under it --------------------
+   Position with style="left:…; top:…; width:…" — top is the banner's top. */
+.menu { position: absolute; }
+
+.banner {
+  position: relative;
+  width: 452px; height: 82px;
+  margin: 0 0 0 calc(var(--banner-x, -8px));
+  display: grid; place-items: center;
+  font: 800 37px/1 "Menu Title", sans-serif;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.banner::before {           /* the brush stroke */
+  content: ""; position: absolute;
+  left: -1px; top: -1px; width: 454px; height: 85px;
+  background: url("banner.png") center / 100% 100% no-repeat;
+  z-index: 0;
+}
+.banner span { position: relative; z-index: 1; }
+
+/* Engraved lettering: a fill of fine diagonal lines with a darker edge. */
+.banner span, .name, .price {
+  background: repeating-linear-gradient(-55deg, var(--fill) 0 1.6px, var(--etch) 1.6px 2.6px);
+  -webkit-background-clip: text; background-clip: text;
+  color: transparent;
+  -webkit-text-stroke: 1px var(--edge);
+}
+.banner span { --fill: #fff; --etch: #9a8a8a; --edge: #400000; }
+.name, .price { --fill: var(--yellow); --etch: #8f6f00; --edge: #6b5200; }
+
+/* ---- An item ------------------------------------------------------------ */
+.item { margin-top: var(--item-gap); }
+.banner + .item { margin-top: var(--first-gap); }
+
+.head {
+  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  font: 700 var(--name-size)/var(--name-lh) "Menu Title", sans-serif;
+  letter-spacing: 0.01em;
+  text-transform: uppercase;
+}
+/* Price beside the first / last line of a two-line name, in the corner, so a
+   long first line can run under it (as "Mediterranean / Veggie" does). */
+.head.top, .head.bottom { position: relative; }
+.head.top .price, .head.bottom .price { position: absolute; right: 0; }
+.head.top .price { top: 0; }
+.head.bottom .price { bottom: 0; }
+.name { margin: 0; font: inherit; white-space: nowrap; }
+.price { white-space: nowrap; text-align: right; word-spacing: -0.05em; }
+
+.desc {
+  margin: var(--gap) 0 0;
+  width: var(--desc-w);
+  color: var(--white);
+  letter-spacing: 0.01em;
+  font: 500 var(--desc-size)/var(--desc-lh) "Menu Body", sans-serif;
+}
+.desc em { font-style: italic; }
+
+/* The chilli: <span class="chilli" title="Hot"></span>, a drawing rather
+   than the 🌶️ emoji, which a TV without an emoji font shows as a blank. */
+.chilli {
+  display: inline-block; width: 0.95em; height: 0.95em; vertical-align: -0.1em;
+  background: url("chilli.svg") center / contain no-repeat;
+  -webkit-text-stroke: 0;
+}

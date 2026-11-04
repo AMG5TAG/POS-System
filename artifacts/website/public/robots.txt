@@ -2,3 +2,4 @@ User-agent: *
 Allow: /
 
 Sitemap: https://koastal.com.au/sitemap.xml
+Sitemap: https://koastal.com.au/sitemap-tv.xml

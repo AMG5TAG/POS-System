@@ -1,0 +1,54 @@
+<!doctype html>
+<!--
+  Koastal TV Streamer: starter page. Files starting with "_" are never published.
+
+  To add a page, copy this file to tv/<name>.html. It goes live at
+  https://koastal.com.au/tv/<name> on the next publish. Folders nest:
+  tv/pizzashed/TV1.html is /tv/pizzashed/TV1, and files beside it (an assets/
+  folder of images, CSS, fonts) are published too, so link them relatively:
+  "assets/menu.css".
+
+  Rules (scripts/build-tv-pages.mjs fails the build if one is broken):
+    - <name>: letters, digits and hyphens. It is the URL, and URLs are
+      case-sensitive (/tv/pizzashed/TV1 is not /tv/pizzashed/tv1).
+    - <title> ends with "Koastal TV Streamer", e.g. "Today's Specials | Koastal TV Streamer".
+    - A meta description: Google shows it under the title in search results.
+    - No noindex. These pages are meant to be found.
+
+  Design:
+    - Each page has its own look. Don't reuse the website's header, fonts or
+      styles, and don't link the website's CSS or JS.
+    - Self-contained: inline CSS and JS, or files in a folder beside the page.
+    - One screen, no scrolling. The build locks html/body to the viewport, so
+      anything taller than the screen is cut off, not scrollable. Size
+      everything in vw/vh (or clamp()) so it fits any TV: designed at
+      1920×1080, it should still fit at 1280×720 and 3840×2160.
+    - Keep content about 5% in from every edge, because some TVs overscan.
+    - Read from about 3 m away: body text at least ~2.2vw, high contrast.
+    - Nothing needs a mouse or touch. If the page responds to input, use
+      arrow keys and Enter (the D-pad).
+    - Rotating content: loop it with setInterval or a CSS animation, and never
+      reload the page more often than every few minutes.
+-->
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Page Name | Koastal TV Streamer</title>
+<meta name="description" content="One or two sentences on what this screen shows. Google shows this under the title.">
+<style>
+  :root { color-scheme: dark; }
+  body {
+    background: #111;
+    color: #fff;
+    font-family: system-ui, sans-serif;
+    display: grid;
+    place-items: center;
+  }
+  h1 { font-size: 6vw; margin: 0; }
+</style>
+</head>
+<body>
+  <h1>Page Name</h1>
+</body>
+</html>

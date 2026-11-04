@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en-AU">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Pizza Menu: Seafood Pizzas, Salads, Chicken, Wings &amp; Ribs, Pastas | Koastal TV Streamer</title>
+<meta name="description" content="Menu board: seafood pizzas, Greek, Garden and Caesar salads, chicken schnitzel and parmigiana with chips, chicken wings, pork and beef ribs, and pastas from Napoli to Carbonara.">
+<link rel="stylesheet" href="assets/menu.css">
+<style>.stage { background-image: url("assets/bg2.jpg"); --name-size: 28px; }</style>
+</head>
+<body>
+<!--
+  Menu board 2 of 3. Edit the text below; sizes and colours are in assets/menu.css.
+  Each <section class="menu"> is placed by its left/top (the banner's top-left
+  is --banner-x left of the text) on a 1920×1080 board.
+  An item:   <div class="item">
+               <div class="head"><h3 class="name">Name</h3><span class="price">M$1 L$2 F$3</span></div>
+               <p class="desc">Description.</p>
+             </div>
+  Lines break only where there is a <br> (names) or at the section's width
+  (descriptions), so put <br> where a line should break. Add class "top" or
+  "bottom" to .head to sit the price beside the first or last line of a
+  two-line name (default: centred).
+-->
+<main class="stage">
+
+  <!-- SEAFOOD PIZZAS -->
+  <section class="menu" style="left:95px; top:30px; width:433px; --banner-x:-12px; --name-lh:39px; --gap:7px; --item-gap:7px">
+    <h2 class="banner"><span>Seafood Pizzas</span></h2>
+    <div class="item">
+      <div class="head top"><h3 class="name">The Shed<br>Seafood</h3><span class="price">M$27 L$32 F$38</span></div>
+      <p class="desc">GARLIC &amp; TOMATO BASE, PRAWNS,<br>CALAMARI, MUSSELS, OCTOPUS,<br>PARSLEY, MOZZARELLA, LEMON OIL.</p>
+    </div>
+    <div class="item">
+      <div class="head top"><h3 class="name">Garlic and<br>Prawn</h3><span class="price">M$25 L$29 F$35</span></div>
+      <p class="desc">GARLIC BASE, KING PRAWNS,<br>MOZZARELLA, LEMON OIL, PARSLEY.</p>
+    </div>
+  </section>
+
+  <!-- SALADS -->
+  <section class="menu" style="left:80px; top:467px; width:485px; --banner-x:-14px; --gap:6px; --item-gap:6px">
+    <h2 class="banner"><span>Salads</span></h2>
+    <div class="item">
+      <div class="head"><h3 class="name">Greek</h3><span class="price">$15</span></div>
+      <p class="desc">TOMATO, CUCUMBER, CAPSICUM, ONION, FETA<br>CHEESE, OLIVES WITH LEMON VINAIGRETTE<br>DRESSING.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Garden</h3><span class="price">$13</span></div>
+      <p class="desc">LETTUCE, TOMATO, ONION, CUCUMBERS AND<br>LEMON VINAIGRETTE DRESSING.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Caesar</h3><span class="price">$16</span></div>
+      <p class="desc">COS LETTUCE, CROUTONS, BACON, BOILED<br>EGG, PARMESAN CHEESE, CAESAR DRESSING.</p>
+    </div>
+    <div class="item" style="margin-top:12px; --name-lh:40px">
+      <div class="head top"><h3 class="name">Add Protein</h3><span class="price">Chicken $5<br>Prawn $7</span></div>
+    </div>
+  </section>
+
+  <!-- CHICKEN -->
+  <section class="menu" style="left:614px; top:35px; width:412px; --banner-x:-8px; --first-gap:7px; --desc-size:23px; --name-lh:39px; --gap:12px; --item-gap:17px">
+    <h2 class="banner"><span>Chicken</span></h2>
+    <div class="item">
+      <div class="head"><h3 class="name">Schnitzel + Chips</h3><span class="price">$25</span></div>
+      <p class="desc">1x CHICKEN SCHNITZEL w/ CHIPS</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Parmigiana + Chips</h3><span class="price">$30</span></div>
+      <p class="desc">1x CHICKEN PARMIGIANA w/ CHIPS</p>
+    </div>
+    <div class="item" style="--gap:5px">
+      <div class="head top"><h3 class="name">Loaded Schnitzel +<br>Chips</h3><span class="price">$30</span></div>
+      <p class="desc">1x LOADED SCHNITZEL w/ CHIPS</p>
+    </div>
+  </section>
+
+  <!-- WINGS AND RIBS -->
+  <section class="menu" style="left:617px; top:467px; width:458px; --banner-x:-4px; --first-gap:20px; --name-lh:40px; --gap:11px; --item-gap:17px; --desc-w:480px">
+    <h2 class="banner"><span>Wings and Ribs</span></h2>
+    <div class="item">
+      <div class="head"><h3 class="name">Chicken<br>Wings</h3><span class="price">10P $17.90<br>20P $29.90</span></div>
+      <p class="desc">INCLUDES 1 SAUCE: CHEF'S HOUSE <span class="chilli" title="Hot"></span>, RANCH,<br>GARLIC, HONEY &amp; SOY, OR HOT HONEY.</p>
+    </div>
+    <div class="item" style="--name-lh:35px">
+      <div class="head"><h3 class="name">Pork Ribs<br>Beef Ribs</h3><span class="price">$34<br>$38</span></div>
+      <p class="desc">1 RACK OF RIBS, BASTED WITH OUR<br>SIGNATURE SAUCE, SERVED WITH FRESH<br>SALAD, CRISPY WEDGES, SOUR CREAM &amp;<br>SWEET CHILLI SAUCE.</p>
+    </div>
+  </section>
+
+  <!-- PASTAS -->
+  <section class="menu" style="left:1138px; top:30px; width:437px; --banner-x:-11px; --first-gap:15px; --item-gap:11px; --desc-w:470px">
+    <h2 class="banner"><span>Pastas</span></h2>
+    <div class="item">
+      <div class="head"><h3 class="name">Napoli</h3><span class="price">O$16</span></div>
+      <p class="desc">RICH TOMATO SAUCE, GARLIC, FRESH BASIL,<br>PARSLEY, PARMESAN CHEESE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Bolognese</h3><span class="price">O$15</span></div>
+      <p class="desc">BEEF MINCE 8 HOURS, RICH RED SAUCE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Amatriciana <span class="chilli" title="Hot"></span></h3><span class="price">O$18</span></div>
+      <p class="desc">BACON, GARLIC, ONION, SHALLOTS IN A<br>PINK SAUCE, PARMESAN CHEESE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Alla Vodka</h3><span class="price">O$18</span></div>
+      <p class="desc">CHILLI, GARLIC, IN A PINK SAUCE,<br>PARMESAN CHEESE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Aglio e Olio</h3><span class="price">O$23</span></div>
+      <p class="desc">CHILLI, GARLIC, PRAWNS, IN AN AGLIO<br>SAUCE, PARMESAN CHEESE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Chicken Boscaiola</h3><span class="price">O$23</span></div>
+      <p class="desc">CHICKEN, MUSHROOM, BACON, GARLIC,<br>CREAM, PARSLEY, PARMESAN CHEESE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Penne Pesto</h3><span class="price">O$18</span></div>
+      <p class="desc">BASIL, CHERRY TOMATOES, CREAM AND<br>PESTO (<em>PENNE PASTA ONLY</em>).</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Carbonara</h3><span class="price">O$18</span></div>
+      <p class="desc">BACON IN A CREAMY WHITE SAUCE.</p>
+    </div>
+    <div class="item">
+      <div class="head"><h3 class="name">Choice of Pasta</h3></div>
+      <p class="desc" style="margin-top:2px">SPAGHETTI, FETTUCCINE OR PENNE</p>
+    </div>
+  </section>
+
+</main>
+<script>
+  // Scale the 1920×1080 board to fit any screen.
+  function fit() { document.documentElement.style.setProperty("--fit", Math.min(innerWidth / 1920, innerHeight / 1080)); }
+  addEventListener("resize", fit); fit();
+</script>
+</body>
+</html>

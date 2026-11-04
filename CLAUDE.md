@@ -545,6 +545,34 @@ token-for-token against the live one), so its own conventions hold:
   written in the future tense on purpose (neither range has opened; the gaming
   page's structured data deliberately carries no `offers`). Koastal Kollective is the only brand name in copy — except the private web search at `/search`, which is named **Koastal Search** by the owner's choice.
 
+### Koastal TV Streamer (koastal.com.au/tv/<name>)
+
+Full-screen display pages for TVs and the Android TV app. Each is an HTML
+file under `artifacts/website/tv/` with its own design — `tv/<name>.html` is
+`/tv/<name>`, and folders nest (`tv/pizzashed/TV1.html` is `/tv/pizzashed/TV1`;
+URLs are case-sensitive). Every other file under `tv/` (an `assets/` folder of
+images, CSS, fonts) is published beside the pages, so pages link them
+relatively. Never reuse the website's header, fonts, styles or React for them.
+The `pizzashed` boards are 1920×1080 stages scaled to fit the screen: the
+photos and brush strokes are one background image per board (the original
+design with its text digitally removed), and every banner, name, price and
+description is HTML text styled by the shared `assets/menu.css`.
+Start from `tv/_template.html`, whose header comment holds the design rules;
+files starting with `_` are never published. The website's postbuild step
+`scripts/build-tv-pages.mjs` (`pnpm --filter @workspace/website run build-tv` on
+its own) copies each to `dist/public/tv/<name>/index.html`, which `server.mjs`
+already serves per path. It **fails the build** when a name isn't
+letters, digits and hyphens, the `<title>` doesn't end with `Koastal TV Streamer`, there is no
+meta description, or the page is noindex. It injects a canonical, a viewport
+meta if missing, and the screen lock: html/body pinned to the viewport and
+never scrollable, full screen on the first key or click in a browser, and the
+pointer hidden when idle. The pages have their own `sitemap-tv.xml` (in
+robots.txt, submitted by IndexNow), not a place in `sitemap.xml`, because
+prerender and the site search read that file and the prerender would
+overwrite each page with the SPA. They are framed only by our own pages
+(`frame-ancestors 'self'`), so the TV app must load the URL directly in its
+WebView rather than inside an iframe on another site.
+
 ### Online shop (koastal.com.au/shop)
 
 A second front end on the SAME database, so nothing is synced: products,

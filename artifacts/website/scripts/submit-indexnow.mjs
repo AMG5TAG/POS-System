@@ -4,6 +4,8 @@ import { dirname, resolve } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const sitemapPath = resolve(__dirname, "..", "public", "sitemap.xml");
+// The TV pages' sitemap is written into the build by build-tv-pages.mjs.
+const tvSitemapPath = resolve(__dirname, "..", "dist", "public", "sitemap-tv.xml");
 
 const HOST = "koastal.com.au";
 const KEY = "eeda10763814fc6c86ebe7e144a23d67";
@@ -47,7 +49,12 @@ async function main() {
     return;
   }
 
-  const urls = extractUrls(xml);
+  let tvXml = "";
+  try {
+    tvXml = readFileSync(tvSitemapPath, "utf8");
+  } catch { /* no TV pages built */ }
+
+  const urls = [...extractUrls(xml), ...extractUrls(tvXml)];
   if (urls.length === 0) {
     console.warn("[indexnow] No <loc> URLs found in sitemap — skipping submission.");
     return;
