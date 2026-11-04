@@ -12,7 +12,9 @@
 <!--
   Menu board 3 of 3. Edit the text below; sizes and colours are in assets/menu.css.
   Each <section class="menu"> is placed by its left/top (the banner's top-left
-  is --banner-x left of the text) on a 1920×1080 board.
+  is --banner-x left of the text) on a 1920×1080 board; two sections sharing a
+  <div class="col"> stack one under the other. Spacing is the same everywhere
+  and set once in assets/menu.css.
   An item:   <div class="item">
                <div class="head"><h3 class="name">Name</h3><span class="price">$10</span></div>
                <p class="desc">Description.</p>
@@ -24,8 +26,10 @@
 -->
 <main class="stage">
 
+  <!-- KIDS PIZZAS and the section under it share a column -->
+  <div class="col" style="left:96px; top:30px">
   <!-- KIDS PIZZAS -->
-  <section class="menu" style="left:96px; top:29px; width:434px; --banner-x:-14px; --price-w:67px; --desc-size:20px; --item-gap:11px">
+  <section class="menu" style="width:434px; --banner-x:-14px; --price-w:67px">
     <h2 class="banner"><span>Kids Pizzas</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Margherita</h3><span class="price">O$10</span></div>
@@ -46,12 +50,12 @@
   </section>
 
   <!-- SIDES -->
-  <section class="menu" style="left:96px; top:479px; width:436px; --banner-x:-14px; --price-w:66px; --desc-w:520px; --gap:6px">
+  <section class="menu" style="width:436px; --banner-x:-14px; --price-w:66px; --desc-w:520px">
     <h2 class="banner"><span>Sides</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Garlic Bread</h3><span class="price">$5</span></div>
     </div>
-    <div class="item" style="margin-top:28px">
+    <div class="item">
       <div class="head"><h3 class="name">Wedges</h3><span class="price">O$15</span></div>
       <p class="desc">COMES WITH SWEET CHILLI AND SOUR CREAM.</p>
     </div>
@@ -59,9 +63,10 @@
       <div class="head"><h3 class="name">Chips</h3><span class="price">O$12</span></div>
     </div>
   </section>
+  </div>
 
   <!-- SPECIALS -->
-  <section class="menu" style="left:609px; top:30px; width:442px; --banner-x:-4px; --price-w:51px; --desc-size:23px; --desc-lh:32px">
+  <section class="menu" style="left:609px; top:30px; width:442px; --banner-x:-4px; --price-w:51px">
     <h2 class="banner"><span>Specials</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Family Deal</h3><span class="price">$45</span></div>
@@ -77,8 +82,10 @@
     </div>
   </section>
 
+  <!-- 15" SPECIALS and the section under it share a column -->
+  <div class="col" style="left:1140px; top:30px">
   <!-- 15" SPECIALS -->
-  <section class="menu" style="left:1137px; top:33px; width:413px; --banner-x:-9px; --price-w:50px; --desc-size:23px; --desc-lh:32px; --first-gap:7px; --item-gap:19px">
+  <section class="menu" style="width:413px; --banner-x:-9px; --price-w:50px">
     <h2 class="banner"><span>15" Specials</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">XL Family Deal</h3><span class="price">$65</span></div>
@@ -91,7 +98,7 @@
   </section>
 
   <!-- DESSERTS -->
-  <section class="menu" style="left:1146px; top:445px; width:444px; --banner-x:-10px; --price-w:66px; --first-gap:18px; --gap:8px; --item-gap:8px; --desc-w:470px">
+  <section class="menu" style="width:444px; --banner-x:-10px; --price-w:66px; --desc-w:470px">
     <h2 class="banner"><span>Desserts</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Nutella Pizza</h3><span class="price">O$15</span></div>
@@ -106,6 +113,7 @@
       <p class="desc">BISCOFF SPREAD, FRESH BANANA, CRUSHED<br>BISCOFF BISCUITS, ICING SUGAR.</p>
     </div>
   </section>
+  </div>
 
   <!-- Steam over the wedges, the parmi and the wings. Move or resize with
        left/top/width/height; delete a block to remove it. -->

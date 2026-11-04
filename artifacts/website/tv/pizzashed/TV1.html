@@ -12,7 +12,9 @@
 <!--
   Menu board 1 of 3. Edit the text below; sizes and colours are in assets/menu.css.
   Each <section class="menu"> is placed by its left/top (the banner's top-left
-  is --banner-x left of the text) on a 1920×1080 board.
+  is --banner-x left of the text) on a 1920×1080 board; two sections sharing a
+  <div class="col"> stack one under the other. Spacing is the same everywhere
+  and set once in assets/menu.css.
   An item:   <div class="item">
                <div class="head"><h3 class="name">Name</h3><span class="price">M$1 L$2 F$3</span></div>
                <p class="desc">DESCRIPTION.</p>
@@ -26,7 +28,7 @@
 <main class="stage">
 
   <!-- PIZZAS (left) -->
-  <section class="menu" style="left:78px; top:30px; width:443px; --banner-x:-8px; --price-w:233px; --first-gap:12px; --gap:13px; --item-gap:14px; --desc-w:470px">
+  <section class="menu" style="left:78px; top:30px; width:443px; --banner-x:-8px; --price-w:233px; --desc-w:470px">
     <h2 class="banner"><span>Pizzas</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Bruschetta</h3><span class="price">O$18</span></div>
@@ -58,8 +60,10 @@
     </div>
   </section>
 
+  <!-- PIZZAS (middle) and the section under it share a column -->
+  <div class="col" style="left:614px; top:30px">
   <!-- PIZZAS (middle) -->
-  <section class="menu" style="left:614px; top:30px; width:455px; --banner-x:-9px; --price-w:233px">
+  <section class="menu" style="width:455px; --banner-x:-9px; --price-w:233px">
     <h2 class="banner"><span>Pizzas</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Meat Lovers</h3><span class="price">M$24 L$30 F$35</span></div>
@@ -80,7 +84,7 @@
   </section>
 
   <!-- VEGGIE PIZZAS -->
-  <section class="menu" style="left:614px; top:669px; width:455px; --banner-x:0px; --price-w:233px">
+  <section class="menu" style="width:455px; --banner-x:0px; --price-w:233px">
     <h2 class="banner"><span>Veggie Pizzas</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Veggie</h3><span class="price">M$20 L$25 F$29</span></div>
@@ -91,6 +95,7 @@
       <p class="desc">ROASTED CAPSICUM, ZUCCHINI, RED<br>ONION, CHERRY TOMATO, OLIVES, FETA,<br>MOZZARELLA.</p>
     </div>
   </section>
+  </div>
 
   <!-- GOURMET PIZZAS -->
   <section class="menu" style="left:1138px; top:30px; width:494px; --banner-x:-14px; --price-w:231px">

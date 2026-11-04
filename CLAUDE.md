@@ -563,8 +563,8 @@ files starting with `_` are never published. The website's postbuild step
 its own) copies each to `dist/public/tv/<name>/index.html`, which `server.mjs`
 already serves per path. It **fails the build** when a name isn't
 letters, digits and hyphens, the `<title>` doesn't end with `Koastal TV Streamer`, there is no
-meta description, or the page is noindex. It injects a canonical, a viewport
-meta if missing, and the screen lock: html/body pinned to the viewport and
+meta description, or the page is noindex. It injects a canonical, the website's site icon
+(`/images/favicon.png`) and a viewport meta if missing, and the screen lock: html/body pinned to the viewport and
 never scrollable, full screen on the first key or click in a browser, and the
 pointer hidden when idle. The pages have their own `sitemap-tv.xml` (in
 robots.txt, submitted by IndexNow), not a place in `sitemap.xml`, because

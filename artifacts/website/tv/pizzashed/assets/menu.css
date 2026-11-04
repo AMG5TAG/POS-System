@@ -30,21 +30,26 @@ body { background: var(--black); }
   overflow: hidden;
   font-family: "Menu Body", system-ui, sans-serif;
 
-  /* Sizes and spacing. Set here for the whole board, or on one section's
-     style="" to change just that section. */
+  /* Sizes and spacing, the same on every board so items are evenly spaced.
+     Change them here, not per section. */
   --name-size: 30px;   /* item name and price */
   --name-lh: 35px;     /* line spacing of a two-line name */
   --desc-size: 21px;
   --desc-w: auto;      /* where descriptions wrap (auto: the section's width) */
   --desc-lh: 28px;
-  --first-gap: 10px;   /* banner → first item */
-  --gap: 10px;         /* name → description */
-  --item-gap: 13px;    /* one item → the next */
+  --first-gap: 12px;   /* banner → first item */
+  --gap: 8px;          /* name → description */
+  --item-gap: 14px;    /* one item → the next */
+  --section-gap: 28px; /* a section → the banner of the next one below */
 }
 
 /* ---- A section: a red banner and the items under it --------------------
    Position with style="left:…; top:…; width:…" — top is the banner's top. */
 .menu { position: absolute; z-index: 2; }   /* above any steam */
+/* A column of sections stacked one under the other. */
+.col { position: absolute; z-index: 2; }
+.col > .menu { position: relative; }
+.col > .menu + .menu { margin-top: var(--section-gap); }
 
 .banner {
   position: relative;
