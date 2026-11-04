@@ -6,7 +6,7 @@
 <title>Pizza Menu: Seafood Pizzas, Salads, Chicken, Wings &amp; Ribs, Pastas | Koastal TV Streamer</title>
 <meta name="description" content="Menu board: seafood pizzas, Greek, Garden and Caesar salads, chicken schnitzel and parmigiana with chips, chicken wings, pork and beef ribs, and pastas from Napoli to Carbonara.">
 <link rel="stylesheet" href="assets/menu.css">
-<style>.stage { background-image: url("assets/bg2.jpg"); --name-size: 28px; --price-align: left; }</style>
+<style>.stage { background-image: url("assets/bg2.jpg"); --name-size: 28px; }</style>
 </head>
 <body>
 <!--
@@ -23,15 +23,15 @@
   (descriptions), so put <br> where a line should break. Add class "top" or
   "bottom" to .head to sit the price beside the first or last line of a
   two-line name (default: centred).
-  Prices on this board start at the same place down each section: --price-w
-  on the section is the column's width (as wide as its widest price).
+  Prices are lined up by assets/menu.js: every price in a column starts at
+  the same place, with M$ / L$ / F$ under each other. Just type the price.
 -->
 <main class="stage">
 
   <!-- SEAFOOD PIZZAS and the section under it share a column -->
-  <div class="col" style="left:88px; top:30px">
+  <div class="col" style="width:485px; left:88px; top:30px">
   <!-- SEAFOOD PIZZAS -->
-  <section class="menu" style="width:433px; --banner-x:-12px; --price-w:216px">
+  <section class="menu" style="--banner-x:-12px">
     <h2 class="banner"><span>Seafood Pizzas</span></h2>
     <div class="item">
       <div class="head top"><h3 class="name">The Shed<br>Seafood</h3><span class="price">M$27 L$32 F$38</span></div>
@@ -44,7 +44,7 @@
   </section>
 
   <!-- SALADS -->
-  <section class="menu" style="width:485px; --banner-x:-14px; --price-w:70px">
+  <section class="menu" style="--banner-x:-14px">
     <h2 class="banner"><span>Salads</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Greek</h3><span class="price">$15</span></div>
@@ -59,15 +59,15 @@
       <p class="desc">COS LETTUCE, CROUTONS, BACON, BOILED<br>EGG, PARMESAN CHEESE, CAESAR DRESSING.</p>
     </div>
     <div class="item">
-      <div class="head top"><h3 class="name">Add Protein</h3><span class="price" style="width:auto; text-align:right">Chicken $5<br>Prawn $7</span></div>
+      <div class="head top"><h3 class="name">Add Protein</h3><span class="price">Chicken $5<br>Prawn $7</span></div>
     </div>
   </section>
   </div>
 
   <!-- CHICKEN and the section under it share a column -->
-  <div class="col" style="left:614px; top:30px">
+  <div class="col" style="width:458px; left:614px; top:30px">
   <!-- CHICKEN -->
-  <section class="menu" style="width:412px; --banner-x:-8px; --price-w:50px">
+  <section class="menu" style="--banner-x:-8px">
     <h2 class="banner"><span>Chicken</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Schnitzel + Chips</h3><span class="price">$25</span></div>
@@ -84,7 +84,7 @@
   </section>
 
   <!-- WINGS AND RIBS -->
-  <section class="menu" style="width:458px; --banner-x:-4px; --price-w:144px; --desc-w:480px">
+  <section class="menu" style="--banner-x:-4px; --desc-w:480px">
     <h2 class="banner"><span>Wings and Ribs</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Chicken<br>Wings</h3><span class="price">10P $17.90<br>20P $29.90</span></div>
@@ -98,7 +98,7 @@
   </div>
 
   <!-- PASTAS -->
-  <section class="menu" style="left:1138px; top:30px; width:437px; --banner-x:-11px; --price-w:70px; --desc-w:470px">
+  <section class="menu" style="left:1138px; top:30px; width:437px; --banner-x:-11px; --desc-w:470px">
     <h2 class="banner"><span>Pastas</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Napoli</h3><span class="price">O$16</span></div>
@@ -153,5 +153,6 @@
   function fit() { document.documentElement.style.setProperty("--fit", Math.min(innerWidth / 1920, innerHeight / 1080)); }
   addEventListener("resize", fit); fit();
 </script>
+<script src="assets/menu.js"></script>
 </body>
 </html>

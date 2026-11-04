@@ -79,7 +79,9 @@ body { background: var(--black); }
 .banner + .item { margin-top: var(--first-gap); }
 
 .head {
-  display: flex; justify-content: space-between; align-items: center; gap: 16px;
+  /* The name takes what is left of the line, so a long name can never push
+     its price out of the price column. */
+  display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; column-gap: 10px;
   font: 800 var(--name-size)/var(--name-lh) "Menu Title", sans-serif;
   letter-spacing: 0.01em;
   text-transform: uppercase;
@@ -91,13 +93,13 @@ body { background: var(--black); }
 .head.top .price { top: 0; }
 .head.bottom .price { bottom: 0; }
 .name { margin: 0; font: inherit; white-space: nowrap; }
-/* Prices sit at the right edge. With --price-w set (on a section, or the
-   whole board) they become a column that wide, and --price-align: left
-   starts every price in it at the same place. */
-.price {
-  white-space: nowrap; word-spacing: -0.05em;
-  flex: none; width: var(--price-w, auto); text-align: var(--price-align, right);
-}
+/* Prices: a column at the right of each section. assets/menu.js lines them
+   up: every price in a column starts at the same place, and the parts of a
+   price (M$ L$ F$) sit under each other from row to row. */
+.price { text-align: left; white-space: nowrap; }
+.price-line { display: block; }
+.price-part { display: inline-block; }
+.price-part + .price-part { margin-left: 0.3em; }
 
 .desc {
   margin: var(--gap) 0 0;

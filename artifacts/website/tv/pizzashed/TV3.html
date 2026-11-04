@@ -6,7 +6,7 @@
 <title>Pizza Menu: Kids Pizzas, Sides, Family Deals &amp; Desserts | Koastal TV Streamer</title>
 <meta name="description" content="Menu board: kids pizzas, sides (garlic bread, wedges, chips), family deals and feasts, 15-inch XL specials, and dessert pizzas including Nutella, Shedella Twist and Biscoff Banana.">
 <link rel="stylesheet" href="assets/menu.css">
-<style>.stage { background-image: url("assets/bg3.jpg"); --name-size: 28px; --price-align: left; }</style>
+<style>.stage { background-image: url("assets/bg3.jpg"); --name-size: 28px; }</style>
 </head>
 <body>
 <!--
@@ -21,15 +21,15 @@
              </div>
   Lines break only where there is a <br> (names) or at the section's width
   (descriptions), so put <br> where a line should break.
-  Prices start at the same place down each section: --price-w on the
-  section is the column's width (as wide as its widest price).
+  Prices are lined up by assets/menu.js: every price in a column starts at
+  the same place, with M$ / L$ / F$ under each other. Just type the price.
 -->
 <main class="stage">
 
   <!-- KIDS PIZZAS and the section under it share a column -->
-  <div class="col" style="left:96px; top:30px">
+  <div class="col" style="width:436px; left:96px; top:30px">
   <!-- KIDS PIZZAS -->
-  <section class="menu" style="width:434px; --banner-x:-14px; --price-w:67px">
+  <section class="menu" style="--banner-x:-14px">
     <h2 class="banner"><span>Kids Pizzas</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Margherita</h3><span class="price">O$10</span></div>
@@ -50,7 +50,7 @@
   </section>
 
   <!-- SIDES -->
-  <section class="menu" style="width:436px; --banner-x:-14px; --price-w:66px; --desc-w:520px">
+  <section class="menu" style="--banner-x:-14px; --desc-w:520px">
     <h2 class="banner"><span>Sides</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Garlic Bread</h3><span class="price">$5</span></div>
@@ -66,7 +66,7 @@
   </div>
 
   <!-- SPECIALS -->
-  <section class="menu" style="left:609px; top:30px; width:442px; --banner-x:-4px; --price-w:51px">
+  <section class="menu" style="left:609px; top:30px; width:442px; --banner-x:-4px">
     <h2 class="banner"><span>Specials</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Family Deal</h3><span class="price">$45</span></div>
@@ -83,9 +83,9 @@
   </section>
 
   <!-- 15" SPECIALS and the section under it share a column -->
-  <div class="col" style="left:1140px; top:30px">
+  <div class="col" style="width:444px; left:1140px; top:30px">
   <!-- 15" SPECIALS -->
-  <section class="menu" style="width:413px; --banner-x:-9px; --price-w:50px">
+  <section class="menu" style="--banner-x:-9px">
     <h2 class="banner"><span>15" Specials</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">XL Family Deal</h3><span class="price">$65</span></div>
@@ -98,7 +98,7 @@
   </section>
 
   <!-- DESSERTS -->
-  <section class="menu" style="width:444px; --banner-x:-10px; --price-w:66px; --desc-w:470px">
+  <section class="menu" style="--banner-x:-10px; --desc-w:470px">
     <h2 class="banner"><span>Desserts</span></h2>
     <div class="item">
       <div class="head"><h3 class="name">Nutella Pizza</h3><span class="price">O$15</span></div>
@@ -133,5 +133,6 @@
   function fit() { document.documentElement.style.setProperty("--fit", Math.min(innerWidth / 1920, innerHeight / 1080)); }
   addEventListener("resize", fit); fit();
 </script>
+<script src="assets/menu.js"></script>
 </body>
 </html>
