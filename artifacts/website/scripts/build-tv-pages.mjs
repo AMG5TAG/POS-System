@@ -22,7 +22,8 @@
 //   - it is not noindex.
 //
 // Injected into every page, so no page can forget them:
-//   - a viewport meta and a canonical, if the page has none;
+//   - a viewport meta, a canonical and the Koastal site icon (the website's
+//     /images/favicon.png), if the page has none;
 //   - the screen lock: html/body exactly one screen, never scrollable (D-pad
 //     focus and scrollIntoView included), no scrollbars, no overscroll;
 //   - full screen on the first key press or click in a browser (the Android
@@ -83,6 +84,13 @@ function build(name, html) {
   const extra = [];
   if (!/<meta[^>]+name=["']viewport["']/i.test(html)) extra.push(`<meta name="viewport" content="width=device-width, initial-scale=1">`);
   if (!/<link[^>]+rel=["']canonical["']/i.test(html)) extra.push(`<link rel="canonical" href="${esc(`${SITE}/tv/${name}`)}">`);
+  if (!/<link[^>]+rel=["'](?:shortcut )?icon["']/i.test(html)) {
+    extra.push(
+      `<link rel="icon" type="image/png" sizes="180x180" href="/images/favicon.png">`,
+      `<link rel="icon" type="image/png" sizes="512x512" href="/images/icon-512.png">`,
+      `<link rel="apple-touch-icon" sizes="180x180" href="/images/favicon.png">`,
+    );
+  }
   extra.push(LOCK);
   // Last in <head>, so the lock wins over the page's own styles.
   return html.replace(/<\/head>/i, `${extra.join("\n")}\n</head>`);

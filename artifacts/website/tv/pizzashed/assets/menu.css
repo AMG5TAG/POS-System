@@ -44,7 +44,7 @@ body { background: var(--black); }
 
 /* ---- A section: a red banner and the items under it --------------------
    Position with style="left:…; top:…; width:…" — top is the banner's top. */
-.menu { position: absolute; }
+.menu { position: absolute; z-index: 2; }   /* above any steam */
 
 .banner {
   position: relative;
@@ -64,15 +64,10 @@ body { background: var(--black); }
 }
 .banner span { position: relative; z-index: 1; }
 
-/* Engraved lettering: a fill of fine diagonal lines with a darker edge. */
-.banner span, .name, .price {
-  background: repeating-linear-gradient(-55deg, var(--fill) 0 1.6px, var(--etch) 1.6px 2.6px);
-  -webkit-background-clip: text; background-clip: text;
-  color: transparent;
-  -webkit-text-stroke: 1px var(--edge);
-}
-.banner span { --fill: #fff; --etch: #9a8a8a; --edge: #400000; }
-.name, .price { --fill: var(--yellow); --etch: #8f6f00; --edge: #6b5200; }
+/* Banner titles, item names and prices: solid Urbanist ExtraBold. (The
+   original's engraved texture was dropped: its hairlines blurred on TVs.) */
+.banner span { color: #fff; }
+.name, .price { color: var(--yellow); }
 
 /* ---- An item ------------------------------------------------------------ */
 .item { margin-top: var(--item-gap); }
@@ -80,7 +75,7 @@ body { background: var(--black); }
 
 .head {
   display: flex; justify-content: space-between; align-items: center; gap: 16px;
-  font: 700 var(--name-size)/var(--name-lh) "Menu Title", sans-serif;
+  font: 800 var(--name-size)/var(--name-lh) "Menu Title", sans-serif;
   letter-spacing: 0.01em;
   text-transform: uppercase;
 }
@@ -91,7 +86,13 @@ body { background: var(--black); }
 .head.top .price { top: 0; }
 .head.bottom .price { bottom: 0; }
 .name { margin: 0; font: inherit; white-space: nowrap; }
-.price { white-space: nowrap; text-align: right; word-spacing: -0.05em; }
+/* Prices sit at the right edge. With --price-w set (on a section, or the
+   whole board) they become a column that wide, and --price-align: left
+   starts every price in it at the same place. */
+.price {
+  white-space: nowrap; word-spacing: -0.05em;
+  flex: none; width: var(--price-w, auto); text-align: var(--price-align, right);
+}
 
 .desc {
   margin: var(--gap) 0 0;
@@ -109,3 +110,37 @@ body { background: var(--black); }
   background: url("chilli.svg") center / contain no-repeat;
   -webkit-text-stroke: 0;
 }
+
+/* ---- Steam ----------------------------------------------------------------
+   Wisps that rise from a dish, drift and fade, on a loop. Place one over the
+   food with its bottom edge on the food's top:
+     <div class="steam" style="left:…; top:…; width:…; height:…">
+       <i></i><i></i><i></i><i></i><i></i><i></i>
+     </div>
+   Only transform and opacity animate (soft gradients, no live blur), so it
+   stays smooth on TV hardware. */
+.steam { position: absolute; pointer-events: none; z-index: 1; }
+.steam i {
+  position: absolute; bottom: 0;
+  width: 34%; height: 55%;
+  border-radius: 50%;
+  background: radial-gradient(ellipse at 50% 60%, rgba(255,255,255,.34) 0%, rgba(255,255,255,.16) 38%, rgba(255,255,255,0) 70%);
+  opacity: 0;
+  transform-origin: 50% 100%;
+  animation: steam-rise 7s ease-out infinite;
+  will-change: transform, opacity;
+}
+.steam i:nth-child(1) { left: 6%;  animation-delay: 0s;   --sway: 18px; }
+.steam i:nth-child(2) { left: 30%; animation-delay: 1.2s; --sway: -22px; animation-duration: 8s; }
+.steam i:nth-child(3) { left: 54%; animation-delay: 2.5s; --sway: 14px; }
+.steam i:nth-child(4) { left: 18%; animation-delay: 3.6s; --sway: -16px; animation-duration: 7.5s; }
+.steam i:nth-child(5) { left: 44%; animation-delay: 4.8s; --sway: 24px; animation-duration: 8.5s; }
+.steam i:nth-child(6) { left: 64%; animation-delay: 5.9s; --sway: -12px; }
+@keyframes steam-rise {
+  0%   { opacity: 0;   transform: translate(0, 0) scale(.5, .55) rotate(0deg); }
+  18%  { opacity: .85; }
+  50%  { transform: translate(var(--sway), -45%) scale(.85, 1) rotate(6deg); }
+  75%  { opacity: .45; }
+  100% { opacity: 0;   transform: translate(calc(var(--sway) * -0.6), -95%) scale(1.25, 1.4) rotate(-5deg); }
+}
+@media (prefers-reduced-motion: reduce) { .steam { display: none; } }
