@@ -79,7 +79,7 @@ export function normaliseServerUrl(input: string): string {
 }
 
 /** IPv4/IPv6 ranges that must never be reachable from a merchant-supplied URL. */
-function isBlockedAddress(ip: string): boolean {
+export function isBlockedAddress(ip: string): boolean {
   const family = net.isIP(ip);
 
   if (family === 4) {

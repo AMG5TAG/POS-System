@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import { releasePageLockAfterPrint } from "@/lib/release-page-lock";
 import {
   Package, User, RotateCcw, Wrench, MapPin, DollarSign, LayoutGrid,
@@ -489,6 +489,67 @@ function fieldFontScale(f: (k: string) => string, fieldKey: string): number {
 
 /* ─── Label preview renderer ─────────────────────────────────────────────── */
 
+/**
+ * The data a repair sticker prints for a service job — ONE builder for every
+ * place that prints one (New Service Job, Service Jobs reprint), which used to
+ * send different data: the reprint left the technician blank and put the device
+ * type ahead of its description. "Due:" is the job's own due date
+ * (service_jobs.due_date, dd/mm/yyyy) — left off when the job has none.
+ */
+export function repairStickerFields(
+  job: {
+    id?: number | null; jobNumber?: string | null; customerName?: string | null;
+    deviceDescription?: string | null; deviceType?: string | null; workDescription?: string | null;
+    accounts?: string | null; passwordOrPin?: string | null; dueDate?: string | null;
+  },
+  extra: { customer?: string | null; tech?: string | null } = {},
+): Record<string, string> {
+  const oneLine = (v: string | null | undefined) =>
+    (v ?? "").split("\n").map((x) => x.trim()).filter(Boolean).join(" / ");
+  return {
+    jobNo: job.jobNumber ?? "",
+    customer: (extra.customer ?? job.customerName ?? "").trim(),
+    device: [job.deviceDescription, job.deviceType].map((x) => (x ?? "").trim()).find(Boolean) ?? "",
+    fault: oneLine(job.workDescription),
+    dueDate: /^\d{4}-\d{2}-\d{2}$/.test(job.dueDate ?? "") ? job.dueDate!.split("-").reverse().join("/") : "",
+    tech: (extra.tech ?? "").trim(),
+    username: oneLine(job.accounts),
+    password: oneLine(job.passwordOrPin),
+    serviceQrUrl: job.id != null ? serviceJobQrUrl(job.id) : "",
+  };
+}
+
+/**
+ * Sample values for designing a template with no real record to hand (the
+ * Labels page). The preview AND the test print both use them, so what is shown
+ * is what prints — they are never used for a real label.
+ */
+export const SAMPLE_LABEL_FIELDS: Record<string, Record<string, string>> = {
+  product:  { productName: "Product Name", category: "Category", sku: "SKU-001", price: "$5.50", barcode: "9300000000017", productQrUrl: SAMPLE_PRODUCT_QR },
+  customer: { customerName: "Sarah Johnson", group: "VIP Member", customerId: "CUS-0042", loyaltyNo: "120 pts", phone: "0412 345 678", customerQrValue: SAMPLE_CUSTOMER_QR },
+  return:   { returnNo: "RA-0089", item: "Defective Keyboard × 1", reason: "Not as described", status: "Awaiting inspection", date: "18/05/2026", customer: "Acme Wholesale" },
+  repair:   { jobNo: "KS0031", customer: "Mike Chen", device: "MacBook Pro 2023", fault: "Screen flickering", dueDate: "22/05/2026", tech: "Alex Taylor", username: "user@example.com", password: "1234", serviceQrUrl: SAMPLE_SERVICE_QR_URL },
+  address:  { name: "Sarah Johnson", company: "Demo Co Pty Ltd", street: "123 Main Street", suburb: "Mannering Park", state: "NSW", postcode: "2259" },
+  pricetag: { productName: "Reusable Cup", sku: "HW-042", wasPrice: "$18.99", price: "$12.99", barcode: "9300000000024" },
+  shelf:    { productName: "Flat White 250g", unitPrice: "$2.20/100g", sku: "GR-250", price: "$5.50", barcode: "9300000000031" },
+};
+
+/** Fields with the type's samples filled in wherever a value is empty. */
+export function withSampleFields(typeId: string, fields: Record<string, string>): Record<string, string> {
+  const out = { ...fields };
+  for (const [k, v] of Object.entries(SAMPLE_LABEL_FIELDS[typeId] ?? {})) {
+    if (!(out[k] ?? "").trim()) out[k] = v;
+  }
+  return out;
+}
+
+/**
+ * On-screen label preview. It renders the PRINT HTML itself (buildLabelHtml in
+ * screen mode — no page rotation, no @page) in a scaled frame, so the preview
+ * can never show a line the print leaves out, or vice versa. The hand-built
+ * preview this replaced had drifted: it filled every empty field with sample
+ * text, so lines showed on screen that never printed.
+ */
 export function LabelPreview({
   type, fields, size, businessName, brandColor, logoUrl, businessWebsite,
   fillWidth, fillHeight,
@@ -509,409 +570,49 @@ export function LabelPreview({
   barcodePosition?: "top" | "bottom";
   colorMode?: "bw" | "color";
 }) {
-  const isHoriz    = orientation === "horizontal";
-  const natPortrait = size.widthMm <= size.heightMm;
-  const rotated    = isHoriz ? natPortrait : !natPortrait;
-
+  const isHoriz = orientation === "horizontal";
   const dispWidthMm  = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
   const dispHeightMm = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
 
-  let finalScale: number;
+  // Screen pixels per label millimetre.
+  let scale: number;
   if (fillWidth !== undefined && fillHeight !== undefined && fillWidth > 0 && fillHeight > 0) {
     const PAD = 48;
-    const scaleW = (fillWidth  - PAD) / dispWidthMm;
-    const scaleH = (fillHeight - PAD) / dispHeightMm;
-    finalScale = Math.min(scaleW, scaleH);
+    scale = Math.min((fillWidth - PAD) / dispWidthMm, (fillHeight - PAD) / dispHeightMm);
   } else {
     const PREVIEW_W = fillWidth ?? 280;
-    const scale = PREVIEW_W / dispWidthMm;
-    const cappedH = Math.min(dispHeightMm * scale, 320);
-    finalScale = Math.min(scale, cappedH / dispHeightMm);
+    const s0 = PREVIEW_W / dispWidthMm;
+    scale = Math.min(s0, Math.min(dispHeightMm * s0, 320) / dispHeightMm);
   }
-  const finalW     = size.widthMm  * finalScale;
-  const finalH     = size.heightMm * finalScale;
-  const finalDispW = dispWidthMm   * finalScale;
-  const finalDispH = dispHeightMm  * finalScale;
 
-  const f = (k: string) => fields[k] ?? "";
-  // Show helpers — default "true" unless explicitly "false"
-  const show = (k: string) => f(k) !== "false";
+  const html = useMemo(() => buildLabelHtml({
+    typeId: type.id, size, fields, businessName, brandColor, logoUrl, website: businessWebsite,
+    orientation, quantity: 1, barcodePosition, colorMode, screen: true,
+  }), [type.id, size, fields, businessName, brandColor, logoUrl, businessWebsite, orientation, barcodePosition, colorMode]);
 
-  // Per-field font size: base multiplier × the user's chosen scale for that
-  // option, floored so small sizes stay legible on screen.
-  const pSize = (k: string, mult: number, min: number) =>
-    Math.max(min, finalScale * mult * fieldFontScale(f, k));
-
-  // Colour mode — black & white by default. In B&W every accent prints black so
-  // the label renders cleanly on a thermal/mono printer; "color" keeps the brand
-  // and status colours.
-  const accent = colorMode === "color" ? brandColor : "#000";
-  const danger = colorMode === "color" ? "#ef4444" : "#000";
-
-  // Scannable barcode strip (spans the full sticker width, sits at the bottom).
-  // Falls back to a sample value so the editor preview always shows one.
-  const barcodeValue = stickerBarcodeValue(type.id, f) || "1234567890";
-  const barcodeUrl   = show("showBarcode") ? barcodeDataUrl(barcodeValue) : "";
-
-  // Service QR — repair stickers can carry the job's QR resolver, which opens
-  // the job when scanned. Falls back to a sample URL so the editor preview
-  // always shows a representative code.
-  const serviceQrSrc = type.id === "repair" && show("showServiceQr")
-    ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
-    : "";
-
-  // Customer QR — customer stickers can carry a code (the customer's `CUS-…` ID
-  // by default) that staff scan to pull the customer up at the POS. Falls back to
-  // a sample so the editor preview always shows a representative code.
-  const customerQrSrc = type.id === "customer" && show("showCustomerQr")
-    ? qrDataUrl(customerQrValue(f) || SAMPLE_CUSTOMER_QR)
-    : "";
-
-  // Product QR — product stickers can carry a QR that opens the public product
-  // page when scanned. Falls back to a sample URL so the editor preview always
-  // shows a representative code.
-  const productQrSrc = type.id === "product" && show("showProductQr")
-    ? qrDataUrl(productQrValue(f) || SAMPLE_PRODUCT_QR)
-    : "";
-
-  const labelW = rotated ? finalH : finalW;
-  const labelH = rotated ? finalW : finalH;
-
-  const baseStyle: React.CSSProperties = {
-    width: labelW,
-    height: labelH,
-    fontSize: Math.max(7, finalScale * 2.8),
-    lineHeight: 1.3,
-    flexShrink: 0,
-  };
-
-  const barcodeImg = barcodeUrl ? (
-    <img
-      src={barcodeUrl}
-      alt="barcode"
-      style={{
-        display: "block",
-        width: "100%",
-        height: Math.max(9, finalScale * 4),
-        imageRendering: "pixelated",
-      }}
-    />
-  ) : null;
-
-  const serviceQrImg = serviceQrSrc ? (
-    <img
-      src={serviceQrSrc}
-      alt="service qr"
-      style={{
-        width: Math.max(22, finalScale * 11),
-        height: Math.max(22, finalScale * 11),
-        objectFit: "contain",
-        flexShrink: 0,
-        alignSelf: "center",
-        imageRendering: "pixelated",
-      }}
-    />
-  ) : null;
-
-  const customerQrImg = customerQrSrc ? (
-    <img
-      src={customerQrSrc}
-      alt="customer qr"
-      style={{
-        width: Math.max(22, finalScale * 11),
-        height: Math.max(22, finalScale * 11),
-        objectFit: "contain",
-        flexShrink: 0,
-        alignSelf: "center",
-        imageRendering: "pixelated",
-      }}
-    />
-  ) : null;
-
-  const productQrImg = productQrSrc ? (
-    <img
-      src={productQrSrc}
-      alt="product qr"
-      style={{
-        width: Math.max(22, finalScale * 11),
-        height: Math.max(22, finalScale * 11),
-        objectFit: "contain",
-        flexShrink: 0,
-        alignSelf: "center",
-        imageRendering: "pixelated",
-      }}
-    />
-  ) : null;
-
-  // Business logo header — rendered above the type-specific content when enabled
-  // and a logo is configured in the business profile.
-  const logoEl = show("showLogo") && logoUrl ? (
-    <div className="mb-[3%] flex">
-      <img
-        src={logoUrl}
-        alt="logo"
+  const PX_PER_MM = 96 / 25.4;
+  return (
+    <div
+      className="bg-white shadow-sm ring-1 ring-black/10 rounded-[3px] overflow-hidden"
+      style={{ width: dispWidthMm * scale, height: dispHeightMm * scale }}
+    >
+      <iframe
+        title={`${type.label} label preview`}
+        srcDoc={html}
+        sandbox="allow-scripts"
+        tabIndex={-1}
         style={{
-          height: Math.max(12, finalScale * 6),
-          maxWidth: "60%",
-          objectFit: "contain",
-          objectPosition: "left center",
+          width: dispWidthMm * PX_PER_MM,
+          height: dispHeightMm * PX_PER_MM,
+          border: 0,
+          pointerEvents: "none",
+          transform: `scale(${scale / PX_PER_MM})`,
+          transformOrigin: "0 0",
+          display: "block",
         }}
       />
     </div>
-  ) : null;
-
-  // Free-text footer line — prints whatever the user typed (promo line, care
-  // note, etc). Hidden when blank.
-  const customText = f("customText").trim();
-  const customTextEl = customText ? (
-    <div
-      className="text-gray-500 mt-[3%] break-words"
-      style={{ fontSize: Math.max(6, finalScale * 2.4), lineHeight: 1.2 }}
-    >
-      {customText}
-    </div>
-  ) : null;
-
-  // Business website — a common footer line available on every sticker type.
-  const website = (businessWebsite ?? "").trim();
-  const websiteEl = show("showWebsite") && website ? (
-    <div
-      className="text-gray-400 truncate"
-      style={{ fontSize: pSize("showWebsite", 2.2, 6), lineHeight: 1.2 }}
-    >
-      {website}
-    </div>
-  ) : null;
-
-  const labelEl = (
-    <div
-      className="bg-white border-2 border-gray-300 rounded shadow-lg overflow-hidden relative font-sans"
-      style={baseStyle}
-    >
-      <div className="absolute inset-0 flex flex-col">
-      {barcodeImg && barcodePosition === "top" && (
-        <div className="px-[6%] pt-[6%]">{barcodeImg}</div>
-      )}
-      <div className="flex-1 min-h-0 overflow-hidden px-[9%] py-[4%] flex flex-col">
-        {logoEl}
-        <div className="flex-1 min-h-0 flex flex-col justify-between">
-
-        {type.id === "product" && (
-          <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              <div>
-                {show("showProductName") && (
-                  <div className="font-bold truncate" style={{ fontSize: pSize("showProductName", 3.2, 8) }}>
-                    {f("productName") || "Product Name"}
-                  </div>
-                )}
-                {show("showCategory") && (
-                  <div className="text-gray-400 truncate" style={{ fontSize: pSize("showCategory", 2.8, 6) }}>{f("category") || "Beverages"}</div>
-                )}
-                {show("showSku") && (
-                  <div className="text-gray-400" style={{ fontSize: pSize("showSku", 2.8, 6) }}>{f("sku") || "BEV-001"}</div>
-                )}
-              </div>
-              <div>
-                {show("showPrice") && (
-                  <div className="font-bold" style={{ fontSize: pSize("showPrice", 3.8, 9), color: accent }}>
-                    {f("price") || "$5.50"}
-                  </div>
-                )}
-                {show("showBizName") && (
-                  <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
-                )}
-              </div>
-            </div>
-            {productQrImg}
-          </div>
-        )}
-
-        {type.id === "customer" && (
-          <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              {show("showCustomerName") && (
-                <div className="font-bold truncate" style={{ fontSize: pSize("showCustomerName", 3.2, 8) }}>
-                  {f("customerName") || "Sarah Johnson"}
-                </div>
-              )}
-              {show("showGroup") && (
-                <div className="px-1 rounded text-white truncate" style={{ background: accent, fontSize: pSize("showGroup", 2.2, 6) }}>
-                  {f("group") || "VIP Member"}
-                </div>
-              )}
-              {show("showCustomerId") && (
-                <div className="text-gray-500" style={{ fontSize: pSize("showCustomerId", 2.8, 6) }}>{f("customerId") || "#CUS-0042"}</div>
-              )}
-              {show("showLoyaltyNo") && (
-                <div className="text-gray-500" style={{ fontSize: pSize("showLoyaltyNo", 2.8, 6) }}>{f("loyaltyNo") || "LYL-20491"}</div>
-              )}
-              {show("showPhone") && (
-                <div className="text-gray-500" style={{ fontSize: pSize("showPhone", 2.8, 6) }}>{f("phone") || "(03) 9000 0000"}</div>
-              )}
-              {show("showBizName") && (
-                <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
-              )}
-            </div>
-            {customerQrImg}
-          </div>
-        )}
-
-        {type.id === "return" && (
-          <>
-            {show("showReturnNo") && (
-              <div className="font-bold" style={{ color: danger, fontSize: pSize("showReturnNo", 2.8, 7) }}>
-                RMA {f("returnNo") || "RMA-0089"}
-              </div>
-            )}
-            {show("showItem") && (
-              <div className="font-medium truncate" style={{ fontSize: pSize("showItem", 2.8, 6) }}>{f("item") || "Defective Keyboard"}</div>
-            )}
-            {show("showReason") && (
-              <div className="text-gray-500 truncate" style={{ fontSize: pSize("showReason", 2.8, 6) }}>{f("reason") || "Not as described"}</div>
-            )}
-            {show("showStatus") && (
-              <div className="px-1 rounded text-white truncate" style={{ background: danger, fontSize: pSize("showStatus", 2.2, 6) }}>
-                {f("status") || "Awaiting Inspection"}
-              </div>
-            )}
-            {show("showDate") && (
-              <div className="text-gray-400" style={{ fontSize: pSize("showDate", 2.8, 6) }}>{f("date") || "18/05/2026"}</div>
-            )}
-            {show("showCustomer") && (
-              <div className="text-gray-500 truncate" style={{ fontSize: pSize("showCustomer", 2.8, 6) }}>{f("customer") || "Acme Wholesale"}</div>
-            )}
-            {show("showBizName") && (
-              <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
-            )}
-          </>
-        )}
-
-        {type.id === "repair" && (
-          <div className="flex-1 min-h-0 flex" style={{ gap: "5%" }}>
-            <div className="flex-1 min-w-0 flex flex-col justify-between">
-              {show("showJobNo") && (
-                show("splitJobNo") ? (
-                  <div className="font-bold" style={{ fontSize: pSize("showJobNo", 2.8, 7), lineHeight: 1.05 }}>
-                    <div>SERVICE</div>
-                    <div className="truncate">{f("jobNo") || "SVC-0031"}</div>
-                  </div>
-                ) : (
-                  <div className="font-bold truncate" style={{ fontSize: pSize("showJobNo", 2.8, 7) }}>
-                    SERVICE {f("jobNo") || "SVC-0031"}
-                  </div>
-                )
-              )}
-              {show("showCustomer") && (
-                <div className="font-medium truncate" style={{ fontSize: pSize("showCustomer", 2.8, 6) }}>{f("customer") || "Mike Chen"}</div>
-              )}
-              {show("showDevice") && (
-                <div className="text-gray-500 truncate" style={{ fontSize: pSize("showDevice", 2.8, 6) }}>{f("device") || "MacBook Pro 2023"}</div>
-              )}
-              {show("showFault") && (
-                <div className="text-gray-400 truncate" style={{ fontSize: pSize("showFault", 2.8, 6) }}>Fault: {f("fault") || "Screen flickering"}</div>
-              )}
-              {show("showDueDate") && (
-                <div className="font-medium truncate" style={{ fontSize: pSize("showDueDate", 2.8, 6) }}>Due: {f("dueDate") || "22/05/2026"}</div>
-              )}
-              {show("showTech") && (
-                <div className="text-gray-400 truncate" style={{ fontSize: pSize("showTech", 2.8, 6) }}>Tech: {f("tech") || "Alex Taylor"}</div>
-              )}
-              {show("showUsername") && (
-                <div className="text-gray-500 truncate" style={{ fontSize: pSize("showUsername", 2.8, 6) }}>User: {f("username") || "user@demo"}</div>
-              )}
-              {show("showPassword") && (
-                <div className="text-gray-500 truncate" style={{ fontSize: pSize("showPassword", 2.8, 6) }}>Pass: {f("password") || "1234"}</div>
-              )}
-              {show("showBizName") && (
-                <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
-              )}
-            </div>
-            {serviceQrImg}
-          </div>
-        )}
-
-        {type.id === "address" && (
-          <>
-            {show("showName") && (
-              <div className="font-bold truncate" style={{ fontSize: pSize("showName", 2.8, 6) }}>{f("name") || "Sarah Johnson"}</div>
-            )}
-            {show("showCompany") && (
-              <div className="truncate" style={{ fontSize: pSize("showCompany", 2.8, 6) }}>{f("company") || "Demo Co Pty Ltd"}</div>
-            )}
-            {show("showStreet") && (
-              <div className="truncate" style={{ fontSize: pSize("showStreet", 2.8, 6) }}>{f("street") || "123 Main Street"}</div>
-            )}
-            {show("showSuburb") && (
-              <div className="truncate" style={{ fontSize: pSize("showSuburb", 2.8, 6) }}>
-                {[f("suburb") || "Melbourne", f("state") || "VIC", f("postcode") || "3000"].filter(Boolean).join(" ")}
-              </div>
-            )}
-            {show("showBizName") && (
-              <div className="text-gray-400 text-right truncate" style={{ fontSize: pSize("showBizName", 2.8, 6) }}>{businessName}</div>
-            )}
-          </>
-        )}
-
-        {type.id === "pricetag" && (
-          <>
-            {show("showProductName") && (
-              <div className="font-bold truncate" style={{ fontSize: pSize("showProductName", 2.8, 6) }}>{f("productName") || "Reusable Cup"}</div>
-            )}
-            {show("showSku") && (
-              <div className="text-gray-400" style={{ fontSize: pSize("showSku", 2.8, 6) }}>#{f("sku") || "HW-042"}</div>
-            )}
-            <div>
-              {show("showWasPrice") && (
-                <div className="line-through text-gray-400" style={{ fontSize: pSize("showWasPrice", 2.8, 6) }}>{f("wasPrice") || "$18.99"}</div>
-              )}
-              {show("showPrice") && (
-                <div className="font-bold" style={{ fontSize: pSize("showPrice", 4.5, 9), color: accent }}>
-                  {f("price") || "$12.99"}
-                </div>
-              )}
-            </div>
-          </>
-        )}
-
-        {type.id === "shelf" && (
-          <>
-            {show("showProductName") && (
-              <div className="font-bold truncate" style={{ fontSize: pSize("showProductName", 2.8, 6) }}>{f("productName") || "Flat White 250g"}</div>
-            )}
-            {show("showUnitPrice") && (
-              <div className="text-gray-400 truncate" style={{ fontSize: pSize("showUnitPrice", 2.8, 6) }}>{f("unitPrice") || "$2.20/100g"}</div>
-            )}
-            {show("showSku") && (
-              <div className="text-gray-400" style={{ fontSize: pSize("showSku", 2.8, 6) }}>{f("sku") || "GR-250"}</div>
-            )}
-            {show("showPrice") && (
-              <div className="font-bold" style={{ fontSize: pSize("showPrice", 4.5, 9), color: accent }}>
-                {f("price") || "$5.50"}
-              </div>
-            )}
-          </>
-        )}
-
-        </div>
-        {websiteEl}
-        {customTextEl}
-      </div>
-      {barcodeImg && barcodePosition === "bottom" && (
-        <div className="px-[6%] pb-[6%]">{barcodeImg}</div>
-      )}
-      </div>
-    </div>
   );
-
-  if (rotated) {
-    return (
-      <div style={{ width: finalDispW, height: finalDispH, display: "flex", alignItems: "center", justifyContent: "center" }}>
-        {labelEl}
-      </div>
-    );
-  }
-  return labelEl;
 }
 
 /* ─── Template persistence hook ──────────────────────────────────────────── */
@@ -1015,6 +716,8 @@ export interface BuildLabelHtmlArgs {
   quantity: number;
   barcodePosition?: "top" | "bottom";
   colorMode?: "bw" | "color";
+  /** On-screen preview (LabelPreview): the label as it reads, no print page setup. */
+  screen?: boolean;
 }
 
 /** Escape user-entered text before interpolating it into the print HTML string. */
@@ -1028,7 +731,7 @@ function escapeHtml(s: string): string {
 }
 
 export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
-  const { typeId, size, fields, businessName, brandColor, logoUrl, website, orientation, quantity, barcodePosition = "bottom", colorMode = "bw" } = args;
+  const { typeId, size, fields, businessName, brandColor, logoUrl, website, orientation, quantity, barcodePosition = "bottom", colorMode = "bw", screen = false } = args;
   // B&W (default) prints every accent in black; "color" keeps brand/status hues.
   const accent = colorMode === "color" ? brandColor : "#000";
   const danger = colorMode === "color" ? "#ef4444" : "#000";
@@ -1037,13 +740,15 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const pageH = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
   // A landscape design is rotated onto the driver's portrait page (see the
   // page setup at the end). Square labels need no turn.
-  const rotateToMedia = pageW > pageH;
+  const rotateToMedia = pageW > pageH && !screen;
 
   // Real values only. These layouts used to fall back to sample text ("Beverages",
   // "Sarah Johnson", a password of "1234"…) whenever a field was empty, and that
   // sample text printed on real labels. An empty field now prints nothing.
   const f    = (k: string) => fields[k] ?? "";
   const show = (k: string) => f(k) !== "false";
+  /** A line prints only when it has something to say — no bare "#", "Due:" or "Tech:". */
+  const has  = (k: string) => f(k).trim() !== "";
   const biz  = businessName;
 
   const shorter = Math.min(pageW, pageH);
@@ -1055,26 +760,27 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 
   // Scannable CODE128 barcode, generated from whatever value the type encodes
   // (plain text included). Rendered full-width at the bottom of the label.
-  const barcodeUrl = show("showBarcode") ? barcodeDataUrl(stickerBarcodeValue(typeId, f)) : "";
+  const barcodeValue = stickerBarcodeValue(typeId, f);
+  const barcodeUrl = show("showBarcode") && barcodeValue.trim() ? barcodeDataUrl(barcodeValue) : "";
 
   // Service QR — repair stickers can carry the job's QR resolver. Uses the real
   // job URL when supplied (the actual print paths pass one); falls back to a
   // sample so a test print from the Stickers editor still shows the code, matching
   // the on-screen preview.
-  const serviceQrSrc = typeId === "repair" && show("showServiceQr")
-    ? qrDataUrl(f("serviceQrUrl") || SAMPLE_SERVICE_QR_URL)
+  const serviceQrSrc = typeId === "repair" && show("showServiceQr") && has("serviceQrUrl")
+    ? qrDataUrl(f("serviceQrUrl"))
     : "";
   // Customer QR — customer stickers can carry the customer's `CUS-…` code (or an
   // explicit value the print path supplies) so staff scan the sticker to pull the
   // customer up at the POS. Falls back to a sample so a test print still shows it.
-  const customerQrSrc = typeId === "customer" && show("showCustomerQr")
-    ? qrDataUrl(customerQrValue(f) || SAMPLE_CUSTOMER_QR)
+  const customerQrSrc = typeId === "customer" && show("showCustomerQr") && !!customerQrValue(f)
+    ? qrDataUrl(customerQrValue(f))
     : "";
   // Product QR — product stickers can carry a QR that opens the public product
   // page when scanned (the print path supplies the real URL). Falls back to a
   // sample so a test print still shows it, matching the on-screen preview.
-  const productQrSrc = typeId === "product" && show("showProductQr")
-    ? qrDataUrl(productQrValue(f) || SAMPLE_PRODUCT_QR)
+  const productQrSrc = typeId === "product" && show("showProductQr") && has("productQrUrl")
+    ? qrDataUrl(productQrValue(f))
     : "";
   const qrMm = Math.max(8, Math.min(shorter * 0.7, pageH * 0.78));
 
@@ -1083,12 +789,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       case "product": {
         const productText = `
         <div>
-          ${show("showProductName") ? `<div style="font-weight:700;font-size:${hSize("showProductName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")}</div>` : ""}
-          ${show("showCategory") ? `<div style="font-size:${hSize("showCategory",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("category")}</div>` : ""}
-          ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")}</div>` : ""}
+          ${show("showProductName")&&has("productName") ? `<div style="font-weight:700;font-size:${hSize("showProductName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")}</div>` : ""}
+          ${show("showCategory")&&has("category") ? `<div style="font-size:${hSize("showCategory",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("category")}</div>` : ""}
+          ${show("showSku")&&has("sku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")}</div>` : ""}
         </div>
         <div>
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.35)}pt;color:${accent}">${f("price")}</div>` : ""}
+          ${show("showPrice")&&has("price") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.35)}pt;color:${accent}">${f("price")}</div>` : ""}
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
         if (!productQrSrc) return productText;
@@ -1100,11 +806,11 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 
       case "customer": {
         const customerText = `
-        ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${hSize("showCustomerName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")}</div>` : ""}
-        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${hSize("showGroup",0.85)}pt">${f("group")}</div>` : ""}
-        ${show("showCustomerId") ? `<div style="font-size:${hSize("showCustomerId",1)}pt;color:#888">${f("customerId")}</div>` : ""}
-        ${show("showLoyaltyNo") ? `<div style="font-size:${hSize("showLoyaltyNo",1)}pt;color:#888">${f("loyaltyNo")}</div>` : ""}
-        ${show("showPhone") ? `<div style="font-size:${hSize("showPhone",1)}pt;color:#888">${f("phone")}</div>` : ""}
+        ${show("showCustomerName")&&has("customerName") ? `<div style="font-weight:700;font-size:${hSize("showCustomerName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")}</div>` : ""}
+        ${show("showGroup")&&has("group") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${hSize("showGroup",0.85)}pt">${f("group")}</div>` : ""}
+        ${show("showCustomerId")&&has("customerId") ? `<div style="font-size:${hSize("showCustomerId",1)}pt;color:#888">${f("customerId")}</div>` : ""}
+        ${show("showLoyaltyNo")&&has("loyaltyNo") ? `<div style="font-size:${hSize("showLoyaltyNo",1)}pt;color:#888">${f("loyaltyNo")}</div>` : ""}
+        ${show("showPhone")&&has("phone") ? `<div style="font-size:${hSize("showPhone",1)}pt;color:#888">${f("phone")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!customerQrSrc) return customerText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
@@ -1114,12 +820,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       }
 
       case "return": return `
-        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${hSize("showReturnNo",1.1)}pt">RETURN ${f("returnNo")}</div>` : ""}
-        ${show("showItem") ? `<div style="font-size:${hSize("showItem",1)}pt;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")}</div>` : ""}
-        ${show("showReason") ? `<div style="font-size:${hSize("showReason",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("reason")}</div>` : ""}
-        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${hSize("showStatus",0.85)}pt;white-space:nowrap;overflow:hidden">${f("status")}</div>` : ""}
-        ${show("showDate") ? `<div style="font-size:${hSize("showDate",1)}pt;color:#888">${f("date")}</div>` : ""}
-        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("customer")}</div>` : ""}
+        ${show("showReturnNo")&&has("returnNo") ? `<div style="font-weight:700;color:${danger};font-size:${hSize("showReturnNo",1.1)}pt">RETURN ${f("returnNo")}</div>` : ""}
+        ${show("showItem")&&has("item") ? `<div style="font-size:${hSize("showItem",1)}pt;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")}</div>` : ""}
+        ${show("showReason")&&has("reason") ? `<div style="font-size:${hSize("showReason",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("reason")}</div>` : ""}
+        ${show("showStatus")&&has("status") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${hSize("showStatus",0.85)}pt;white-space:nowrap;overflow:hidden">${f("status")}</div>` : ""}
+        ${show("showDate")&&has("date") ? `<div style="font-size:${hSize("showDate",1)}pt;color:#888">${f("date")}</div>` : ""}
+        ${show("showCustomer")&&has("customer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("customer")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "repair": {
@@ -1127,13 +833,13 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
         ${show("showJobNo") ? (show("splitJobNo")
           ? `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;line-height:1.05"><div>SERVICE</div><div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("jobNo")}</div></div>`
           : `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")}</div>`) : ""}
-        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")}</div>` : ""}
-        ${show("showDevice") ? `<div style="font-size:${hSize("showDevice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("device")}</div>` : ""}
-        ${show("showFault") ? `<div style="font-size:${hSize("showFault",1)}pt;color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")}</div>` : ""}
-        ${show("showDueDate") ? `<div style="font-size:${hSize("showDueDate",1)}pt;font-weight:600">Due: ${f("dueDate")}</div>` : ""}
-        ${show("showTech") ? `<div style="font-size:${hSize("showTech",1)}pt;color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")}</div>` : ""}
-        ${show("showUsername") ? `<div style="font-size:${hSize("showUsername",1)}pt;color:#666;white-space:nowrap;overflow:hidden">User: ${f("username")}</div>` : ""}
-        ${show("showPassword") ? `<div style="font-size:${hSize("showPassword",1)}pt;color:#666;white-space:nowrap;overflow:hidden">Pass: ${f("password")}</div>` : ""}
+        ${show("showCustomer")&&has("customer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")}</div>` : ""}
+        ${show("showDevice")&&has("device") ? `<div style="font-size:${hSize("showDevice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("device")}</div>` : ""}
+        ${show("showFault")&&has("fault") ? `<div style="font-size:${hSize("showFault",1)}pt;color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")}</div>` : ""}
+        ${show("showDueDate")&&has("dueDate") ? `<div style="font-size:${hSize("showDueDate",1)}pt;font-weight:600">Due: ${f("dueDate")}</div>` : ""}
+        ${show("showTech")&&has("tech") ? `<div style="font-size:${hSize("showTech",1)}pt;color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")}</div>` : ""}
+        ${show("showUsername")&&has("username") ? `<div style="font-size:${hSize("showUsername",1)}pt;color:#666;white-space:nowrap;overflow:hidden">User: ${f("username")}</div>` : ""}
+        ${show("showPassword")&&has("password") ? `<div style="font-size:${hSize("showPassword",1)}pt;color:#666;white-space:nowrap;overflow:hidden">Pass: ${f("password")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!serviceQrSrc) return repairText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
@@ -1143,25 +849,25 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       }
 
       case "address": return `
-        ${show("showName") ? `<div style="font-size:${hSize("showName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")}</div>` : ""}
-        ${show("showCompany") ? `<div style="font-size:${hSize("showCompany",1)}pt;white-space:nowrap;overflow:hidden">${f("company")}</div>` : ""}
-        ${show("showStreet") ? `<div style="font-size:${hSize("showStreet",1)}pt;white-space:nowrap;overflow:hidden">${f("street")}</div>` : ""}
-        ${show("showSuburb") ? `<div style="font-size:${hSize("showSuburb",1)}pt;white-space:nowrap;overflow:hidden">${[f("suburb"),f("state"),f("postcode")].filter(Boolean).join(" ")}</div>` : ""}
+        ${show("showName")&&has("name") ? `<div style="font-size:${hSize("showName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")}</div>` : ""}
+        ${show("showCompany")&&has("company") ? `<div style="font-size:${hSize("showCompany",1)}pt;white-space:nowrap;overflow:hidden">${f("company")}</div>` : ""}
+        ${show("showStreet")&&has("street") ? `<div style="font-size:${hSize("showStreet",1)}pt;white-space:nowrap;overflow:hidden">${f("street")}</div>` : ""}
+        ${show("showSuburb")&&(has("suburb")||has("state")||has("postcode")) ? `<div style="font-size:${hSize("showSuburb",1)}pt;white-space:nowrap;overflow:hidden">${[f("suburb"),f("state"),f("postcode")].filter(Boolean).join(" ")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "pricetag": return `
-        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")}</div>` : ""}
-        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">#${f("sku")}</div>` : ""}
+        ${show("showProductName")&&has("productName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")}</div>` : ""}
+        ${show("showSku")&&has("sku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">#${f("sku")}</div>` : ""}
         <div>
-          ${show("showWasPrice") ? `<div style="font-size:${hSize("showWasPrice",1)}pt;text-decoration:line-through;color:#aaa">${f("wasPrice")}</div>` : ""}
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")}</div>` : ""}
+          ${show("showWasPrice")&&has("wasPrice") ? `<div style="font-size:${hSize("showWasPrice",1)}pt;text-decoration:line-through;color:#aaa">${f("wasPrice")}</div>` : ""}
+          ${show("showPrice")&&has("price") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")}</div>` : ""}
         </div>`;
 
       case "shelf": return `
-        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")}</div>` : ""}
-        ${show("showUnitPrice") ? `<div style="font-size:${hSize("showUnitPrice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")}</div>` : ""}
-        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")}</div>` : ""}
-        ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")}</div>` : ""}`;
+        ${show("showProductName")&&has("productName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")}</div>` : ""}
+        ${show("showUnitPrice")&&has("unitPrice") ? `<div style="font-size:${hSize("showUnitPrice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")}</div>` : ""}
+        ${show("showSku")&&has("sku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")}</div>` : ""}
+        ${show("showPrice")&&has("price") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")}</div>` : ""}`;
 
       default: return "";
     }
@@ -1243,10 +949,10 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
     box-sizing:border-box;margin:0;padding:0;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
-  @page{size:${mediaW}mm ${mediaH}mm;margin:0}
+  ${screen ? "" : `@page{size:${mediaW}mm ${mediaH}mm;margin:0}`}
   html,body{
     margin:0;padding:0;
-    width:${mediaW}mm;
+    width:${screen ? pageW : mediaW}mm;overflow:hidden;
     background:#fff;
     writing-mode:horizontal-tb;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;

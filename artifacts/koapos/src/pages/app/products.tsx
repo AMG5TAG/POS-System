@@ -58,6 +58,7 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductMediaEditor, type ProductMediaItem } from "@/components/products/ProductMediaEditor";
 import { ProductPhotosEditor } from "@/components/products/ProductPhotosEditor";
+import { ImportProductDetailsDialog, type ImportApply } from "@/components/products/ImportProductDetailsDialog";
 import { formatCurrency } from "@/lib/utils";
 import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
@@ -68,7 +69,7 @@ import {
   Search, Plus, Pencil, Trash2, Package, Check,
   ChevronUp, ChevronDown, ChevronsUpDown, ChevronRight, ChevronLeft,
   Tag, Barcode, Boxes, Settings2, DollarSign, ImageIcon, MapPin,
-  Shuffle, Video, Weight, ScanSearch, Eye, EyeOff, Filter,
+  Shuffle, Video, Weight, ScanSearch, Link2, Eye, EyeOff, Filter,
   Layers, Briefcase, Download, KeyRound, Printer, LayoutTemplate, Star, Lock,
   Archive, X as XIcon, Upload, Hash, QrCode, Copy, ExternalLink, Truck, Send,
   AlertTriangle, LayoutGrid, List,
@@ -567,9 +568,14 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
     productQrUrl: qrLookup(`product-${product.id}`, publicProductUrl((merchant as { username?: string | null } | undefined)?.username, product.id)),
   };
 
-  const resolvedFields = defaultTpl
-    ? { ...resolveQuickCodes(defaultTpl.fields, { merchant: { name: businessName } }), ...productFields }
-    : {};
+  // What the print uses: the type's default toggles, the saved template (if
+  // any) and this product's data. With no saved template this used to be {} —
+  // a blank preview of a label that then printed fine.
+  const resolvedFields = {
+    ...Object.fromEntries(type.fields.map((fld) => [fld.key, fld.defaultValue])),
+    ...(defaultTpl ? resolveQuickCodes(defaultTpl.fields, { merchant: { name: businessName } }) : {}),
+    ...productFields,
+  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -1293,6 +1299,7 @@ export default function ProductsPage() {
   const [dialogOpen, setDialogOpen]     = useState(false);
   const [pendingProductClose, setPendingProductClose] = useState(false);
   const [formTouched, setFormTouched] = useState(false);
+  const [importDetailsOpen, setImportDetailsOpen] = useState(false);
   const [editingProduct, setEditingProduct]   = useState<Product | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
@@ -1368,6 +1375,60 @@ export default function ProductsPage() {
         onCreated((cat as { id: number }).id);
       },
       onError: () => toast.error("Failed to create category"),
+    });
+  };
+
+  /* ── Import Details (read a product page into the form) ── */
+  const applyImportedDetails = async (p: ImportApply) => {
+    let brandId: string | undefined;
+    if (p.brand) {
+      if ("id" in p.brand) brandId = p.brand.id;
+      else {
+        try {
+          const b = await createBrandMutation.mutateAsync({ data: { name: p.brand.createName } }) as { id: number };
+          queryClient.invalidateQueries({ queryKey: ["brands"] });
+          brandId = String(b.id);
+        } catch { toast.error(`Couldn't create brand "${p.brand.createName}" — pick one on the form.`); }
+      }
+    }
+    let categoryId: string | undefined;
+    if (p.category) {
+      if ("id" in p.category) categoryId = p.category.id;
+      else {
+        try {
+          const c = await createCategoryMutation.mutateAsync({ data: { name: p.category.createName } }) as { id: number };
+          queryClient.invalidateQueries({ queryKey: ["categories"] });
+          categoryId = String(c.id);
+        } catch { toast.error(`Couldn't create category "${p.category.createName}" — pick one on the form.`); }
+      }
+    }
+    setFormTouched(true);
+    setForm((f) => {
+      const existing = [f.imageUrl, ...f.media.filter((m) => m.type === "image").map((m) => m.url)].filter(Boolean);
+      const photos = [...existing, ...p.photos];
+      return {
+        ...f,
+        ...(p.name !== undefined ? { name: p.name } : {}),
+        ...(p.description !== undefined ? { description: p.description } : {}),
+        ...(p.sku !== undefined ? { sku: p.sku } : {}),
+        ...(p.barcode !== undefined ? { barcode: p.barcode } : {}),
+        ...(p.price !== undefined ? { price: p.price } : {}),
+        ...(p.technicalSpecs !== undefined ? { technicalSpecs: p.technicalSpecs } : {}),
+        ...(p.weightKg !== undefined ? { weight: p.weightKg, weightUnit: "kg" } : {}),
+        ...(p.lengthCm !== undefined ? { lengthCm: p.lengthCm } : {}),
+        ...(p.widthCm !== undefined ? { widthCm: p.widthCm } : {}),
+        ...(p.heightCm !== undefined ? { heightCm: p.heightCm } : {}),
+        ...(p.warranty ? { warrantyDuration: p.warranty.duration, warrantyUnit: p.warranty.unit } : {}),
+        ...(brandId ? { brandId } : {}),
+        ...(categoryId ? { categoryId } : {}),
+        ...(p.photos.length ? {
+          imageUrl: photos[0] ?? "",
+          media: [
+            ...photos.slice(1).map((url) => ({ type: "image" as const, url })),
+            ...f.media.filter((m) => m.type === "video"),
+          ],
+        } : {}),
+      };
     });
   };
 
@@ -2674,6 +2735,7 @@ export default function ProductsPage() {
                   <div className="col-span-2">
                     <div className="flex items-center justify-between mb-1.5">
                       <Label className="text-xs text-muted-foreground">Product Name *</Label>
+                      <div className="flex items-center gap-1.5">
                       <button
                         type="button"
                         title={form.barcode ? `Look up barcode "${form.barcode}" on Barcode Lookup` : "Look up barcode on Barcode Lookup (enter a barcode first)"}
@@ -2693,6 +2755,16 @@ export default function ProductsPage() {
                         <ScanSearch className="w-3 h-3" />
                         Barcode Lookup
                       </button>
+                      <button
+                        type="button"
+                        title="Fill this product in from a link to its page on another website"
+                        onClick={() => setImportDetailsOpen(true)}
+                        className="flex items-center gap-1.5 text-xs px-2 py-1 rounded-md border text-primary border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors"
+                      >
+                        <Link2 className="w-3 h-3" />
+                        Import Details
+                      </button>
+                      </div>
                     </div>
                     <Input
                       value={form.name}
@@ -3742,6 +3814,21 @@ export default function ProductsPage() {
 
       {/* ─── Unsaved product changes guard (page navigation) ───────────────── */}
       <ProductNavGuard />
+
+      <ImportProductDetailsDialog
+        open={importDetailsOpen}
+        onOpenChange={setImportDetailsOpen}
+        current={{
+          name: form.name, description: form.description, sku: form.sku, barcode: form.barcode,
+          brandId: form.brandId, categoryId: form.categoryId, price: form.price,
+          weight: form.weight, lengthCm: form.lengthCm, widthCm: form.widthCm, heightCm: form.heightCm,
+          warrantyDuration: form.warrantyDuration, technicalSpecs: form.technicalSpecs,
+          photoCount: [form.imageUrl, ...form.media.filter((m) => m.type === "image").map((m) => m.url)].filter(Boolean).length,
+        }}
+        brands={brandsList}
+        categories={categories}
+        onApply={applyImportedDetails}
+      />
 
       {/* ─── Unsaved product changes guard (dialog close) ──────────────────── */}
       <AlertDialog open={pendingProductClose} onOpenChange={setPendingProductClose}>

@@ -4,6 +4,7 @@ import { Link, useRoute } from "wouter";
 import { AppLayout } from "@/components/layout/app-layout";
 import {
   useListServiceJobs,
+  useListStaff,
   useDeleteServiceJob,
   useGetMerchant,
   useGetPosSettings,
@@ -42,7 +43,7 @@ import {
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, formatCurrency } from "@/lib/utils";
-import { useStickerPrinter } from "@/lib/sticker-config";
+import { useStickerPrinter, repairStickerFields } from "@/lib/sticker-config";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
 import { ArchiveJobsDialog, archiveReasonLabel, useArchiveJobs } from "@/components/service-jobs/ArchiveJobsDialog";
@@ -101,7 +102,7 @@ function formatCompletedDateTime(iso: string) {
 
 /* ─── Sorting ────────────────────────────────────────────────────────────── */
 
-type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "completedAt" | "status" | "deviceType" | "description" | "quoted" | "quoteTotal";
+type SortKey = "jobNumber" | "priority" | "customerName" | "bookInDate" | "dueDate" | "completedAt" | "status" | "deviceType" | "description" | "quoted" | "quoteTotal";
 type SortDir = "asc" | "desc";
 
 function getValue(job: ServiceJob, key: SortKey): string | number {
@@ -114,6 +115,8 @@ function getValue(job: ServiceJob, key: SortKey): string | number {
     // date (every cancelled one) sorts to the bottom descending, which is where
     // "never completed" belongs in a list ordered by most recently finished.
     case "completedAt":  return job.completedAt ?? "";
+    // No due date sorts last ascending (after every real date).
+    case "dueDate":      return job.dueDate ?? "9999-99-99";
     case "status":       return job.status ?? "";
     case "deviceType":   return (job.deviceType ?? "").toLowerCase();
     case "description":  return (job.workDescription ?? job.deviceDescription ?? "").toLowerCase();
@@ -344,6 +347,9 @@ export default function ServiceJobsPage() {
   const businessName         = merchant?.businessName ?? "Your Business";
   const brandColor           = (profile.brandColors as string[] | undefined)?.[0] ?? "#efbf04";
   const { printStickers } = useStickerPrinter();
+  /* The technician printed on a repair sticker is the job's assigned staff member. */
+  const { data: staffData } = useListStaff();
+  const staffNameById = new Map((Array.isArray(staffData) ? staffData : []).map((st) => [st.id, st.name] as [number, string]));
 
   /* Read active service-sheet template + opts from Management > Templates */
   const { opts: serviceOpts, fontCss: serviceFontCss, selectedStyle: serviceStyle } = useSalesTemplate("Service_Ticket");
@@ -452,22 +458,9 @@ export default function ServiceJobsPage() {
     const ok = printStickers({
       typeId: "repair",
       orientation: "horizontal",
-      fieldsOverride: {
-        jobNo:    job.jobNumber ?? "",
-        customer: job.customerName ?? "",
-        device:   job.deviceType ?? job.deviceDescription ?? "",
-        fault:    job.workDescription ?? "",
-        dueDate:  "",
-        tech:     "",
-        // Device credentials (opt-in via the "Username"/"Password" label toggles).
-        // Both are stored newline-joined on the job; collapse to one line for the
-        // sticker and drop blanks so an empty credential doesn't print " / ".
-        username: (job.accounts ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
-        password: (job.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
-        // Tech App deep link for the optional service QR (shown when the saved
-        // repair template enables it).
-        serviceQrUrl: job.id != null ? serviceJobQrUrl(job.id) : "",
-      },
+      fieldsOverride: repairStickerFields(job, {
+        tech: job.staffId != null ? (staffNameById.get(job.staffId) ?? "") : "",
+      }),
     });
     if (!ok) toast.error("Couldn't open the print dialog — please try again");
   };
@@ -566,6 +559,8 @@ export default function ServiceJobsPage() {
       return key;
     });
   }, []);
+
+  const todayYmd = new Date().toLocaleDateString("en-CA");
 
   /* Selected jobs on the tab being looked at (a selection never crosses tabs). */
   const selectedHere = sorted.filter((j) => selected.has(j.id));
@@ -802,6 +797,7 @@ export default function ServiceJobsPage() {
                         <SortableHeader {...sh("Priority",    "priority")} />
                         <SortableHeader {...sh("Contact",     "customerName")} />
                         <SortableHeader {...sh("Date",        "bookInDate")} />
+                        {tab !== "history" && <SortableHeader {...sh("Due", "dueDate")} />}
                         {/* Only on History: every active job is by definition
                             not completed, so on that tab the column would be a
                             full column of dashes. */}
@@ -861,6 +857,13 @@ export default function ServiceJobsPage() {
                             <td className="px-3 py-3 whitespace-nowrap text-muted-foreground text-xs">
                               {formatDate(job.bookInDate)}
                             </td>
+
+                            {/* Due — red once it has passed on an open job. */}
+                            {tab !== "history" && (
+                              <td className={cn("px-3 py-3 whitespace-nowrap text-xs", job.dueDate && job.dueDate < todayYmd ? "text-red-600 font-semibold" : "text-muted-foreground")}>
+                                {job.dueDate ? formatDate(job.dueDate) : "—"}
+                              </td>
+                            )}
 
                             {/* A cancelled job was never completed, so it has no
                                 date to show — a dash, not today's date. */}
@@ -1044,7 +1047,7 @@ export default function ServiceJobsPage() {
                         what was quoted over the period being looked at. */}
                     <tfoot>
                       <tr className="border-t-2 border-border bg-muted/30 text-xs">
-                        <td colSpan={tab === "active" ? 9 : 10} className="px-4 py-3 text-right font-medium text-muted-foreground">
+                        <td colSpan={tab === "archive" ? 11 : 10} className="px-4 py-3 text-right font-medium text-muted-foreground">
                           {quotedCount === 1 ? "Total of 1 quote" : `Total of ${quotedCount} quotes`}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">

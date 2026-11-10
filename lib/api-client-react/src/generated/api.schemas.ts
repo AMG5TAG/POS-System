@@ -1883,6 +1883,11 @@ export interface ServiceJob {
   customerEmail?: string | null;
   status: ServiceJobStatus;
   bookInDate: string;
+  /**
+     * When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as "Due:".
+     * @nullable
+     */
+  dueDate?: string | null;
   /** @nullable */
   deviceType?: string | null;
   /** @nullable */
@@ -1997,6 +2002,11 @@ export interface ServiceJobInput {
   staffId?: number | null;
   status?: ServiceJobInputStatus;
   bookInDate?: string;
+  /**
+     * When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as "Due:".
+     * @nullable
+     */
+  dueDate?: string | null;
   /** @nullable */
   deviceType?: string | null;
   /** @nullable */
@@ -2173,6 +2183,11 @@ export interface DeviceHistoryJob {
   /** @nullable */
   condition?: string | null;
   bookInDate: string;
+  /**
+     * When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as "Due:".
+     * @nullable
+     */
+  dueDate?: string | null;
   /** @nullable */
   customerName?: string | null;
   createdAt: string;
@@ -3925,6 +3940,33 @@ export interface SupplierInvoiceImportResult {
   purchaseOrder: PurchaseOrder;
   supplierCreated: boolean;
   newProducts: SupplierInvoiceImportResultNewProductsItem[];
+}
+
+export type ProductUrlImportProduct = {
+  name?: string;
+  description?: string;
+  sku?: string;
+  barcode?: string;
+  brand?: string;
+  category?: string;
+  price?: number;
+  weightKg?: number;
+  lengthCm?: number;
+  widthCm?: number;
+  heightCm?: number;
+  warranty?: string;
+  technicalSpecs?: string;
+  images: string[];
+};
+
+export interface ProductUrlImport {
+  /** The page actually read */
+  url: string;
+  product: ProductUrlImportProduct;
+  /** Fields Claude filled because the page's own data left them empty. */
+  aiFilled: string[];
+  aiUsed: boolean;
+  aiError?: string;
 }
 
 export interface PurchaseOrderInput {
@@ -7492,6 +7534,19 @@ status?: string;
 
 export type DeletePurchaseOrder200 = {
   success?: boolean;
+};
+
+export type ImportProductFromUrlBody = {
+  url: string;
+};
+
+export type GetProductUrlImportImageParams = {
+url: string;
+};
+
+export type SetPurchaseOrderPaymentBody = {
+  paid: boolean;
+  paymentMethod?: string;
 };
 
 export type SendPurchaseOrderEmailBody = {

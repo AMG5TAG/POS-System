@@ -20,7 +20,7 @@ import {
   STICKER_TYPES, DYMO_SIZES, LabelPreview,
   useStickerTemplates, useStickerPrinter,
   FONT_SIZE_OPTIONS, fieldHasFontSize, fontScaleKey,
-  labelSizeFor, LABEL_SIZE_ID,
+  labelSizeFor, LABEL_SIZE_ID, withSampleFields,
 } from "@/lib/sticker-config";
 
 /* ─── On/Off pill toggle ──────────────────────────────────────────────────── */
@@ -129,6 +129,9 @@ function FieldTextInput({
 
 /* ─── Main page ──────────────────────────────────────────────────────────── */
 
+/** Label types filled from a product (the product search on this page). */
+const PRODUCT_LABEL_TYPES = ["product", "pricetag", "shelf"];
+
 export default function ManagementStickersPage() {
   const [selectedTypeId, setSelectedTypeId] = useState<string>("product");
   const [selectedSizeId, setSelectedSizeId] = useState<string>(LABEL_SIZE_ID);
@@ -155,7 +158,7 @@ export default function ManagementStickersPage() {
   const searchRef = useRef<HTMLDivElement>(null);
 
   const selectedType = STICKER_TYPES.find((t) => t.id === selectedTypeId)!;
-  const hasProductSearch = ["product", "pricetag", "shelf"].includes(selectedTypeId);
+  const hasProductSearch = PRODUCT_LABEL_TYPES.includes(selectedTypeId);
 
   const [fields, setFields] = useState<Record<string, Record<string, string>>>(() =>
     Object.fromEntries(
@@ -167,6 +170,13 @@ export default function ManagementStickersPage() {
   );
 
   const currentFields = fields[selectedTypeId] ?? {};
+  /* This page designs templates. A product-type label with a product picked
+     shows and prints that product only — never a sample mixed in. Anything else
+     (no product yet, or a customer/return/repair/address label, which has no
+     record picker here) shows the type's sample values, and Print makes a test
+     label with exactly those values: what's on screen is what prints. */
+  const hasRealRecord = PRODUCT_LABEL_TYPES.includes(selectedTypeId) && !!(currentFields.productName ?? "").trim();
+  const displayFields = hasRealRecord ? currentFields : withSampleFields(selectedTypeId, currentFields);
   const setField = (key: string, value: string) => {
     setFields((prev) => ({ ...prev, [selectedTypeId]: { ...prev[selectedTypeId], [key]: value } }));
   };
@@ -198,7 +208,9 @@ export default function ManagementStickersPage() {
     if (t) {
       setSelectedSizeId(defaultTpl?.sizeId ?? t.defaultSize);
       const defaults = Object.fromEntries(t.fields.map((fld) => [fld.key, fld.defaultValue]));
-      setFields((prev) => ({ ...prev, [typeId]: { ...defaults, ...(defaultTpl?.fields ?? {}) } }));
+      // Carry the product already picked onto the new label type.
+      const carried = pickedProduct && PRODUCT_LABEL_TYPES.includes(typeId) ? productFields(pickedProduct) : {};
+      setFields((prev) => ({ ...prev, [typeId]: { ...defaults, ...(defaultTpl?.fields ?? {}), ...carried } }));
     }
     setProductQuery("");
     setShowProdDropdown(false);
@@ -293,10 +305,12 @@ export default function ManagementStickersPage() {
     toast.success("Template deleted.");
   };
 
-  const fillFromProduct = (p: Product) => {
-    setProductQuery(p.name);
-    setShowProdDropdown(false);
-    const updates: Record<string, string> = {
+  /* The product being labelled, kept across label types: picking a product on
+     "Product" and then switching to "Price Tag" used to reset the new type's
+     fields and print a blank tag (just "#" and the website). */
+  const [pickedProduct, setPickedProduct] = useState<Product | null>(null);
+
+  const productFields = (p: Product): Record<string, string> => ({
       productName:  p.name,
       sku:          p.sku         ?? "",
       price:        p.price != null ? `$${Number(p.price).toFixed(2)}` : "",
@@ -304,7 +318,13 @@ export default function ManagementStickersPage() {
       category:     (p as Product & { category?: { name: string } }).category?.name ?? "",
       // Public product-page URL for the optional QR toggle on the product sticker.
       productQrUrl: publicProductUrl((merchant as { username?: string | null } | undefined)?.username, p.id),
-    };
+  });
+
+  const fillFromProduct = (p: Product) => {
+    setProductQuery(p.name);
+    setShowProdDropdown(false);
+    setPickedProduct(p);
+    const updates = productFields(p);
     setFields((prev) => ({ ...prev, [selectedTypeId]: { ...prev[selectedTypeId], ...updates } }));
   };
 
@@ -357,9 +377,12 @@ export default function ManagementStickersPage() {
       barcodePosition,
       colorMode,
       quantity,
-      fieldsOverride: currentFields,
+      fieldsOverride: displayFields,
     });
     if (!ok) toast.error("Couldn't open the print dialog — please try again");
+    else if (!hasRealRecord) toast.info(PRODUCT_LABEL_TYPES.includes(selectedTypeId)
+      ? "Test label printed with sample data — search for a product to print a real one."
+      : "Test label printed with sample data — real labels print from the customer, service job or return.");
   };
 
   /* ── Render ────────────────────────────────────────────────────────────── */
@@ -528,7 +551,7 @@ export default function ManagementStickersPage() {
               />
             </div>
             <Button onClick={handlePrint} className="gap-2">
-              <Printer className="w-4 h-4" /> Print {quantity > 1 ? `${quantity} Labels` : "Label"}
+              <Printer className="w-4 h-4" /> {hasRealRecord ? "Print" : "Print test"} {quantity > 1 ? `${quantity} Labels` : "Label"}
             </Button>
           </div>
         </div>
@@ -715,7 +738,7 @@ export default function ManagementStickersPage() {
                   <div style={{ transform: `scale(${previewZoom})`, transformOrigin: "center" }} className="transition-transform">
                     <LabelPreview
                       type={selectedType}
-                      fields={currentFields}
+                      fields={displayFields}
                       size={selectedSize}
                       businessName={businessName}
                       brandColor={brandColor}

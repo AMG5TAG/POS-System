@@ -18,7 +18,7 @@ import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
   Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall, MessageSquare, Check,
-  Archive, ArchiveRestore,
+  Archive, ArchiveRestore, CalendarClock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { archiveReasonLabel } from "@/components/service-jobs/ArchiveJobsDialog";
@@ -248,6 +248,9 @@ export function ServiceJobDetailDialog({
     if (tabIndex === -1) setTab("details");
   }, [tabIndex]);
 
+  /* Due date field state — before the early return, as hooks must be. */
+  const [localDue, setLocalDue] = useState(job?.dueDate ?? "");
+  useEffect(() => { setLocalDue(job?.dueDate ?? ""); }, [job?.id, job?.dueDate]);
   if (!job) return null;
 
   const { className } = getStatus(localStatus);
@@ -273,6 +276,21 @@ export function ServiceJobDetailDialog({
         },
         onError: () => toast.error("Failed to update status"),
       }
+    );
+  };
+
+  /* Due date: saved as soon as it's picked; "" clears it. */
+  const todayYmd = new Date().toLocaleDateString("en-CA");
+  const isOverdue = !!localDue && localDue < todayYmd && job?.status !== "completed" && job?.status !== "cancelled";
+  const handleDueChange = (value: string) => {
+    if (!job) return;
+    setLocalDue(value);
+    updateMutation.mutate(
+      { id: job.id, data: { dueDate: value || null } as never },
+      {
+        onSuccess: () => { invalidate(); toast.success(value ? "Due date saved" : "Due date cleared"); },
+        onError: () => { setLocalDue(job.dueDate ?? ""); toast.error("Failed to save the due date"); },
+      },
     );
   };
 
@@ -503,6 +521,22 @@ export function ServiceJobDetailDialog({
                 <div className="divide-y">
                   <DetailRow icon={User}     label="Name"        value={job.customerName} />
                   <DetailRow icon={Calendar} label="Book-In Date" value={formatDate(job.bookInDate)} />
+                  {/* Due date — editable in place; printed as "Due:" on the repair sticker. */}
+                  <div className="flex items-start gap-3 px-4 py-3">
+                    <CalendarClock className={cn("w-4 h-4 mt-0.5 shrink-0", isOverdue ? "text-red-600" : "text-muted-foreground")} />
+                    <div className="text-sm min-w-0 flex-1">
+                      <p className="text-xs text-muted-foreground mb-0.5">
+                        Due Date{isOverdue && <span className="ml-1.5 font-semibold text-red-600">Overdue</span>}
+                      </p>
+                      <input
+                        type="date"
+                        value={localDue}
+                        onChange={(e) => handleDueChange(e.target.value)}
+                        disabled={job.status === "completed" || job.status === "cancelled"}
+                        className={cn("bg-transparent border-none outline-none text-sm font-medium p-0 cursor-pointer disabled:cursor-default", isOverdue && "text-red-600")}
+                      />
+                    </div>
+                  </div>
                   {job.partnerRepairCode && (
                     <DetailRow icon={Hash} label="Partner Repair Code" value={job.partnerRepairCode} />
                   )}

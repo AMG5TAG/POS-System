@@ -12,10 +12,11 @@ import {
   ApiError,
   type ServiceJob,
   type Customer,
+  useListStaff,
 } from "@workspace/api-client-react";
 import {
   LabelPreview, useStickerTemplates, useStickerPrinter,
-  STICKER_TYPES, DYMO_SIZES, labelSizeFor,
+  STICKER_TYPES, DYMO_SIZES, labelSizeFor, repairStickerFields,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Badge } from "@/components/ui/badge";
@@ -307,29 +308,23 @@ export default function ServiceJobNewPage() {
   // actual print (printStickers merges the same defaults) — without it, a saved
   // template missing a newer toggle (e.g. Username/Password) would read as "on"
   // in the preview but "off" when printed.
+  const { data: stickerStaffData } = useListStaff();
+  const stickerStaffNameById = new Map((Array.isArray(stickerStaffData) ? stickerStaffData : []).map((st) => [st.id, st.name] as [number, string]));
   const stickerBaseFields = {
     ...Object.fromEntries(repairStickerType.fields.map((f) => [f.key, f.defaultValue])),
     ...(activeStickerTpl?.fields ?? {}),
   };
+  // The same data the Service Jobs reprint sends (repairStickerFields).
   const stickerFields = {
     ...stickerBaseFields,
-    jobNo: successJob?.jobNumber ?? `SVC-${successJob?.id ?? 0}`,
-    customer: selectedCustomer
-      ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Walk-in"
-      : (successJob?.customerName ?? "Walk-in"),
-    device: successJob?.deviceDescription ?? successJob?.deviceType ?? stickerBaseFields.device ?? "",
-    fault: successJob?.workDescription ?? stickerBaseFields.fault ?? "",
-    dueDate: new Date().toLocaleDateString("en-AU"),
-    // Device credentials (opt-in via the "Username"/"Password" label toggles).
-    // Stored newline-joined on the job; collapse to one line for the sticker and
-    // drop blanks so an empty credential doesn't render a stray " / ".
-    username: (successJob?.accounts ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
-    password: (successJob?.passwordOrPin ?? "").split("\n").map((s) => s.trim()).filter(Boolean).join(" / "),
-    // Tech App deep link for the optional service QR (shown when the repair
-    // template enables it).
-    serviceQrUrl: successJob?.id != null ? serviceJobQrUrl(successJob.id) : "",
+    ...(successJob ? repairStickerFields(successJob, {
+      customer: selectedCustomer
+        ? [selectedCustomer.firstName, selectedCustomer.lastName].filter(Boolean).join(" ") || "Walk-in"
+        : (successJob.customerName ?? "Walk-in"),
+      tech: successJob.staffId != null ? (stickerStaffNameById.get(successJob.staffId) ?? "") : "",
+    }) : {}),
   };
-  const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
+    const brandColor = bizProfile?.brandColors?.[0] ?? "#374151";
   const businessName = merchant?.businessName ?? "";
 
   const { opts: svcOpts, fontCss: svcFontCss, selectedStyle: svcStyle } = useSalesTemplate("Service_Ticket");
@@ -346,6 +341,8 @@ export default function ServiceJobNewPage() {
 
   const [status, setStatus] = useState("pending");
   const [bookInDate, setBookInDate] = useState(prefill.bookInDate || todayISO());
+  /* When the repair is promised by — printed as "Due:" on the repair sticker. */
+  const [dueDate, setDueDate] = useState("");
   const [isPartnerRepair, setIsPartnerRepair] = useState(false);
   const [isCritical, setIsCritical] = useState(false);
   const [isUnderWarranty, setIsUnderWarranty] = useState(false);
@@ -419,6 +416,7 @@ export default function ServiceJobNewPage() {
           ...(prefill.title ? { title: prefill.title } : {}),
           status: status as "pending" | "in-progress" | "awaiting-parts" | "awaiting-stock" | "at-repairer" | "awaiting-partner-approval" | "partner-replacement" | "awaiting-customer" | "awaiting-pickup" | "completed" | "cancelled",
           bookInDate,
+          dueDate: dueDate || null,
           isPartnerRepair,
           isCritical,
           isUnderWarranty,
@@ -622,6 +620,19 @@ export default function ServiceJobNewPage() {
                   type="date"
                   value={bookInDate}
                   onChange={(e) => setBookInDate(e.target.value)}
+                  className="text-sm font-medium bg-transparent border-none outline-none w-full cursor-pointer"
+                />
+              </div>
+            </div>
+            <div className="flex items-center gap-3 border rounded-xl px-4 py-3 bg-background">
+              <CalendarClock className="w-4 h-4 text-amber-600 shrink-0" />
+              <div className="flex-1 min-w-0">
+                <p className="text-xs font-medium text-muted-foreground mb-0.5">Due Date <span className="font-normal">(optional — printed on the sticker)</span></p>
+                <input
+                  type="date"
+                  value={dueDate}
+                  min={bookInDate || undefined}
+                  onChange={(e) => setDueDate(e.target.value)}
                   className="text-sm font-medium bg-transparent border-none outline-none w-full cursor-pointer"
                 />
               </div>

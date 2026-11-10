@@ -154,6 +154,7 @@ import type {
   GetPaymentTotalsParams,
   GetPosFavouritesParams,
   GetProductPerformanceParams,
+  GetProductUrlImportImageParams,
   GetProfitLossParams,
   GetRecentTransactionsParams,
   GetSaleReturnable200,
@@ -174,6 +175,7 @@ import type {
   HealthStatus,
   ImportCustomersBody,
   ImportMerchantAssetsResponse,
+  ImportProductFromUrlBody,
   ImportProductsBody,
   IntegrationActionResult,
   IntegrationConnectInput,
@@ -338,6 +340,7 @@ import type {
   ProductTypeList,
   ProductTypeReorderInput,
   ProductUpdate,
+  ProductUrlImport,
   ProductVariant,
   ProductVariantInput,
   ProductVariantUpdate,
@@ -417,6 +420,7 @@ import type {
   ServiceSettingsInput,
   SetActiveLocation200,
   SetActiveLocationBody,
+  SetPurchaseOrderPaymentBody,
   ShippingCarrier,
   ShippingCarrierCredentialsInput,
   ShippingCarrierListResponse,
@@ -14197,6 +14201,165 @@ export function useGetSupplierFeedImage<TData = Awaited<ReturnType<typeof getSup
 
 
 
+export const getImportProductFromUrlUrl = () => {
+
+
+
+
+  return `/api/products/import-from-url`
+}
+
+/**
+ * Fetches the page (public addresses only) and reads its schema.org Product data, product meta tags and spec tables. When the merchant has Claude connected and AI on, Claude fills only the fields the page's structured data left empty; those are listed in aiFilled. Nothing is saved — the product form shows the result for review.
+
+ * @summary Read a product's details from a web page
+ */
+export const importProductFromUrl = async (importProductFromUrlBody: ImportProductFromUrlBody, options?: RequestInit): Promise<ProductUrlImport> => {
+
+  return customFetch<ProductUrlImport>(getImportProductFromUrlUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      importProductFromUrlBody,)
+  }
+);}
+
+
+
+
+export const getImportProductFromUrlMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProductFromUrl>>, TError,{data: BodyType<ImportProductFromUrlBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importProductFromUrl>>, TError,{data: BodyType<ImportProductFromUrlBody>}, TContext> => {
+
+const mutationKey = ['importProductFromUrl'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importProductFromUrl>>, {data: BodyType<ImportProductFromUrlBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importProductFromUrl(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportProductFromUrlMutationResult = NonNullable<Awaited<ReturnType<typeof importProductFromUrl>>>
+    export type ImportProductFromUrlMutationBody = BodyType<ImportProductFromUrlBody>
+    export type ImportProductFromUrlMutationError = ErrorType<void>
+
+    /**
+ * @summary Read a product's details from a web page
+ */
+export const useImportProductFromUrl = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importProductFromUrl>>, TError,{data: BodyType<ImportProductFromUrlBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importProductFromUrl>>,
+        TError,
+        {data: BodyType<ImportProductFromUrlBody>},
+        TContext
+      > => {
+      return useMutation(getImportProductFromUrlMutationOptions(options));
+    }
+
+export const getGetProductUrlImportImageUrl = (params: GetProductUrlImportImageParams,) => {
+  const normalizedParams = new URLSearchParams();
+
+  Object.entries(params || {}).forEach(([key, value]) => {
+
+    if (value !== undefined) {
+      normalizedParams.append(key, value === null ? 'null' : value.toString())
+    }
+  });
+
+  const stringifiedParams = normalizedParams.toString();
+
+  return stringifiedParams.length > 0 ? `/api/products/import-from-url/image?${stringifiedParams}` : `/api/products/import-from-url/image`
+}
+
+/**
+ * Proxies one image (public addresses only, images only, 15 MB cap) so the product form can copy it into this business's storage — the shop can't show a hot-linked photo, and most sites send no CORS.
+
+ * @summary Fetch an image from another site so the browser can upload it
+ */
+export const getProductUrlImportImage = async (params: GetProductUrlImportImageParams, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetProductUrlImportImageUrl(params),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetProductUrlImportImageQueryKey = (params?: GetProductUrlImportImageParams,) => {
+    return [
+    `/api/products/import-from-url/image`, ...(params ? [params] : [])
+    ] as const;
+    }
+
+
+export const getGetProductUrlImportImageQueryOptions = <TData = Awaited<ReturnType<typeof getProductUrlImportImage>>, TError = ErrorType<void>>(params: GetProductUrlImportImageParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductUrlImportImage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetProductUrlImportImageQueryKey(params);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getProductUrlImportImage>>> = ({ signal }) => getProductUrlImportImage(params, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getProductUrlImportImage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetProductUrlImportImageQueryResult = NonNullable<Awaited<ReturnType<typeof getProductUrlImportImage>>>
+export type GetProductUrlImportImageQueryError = ErrorType<void>
+
+
+/**
+ * @summary Fetch an image from another site so the browser can upload it
+ */
+
+export function useGetProductUrlImportImage<TData = Awaited<ReturnType<typeof getProductUrlImportImage>>, TError = ErrorType<void>>(
+ params: GetProductUrlImportImageParams, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getProductUrlImportImage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetProductUrlImportImageQueryOptions(params,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
 export const getImportSupplierInvoiceUrl = () => {
 
 
@@ -14340,6 +14503,79 @@ export const useReceivePurchaseOrderItems = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getReceivePurchaseOrderItemsMutationOptions(options));
+    }
+
+export const getSetPurchaseOrderPaymentUrl = (id: number,) => {
+
+
+
+
+  return `/api/purchase-orders/${id}/payment`
+}
+
+/**
+ * Paid settles the order at its stored total and stamps paidAt; unpaid clears the payment. A PO moves to History only once it is both fully received and paid.
+ * @summary Mark a purchase order paid or unpaid
+ */
+export const setPurchaseOrderPayment = async (id: number,
+    setPurchaseOrderPaymentBody: SetPurchaseOrderPaymentBody, options?: RequestInit): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getSetPurchaseOrderPaymentUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      setPurchaseOrderPaymentBody,)
+  }
+);}
+
+
+
+
+export const getSetPurchaseOrderPaymentMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPurchaseOrderPayment>>, TError,{id: number;data: BodyType<SetPurchaseOrderPaymentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setPurchaseOrderPayment>>, TError,{id: number;data: BodyType<SetPurchaseOrderPaymentBody>}, TContext> => {
+
+const mutationKey = ['setPurchaseOrderPayment'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPurchaseOrderPayment>>, {id: number;data: BodyType<SetPurchaseOrderPaymentBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setPurchaseOrderPayment(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPurchaseOrderPaymentMutationResult = NonNullable<Awaited<ReturnType<typeof setPurchaseOrderPayment>>>
+    export type SetPurchaseOrderPaymentMutationBody = BodyType<SetPurchaseOrderPaymentBody>
+    export type SetPurchaseOrderPaymentMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Mark a purchase order paid or unpaid
+ */
+export const useSetPurchaseOrderPayment = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPurchaseOrderPayment>>, TError,{id: number;data: BodyType<SetPurchaseOrderPaymentBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setPurchaseOrderPayment>>,
+        TError,
+        {id: number;data: BodyType<SetPurchaseOrderPaymentBody>},
+        TContext
+      > => {
+      return useMutation(getSetPurchaseOrderPaymentMutationOptions(options));
     }
 
 export const getSendPurchaseOrderEmailUrl = (id: number,) => {

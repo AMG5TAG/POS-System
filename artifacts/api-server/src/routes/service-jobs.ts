@@ -57,6 +57,7 @@ function formatJob(
     isUnderWarranty: job.isUnderWarranty === "true",
     repairWarrantyDays: job.repairWarrantyDays ?? 0,
     completedAt: job.completedAt ? job.completedAt.toISOString() : null,
+    dueDate: job.dueDate ?? null,
     reworkOfJobId: job.reworkOfJobId ?? null,
     reopenedFromJobId: job.reopenedFromJobId ?? null,
     archivedAt: job.archivedAt ? job.archivedAt.toISOString() : null,
@@ -84,6 +85,11 @@ function formatJob(
     createdAt: job.createdAt.toISOString(),
     updatedAt: job.updatedAt.toISOString(),
   };
+}
+
+/** A due date is a calendar day, YYYY-MM-DD; anything else (blank included) is "none". */
+export function cleanDueDate(raw: unknown): string | null {
+  return typeof raw === "string" && /^\d{4}-\d{2}-\d{2}$/.test(raw.trim()) ? raw.trim() : null;
 }
 
 function nextJobNumber(existing: Array<{ jobNumber: string }>, prefix = "SJ", digits = 4, tryIndex = 0): string {
@@ -178,6 +184,7 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
       title: body.title ? String(body.title) : "Service Job",
       status: typeof body.status === "string" ? body.status : "pending",
       bookInDate: typeof body.bookInDate === "string" ? body.bookInDate : today,
+      dueDate: cleanDueDate(body.dueDate),
       deviceType: typeof body.deviceType === "string" ? body.deviceType : null,
       deviceDescription: typeof body.deviceDescription === "string" ? body.deviceDescription : null,
       deviceColour: typeof body.deviceColour === "string" ? body.deviceColour : null,
@@ -271,6 +278,8 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
   const updates: Record<string, unknown> = {};
   if (typeof body.status === "string") updates.status = body.status;
   if (typeof body.bookInDate === "string") updates.bookInDate = body.bookInDate;
+  // Sent as "" or null to clear it.
+  if (body.dueDate !== undefined) updates.dueDate = cleanDueDate(body.dueDate);
   if (body.customerId !== undefined) updates.customerId = body.customerId ? Number(body.customerId) : null;
   if (body.staffId !== undefined) updates.staffId = body.staffId ? Number(body.staffId) : null;
   if (typeof body.deviceType === "string") updates.deviceType = body.deviceType;

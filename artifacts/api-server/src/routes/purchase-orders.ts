@@ -15,6 +15,8 @@ import {
   DeletePurchaseOrderParams,
   ReceivePurchaseOrderItemsParams,
   SendPurchaseOrderEmailParams,
+  SetPurchaseOrderPaymentParams,
+  SetPurchaseOrderPaymentBody,
   MatchSupplierInvoiceBody,
   ImportSupplierInvoiceBody,
 } from "@workspace/api-zod";
@@ -496,6 +498,31 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
   }
   const result = await getPOWithItems(id, merchantId);
   res.json(result);
+});
+
+// POST /purchase-orders/:id/payment
+// Marks the order paid (settled at its stored total, paidAt stamped) or unpaid
+// (payment cleared). The PO list moves an order to History only once it is
+// both fully received and paid, so this is what closes a received order.
+router.post("/purchase-orders/:id/payment", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { id } = SetPurchaseOrderPaymentParams.parse({ id: Number(req.params.id) });
+  const body = SetPurchaseOrderPaymentBody.parse(req.body);
+  const [po] = await db.select().from(purchaseOrdersTable)
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  if (!po) { res.status(404).json({ error: "Not found" }); return; }
+  const totalCost = round2(parseFloat(po.totalCost));
+  await db.update(purchaseOrdersTable).set(
+    body.paid
+      ? {
+          amountPaid: String(totalCost),
+          paymentStatus: "paid",
+          paymentMethod: body.paymentMethod?.trim() || po.paymentMethod || null,
+          paidAt: po.paymentStatus === "paid" && po.paidAt ? po.paidAt : new Date(),
+        }
+      : { amountPaid: "0", paymentStatus: "unpaid", paymentMethod: null, paidAt: null },
+  ).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  res.json(await getPOWithItems(id, merchantId));
 });
 
 // DELETE /purchase-orders/:id

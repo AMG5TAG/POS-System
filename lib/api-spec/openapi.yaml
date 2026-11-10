@@ -4130,6 +4130,63 @@ paths:
         "404":
           description: No image for that code
 
+  /products/import-from-url:
+    post:
+      operationId: importProductFromUrl
+      tags: [products]
+      summary: Read a product's details from a web page
+      description: >
+        Fetches the page (public addresses only) and reads its schema.org
+        Product data, product meta tags and spec tables. When the merchant has
+        Claude connected and AI on, Claude fills only the fields the page's
+        structured data left empty; those are listed in aiFilled. Nothing is
+        saved — the product form shows the result for review.
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [url]
+              properties:
+                url: { type: string }
+      responses:
+        "200":
+          description: What the page said
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductUrlImport"
+        "400":
+          description: The link is not valid or not reachable
+        "502":
+          description: The site could not be read
+
+  /products/import-from-url/image:
+    get:
+      operationId: getProductUrlImportImage
+      tags: [products]
+      summary: Fetch an image from another site so the browser can upload it
+      description: >
+        Proxies one image (public addresses only, images only, 15 MB cap) so
+        the product form can copy it into this business's storage — the shop
+        can't show a hot-linked photo, and most sites send no CORS.
+      security: [{ session: [] }]
+      parameters:
+        - name: url
+          in: query
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The image
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "400":
+          description: Not an image, or not reachable
+
   /purchase-orders/import:
     post:
       operationId: importSupplierInvoice
@@ -4176,6 +4233,38 @@ paths:
       responses:
         "200":
           description: Updated purchase order with receipt log
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+
+  /purchase-orders/{id}/payment:
+    post:
+      operationId: setPurchaseOrderPayment
+      summary: Mark a purchase order paid or unpaid
+      description: >-
+        Paid settles the order at its stored total and stamps paidAt; unpaid
+        clears the payment. A PO moves to History only once it is both fully
+        received and paid.
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [paid]
+              properties:
+                paid: { type: boolean }
+                paymentMethod: { type: string }
+      responses:
+        "200":
+          description: Updated purchase order
           content:
             application/json:
               schema:
@@ -12176,6 +12265,9 @@ components:
           enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, awaiting-pickup, completed, cancelled]
         bookInDate:
           type: string
+        dueDate:
+          type: ["string", "null"]
+          description: When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as "Due:".
         deviceType:
           type: ["string", "null"]
         deviceDescription:
@@ -12300,6 +12392,9 @@ components:
           enum: [pending, in-progress, awaiting-parts, awaiting-stock, at-repairer, awaiting-partner-approval, partner-replacement, awaiting-customer, awaiting-pickup, completed, cancelled]
         bookInDate:
           type: string
+        dueDate:
+          type: ["string", "null"]
+          description: When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as "Due:".
         deviceType:
           type: ["string", "null"]
         deviceDescription:
@@ -12509,6 +12604,9 @@ components:
           type: ["string", "null"]
         bookInDate:
           type: string
+        dueDate:
+          type: ["string", "null"]
+          description: When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as "Due:".
         customerName:
           type: ["string", "null"]
         createdAt:
@@ -14298,6 +14396,37 @@ components:
           items:
             $ref: "#/components/schemas/POReceiptLog"
         createdAt: { type: string }
+    ProductUrlImport:
+      type: object
+      required: [url, product, aiFilled, aiUsed]
+      properties:
+        url: { type: string, description: The page actually read, after redirects }
+        product:
+          type: object
+          required: [images]
+          properties:
+            name: { type: string }
+            description: { type: string }
+            sku: { type: string }
+            barcode: { type: string }
+            brand: { type: string }
+            category: { type: string }
+            price: { type: number }
+            weightKg: { type: number }
+            lengthCm: { type: number }
+            widthCm: { type: number }
+            heightCm: { type: number }
+            warranty: { type: string }
+            technicalSpecs: { type: string }
+            images:
+              type: array
+              items: { type: string }
+        aiFilled:
+          type: array
+          description: Fields Claude filled because the page's own data left them empty.
+          items: { type: string }
+        aiUsed: { type: boolean }
+        aiError: { type: string }
     PurchaseOrderInput:
       type: object
       required: [orderDate]

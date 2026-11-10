@@ -1398,6 +1398,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "customerEmail": zod.string().nullish(),
   "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
   "deviceColour": zod.string().nullish(),
@@ -4149,6 +4150,7 @@ export const ListServiceJobsResponseItem = zod.object({
   "customerEmail": zod.string().nullish(),
   "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
   "deviceColour": zod.string().nullish(),
@@ -4198,6 +4200,7 @@ export const CreateServiceJobBody = zod.object({
   "staffId": zod.number().nullish(),
   "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']).optional(),
   "bookInDate": zod.string().optional(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
   "deviceColour": zod.string().nullish(),
@@ -4240,6 +4243,7 @@ export const UpdateServiceJobBody = zod.object({
   "staffId": zod.number().nullish(),
   "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']).optional(),
   "bookInDate": zod.string().optional(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
   "deviceColour": zod.string().nullish(),
@@ -4280,6 +4284,7 @@ export const UpdateServiceJobResponse = zod.object({
   "customerEmail": zod.string().nullish(),
   "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
   "deviceColour": zod.string().nullish(),
@@ -4384,6 +4389,7 @@ export const ArchiveServiceJobsResponse = zod.object({
   "customerEmail": zod.string().nullish(),
   "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']),
   "bookInDate": zod.string(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "deviceType": zod.string().nullish(),
   "deviceDescription": zod.string().nullish(),
   "deviceColour": zod.string().nullish(),
@@ -4684,6 +4690,7 @@ export const GetDeviceHistoryResponse = zod.object({
   "deviceDescription": zod.string().nullish(),
   "condition": zod.string().nullish(),
   "bookInDate": zod.string(),
+  "dueDate": zod.string().nullish().describe('When the repair is promised by (YYYY-MM-DD). Printed on the repair sticker as \"Due:\".'),
   "customerName": zod.string().nullish(),
   "createdAt": zod.coerce.date()
 })),
@@ -6235,6 +6242,49 @@ export const GetSupplierFeedImageParams = zod.object({
 
 
 /**
+ * Fetches the page (public addresses only) and reads its schema.org Product data, product meta tags and spec tables. When the merchant has Claude connected and AI on, Claude fills only the fields the page's structured data left empty; those are listed in aiFilled. Nothing is saved — the product form shows the result for review.
+
+ * @summary Read a product's details from a web page
+ */
+export const ImportProductFromUrlBody = zod.object({
+  "url": zod.string()
+})
+
+export const ImportProductFromUrlResponse = zod.object({
+  "url": zod.string().describe('The page actually read'),
+  "product": zod.object({
+  "name": zod.string().optional(),
+  "description": zod.string().optional(),
+  "sku": zod.string().optional(),
+  "barcode": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "category": zod.string().optional(),
+  "price": zod.number().optional(),
+  "weightKg": zod.number().optional(),
+  "lengthCm": zod.number().optional(),
+  "widthCm": zod.number().optional(),
+  "heightCm": zod.number().optional(),
+  "warranty": zod.string().optional(),
+  "technicalSpecs": zod.string().optional(),
+  "images": zod.array(zod.string())
+}),
+  "aiFilled": zod.array(zod.string()).describe('Fields Claude filled because the page\'s own data left them empty.'),
+  "aiUsed": zod.boolean(),
+  "aiError": zod.string().optional()
+})
+
+
+/**
+ * Proxies one image (public addresses only, images only, 15 MB cap) so the product form can copy it into this business's storage — the shop can't show a hot-linked photo, and most sites send no CORS.
+
+ * @summary Fetch an image from another site so the browser can upload it
+ */
+export const GetProductUrlImportImageQueryParams = zod.object({
+  "url": zod.coerce.string()
+})
+
+
+/**
  * One transaction: creates the supplier if asked, creates basic products for lines that match nothing, then the purchase order (status Ordered). Receiving is a separate call to /purchase-orders/{id}/receive.
 
  * @summary Create a purchase order (and any new supplier/products) from a reviewed supplier invoice
@@ -6367,6 +6417,74 @@ export const ReceivePurchaseOrderItemsBody = zod.object({
 })
 
 export const ReceivePurchaseOrderItemsResponse = zod.object({
+  "preOrderArrivals": zod.array(zod.object({
+  "preOrderId": zod.number(),
+  "number": zod.string(),
+  "customerName": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "allocatedQuantity": zod.number(),
+  "complete": zod.boolean()
+})).optional().describe('Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out.'),
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string(),
+  "orderNumber": zod.string().nullish(),
+  "status": zod.string(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "receivedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "totalCost": zod.number(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
+  "amountPaid": zod.number().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentMethod": zod.string().nullish(),
+  "paidAt": zod.string().nullish(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
+})).optional(),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "processedBy": zod.string(),
+  "processedAt": zod.string(),
+  "notes": zod.string()
+})).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * Paid settles the order at its stored total and stamps paidAt; unpaid clears the payment. A PO moves to History only once it is both fully received and paid.
+ * @summary Mark a purchase order paid or unpaid
+ */
+export const SetPurchaseOrderPaymentParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SetPurchaseOrderPaymentBody = zod.object({
+  "paid": zod.boolean(),
+  "paymentMethod": zod.string().optional()
+})
+
+export const SetPurchaseOrderPaymentResponse = zod.object({
   "preOrderArrivals": zod.array(zod.object({
   "preOrderId": zod.number(),
   "number": zod.string(),

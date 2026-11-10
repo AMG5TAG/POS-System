@@ -289,7 +289,29 @@ the same reason. A label with more lines than fit is shrunk as a whole by an
 inline script (`.lbl-body`/`.lbl-fit`, zoom down to 55%) — lines never squash
 into each other. The layouts print **real values only**: they used to fall back
 to sample text ("Beverages", a repair password of "1234") whenever a field was
-empty, and that printed on real labels.
+empty, and that printed on real labels. A line prints only when its value is non-empty (`has()`), so
+no bare "#", "Due:" or "Tech:". On Templates › Labels the picked product
+carries across label types, and a product/price-tag/shelf label with no product
+is refused rather than printed blank.
+
+**The preview IS the print.** `LabelPreview` renders `buildLabelHtml` itself
+(screen mode: no page rotation, no `@page`) in a scaled iframe — the
+hand-built preview it replaced had drifted from the print and filled every
+empty field with sample text, so lines showed on screen that never printed.
+Sample values live in one place, `SAMPLE_LABEL_FIELDS`, and only Templates ›
+Labels uses them (`withSampleFields`): with no real record picked, the preview
+and the **test** print both use them; a picked product is never mixed with
+samples. QR codes and the barcode print only from real values. Repair stickers
+take their data from one builder, `repairStickerFields` (New Service Job and the
+Service Jobs reprint used to differ: no technician on reprints, device type
+before description, today's date printed as "Due:"). "Due:" is the job's own
+**due date**, `service_jobs.due_date` (YYYY-MM-DD, nullable;
+`scripts/src/add-service-job-due-date.ts`; `cleanDueDate` in
+`routes/service-jobs.ts` stores anything else as none). Set on New Service Job,
+edited in place in the job dialog, shown as a sortable **Due** column on the
+Services and Archive tabs — red once it has passed on an open job.
+`label-print-complete.test.ts` asserts every line of every label type reaches
+the printed HTML with all options on.
 
 **Never print while a dialog is closing.** `window.print()` halts the page's
 JavaScript, and a Radix dialog still closing then never lifts its page lock
@@ -1115,6 +1137,34 @@ fetches `GET /purchase-orders/import/feed-image/:stockCode` (the server fetches
 only the URL the feed names, only on leadersystems.com.au — Leader sends no
 CORS) and uploads it through `uploadFile`; the import refuses an `imageUrl`
 outside the business's own storage.
+
+**Paid / unpaid and History.** The PO list has a Payment column (Paid /
+Part paid / Unpaid); clicking the badge, or Mark Paid / Mark Unpaid in the
+detail dialog, calls `POST /purchase-orders/:id/payment {paid}` — paid settles
+`amount_paid` at the stored `total_cost` and stamps `paid_at`, unpaid clears
+all four payment columns. An order moves to the **History** tab only when it is
+fully received **and** paid (`isClosed` in `products-purchase-orders.tsx`), so
+a received order still owing the supplier stays on the working list. Pinned by
+`purchase-orders-mark-paid.test.ts`.
+
+### Import Details (product form)
+
+The product form's **Import Details** button (`ImportProductDetailsDialog`)
+reads a product page link into the form. `POST /products/import-from-url`
+(`routes/product-url-import.ts`) fetches it through `lib/safe-fetch.ts` —
+public addresses only, every redirect hop re-checked with the Nextcloud SSRF
+guard's `isBlockedAddress`, size-capped — and `lib/product-page-import.ts`
+reads schema.org Product JSON-LD, then product meta tags, then two-column spec
+tables / `<dl>`s; a barcode is kept only with a valid GTIN check digit. When
+the AI switch is on and Claude is connected, Claude fills **only fields the
+page left empty** (`aiFilled`, marked ✨ in the dialog). Nothing is saved: each
+field is shown ticked, editable, or "Not on page" for staff to type in; a field
+the form already holds starts unticked. Brand/category match existing ones by
+name or are created on apply. Photos are copied into our own storage through
+`GET /products/import-from-url/image` (images only, 15 MB) and appended after
+existing photos. Pages built in the browser (JB Hi-Fi) carry no product data
+in their HTML — the maker's own page usually does. Pinned by
+`product-page-import.test.ts` and koapos `product-url-import.test.ts`.
 
 ### Merging brands and suppliers
 

@@ -7,6 +7,7 @@ import {
   useUpdatePurchaseOrder,
   useDeletePurchaseOrder,
   useReceivePurchaseOrderItems,
+  useSetPurchaseOrderPayment,
   useSendPurchaseOrderEmail,
   useListProducts,
   useListSuppliers,
@@ -30,7 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown, Bell, FileUp, PackagePlus, EyeOff } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown, CircleDollarSign, Bell, FileUp, PackagePlus, EyeOff } from "lucide-react";
 import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { ImportSupplierInvoiceDialog, type ImportDone } from "@/components/purchase-orders/ImportSupplierInvoiceDialog";
@@ -345,23 +346,55 @@ export default function ProductsPurchaseOrdersPage() {
   const updatePO      = useUpdatePurchaseOrder();
   const deletePO      = useDeletePurchaseOrder();
   const receivePO     = useReceivePurchaseOrderItems();
+  const setPayment    = useSetPurchaseOrderPayment();
   const sendEmailMutation = useSendPurchaseOrderEmail();
 
-  // A fully received PO is locked (read-only) and lives in the History tab.
   const isFullyReceived = (o: { status: string }) =>
     o.status === "Fully Received" || o.status === "Received"; // "Received" = legacy value
+  // An order moves to History only once it is BOTH fully received and paid —
+  // a received order still owing the supplier stays on the working list.
+  const isClosed = (o: { status: string; paymentStatus?: string | null }) =>
+    isFullyReceived(o) && o.paymentStatus === "paid";
 
   const searchMatch = (o: PurchaseOrder) =>
     o.poNumber.toLowerCase().includes(search.toLowerCase()) ||
     (o.supplierName ?? "").toLowerCase().includes(search.toLowerCase()) ||
     (o.orderNumber ?? "").toLowerCase().includes(search.toLowerCase());
 
-  const activeCount  = orders.filter((o) => !isFullyReceived(o)).length;
-  const historyCount = orders.filter(isFullyReceived).length;
+  const activeCount  = orders.filter((o) => !isClosed(o)).length;
+  const historyCount = orders.filter(isClosed).length;
 
   const filtered = orders
     .filter(searchMatch)
-    .filter((o) => (tab === "history" ? isFullyReceived(o) : !isFullyReceived(o)));
+    .filter((o) => (tab === "history" ? isClosed(o) : !isClosed(o)));
+
+  const togglePaid = (po: PurchaseOrder) => {
+    const paid = po.paymentStatus !== "paid";
+    setPayment.mutate(
+      { id: po.id, data: { paid } },
+      {
+        onSuccess: (updated) => {
+          invalidateList();
+          setViewingPO((v) => (v && v.id === updated.id ? updated : v));
+          toast.success(paid
+            ? (isFullyReceived(updated) ? `${updated.poNumber} paid — moved to History` : `${updated.poNumber} marked paid`)
+            : `${updated.poNumber} marked unpaid`);
+        },
+        onError: () => toast.error("Failed to update payment"),
+      },
+    );
+  };
+
+  const paymentBadge = (po: PurchaseOrder) =>
+    po.paymentStatus === "paid" ? (
+      <Badge variant="outline" className="border-green-500 text-green-700 dark:text-green-400">Paid</Badge>
+    ) : po.paymentStatus === "partial" ? (
+      <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">
+        Part paid · {formatCurrency(po.amountPaid ?? 0)}
+      </Badge>
+    ) : (
+      <Badge variant="outline" className="border-red-400 text-red-700 dark:text-red-400">Unpaid</Badge>
+    );
 
   const addItem = () => setItems((p) => [...p, { ...EMPTY_ITEM }]);
   const updateItem = (i: number, field: keyof POItem, value: string | number | boolean) =>
@@ -598,8 +631,8 @@ export default function ProductsPurchaseOrdersPage() {
                 <>
                   <History className="w-16 h-16 text-muted-foreground/30" />
                   <div>
-                    <p className="font-medium text-lg">No fully received orders</p>
-                    <p className="text-muted-foreground text-sm">Purchase orders move here once all their items have been received.</p>
+                    <p className="font-medium text-lg">No completed orders</p>
+                    <p className="text-muted-foreground text-sm">Purchase orders move here once they are fully received and marked paid.</p>
                   </div>
                 </>
               ) : (
@@ -628,6 +661,7 @@ export default function ProductsPurchaseOrdersPage() {
                   <th className="text-left p-3 font-medium hidden md:table-cell">Order Date</th>
                   <th className="text-left p-3 font-medium hidden lg:table-cell">Expected</th>
                   <th className="text-left p-3 font-medium">Status</th>
+                  <th className="text-left p-3 font-medium">Payment</th>
                   <th className="text-right p-3 font-medium">Total</th>
                   <th className="p-3 w-20" />
                 </tr>
@@ -650,16 +684,19 @@ export default function ProductsPurchaseOrdersPage() {
                     <td className="p-3" onClick={() => setViewingPO(po)}>
                       {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
                     </td>
+                    <td className="p-3">
+                      <button
+                        type="button"
+                        className="rounded-full disabled:opacity-50"
+                        title={po.paymentStatus === "paid" ? "Click to mark unpaid" : "Click to mark paid"}
+                        disabled={setPayment.isPending}
+                        onClick={(e) => { e.stopPropagation(); togglePaid(po); }}
+                      >
+                        {paymentBadge(po)}
+                      </button>
+                    </td>
                     <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>
-                      <div>{formatCurrency(po.totalCost ?? 0)}</div>
-                      {po.paymentStatus === "paid" && (
-                        <Badge variant="outline" className="mt-1 border-green-500 text-green-700 dark:text-green-400 text-[10px] font-normal">Paid</Badge>
-                      )}
-                      {po.paymentStatus === "partial" && (
-                        <Badge variant="outline" className="mt-1 border-amber-400 text-amber-700 dark:text-amber-400 text-[10px] font-normal">
-                          {formatCurrency(po.amountPaid ?? 0)} paid
-                        </Badge>
-                      )}
+                      {formatCurrency(po.totalCost ?? 0)}
                     </td>
                     <td className="p-3 flex gap-1 justify-end">
                       <Button variant="ghost" size="icon" className="h-7 w-7" title="View details" onClick={() => setViewingPO(po)}>
@@ -732,6 +769,7 @@ export default function ProductsPurchaseOrdersPage() {
                 <div className="flex items-center gap-3">
                   <DialogTitle className="font-mono text-xl">#{po.poNumber}</DialogTitle>
                   {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
+                  {paymentBadge(po)}
                 </div>
               </DialogHeader>
 
@@ -870,6 +908,10 @@ export default function ProductsPurchaseOrdersPage() {
                 <div className="flex gap-2">
                   <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
                     <Pencil className="w-4 h-4 mr-1.5" /> Edit
+                  </Button>
+                  <Button variant="outline" disabled={setPayment.isPending} onClick={() => togglePaid(po)} className="gap-1.5">
+                    <CircleDollarSign className="w-4 h-4" />
+                    {po.paymentStatus === "paid" ? "Mark Unpaid" : "Mark Paid"}
                   </Button>
                   {(po.status === "Ordered" || po.status === "Partially Received" || po.status === "Sent" || po.status === "Partial") && (
                     <Button onClick={() => setReceiveDialogOpen(true)} className="gap-1.5 bg-emerald-600 hover:bg-emerald-700 text-white">

@@ -31,6 +31,9 @@ export const serviceJobsTable = pgTable("service_jobs", {
   repairWarrantyDays: integer("repair_warranty_days").notNull().default(0),
   // When the repair was marked completed (anchors the repair-warranty window).
   completedAt: timestamp("completed_at", { withTimezone: true }),
+  /* When the repair is promised by (YYYY-MM-DD) — printed as "Due:" on the
+     repair sticker. Added by scripts/src/add-service-job-due-date.ts. */
+  dueDate: text("due_date"),
   // If this job is a no-charge rework, the original job it redoes.
   reworkOfJobId: integer("rework_of_job_id"),
   // If this job was opened by reopening a completed job (a fresh, chargeable

@@ -98,6 +98,16 @@ describe.skipIf(!hasDb)("archive route (real DB)", () => {
     expect(a.notes).toContain("Restored from archive");
   });
 
+  it("sets, returns and clears a due date (YYYY-MM-DD only)", async () => {
+    const set = await request(app).patch(`/api/service-jobs/${ids[0]}`).send({ dueDate: "2026-11-20" }).expect(200);
+    expect(set.body.dueDate).toBe("2026-11-20");
+    const junk = await request(app).patch(`/api/service-jobs/${ids[0]}`).send({ dueDate: "next week" }).expect(200);
+    expect(junk.body.dueDate).toBeNull();
+    await request(app).patch(`/api/service-jobs/${ids[0]}`).send({ dueDate: "2026-11-21" }).expect(200);
+    const cleared = await request(app).patch(`/api/service-jobs/${ids[0]}`).send({ dueDate: "" }).expect(200);
+    expect(cleared.body.dueDate).toBeNull();
+  });
+
   it("completing an archived job moves it to history", async () => {
     // ids[1] is still archived from the first test.
     expect((await row(ids[1]!)).archivedAt).toBeTruthy();
