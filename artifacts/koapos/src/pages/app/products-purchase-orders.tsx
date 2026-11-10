@@ -35,7 +35,7 @@ import { toast } from "sonner";
 import { useLocation } from "wouter";
 import { ImportSupplierInvoiceDialog, type ImportDone } from "@/components/purchase-orders/ImportSupplierInvoiceDialog";
 import { uploadFile } from "@/lib/upload";
-import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
+import { useStickerPrinter, SALE_TICKET_SIZE_ID, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
 import { parseHardwareConfig, type HardwareCfg } from "@/lib/hardware-config";
 import { printDocument } from "@/lib/print-router";
@@ -329,10 +329,15 @@ export default function ProductsPurchaseOrdersPage() {
       toast.error("No catalogued products to print tickets for.");
       return;
     }
-    const ok = printStickersBatch(jobs);
-    if (!ok) toast.error("Couldn't open the print dialog — please try again");
-    else toast.success(`Printing ${count} sale ticket${count > 1 ? "s" : ""}`);
+    // Close the choice dialog FIRST and print once it has gone. Printing while
+    // it was still closing froze the page: print() halts JavaScript, and the
+    // dialog's "block the page" lock never got lifted.
     setPrintChoicePO(null);
+    window.setTimeout(() => {
+      const ok = printStickersBatch(jobs);
+      if (!ok) toast.error("Couldn't open the print dialog — please try again");
+      else toast.success(`Printing ${count} sale ticket${count > 1 ? "s" : ""} on DYMO ${SALE_TICKET_SIZE_ID}`);
+    }, 350);
   };
 
   const { data: orders = [], isLoading } = useListPurchaseOrders({});
@@ -1465,8 +1470,14 @@ export default function ProductsPurchaseOrdersPage() {
           invalidateList();
           queryClient.invalidateQueries({ queryKey: ["products"] });
           queryClient.invalidateQueries({ queryKey: ["suppliers"] });
-          if (r.newProducts.length) setImportDone(r);
-          else afterImport(r);
+          // Products filled from the supplier's datafeed already have their
+          // details; only ask about the rest (and any left without a price).
+          const needDetails = r.newProducts.filter((p) => !p.filledFromFeed || p.hidden);
+          if (needDetails.length) setImportDone({ ...r, newProducts: needDetails });
+          else {
+            if (r.newProducts.length) toast.success(`${r.newProducts.length} new product${r.newProducts.length === 1 ? "" : "s"} created from Leader's product data`);
+            afterImport(r);
+          }
         }}
       />
 
@@ -1474,10 +1485,12 @@ export default function ProductsPurchaseOrdersPage() {
       <Dialog open={!!importDone} onOpenChange={(o) => { if (!o && importDone) { const r = importDone; setImportDone(null); afterImport(r); } }}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2"><PackagePlus className="w-5 h-5 text-primary" />{importDone?.newProducts.length} new product{importDone?.newProducts.length === 1 ? "" : "s"} added</DialogTitle>
+            <DialogTitle className="flex items-center gap-2"><PackagePlus className="w-5 h-5 text-primary" />{importDone?.newProducts.length} new product{importDone?.newProducts.length === 1 ? "" : "s"} need{importDone?.newProducts.length === 1 ? "s" : ""} details</DialogTitle>
           </DialogHeader>
           <p className="text-sm text-muted-foreground">
-            They were created with just the basics from the invoice — name, SKU, cost and supplier. Fill in their details (sell price, category, photos, description) before selling them.
+            {importDone?.newProducts.some((p) => !p.filledFromFeed)
+              ? "These were created with just the basics from the invoice — name, SKU, cost and supplier. Fill in their details (sell price, category, photos, description) before selling them."
+              : "These were filled from the supplier's product data but have no sell price yet."}
             {importDone?.newProducts.some((p) => p.hidden) && " Those without a sell price are hidden from the till until you price them."}
           </p>
           <div className="divide-y rounded-lg border max-h-72 overflow-y-auto">

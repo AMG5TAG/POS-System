@@ -783,6 +783,12 @@ router.post("/purchase-orders/import", requireAuth, async (req, res): Promise<vo
             widthCm: measure(np.widthCm),
             heightCm: measure(np.heightCm),
             ...(warranty ?? {}),
+            // Trimmed, de-duplicated case-insensitively, first spelling kept.
+            tags: (() => {
+              const seen = new Set<string>();
+              const out = (np.tags ?? []).map((t) => t.trim()).filter((t) => t && !seen.has(t.toLowerCase()) && (seen.add(t.toLowerCase()), true));
+              return out.length ? out : null;
+            })(),
             productTypeId: standardType!.id,
             lowStockThreshold: lowStock?.globalThreshold ?? null,
             trackInventory: "true",

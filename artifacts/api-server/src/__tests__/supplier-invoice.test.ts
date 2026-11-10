@@ -224,6 +224,7 @@ describe.skipIf(!hasDb)("import routes (real DB)", () => {
             name: item.name, sku: code, manufCode: item.manufCode, sellPrice: 99, description: item.description,
             barcode: item.barcode, brand: item.brand, weightKg: 1.5, lengthCm: 20, widthCm: 10, heightCm: 5, warrantyMonths: 24,
             imageUrl: `/api/storage/objects/merchants/${h.merchantId}/assets/abc`,
+            tags: ["Memory", "memory", " USB ", ""],
           },
           productName: item.name, stockCode: code, quantity: 1, unitCost: 50,
         }],
@@ -238,6 +239,7 @@ describe.skipIf(!hasDb)("import routes (real DB)", () => {
         imageUrl: `/api/storage/objects/merchants/${h.merchantId}/assets/abc`,
       });
       expect(parseFloat(p.weightKg)).toBe(1.5);
+      expect(p.tags).toEqual(["Memory", "USB"]);
       expect(parseFloat(p.lengthCm)).toBe(20);
       const [b] = await db.select().from(t.brandsTable).where(orm.eq(t.brandsTable.id, p.brandId));
       expect(b.name).toBe(`Feedbrand ${tag}`);

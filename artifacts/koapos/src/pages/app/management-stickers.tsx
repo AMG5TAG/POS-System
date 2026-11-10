@@ -20,6 +20,7 @@ import {
   STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
   useStickerTemplates, useStickerPrinter, DymoSize,
   FONT_SIZE_OPTIONS, fieldHasFontSize, fontScaleKey,
+  labelSizeFor, SALE_TICKET_TYPES, SALE_TICKET_SIZE_ID,
 } from "@/lib/sticker-config";
 
 /* ─── On/Off pill toggle ──────────────────────────────────────────────────── */
@@ -177,7 +178,8 @@ export default function ManagementStickersPage() {
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
 
-  const selectedSize = DYMO_SIZES.find((s) => s.id === selectedSizeId) ?? DYMO_SIZES[0];
+  // Sale tickets always print on S0722370 — preview what will print.
+  const selectedSize = DYMO_SIZES.find((s) => s.id === labelSizeFor(selectedTypeId, selectedSizeId)) ?? DYMO_SIZES[0];
 
   // Product search query
   const { data: productSearchData } = useListProducts(
@@ -757,7 +759,11 @@ export default function ManagementStickersPage() {
 
                 {/* Recommended sizes */}
                 <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">Recommended sizes for {selectedType.label}</p>
+                  <p className="text-xs font-medium text-muted-foreground">
+                    {SALE_TICKET_TYPES.has(selectedTypeId)
+                      ? `${selectedType.label} labels always print on DYMO ${SALE_TICKET_SIZE_ID} (28 × 89 mm)`
+                      : `Recommended sizes for ${selectedType.label}`}
+                  </p>
                   <div className="flex flex-wrap gap-1.5">
                     {(RECOMMENDED_SIZES[selectedTypeId] ?? []).map((sid) => {
                       const s = DYMO_SIZES.find((d) => d.id === sid);

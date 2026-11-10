@@ -6288,6 +6288,10 @@ export const importSupplierInvoiceBodyLinesItemNewProductHeightCmMin = 0;
 export const importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMin = 0;
 export const importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMax = 240;
 
+export const importSupplierInvoiceBodyLinesItemNewProductTagsItemMax = 60;
+
+export const importSupplierInvoiceBodyLinesItemNewProductTagsMax = 30;
+
 export const importSupplierInvoiceBodyLinesItemProductNameMax = 300;
 
 export const importSupplierInvoiceBodyLinesItemStockCodeMax = 120;
@@ -6335,7 +6339,8 @@ export const ImportSupplierInvoiceBody = zod.object({
   "lengthCm": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductLengthCmMin).optional(),
   "widthCm": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductWidthCmMin).optional(),
   "heightCm": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductHeightCmMin).optional(),
-  "warrantyMonths": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMin).max(importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMax).optional()
+  "warrantyMonths": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMin).max(importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMax).optional(),
+  "tags": zod.array(zod.string().max(importSupplierInvoiceBodyLinesItemNewProductTagsItemMax)).max(importSupplierInvoiceBodyLinesItemNewProductTagsMax).optional()
 }).optional(),
   "productName": zod.string().max(importSupplierInvoiceBodyLinesItemProductNameMax),
   "stockCode": zod.string().max(importSupplierInvoiceBodyLinesItemStockCodeMax).optional(),

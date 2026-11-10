@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  useMatchSupplierInvoice, useImportSupplierInvoice, useReceivePurchaseOrderItems, useListCategories, useCreateCategory,
+  useMatchSupplierInvoice, useImportSupplierInvoice, useReceivePurchaseOrderItems, useListCategories, useCreateCategory, useListProductTags, getListProductTagsQueryKey,
   type PurchaseOrder, type SupplierInvoiceImportResult, type SupplierFeedProduct,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -18,7 +18,8 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { TreeCategorySelect } from "@/components/ui/tree-category-select";
 import { useQueryClient } from "@tanstack/react-query";
-import { FolderPlus } from "lucide-react";
+import { FolderPlus, Tag, X as XIcon } from "lucide-react";
+import { suggestTags } from "@/lib/tag-suggest";
 import { cn, formatCurrency } from "@/lib/utils";
 import { uploadFile } from "@/lib/upload";
 import {
@@ -50,14 +51,18 @@ interface LineState {
   serials: string[];
   /** The supplier datafeed's details for this stock code (Leader), if any. */
   feed: SupplierFeedProduct | null;
-  /** The feed's category matched to one of ours by name — never created. */
+  /** The feed's category matched to one of ours by name (or picked/created here). */
   categoryId: number | null;
+  /** Tags for a new product — the business's own tags its text mentions, editable. */
+  tags: string[];
 }
 
 export interface ImportDone {
   po: PurchaseOrder;
   received: boolean;
-  newProducts: SupplierInvoiceImportResult["newProducts"];
+  /** `filledFromFeed`: its details came from the supplier's datafeed, so it
+   *  doesn't need staff to fill them in. */
+  newProducts: Array<SupplierInvoiceImportResult["newProducts"][number] & { filledFromFeed: boolean }>;
   supplierCreated: boolean;
 }
 
@@ -91,6 +96,8 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
   const [feedAvailable, setFeedAvailable] = useState(false);
   const [useFeed, setUseFeed] = useState(true);
   const { data: categories = [] } = useListCategories({ query: { enabled: open, queryKey: ["categories"] } });
+  const { data: tagData } = useListProductTags({ query: { enabled: open, queryKey: getListProductTagsQueryKey() } });
+  const knownTags = useMemo(() => (tagData?.items ?? []) as Array<{ name: string; productCount: number }>, [tagData]);
   const createCategory = useCreateCategory();
   const queryClient = useQueryClient();
   const [creatingCat, setCreatingCat] = useState<string | null>(null);
@@ -179,6 +186,7 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
           sellPrice: !m && feed?.rrp ? feed.rrp.toFixed(2) : "",
           feed,
           categoryId: feed ? (catByName.get(feed.subcategory.trim().toLowerCase()) ?? catByName.get(feed.category.trim().toLowerCase()) ?? null) : null,
+          tags: suggestTags([feed?.name, feed?.shortDescription, feed?.brand, feed?.category, feed?.subcategory, l.description].filter(Boolean).join(" · "), knownTags),
           stockCode: l.stockCode,
           manufCode: l.manufCode,
           qty: Math.max(1, Math.round(l.qty)),
@@ -259,6 +267,7 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
             manufCode: (useFeed && l.feed?.manufCode) || l.manufCode || undefined,
             ...(parseFloat(l.sellPrice) > 0 ? { sellPrice: Math.round(parseFloat(l.sellPrice) * 100) / 100 } : {}),
             ...(l.categoryId ? { categoryId: l.categoryId } : {}),
+            ...(l.tags.length ? { tags: l.tags } : {}),
             ...(useFeed && l.feed ? {
               description: l.feed.description || undefined,
               barcode: l.feed.barcode || undefined,
@@ -303,7 +312,14 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
       }
 
       toast.success(`${po.poNumber} created from the invoice${received ? " and received into stock" : ""}`);
-      onDone({ po, received, newProducts: result.newProducts, supplierCreated: result.supplierCreated });
+      // The server returns new products in line order, so line k of the new
+      // ones is product k.
+      const newLines = lines.filter((l) => l.mode === "new");
+      onDone({
+        po, received,
+        newProducts: result.newProducts.map((p, k) => ({ ...p, filledFromFeed: useFeed && !!newLines[k]?.feed })),
+        supplierCreated: result.supplierCreated,
+      });
       reset();
       onOpenChange(false);
     } catch (e) {
@@ -497,6 +513,11 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
                                         })()}
                                         {!l.categoryId && !l.feed && <span className="text-[11px] text-amber-700 dark:text-amber-400">Choose or create a category</span>}
                                       </div>
+                                      <TagChips
+                                        tags={l.tags}
+                                        known={knownTags}
+                                        onChange={(tags) => setLine(i, { tags })}
+                                      />
                                     </div>
                                   </div>
                                 </div>
@@ -624,5 +645,42 @@ function FeedThumb({ stockCode, hasImage }: { stockCode: string; hasImage: boole
       onError={() => setFailed(true)}
       className="w-12 h-12 rounded border bg-white object-contain shrink-0"
     />
+  );
+}
+
+/** A new product's tags: suggested from the business's own tags, removable,
+ *  and more can be typed (existing tags offered as you type). */
+function TagChips({ tags, known, onChange }: { tags: string[]; known: Array<{ name: string }>; onChange: (t: string[]) => void }) {
+  const [draft, setDraft] = useState("");
+  const listId = useMemo(() => `tags-${Math.random().toString(36).slice(2)}`, []);
+  const add = (raw: string) => {
+    const t = raw.trim().replace(/,$/, "");
+    if (!t) return;
+    const existing = known.find((k) => k.name.toLowerCase() === t.toLowerCase())?.name ?? t;
+    if (!tags.some((x) => x.toLowerCase() === existing.toLowerCase())) onChange([...tags, existing]);
+    setDraft("");
+  };
+  return (
+    <div className="flex flex-wrap items-center gap-1">
+      <Tag className="w-3 h-3 text-muted-foreground" />
+      {tags.map((t) => (
+        <span key={t} className="inline-flex items-center gap-0.5 rounded-full border bg-muted px-2 py-0.5 text-[11px]">
+          {t}
+          <button type="button" aria-label={`Remove ${t}`} onClick={() => onChange(tags.filter((x) => x !== t))} className="text-muted-foreground hover:text-foreground">
+            <XIcon className="w-3 h-3" />
+          </button>
+        </span>
+      ))}
+      <input
+        list={listId}
+        value={draft}
+        onChange={(e) => { if (e.target.value.endsWith(",")) add(e.target.value); else setDraft(e.target.value); }}
+        onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(draft); } }}
+        onBlur={() => add(draft)}
+        placeholder={tags.length ? "+ tag" : "Add tags…"}
+        className="h-6 w-24 rounded border bg-background px-1.5 text-[11px] outline-none focus:ring-1 focus:ring-ring"
+      />
+      <datalist id={listId}>{known.map((k) => <option key={k.name} value={k.name} />)}</datalist>
+    </div>
   );
 }

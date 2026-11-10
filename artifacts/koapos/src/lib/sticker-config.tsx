@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { releasePageLockAfterPrint } from "@/lib/release-page-lock";
 import {
   Package, User, RotateCcw, Wrench, MapPin, DollarSign, LayoutGrid,
 } from "lucide-react";
@@ -149,7 +150,8 @@ export const DYMO_SIZES: DymoSize[] = [
   { id: "30334",    name: "Extra Large Ship (4\" × 6\")",       widthMm: 102,   heightMm: 152,  series: "LW" },
   { id: "30336",    name: "Multipurpose (1\" × 2⅛\")",         widthMm: 25.4,  heightMm: 54,   series: "LW" },
   { id: "99014",    name: "Shipping 54×101mm",                  widthMm: 54,    heightMm: 101,  series: "LW" },
-  { id: "S0722370", name: "Standard Address 36×89mm",           widthMm: 36,    heightMm: 89,   series: "LW" },
+  // DYMO 99010 — 28 × 89 mm (was listed here as 36 × 89, which is 99012).
+  { id: "S0722370", name: "Standard Address 28×89mm (99010)",    widthMm: 28,    heightMm: 89,   series: "LW" },
   { id: "S0722520", name: "Large Return Address 25×54mm",        widthMm: 25,    heightMm: 54,   series: "LW" },
   // LabelWriter 550 series
   { id: "LW-1x1",   name: "Square 1\" × 1\" (550)",            widthMm: 25.4,  heightMm: 25.4, series: "LW550" },
@@ -172,7 +174,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: Package,
     color: "text-blue-500",
     description: "Price tags and shelf labels for stock items",
-    defaultSize: "S0722520",
+    defaultSize: "S0722370",
     fields: [
       { key: "showProductName", label: "Product Name",  defaultValue: "true",  type: "toggle" },
       { key: "showSku",         label: "SKU",           defaultValue: "true",  type: "toggle" },
@@ -263,7 +265,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: DollarSign,
     color: "text-green-600",
     description: "Retail price tags with product info",
-    defaultSize: "S0722520",
+    defaultSize: "S0722370",
     fields: [
       { key: "showProductName", label: "Product Name", defaultValue: "true",  type: "toggle" },
       { key: "showPrice",       label: "Price",        defaultValue: "true",  type: "toggle" },
@@ -301,15 +303,29 @@ export const COMMON_STICKER_FIELDS: StickerField[] = [
 ];
 STICKER_TYPES.forEach((t) => t.fields.push(...COMMON_STICKER_FIELDS));
 
+/* ─── Sale tickets ───────────────────────────────────────────────────────────
+   Every sale ticket (a product or price-tag label) prints on DYMO S0722370 —
+   99010 Standard Address, 28 × 89 mm — the roll the shop keeps in the label
+   printer. It is enforced where every label is built (buildStickersHtml) and
+   shown in the editor and previews, so a template saved at another size, or a
+   print path that asks for one, still comes out on the right roll. */
+export const SALE_TICKET_SIZE_ID = "S0722370";
+export const SALE_TICKET_TYPES: ReadonlySet<string> = new Set(["product", "pricetag"]);
+
+/** The label size a type actually prints at: sale tickets are always S0722370. */
+export function labelSizeFor(typeId: string, sizeId: string | null | undefined): string {
+  return SALE_TICKET_TYPES.has(typeId) ? SALE_TICKET_SIZE_ID : (sizeId || SALE_TICKET_SIZE_ID);
+}
+
 /* ─── Recommended sizes per type ─────────────────────────────────────────── */
 
 export const RECOMMENDED_SIZES: Record<string, string[]> = {
-  product:  ["S0722520", "11354", "LW-2x1", "LW-2.5x1", "11353"],
+  product:  [SALE_TICKET_SIZE_ID],
   customer: ["S0722520", "30252", "30331", "S0722370"],
   return:   ["S0722520", "30256", "30334", "99014"],
   repair:   ["S0722520", "30256", "30334", "99014"],
   address:  ["S0722520", "30252", "30331", "S0722370"],
-  pricetag: ["S0722520", "LW-2.5x1", "11354", "LW-2x1"],
+  pricetag: [SALE_TICKET_SIZE_ID],
   shelf:    ["S0722520", "30321", "LW-2.5x1", "11355"],
 };
 
@@ -1232,14 +1248,19 @@ function printLabelHtmlViaIframe(html: string): boolean {
   doc.write(html);
   doc.close();
   let removed = false;
-  const cleanup = () => { if (!removed) { removed = true; setTimeout(() => iframe.remove(), 1000); } };
+  const cleanup = () => {
+    if (!removed) { removed = true; setTimeout(() => iframe.remove(), 1000); }
+    releasePageLockAfterPrint();
+  };
   win.onafterprint = cleanup;
 
   let printed = false;
   const triggerPrint = () => {
     if (printed) return;
     printed = true;
-    try { win.focus(); win.print(); } catch { iframe.remove(); return; }
+    try { win.focus(); win.print(); } catch { iframe.remove(); releasePageLockAfterPrint(); return; }
+    // print() returns once the dialog is dismissed in most browsers.
+    releasePageLockAfterPrint();
     // Safety net: some browsers never fire afterprint.
     setTimeout(cleanup, 60_000);
   };
@@ -1311,7 +1332,7 @@ export function useStickerPrinter() {
     const type = STICKER_TYPES.find((t) => t.id === args.typeId);
     if (!type) return null;
     const tpl = args.template ?? defaultTemplateFor(args.typeId);
-    const sizeId = args.sizeOverride ?? tpl?.sizeId ?? type.defaultSize;
+    const sizeId = labelSizeFor(args.typeId, args.sizeOverride ?? tpl?.sizeId ?? type.defaultSize);
     const size = DYMO_SIZES.find((s) => s.id === sizeId) ?? DYMO_SIZES[0];
 
     const typeDefaults = Object.fromEntries(type.fields.map((fld) => [fld.key, fld.defaultValue]));

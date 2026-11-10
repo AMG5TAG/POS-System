@@ -38,7 +38,7 @@ import {
   useGetLowStockAlertSettings,
 } from "@workspace/api-client-react";
 import {
-  useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes,
+  useStickerTemplates, useStickerPrinter, LabelPreview, STICKER_TYPES, DYMO_SIZES, resolveQuickCodes, labelSizeFor,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { InvoiceSendDialog } from "@/components/invoices/InvoiceSendDialog";
@@ -550,7 +550,8 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
     ?? templates.find((t) => t.typeId === "product");
 
   const type = defaultTpl ? (STICKER_TYPES.find((t) => t.id === defaultTpl.typeId) ?? STICKER_TYPES[0]) : STICKER_TYPES[0];
-  const size = defaultTpl ? (DYMO_SIZES.find((s) => s.id === defaultTpl.sizeId) ?? DYMO_SIZES[2]) : DYMO_SIZES[2];
+  // Sale tickets always print on S0722370 (labelSizeFor), so preview that.
+  const size = DYMO_SIZES.find((s) => s.id === labelSizeFor("product", defaultTpl?.sizeId)) ?? DYMO_SIZES[2];
 
   // The real product values, keyed by the data fields buildLabelHtml / LabelPreview
   // read. Saved templates only persist on/off toggles (not product data), so these

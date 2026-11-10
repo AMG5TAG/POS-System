@@ -3822,6 +3822,8 @@ export type SupplierInvoiceImportInputLinesItemNewProduct = {
      * @maximum 240
      */
   warrantyMonths?: number;
+  /** @maxItems 30 */
+  tags?: string[];
 };
 
 export type SupplierInvoiceImportInputLinesItem = {

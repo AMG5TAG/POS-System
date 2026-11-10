@@ -12,6 +12,7 @@
  * Every step degrades to the next, so a sale is never blocked by a printer
  * problem: the worst case is the operator seeing the print dialog they see today.
  */
+import { releasePageLockAfterPrint } from "@/lib/release-page-lock";
 import {
   isThermalProfile, profileForPurpose, thermalWidth,
   type HardwareCfg, type PrinterProfile, type PrintPurpose,
@@ -81,10 +82,11 @@ export function printHtmlViaIframe(html: string): boolean {
   doc.open();
   doc.write(html);
   doc.close();
-  win.addEventListener("afterprint", cleanup, { once: true });
+  win.addEventListener("afterprint", () => { cleanup(); releasePageLockAfterPrint(); }, { once: true });
   // Give images/fonts a beat to settle before the dialog captures the page.
   window.setTimeout(() => {
-    try { win.focus(); win.print(); } catch { iframe.remove(); return; }
+    try { win.focus(); win.print(); } catch { iframe.remove(); releasePageLockAfterPrint(); return; }
+    releasePageLockAfterPrint();
     window.setTimeout(cleanup, 30_000);
   }, 250);
   return true;

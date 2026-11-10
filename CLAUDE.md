@@ -271,6 +271,21 @@ style is an A4 one, which is what keeps pre-existing 80mm merchants unchanged;
 picking a thermal style writes it to `80mm` so the two can't disagree. Compact is
 a *density*, never a smaller field set — a job prints the same content on either.
 
+**Sale tickets are always DYMO S0722370** (99010 Standard Address, 28 × 89 mm
+— it was listed as 36 × 89, which is 99012). `labelSizeFor` in
+`lib/sticker-config.tsx` forces it for the `product` and `pricetag` label types
+inside `buildStickersHtml`, so every print path (PO "Sale Tickets", the product
+page, the label editor) prints on that roll whatever size a saved template says;
+the editor and the product print preview show the same size.
+
+**Never print while a dialog is closing.** `window.print()` halts the page's
+JavaScript, and a Radix dialog still closing then never lifts its page lock
+(`pointer-events: none` on <body>, `data-scroll-locked`) — the PO ticket print
+froze the whole page this way. Close the dialog first and print after it has
+gone (~350 ms); `releasePageLockAfterPrint` (`lib/release-page-lock.ts`, called
+by both iframe print paths) frees a stranded lock afterwards, and only when no
+dialog is actually open.
+
 Labels/stickers (`lib/sticker-config.tsx`) route through the same router but are
 **never** ESC/POS — DYMO-class printers use their own driver protocol, so they take
 the bridge's HTML path with `paper: "auto"`, which preserves the exact die-cut

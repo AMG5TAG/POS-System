@@ -14218,6 +14218,10 @@ components:
                   widthCm: { type: number, minimum: 0 }
                   heightCm: { type: number, minimum: 0 }
                   warrantyMonths: { type: integer, minimum: 0, maximum: 240 }
+                  tags:
+                    type: array
+                    maxItems: 30
+                    items: { type: string, maxLength: 60 }
               productName: { type: string, maxLength: 300 }
               stockCode: { type: string, maxLength: 120 }
               quantity: { type: integer, minimum: 1, maximum: 100000 }
