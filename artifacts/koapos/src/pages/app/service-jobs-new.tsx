@@ -15,7 +15,7 @@ import {
 } from "@workspace/api-client-react";
 import {
   LabelPreview, useStickerTemplates, useStickerPrinter,
-  STICKER_TYPES, DYMO_SIZES,
+  STICKER_TYPES, DYMO_SIZES, labelSizeFor,
 } from "@/lib/sticker-config";
 import { useBusinessProfile } from "@/lib/business-profile";
 import { Badge } from "@/components/ui/badge";
@@ -300,7 +300,8 @@ export default function ServiceJobNewPage() {
   const repairStickerType = STICKER_TYPES.find((t) => t.id === "repair")!;
   const repairTemplates = stickerTemplates.filter((t) => t.typeId === "repair");
   const activeStickerTpl = repairTemplates.find((t) => t.id === selectedStickerTplId) ?? null;
-  const stickerSize = DYMO_SIZES.find((s) => s.id === (activeStickerTpl?.sizeId ?? repairStickerType.defaultSize)) ?? DYMO_SIZES.find((s) => s.id === "30256")!;
+  // Every label prints on the one roll (labelSizeFor), so preview that size.
+  const stickerSize = DYMO_SIZES.find((s) => s.id === labelSizeFor("repair", activeStickerTpl?.sizeId ?? repairStickerType.defaultSize))!;
   // Start from the type's field defaults so every toggle key has a value, then
   // overlay the saved template. This keeps the on-screen preview in sync with the
   // actual print (printStickers merges the same defaults) — without it, a saved

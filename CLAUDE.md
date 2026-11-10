@@ -271,12 +271,25 @@ style is an A4 one, which is what keeps pre-existing 80mm merchants unchanged;
 picking a thermal style writes it to `80mm` so the two can't disagree. Compact is
 a *density*, never a smaller field set — a job prints the same content on either.
 
-**Sale tickets are always DYMO S0722370** (99010 Standard Address, 28 × 89 mm
-— it was listed as 36 × 89, which is 99012). `labelSizeFor` in
-`lib/sticker-config.tsx` forces it for the `product` and `pricetag` label types
-inside `buildStickersHtml`, so every print path (PO "Sale Tickets", the product
-page, the label editor) prints on that roll whatever size a saved template says;
-the editor and the product print preview show the same size.
+**One DYMO roll for every label: S0722520** (11352 Large Return Address,
+25 × 54 mm; `LABEL_SIZE_ID` in `lib/sticker-config.tsx`). `labelSizeFor`
+returns it for every label type inside `buildStickersHtml`, so sale tickets,
+price tags, customer, repair, return, address and shelf labels all print on it
+whatever size a saved template says; the templates page shows the size fixed
+rather than offering others, and the product and repair-sticker previews use it.
+The rest of `DYMO_SIZES` stays only so old saved templates resolve (S0722370 is
+99010, 28 × 89 mm — it was listed as 36 × 89).
+
+**Label pages are portrait, like the roll.** `buildLabelHtml` declares `@page`
+at the roll's portrait size (25 × 54) and turns a landscape design −90° onto
+it. A landscape `@page` (54 × 25) matched no paper the DYMO driver offers, so
+Chrome fell back to the default paper with margins — the browser's date/title
+header printed and one ticket ran over two labels. The page title is blank for
+the same reason. A label with more lines than fit is shrunk as a whole by an
+inline script (`.lbl-body`/`.lbl-fit`, zoom down to 55%) — lines never squash
+into each other. The layouts print **real values only**: they used to fall back
+to sample text ("Beverages", a repair password of "1234") whenever a field was
+empty, and that printed on real labels.
 
 **Never print while a dialog is closing.** `window.print()` halts the page's
 JavaScript, and a Radix dialog still closing then never lifts its page lock

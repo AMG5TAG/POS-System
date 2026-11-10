@@ -550,7 +550,7 @@ function PrintStickerDialog({ open, onOpenChange, product }: {
     ?? templates.find((t) => t.typeId === "product");
 
   const type = defaultTpl ? (STICKER_TYPES.find((t) => t.id === defaultTpl.typeId) ?? STICKER_TYPES[0]) : STICKER_TYPES[0];
-  // Sale tickets always print on S0722370 (labelSizeFor), so preview that.
+  // Sale tickets always print at SALE_TICKET_SIZE_ID (labelSizeFor), so preview that.
   const size = DYMO_SIZES.find((s) => s.id === labelSizeFor("product", defaultTpl?.sizeId)) ?? DYMO_SIZES[2];
 
   // The real product values, keyed by the data fields buildLabelHtml / LabelPreview

@@ -165,6 +165,24 @@ export const DYMO_SIZES: DymoSize[] = [
   { id: "D1-19mm",  name: "D1 Tape 19mm",                      widthMm: 19,    heightMm: 40,   series: "D1"  },
 ];
 
+/* ─── The one label size ─────────────────────────────────────────────────────
+   The shop runs ONE DYMO roll: S0722520, Large Return Address, 25 × 54 mm.
+   Every label type — sale tickets, price tags, customer, repair, return,
+   address and shelf labels — prints on it, enforced where every label is built
+   (buildStickersHtml) and shown in the templates editor and previews, so a
+   template saved at another size, or a print path that asks for one, still
+   comes out on that roll. The other DYMO_SIZES stay listed only so old saved
+   templates still resolve. */
+export const LABEL_SIZE_ID = "S0722520";
+/** Kept for callers that speak of sale tickets; the same single size. */
+export const SALE_TICKET_SIZE_ID = LABEL_SIZE_ID;
+export const SALE_TICKET_TYPES: ReadonlySet<string> = new Set(["product", "pricetag"]);
+
+/** The label size every label type prints at: always the one roll, S0722520. */
+export function labelSizeFor(_typeId: string, _sizeId?: string | null): string {
+  return LABEL_SIZE_ID;
+}
+
 /* ─── Sticker types — all label fields are on/off toggles ────────────────── */
 
 export const STICKER_TYPES: StickerType[] = [
@@ -174,7 +192,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: Package,
     color: "text-blue-500",
     description: "Price tags and shelf labels for stock items",
-    defaultSize: "S0722370",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showProductName", label: "Product Name",  defaultValue: "true",  type: "toggle" },
       { key: "showSku",         label: "SKU",           defaultValue: "true",  type: "toggle" },
@@ -191,7 +209,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: User,
     color: "text-violet-500",
     description: "Loyalty cards, ID labels and membership stickers",
-    defaultSize: "S0722520",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showCustomerName", label: "Customer Name",  defaultValue: "true", type: "toggle" },
       { key: "showCustomerId",   label: "Customer ID",    defaultValue: "true", type: "toggle" },
@@ -209,7 +227,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: RotateCcw,
     color: "text-amber-500",
     description: "Supplier return (RMA) labels for goods sent back to suppliers",
-    defaultSize: "S0722520",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showReturnNo",  label: "RMA #",          defaultValue: "true", type: "toggle" },
       { key: "showDate",      label: "Date",           defaultValue: "true", type: "toggle" },
@@ -227,7 +245,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: Wrench,
     color: "text-rose-500",
     description: "Job labels for service desk and repair tickets",
-    defaultSize: "S0722520",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showJobNo",    label: "Job #",         defaultValue: "true", type: "toggle" },
       { key: "splitJobNo",   label: "Job # on 2 Lines", defaultValue: "false", type: "toggle" },
@@ -249,7 +267,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: MapPin,
     color: "text-emerald-500",
     description: "Shipping and postal address labels",
-    defaultSize: "S0722520",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showName",    label: "Name",                      defaultValue: "true", type: "toggle" },
       { key: "showCompany", label: "Business Name",             defaultValue: "true", type: "toggle" },
@@ -265,7 +283,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: DollarSign,
     color: "text-green-600",
     description: "Retail price tags with product info",
-    defaultSize: "S0722370",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showProductName", label: "Product Name", defaultValue: "true",  type: "toggle" },
       { key: "showPrice",       label: "Price",        defaultValue: "true",  type: "toggle" },
@@ -280,7 +298,7 @@ export const STICKER_TYPES: StickerType[] = [
     icon: LayoutGrid,
     color: "text-cyan-500",
     description: "Shelf-edge labels for gondola or display shelving",
-    defaultSize: "S0722520",
+    defaultSize: LABEL_SIZE_ID,
     fields: [
       { key: "showProductName", label: "Product Name", defaultValue: "true", type: "toggle" },
       { key: "showPrice",       label: "Price",        defaultValue: "true", type: "toggle" },
@@ -303,30 +321,16 @@ export const COMMON_STICKER_FIELDS: StickerField[] = [
 ];
 STICKER_TYPES.forEach((t) => t.fields.push(...COMMON_STICKER_FIELDS));
 
-/* ─── Sale tickets ───────────────────────────────────────────────────────────
-   Every sale ticket (a product or price-tag label) prints on DYMO S0722370 —
-   99010 Standard Address, 28 × 89 mm — the roll the shop keeps in the label
-   printer. It is enforced where every label is built (buildStickersHtml) and
-   shown in the editor and previews, so a template saved at another size, or a
-   print path that asks for one, still comes out on the right roll. */
-export const SALE_TICKET_SIZE_ID = "S0722370";
-export const SALE_TICKET_TYPES: ReadonlySet<string> = new Set(["product", "pricetag"]);
-
-/** The label size a type actually prints at: sale tickets are always S0722370. */
-export function labelSizeFor(typeId: string, sizeId: string | null | undefined): string {
-  return SALE_TICKET_TYPES.has(typeId) ? SALE_TICKET_SIZE_ID : (sizeId || SALE_TICKET_SIZE_ID);
-}
-
 /* ─── Recommended sizes per type ─────────────────────────────────────────── */
 
 export const RECOMMENDED_SIZES: Record<string, string[]> = {
-  product:  [SALE_TICKET_SIZE_ID],
-  customer: ["S0722520", "30252", "30331", "S0722370"],
-  return:   ["S0722520", "30256", "30334", "99014"],
-  repair:   ["S0722520", "30256", "30334", "99014"],
-  address:  ["S0722520", "30252", "30331", "S0722370"],
-  pricetag: [SALE_TICKET_SIZE_ID],
-  shelf:    ["S0722520", "30321", "LW-2.5x1", "11355"],
+  product:  [LABEL_SIZE_ID],
+  customer: [LABEL_SIZE_ID],
+  return:   [LABEL_SIZE_ID],
+  repair:   [LABEL_SIZE_ID],
+  address:  [LABEL_SIZE_ID],
+  pricetag: [LABEL_SIZE_ID],
+  shelf:    [LABEL_SIZE_ID],
 };
 
 /* ─── Barcode helpers ────────────────────────────────────────────────────── */
@@ -1031,7 +1035,13 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
   const isHoriz = orientation === "horizontal";
   const pageW = isHoriz ? Math.max(size.widthMm, size.heightMm) : Math.min(size.widthMm, size.heightMm);
   const pageH = isHoriz ? Math.min(size.widthMm, size.heightMm) : Math.max(size.widthMm, size.heightMm);
+  // A landscape design is rotated onto the driver's portrait page (see the
+  // page setup at the end). Square labels need no turn.
+  const rotateToMedia = pageW > pageH;
 
+  // Real values only. These layouts used to fall back to sample text ("Beverages",
+  // "Sarah Johnson", a password of "1234"…) whenever a field was empty, and that
+  // sample text printed on real labels. An empty field now prints nothing.
   const f    = (k: string) => fields[k] ?? "";
   const show = (k: string) => f(k) !== "false";
   const biz  = businessName;
@@ -1073,12 +1083,12 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       case "product": {
         const productText = `
         <div>
-          ${show("showProductName") ? `<div style="font-weight:700;font-size:${hSize("showProductName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")||"Product Name"}</div>` : ""}
-          ${show("showCategory") ? `<div style="font-size:${hSize("showCategory",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("category")||"Beverages"}</div>` : ""}
-          ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")||"BEV-001"}</div>` : ""}
+          ${show("showProductName") ? `<div style="font-weight:700;font-size:${hSize("showProductName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("productName")}</div>` : ""}
+          ${show("showCategory") ? `<div style="font-size:${hSize("showCategory",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("category")}</div>` : ""}
+          ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")}</div>` : ""}
         </div>
         <div>
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.35)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.35)}pt;color:${accent}">${f("price")}</div>` : ""}
           ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}
         </div>`;
         if (!productQrSrc) return productText;
@@ -1090,11 +1100,11 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
 
       case "customer": {
         const customerText = `
-        ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${hSize("showCustomerName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")||"Sarah Johnson"}</div>` : ""}
-        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${hSize("showGroup",0.85)}pt">${f("group")||"VIP Member"}</div>` : ""}
-        ${show("showCustomerId") ? `<div style="font-size:${hSize("showCustomerId",1)}pt;color:#888">${f("customerId")||"#CUS-0042"}</div>` : ""}
-        ${show("showLoyaltyNo") ? `<div style="font-size:${hSize("showLoyaltyNo",1)}pt;color:#888">${f("loyaltyNo")||"LYL-20491"}</div>` : ""}
-        ${show("showPhone") ? `<div style="font-size:${hSize("showPhone",1)}pt;color:#888">${f("phone")||"(03) 9000 0000"}</div>` : ""}
+        ${show("showCustomerName") ? `<div style="font-weight:700;font-size:${hSize("showCustomerName",1.15)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("customerName")}</div>` : ""}
+        ${show("showGroup") ? `<div style="background:${accent};color:#fff;padding:0 1mm;border-radius:.5mm;white-space:nowrap;overflow:hidden;font-size:${hSize("showGroup",0.85)}pt">${f("group")}</div>` : ""}
+        ${show("showCustomerId") ? `<div style="font-size:${hSize("showCustomerId",1)}pt;color:#888">${f("customerId")}</div>` : ""}
+        ${show("showLoyaltyNo") ? `<div style="font-size:${hSize("showLoyaltyNo",1)}pt;color:#888">${f("loyaltyNo")}</div>` : ""}
+        ${show("showPhone") ? `<div style="font-size:${hSize("showPhone",1)}pt;color:#888">${f("phone")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!customerQrSrc) return customerText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
@@ -1104,26 +1114,26 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       }
 
       case "return": return `
-        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${hSize("showReturnNo",1.1)}pt">RETURN ${f("returnNo")||"RTN-0089"}</div>` : ""}
-        ${show("showItem") ? `<div style="font-size:${hSize("showItem",1)}pt;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")||"Defective Keyboard"}</div>` : ""}
-        ${show("showReason") ? `<div style="font-size:${hSize("showReason",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("reason")||"Not as described"}</div>` : ""}
-        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${hSize("showStatus",0.85)}pt;white-space:nowrap;overflow:hidden">${f("status")||"Awaiting Inspection"}</div>` : ""}
-        ${show("showDate") ? `<div style="font-size:${hSize("showDate",1)}pt;color:#888">${f("date")||"18/05/2026"}</div>` : ""}
-        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("customer")||"Sarah Johnson"}</div>` : ""}
+        ${show("showReturnNo") ? `<div style="font-weight:700;color:${danger};font-size:${hSize("showReturnNo",1.1)}pt">RETURN ${f("returnNo")}</div>` : ""}
+        ${show("showItem") ? `<div style="font-size:${hSize("showItem",1)}pt;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("item")}</div>` : ""}
+        ${show("showReason") ? `<div style="font-size:${hSize("showReason",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("reason")}</div>` : ""}
+        ${show("showStatus") ? `<div style="background:${danger};color:#fff;padding:0 1mm;border-radius:.5mm;font-size:${hSize("showStatus",0.85)}pt;white-space:nowrap;overflow:hidden">${f("status")}</div>` : ""}
+        ${show("showDate") ? `<div style="font-size:${hSize("showDate",1)}pt;color:#888">${f("date")}</div>` : ""}
+        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("customer")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "repair": {
         const repairText = `
         ${show("showJobNo") ? (show("splitJobNo")
-          ? `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;line-height:1.05"><div>SERVICE</div><div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("jobNo")||"SVC-0031"}</div></div>`
-          : `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")||"SVC-0031"}</div>`) : ""}
-        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")||"Mike Chen"}</div>` : ""}
-        ${show("showDevice") ? `<div style="font-size:${hSize("showDevice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("device")||"MacBook Pro 2023"}</div>` : ""}
-        ${show("showFault") ? `<div style="font-size:${hSize("showFault",1)}pt;color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")||"Screen flickering"}</div>` : ""}
-        ${show("showDueDate") ? `<div style="font-size:${hSize("showDueDate",1)}pt;font-weight:600">Due: ${f("dueDate")||"22/05/2026"}</div>` : ""}
-        ${show("showTech") ? `<div style="font-size:${hSize("showTech",1)}pt;color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")||"Alex Taylor"}</div>` : ""}
-        ${show("showUsername") ? `<div style="font-size:${hSize("showUsername",1)}pt;color:#666;white-space:nowrap;overflow:hidden">User: ${f("username")||"user@demo"}</div>` : ""}
-        ${show("showPassword") ? `<div style="font-size:${hSize("showPassword",1)}pt;color:#666;white-space:nowrap;overflow:hidden">Pass: ${f("password")||"1234"}</div>` : ""}
+          ? `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;line-height:1.05"><div>SERVICE</div><div style="overflow:hidden;white-space:nowrap;text-overflow:ellipsis">${f("jobNo")}</div></div>`
+          : `<div style="font-weight:700;font-size:${hSize("showJobNo",1.1)}pt;overflow:hidden;white-space:nowrap;text-overflow:ellipsis">SERVICE ${f("jobNo")}</div>`) : ""}
+        ${show("showCustomer") ? `<div style="font-size:${hSize("showCustomer",1)}pt;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("customer")}</div>` : ""}
+        ${show("showDevice") ? `<div style="font-size:${hSize("showDevice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("device")}</div>` : ""}
+        ${show("showFault") ? `<div style="font-size:${hSize("showFault",1)}pt;color:#aaa;white-space:nowrap;overflow:hidden">Fault: ${f("fault")}</div>` : ""}
+        ${show("showDueDate") ? `<div style="font-size:${hSize("showDueDate",1)}pt;font-weight:600">Due: ${f("dueDate")}</div>` : ""}
+        ${show("showTech") ? `<div style="font-size:${hSize("showTech",1)}pt;color:#888;white-space:nowrap;overflow:hidden">Tech: ${f("tech")}</div>` : ""}
+        ${show("showUsername") ? `<div style="font-size:${hSize("showUsername",1)}pt;color:#666;white-space:nowrap;overflow:hidden">User: ${f("username")}</div>` : ""}
+        ${show("showPassword") ? `<div style="font-size:${hSize("showPassword",1)}pt;color:#666;white-space:nowrap;overflow:hidden">Pass: ${f("password")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
         if (!serviceQrSrc) return repairText;
         return `<div style="display:flex;gap:2mm;flex:1;min-height:0;align-items:center">
@@ -1133,25 +1143,25 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       }
 
       case "address": return `
-        ${show("showName") ? `<div style="font-size:${hSize("showName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")||"Sarah Johnson"}</div>` : ""}
-        ${show("showCompany") ? `<div style="font-size:${hSize("showCompany",1)}pt;white-space:nowrap;overflow:hidden">${f("company")||"Demo Co Pty Ltd"}</div>` : ""}
-        ${show("showStreet") ? `<div style="font-size:${hSize("showStreet",1)}pt;white-space:nowrap;overflow:hidden">${f("street")||"123 Main Street"}</div>` : ""}
-        ${show("showSuburb") ? `<div style="font-size:${hSize("showSuburb",1)}pt;white-space:nowrap;overflow:hidden">${[f("suburb")||"Melbourne",f("state")||"VIC",f("postcode")||"3000"].filter(Boolean).join(" ")}</div>` : ""}
+        ${show("showName") ? `<div style="font-size:${hSize("showName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("name")}</div>` : ""}
+        ${show("showCompany") ? `<div style="font-size:${hSize("showCompany",1)}pt;white-space:nowrap;overflow:hidden">${f("company")}</div>` : ""}
+        ${show("showStreet") ? `<div style="font-size:${hSize("showStreet",1)}pt;white-space:nowrap;overflow:hidden">${f("street")}</div>` : ""}
+        ${show("showSuburb") ? `<div style="font-size:${hSize("showSuburb",1)}pt;white-space:nowrap;overflow:hidden">${[f("suburb"),f("state"),f("postcode")].filter(Boolean).join(" ")}</div>` : ""}
         ${show("showBizName")&&biz ? `<div style="color:#888;font-size:${hSize("showBizName",0.85)}pt;text-align:right;white-space:nowrap;overflow:hidden">${biz}</div>` : ""}`;
 
       case "pricetag": return `
-        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Reusable Cup"}</div>` : ""}
-        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">#${f("sku")||"HW-042"}</div>` : ""}
+        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")}</div>` : ""}
+        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">#${f("sku")}</div>` : ""}
         <div>
-          ${show("showWasPrice") ? `<div style="font-size:${hSize("showWasPrice",1)}pt;text-decoration:line-through;color:#aaa">${f("wasPrice")||"$18.99"}</div>` : ""}
-          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")||"$12.99"}</div>` : ""}
+          ${show("showWasPrice") ? `<div style="font-size:${hSize("showWasPrice",1)}pt;text-decoration:line-through;color:#aaa">${f("wasPrice")}</div>` : ""}
+          ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")}</div>` : ""}
         </div>`;
 
       case "shelf": return `
-        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")||"Flat White 250g"}</div>` : ""}
-        ${show("showUnitPrice") ? `<div style="font-size:${hSize("showUnitPrice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")||"$2.20/100g"}</div>` : ""}
-        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")||"GR-250"}</div>` : ""}
-        ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")||"$5.50"}</div>` : ""}`;
+        ${show("showProductName") ? `<div style="font-size:${hSize("showProductName",1)}pt;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${f("productName")}</div>` : ""}
+        ${show("showUnitPrice") ? `<div style="font-size:${hSize("showUnitPrice",1)}pt;color:#888;white-space:nowrap;overflow:hidden">${f("unitPrice")}</div>` : ""}
+        ${show("showSku") ? `<div style="font-size:${hSize("showSku",1)}pt;color:#888">${f("sku")}</div>` : ""}
+        ${show("showPrice") ? `<div style="font-weight:700;font-size:${hSize("showPrice",1.5)}pt;color:${accent}">${f("price")}</div>` : ""}`;
 
       default: return "";
     }
@@ -1192,44 +1202,74 @@ export function buildLabelHtml(args: BuildLabelHtmlArgs): string {
       display:flex;flex-direction:column;
       background:#fff;
       writing-mode:horizontal-tb;
-      page-break-after:always;break-after:page;
-      page-break-inside:avoid;break-inside:avoid;
+      ${rotateToMedia ? "" : "page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid;"}
     ">
       ${barcodePosition === "top" ? barcodeBlock("1.5mm 2mm 0 2mm") : ""}
-      <div style="flex:1;min-height:0;overflow:hidden;display:flex;flex-direction:column;padding:1mm 3mm">
-        ${logoBlock}
-        <div style="flex:1;min-height:0;display:flex;flex-direction:column;justify-content:space-between">
-          ${inner}
+      <div class="lbl-body" style="flex:1;min-height:0;overflow:hidden;padding:1mm 3mm 0.6mm">
+        <div class="lbl-fit" style="min-height:100%;display:flex;flex-direction:column">
+          ${logoBlock}
+          <div class="lbl-inner" style="flex:1;display:flex;flex-direction:column;justify-content:space-between">
+            ${inner}
+          </div>
+          ${websiteBlock}
+          ${customTextBlock}
         </div>
-        ${websiteBlock}
-        ${customTextBlock}
       </div>
       ${barcodePosition === "bottom" ? barcodeBlock("0 2mm 1.5mm 2mm") : ""}
     </div>`;
+
+  /* The page is always the roll as the DYMO driver defines it: PORTRAIT, short
+     edge across the print head (S0722520 = 25 mm wide × 54 mm long). A
+     landscape @page (54 × 25) matched no paper the driver offers, so Chrome fell
+     back to the printer's default paper with normal margins — the browser's
+     date/title header printed and one ticket ran over two labels. A landscape
+     design is drawn at its own size and turned −90° to sit on the portrait
+     page, so it still reads along the label. */
+  const mediaW = Math.min(pageW, pageH);
+  const mediaH = Math.max(pageW, pageH);
+  const page = rotateToMedia
+    ? `<div style="width:${mediaW}mm;height:${mediaH}mm;position:relative;overflow:hidden;page-break-after:always;break-after:page;page-break-inside:avoid;break-inside:avoid">
+        <div style="position:absolute;left:0;top:${mediaH}mm;width:${pageW}mm;height:${pageH}mm;transform-origin:0 0;transform:rotate(-90deg)">${labelBlock}</div>
+      </div>`
+    : labelBlock;
 
   return `<!DOCTYPE html>
 <html>
 <head>
 <meta charset="utf-8">
-<title>Label Print</title>
+<title>​</title>
 <style>
   *,*::before,*::after{
     box-sizing:border-box;margin:0;padding:0;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
-  @page{size:${pageW}mm ${pageH}mm;margin:0}
+  @page{size:${mediaW}mm ${mediaH}mm;margin:0}
   html,body{
     margin:0;padding:0;
-    width:${pageW}mm;
+    width:${mediaW}mm;
     background:#fff;
     writing-mode:horizontal-tb;
     -webkit-print-color-adjust:exact;print-color-adjust:exact;
   }
   img{image-rendering:-webkit-optimize-contrast;image-rendering:crisp-edges;image-rendering:pixelated}
+  /* Lines never squash into each other: a label with more lines than fit is
+     shrunk as a whole by the script below instead. */
+  .lbl-fit>*,.lbl-inner>*{flex-shrink:0}
 </style>
 </head>
 <body>
-${Array.from({ length: Math.max(1, quantity) }).map(() => labelBlock).join("\n")}
+${Array.from({ length: Math.max(1, quantity) }).map(() => page).join("\n")}
+<script>
+/* Shrink a label's text block until it fits the 25 x 54 mm label (down to 55%).
+   Zoom changes layout, so the body's scrollHeight follows it. */
+(function(){
+  var bodies=document.querySelectorAll('.lbl-body');
+  for(var i=0;i<bodies.length;i++){
+    var b=bodies[i],f=b.firstElementChild,z=1;
+    while(f&&b.scrollHeight>b.clientHeight+1&&z>0.55){z-=0.04;f.style.zoom=String(z);}
+  }
+})();
+</script>
 </body>
 </html>`;
 }

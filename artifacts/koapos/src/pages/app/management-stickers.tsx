@@ -17,10 +17,10 @@ import {
   Save, Star, Copy, Trash2, Plus, ZoomIn, ZoomOut,
 } from "lucide-react";
 import {
-  STICKER_TYPES, DYMO_SIZES, RECOMMENDED_SIZES, LabelPreview,
-  useStickerTemplates, useStickerPrinter, DymoSize,
+  STICKER_TYPES, DYMO_SIZES, LabelPreview,
+  useStickerTemplates, useStickerPrinter,
   FONT_SIZE_OPTIONS, fieldHasFontSize, fontScaleKey,
-  labelSizeFor, SALE_TICKET_TYPES, SALE_TICKET_SIZE_ID,
+  labelSizeFor, LABEL_SIZE_ID,
 } from "@/lib/sticker-config";
 
 /* ─── On/Off pill toggle ──────────────────────────────────────────────────── */
@@ -131,7 +131,7 @@ function FieldTextInput({
 
 export default function ManagementStickersPage() {
   const [selectedTypeId, setSelectedTypeId] = useState<string>("product");
-  const [selectedSizeId, setSelectedSizeId] = useState<string>("S0722520");
+  const [selectedSizeId, setSelectedSizeId] = useState<string>(LABEL_SIZE_ID);
   const [orientation,   setOrientation]     = useState<"horizontal" | "vertical">("horizontal");
   const [barcodePosition, setBarcodePosition] = useState<"top" | "bottom">("bottom");
   const [colorMode,     setColorMode]       = useState<"bw" | "color">("bw");
@@ -178,7 +178,7 @@ export default function ManagementStickersPage() {
   const businessName = merchant?.businessName || "Your Business";
   const brandColor   = profile.brandColors?.[0] || "#efbf04";
 
-  // Sale tickets always print on S0722370 — preview what will print.
+  // Every label prints on the one roll (LABEL_SIZE_ID) — preview what will print.
   const selectedSize = DYMO_SIZES.find((s) => s.id === labelSizeFor(selectedTypeId, selectedSizeId)) ?? DYMO_SIZES[0];
 
   // Product search query
@@ -326,7 +326,7 @@ export default function ManagementStickersPage() {
         const p = JSON.parse(prodRaw) as { name: string; sku: string; price: number; barcode: string; category: string };
         sessionStorage.removeItem("koapos_sticker_product");
         setSelectedTypeId("product");
-        setSelectedSizeId("11354");
+        setSelectedSizeId(LABEL_SIZE_ID);
         setProductQuery(p.name || "");
         setFields((prev) => ({
           ...prev,
@@ -343,11 +343,6 @@ export default function ManagementStickersPage() {
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
-
-  const sizeGroups = DYMO_SIZES.reduce<Record<string, DymoSize[]>>((acc, s) => {
-    (acc[s.series] ??= []).push(s);
-    return acc;
-  }, {});
 
   /* ── Print handler ─────────────────────────────────────────────────────── */
   /* Delegates to the shared sticker printer so the Stickers manager and every
@@ -570,33 +565,13 @@ export default function ManagementStickersPage() {
             {/* Size + orientation settings card — flex-1 fills remaining column height */}
             <Card className="flex-1">
               <CardContent className="p-4 space-y-4">
-                {/* Size selector */}
+                {/* Label size — fixed: the shop runs one DYMO roll (LABEL_SIZE_ID). */}
                 <div className="space-y-1.5">
                   <Label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Label Size</Label>
-                  <Select value={selectedSizeId} onValueChange={setSelectedSizeId}>
-                    <SelectTrigger>
-                      <SelectValue>
-                        {selectedSize.name} ({selectedSize.widthMm}×{selectedSize.heightMm}mm)
-                      </SelectValue>
-                    </SelectTrigger>
-                    <SelectContent>
-                      {Object.entries(sizeGroups).map(([series, sizes]) => (
-                        <div key={series}>
-                          <div className="px-2 py-1 text-[10px] font-semibold text-muted-foreground uppercase tracking-wider border-b">
-                            {series === "LW" ? "LabelWriter 400/450" : series === "LW550" ? "LabelWriter 550" : "D1 Tape"}
-                          </div>
-                          {sizes.map((s) => (
-                            <SelectItem key={s.id} value={s.id}>
-                              {s.name} · {s.widthMm}×{s.heightMm}mm
-                            </SelectItem>
-                          ))}
-                        </div>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  <p className="text-[11px] text-muted-foreground">
-                    {selectedSize.widthMm}mm × {selectedSize.heightMm}mm · Part #{selectedSize.id}
-                  </p>
+                  <div className="rounded-md border bg-muted/40 px-3 py-2 text-sm">
+                    <p className="font-medium">DYMO {selectedSize.id} — Large Return Address</p>
+                    <p className="text-[11px] text-muted-foreground">{selectedSize.widthMm} × {selectedSize.heightMm} mm · every label type prints on this roll</p>
+                  </div>
                 </div>
 
                 {/* Orientation */}
@@ -757,34 +732,6 @@ export default function ManagementStickersPage() {
                   Preview is scaled — actual size: {selectedSize.widthMm}mm × {selectedSize.heightMm}mm
                 </p>
 
-                {/* Recommended sizes */}
-                <div className="space-y-1.5">
-                  <p className="text-xs font-medium text-muted-foreground">
-                    {SALE_TICKET_TYPES.has(selectedTypeId)
-                      ? `${selectedType.label} labels always print on DYMO ${SALE_TICKET_SIZE_ID} (28 × 89 mm)`
-                      : `Recommended sizes for ${selectedType.label}`}
-                  </p>
-                  <div className="flex flex-wrap gap-1.5">
-                    {(RECOMMENDED_SIZES[selectedTypeId] ?? []).map((sid) => {
-                      const s = DYMO_SIZES.find((d) => d.id === sid);
-                      if (!s) return null;
-                      return (
-                        <button
-                          key={sid}
-                          onClick={() => setSelectedSizeId(sid)}
-                          className={cn(
-                            "text-[10px] px-2 py-0.5 rounded border transition-colors",
-                            sid === selectedSizeId
-                              ? "bg-primary text-primary-foreground border-primary"
-                              : "pill-selector hover:bg-muted border-border",
-                          )}
-                        >
-                          {sid}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
               </CardContent>
             </Card>
           </div>
