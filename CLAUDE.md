@@ -1332,6 +1332,34 @@ Two subtleties worth keeping:
   session — the same physical float is counted into the drawer again each
   morning, and summing it would inflate the float by a factor of the days traded.
 
+**Weekly budget comes from the KPIs.** End of Week doesn't keep its own
+budget: it reads the business's **Net Profit** KPI (Staff & Operations ›
+KPIs & Targets) — active, no staff assigned, preferring one named "Budget";
+among several, the one whose dated window covers the week, then an undated
+one, then the latest window that started before the week (flagged on the page
+as outside its window). The target is spread by the KPI's own period (monthly
+× 12 ÷ 52, quarterly × 4 ÷ 52, annual ÷ 52, weekly as is), pro rata per day for
+a custom range, and the week is measured on **profit after staff**
+(`weekBudget`/`pickBudgetKpi` in `lib/end-of-week.ts`, pinned in
+`end-of-week.test.ts`). `budget` is part of the assembled report, so a
+finalised week's snapshot keeps the budget it was judged against.
+`sales_settings.eow_monthly_budgets` held a short-lived separate budget and is
+RETAINED, UNUSED.
+
+**The default week is the shop's own date.** `defaultWeekRange` takes a date;
+the route now gives it `localDate(merchant.timezone)`, not `new Date()` — on a
+Friday morning in Sydney the UTC date is still Thursday, which opened the page
+on the week before the one that had just closed.
+
+**Friday prompt.** Opening a register (the till's Open Register dialog in
+`pos.tsx`, and `pos-eod.tsx`) bumps `FridayEndOfWeekPrompt`
+(`components/end-of-week/`), which asks `GET /end-of-week/status` (any staff;
+no figures) for the shop's weekday and the just-finished week's status. On a
+Friday, unless that week is finalised or this device was already prompted
+today (localStorage `kk-eow-prompted-<date>`), it asks for End of Week —
+managers/owners get a button to the page, cashiers are told to tell a manager.
+It waits for the float-slip prompt to close first.
+
 Adding the table is the standalone idempotent script
 `scripts/src/add-end-of-week-reports-table.ts` in the `db:push` chain, not
 `drizzle-kit push`, for the same reason every other `add-*-table` script exists:

@@ -371,3 +371,102 @@ export function mergeCashPurchases(
 
 export const sumCashPurchases = (rows: readonly CashPurchase[]): number =>
   r2(rows.reduce((s, p) => s + (Number(p.amount) || 0), 0));
+
+/* ── Weekly budget ────────────────────────────────────────────────────────
+   The budget is the business's own KPI (Management › Staff & Operations ›
+   KPIs & Targets): an active, business-wide (no staff assigned) Net Profit
+   KPI, preferring one named "Budget". When several qualify, the one whose
+   dated window covers the week wins, then an undated one, then the most recent
+   window that started before the week — a "Budget" set for one month keeps
+   applying until it is updated, and the page says which window it came from.
+   Its target is spread by its own period (monthly × 12 ÷ 52, quarterly × 4 ÷
+   52, annual ÷ 52, weekly as is, daily × 7), pro rata per day for a custom
+   range. The week is measured on profit after staff. */
+
+export interface BudgetKpi {
+  id: number;
+  name: string;
+  metric: string;
+  period: string;
+  target: number;
+  startDate: string | null;
+  endDate: string | null;
+  isActive: boolean;
+  /** Staff the KPI is assigned to; a budget is business-wide, so empty. */
+  staffIds: number[];
+}
+
+export interface WeekBudget {
+  kpiId: number;
+  kpiName: string;
+  period: string;
+  /** The KPI's target for its own period. */
+  periodTarget: number;
+  /** The KPI's dated window, when it has one ("2026-06-01 – 2026-06-30"). */
+  windowStart: string | null;
+  windowEnd: string | null;
+  /** True when the week falls outside that window (the latest one was used). */
+  outsideWindow: boolean;
+  weeklyBudget: number;
+  /** Profit after staff for the week. */
+  actual: number;
+  /** actual − weeklyBudget: positive = made over budget, negative = missed it. */
+  difference: number;
+}
+
+const WEEKS_PER_PERIOD: Record<string, number> = {
+  daily: 1 / 7, weekly: 1, monthly: 52 / 12, quarterly: 13, annual: 52,
+};
+
+/** The KPI window's end: the given end date, else one period after the start. */
+function windowEnd(k: BudgetKpi): string | null {
+  if (!k.startDate) return null;
+  if (k.endDate && k.endDate >= k.startDate) return k.endDate;
+  const s = parseYmd(k.startDate)!;
+  const e = new Date(s);
+  switch (k.period) {
+    case "daily": break;
+    case "weekly": e.setUTCDate(e.getUTCDate() + 6); break;
+    case "quarterly": e.setUTCMonth(e.getUTCMonth() + 3); e.setUTCDate(e.getUTCDate() - 1); break;
+    case "annual": e.setUTCFullYear(e.getUTCFullYear() + 1); e.setUTCDate(e.getUTCDate() - 1); break;
+    default: e.setUTCMonth(e.getUTCMonth() + 1); e.setUTCDate(e.getUTCDate() - 1);
+  }
+  return toYmd(e);
+}
+
+export function pickBudgetKpi(kpis: readonly BudgetKpi[], weekStart: string): { kpi: BudgetKpi; outsideWindow: boolean } | null {
+  const pool = kpis.filter((k) =>
+    k.isActive && k.metric === "net_profit" && k.staffIds.length === 0 && k.target > 0 && WEEKS_PER_PERIOD[k.period] != null);
+  if (!pool.length) return null;
+  const named = pool.filter((k) => k.name.trim().toLowerCase() === "budget");
+  const ranked = named.length ? named : pool;
+
+  const covering = ranked.filter((k) => k.startDate && k.startDate <= weekStart && (windowEnd(k) ?? "") >= weekStart);
+  if (covering.length) return { kpi: covering.sort((a, b) => (b.startDate! > a.startDate! ? 1 : -1))[0]!, outsideWindow: false };
+  const undated = ranked.filter((k) => !k.startDate);
+  if (undated.length) return { kpi: undated.sort((a, b) => b.id - a.id)[0]!, outsideWindow: false };
+  const started = ranked.filter((k) => k.startDate && k.startDate <= weekStart)
+    .sort((a, b) => (b.startDate! > a.startDate! ? 1 : -1));
+  if (started.length) return { kpi: started[0]!, outsideWindow: true };
+  return null; // only windows that start after this week
+}
+
+export function weekBudget(kpis: readonly BudgetKpi[], startDate: string, days: number, actual: number): WeekBudget | null {
+  if (!(days > 0)) return null;
+  const pick = pickBudgetKpi(kpis, startDate);
+  if (!pick) return null;
+  const { kpi, outsideWindow } = pick;
+  const weeklyBudget = r2((kpi.target / WEEKS_PER_PERIOD[kpi.period]!) * (days / 7));
+  return {
+    kpiId: kpi.id,
+    kpiName: kpi.name,
+    period: kpi.period,
+    periodTarget: r2(kpi.target),
+    windowStart: kpi.startDate,
+    windowEnd: windowEnd(kpi),
+    outsideWindow,
+    weeklyBudget,
+    actual: r2(actual),
+    difference: r2(actual - weeklyBudget),
+  };
+}

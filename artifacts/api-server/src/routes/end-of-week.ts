@@ -1,16 +1,17 @@
 import { Router, type IRouter } from "express";
 import { sql, eq, and } from "drizzle-orm";
 import { z } from "zod/v4";
-import { db, endOfWeekReportsTable, merchantsTable, staffTable, salesSettingsTable } from "@workspace/db";
+import { db, endOfWeekReportsTable, merchantsTable, staffTable, salesSettingsTable, kpiTargetsTable } from "@workspace/db";
 import { requireAuth } from "../middlewares/requireAuth";
 import { requireManagerOrOwner } from "../middlewares/requireManagerOrOwner";
 import { getDefaultTaxRate, splitGstInclusive } from "../lib/tax";
 import {
   r2, daysInRange, defaultWeekRange, groupByBanking, computeDeposit,
   computeWages, computeSuper, shiftHours, mergeStaffCosts, sumStaffCosts,
-  mergeCashPurchases, sumCashPurchases, staffCostTotal,
-  type MethodTotal, type StaffCostRow, type CashPurchase,
+  mergeCashPurchases, sumCashPurchases, staffCostTotal, weekBudget, parseYmd,
+  type MethodTotal, type StaffCostRow, type CashPurchase, type BudgetKpi,
 } from "../lib/end-of-week";
+import { localDate } from "../lib/pre-orders";
 
 /**
  * End of Week — Management › Marketing & Reports › End of Week.
@@ -51,13 +52,41 @@ function validateRange(startDate: string, endDate: string): string | null {
  * flips the toggle expects the page they are looking at to change. Absent row =
  * the default, which is what the report did before the option existed.
  */
-async function includeTaxInStaffCost(merchantId: number): Promise<boolean> {
-  const [row] = await db
-    .select({ v: salesSettingsTable.eowIncludeTaxInStaffCost })
-    .from(salesSettingsTable)
-    .where(eq(salesSettingsTable.merchantId, merchantId))
-    .limit(1);
-  return row?.v === "true";
+interface EowSettings { includeTax: boolean; budgetKpis: BudgetKpi[] }
+
+/** The PAYG convention above, and the KPIs the weekly budget is read from
+ *  (Management › KPIs & Targets — see weekBudget in lib/end-of-week.ts). */
+async function eowSettings(merchantId: number): Promise<EowSettings> {
+  const [[row], kpis] = await Promise.all([
+    db.select({ v: salesSettingsTable.eowIncludeTaxInStaffCost })
+      .from(salesSettingsTable)
+      .where(eq(salesSettingsTable.merchantId, merchantId))
+      .limit(1),
+    db.select().from(kpiTargetsTable)
+      .where(and(eq(kpiTargetsTable.merchantId, merchantId), eq(kpiTargetsTable.metric, "net_profit"))),
+  ]);
+  const ids = (raw: string): number[] => { try { const v = JSON.parse(raw); return Array.isArray(v) ? v.map(Number).filter(Number.isFinite) : []; } catch { return []; } };
+  return {
+    includeTax: row?.v === "true",
+    budgetKpis: kpis.map((k) => ({
+      id: k.id, name: k.name, metric: k.metric, period: k.period,
+      target: parseFloat(k.target) || 0,
+      startDate: k.startDate || null, endDate: k.endDate || null,
+      isActive: k.isActive === "true",
+      staffIds: ids(k.staffIds),
+    })),
+  };
+}
+
+/**
+ * The week that has just finished, in the shop's own time zone. The default
+ * range used to be worked out from the UTC date, and on a Friday morning in
+ * Sydney it is still Thursday in UTC — so the page opened on the week before
+ * the one that had just closed, exactly when someone was about to bank it.
+ */
+async function currentDefaultWeek(merchantId: number): Promise<{ startDate: string; endDate: string }> {
+  const [m] = await db.select({ timezone: merchantsTable.timezone }).from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  return defaultWeekRange(parseYmd(localDate(m?.timezone)) ?? new Date());
 }
 
 /* ── The computed half ────────────────────────────────────────────────────── */
@@ -444,8 +473,9 @@ function assemble(
   startDate: string, endDate: string,
   computed: ComputedWeek,
   saved: SavedRow | null,
-  includeTax: boolean,
+  settings: EowSettings,
 ) {
+  const includeTax = settings.includeTax;
   const isFirstOpen = saved === null;
   const cashPurchases = mergeCashPurchases(
     asArray<CashPurchase>(saved?.cashPurchases),
@@ -521,6 +551,12 @@ function assemble(
     /** Trading profit less what the week's staff cost. The bottom line the
      *  report exists to produce. */
     profitAfterStaff: r2(computed.sales.netProfit - staffCostTotals.total),
+
+    /** The week measured against its month's budget (null when no budget is
+     *  set). Part of the snapshot, so a finalised week keeps the budget it was
+     *  judged against even if the budget changes later. */
+    budget: weekBudget(settings.budgetKpis, startDate, daysInRange(startDate, endDate),
+      r2(computed.sales.netProfit - staffCostTotals.total)),
   };
 }
 
@@ -531,7 +567,7 @@ router.get("/end-of-week", requireAuth, requireManagerOrOwner, async (req, res):
 
   let startDate: string, endDate: string;
   if (req.query.startDate === undefined && req.query.endDate === undefined) {
-    ({ startDate, endDate } = defaultWeekRange(new Date()));
+    ({ startDate, endDate } = await currentDefaultWeek(merchantId));
   } else {
     const parsed = DateRange.safeParse(req.query);
     if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
@@ -559,11 +595,11 @@ router.get("/end-of-week", requireAuth, requireManagerOrOwner, async (req, res):
     return;
   }
 
-  const [computed, includeTax] = await Promise.all([
+  const [computed, settings] = await Promise.all([
     computeWeek(merchantId, startDate, endDate),
-    includeTaxInStaffCost(merchantId),
+    eowSettings(merchantId),
   ]);
-  res.json(assemble(startDate, endDate, computed, (saved as SavedRow | undefined) ?? null, includeTax));
+  res.json(assemble(startDate, endDate, computed, (saved as SavedRow | undefined) ?? null, settings));
 });
 
 /* ── PUT /end-of-week ─────────────────────────────────────────────────────── */
@@ -632,9 +668,9 @@ router.put("/end-of-week", requireAuth, requireManagerOrOwner, async (req, res):
   if (input.staffCosts    !== undefined) values.staffCosts    = input.staffCosts;
   if (input.notes         !== undefined) values.notes         = input.notes;
 
-  const [computed, includeTax] = await Promise.all([
+  const [computed, settings] = await Promise.all([
     computeWeek(merchantId, startDate, endDate),
-    includeTaxInStaffCost(merchantId),
+    eowSettings(merchantId),
   ]);
 
   if (existing) {
@@ -663,7 +699,7 @@ router.put("/end-of-week", requireAuth, requireManagerOrOwner, async (req, res):
       eq(endOfWeekReportsTable.endDate, endDate),
     ))
     .limit(1);
-  res.json(assemble(startDate, endDate, computed, (saved as SavedRow | undefined) ?? null, includeTax));
+  res.json(assemble(startDate, endDate, computed, (saved as SavedRow | undefined) ?? null, settings));
 });
 
 /* ── POST /end-of-week/finalise ───────────────────────────────────────────── */
@@ -709,11 +745,11 @@ router.post("/end-of-week/finalise", requireAuth, requireManagerOrOwner, async (
     if (member?.name) closedByName = member.name;
   }
 
-  const [computed, includeTax] = await Promise.all([
+  const [computed, settings] = await Promise.all([
     computeWeek(merchantId, startDate, endDate),
-    includeTaxInStaffCost(merchantId),
+    eowSettings(merchantId),
   ]);
-  const snapshot = assemble(startDate, endDate, computed, (existing as SavedRow | undefined) ?? null, includeTax);
+  const snapshot = assemble(startDate, endDate, computed, (existing as SavedRow | undefined) ?? null, settings);
 
   const finalisedAt = new Date();
   const values = {
@@ -765,20 +801,47 @@ router.post("/end-of-week/reopen", requireAuth, requireManagerOrOwner, async (re
 
   if (updated.length === 0) { res.status(404).json({ error: "No saved report for that week" }); return; }
 
-  const [computed, includeTax] = await Promise.all([
+  const [computed, settings] = await Promise.all([
     computeWeek(merchantId, startDate, endDate),
-    includeTaxInStaffCost(merchantId),
+    eowSettings(merchantId),
   ]);
   const [saved] = await db
     .select()
     .from(endOfWeekReportsTable)
     .where(eq(endOfWeekReportsTable.id, updated[0].id))
     .limit(1);
-  res.json(assemble(startDate, endDate, computed, (saved as SavedRow | undefined) ?? null, includeTax));
+  res.json(assemble(startDate, endDate, computed, (saved as SavedRow | undefined) ?? null, settings));
 });
 
 /* ── GET /end-of-week/history ─────────────────────────────────────────────── */
 // The weeks already saved, newest first — the banking history.
+/* ── Status ───────────────────────────────────────────────────────────────── */
+// For the Friday prompt when a register is opened: which week has just
+// finished and whether it has been done. Any signed-in staff may ask (a
+// cashier's prompt tells them to fetch a manager); it reveals no figures.
+router.get("/end-of-week/status", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const [m] = await db.select({ timezone: merchantsTable.timezone }).from(merchantsTable).where(eq(merchantsTable.id, merchantId));
+  const today = localDate(m?.timezone);
+  const { startDate, endDate } = defaultWeekRange(parseYmd(today) ?? new Date());
+  const [saved] = await db.select({ status: endOfWeekReportsTable.status })
+    .from(endOfWeekReportsTable)
+    .where(and(
+      eq(endOfWeekReportsTable.merchantId, merchantId),
+      eq(endOfWeekReportsTable.startDate, startDate),
+      eq(endOfWeekReportsTable.endDate, endDate),
+    ))
+    .limit(1);
+  res.json({
+    today,
+    /** The shop's own day of the week, 0 = Sunday … 5 = Friday. */
+    weekday: (parseYmd(today) ?? new Date()).getUTCDay(),
+    startDate,
+    endDate,
+    status: saved?.status ?? "not-started",
+  });
+});
+
 router.get("/end-of-week/history", requireAuth, requireManagerOrOwner, async (req, res): Promise<void> => {
   const merchantId = req.session.merchantId!;
   const limit = Math.min(Math.max(parseInt(String(req.query.limit ?? "26"), 10) || 26, 1), 200);

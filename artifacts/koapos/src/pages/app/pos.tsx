@@ -70,6 +70,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { toast } from "sonner";
+import { FridayEndOfWeekPrompt } from "@/components/end-of-week/FridayEndOfWeekPrompt";
 import { Badge } from "@/components/ui/badge";
 import { isPreOrderActive, formatPreOrderDate, depositLineId } from "@/lib/pre-order";
 import { cn } from "@/lib/utils";
@@ -678,6 +679,9 @@ export default function POSPage() {
 
   const getSession = (): RegisterSession | null => sessionSnap;
 
+  /* Friday: opening a register asks for End of Week (FridayEndOfWeekPrompt). */
+  const [eowTrigger, setEowTrigger] = useState(0);
+
   const handleOpenRegister = () => {
     /* Hard per-terminal lock — this register's till is already open on another
        device, so this machine cannot open a second session for it. */
@@ -709,6 +713,7 @@ export default function POSPage() {
     /* Skip the cash-movement (float) slip for cashless Operations registers. */
     if (!isOperationsRegister) setCashMovementPrintOpen(true);
     toast.success("Register opened");
+    setEowTrigger((n) => n + 1);
 
     /* Sync to server so other devices can detect this till is in use. */
     createServerSession.mutate(
@@ -5899,6 +5904,9 @@ export default function POSPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Waits for the float slip prompt above to close first. */}
+      <FridayEndOfWeekPrompt trigger={eowTrigger} blocked={cashMovementPrintOpen || openRegisterDialogOpen} />
 
       {/* ─── Cash Movement Print Prompt ─── */}
       <Dialog open={cashMovementPrintOpen} onOpenChange={(o) => { if (!o) setCashMovementPrintOpen(false); }}>

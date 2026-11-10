@@ -308,3 +308,51 @@ describe("mergeCashPurchases", () => {
     expect(sumCashPurchases(rows)).toBe(60);
   });
 });
+
+/* ── Weekly budget (from the KPIs) ───────────────────────────────────── */
+import { pickBudgetKpi, weekBudget, type BudgetKpi } from "../lib/end-of-week";
+
+const kpi = (over: Partial<BudgetKpi>): BudgetKpi => ({
+  id: 1, name: "Budget", metric: "net_profit", period: "monthly", target: 6046.39,
+  startDate: null, endDate: null, isActive: true, staffIds: [], ...over,
+});
+
+describe("weekly budget from the KPIs", () => {
+  it("spreads a monthly target over 52 weeks a year (× 12 ÷ 52) and measures profit after staff", () => {
+    const b = weekBudget([kpi({})], "2026-11-06", 7, 2000)!;
+    expect(b).toMatchObject({ kpiName: "Budget", period: "monthly", periodTarget: 6046.39, weeklyBudget: 1395.32, outsideWindow: false });
+    expect(b.difference).toBe(604.68); // made over budget
+    expect(weekBudget([kpi({})], "2026-11-06", 7, 1000)!.difference).toBe(-395.32); // missed it
+  });
+
+  it("uses each period's own rate, and pro-rates a custom range", () => {
+    expect(weekBudget([kpi({ period: "weekly", target: 1500 })], "2026-11-06", 7, 0)!.weeklyBudget).toBe(1500);
+    expect(weekBudget([kpi({ period: "quarterly", target: 13000 })], "2026-11-06", 7, 0)!.weeklyBudget).toBe(1000);
+    expect(weekBudget([kpi({ period: "annual", target: 52000 })], "2026-11-06", 14, 0)!.weeklyBudget).toBe(2000);
+  });
+
+  it("only takes an active, business-wide Net Profit KPI, preferring one named Budget", () => {
+    const pool = [
+      kpi({ id: 1, name: "Staff profit", staffIds: [3] }),
+      kpi({ id: 2, name: "Revenue", metric: "revenue" }),
+      kpi({ id: 3, name: "Old", isActive: false }),
+      kpi({ id: 4, name: "Profit goal", target: 9000 }),
+      kpi({ id: 5, name: "budget", target: 5000 }),
+    ];
+    expect(pickBudgetKpi(pool, "2026-11-06")!.kpi.id).toBe(5);
+    expect(pickBudgetKpi(pool.slice(0, 4), "2026-11-06")!.kpi.id).toBe(4);
+    expect(weekBudget(pool.slice(0, 3), "2026-11-06", 7, 0)).toBeNull();
+  });
+
+  it("prefers the window covering the week, then undated, then the latest that started before it", () => {
+    const june = kpi({ id: 10, target: 6000, startDate: "2026-06-01", endDate: "2026-06-30" });
+    const nov = kpi({ id: 11, target: 7000, startDate: "2026-11-01" }); // one month long by default
+    expect(pickBudgetKpi([june, nov], "2026-11-06")).toEqual({ kpi: nov, outsideWindow: false });
+    expect(pickBudgetKpi([june, kpi({ id: 12 })], "2026-11-06")!.kpi.id).toBe(12);
+    // Only June's window exists: it still applies, flagged as outside its window.
+    const old = weekBudget([june], "2026-11-06", 7, 0)!;
+    expect(old).toMatchObject({ kpiId: 10, outsideWindow: true, windowStart: "2026-06-01", windowEnd: "2026-06-30" });
+    // A window that only starts after the week isn't used.
+    expect(weekBudget([kpi({ startDate: "2027-01-01" })], "2026-11-06", 7, 0)).toBeNull();
+  });
+});

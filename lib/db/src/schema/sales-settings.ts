@@ -65,6 +65,11 @@ export const salesSettingsTable = pgTable("sales_settings", {
   // in the week) turn it on. An accounting convention, so it is per merchant
   // rather than per week — weeks that disagree cannot be compared.
   eowIncludeTaxInStaffCost:      text("eow_include_tax_in_staff_cost").notNull().default("false"),
+  // RETAINED, UNUSED: briefly held End of Week's own monthly budgets; the
+  // weekly budget now comes from the business's "Budget" Net Profit KPI
+  // (api-server lib/end-of-week.ts, weekBudget). Always '{}'. Kept so
+  // drizzle-kit push doesn't offer to drop it; nothing reads it.
+  eowMonthlyBudgets:             text("eow_monthly_budgets").notNull().default("{}"),
 
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow().$onUpdate(() => new Date()),

@@ -26,6 +26,7 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from "@/components/ui/select";
 import { toast } from "sonner";
+import { FridayEndOfWeekPrompt } from "@/components/end-of-week/FridayEndOfWeekPrompt";
 import { format } from "date-fns";
 import {
   Monitor, DollarSign, ArrowDownLeft, ArrowUpRight,
@@ -126,6 +127,8 @@ export default function PosEodPage() {
   const [openDlg, setOpenDlg]   = useState(false);
   const [openForm, setOpenForm] = useState({ openingFloat: "200.00", openedBy: "", openingNotes: "" });
   const [saving, setSaving]     = useState(false);
+  /* Friday: opening a register asks for End of Week. */
+  const [eowTrigger, setEowTrigger] = useState(0);
 
   function handleOpen() {
     setSaving(true);
@@ -135,6 +138,7 @@ export default function PosEodPage() {
         onSuccess: () => {
           toast.success("Register opened");
           setOpenDlg(false);
+          setEowTrigger((n) => n + 1);
           setOpenForm({ openingFloat: "200.00", openedBy: "", openingNotes: "" });
           qc.invalidateQueries({ queryKey: ["pos-register-sessions"] });
         },
@@ -612,6 +616,8 @@ export default function PosEodPage() {
           </div>
         )}
       </div>
+
+      <FridayEndOfWeekPrompt trigger={eowTrigger} blocked={openDlg} />
 
       {/* ── Open Register Dialog ── */}
       <Dialog open={openDlg} onOpenChange={setOpenDlg}>

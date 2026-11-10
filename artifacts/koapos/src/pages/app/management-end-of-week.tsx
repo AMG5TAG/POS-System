@@ -19,6 +19,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { formatCurrency, cn } from "@/lib/utils";
 import { toast } from "sonner";
+import { WeeklyBudgetCard, type WeekBudget } from "@/components/end-of-week/WeeklyBudget";
 import {
   CalendarRange, ChevronLeft, ChevronRight, RefreshCw, Download, Printer,
   Banknote, CreditCard, Landmark, Gift, Coins, Wallet, Lock, LockOpen,
@@ -127,6 +128,8 @@ interface EndOfWeekData {
     includeTax: boolean;
   };
   profitAfterStaff: number;
+  /** The week against its month's budget; null when none is set. */
+  budget?: WeekBudget | null;
 }
 
 /* ─── Week maths (mirrors src/lib/end-of-week.ts on the server) ──────────── */
@@ -530,6 +533,10 @@ export default function ManagementEndOfWeekPage() {
         data.staffCosts.totals.kpi, data.staffCosts.totals.total],
       [],
       ["Net profit after employee costs", data.profitAfterStaff],
+      ...(data.budget ? [
+        [`Weekly budget (KPI "${data.budget.kpiName}", ${data.budget.period})`, data.budget.weeklyBudget],
+        [data.budget.difference >= 0 ? "Made over budget" : "Missed budget by", Math.abs(data.budget.difference)],
+      ] : []),
       [],
       ["WEEK IN REVIEW"],
       ["New customers", data.customers.newCustomers],
@@ -643,6 +650,8 @@ export default function ManagementEndOfWeekPage() {
             </span>
           </div>
         )}
+
+        <WeeklyBudgetCard budget={data?.budget} loading={isLoading} finalised={locked} />
 
         {/* The three figures the week is actually acted on: what the staff cost,
             what is owed to the ATO, and what the stock sold this week cost to
