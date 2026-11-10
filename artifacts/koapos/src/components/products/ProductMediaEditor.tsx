@@ -22,7 +22,11 @@ function youtubeThumb(url: string): string | null {
 }
 const isLink = (url: string) => /youtube\.com|youtu\.be|vimeo\.com/i.test(url);
 
-export function ProductMediaEditor({ value, onChange }: { value: ProductMediaItem[]; onChange: (v: ProductMediaItem[]) => void }) {
+/** `videosOnly`: show and add videos only, leaving the image items in `value`
+ *  untouched — the product form edits photos in ProductPhotosEditor. */
+export function ProductMediaEditor({ value, onChange, videosOnly = false }: {
+  value: ProductMediaItem[]; onChange: (v: ProductMediaItem[]) => void; videosOnly?: boolean;
+}) {
   const [adding, setAdding] = useState("");
   const [link, setLink] = useState("");
   const [uploading, setUploading] = useState<string | null>(null);
@@ -33,11 +37,13 @@ export function ProductMediaEditor({ value, onChange }: { value: ProductMediaIte
     if (value.some((m) => m.url === item.url)) { toast.info("That's already in the gallery"); return; }
     onChange([...value, item]);
   };
-  const move = (i: number, d: -1 | 1) => {
-    const j = i + d;
-    if (j < 0 || j >= value.length) return;
+  // Positions in `value` of the items shown; moving swaps with the next shown one.
+  const shown = value.map((m, i) => ({ m, i })).filter(({ m }) => !videosOnly || m.type === "video");
+  const move = (k: number, d: -1 | 1) => {
+    const a = shown[k]?.i, b = shown[k + d]?.i;
+    if (a === undefined || b === undefined) return;
     const next = [...value];
-    [next[i], next[j]] = [next[j]!, next[i]!];
+    [next[a], next[b]] = [next[b]!, next[a]!];
     onChange(next);
   };
 
@@ -67,9 +73,9 @@ export function ProductMediaEditor({ value, onChange }: { value: ProductMediaIte
 
   return (
     <div className="space-y-4">
-      {value.length > 0 && (
+      {shown.length > 0 && (
         <div className="grid grid-cols-3 sm:grid-cols-4 gap-3">
-          {value.map((m, i) => (
+          {shown.map(({ m, i: at }, i) => (
             <div key={m.url} className="group relative aspect-square rounded-lg border bg-muted/30 overflow-hidden">
               {m.type === "image" ? (
                 <img src={m.url} alt="" className="w-full h-full object-contain" />
@@ -85,13 +91,13 @@ export function ProductMediaEditor({ value, onChange }: { value: ProductMediaIte
                   <span className="w-9 h-9 rounded-full bg-black/55 text-white flex items-center justify-center"><Play className="w-4 h-4 fill-white" /></span>
                 </span>
               )}
-              <span className="absolute top-1 left-1 rounded bg-black/55 text-white text-[10px] px-1.5 py-0.5">{i + 2}</span>
+              {!videosOnly && <span className="absolute top-1 left-1 rounded bg-black/55 text-white text-[10px] px-1.5 py-0.5">{i + 2}</span>}
               <div className="absolute inset-x-0 bottom-0 flex justify-between gap-1 p-1 bg-gradient-to-t from-black/60 to-transparent opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition">
                 <div className="flex gap-1">
                   <button type="button" onClick={() => move(i, -1)} disabled={i === 0} aria-label="Move earlier" className="w-7 h-7 rounded bg-white/90 flex items-center justify-center disabled:opacity-40"><ArrowLeft className="w-3.5 h-3.5" /></button>
-                  <button type="button" onClick={() => move(i, 1)} disabled={i === value.length - 1} aria-label="Move later" className="w-7 h-7 rounded bg-white/90 flex items-center justify-center disabled:opacity-40"><ArrowRight className="w-3.5 h-3.5" /></button>
+                  <button type="button" onClick={() => move(i, 1)} disabled={i === shown.length - 1} aria-label="Move later" className="w-7 h-7 rounded bg-white/90 flex items-center justify-center disabled:opacity-40"><ArrowRight className="w-3.5 h-3.5" /></button>
                 </div>
-                <button type="button" onClick={() => onChange(value.filter((_, k) => k !== i))} aria-label="Remove" className="w-7 h-7 rounded bg-white/90 text-destructive flex items-center justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
+                <button type="button" onClick={() => onChange(value.filter((_, k) => k !== at))} aria-label="Remove" className="w-7 h-7 rounded bg-white/90 text-destructive flex items-center justify-center"><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             </div>
           ))}
@@ -101,12 +107,12 @@ export function ProductMediaEditor({ value, onChange }: { value: ProductMediaIte
       {full ? (
         <p className="text-xs text-muted-foreground">The gallery is full ({MAX_ITEMS} items). Remove one to add another.</p>
       ) : (
-        <div className="grid sm:grid-cols-[160px_1fr] gap-4 items-start">
-          <div className="space-y-1.5">
+        <div className={cn("grid gap-4 items-start", !videosOnly && "sm:grid-cols-[160px_1fr]")}>
+          {!videosOnly && <div className="space-y-1.5">
             <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><ImagePlus className="w-3.5 h-3.5" /> Add image</p>
             {/* An empty uploader: each upload is appended, then it clears for the next. */}
             <ImageUploader value={adding} onChange={(url) => { if (url) add({ type: "image", url }); setAdding(""); }} aspectRatio="square" />
-          </div>
+          </div>}
           <div className="space-y-3">
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-1.5"><Film className="w-3.5 h-3.5" /> Add video</p>

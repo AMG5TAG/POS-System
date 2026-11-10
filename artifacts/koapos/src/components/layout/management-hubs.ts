@@ -74,7 +74,6 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
         name: "Calculators", icon: Calculator,
         children: [
           { name: "3D Prints",  href: "/management/products-inventory/3d-prints",  icon: Cpu       },
-          { name: "PC Builder", href: "/management/products-inventory/pc-builder", icon: HardDrive },
         ],
       },
     ],

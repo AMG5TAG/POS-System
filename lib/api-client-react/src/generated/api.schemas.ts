@@ -5782,66 +5782,6 @@ export interface CostOfGoodsReport {
   suppliers: CostOfGoodsSupplier[];
 }
 
-export type PcSavedBuildBuild = { [key: string]: unknown };
-
-export interface PcSavedBuild {
-  id: number;
-  merchantId: number;
-  name: string;
-  build: PcSavedBuildBuild;
-  assemblyHours: number;
-  createdAt: string;
-  updatedAt: string;
-}
-
-export type PcSavedBuildInputBuild = { [key: string]: unknown };
-
-export interface PcSavedBuildInput {
-  name: string;
-  build: PcSavedBuildInputBuild;
-  assemblyHours: number;
-}
-
-export interface PcBuilderSettings {
-  id: number;
-  merchantId: number;
-  applyDefaultMarkup: string;
-  defaultMarkup: number;
-  laborRate: number;
-  assemblyTimeMinutes: number;
-  includeGst: string;
-  showCompatWarnings: string;
-  enabledSlots: string;
-  updatedAt: string;
-}
-
-export interface PcBuilderSettingsInput {
-  applyDefaultMarkup?: string;
-  defaultMarkup?: number;
-  laborRate?: number;
-  assemblyTimeMinutes?: number;
-  includeGst?: string;
-  showCompatWarnings?: string;
-  enabledSlots?: string;
-}
-
-export interface PcCompatRule {
-  id: number;
-  merchantId: number;
-  ruleKey: string;
-  partType: string;
-  socket: string;
-  specs: string;
-  updatedAt: string;
-}
-
-export interface PcCompatRuleInput {
-  ruleKey: string;
-  partType?: string;
-  socket?: string;
-  specs?: string;
-}
-
 export interface Print3dSettings {
   id: number;
   merchantId: number;
@@ -7403,10 +7343,6 @@ startDate: string;
  * End date (YYYY-MM-DD, inclusive)
  */
 endDate: string;
-};
-
-export type ListPcSavedBuilds200 = {
-  items: PcSavedBuild[];
 };
 
 export type SendReferralDigestNow400 = {

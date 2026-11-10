@@ -19,10 +19,6 @@ import {
   useGetPosSettings,
   useUpsertPosSettings,
   useListProductTypes,
-  useListPcCompatRules,
-  useUpsertPcCompatRule,
-  useDeletePcCompatRule,
-  getListPcCompatRulesQueryKey,
   useListProductVariants,
   useCreateProductVariant,
   useDeleteProductVariant,
@@ -61,6 +57,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { ProductMediaEditor, type ProductMediaItem } from "@/components/products/ProductMediaEditor";
+import { ProductPhotosEditor } from "@/components/products/ProductPhotosEditor";
 import { formatCurrency } from "@/lib/utils";
 import { FloorPlanMiniView } from "@/components/floor-plan-mini-view";
 import { ImageUploader } from "@/components/ui/image-uploader";
@@ -82,16 +79,13 @@ import { useEntityQrLookup } from "@/hooks/use-entity-qr";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn } from "@/lib/utils";
-import {
-  PC_PART_SLOTS, type PCPartCompat,
-} from "./management-calculators-pc-builder";
 
 /* ─── Types ──────────────────────────────────────────────────────────────── */
 
 type SortKey = "name" | "price" | "stock" | "category";
 type SortDir  = "asc" | "desc";
 type DetailTab = "details" | "price" | "media" | "inventory" | "serials" | "sales" | "settings";
-type FormTab   = "details" | "media" | "pricing" | "stock" | "compatibility" | "settings" | "digital_codes" | "variants";
+type FormTab   = "details" | "media" | "pricing" | "stock" | "settings" | "digital_codes" | "variants";
 
 type BulkActionPending =
   | { type: "price_percent"; value: number }
@@ -193,7 +187,6 @@ const FORM_TABS: { key: FormTab; label: string; digitalCodeOnly?: boolean; varia
   { key: "media",         label: "Media"         },
   { key: "pricing",       label: "Pricing"       },
   { key: "stock",         label: "Stock",         hideForDigitalCode: true, hideForTimeCard: true },
-  { key: "compatibility", label: "Compatibility", hideForService: true, hideForTimeCard: true },
   { key: "settings",      label: "Settings"      },
   { key: "digital_codes", label: "Digital Codes", digitalCodeOnly: true },
   { key: "variants",      label: "Variants",     variantOnly: true },
@@ -517,17 +510,6 @@ function BrandSelect({
 
 /* ─── Image slot ─────────────────────────────────────────────────────────── */
 
-function ImageSlot({ label, value, onChange }: {
-  label: string; value: string; onChange: (v: string) => void;
-}) {
-  return (
-    <div className="space-y-1.5">
-      <p className="text-xs font-medium text-muted-foreground">{label}</p>
-      <ImageUploader value={value} onChange={onChange} aspectRatio="square" />
-    </div>
-  );
-}
-
 /* ─── Print Sticker dialog ───────────────────────────────────────────────── */
 
 function useContainerSize(ref: React.RefObject<HTMLDivElement | null>) {
@@ -800,11 +782,12 @@ function ProductQrPanel({ product, onClose }: {
 /* ─── Product detail dialog ──────────────────────────────────────────────── */
 
 function ProductDetailDialog({
-  product, onClose, onEdit, onDelete, deleteIsPending,
+  product, onClose, onEdit, onClone, onDelete, deleteIsPending,
 }: {
   product: Product | null;
   onClose: () => void;
   onEdit: (p: Product, tab?: FormTab) => void;
+  onClone: (p: Product) => void;
   onDelete: (id: number) => void;
   deleteIsPending: boolean;
 }) {
@@ -1079,6 +1062,9 @@ function ProductDetailDialog({
             <Button size="sm" className="w-8 h-8 p-0" onClick={() => { onClose(); onEdit(product, EDIT_TAB_FOR_VIEW_TAB[tab]); }} title="Edit product">
               <Pencil className="w-4 h-4" />
             </Button>
+            <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => { onClose(); onClone(product); }} title="Clone — a new product pre-filled with this one's details">
+              <Copy className="w-3.5 h-3.5" /> Clone
+            </Button>
             <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
               <ChevronLeft className="w-4 h-4" />
             </Button>
@@ -1310,17 +1296,12 @@ export default function ProductsPage() {
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [form, setForm]                 = useState<ProductForm>(defaultForm);
   const [formTab, setFormTab]           = useState<FormTab>("details");
-  const [pcPartType, setPcPartType]     = useState("");
-  const [pcSocket, setPcSocket]         = useState("");
-  const [pcCompatNotes, setPcCompatNotes] = useState("");
+  /** Set while the New Product form was opened by Clone, for its title. */
+  const [clonedFrom, setClonedFrom]     = useState<Product | null>(null);
   const { data: posSettings } = useGetPosSettings({ query: { queryKey: ["pos-settings"] } });
   const upsertPosSettings = useUpsertPosSettings();
   const { data: productTypesData } = useListProductTypes({ query: { queryKey: ["product-types"] } });
   const productTypesList: ProductType[] = productTypesData?.items ?? [];
-  const { data: compatRules } = useListPcCompatRules();
-  const upsertCompatRuleMutation = useUpsertPcCompatRule();
-  const deleteCompatRuleMutation = useDeletePcCompatRule();
-  const invCompat = () => queryClient.invalidateQueries({ queryKey: getListPcCompatRulesQueryKey() });
   const [skuPrefix, setSkuPrefix]       = useState("KP");
   useEffect(() => {
     if (posSettings?.defaultSkuPrefix) setSkuPrefix(posSettings.defaultSkuPrefix);
@@ -1652,11 +1633,11 @@ export default function ProductsPage() {
     initialProductFormRef.current = startForm;
     manualGroupsRef.current = new Set();
     followGroupsRef.current = { openedPrice: 0, stored: {}, ids: new Set() };
-    setEditingProduct(null); setForm(startForm); setFormTab("details"); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); setFormTouched(false); setDialogOpen(true);
+    setEditingProduct(null); setClonedFrom(null); setForm(startForm); setFormTab("details"); setFormTouched(false); setDialogOpen(true);
   };
 
-  const openEdit = (p: Product, tab: FormTab = "details") => {
-    setEditingProduct(p);
+  /** Every field the product form edits, read off a saved product. */
+  const productToForm = (p: Product): ProductForm => {
     const ep = p as Product & { barcode?: string; imageUrl?: string; productType?: string; productTypeId?: number | null; groupPrices?: Record<string, number>; supplier?: string | null; supplierCode?: string | null; isEpay?: boolean };
     const editForm: ProductForm = {
       name: p.name, description: p.description || "",
@@ -1704,22 +1685,59 @@ export default function ProductsPage() {
       stockLocationDisplay: (ep as Product & { stockLocation?: string | null }).stockLocation ?? "",
       stockLocationOverflow: (ep as Product & { overflowLocation?: string | null }).overflowLocation ?? "",
     };
+    return editForm;
+  };
+
+  /** Group prices already stored count as manual entries to keep; the rest
+   *  pre-fill from rules / sell price and follow a price change. */
+  const primeGroupPriceRefs = (p: Product) => {
+    const gp = ((p as Product & { groupPrices?: Record<string, number> }).groupPrices ?? {}) as Record<string, number>;
+    manualGroupsRef.current = new Set(Object.keys(gp));
+    followGroupsRef.current = { openedPrice: Number(p.price) || 0, stored: { ...gp }, ids: new Set(Object.keys(gp)) };
+  };
+
+  const openEdit = (p: Product, tab: FormTab = "details") => {
+    setEditingProduct(p);
+    setClonedFrom(null);
+    const editForm = productToForm(p);
     initialProductFormRef.current = editForm;
-    // Treat any price already stored on the product as a manual entry to keep,
-    // and pre-fill the rest from rules / sell price.
-    manualGroupsRef.current = new Set(Object.keys(ep.groupPrices ?? {}));
-    followGroupsRef.current = {
-      openedPrice: Number(ep.price) || 0,
-      stored: { ...((ep.groupPrices ?? {}) as Record<string, number>) },
-      ids: new Set(Object.keys(ep.groupPrices ?? {})),
-    };
+    primeGroupPriceRefs(p);
     setForm(editForm);
-    const _c = (compatRules ?? []).find(r => r.ruleKey === p.id.toString()) as PCPartCompat | undefined;
-    setPcPartType(_c?.partType || "");
-    setPcSocket(_c?.socket || "");
-    setPcCompatNotes(_c?.specs || "");
     setFormTab(tab);
     setFormTouched(false);
+    setDialogOpen(true);
+  };
+
+  /**
+   * Clone: the New Product form, pre-filled from an existing product. Saving
+   * creates a new product; the original is untouched. Everything that
+   * describes the product is copied — photos, videos, prices, group prices,
+   * category, brand, supplier, specs, tags, warranty, settings. What
+   * identifies one physical item is not: the SKU is regenerated, the barcode
+   * left blank (both must be unique), and stock starts at 0, since copying
+   * the count would invent stock nobody received. Serials, digital codes and
+   * variants belong to the original and are not copied.
+   */
+  const openClone = (p: Product) => {
+    const base = productToForm(p);
+    const cloneForm: ProductForm = {
+      ...base,
+      name: `${base.name} (Copy)`,
+      sku: base.sku ? generateSKU(skuPrefix) : "",
+      barcode: "",
+      stockQuantity: "0",
+      media: base.media.map((m) => ({ ...m })),
+      tags: [...base.tags],
+      groupPrices: { ...base.groupPrices },
+    };
+    setEditingProduct(null);
+    setClonedFrom(p);
+    initialProductFormRef.current = cloneForm;
+    primeGroupPriceRefs(p);
+    setForm(cloneForm);
+    setFormTab("details");
+    // Unsaved: closing the dialog asks before discarding the copy.
+    setFormTouched(true);
     setDialogOpen(true);
   };
 
@@ -1732,7 +1750,8 @@ export default function ProductsPage() {
       costPrice: form.costPrice ? parseFloat(form.costPrice) : undefined,
       sku: form.sku || undefined,
       barcode: form.barcode || undefined,
-      imageUrl: form.imageUrl || undefined,
+      // "" on an edit clears the photo; a new product simply has none.
+      imageUrl: editingProduct ? form.imageUrl : (form.imageUrl || undefined),
       media: form.media,
       categoryId: form.categoryId ? parseInt(form.categoryId) : undefined,
       brandId: form.brandId ? parseInt(form.brandId) : undefined,
@@ -1784,17 +1803,6 @@ export default function ProductsPage() {
     if (editingProduct) {
       updateMutation.mutate({ id: editingProduct.id, data: payload }, {
         onSuccess: () => {
-          if (pcPartType) {
-            upsertCompatRuleMutation.mutate(
-              { data: { ruleKey: editingProduct.id.toString(), partType: pcPartType, socket: pcSocket, specs: pcCompatNotes } },
-              { onError: () => toast.error("Failed to save compatibility data"), onSettled: invCompat },
-            );
-          } else {
-            deleteCompatRuleMutation.mutate(
-              { ruleKey: editingProduct.id.toString() },
-              { onSettled: invCompat },
-            );
-          }
           toast.success("Product updated"); setDialogOpen(false); setFormTouched(false); inv();
         },
         onError: (err) => {
@@ -1809,14 +1817,7 @@ export default function ProductsPage() {
       });
     } else {
       createMutation.mutate({ data: payload }, {
-        onSuccess: (created) => {
-          const cid = (created as { id?: number })?.id;
-          if (pcPartType && cid) {
-            upsertCompatRuleMutation.mutate(
-              { data: { ruleKey: cid.toString(), partType: pcPartType, socket: pcSocket, specs: pcCompatNotes } },
-              { onError: () => toast.error("Failed to save compatibility data"), onSettled: invCompat },
-            );
-          }
+        onSuccess: () => {
           toast.success("Product created"); setDialogOpen(false); setFormTouched(false); inv();
         },
         onError: (err) => {
@@ -2618,6 +2619,7 @@ export default function ProductsPage() {
         product={selectedProduct}
         onClose={() => setSelectedProduct(null)}
         onEdit={openEdit}
+        onClone={openClone}
         onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
       />
@@ -2631,7 +2633,7 @@ export default function ProductsPage() {
           {/* Header */}
           <DialogHeader className="px-6 pt-5 pb-0 shrink-0">
             <DialogTitle>
-              {editingProduct ? `Edit Product — ${editingProduct.name}` : "New Product"}
+              {editingProduct ? `Edit Product — ${editingProduct.name}` : clonedFrom ? `New Product — copy of ${clonedFrom.name}` : "New Product"}
             </DialogTitle>
           </DialogHeader>
 
@@ -3179,20 +3181,31 @@ export default function ProductsPage() {
             {formTab === "media" && (
               <div className="py-5 space-y-6">
                 <div>
-                  <SectionHeader label="Primary Image" />
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">Shown on the product grid, receipts and first on the online shop. JPG, PNG, WebP · up to 2048×2048px recommended.</p>
-                  <div className="w-44">
-                    <ImageSlot label="Primary" value={form.imageUrl} onChange={(v) => setField("imageUrl", v)} />
-                  </div>
+                  <SectionHeader label="Photos" />
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">The first photo is the default — shown on the product grid, receipts, promo cards and first on the online shop. The rest follow it on the shop's product page, in order. JPG, PNG, WebP · up to 2048×2048px recommended.</p>
+                  <ProductPhotosEditor
+                    photos={[form.imageUrl, ...form.media.filter((m) => m.type === "image").map((m) => m.url)].filter(Boolean)}
+                    onChange={(photos) => {
+                      setFormTouched(true);
+                      setForm((f) => ({
+                        ...f,
+                        imageUrl: photos[0] ?? "",
+                        media: [
+                          ...photos.slice(1).map((url) => ({ type: "image" as const, url })),
+                          ...f.media.filter((m) => m.type === "video"),
+                        ],
+                      }));
+                    }}
+                  />
                 </div>
 
                 <div className="border-t pt-5">
                   <div className="flex items-center gap-2">
                     <Video className="w-4 h-4 text-muted-foreground" />
-                    <SectionHeader label="Gallery — Images & Videos" />
+                    <SectionHeader label="Videos" />
                   </div>
-                  <p className="text-xs text-muted-foreground mt-1 mb-4">Shown after the primary image on the online shop's product page, in this order. Use the arrows to reorder.</p>
-                  <ProductMediaEditor value={form.media} onChange={(v) => setField("media", v)} />
+                  <p className="text-xs text-muted-foreground mt-1 mb-4">Shown after the photos on the online shop's product page. Use the arrows to reorder.</p>
+                  <ProductMediaEditor videosOnly value={form.media} onChange={(v) => setField("media", v)} />
                 </div>
               </div>
             )}
@@ -3523,86 +3536,6 @@ export default function ProductsPage() {
                     </>
                   )}
                 </div>}
-              </div>
-            )}
-
-            {/* ── Compatibility ── */}
-            {formTab === "compatibility" && (
-              <div className="py-5 space-y-5">
-                <div>
-                  <SectionHeader label="PC Part Type" />
-                  <p className="text-xs text-muted-foreground mt-1 mb-3">
-                    Tag this product as a PC component so it appears as a selectable part in POS → PC Builder.
-                  </p>
-                  <div className="grid grid-cols-3 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => { setFormTouched(true); setPcPartType(""); setPcSocket(""); setPcCompatNotes(""); }}
-                      className={cn(
-                        "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
-                        !pcPartType
-                          ? "border-primary bg-primary/5 text-primary font-medium"
-                          : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground"
-                      )}
-                    >
-                      <Package className="w-3.5 h-3.5 shrink-0" />
-                      Not a PC part
-                    </button>
-                    {PC_PART_SLOTS.map(({ id, label, icon: Icon }) => (
-                      <button
-                        key={id}
-                        type="button"
-                        onClick={() => { setFormTouched(true); setPcPartType(id); }}
-                        className={cn(
-                          "flex items-center gap-2 px-3 py-2.5 rounded-lg border-2 text-sm transition-all text-left",
-                          pcPartType === id
-                            ? "border-primary bg-primary/5 text-primary font-medium"
-                            : "pill-selector border-border hover:border-muted-foreground/40 text-muted-foreground"
-                        )}
-                      >
-                        <Icon className="w-3.5 h-3.5 shrink-0" />
-                        {label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-
-                {pcPartType && (
-                  <div className="border-t pt-5 grid grid-cols-2 gap-4">
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Socket / Interface</Label>
-                      <Input
-                        value={pcSocket}
-                        onChange={(e) => { setFormTouched(true); setPcSocket(e.target.value); }}
-                        placeholder={
-                          pcPartType === "cpu" || pcPartType === "motherboard" ? "e.g. AM5, LGA1700"
-                          : pcPartType === "memory" ? "e.g. DDR5, DDR4"
-                          : pcPartType === "storage" ? "e.g. M.2 NVMe, SATA III"
-                          : pcPartType === "psu" ? "e.g. ATX, SFX"
-                          : "e.g. socket, interface"
-                        }
-                        className="mt-1.5"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Used for compatibility matching in PC Builder.</p>
-                    </div>
-                    <div>
-                      <Label className="text-xs text-muted-foreground">Additional Specs</Label>
-                      <Input
-                        value={pcCompatNotes}
-                        onChange={(e) => { setFormTouched(true); setPcCompatNotes(e.target.value); }}
-                        placeholder="e.g. 32GB, 3200MHz, 850W, 6-core"
-                        className="mt-1.5"
-                      />
-                      <p className="text-xs text-muted-foreground mt-1">Shown as extra info in the PC Builder slot picker.</p>
-                    </div>
-                  </div>
-                )}
-
-                {!pcPartType && (
-                  <div className="border rounded-xl p-4 bg-muted/20 text-sm text-muted-foreground">
-                    Select a PC part type above to tag this product. Once tagged, it will appear in the relevant slot when building a custom PC in POS → PC Builder.
-                  </div>
-                )}
               </div>
             )}
 

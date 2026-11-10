@@ -10499,79 +10499,6 @@ export const GetCostOfGoodsResponse = zod.object({
 })
 
 
-export const GetPcBuilderSettingsResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "applyDefaultMarkup": zod.string(),
-  "defaultMarkup": zod.number(),
-  "laborRate": zod.number(),
-  "assemblyTimeMinutes": zod.number(),
-  "includeGst": zod.string(),
-  "showCompatWarnings": zod.string(),
-  "enabledSlots": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-export const UpdatePcBuilderSettingsBody = zod.object({
-  "applyDefaultMarkup": zod.string().optional(),
-  "defaultMarkup": zod.number().optional(),
-  "laborRate": zod.number().optional(),
-  "assemblyTimeMinutes": zod.number().optional(),
-  "includeGst": zod.string().optional(),
-  "showCompatWarnings": zod.string().optional(),
-  "enabledSlots": zod.string().optional()
-})
-
-export const UpdatePcBuilderSettingsResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "applyDefaultMarkup": zod.string(),
-  "defaultMarkup": zod.number(),
-  "laborRate": zod.number(),
-  "assemblyTimeMinutes": zod.number(),
-  "includeGst": zod.string(),
-  "showCompatWarnings": zod.string(),
-  "enabledSlots": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-export const ListPcSavedBuildsResponse = zod.object({
-  "items": zod.array(zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "name": zod.string(),
-  "build": zod.record(zod.string(), zod.unknown()),
-  "assemblyHours": zod.number(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-}))
-})
-
-
-export const CreatePcSavedBuildBody = zod.object({
-  "name": zod.string(),
-  "build": zod.record(zod.string(), zod.unknown()),
-  "assemblyHours": zod.number()
-})
-
-export const CreatePcSavedBuildResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "name": zod.string(),
-  "build": zod.record(zod.string(), zod.unknown()),
-  "assemblyHours": zod.number(),
-  "createdAt": zod.coerce.date(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-export const DeletePcSavedBuildParams = zod.object({
-  "id": zod.coerce.number()
-})
-
-
 export const ListStaffNotesResponse = zod.object({
   "items": zod.array(zod.object({
   "id": zod.number(),
@@ -10650,41 +10577,6 @@ export const CreateDashboardNoteBody = zod.object({
 
 export const DeleteDashboardNoteParams = zod.object({
   "id": zod.coerce.number()
-})
-
-
-export const ListPcCompatRulesResponseItem = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "ruleKey": zod.string(),
-  "partType": zod.string(),
-  "socket": zod.string(),
-  "specs": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-export const ListPcCompatRulesResponse = zod.array(ListPcCompatRulesResponseItem)
-
-
-export const UpsertPcCompatRuleBody = zod.object({
-  "ruleKey": zod.string(),
-  "partType": zod.string().optional(),
-  "socket": zod.string().optional(),
-  "specs": zod.string().optional()
-})
-
-export const UpsertPcCompatRuleResponse = zod.object({
-  "id": zod.number(),
-  "merchantId": zod.number(),
-  "ruleKey": zod.string(),
-  "partType": zod.string(),
-  "socket": zod.string(),
-  "specs": zod.string(),
-  "updatedAt": zod.coerce.date()
-})
-
-
-export const DeletePcCompatRuleParams = zod.object({
-  "ruleKey": zod.coerce.string()
 })
 
 

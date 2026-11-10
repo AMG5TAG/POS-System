@@ -1,6 +1,12 @@
 import { pgTable, text, serial, integer, timestamp, unique } from "drizzle-orm/pg-core";
 import { merchantsTable } from "./merchants";
 
+/**
+ * RETAINED, UNUSED: the PC Builder (POS › PC Builder, its Management settings
+ * page and the product form's PC-part tagging) was removed from the app, but
+ * this table may still hold data, so its definition stays — dropping it here
+ * would make `drizzle-kit push` offer to delete those rows. No code reads it.
+ */
 export const pcCompatRulesTable = pgTable(
   "pc_compat_rules",
   {

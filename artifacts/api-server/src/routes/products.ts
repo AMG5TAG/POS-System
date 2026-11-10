@@ -838,6 +838,8 @@ router.patch("/products/:id", requireAuth, async (req, res): Promise<void> => {
   }
 
   const updates: Record<string, unknown> = { ...rest };
+  // The product form sends "" when every photo was removed; store no photo, not a blank URL.
+  if (updates.imageUrl === "") updates.imageUrl = null;
   if (price !== undefined) updates.price = price.toString();
   if (costPrice !== undefined) updates.costPrice = costPrice.toString();
   if (taxRate !== undefined) updates.taxRate = taxRate.toString();

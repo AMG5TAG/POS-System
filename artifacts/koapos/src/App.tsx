@@ -126,8 +126,6 @@ const SettingsSmsPage = lazyWithRetry(() => import("@/pages/app/settings-sms"));
 const SettingsProductTypesPage = lazyWithRetry(() => import("@/pages/app/settings-product-types"));
 const POS3DPrintsPage = lazyWithRetry(() => import("@/pages/app/pos-3d-prints"));
 const ManagementCalculators3DPage = lazyWithRetry(() => import("@/pages/app/management-calculators-3d"));
-const POSPCBuilderPage = lazyWithRetry(() => import("@/pages/app/pos-pc-builder"));
-const ManagementCalculatorsPCBuilderPage = lazyWithRetry(() => import("@/pages/app/management-calculators-pc-builder"));
 const ManagementKpisPage = lazyWithRetry(() => import("@/pages/app/management-kpis"));
 const StaffNotesPage = lazyWithRetry(() => import("@/pages/app/staff-notes"));
 const StaffKpisPage = lazyWithRetry(() => import("@/pages/app/staff-kpis"));
@@ -401,9 +399,8 @@ function Router() {
       <Route path="/pos/3d-prints">
         <ProtectedRoute component={POS3DPrintsPage} />
       </Route>
-      <Route path="/pos/pc-builder">
-        <ProtectedRoute component={POSPCBuilderPage} />
-      </Route>
+      {/* PC Builder was removed; old bookmarks land on the till. */}
+      <Route path="/pos/pc-builder"><Redirect to="/pos/sell" /></Route>
       <Route path="/pos/eod">
         <ProtectedRoute component={PosEodPage} />
       </Route>
@@ -642,9 +639,7 @@ function Router() {
       <Route path="/management/products-inventory/3d-prints">
         <ManagementProtectedRoute component={ManagementCalculators3DPage} />
       </Route>
-      <Route path="/management/products-inventory/pc-builder">
-        <ManagementProtectedRoute component={ManagementCalculatorsPCBuilderPage} />
-      </Route>
+      <Route path="/management/products-inventory/pc-builder"><Redirect to="/management/products-inventory/3d-prints" /></Route>
       <Route path="/management/products-inventory/time-cards">
         <ManagementProtectedRoute component={ManagementTimeCardsPage} />
       </Route>
@@ -942,7 +937,7 @@ function Router() {
       <Route path="/management/misc-templates"><Redirect to="/management/customisation/templates/misc" /></Route>
       <Route path="/management/stickers"><Redirect to="/management/customisation/templates/labels" /></Route>
       <Route path="/management/calculators/3d-printing"><Redirect to="/management/products-inventory/3d-prints" /></Route>
-      <Route path="/management/calculators/pc-builder"><Redirect to="/management/products-inventory/pc-builder" /></Route>
+      <Route path="/management/calculators/pc-builder"><Redirect to="/management/products-inventory/3d-prints" /></Route>
       <Route path="/management/staff/timesheet"><Redirect to="/management/staff-operations/timesheets" /></Route>
       <Route path="/management/staff/cost-summary"><Redirect to="/management/staff-operations/cost-summary" /></Route>
       <Route path="/management/staff"><Redirect to="/management/staff-operations/employees" /></Route>

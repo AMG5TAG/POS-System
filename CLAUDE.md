@@ -107,6 +107,12 @@ accounts) and all of their data are still in the database.
   quotes"); the onboarding wizard; Clear Demo Data; and the tax labels for other
   countries — tax is Australian GST with an ABN. The overdue-invoice surcharge
   under Invoice Settings is a different feature and stays.
+- **PC Builder removed** (POS › PC Builder, the Management › Calculators PC
+  Builder settings, the product form's Compatibility tab that tagged PC parts,
+  and the `/pc-builder-settings`, `/pc-saved-builds`, `/pc-compat-rules` APIs).
+  Its tables `pc_builder_settings`, `pc_saved_builds` and `pc_compat_rules` are
+  left in place, RETAINED, UNUSED. Old URLs redirect. Management › Parts
+  Compatibility is a different feature and stays.
 - **Domain and name.** The POS is named **KoaPOS** and lives at
   **pos.koastal.com.au** (`APP_BASE_URL` in `.replit`, `DEFAULT_PUBLIC_DOMAIN`
   in both `publicUrl.ts` files); the online shop is branded Koastal, not KoaPOS.
@@ -676,7 +682,12 @@ appointment booking); 4: click & collect, flat-rate and Australia Post shipping.
   `shopMediaUrl`. Pinned by `shop-media.test.ts`.
 - **Gallery**: `products.media` (jsonb, `scripts/src/add-product-media.ts`) holds
   images and videos after the primary `imageUrl`, in order — set in the POS
-  product form's Media tab (`ProductMediaEditor`). A video is an upload
+  product form's Media tab. Photos are one list (`ProductPhotosEditor`,
+  multi-file upload): the first is `imageUrl`, the default, and the rest are
+  `media`'s image items; videos are `ProductMediaEditor videosOnly`. Editing
+  the photos rewrites `media` as images then videos. **Clone** (product detail
+  panel) opens New Product pre-filled from a product — new SKU, blank barcode,
+  stock 0; serials, digital codes and variants are not copied. A video is an upload
   (MP4/WebM/MOV, capped at 200 MB in the POS since it is hashed in memory) or a
   YouTube/Vimeo link, embedded via `describeVideo`. Only uploads and https links
   are stored (`cleanMedia`). The Media tab's old four image slots and video URL
