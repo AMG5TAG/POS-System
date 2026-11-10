@@ -1,7 +1,7 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  useMatchSupplierInvoice, useImportSupplierInvoice, useReceivePurchaseOrderItems, useListCategories,
+  useMatchSupplierInvoice, useImportSupplierInvoice, useReceivePurchaseOrderItems, useListCategories, useCreateCategory,
   type PurchaseOrder, type SupplierInvoiceImportResult, type SupplierFeedProduct,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
@@ -16,6 +16,9 @@ import {
   AlertTriangle, Check, FileUp, Link2, Loader2, PackagePlus, Search, Truck, Undo2, Ban, Sparkles, ImageOff,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
+import { TreeCategorySelect } from "@/components/ui/tree-category-select";
+import { useQueryClient } from "@tanstack/react-query";
+import { FolderPlus } from "lucide-react";
 import { cn, formatCurrency } from "@/lib/utils";
 import { uploadFile } from "@/lib/upload";
 import {
@@ -88,6 +91,43 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
   const [feedAvailable, setFeedAvailable] = useState(false);
   const [useFeed, setUseFeed] = useState(true);
   const { data: categories = [] } = useListCategories({ query: { enabled: open, queryKey: ["categories"] } });
+  const createCategory = useCreateCategory();
+  const queryClient = useQueryClient();
+  const [creatingCat, setCreatingCat] = useState<string | null>(null);
+
+  /** Make a category, refresh the list everywhere, and hand back its id. */
+  const makeCategory = async (name: string, parentId?: number): Promise<number> => {
+    const c = await createCategory.mutateAsync({ data: { name: name.trim(), ...(parentId ? { parentId } : {}) } });
+    await queryClient.invalidateQueries({ queryKey: ["categories"] });
+    return (c as { id: number }).id;
+  };
+
+  /* A new product the feed puts in a category you don't have: offer to create
+     it — the feed's subcategory, under its category when you already have that
+     one, or both (category › subcategory) when you have neither. Every new
+     line waiting on the same category gets it. */
+  const suggestionFor = (feed: SupplierFeedProduct) => {
+    const sub = feed.subcategory.trim();
+    const cat = feed.category.trim();
+    const parent = cat ? categories.find((c) => c.name.trim().toLowerCase() === cat.toLowerCase()) : undefined;
+    if (!sub) return cat ? { key: `|${cat}`, label: cat, parentName: null as string | null, parentId: undefined as number | undefined, child: cat } : null;
+    return { key: `${cat}|${sub}`, label: parent ? `${sub} (under ${parent.name})` : cat ? `${cat} › ${sub}` : sub, parentName: !parent && cat ? cat : null, parentId: parent?.id, child: sub };
+  };
+  const createSuggested = async (feed: SupplierFeedProduct) => {
+    const sug = suggestionFor(feed);
+    if (!sug) return;
+    setCreatingCat(sug.key);
+    try {
+      const parentId = sug.parentId ?? (sug.parentName ? await makeCategory(sug.parentName) : undefined);
+      const id = await makeCategory(sug.child, parentId);
+      setLines((ls) => ls.map((l) => (l.mode === "new" && !l.categoryId && l.feed && suggestionFor(l.feed)?.key === sug.key ? { ...l, categoryId: id } : l)));
+      toast.success(`Category "${sug.label}" created`);
+    } catch {
+      toast.error("Couldn't create the category");
+    } finally {
+      setCreatingCat(null);
+    }
+  };
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -159,6 +199,7 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
     setLines((ls) => ls.map((l, k) => (k === i ? { ...l, ...patch } : l)));
 
   const newCount = lines.filter((l) => l.mode === "new").length;
+  const uncategorised = lines.filter((l) => l.mode === "new" && !l.categoryId).length;
   const unpricedNew = lines.filter((l) => l.mode === "new" && !(parseFloat(l.sellPrice) > 0)).length;
   const sumInc = lines.reduce((s, l) => s + (l.totalInc ?? l.qty * l.unitEx * 1.1), 0);
 
@@ -217,11 +258,11 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
             sku: l.stockCode || undefined,
             manufCode: (useFeed && l.feed?.manufCode) || l.manufCode || undefined,
             ...(parseFloat(l.sellPrice) > 0 ? { sellPrice: Math.round(parseFloat(l.sellPrice) * 100) / 100 } : {}),
+            ...(l.categoryId ? { categoryId: l.categoryId } : {}),
             ...(useFeed && l.feed ? {
               description: l.feed.description || undefined,
               barcode: l.feed.barcode || undefined,
               brand: l.feed.brand || undefined,
-              ...(l.categoryId ? { categoryId: l.categoryId } : {}),
               ...(feedImages.get(i) ? { imageUrl: feedImages.get(i) } : {}),
               ...(l.feed.weightKg ? { weightKg: l.feed.weightKg } : {}),
               ...(l.feed.lengthCm ? { lengthCm: l.feed.lengthCm } : {}),
@@ -365,7 +406,7 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
                   <Checkbox checked={useFeed} onCheckedChange={(v) => setUseFeed(v === true)} className="mt-0.5" />
                   <span>
                     <span className="text-sm font-medium flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-sky-600" />Fill new products from Leader's product data</span>
-                    <span className="text-xs text-muted-foreground">Full name, description, photo, barcode, brand, weight &amp; dimensions and warranty from Leader's datafeed. The sell price starts at Leader's RRP — change it below. Categories are matched to yours by name, never created.</span>
+                    <span className="text-xs text-muted-foreground">Full name, description, photo, barcode, brand, weight &amp; dimensions and warranty from Leader's datafeed. The sell price starts at Leader's RRP — change it below. Categories are matched to yours by name; any that don't match can be created with one click below.</span>
                   </span>
                 </label>
               )}
@@ -375,6 +416,7 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
                 <div className="flex flex-wrap items-center gap-2">
                   <h3 className="text-sm font-semibold">{lines.length} lines</h3>
                   {newCount > 0 && <Badge className="bg-sky-600 hover:bg-sky-600">{newCount} new product{newCount === 1 ? "" : "s"}</Badge>}
+                  {uncategorised > 0 && <Badge variant="outline" className="border-amber-400 text-amber-700 dark:text-amber-400">{uncategorised} without a category</Badge>}
                   {unpricedNew > 0 && <span className="text-xs text-muted-foreground">New products without a sell price are created hidden from the till until you price them.</span>}
                 </div>
                 <div className="rounded-xl border overflow-x-auto">
@@ -425,13 +467,36 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
                                           <p>
                                             {[l.feed.brand, l.feed.barcode && `EAN ${l.feed.barcode}`, l.feed.warrantyMonths && `${l.feed.warrantyMonths % 12 === 0 ? `${l.feed.warrantyMonths / 12} yr` : `${l.feed.warrantyMonths} mth`} warranty`]
                                               .filter(Boolean).join(" · ")}
-                                            {" · "}
-                                            {l.categoryId
-                                              ? <span className="text-emerald-700 dark:text-emerald-400">Category: {categories.find((c) => c.id === l.categoryId)?.name}</span>
-                                              : <span title={`Leader: ${l.feed.category} › ${l.feed.subcategory}`}>No matching category</span>}
                                           </p>
                                         </div>
                                       )}
+                                      {/* Category: matched from the feed, picked, or made here. */}
+                                      <div className="flex flex-wrap items-center gap-1.5">
+                                        <TreeCategorySelect
+                                          categories={categories}
+                                          value={l.categoryId ? String(l.categoryId) : ""}
+                                          onChange={(v) => setLine(i, { categoryId: v ? Number(v) : null })}
+                                          placeholder="No category"
+                                          triggerClass={cn("h-7 text-xs w-[200px]", !l.categoryId && "border-amber-400 text-amber-700 dark:text-amber-400")}
+                                          onCreateCategory={(name, onCreated) => {
+                                            void makeCategory(name)
+                                              .then((id) => { onCreated(id); setLine(i, { categoryId: id }); toast.success(`Category "${name}" created`); })
+                                              .catch(() => toast.error("Couldn't create the category"));
+                                          }}
+                                        />
+                                        {!l.categoryId && l.feed && suggestionFor(l.feed) && (() => {
+                                          const sug = suggestionFor(l.feed!)!;
+                                          return (
+                                            <Button type="button" variant="outline" size="sm" className="h-7 px-2 text-[11px] gap-1"
+                                              disabled={creatingCat !== null} onClick={() => void createSuggested(l.feed!)}
+                                              title={`Leader files this under ${l.feed!.category} › ${l.feed!.subcategory}`}>
+                                              {creatingCat === sug.key ? <Loader2 className="w-3 h-3 animate-spin" /> : <FolderPlus className="w-3 h-3" />}
+                                              Create "{sug.label}"
+                                            </Button>
+                                          );
+                                        })()}
+                                        {!l.categoryId && !l.feed && <span className="text-[11px] text-amber-700 dark:text-amber-400">Choose or create a category</span>}
+                                      </div>
                                     </div>
                                   </div>
                                 </div>

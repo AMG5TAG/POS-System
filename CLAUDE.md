@@ -1076,8 +1076,13 @@ manufacturer code, image, weight (kg), dimensions (mm → cm), warranty (months 
 years when whole), RRP, category. It is consulted **only for a Leader
 invoice** (`isLeaderSupplier`), since another supplier's stock code could
 collide. In the review the sell price starts at the RRP; the feed's category is
-matched to an existing one by name in the browser and never created; the brand
-is matched or created. Photos are copied into our own storage: the browser
+matched to an existing one by name in the browser (subcategory, then category);
+the brand is matched or created. Every new product has a category picker
+(`TreeCategorySelect`, which can create one), and a new product the feed files
+under a category you don't have offers **Create "<subcategory>"** — nested
+under the feed's category when you have it, else creating category › subcategory
+— applied to every new line waiting on the same one. Nothing is created
+without that click. Photos are copied into our own storage: the browser
 fetches `GET /purchase-orders/import/feed-image/:stockCode` (the server fetches
 only the URL the feed names, only on leadersystems.com.au — Leader sends no
 CORS) and uploads it through `uploadFile`; the import refuses an `imageUrl`
