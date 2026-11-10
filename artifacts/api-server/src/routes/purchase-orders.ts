@@ -20,6 +20,9 @@ import {
 } from "@workspace/api-zod";
 import { registerProductQr, registerQrBestEffort } from "../services/entityQr";
 import { cleanSerials, matchProducts, matchSupplier, serialsNote } from "../lib/supplier-invoice";
+import { isLeaderImageUrl, isLeaderSupplier, warrantyFromMonths } from "../lib/leader-feed";
+import { getLeaderFeed, leaderFeedConfigured, lookupLeaderProducts } from "../services/leaderFeed";
+import { brandsTable } from "@workspace/db";
 import { sendEmail } from "../services/email";
 import { escapeHtml } from "../lib/html-escape";
 
@@ -609,14 +612,51 @@ router.post("/purchase-orders/import/match", requireAuth, async (req, res): Prom
     poNumberTaken = hit ?? null;
   }
 
+  const supplier = matchSupplier(suppliers, { name: body.supplierName, accountCode: body.accountCode });
+  // Leader's dealer datafeed fills in new products (description, image, …).
+  // Only for a Leader invoice: stock codes are the supplier's own, and another
+  // supplier's code could collide with one of Leader's.
+  const fromLeader = isLeaderSupplier(body.supplierName) || isLeaderSupplier(supplier?.name);
+  const feed = fromLeader && leaderFeedConfigured()
+    ? await lookupLeaderProducts(body.lines.map((l) => l.stockCode), req.log)
+    : body.lines.map(() => null);
+
   res.json({
-    supplier: matchSupplier(suppliers, { name: body.supplierName, accountCode: body.accountCode }),
+    supplier,
+    feedAvailable: fromLeader && feed.some(Boolean),
+    feed,
     poNumberTaken,
     lines: matchProducts(
       products.map((p) => ({ ...p, price: parseFloat(String(p.price)) || 0, isActive: p.isActive === "true" })),
       body.lines.map((l) => ({ stockCode: l.stockCode, manufCode: l.manufCode })),
     ),
   });
+});
+
+/* The feed's image for a stock code, so the browser can upload it to our own
+   storage (Leader's site sends no CORS headers). Only the URL the feed names
+   is fetched, and only on Leader's own domain — the request names a stock
+   code, never a URL. */
+router.get("/purchase-orders/import/feed-image/:stockCode", requireAuth, async (req, res): Promise<void> => {
+  const feed = await getLeaderFeed(req.log);
+  const item = feed?.get(String(req.params.stockCode).replace(/\s+/g, "").toUpperCase());
+  if (!item?.imageUrl || !isLeaderImageUrl(item.imageUrl)) { res.status(404).json({ error: "No image for that code" }); return; }
+  const ctl = new AbortController();
+  const timer = setTimeout(() => ctl.abort(), 20_000);
+  try {
+    const r = await fetch(item.imageUrl, { signal: ctl.signal, redirect: "error" });
+    const type = r.headers.get("content-type") ?? "";
+    if (!r.ok || !/^image\/(jpeg|png|webp|gif)/i.test(type)) { res.status(404).json({ error: "No image for that code" }); return; }
+    const buf = Buffer.from(await r.arrayBuffer());
+    if (buf.length > 10 * 1024 * 1024) { res.status(413).json({ error: "Image too large" }); return; }
+    res.setHeader("Content-Type", type.split(";")[0]!);
+    res.setHeader("Cache-Control", "private, max-age=3600");
+    res.send(buf);
+  } catch {
+    res.status(502).json({ error: "Couldn't fetch the supplier's image" });
+  } finally {
+    clearTimeout(timer);
+  }
 });
 
 router.post("/purchase-orders/import", requireAuth, async (req, res): Promise<void> => {
@@ -637,6 +677,18 @@ router.post("/purchase-orders/import", requireAuth, async (req, res): Promise<vo
     const owned = await db.select({ id: productsTable.id }).from(productsTable)
       .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, linkedIds)));
     if (owned.length !== linkedIds.length) { res.status(400).json({ error: "A line names a product that doesn't exist" }); return; }
+  }
+
+  // Feed details on new products: categories must be this business's, and
+  // images must already be in its own storage (the browser uploads them).
+  for (const l of body.lines) {
+    const np = l.newProduct;
+    if (!np) continue;
+    const foreign = await foreignIdError(merchantId, { categoryId: np.categoryId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+    if (np.imageUrl && !np.imageUrl.startsWith(`/api/storage/objects/merchants/${merchantId}/`)) {
+      res.status(400).json({ error: "Product images must be uploaded first" }); return;
+    }
   }
 
   // Defaults a product made in the product form would get.
@@ -702,6 +754,16 @@ router.post("/purchase-orders/import", requireAuth, async (req, res): Promise<vo
           const np = l.newProduct;
           const sellPrice = np.sellPrice && np.sellPrice > 0 ? round2(np.sellPrice) : 0;
           const sku = np.sku?.trim() || l.stockCode?.trim() || null;
+          // Brand by name, created when this business doesn't have it yet.
+          let brandId: number | null = null;
+          const brandName = np.brand?.trim();
+          if (brandName) {
+            const [b] = await tx.select({ id: brandsTable.id }).from(brandsTable)
+              .where(and(eq(brandsTable.merchantId, merchantId), sql`lower(${brandsTable.name}) = ${brandName.toLowerCase()}`)).limit(1);
+            brandId = b?.id ?? (await tx.insert(brandsTable).values({ merchantId, name: brandName }).returning())[0]!.id;
+          }
+          const warranty = warrantyFromMonths(np.warrantyMonths);
+          const measure = (n: number | undefined) => (n != null && Number.isFinite(n) && n > 0 ? String(Math.round(n * 1000) / 1000) : null);
           const [p] = await tx.insert(productsTable).values({
             merchantId,
             name: np.name.trim(),
@@ -711,6 +773,16 @@ router.post("/purchase-orders/import", requireAuth, async (req, res): Promise<vo
             supplier: supplierName,
             supplierCode: l.stockCode?.trim() || null,
             technicalSpecs: np.manufCode?.trim() ? `Manufacturer code: ${np.manufCode.trim()}` : null,
+            description: np.description?.trim() || null,
+            barcode: np.barcode?.trim() || null,
+            imageUrl: np.imageUrl || null,
+            brandId,
+            categoryId: np.categoryId ?? null,
+            weightKg: measure(np.weightKg),
+            lengthCm: measure(np.lengthCm),
+            widthCm: measure(np.widthCm),
+            heightCm: measure(np.heightCm),
+            ...(warranty ?? {}),
             productTypeId: standardType!.id,
             lowStockThreshold: lowStock?.globalThreshold ?? null,
             trackInventory: "true",

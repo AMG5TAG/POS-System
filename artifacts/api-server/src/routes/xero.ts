@@ -11,7 +11,7 @@ import {
   purchaseOrdersTable,
   customerNotesTable,
 } from "@workspace/db";
-import { eq, and, gte, desc, inArray } from "drizzle-orm";
+import { eq, and, gte, desc, inArray, isNull } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { publicOrigin } from "../lib/publicUrl";
 
@@ -826,6 +826,11 @@ router.post("/xero/sync/transactions", requireAuth, requireOwner, async (req, re
         eq(transactionsTable.merchantId, merchantId),
         eq(transactionsTable.status, "completed"),
         gte(transactionsTable.createdAt, since),
+        // Returns/swaps (return_of_transaction_id) are not sales: a net refund
+        // is a negative invoice, which Xero refuses — and one refusal fails the
+        // batch. They belong in Xero as credit notes, which this sync doesn't
+        // write yet, so they are left out rather than break it.
+        isNull(transactionsTable.returnOfTransactionId),
       ),
     )
     .orderBy(desc(transactionsTable.createdAt))
@@ -1042,6 +1047,10 @@ router.post("/xero/sync-sale", requireAuth, async (req, res): Promise<void> => {
     ));
 
   if (!tx) { res.status(404).json({ error: "Transaction not found" }); return; }
+  if (tx.returnOfTransactionId != null) {
+    res.status(400).json({ error: "Returns aren't synced to Xero yet — record the refund there as a credit note." });
+    return;
+  }
 
   const creds = (await getCreds(merchantId)) ?? {};
   const revenueCode = creds.mappings?.revenueAccount ?? "200";

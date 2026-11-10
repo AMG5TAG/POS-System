@@ -156,6 +156,7 @@ import type {
   GetProductPerformanceParams,
   GetProfitLossParams,
   GetRecentTransactionsParams,
+  GetSaleReturnable200,
   GetSalesChartParams,
   GetSalesSummaryParams,
   GetStaffClockStatusParams,
@@ -367,6 +368,7 @@ import type {
   ResetPasswordInput,
   RestoreBackup200,
   RestoreBackupInput,
+  ReturnSaleBody,
   RosterShiftInput,
   RosterShiftItem,
   RosterShiftListResponse,
@@ -5728,6 +5730,157 @@ export const useRefundTransaction = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getRefundTransactionMutationOptions(options));
+    }
+
+export const getGetSaleReturnableUrl = (id: number,) => {
+
+
+
+
+  return `/api/transactions/${id}/returnable`
+}
+
+/**
+ * @summary What of a sale can still be returned, and for how much
+ */
+export const getSaleReturnable = async (id: number, options?: RequestInit): Promise<GetSaleReturnable200> => {
+
+  return customFetch<GetSaleReturnable200>(getGetSaleReturnableUrl(id),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSaleReturnableQueryKey = (id: number,) => {
+    return [
+    `/api/transactions/${id}/returnable`
+    ] as const;
+    }
+
+
+export const getGetSaleReturnableQueryOptions = <TData = Awaited<ReturnType<typeof getSaleReturnable>>, TError = ErrorType<unknown>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSaleReturnable>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSaleReturnableQueryKey(id);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSaleReturnable>>> = ({ signal }) => getSaleReturnable(id, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSaleReturnable>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSaleReturnableQueryResult = NonNullable<Awaited<ReturnType<typeof getSaleReturnable>>>
+export type GetSaleReturnableQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary What of a sale can still be returned, and for how much
+ */
+
+export function useGetSaleReturnable<TData = Awaited<ReturnType<typeof getSaleReturnable>>, TError = ErrorType<unknown>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSaleReturnable>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSaleReturnableQueryOptions(id,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getReturnSaleUrl = (id: number,) => {
+
+
+
+
+  return `/api/transactions/${id}/return`
+}
+
+/**
+ * Records a new completed transaction linked to the sale: returned items as negative lines (restocked when asked), swap items as positive lines, the net as its total. Loyalty, lifetime spend and store credit move in the same database transaction. Needs a manager (or a manager PIN at the till), like a refund.
+
+ * @summary Return items from a completed sale, optionally swapping them for other products
+ */
+export const returnSale = async (id: number,
+    returnSaleBody: ReturnSaleBody, options?: RequestInit): Promise<Transaction> => {
+
+  return customFetch<Transaction>(getReturnSaleUrl(id),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      returnSaleBody,)
+  }
+);}
+
+
+
+
+export const getReturnSaleMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof returnSale>>, TError,{id: number;data: BodyType<ReturnSaleBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof returnSale>>, TError,{id: number;data: BodyType<ReturnSaleBody>}, TContext> => {
+
+const mutationKey = ['returnSale'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof returnSale>>, {id: number;data: BodyType<ReturnSaleBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  returnSale(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ReturnSaleMutationResult = NonNullable<Awaited<ReturnType<typeof returnSale>>>
+    export type ReturnSaleMutationBody = BodyType<ReturnSaleBody>
+    export type ReturnSaleMutationError = ErrorType<void>
+
+    /**
+ * @summary Return items from a completed sale, optionally swapping them for other products
+ */
+export const useReturnSale = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof returnSale>>, TError,{id: number;data: BodyType<ReturnSaleBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof returnSale>>,
+        TError,
+        {id: number;data: BodyType<ReturnSaleBody>},
+        TContext
+      > => {
+      return useMutation(getReturnSaleMutationOptions(options));
     }
 
 export const getVoidTransactionUrl = (id: number,) => {
@@ -13964,6 +14117,85 @@ export const useMatchSupplierInvoice = <TError = ErrorType<unknown>,
       > => {
       return useMutation(getMatchSupplierInvoiceMutationOptions(options));
     }
+
+export const getGetSupplierFeedImageUrl = (stockCode: string,) => {
+
+
+
+
+  return `/api/purchase-orders/import/feed-image/${stockCode}`
+}
+
+/**
+ * Proxies the image named for that stock code in the supplier's datafeed (Leader's site has no CORS), so the browser can upload it to this business's storage. Only the feed's own image URLs are ever fetched.
+
+ * @summary The datafeed image for a stock code, fetched from the supplier's own site
+ */
+export const getSupplierFeedImage = async (stockCode: string, options?: RequestInit): Promise<Blob> => {
+
+  return customFetch<Blob>(getGetSupplierFeedImageUrl(stockCode),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getGetSupplierFeedImageQueryKey = (stockCode: string,) => {
+    return [
+    `/api/purchase-orders/import/feed-image/${stockCode}`
+    ] as const;
+    }
+
+
+export const getGetSupplierFeedImageQueryOptions = <TData = Awaited<ReturnType<typeof getSupplierFeedImage>>, TError = ErrorType<void>>(stockCode: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupplierFeedImage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getGetSupplierFeedImageQueryKey(stockCode);
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getSupplierFeedImage>>> = ({ signal }) => getSupplierFeedImage(stockCode, { signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, enabled: !!(stockCode), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getSupplierFeedImage>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type GetSupplierFeedImageQueryResult = NonNullable<Awaited<ReturnType<typeof getSupplierFeedImage>>>
+export type GetSupplierFeedImageQueryError = ErrorType<void>
+
+
+/**
+ * @summary The datafeed image for a stock code, fetched from the supplier's own site
+ */
+
+export function useGetSupplierFeedImage<TData = Awaited<ReturnType<typeof getSupplierFeedImage>>, TError = ErrorType<void>>(
+ stockCode: string, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getSupplierFeedImage>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getGetSupplierFeedImageQueryOptions(stockCode,options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
 
 export const getImportSupplierInvoiceUrl = () => {
 

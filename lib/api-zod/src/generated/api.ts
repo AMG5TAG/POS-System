@@ -1341,6 +1341,7 @@ export const GetCustomerHistoryResponse = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -1349,6 +1350,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2092,6 +2095,7 @@ export const ListTransactionsResponse = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2100,6 +2104,8 @@ export const ListTransactionsResponse = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2138,6 +2144,8 @@ export const CreateTransactionBody = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2196,6 +2204,8 @@ export const CheckTransactionDiscountBody = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2313,6 +2323,7 @@ export const GetTransactionResponse = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2321,6 +2332,8 @@ export const GetTransactionResponse = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2425,6 +2438,7 @@ export const RefundTransactionResponse = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2433,6 +2447,8 @@ export const RefundTransactionResponse = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2446,6 +2462,82 @@ export const RefundTransactionResponse = zod.object({
   "balance": zod.number()
 })).optional().describe('Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items.'),
   "createdAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary What of a sale can still be returned, and for how much
+ */
+export const GetSaleReturnableParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const GetSaleReturnableResponse = zod.object({
+  "transactionId": zod.number(),
+  "receiptNumber": zod.string(),
+  "status": zod.string(),
+  "paymentMethod": zod.string(),
+  "defaultRefundMethod": zod.string(),
+  "customerId": zod.number().nullish(),
+  "lines": zod.array(zod.object({
+  "index": zod.number(),
+  "productId": zod.number(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "returned": zod.number(),
+  "remaining": zod.number(),
+  "unitRefund": zod.number(),
+  "blockedReason": zod.string().nullish()
+})),
+  "returns": zod.array(zod.object({
+  "id": zod.number(),
+  "receiptNumber": zod.string(),
+  "total": zod.number(),
+  "createdAt": zod.coerce.date()
+})).describe('Earlier returns against this sale.')
+})
+
+
+/**
+ * Records a new completed transaction linked to the sale: returned items as negative lines (restocked when asked), swap items as positive lines, the net as its total. Loyalty, lifetime spend and store credit move in the same database transaction. Needs a manager (or a manager PIN at the till), like a refund.
+
+ * @summary Return items from a completed sale, optionally swapping them for other products
+ */
+export const ReturnSaleParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const returnSaleBodyLinesItemIndexMin = 0;
+
+
+export const returnSaleBodyLinesMax = 200;
+
+
+export const returnSaleBodyNewItemsItemQuantityMax = 1000;
+
+export const returnSaleBodyNewItemsMax = 100;
+
+export const returnSaleBodyMethodMax = 40;
+
+export const returnSaleBodyReasonMax = 500;
+
+export const returnSaleBodyIdempotencyKeyMax = 100;
+
+
+
+export const ReturnSaleBody = zod.object({
+  "lines": zod.array(zod.object({
+  "index": zod.number().min(returnSaleBodyLinesItemIndexMin),
+  "quantity": zod.number().min(1),
+  "restock": zod.boolean()
+})).max(returnSaleBodyLinesMax),
+  "newItems": zod.array(zod.object({
+  "productId": zod.number().min(1),
+  "quantity": zod.number().min(1).max(returnSaleBodyNewItemsItemQuantityMax)
+})).max(returnSaleBodyNewItemsMax).optional(),
+  "method": zod.string().max(returnSaleBodyMethodMax).describe('How the difference is settled — refunded to the customer, or paid by them on a swap that costs more. store_credit moves their balance.'),
+  "reason": zod.string().max(returnSaleBodyReasonMax).optional(),
+  "idempotencyKey": zod.string().max(returnSaleBodyIdempotencyKeyMax).optional()
 })
 
 
@@ -2528,6 +2620,7 @@ export const VoidTransactionResponse = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2536,6 +2629,8 @@ export const VoidTransactionResponse = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -2641,6 +2736,7 @@ export const ModifyCompletedSaleResponse = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -2649,6 +2745,8 @@ export const ModifyCompletedSaleResponse = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -3840,6 +3938,7 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "loyaltyEarned": zod.number().nullish(),
   "discountCapped": zod.boolean().nullish().describe('True when the cashier attempted a discount exceeding their role limit and it was clamped to the maximum allowed. Managers can use this to review override attempts.'),
   "discountPct": zod.number().nullish().describe('The overall cart discount percentage when the cashier entered the discount as a percentage (e.g. 10 for 10%). Null when no overall discount was applied or when it was a dollar-amount discount. Used to render \"10% discount\" on reprinted receipts instead of \"Discount\".'),
+  "returnOfTransactionId": zod.number().nullish().describe('Set on a return\/swap — the sale it returns against. Its returned lines have negative quantities and totals.'),
   "items": zod.array(zod.object({
   "productId": zod.number(),
   "productName": zod.string(),
@@ -3848,6 +3947,8 @@ export const GetRecentTransactionsResponseItem = zod.object({
   "totalPrice": zod.number(),
   "taxAmount": zod.number().optional(),
   "discount": zod.number().optional(),
+  "returnOfLine": zod.number().optional().describe('On a return\'s line — the index of the original sale\'s line it returns (quantity and totals are negative).'),
+  "restocked": zod.boolean().optional().describe('On a return\'s line — whether the item went back into stock.'),
   "giftCardIssue": zod.boolean().optional().describe('When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale.'),
   "giftCardNumber": zod.string().optional().describe('Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item.'),
   "digitalCodes": zod.array(zod.string()).optional().describe('Digital codes assigned to this line item during checkout. Populated in the response for products of type \"digital_code\" with unassigned codes available in inventory. One code per unit sold.'),
@@ -6085,6 +6186,25 @@ export const MatchSupplierInvoiceBody = zod.object({
 })
 
 export const MatchSupplierInvoiceResponse = zod.object({
+  "feedAvailable": zod.boolean().describe('True when the invoice is from a supplier whose datafeed is configured and could be read.'),
+  "feed": zod.array(zod.object({
+  "stockCode": zod.string(),
+  "name": zod.string(),
+  "shortDescription": zod.string(),
+  "description": zod.string(),
+  "barcode": zod.string(),
+  "brand": zod.string(),
+  "manufCode": zod.string(),
+  "imageUrl": zod.string(),
+  "weightKg": zod.number().nullish(),
+  "lengthCm": zod.number().nullish(),
+  "widthCm": zod.number().nullish(),
+  "heightCm": zod.number().nullish(),
+  "warrantyMonths": zod.number().nullish(),
+  "rrp": zod.number().nullish().describe('Recommended retail, inc GST'),
+  "category": zod.string(),
+  "subcategory": zod.string()
+}).describe('A product\'s details from the supplier\'s datafeed (Leader Computers).').nullable()).describe('Per line, that stock code\'s datafeed details (same order as lines), or null.'),
   "supplier": zod.object({
   "id": zod.number(),
   "name": zod.string(),
@@ -6101,6 +6221,16 @@ export const MatchSupplierInvoiceResponse = zod.object({
   "price": zod.number().optional(),
   "matchedBy": zod.enum(['sku', 'supplierCode', 'manufCode'])
 }).nullable())
+})
+
+
+/**
+ * Proxies the image named for that stock code in the supplier's datafeed (Leader's site has no CORS), so the browser can upload it to this business's storage. Only the feed's own image URLs are ever fetched.
+
+ * @summary The datafeed image for a stock code, fetched from the supplier's own site
+ */
+export const GetSupplierFeedImageParams = zod.object({
+  "stockCode": zod.coerce.string()
 })
 
 
@@ -6139,6 +6269,25 @@ export const importSupplierInvoiceBodyLinesItemNewProductManufCodeMax = 120;
 
 export const importSupplierInvoiceBodyLinesItemNewProductSellPriceMin = 0;
 
+export const importSupplierInvoiceBodyLinesItemNewProductDescriptionMax = 20000;
+
+export const importSupplierInvoiceBodyLinesItemNewProductBarcodeMax = 40;
+
+export const importSupplierInvoiceBodyLinesItemNewProductBrandMax = 120;
+
+export const importSupplierInvoiceBodyLinesItemNewProductImageUrlMax = 1000;
+
+export const importSupplierInvoiceBodyLinesItemNewProductWeightKgMin = 0;
+
+export const importSupplierInvoiceBodyLinesItemNewProductLengthCmMin = 0;
+
+export const importSupplierInvoiceBodyLinesItemNewProductWidthCmMin = 0;
+
+export const importSupplierInvoiceBodyLinesItemNewProductHeightCmMin = 0;
+
+export const importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMin = 0;
+export const importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMax = 240;
+
 export const importSupplierInvoiceBodyLinesItemProductNameMax = 300;
 
 export const importSupplierInvoiceBodyLinesItemStockCodeMax = 120;
@@ -6176,7 +6325,17 @@ export const ImportSupplierInvoiceBody = zod.object({
   "name": zod.string().min(1).max(importSupplierInvoiceBodyLinesItemNewProductNameMax),
   "sku": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductSkuMax).optional(),
   "manufCode": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductManufCodeMax).optional(),
-  "sellPrice": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductSellPriceMin).optional().describe('Inc-GST. Blank or 0 creates the product hidden from the till until it is priced.')
+  "sellPrice": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductSellPriceMin).optional().describe('Inc-GST. Blank or 0 creates the product hidden from the till until it is priced.'),
+  "description": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductDescriptionMax).optional(),
+  "barcode": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductBarcodeMax).optional(),
+  "brand": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductBrandMax).optional().describe('Matched to a brand by name, or created.'),
+  "categoryId": zod.number().optional().describe('An existing category of this business (the review matches the feed\'s category by name; none is ever created).'),
+  "imageUrl": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductImageUrlMax).optional().describe('An uploaded image in this business\'s storage (\/api\/storage\/objects\/...).'),
+  "weightKg": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductWeightKgMin).optional(),
+  "lengthCm": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductLengthCmMin).optional(),
+  "widthCm": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductWidthCmMin).optional(),
+  "heightCm": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductHeightCmMin).optional(),
+  "warrantyMonths": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMin).max(importSupplierInvoiceBodyLinesItemNewProductWarrantyMonthsMax).optional()
 }).optional(),
   "productName": zod.string().max(importSupplierInvoiceBodyLinesItemProductNameMax),
   "stockCode": zod.string().max(importSupplierInvoiceBodyLinesItemStockCodeMax).optional(),

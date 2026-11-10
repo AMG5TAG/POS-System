@@ -1734,6 +1734,108 @@ paths:
               schema:
                 $ref: "#/components/schemas/Transaction"
 
+  /transactions/{id}/returnable:
+    get:
+      operationId: getSaleReturnable
+      summary: What of a sale can still be returned, and for how much
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      responses:
+        "200":
+          description: The sale's lines with what's left to return
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [transactionId, receiptNumber, status, paymentMethod, defaultRefundMethod, lines, returns]
+                properties:
+                  transactionId: { type: integer }
+                  receiptNumber: { type: string }
+                  status: { type: string }
+                  paymentMethod: { type: string }
+                  defaultRefundMethod: { type: string }
+                  customerId: { type: integer, nullable: true }
+                  lines:
+                    type: array
+                    items:
+                      type: object
+                      required: [index, productId, productName, quantity, returned, remaining, unitRefund]
+                      properties:
+                        index: { type: integer }
+                        productId: { type: integer }
+                        productName: { type: string }
+                        quantity: { type: integer }
+                        returned: { type: integer }
+                        remaining: { type: integer }
+                        unitRefund: { type: number }
+                        blockedReason: { type: string, nullable: true }
+                  returns:
+                    type: array
+                    description: Earlier returns against this sale.
+                    items:
+                      type: object
+                      required: [id, receiptNumber, total, createdAt]
+                      properties:
+                        id: { type: integer }
+                        receiptNumber: { type: string }
+                        total: { type: number }
+                        createdAt: { type: string, format: date-time }
+
+  /transactions/{id}/return:
+    post:
+      operationId: returnSale
+      summary: Return items from a completed sale, optionally swapping them for other products
+      description: >
+        Records a new completed transaction linked to the sale: returned items
+        as negative lines (restocked when asked), swap items as positive lines,
+        the net as its total. Loyalty, lifetime spend and store credit move in
+        the same database transaction. Needs a manager (or a manager PIN at the
+        till), like a refund.
+      parameters:
+        - { name: id, in: path, required: true, schema: { type: integer } }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [lines, method]
+              properties:
+                lines:
+                  type: array
+                  maxItems: 200
+                  items:
+                    type: object
+                    required: [index, quantity, restock]
+                    properties:
+                      index: { type: integer, minimum: 0 }
+                      quantity: { type: integer, minimum: 1 }
+                      restock: { type: boolean }
+                newItems:
+                  type: array
+                  maxItems: 100
+                  items:
+                    type: object
+                    required: [productId, quantity]
+                    properties:
+                      productId: { type: integer, minimum: 1 }
+                      quantity: { type: integer, minimum: 1, maximum: 1000 }
+                method:
+                  type: string
+                  maxLength: 40
+                  description: How the difference is settled — refunded to the customer, or paid by them on a swap that costs more. store_credit moves their balance.
+                reason: { type: string, maxLength: 500 }
+                idempotencyKey: { type: string, maxLength: 100 }
+      responses:
+        "201":
+          description: The return transaction
+          content:
+            application/json:
+              schema: { $ref: "#/components/schemas/Transaction" }
+        "400": { description: Invalid }
+        "409":
+          description: "Can't be returned: already returned, sale not completed, loyalty already spent, or short store credit"
+
   /transactions/{id}/void:
     post:
       operationId: voidTransaction
@@ -4004,6 +4106,29 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/SupplierInvoiceMatch"
+
+  /purchase-orders/import/feed-image/{stockCode}:
+    get:
+      operationId: getSupplierFeedImage
+      tags: [purchase-orders]
+      summary: The datafeed image for a stock code, fetched from the supplier's own site
+      description: >
+        Proxies the image named for that stock code in the supplier's datafeed
+        (Leader's site has no CORS), so the browser can upload it to this
+        business's storage. Only the feed's own image URLs are ever fetched.
+      parameters:
+        - name: stockCode
+          in: path
+          required: true
+          schema: { type: string }
+      responses:
+        "200":
+          description: The image
+          content:
+            image/*:
+              schema: { type: string, format: binary }
+        "404":
+          description: No image for that code
 
   /purchase-orders/import:
     post:
@@ -11291,6 +11416,12 @@ components:
           type: number
         discount:
           type: number
+        returnOfLine:
+          type: integer
+          description: On a return's line — the index of the original sale's line it returns (quantity and totals are negative).
+        restocked:
+          type: boolean
+          description: On a return's line — whether the item went back into stock.
         giftCardIssue:
           type: boolean
           description: >-
@@ -11380,6 +11511,9 @@ components:
             discount as a percentage (e.g. 10 for 10%). Null when no overall
             discount was applied or when it was a dollar-amount discount. Used
             to render "10% discount" on reprinted receipts instead of "Discount".
+        returnOfTransactionId:
+          type: ["integer", "null"]
+          description: Set on a return/swap — the sale it returns against. Its returned lines have negative quantities and totals.
         items:
           type: array
           items:
@@ -13955,10 +14089,40 @@ components:
             properties:
               stockCode: { type: string, maxLength: 120 }
               manufCode: { type: string, maxLength: 120 }
+    SupplierFeedProduct:
+      type: object
+      description: A product's details from the supplier's datafeed (Leader Computers).
+      required: [stockCode, name, shortDescription, description, barcode, brand, manufCode, imageUrl, category, subcategory]
+      properties:
+        stockCode: { type: string }
+        name: { type: string }
+        shortDescription: { type: string }
+        description: { type: string }
+        barcode: { type: string }
+        brand: { type: string }
+        manufCode: { type: string }
+        imageUrl: { type: string }
+        weightKg: { type: number, nullable: true }
+        lengthCm: { type: number, nullable: true }
+        widthCm: { type: number, nullable: true }
+        heightCm: { type: number, nullable: true }
+        warrantyMonths: { type: integer, nullable: true }
+        rrp: { type: number, nullable: true, description: "Recommended retail, inc GST" }
+        category: { type: string }
+        subcategory: { type: string }
     SupplierInvoiceMatch:
       type: object
-      required: [supplier, poNumberTaken, lines]
+      required: [supplier, poNumberTaken, lines, feed, feedAvailable]
       properties:
+        feedAvailable:
+          type: boolean
+          description: True when the invoice is from a supplier whose datafeed is configured and could be read.
+        feed:
+          type: array
+          description: Per line, that stock code's datafeed details (same order as lines), or null.
+          items:
+            allOf: [{ $ref: "#/components/schemas/SupplierFeedProduct" }]
+            nullable: true
         supplier:
           type: object
           nullable: true
@@ -14036,6 +14200,24 @@ components:
                     type: number
                     minimum: 0
                     description: Inc-GST. Blank or 0 creates the product hidden from the till until it is priced.
+                  description: { type: string, maxLength: 20000 }
+                  barcode: { type: string, maxLength: 40 }
+                  brand:
+                    type: string
+                    maxLength: 120
+                    description: Matched to a brand by name, or created.
+                  categoryId:
+                    type: integer
+                    description: An existing category of this business (the review matches the feed's category by name; none is ever created).
+                  imageUrl:
+                    type: string
+                    maxLength: 1000
+                    description: An uploaded image in this business's storage (/api/storage/objects/...).
+                  weightKg: { type: number, minimum: 0 }
+                  lengthCm: { type: number, minimum: 0 }
+                  widthCm: { type: number, minimum: 0 }
+                  heightCm: { type: number, minimum: 0 }
+                  warrantyMonths: { type: integer, minimum: 0, maximum: 240 }
               productName: { type: string, maxLength: 300 }
               stockCode: { type: string, maxLength: 120 }
               quantity: { type: integer, minimum: 1, maximum: 100000 }

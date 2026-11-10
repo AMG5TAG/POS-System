@@ -15,6 +15,7 @@ import { scheduleBackups } from "./services/backupScheduler";
 import { scheduleAutoSync } from "./services/autoSyncScheduler";
 import { scheduleKpiResets } from "./services/kpiResetScheduler";
 import { scheduleScheduledReports } from "./services/scheduledReportsScheduler";
+import { scheduleLeaderFeedRefresh } from "./services/leaderFeed";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 import { checkSchemaDrift } from "./services/schemaDriftCheck";
 import { clearScheduledIntervals } from "./lib/shutdown";
@@ -67,6 +68,7 @@ async function bootstrap() {
   scheduleAutoSync(logger);
   scheduleKpiResets(logger);
   scheduleScheduledReports(logger);
+  scheduleLeaderFeedRefresh(logger);
   ensureLoginCleanupFunction(logger).then(() => {
     scheduleLoginAttemptsCleanup(logger);
   }).catch((err) => {

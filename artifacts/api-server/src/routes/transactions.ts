@@ -27,6 +27,11 @@ import { reconcileOversellLedger } from "../lib/oversellLedger";
 import { completeLinkedWork, mergeLinkedWork } from "../lib/linked-work";
 import { planPreOrders, recordPreOrders, loadCollectable, collectPreOrder, cancelSalePreOrders, type PreOrderPlan } from "../lib/pre-order-sales";
 import { localDate } from "../lib/pre-orders";
+import {
+  buildReturnLine, defaultRefundMethod, loyaltyToTakeBack, returnableLines, returnMethodError, type SaleLine,
+} from "../lib/sale-returns";
+import { GetSaleReturnableParams, ReturnSaleParams, ReturnSaleBody } from "@workspace/api-zod";
+import { isNotNull } from "drizzle-orm";
 
 const router: IRouter = Router();
 
@@ -91,6 +96,7 @@ function formatTransaction(t: typeof transactionsTable.$inferSelect, customer?: 
     surchargeAmount: t.surchargeAmount != null ? parseFloat(t.surchargeAmount) : 0,
     discountCapped: t.discountCapped === "true" ? true : t.discountCapped === "false" ? false : null,
     discountPct: t.discountPct != null ? parseFloat(t.discountPct) : null,
+    returnOfTransactionId: t.returnOfTransactionId ?? null,
     items: rawItems,
     ...(issuedGiftCards.length > 0 ? { issuedGiftCards } : {}),
     createdAt: t.createdAt.toISOString(),
@@ -1311,6 +1317,7 @@ router.post("/transactions/:id/refund", requireAuth, requireManagerOrApproval, a
       if (transaction.status !== "completed") {
         throw new HttpError(409, `Only completed sales can be refunded (this sale is ${transaction.status}).`);
       }
+      await assertNoReturns(tx, merchantId, transaction, "refunded");
       await reverseSaleEffects(tx, merchantId, transaction);
       await cancelSalePreOrders(tx, merchantId, transaction.id);
       const [row] = await tx
@@ -1327,6 +1334,285 @@ router.post("/transactions/:id/refund", requireAuth, requireManagerOrApproval, a
       cust = c ?? null;
     }
     res.json(formatTransaction(updated, cust));
+  } catch (err) {
+    if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
+    throw err;
+  }
+});
+
+/* ── Returns & swaps ──────────────────────────────────────────────────────
+   Customer › History › Return / swap. A return is its own completed
+   transaction linked to the sale (return_of_transaction_id): returned items as
+   negative lines, swap items as positive lines, the net as its total. Money
+   rules in lib/sale-returns.ts, pinned by sale-returns.test.ts. */
+
+type Tx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+const round2 = (n: number) => Math.round((n + Number.EPSILON) * 100) / 100;
+
+/** A sale with returns against it can't be refunded or voided whole (the
+ *  returned items would come back twice), and a return can't be either. */
+async function assertNoReturns(tx: Tx, merchantId: number, transaction: typeof transactionsTable.$inferSelect, verb: string): Promise<void> {
+  if (transaction.returnOfTransactionId != null) {
+    throw new HttpError(409, `This is a return against another sale — it can't be ${verb}.`);
+  }
+  const [r] = await tx.select({ id: transactionsTable.id }).from(transactionsTable)
+    .where(and(eq(transactionsTable.merchantId, merchantId), eq(transactionsTable.returnOfTransactionId, transaction.id)))
+    .limit(1);
+  if (r) throw new HttpError(409, `This sale has had items returned — use Return / swap for the rest instead of ${verb === "voided" ? "voiding" : "refunding"} it whole.`);
+}
+
+async function priorReturnItems(executor: Tx | typeof db, merchantId: number, saleId: number): Promise<{ rows: Array<typeof transactionsTable.$inferSelect>; items: SaleLine[][] }> {
+  const rows = await executor.select().from(transactionsTable)
+    .where(and(
+      eq(transactionsTable.merchantId, merchantId),
+      eq(transactionsTable.returnOfTransactionId, saleId),
+      eq(transactionsTable.status, "completed"),
+    ))
+    .orderBy(transactionsTable.createdAt);
+  return { rows, items: rows.map((r) => (Array.isArray(r.items) ? r.items as SaleLine[] : [])) };
+}
+
+router.get("/transactions/:id/returnable", requireAuth, async (req, res): Promise<void> => {
+  const params = GetSaleReturnableParams.safeParse(req.params);
+  if (!params.success) { res.status(400).json({ error: params.error.message }); return; }
+  const merchantId = req.session.merchantId!;
+  const [sale] = await db.select().from(transactionsTable)
+    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, merchantId)));
+  if (!sale) { res.status(404).json({ error: "Sale not found" }); return; }
+  const prior = await priorReturnItems(db, merchantId, sale.id);
+  const original = Array.isArray(sale.items) ? sale.items as SaleLine[] : [];
+  res.json({
+    transactionId: sale.id,
+    receiptNumber: sale.receiptNumber,
+    status: sale.status,
+    paymentMethod: sale.paymentMethod,
+    defaultRefundMethod: defaultRefundMethod(sale.paymentMethod),
+    customerId: sale.customerId ?? null,
+    lines: sale.returnOfTransactionId != null ? [] : returnableLines(original, prior.items),
+    returns: prior.rows.map((r) => ({ id: r.id, receiptNumber: r.receiptNumber, total: parseFloat(r.total), createdAt: r.createdAt.toISOString() })),
+  });
+});
+
+router.post("/transactions/:id/return", requireAuth, requireManagerOrApproval, async (req, res): Promise<void> => {
+  const params = ReturnSaleParams.safeParse(req.params);
+  const parsed = ReturnSaleBody.safeParse(req.body);
+  if (!params.success || !parsed.success) {
+    res.status(400).json({ error: (params.success ? parsed.error?.message : params.error.message) ?? "Invalid request" });
+    return;
+  }
+  const merchantId = req.session.merchantId!;
+  const body = parsed.data;
+  const method = body.method.trim();
+  const methodErr = returnMethodError(method);
+  if (methodErr) { res.status(400).json({ error: methodErr }); return; }
+  const lines = body.lines ?? [];
+  const newItemsReq = body.newItems ?? [];
+  if (!lines.length) { res.status(400).json({ error: "Choose at least one item to return" }); return; }
+  if (new Set(lines.map((l) => l.index)).size !== lines.length) { res.status(400).json({ error: "Each line can only appear once" }); return; }
+  const idempotencyKey = body.idempotencyKey?.trim() ? `return:${body.idempotencyKey.trim()}` : null;
+
+  // A retry of a return that already landed answers with that return.
+  if (idempotencyKey) {
+    const [done] = await db.select().from(transactionsTable)
+      .where(and(eq(transactionsTable.merchantId, merchantId), eq(transactionsTable.idempotencyKey, idempotencyKey)));
+    if (done) { res.status(201).json(formatTransaction(done, null)); return; }
+  }
+
+  try {
+    const created = await db.transaction(async (tx) => {
+      // Lock the sale so two returns (or a return and a refund) can't race.
+      const [sale] = await tx.select().from(transactionsTable)
+        .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, merchantId)))
+        .for("update");
+      if (!sale) throw new HttpError(404, "Sale not found");
+      if (sale.returnOfTransactionId != null) throw new HttpError(409, "That's a return — returns are made against the original sale.");
+      if (sale.status !== "completed") throw new HttpError(409, `Only completed sales can have returns (this sale is ${sale.status}).`);
+
+      const original = Array.isArray(sale.items) ? sale.items as SaleLine[] : [];
+      const prior = await priorReturnItems(tx, merchantId, sale.id);
+
+      // Returned lines (negative), validated against what's left to return.
+      const returnLines: SaleLine[] = [];
+      for (const l of lines) {
+        try { returnLines.push(buildReturnLine(original, prior.items, l.index, l.quantity, l.restock)); }
+        catch (e) { throw new HttpError(409, (e as Error).message); }
+      }
+      const refundTotal = round2(-returnLines.reduce((sum, l) => sum + l.totalPrice, 0));
+      const refundTax = round2(-returnLines.reduce((sum, l) => sum + (l.taxAmount ?? 0), 0));
+
+      // The customer (if any) and their group price for swap items.
+      const [customer] = sale.customerId
+        ? await tx.select().from(customersTable)
+            .where(and(eq(customersTable.id, sale.customerId), eq(customersTable.merchantId, merchantId)))
+            .for("update")
+        : [];
+      if ((method === "store_credit") && !customer) throw new HttpError(400, "Store credit needs a customer on the sale");
+
+      let customerGroupId: string | null = null;
+      let groupRules: GroupPricingRule[] = [];
+      if (customer?.customerGroup) {
+        const [cs] = await tx.select({ groups: customerSettingsTable.groups, groupPricing: customerSettingsTable.groupPricing })
+          .from(customerSettingsTable).where(eq(customerSettingsTable.merchantId, merchantId));
+        const parse = <T,>(raw: string | null | undefined, d: T): T => { try { return raw ? (JSON.parse(raw) as T) : d; } catch { return d; } };
+        const groups = parse<Array<{ id: string; name: string }>>(cs?.groups, []);
+        customerGroupId = resolveCustomerGroupId(customer.customerGroup, Array.isArray(groups) ? groups : []);
+        const rules = parse<GroupPricingRule[]>(cs?.groupPricing, []);
+        groupRules = Array.isArray(rules) ? rules : [];
+      }
+
+      // Swap lines at today's price (the customer's group price if they have one).
+      const swapIds = [...new Set(newItemsReq.map((n) => n.productId))];
+      const swapProducts = swapIds.length
+        ? await tx.select().from(productsTable)
+            .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, swapIds)))
+        : [];
+      const swapById = new Map(swapProducts.map((p) => [p.id, p]));
+      const swapLines: SaleLine[] = [];
+      for (const n of newItemsReq) {
+        const p = swapById.get(n.productId);
+        if (!p) throw new HttpError(400, "A swap item isn't one of your products");
+        if (p.isEpay === "true") throw new HttpError(400, `${p.name} can't be swapped in — sell it at the till`);
+        const catalog = parseFloat(p.price) || 0;
+        const taxRate = p.taxRate != null ? parseFloat(p.taxRate) : 10;
+        const group = groupPriceFor({
+          price: catalog,
+          costPrice: p.costPrice != null ? parseFloat(p.costPrice) : 0,
+          taxRate,
+          categoryId: p.categoryId ?? null,
+          groupPrices: (p.groupPrices as Record<string, number> | null) ?? null,
+        }, customerGroupId, groupRules);
+        const unit = group ?? catalog;
+        const totalPrice = round2(unit * n.quantity);
+        const cost = p.costPrice != null ? parseFloat(p.costPrice) : NaN;
+        swapLines.push({
+          productId: p.id,
+          productName: p.name,
+          quantity: n.quantity,
+          unitPrice: unit,
+          totalPrice,
+          taxAmount: round2(totalPrice * (taxRate / (100 + taxRate))),
+          ...(Number.isFinite(cost) ? { costPrice: cost } : {}),
+        });
+      }
+      const swapTotal = round2(swapLines.reduce((sum, l) => sum + l.totalPrice, 0));
+      const swapTax = round2(swapLines.reduce((sum, l) => sum + (l.taxAmount ?? 0), 0));
+      const net = round2(swapTotal - refundTotal); // < 0: money back to the customer
+
+      // Stock: returned items back on the shelf when ticked; swap items out.
+      const stockDelta = new Map<number, number>();
+      for (const l of returnLines) if (l.restocked && l.productId) stockDelta.set(l.productId, (stockDelta.get(l.productId) ?? 0) - l.quantity);
+      for (const l of swapLines) if (l.productId) stockDelta.set(l.productId, (stockDelta.get(l.productId) ?? 0) - l.quantity);
+      for (const [productId, delta] of stockDelta) {
+        if (!delta) continue;
+        const [p] = await tx.select({ stockQuantity: productsTable.stockQuantity, trackInventory: productsTable.trackInventory })
+          .from(productsTable)
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)))
+          .for("update");
+        if (p?.trackInventory !== "true") continue;
+        const next = p.stockQuantity + delta;
+        await tx.update(productsTable).set({ stockQuantity: next })
+          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+        await reconcileOversellLedger(tx, { merchantId, productId, prevStock: p.stockQuantity, newStock: next });
+      }
+
+      // Loyalty: take back what the returned items earned (all or nothing, as
+      // for a refund) and earn on the swap items.
+      let loyaltyDelta = 0;
+      if (customer) {
+        const takeBack = sale.paymentMethod === "loyalty"
+          ? 0
+          : loyaltyToTakeBack(parseFloat(sale.loyaltyEarned ?? "0") || 0, refundTotal, parseFloat(sale.total) || 0);
+        let earned = 0;
+        if (swapLines.length && method !== "store_credit") {
+          const [loyaltyRow] = await tx.select({ programType: loyaltySettingsTable.programType, isEnabled: loyaltySettingsTable.isEnabled, config: loyaltySettingsTable.config })
+            .from(loyaltySettingsTable).where(eq(loyaltySettingsTable.merchantId, merchantId));
+          earned = loyaltyEarnedFor({
+            programType: loyaltyRow?.programType ?? "cashback",
+            config: (loyaltyRow?.config ?? {}) as Record<string, unknown>,
+            programOn: loyaltyRow ? loyaltyRow.isEnabled === "true" : true,
+            paymentMethod: method,
+            total: swapTotal,
+            customer: { customerGroup: customer.customerGroup ?? null, totalSpent: customer.totalSpent, loyaltyPoints: customer.loyaltyPoints ?? 0, dateOfBirth: customer.dateOfBirth ?? null },
+            lines: swapLines.map((l) => {
+              const p = swapById.get(l.productId!);
+              return { productId: l.productId!, totalPrice: l.totalPrice, excludeFromLoyalty: p?.excludeFromLoyalty === "true", categoryId: p?.categoryId ?? null };
+            }),
+          });
+        }
+        loyaltyDelta = round2(earned - takeBack);
+        if (loyaltyDelta < 0 && (customer.loyaltyPoints ?? 0) < -loyaltyDelta) {
+          throw new HttpError(409, loyaltySpentMessage(-loyaltyDelta));
+        }
+        await tx.update(customersTable)
+          .set({
+            loyaltyPoints: sql`${customersTable.loyaltyPoints} + ${loyaltyDelta}`,
+            totalSpent: sql`GREATEST(0, ${customersTable.totalSpent} + ${net})`,
+          })
+          .where(and(eq(customersTable.id, customer.id), eq(customersTable.merchantId, merchantId)));
+      }
+
+      // The difference: store credit moves the customer's balance; any other
+      // method is money staff hand over (or take) at the counter or terminal.
+      let receiptNumber = generateReceiptNumber("RT");
+      let storeCredit: { change: number; after: number } | null = null;
+      if (method === "store_credit" && net !== 0) {
+        const [balRow] = await tx
+          .select({ bal: sql<string>`COALESCE(SUM(${storeCreditLedgerTable.amount}), 0)` })
+          .from(storeCreditLedgerTable)
+          .where(and(eq(storeCreditLedgerTable.customerId, customer!.id), eq(storeCreditLedgerTable.merchantId, merchantId)));
+        const balance = parseFloat(balRow?.bal ?? "0");
+        const change = round2(-net); // a refund credits, a dearer swap debits
+        if (balance + change < -0.005) throw new HttpError(409, `Not enough store credit — the customer has ${balance.toFixed(2)} and the swap needs ${net.toFixed(2)} more.`);
+        // Written to the ledger against the return transaction once it exists (below).
+        storeCredit = { change, after: round2(balance + change) };
+      }
+
+      let row: typeof transactionsTable.$inferSelect | undefined;
+      for (let attempt = 0; attempt < 5 && !row; attempt++) {
+        try {
+          [row] = await tx.insert(transactionsTable).values({
+            merchantId,
+            customerId: customer?.id ?? null,
+            staffId: req.session.staffId ?? null,
+            receiptNumber,
+            status: "completed",
+            subtotal: String(net),
+            taxTotal: String(round2(swapTax - refundTax)),
+            discountTotal: "0",
+            total: String(net),
+            paymentMethod: net === 0 ? "exchange" : method,
+            notes: (body.reason?.trim() || `Return against ${sale.receiptNumber}`).slice(0, 500),
+            loyaltyEarned: String(loyaltyDelta),
+            items: [...returnLines, ...swapLines],
+            idempotencyKey,
+            returnOfTransactionId: sale.id,
+          }).returning();
+        } catch (err) {
+          const cause = (err as { cause?: unknown })?.cause;
+          if (isUniqueViolation(err, "transactions_merchant_receipt_unique") || isUniqueViolation(cause, "transactions_merchant_receipt_unique")) {
+            receiptNumber = generateReceiptNumber("RT");
+            continue;
+          }
+          throw err;
+        }
+      }
+      if (!row) throw new HttpError(500, "Couldn't number the return — please try again");
+
+      const sc = storeCredit;
+      if (sc) {
+        await tx.insert(storeCreditLedgerTable).values({
+          merchantId,
+          customerId: customer!.id,
+          type: sc.change > 0 ? "refund" : "redeem",
+          amount: String(sc.change),
+          balanceAfter: String(sc.after),
+          note: sc.change > 0 ? `Return ${row.receiptNumber} against sale ${sale.receiptNumber}` : `Swap ${row.receiptNumber} against sale ${sale.receiptNumber}`,
+          transactionId: row.id,
+        });
+      }
+      return { row, customer: customer ?? null };
+    });
+    res.status(201).json(formatTransaction(created.row, created.customer));
   } catch (err) {
     if (err instanceof HttpError) { res.status(err.status).json({ error: err.message }); return; }
     throw err;
@@ -1354,6 +1640,7 @@ router.post("/transactions/:id/void", requireAuth, requireManagerOrApproval, asy
       if (!transaction) throw new HttpError(404, "Transaction not found");
       if (transaction.status === "voided") throw new HttpError(409, "Already voided");
       if (transaction.status === "refunded") throw new HttpError(409, "Refunded sales can't be voided");
+      await assertNoReturns(tx, merchantId, transaction, "voided");
       if (transaction.status === "completed") await reverseSaleEffects(tx, merchantId, transaction);
       await cancelSalePreOrders(tx, merchantId, id);
       const [row] = await tx.update(transactionsTable)

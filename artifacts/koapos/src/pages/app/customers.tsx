@@ -13,6 +13,7 @@ import {
   useDeleteCustomer,
   useMergeCustomerProfiles,
   useGetCustomerHistory,
+  getGetCustomerHistoryQueryKey,
   useListCustomerNotes,
   useCreateCustomerNote,
   useDeleteCustomerNote,
@@ -58,8 +59,9 @@ import {
   Mail, Phone, Building2, StickyNote, Calendar, Hash, Upload, FileText,
   Receipt, Clock, Wrench, ExternalLink, Loader2, X, QrCode, Copy, Check, Wallet,
   Download, ChevronLeft, ChevronRight, GitMerge, MoreVertical, FileDown, Filter,
-  Printer, Send, Eye, EyeOff,
+  Printer, Send, Eye, EyeOff, RotateCcw,
 } from "lucide-react";
+import { ReturnSaleDialog } from "@/components/sales/ReturnSaleDialog";
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
@@ -1199,6 +1201,8 @@ function CustomerDetailInner({
   const [localLoyaltyPts, setLocalLoyaltyPts] = useState(customer.loyaltyPoints ?? 0);
 
   const { data: history, isLoading: histLoading } = useGetCustomerHistory(customer.id);
+  /* Customer › History › Return / swap (components/sales/ReturnSaleDialog). */
+  const [returningTx, setReturningTx] = useState<Transaction | null>(null);
   const { data: notes = [], isLoading: notesLoading } = useListCustomerNotes(customer.id);
   const { data: files = [], isLoading: filesLoading } = useListCustomerFiles(customer.id);
   const { data: loyaltySettings } = useGetLoyaltySettings();
@@ -1603,9 +1607,22 @@ function CustomerDetailInner({
                           </div>
                           <div className="text-right mr-2">
                             <p className="font-bold">{formatCurrency(tx.total)}</p>
-                            <Badge variant="outline" className="text-xs capitalize">{tx.status}</Badge>
+                            {tx.returnOfTransactionId != null
+                              ? <Badge variant="outline" className="text-xs border-amber-300 text-amber-700">{Number(tx.total) > 0 ? "Swap" : "Return"}</Badge>
+                              : <Badge variant="outline" className="text-xs capitalize">{tx.status}</Badge>}
                           </div>
                         </button>
+                        {tx.status === "completed" && tx.returnOfTransactionId == null && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="h-7 px-2 text-xs gap-1 shrink-0 mr-1"
+                            onClick={(e) => { e.stopPropagation(); setReturningTx(tx as Transaction); }}
+                            title="Return items or swap them for something else"
+                          >
+                            <RotateCcw className="h-3.5 w-3.5" /> Return / swap
+                          </Button>
+                        )}
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
                             <Button
@@ -2221,6 +2238,16 @@ function CustomerDetailInner({
       })()}
 
       {/* ── Transaction detail modal ── */}
+      <ReturnSaleDialog
+        sale={returningTx}
+        hasCustomer
+        onClose={() => setReturningTx(null)}
+        onDone={() => {
+          void queryClient.invalidateQueries({ queryKey: getGetCustomerHistoryQueryKey(customer.id) });
+          void queryClient.invalidateQueries({ queryKey: ["customers"] });
+        }}
+      />
+
       <Dialog open={!!selectedTx} onOpenChange={() => setSelectedTx(null)}>
         <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto">
           <DialogHeader>

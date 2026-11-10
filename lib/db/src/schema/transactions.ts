@@ -40,6 +40,10 @@ export const transactionsTable = pgTable("transactions", {
   // NULL when no overall discount was applied or when it was entered as a dollar
   // amount. Used to render "10% discount" instead of "Discount" on reprints.
   discountPct: numeric("discount_pct", { precision: 5, scale: 2 }),
+  /* A return/swap is its own transaction pointing at the sale it returns
+     against (api-server lib/sale-returns.ts). Null on every ordinary sale.
+     Added by scripts/src/add-transaction-returns.ts. */
+  returnOfTransactionId: integer("return_of_transaction_id"),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => [
   index("transactions_merchant_id_idx").on(t.merchantId),
@@ -52,6 +56,7 @@ export const transactionsTable = pgTable("transactions", {
   // collision aborts the sale transaction with a unique violation — finalizeSale
   // regenerates and retries the whole transaction on this specific constraint.
   uniqueIndex("transactions_merchant_receipt_unique").on(t.merchantId, t.receiptNumber),
+  index("transactions_return_of_idx").on(t.returnOfTransactionId),
 ]);
 
 export const insertTransactionSchema = createInsertSchema(transactionsTable).omit({ id: true, createdAt: true });

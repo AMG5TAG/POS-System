@@ -1,8 +1,8 @@
 import { useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
 import {
-  useMatchSupplierInvoice, useImportSupplierInvoice, useReceivePurchaseOrderItems,
-  type PurchaseOrder, type SupplierInvoiceImportResult,
+  useMatchSupplierInvoice, useImportSupplierInvoice, useReceivePurchaseOrderItems, useListCategories,
+  type PurchaseOrder, type SupplierInvoiceImportResult, type SupplierFeedProduct,
 } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -13,8 +13,9 @@ import { Switch } from "@/components/ui/switch";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  AlertTriangle, Check, FileUp, Link2, Loader2, PackagePlus, Search, Truck, Undo2, Ban,
+  AlertTriangle, Check, FileUp, Link2, Loader2, PackagePlus, Search, Truck, Undo2, Ban, Sparkles, ImageOff,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import { cn, formatCurrency } from "@/lib/utils";
 import { uploadFile } from "@/lib/upload";
 import {
@@ -44,6 +45,10 @@ interface LineState {
   unitEx: number;
   totalInc: number | null;
   serials: string[];
+  /** The supplier datafeed's details for this stock code (Leader), if any. */
+  feed: SupplierFeedProduct | null;
+  /** The feed's category matched to one of ours by name — never created. */
+  categoryId: number | null;
 }
 
 export interface ImportDone {
@@ -79,13 +84,17 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
   const [poTaken, setPoTaken] = useState<string | null>(null);
   const [orderDate, setOrderDate] = useState("");
   const [receiveNow, setReceiveNow] = useState(true);
+  /* Fill new products from the supplier's datafeed (description, photo, …). */
+  const [feedAvailable, setFeedAvailable] = useState(false);
+  const [useFeed, setUseFeed] = useState(true);
+  const { data: categories = [] } = useListCategories({ query: { enabled: open, queryKey: ["categories"] } });
   const [busy, setBusy] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
 
   const productById = useMemo(() => new Map(products.map((p) => [p.id, p])), [products]);
 
   const reset = () => {
-    setFile(null); setParsed(null); setLines([]); setError(null); setPoTaken(null);
+    setFile(null); setParsed(null); setLines([]); setError(null); setPoTaken(null); setFeedAvailable(false); setUseFeed(true);
     setSupplierId(null); setSupplierMatchedBy(null); setReceiveNow(true); setBusy(null);
     if (fileInput.current) fileInput.current.value = "";
   };
@@ -114,14 +123,22 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
         setSupplierMode("new"); setSupplierId(null); setSupplierMatchedBy(null);
       }
       setNewSupplierName(titleCase(inv.supplier.name));
+      setFeedAvailable(match.feedAvailable);
+      // Feed category → one of ours by name: the subcategory first ("USB Flash
+      // Drives"), then the category ("USB, Bluetooth & IEEE").
+      const catByName = new Map(categories.map((c) => [c.name.trim().toLowerCase(), c.id]));
       setLines(inv.lines.map((l, i) => {
         const m = match.lines[i];
+        const feed = match.feed[i] ?? null;
         return {
           mode: m ? "existing" : "new",
           productId: m?.productId ?? null,
           matchedBy: m?.matchedBy ?? null,
-          name: l.description,
-          sellPrice: "",
+          // The feed's full name beats the invoice's truncated description.
+          name: feed?.name || l.description,
+          sellPrice: !m && feed?.rrp ? feed.rrp.toFixed(2) : "",
+          feed,
+          categoryId: feed ? (catByName.get(feed.subcategory.trim().toLowerCase()) ?? catByName.get(feed.category.trim().toLowerCase()) ?? null) : null,
           stockCode: l.stockCode,
           manufCode: l.manufCode,
           qty: Math.max(1, Math.round(l.qty)),
@@ -163,6 +180,21 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
         catch { toast.warning("Couldn't attach the PDF to the PO — continuing without it."); }
       }
 
+      // Photos from the supplier's feed, copied into our own storage first —
+      // the shop can't show an image hot-linked from a trade-only site.
+      const feedImages = new Map<number, string>();
+      const withImages = lines.map((l, i) => ({ l, i })).filter(({ l }) => l.mode === "new" && useFeed && l.feed?.imageUrl);
+      for (const [n, { l, i }] of withImages.entries()) {
+        setBusy(`Copying product photos… ${n + 1} of ${withImages.length}`);
+        try {
+          const r = await fetch(`/api/purchase-orders/import/feed-image/${encodeURIComponent(l.stockCode)}`, { credentials: "include" });
+          if (!r.ok) continue;
+          const blob = await r.blob();
+          const ext = blob.type.split("/")[1]?.replace("jpeg", "jpg") ?? "jpg";
+          feedImages.set(i, (await uploadFile(new File([blob], `${l.stockCode}.${ext}`, { type: blob.type }))).url);
+        } catch { /* the product is still created, just without a photo */ }
+      }
+
       setBusy("Creating the purchase order…");
       const result = await importMutation.mutateAsync({ data: {
         ...(supplierMode === "existing"
@@ -178,13 +210,25 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
         orderDate,
         notes: `Imported from ${parsed.supplier.name || "supplier"} invoice ${parsed.invoiceNumber}`.slice(0, 2000),
         invoiceUrls,
-        lines: lines.map((l) => ({
+        lines: lines.map((l, i) => ({
           ...(l.mode === "existing" && l.productId ? { productId: l.productId } : {}),
           ...(l.mode === "new" ? { newProduct: {
             name: l.name.trim(),
             sku: l.stockCode || undefined,
-            manufCode: l.manufCode || undefined,
+            manufCode: (useFeed && l.feed?.manufCode) || l.manufCode || undefined,
             ...(parseFloat(l.sellPrice) > 0 ? { sellPrice: Math.round(parseFloat(l.sellPrice) * 100) / 100 } : {}),
+            ...(useFeed && l.feed ? {
+              description: l.feed.description || undefined,
+              barcode: l.feed.barcode || undefined,
+              brand: l.feed.brand || undefined,
+              ...(l.categoryId ? { categoryId: l.categoryId } : {}),
+              ...(feedImages.get(i) ? { imageUrl: feedImages.get(i) } : {}),
+              ...(l.feed.weightKg ? { weightKg: l.feed.weightKg } : {}),
+              ...(l.feed.lengthCm ? { lengthCm: l.feed.lengthCm } : {}),
+              ...(l.feed.widthCm ? { widthCm: l.feed.widthCm } : {}),
+              ...(l.feed.heightCm ? { heightCm: l.feed.heightCm } : {}),
+              ...(l.feed.warrantyMonths ? { warrantyMonths: l.feed.warrantyMonths } : {}),
+            } : {}),
           } } : {}),
           productName: l.mode === "existing" && l.productId ? (productById.get(l.productId)?.name ?? l.name) : l.name,
           stockCode: l.stockCode || undefined,
@@ -245,7 +289,10 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
               onDrop={(e) => { e.preventDefault(); void read(e.dataTransfer.files?.[0]); }}
             >
               {reading ? (
-                <div className="flex flex-col items-center gap-2 text-muted-foreground"><Loader2 className="w-6 h-6 animate-spin" />Reading the invoice…</div>
+                <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                  <Loader2 className="w-6 h-6 animate-spin" />Reading the invoice…
+                  <span className="text-xs">For Leader invoices this also looks up their product data — if the server has only just started, that can take up to a minute.</span>
+                </div>
               ) : (
                 <>
                   <FileUp className="w-8 h-8 mx-auto text-muted-foreground mb-2" />
@@ -313,6 +360,16 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
                 </div>
               </section>
 
+              {feedAvailable && newCount > 0 && (
+                <label className="flex items-start gap-3 rounded-xl border border-sky-300 bg-sky-50/60 dark:bg-sky-950/20 p-4 cursor-pointer">
+                  <Checkbox checked={useFeed} onCheckedChange={(v) => setUseFeed(v === true)} className="mt-0.5" />
+                  <span>
+                    <span className="text-sm font-medium flex items-center gap-1.5"><Sparkles className="w-4 h-4 text-sky-600" />Fill new products from Leader's product data</span>
+                    <span className="text-xs text-muted-foreground">Full name, description, photo, barcode, brand, weight &amp; dimensions and warranty from Leader's datafeed. The sell price starts at Leader's RRP — change it below. Categories are matched to yours by name, never created.</span>
+                  </span>
+                </label>
+              )}
+
               {/* Lines */}
               <section className="space-y-2">
                 <div className="flex flex-wrap items-center gap-2">
@@ -358,7 +415,25 @@ export function ImportSupplierInvoiceDialog({ open, onOpenChange, products, supp
                               {l.mode === "new" && (
                                 <div className="space-y-1">
                                   <div className="flex items-center gap-1.5 text-[11px] font-semibold text-sky-700 dark:text-sky-300"><PackagePlus className="w-3.5 h-3.5" />New product</div>
-                                  <Input value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} className="h-8" />
+                                  <div className="flex items-start gap-2">
+                                    {useFeed && l.feed && <FeedThumb stockCode={l.stockCode} hasImage={!!l.feed.imageUrl} />}
+                                    <div className="min-w-0 flex-1 space-y-1">
+                                      <Input value={l.name} onChange={(e) => setLine(i, { name: e.target.value })} className="h-8" />
+                                      {useFeed && l.feed && (
+                                        <div className="text-[11px] text-muted-foreground space-y-0.5">
+                                          <p className="line-clamp-2" title={l.feed.description}>{l.feed.description.split("\n").filter(Boolean).slice(1, 3).join(" · ") || l.feed.shortDescription}</p>
+                                          <p>
+                                            {[l.feed.brand, l.feed.barcode && `EAN ${l.feed.barcode}`, l.feed.warrantyMonths && `${l.feed.warrantyMonths % 12 === 0 ? `${l.feed.warrantyMonths / 12} yr` : `${l.feed.warrantyMonths} mth`} warranty`]
+                                              .filter(Boolean).join(" · ")}
+                                            {" · "}
+                                            {l.categoryId
+                                              ? <span className="text-emerald-700 dark:text-emerald-400">Category: {categories.find((c) => c.id === l.categoryId)?.name}</span>
+                                              : <span title={`Leader: ${l.feed.category} › ${l.feed.subcategory}`}>No matching category</span>}
+                                          </p>
+                                        </div>
+                                      )}
+                                    </div>
+                                  </div>
                                 </div>
                               )}
                               {l.mode === "none" && <div className="text-muted-foreground"><span className="line-through">{l.name}</span><div className="text-[11px] no-underline">Not stocked (e.g. freight) — on the PO only</div></div>}
@@ -468,4 +543,21 @@ function ProductPicker({ products, onPick }: { products: ImportProductOption[]; 
 /** "LEADER COMPUTERS PTY LTD" → "Leader Computers Pty Ltd". */
 function titleCase(s: string): string {
   return s.toLowerCase().replace(/\b([a-z])/g, (m) => m.toUpperCase()).replace(/\bPty\b/g, "Pty").replace(/\bLtd\b/g, "Ltd");
+}
+
+/** The feed photo, via the server (Leader's site has no CORS) — shown as it will be imported. */
+function FeedThumb({ stockCode, hasImage }: { stockCode: string; hasImage: boolean }) {
+  const [failed, setFailed] = useState(false);
+  if (!hasImage || failed) {
+    return <div className="w-12 h-12 rounded border bg-muted flex items-center justify-center shrink-0" title="No photo in the feed"><ImageOff className="w-4 h-4 text-muted-foreground" /></div>;
+  }
+  return (
+    <img
+      src={`/api/purchase-orders/import/feed-image/${encodeURIComponent(stockCode)}`}
+      alt=""
+      loading="lazy"
+      onError={() => setFailed(true)}
+      className="w-12 h-12 rounded border bg-white object-contain shrink-0"
+    />
+  );
 }

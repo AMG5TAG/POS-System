@@ -94,7 +94,7 @@ describe.skipIf(!hasDb)("import routes (real DB)", () => {
   /* eslint-enable @typescript-eslint/no-explicit-any */
   const tag = `T${Date.now()}`;
   let existingId = 0;
-  const created = { po: [] as number[], products: [] as number[], suppliers: [] as number[] };
+  const created = { po: [] as number[], products: [] as number[], suppliers: [] as number[], brands: [] as number[] };
 
   beforeAll(async () => {
     t = await import("@workspace/db");
@@ -124,6 +124,7 @@ describe.skipIf(!hasDb)("import routes (real DB)", () => {
       await db.delete(t.productPriceHistoryTable).where(inArray(t.productPriceHistoryTable.productId, created.products));
       await db.delete(t.productsTable).where(inArray(t.productsTable.id, created.products));
     }
+    if (created.brands.length) await db.delete(t.brandsTable).where(inArray(t.brandsTable.id, created.brands));
     if (created.suppliers.length) await db.delete(t.suppliersTable).where(inArray(t.suppliersTable.id, created.suppliers));
     await t.pool.end();
   });
@@ -182,6 +183,69 @@ describe.skipIf(!hasDb)("import routes (real DB)", () => {
       supplierId: again.body.supplier.id, poNumber: `INV-${tag}`, orderDate: "2026-10-01",
       lines: [{ productId: existingId, productName: "Existing", quantity: 1, unitCost: 1 }],
     }).expect(409);
+  });
+
+  it("fills new products from Leader's datafeed, and only for a Leader invoice", async () => {
+    const { __setLeaderFeedForTests } = await import("../services/leaderFeed");
+    const { feedRowToProduct } = await import("../lib/leader-feed");
+    const prev = process.env.LEADER_DATAFEED_URL;
+    process.env.LEADER_DATAFEED_URL = "https://example.invalid/feed.csv";
+    const code = `${tag}-FEED`;
+    const item = feedRowToProduct({
+      "STOCK CODE": code, "SHORT DESCRIPTION": "Feedbrand Widget 9000: fast, small", "LONG DESCRIPTION": "<p>Long words</p>",
+      "BAR CODE": "9300000000001", "MANUFACTURER": `Feedbrand ${tag}`, "MANUFACTURER SKU": "FW9000",
+      "IMAGE": "https://www.leadersystems.com.au/Images/X.jpg", "WEIGHT": "1.5", "LENGTH": "200", "WIDTH": "100", "HEIGHT": "50",
+      "WARRANTY": "24", "RRP": "99", "CATEGORY NAME": "Widgets", "SUBCATEGORY NAME": "Small widgets",
+    })!;
+    __setLeaderFeedForTests(new Map([[code.toUpperCase(), item]]));
+    try {
+      const leader = await request(app).post("/api/purchase-orders/import/match").send({
+        supplierName: "LEADER COMPUTERS PTY LTD", lines: [{ stockCode: code.toLowerCase() }],
+      }).expect(200);
+      expect(leader.body.feedAvailable).toBe(true);
+      expect(leader.body.feed[0]).toMatchObject({ name: "Feedbrand Widget 9000", rrp: 99, warrantyMonths: 24 });
+
+      const other = await request(app).post("/api/purchase-orders/import/match").send({
+        supplierName: "Someone Else Pty Ltd", lines: [{ stockCode: code }],
+      }).expect(200);
+      expect(other.body.feedAvailable).toBe(false);
+      expect(other.body.feed[0]).toBeNull();
+
+      // An image not in this business's storage is refused.
+      await request(app).post("/api/purchase-orders/import").send({
+        newSupplier: { name: `Leader ${tag}` }, poNumber: `INV3-${tag}`, orderDate: "2026-10-01",
+        lines: [{ newProduct: { name: "X", imageUrl: "https://evil.example/x.jpg" }, productName: "X", stockCode: code, quantity: 1, unitCost: 1 }],
+      }).expect(400);
+
+      const res = await request(app).post("/api/purchase-orders/import").send({
+        newSupplier: { name: `Leader ${tag}` }, poNumber: `INV4-${tag}`, orderDate: "2026-10-01",
+        lines: [{
+          newProduct: {
+            name: item.name, sku: code, manufCode: item.manufCode, sellPrice: 99, description: item.description,
+            barcode: item.barcode, brand: item.brand, weightKg: 1.5, lengthCm: 20, widthCm: 10, heightCm: 5, warrantyMonths: 24,
+            imageUrl: `/api/storage/objects/merchants/${h.merchantId}/assets/abc`,
+          },
+          productName: item.name, stockCode: code, quantity: 1, unitCost: 50,
+        }],
+      }).expect(201);
+      created.po.push(res.body.purchaseOrder.id);
+      created.suppliers.push(res.body.purchaseOrder.supplierId);
+      const pid = res.body.newProducts[0].id;
+      created.products.push(pid);
+      const [p] = await db.select().from(t.productsTable).where(orm.eq(t.productsTable.id, pid));
+      expect(p).toMatchObject({
+        description: "Long words", barcode: "9300000000001", warrantyDuration: 2, warrantyUnit: "years",
+        imageUrl: `/api/storage/objects/merchants/${h.merchantId}/assets/abc`,
+      });
+      expect(parseFloat(p.weightKg)).toBe(1.5);
+      expect(parseFloat(p.lengthCm)).toBe(20);
+      const [b] = await db.select().from(t.brandsTable).where(orm.eq(t.brandsTable.id, p.brandId));
+      expect(b.name).toBe(`Feedbrand ${tag}`);
+      created.brands.push(b.id);
+    } finally {
+      __setLeaderFeedForTests(null);
+      if (prev === undefined) delete process.env.LEADER_DATAFEED_URL; else process.env.LEADER_DATAFEED_URL = prev;
+    }
   });
 
   it("refuses a product id that isn't this business's", async () => {

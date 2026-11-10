@@ -1309,6 +1309,10 @@ export interface TransactionItem {
   totalPrice: number;
   taxAmount?: number;
   discount?: number;
+  /** On a return's line — the index of the original sale's line it returns (quantity and totals are negative). */
+  returnOfLine?: number;
+  /** On a return's line — whether the item went back into stock. */
+  restocked?: boolean;
   /** When true, this item represents a gift card being sold. The server creates and activates the card atomically inside the same DB transaction as the sale. */
   giftCardIssue?: boolean;
   /** Card number for the issued gift card. The client may provide a pre-generated code; if omitted or blank, the server generates one. Populated in the response for every giftCardIssue item. */
@@ -1391,6 +1395,11 @@ export interface Transaction {
      * @nullable
      */
   discountPct?: number | null;
+  /**
+     * Set on a return/swap — the sale it returns against. Its returned lines have negative quantities and totals.
+     * @nullable
+     */
+  returnOfTransactionId?: number | null;
   items: TransactionItem[];
   /** Gift cards activated as part of this transaction. Present when the sale included one or more giftCardIssue line items. */
   issuedGiftCards?: TransactionIssuedGiftCardsItem[];
@@ -3684,6 +3693,29 @@ export interface SupplierInvoiceMatchInput {
   lines: SupplierInvoiceMatchInputLinesItem[];
 }
 
+/**
+ * A product's details from the supplier's datafeed (Leader Computers).
+ */
+export interface SupplierFeedProduct {
+  stockCode: string;
+  name: string;
+  shortDescription: string;
+  description: string;
+  barcode: string;
+  brand: string;
+  manufCode: string;
+  imageUrl: string;
+  weightKg?: number | null;
+  lengthCm?: number | null;
+  widthCm?: number | null;
+  heightCm?: number | null;
+  warrantyMonths?: number | null;
+  /** Recommended retail, inc GST */
+  rrp?: number | null;
+  category: string;
+  subcategory: string;
+}
+
 export type SupplierInvoiceMatchSupplierMatchedBy = typeof SupplierInvoiceMatchSupplierMatchedBy[keyof typeof SupplierInvoiceMatchSupplierMatchedBy];
 
 
@@ -3721,6 +3753,10 @@ export type SupplierInvoiceMatchLinesItem = {
 } | null;
 
 export interface SupplierInvoiceMatch {
+  /** True when the invoice is from a supplier whose datafeed is configured and could be read. */
+  feedAvailable: boolean;
+  /** Per line, that stock code's datafeed details (same order as lines), or null. */
+  feed: (SupplierFeedProduct | null)[];
   supplier: SupplierInvoiceMatchSupplier;
   poNumberTaken: SupplierInvoiceMatchPoNumberTaken;
   lines: SupplierInvoiceMatchLinesItem[];
@@ -3757,6 +3793,35 @@ export type SupplierInvoiceImportInputLinesItemNewProduct = {
      * @minimum 0
      */
   sellPrice?: number;
+  /** @maxLength 20000 */
+  description?: string;
+  /** @maxLength 40 */
+  barcode?: string;
+  /**
+     * Matched to a brand by name, or created.
+     * @maxLength 120
+     */
+  brand?: string;
+  /** An existing category of this business (the review matches the feed's category by name; none is ever created). */
+  categoryId?: number;
+  /**
+     * An uploaded image in this business's storage (/api/storage/objects/...).
+     * @maxLength 1000
+     */
+  imageUrl?: string;
+  /** @minimum 0 */
+  weightKg?: number;
+  /** @minimum 0 */
+  lengthCm?: number;
+  /** @minimum 0 */
+  widthCm?: number;
+  /** @minimum 0 */
+  heightCm?: number;
+  /**
+     * @minimum 0
+     * @maximum 240
+     */
+  warrantyMonths?: number;
 };
 
 export type SupplierInvoiceImportInputLinesItem = {
@@ -7107,6 +7172,70 @@ to?: string;
 export type CheckTransactionDiscount200 = {
   ok: boolean;
   discountApproval?: string;
+};
+
+export type GetSaleReturnable200LinesItem = {
+  index: number;
+  productId: number;
+  productName: string;
+  quantity: number;
+  returned: number;
+  remaining: number;
+  unitRefund: number;
+  blockedReason?: string | null;
+};
+
+export type GetSaleReturnable200ReturnsItem = {
+  id: number;
+  receiptNumber: string;
+  total: number;
+  createdAt: string;
+};
+
+export type GetSaleReturnable200 = {
+  transactionId: number;
+  receiptNumber: string;
+  status: string;
+  paymentMethod: string;
+  defaultRefundMethod: string;
+  customerId?: number | null;
+  lines: GetSaleReturnable200LinesItem[];
+  /** Earlier returns against this sale. */
+  returns: GetSaleReturnable200ReturnsItem[];
+};
+
+export type ReturnSaleBodyLinesItem = {
+  /** @minimum 0 */
+  index: number;
+  /** @minimum 1 */
+  quantity: number;
+  restock: boolean;
+};
+
+export type ReturnSaleBodyNewItemsItem = {
+  /** @minimum 1 */
+  productId: number;
+  /**
+     * @minimum 1
+     * @maximum 1000
+     */
+  quantity: number;
+};
+
+export type ReturnSaleBody = {
+  /** @maxItems 200 */
+  lines: ReturnSaleBodyLinesItem[];
+  /** @maxItems 100 */
+  newItems?: ReturnSaleBodyNewItemsItem[];
+  /**
+     * How the difference is settled — refunded to the customer, or paid by them on a swap that costs more. store_credit moves their balance.
+     * @maxLength 40
+     */
+  method: string;
+  /** @maxLength 500 */
+  reason?: string;
+  /** @maxLength 100 */
+  idempotencyKey?: string;
 };
 
 export type VoidTransactionBody = {

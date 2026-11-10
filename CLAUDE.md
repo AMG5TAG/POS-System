@@ -1065,6 +1065,24 @@ Receiving is then the ordinary `/:id/receive` call (stock, serials for
 serial-tracked products, pre-orders, sale-ticket prompt). The PDF is attached
 to the PO.
 
+**Leader's datafeed fills in new products.** `LEADER_DATAFEED_URL` (a secret;
+per-dealer link from the Leader portal, Resources › Datafeed, stock CSV with
+headings and long description) is downloaded by `services/leaderFeed.ts` —
+Leader builds it on request and takes ~35s, so it is fetched at boot and every
+6 hours and a stale copy is served while a fresh one downloads. Rows are mapped
+by `lib/leader-feed.ts` (`leader-feed.test.ts`, fixture of real rows): name cut
+from the short description, long description as plain text, barcode, brand,
+manufacturer code, image, weight (kg), dimensions (mm → cm), warranty (months →
+years when whole), RRP, category. It is consulted **only for a Leader
+invoice** (`isLeaderSupplier`), since another supplier's stock code could
+collide. In the review the sell price starts at the RRP; the feed's category is
+matched to an existing one by name in the browser and never created; the brand
+is matched or created. Photos are copied into our own storage: the browser
+fetches `GET /purchase-orders/import/feed-image/:stockCode` (the server fetches
+only the URL the feed names, only on leadersystems.com.au — Leader sends no
+CORS) and uploads it through `uploadFile`; the import refuses an `imageUrl`
+outside the business's own storage.
+
 ### Merging brands and suppliers
 
 `POST /brands/merge` and `/suppliers/merge` (`{targetId, sourceIds, dryRun}`)
@@ -1415,6 +1433,30 @@ inside the DB transaction that records the money, never by a pre-check:
   `rotateSessionKeeping` (`lib/session-rotate.ts`), which keeps the session's
   contents: a plain regenerate would sign the POS out in the same browser.
 
+- **Returns & swaps** (Customer › History › Return / swap, `ReturnSaleDialog`).
+  A return is its own **completed** transaction with
+  `return_of_transaction_id` = the sale (`scripts/src/add-transaction-returns.ts`):
+  returned items are **negative** lines (`quantity`/`totalPrice`/`taxAmount` < 0,
+  `returnOfLine` = the original line's index, original `costPrice`, `restocked`),
+  swap items positive lines at today's (group) price, `total` = the net (< 0 =
+  money back). That shape is what makes the report views net it off with no
+  change — revenue, GST, COGS, product performance and the payment-method
+  breakdown (cash out of the drawer); it does count as a transaction in "number
+  of sales". `POST /transactions/:id/return` (manager or manager PIN, like a
+  refund) locks the sale, refunds what each line was actually paid pro rata (the
+  last unit takes the line's remainder, so a line refunds exactly its
+  `totalPrice` however it's split), restocks ticked lines, takes swap items out
+  of stock, takes back loyalty in proportion to the refund (refused if already
+  spent, as for refunds) and earns on swap items, adjusts lifetime spend, and
+  credits/debits store credit when that's the method — cash and card are
+  recorded, not moved (EFTPOS refunds are done on the terminal). Gift cards,
+  pre-order deposits, digital codes and custom lines can't be returned this way.
+  A sale with returns can't then be refunded or voided whole, and a return
+  can't be refunded or voided. `idempotencyKey` (stored as `return:<key>`) makes
+  retries safe. Returns are left out of the Xero sale sync (a negative invoice
+  is refused; they need credit notes, not written yet). Rules in
+  `lib/sale-returns.ts`, pinned by `sale-returns.test.ts`.
+
 Pinned by `money-integrity.test.ts` (real DB; skipped without `DATABASE_URL`)
 and `discount-limits.test.ts`.
 
@@ -1626,6 +1668,7 @@ Each integration is "feature disabled if missing" — the API hides the connect 
 - `GOOGLE_ADS_DEVELOPER_TOKEN` — Google Ads account listing; discovery disabled if missing.
 - `STRIPE_CONNECT_CLIENT_ID` / `STRIPE_SECRET_KEY` — Stripe Connect onboarding & charges.
 - `XERO_CLIENT_ID` / `XERO_CLIENT_SECRET` — Xero accounting sync.
+- `LEADER_DATAFEED_URL` — Leader Computers' per-dealer product datafeed; fills new products made by a supplier-invoice import. Treat as a secret.
 - `APPLE_WALLET_CERT_PEM` / `APPLE_WALLET_KEY_PEM` / `APPLE_WALLET_TEAM_ID` / `APPLE_WALLET_PASS_TYPE_ID` — Apple Wallet loyalty passes.
 - `GOOGLE_WALLET_ISSUER_ID` / `GOOGLE_WALLET_SERVICE_ACCOUNT_EMAIL` / `GOOGLE_WALLET_PRIVATE_KEY` — Google Wallet loyalty passes.
 - Sign In with Apple: `APPLE_CLIENT_ID` (Service ID, e.g. `com.yourapp.signin`), `APPLE_TEAM_ID` (10-char), `APPLE_KEY_ID` (10-char), `APPLE_PRIVATE_KEY` (full `.p8` contents incl. BEGIN/END headers). These are server-side config secrets and are **not** stored in `oauth_token_vault`; per-merchant Apple tokens issued after the flow are stored in the vault.
