@@ -119,6 +119,7 @@ const FilesPage = lazyWithRetry(() => import("@/pages/app/forms-files/files"));
 const CloudStoragePage = lazyWithRetry(() => import("@/pages/app/forms-files/cloud"));
 const ManagementStickersPage = lazyWithRetry(() => import("@/pages/app/management-stickers"));
 const InventoryWastagePage = lazyWithRetry(() => import("@/pages/app/inventory-wastage"));
+const InventoryPromotionsPage = lazyWithRetry(() => import("@/pages/app/inventory-promotions"));
 const SettingsTaxPage = lazyWithRetry(() => import("@/pages/app/settings-tax"));
 const SettingsEmailPage = lazyWithRetry(() => import("@/pages/app/settings-email"));
 const SettingsSmsPage = lazyWithRetry(() => import("@/pages/app/settings-sms"));
@@ -798,6 +799,9 @@ function Router() {
         <Redirect to="/management/customers/settings" />
       </Route>
 
+      <Route path="/inventory/promotions">
+        <ProtectedRoute component={InventoryPromotionsPage} />
+      </Route>
       <Route path="/inventory/wastage">
         <ProtectedRoute component={InventoryWastagePage} />
       </Route>

@@ -277,6 +277,34 @@ Hardware settings surface a warning. The `network` transport on a profile (IP + 
 9100) is *not* this — it's a raw socket the browser can't open and the cloud API
 server can't reach, and still falls back to the print dialog.
 
+### Promo cards (Inventory › Promotions)
+
+`/inventory/promotions` (`pages/app/inventory-promotions.tsx`) prints shelf
+promo cards from three templates — the merchant's own artwork with the sample
+text painted out, in `koapos/src/assets/promo-template-*.png`:
+`classic` (6×4 portrait; the original 1240×1748 design was stretched to
+1240×1860 inside the white panel so it is exactly 4:6), `products` and
+`computers` (square, printed on square stock chosen per device: 4/5/6/8 in).
+`lib/promo-card.ts` is the one renderer for both the preview iframe and the
+print, laid out in the artwork's own pixels and scaled to the paper; text boxes
+carry `data-fit` and an inline script shrinks them to fit. Every image is
+inlined as a data URL because the Print Bridge renders from a temp file with no
+session. Each paper size is its own print job (`@page` is per document);
+purpose `promotion`, routed to the document printer by default.
+
+Name, price, photo and the QR (shop product page, `shopOrigin()/product/<id>`)
+are read live; only the words are saved — `product_promotions` (`template`,
+`copy` jsonb; `scripts/src/add-product-promotions-table.ts`), cleaned on read
+and write by `lib/product-promo.ts`. Adding a product with no saved copy drafts
+it (`POST /promotions/:id/generate`): Claude via `aiJson` when the merchant has
+connected one and the AI switch is on, otherwise — or when the call fails — bullets/specs/sentences
+from the product itself, never invented. The warranty and condition banner
+always come from the product record, not the model. `suggestTemplate` picks
+`computers` for anything that reads as a laptop/desktop/PC. The K coin's
+"Earn 1% Kredit back" is baked into the artwork, so it is covered unless
+loyalty is on, cashback, at exactly 1%. Pinned by `product-promo.test.ts` and
+`promotions.test.ts`.
+
 ### QR codes
 
 `lib/qr-render.ts` is the only QR renderer: settings, the payload each QR *type*

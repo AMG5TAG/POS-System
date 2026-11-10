@@ -3311,6 +3311,118 @@ export interface ServiceSettings {
   customNotes: ServiceCustomNote[];
 }
 
+/**
+ * The eight spec tiles of the Computers template.
+ */
+export interface PromoSpecs {
+  /** @maxLength 200 */
+  cpu?: string;
+  /** @maxLength 200 */
+  ram?: string;
+  /** @maxLength 200 */
+  storage?: string;
+  /** @maxLength 200 */
+  gpu?: string;
+  /** @maxLength 200 */
+  display?: string;
+  /** @maxLength 200 */
+  os?: string;
+  /** @maxLength 200 */
+  warranty?: string;
+  /** @maxLength 200 */
+  grade?: string;
+}
+
+export interface PromoCopy {
+  /**
+     * Printed instead of the product name when set.
+     * @maxLength 200
+     */
+  headline?: string;
+  /** @maxLength 200 */
+  subtitle?: string;
+  /**
+     * Condition strip on the square templates, e.g. "Refurbished - works perfectly - fully tested". Blank hides the words.
+     * @maxLength 200
+     */
+  banner?: string;
+  /** @maxItems 5 */
+  features?: string[];
+  /**
+     * One-line sales pitch (the classic card's tagline, the square cards' pitch-box heading).
+     * @maxLength 300
+     */
+  pitch?: string;
+  /**
+     * Short paragraph in the square cards' pitch box.
+     * @maxLength 600
+     */
+  blurb?: string;
+  specs?: PromoSpecs;
+}
+
+export type ProductPromotionTemplate = typeof ProductPromotionTemplate[keyof typeof ProductPromotionTemplate];
+
+
+export const ProductPromotionTemplate = {
+  classic: 'classic',
+  products: 'products',
+  computers: 'computers',
+} as const;
+
+export interface ProductPromotion {
+  productId: number;
+  template: ProductPromotionTemplate;
+  copy: PromoCopy;
+  updatedAt: string;
+}
+
+export type ProductPromotionInputTemplate = typeof ProductPromotionInputTemplate[keyof typeof ProductPromotionInputTemplate];
+
+
+export const ProductPromotionInputTemplate = {
+  classic: 'classic',
+  products: 'products',
+  computers: 'computers',
+} as const;
+
+export interface ProductPromotionInput {
+  template: ProductPromotionInputTemplate;
+  copy: PromoCopy;
+}
+
+/**
+ * `ai` when Claude wrote it, `product` when it was pulled from the description/specs.
+ */
+export type ProductPromotionDraftSource = typeof ProductPromotionDraftSource[keyof typeof ProductPromotionDraftSource];
+
+
+export const ProductPromotionDraftSource = {
+  ai: 'ai',
+  product: 'product',
+} as const;
+
+/**
+ * Computers for anything that reads as a laptop/desktop/PC, else products.
+ */
+export type ProductPromotionDraftSuggestedTemplate = typeof ProductPromotionDraftSuggestedTemplate[keyof typeof ProductPromotionDraftSuggestedTemplate];
+
+
+export const ProductPromotionDraftSuggestedTemplate = {
+  products: 'products',
+  computers: 'computers',
+} as const;
+
+export interface ProductPromotionDraft {
+  copy: PromoCopy;
+  /** `ai` when Claude wrote it, `product` when it was pulled from the description/specs. */
+  source: ProductPromotionDraftSource;
+  /** Computers for anything that reads as a laptop/desktop/PC, else products. */
+  suggestedTemplate: ProductPromotionDraftSuggestedTemplate;
+  /** Set when an AI account is connected but the call failed and the product data was used instead. */
+  aiError?: string;
+}
+
 export interface ServiceSettingsInput {
   /** @maxItems 100 */
   customNotes?: ServiceCustomNote[];

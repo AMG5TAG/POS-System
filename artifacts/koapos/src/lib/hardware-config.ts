@@ -86,7 +86,8 @@ export type PrintPurpose =
   | "eod"
   | "label"
   | "customerForm"
-  | "appointment";
+  | "appointment"
+  | "promotion";
 
 export interface PrintPurposeMeta {
   id: PrintPurpose;
@@ -109,6 +110,7 @@ export const PRINT_PURPOSES: PrintPurposeMeta[] = [
   { id: "label",            label: "Labels & stickers",   hint: "Product, repair, customer and address labels", paper: "label" },
   { id: "customerForm",     label: "Customer forms",      hint: "Consent, privacy and intake forms",         paper: "a4"   },
   { id: "appointment",      label: "Appointment slip",    hint: "Printed appointment details",              paper: "a4"   },
+  { id: "promotion",        label: "Promo cards",         hint: "Inventory › Promotions — 6×4 and square product cards", paper: "a4" },
 ];
 
 export interface PrinterProfile {
@@ -162,6 +164,7 @@ export const DEFAULT_ROUTING: Partial<Record<PrintPurpose, string>> = {
   label: LABEL_PROFILE_ID,
   customerForm: DOCUMENT_PROFILE_ID,
   appointment: DOCUMENT_PROFILE_ID,
+  promotion: DOCUMENT_PROFILE_ID,
 };
 
 export const DEFAULT_HW: HardwareCfg = {

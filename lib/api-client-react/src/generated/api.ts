@@ -322,6 +322,9 @@ import type {
   ProductPreOrderInput,
   ProductPreOrderListResponse,
   ProductPriceHistoryEntry,
+  ProductPromotion,
+  ProductPromotionDraft,
+  ProductPromotionInput,
   ProductRecall,
   ProductRecallInput,
   ProductRecallListResponse,
@@ -6906,6 +6909,297 @@ export const useUpdateServiceSettings = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getUpdateServiceSettingsMutationOptions(options));
+    }
+
+export const getListProductPromotionsUrl = () => {
+
+
+
+
+  return `/api/promotions`
+}
+
+/**
+ * @summary Saved promo card copy for every product that has some
+ */
+export const listProductPromotions = async ( options?: RequestInit): Promise<ProductPromotion[]> => {
+
+  return customFetch<ProductPromotion[]>(getListProductPromotionsUrl(),
+  {
+    ...options,
+    method: 'GET'
+
+
+  }
+);}
+
+
+
+
+
+export const getListProductPromotionsQueryKey = () => {
+    return [
+    `/api/promotions`
+    ] as const;
+    }
+
+
+export const getListProductPromotionsQueryOptions = <TData = Awaited<ReturnType<typeof listProductPromotions>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProductPromotions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+) => {
+
+const {query: queryOptions, request: requestOptions} = options ?? {};
+
+  const queryKey =  queryOptions?.queryKey ?? getListProductPromotionsQueryKey();
+
+
+
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listProductPromotions>>> = ({ signal }) => listProductPromotions({ signal, ...requestOptions });
+
+
+
+
+
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listProductPromotions>>, TError, TData> & { queryKey: QueryKey }
+}
+
+export type ListProductPromotionsQueryResult = NonNullable<Awaited<ReturnType<typeof listProductPromotions>>>
+export type ListProductPromotionsQueryError = ErrorType<unknown>
+
+
+/**
+ * @summary Saved promo card copy for every product that has some
+ */
+
+export function useListProductPromotions<TData = Awaited<ReturnType<typeof listProductPromotions>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listProductPromotions>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+
+ ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
+
+  const queryOptions = getListProductPromotionsQueryOptions(options)
+
+  const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
+
+  return { ...query, queryKey: queryOptions.queryKey };
+}
+
+
+
+
+
+
+
+export const getSaveProductPromotionUrl = (productId: number,) => {
+
+
+
+
+  return `/api/promotions/${productId}`
+}
+
+/**
+ * @summary Save a product's promo card template and copy
+ */
+export const saveProductPromotion = async (productId: number,
+    productPromotionInput: ProductPromotionInput, options?: RequestInit): Promise<ProductPromotion> => {
+
+  return customFetch<ProductPromotion>(getSaveProductPromotionUrl(productId),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      productPromotionInput,)
+  }
+);}
+
+
+
+
+export const getSaveProductPromotionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveProductPromotion>>, TError,{productId: number;data: BodyType<ProductPromotionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof saveProductPromotion>>, TError,{productId: number;data: BodyType<ProductPromotionInput>}, TContext> => {
+
+const mutationKey = ['saveProductPromotion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof saveProductPromotion>>, {productId: number;data: BodyType<ProductPromotionInput>}> = (props) => {
+          const {productId,data} = props ?? {};
+
+          return  saveProductPromotion(productId,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SaveProductPromotionMutationResult = NonNullable<Awaited<ReturnType<typeof saveProductPromotion>>>
+    export type SaveProductPromotionMutationBody = BodyType<ProductPromotionInput>
+    export type SaveProductPromotionMutationError = ErrorType<void>
+
+    /**
+ * @summary Save a product's promo card template and copy
+ */
+export const useSaveProductPromotion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof saveProductPromotion>>, TError,{productId: number;data: BodyType<ProductPromotionInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof saveProductPromotion>>,
+        TError,
+        {productId: number;data: BodyType<ProductPromotionInput>},
+        TContext
+      > => {
+      return useMutation(getSaveProductPromotionMutationOptions(options));
+    }
+
+export const getDeleteProductPromotionUrl = (productId: number,) => {
+
+
+
+
+  return `/api/promotions/${productId}`
+}
+
+/**
+ * @summary Forget a product's saved promo copy
+ */
+export const deleteProductPromotion = async (productId: number, options?: RequestInit): Promise<void> => {
+
+  return customFetch<void>(getDeleteProductPromotionUrl(productId),
+  {
+    ...options,
+    method: 'DELETE'
+
+
+  }
+);}
+
+
+
+
+export const getDeleteProductPromotionMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProductPromotion>>, TError,{productId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteProductPromotion>>, TError,{productId: number}, TContext> => {
+
+const mutationKey = ['deleteProductPromotion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteProductPromotion>>, {productId: number}> = (props) => {
+          const {productId} = props ?? {};
+
+          return  deleteProductPromotion(productId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type DeleteProductPromotionMutationResult = NonNullable<Awaited<ReturnType<typeof deleteProductPromotion>>>
+
+    export type DeleteProductPromotionMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Forget a product's saved promo copy
+ */
+export const useDeleteProductPromotion = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteProductPromotion>>, TError,{productId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof deleteProductPromotion>>,
+        TError,
+        {productId: number},
+        TContext
+      > => {
+      return useMutation(getDeleteProductPromotionMutationOptions(options));
+    }
+
+export const getGenerateProductPromotionUrl = (productId: number,) => {
+
+
+
+
+  return `/api/promotions/${productId}/generate`
+}
+
+/**
+ * Uses the merchant's connected Claude account when there is one, and otherwise pulls bullets and specs out of the description and technical specs. Nothing is saved — the caller saves what it keeps.
+
+ * @summary Draft promo card copy (features, pitch, blurb, PC specs) from the product's own data
+ */
+export const generateProductPromotion = async (productId: number, options?: RequestInit): Promise<ProductPromotionDraft> => {
+
+  return customFetch<ProductPromotionDraft>(getGenerateProductPromotionUrl(productId),
+  {
+    ...options,
+    method: 'POST'
+
+
+  }
+);}
+
+
+
+
+export const getGenerateProductPromotionMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateProductPromotion>>, TError,{productId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof generateProductPromotion>>, TError,{productId: number}, TContext> => {
+
+const mutationKey = ['generateProductPromotion'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof generateProductPromotion>>, {productId: number}> = (props) => {
+          const {productId} = props ?? {};
+
+          return  generateProductPromotion(productId,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type GenerateProductPromotionMutationResult = NonNullable<Awaited<ReturnType<typeof generateProductPromotion>>>
+
+    export type GenerateProductPromotionMutationError = ErrorType<void>
+
+    /**
+ * @summary Draft promo card copy (features, pitch, blurb, PC specs) from the product's own data
+ */
+export const useGenerateProductPromotion = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof generateProductPromotion>>, TError,{productId: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof generateProductPromotion>>,
+        TError,
+        {productId: number},
+        TContext
+      > => {
+      return useMutation(getGenerateProductPromotionMutationOptions(options));
     }
 
 export const getGetLoyaltyLeaderboardUrl = () => {

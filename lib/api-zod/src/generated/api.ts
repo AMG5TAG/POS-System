@@ -3199,6 +3199,259 @@ export const UpdateServiceSettingsResponse = zod.object({
 
 
 /**
+ * @summary Saved promo card copy for every product that has some
+ */
+export const listProductPromotionsResponseCopyHeadlineMax = 200;
+
+export const listProductPromotionsResponseCopySubtitleMax = 200;
+
+export const listProductPromotionsResponseCopyBannerMax = 200;
+
+export const listProductPromotionsResponseCopyFeaturesItemMax = 200;
+
+export const listProductPromotionsResponseCopyFeaturesMax = 5;
+
+export const listProductPromotionsResponseCopyPitchMax = 300;
+
+export const listProductPromotionsResponseCopyBlurbMax = 600;
+
+export const listProductPromotionsResponseCopySpecsCpuMax = 200;
+
+export const listProductPromotionsResponseCopySpecsRamMax = 200;
+
+export const listProductPromotionsResponseCopySpecsStorageMax = 200;
+
+export const listProductPromotionsResponseCopySpecsGpuMax = 200;
+
+export const listProductPromotionsResponseCopySpecsDisplayMax = 200;
+
+export const listProductPromotionsResponseCopySpecsOsMax = 200;
+
+export const listProductPromotionsResponseCopySpecsWarrantyMax = 200;
+
+export const listProductPromotionsResponseCopySpecsGradeMax = 200;
+
+
+
+export const ListProductPromotionsResponseItem = zod.object({
+  "productId": zod.number(),
+  "template": zod.enum(['classic', 'products', 'computers']),
+  "copy": zod.object({
+  "headline": zod.string().max(listProductPromotionsResponseCopyHeadlineMax).optional().describe('Printed instead of the product name when set.'),
+  "subtitle": zod.string().max(listProductPromotionsResponseCopySubtitleMax).optional(),
+  "banner": zod.string().max(listProductPromotionsResponseCopyBannerMax).optional().describe('Condition strip on the square templates, e.g. \"Refurbished - works perfectly - fully tested\". Blank hides the words.'),
+  "features": zod.array(zod.string().max(listProductPromotionsResponseCopyFeaturesItemMax)).max(listProductPromotionsResponseCopyFeaturesMax).optional(),
+  "pitch": zod.string().max(listProductPromotionsResponseCopyPitchMax).optional().describe('One-line sales pitch (the classic card\'s tagline, the square cards\' pitch-box heading).'),
+  "blurb": zod.string().max(listProductPromotionsResponseCopyBlurbMax).optional().describe('Short paragraph in the square cards\' pitch box.'),
+  "specs": zod.object({
+  "cpu": zod.string().max(listProductPromotionsResponseCopySpecsCpuMax).optional(),
+  "ram": zod.string().max(listProductPromotionsResponseCopySpecsRamMax).optional(),
+  "storage": zod.string().max(listProductPromotionsResponseCopySpecsStorageMax).optional(),
+  "gpu": zod.string().max(listProductPromotionsResponseCopySpecsGpuMax).optional(),
+  "display": zod.string().max(listProductPromotionsResponseCopySpecsDisplayMax).optional(),
+  "os": zod.string().max(listProductPromotionsResponseCopySpecsOsMax).optional(),
+  "warranty": zod.string().max(listProductPromotionsResponseCopySpecsWarrantyMax).optional(),
+  "grade": zod.string().max(listProductPromotionsResponseCopySpecsGradeMax).optional()
+}).optional().describe('The eight spec tiles of the Computers template.')
+}),
+  "updatedAt": zod.coerce.date()
+})
+export const ListProductPromotionsResponse = zod.array(ListProductPromotionsResponseItem)
+
+
+/**
+ * @summary Save a product's promo card template and copy
+ */
+export const SaveProductPromotionParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const saveProductPromotionBodyCopyHeadlineMax = 200;
+
+export const saveProductPromotionBodyCopySubtitleMax = 200;
+
+export const saveProductPromotionBodyCopyBannerMax = 200;
+
+export const saveProductPromotionBodyCopyFeaturesItemMax = 200;
+
+export const saveProductPromotionBodyCopyFeaturesMax = 5;
+
+export const saveProductPromotionBodyCopyPitchMax = 300;
+
+export const saveProductPromotionBodyCopyBlurbMax = 600;
+
+export const saveProductPromotionBodyCopySpecsCpuMax = 200;
+
+export const saveProductPromotionBodyCopySpecsRamMax = 200;
+
+export const saveProductPromotionBodyCopySpecsStorageMax = 200;
+
+export const saveProductPromotionBodyCopySpecsGpuMax = 200;
+
+export const saveProductPromotionBodyCopySpecsDisplayMax = 200;
+
+export const saveProductPromotionBodyCopySpecsOsMax = 200;
+
+export const saveProductPromotionBodyCopySpecsWarrantyMax = 200;
+
+export const saveProductPromotionBodyCopySpecsGradeMax = 200;
+
+
+
+export const SaveProductPromotionBody = zod.object({
+  "template": zod.enum(['classic', 'products', 'computers']),
+  "copy": zod.object({
+  "headline": zod.string().max(saveProductPromotionBodyCopyHeadlineMax).optional().describe('Printed instead of the product name when set.'),
+  "subtitle": zod.string().max(saveProductPromotionBodyCopySubtitleMax).optional(),
+  "banner": zod.string().max(saveProductPromotionBodyCopyBannerMax).optional().describe('Condition strip on the square templates, e.g. \"Refurbished - works perfectly - fully tested\". Blank hides the words.'),
+  "features": zod.array(zod.string().max(saveProductPromotionBodyCopyFeaturesItemMax)).max(saveProductPromotionBodyCopyFeaturesMax).optional(),
+  "pitch": zod.string().max(saveProductPromotionBodyCopyPitchMax).optional().describe('One-line sales pitch (the classic card\'s tagline, the square cards\' pitch-box heading).'),
+  "blurb": zod.string().max(saveProductPromotionBodyCopyBlurbMax).optional().describe('Short paragraph in the square cards\' pitch box.'),
+  "specs": zod.object({
+  "cpu": zod.string().max(saveProductPromotionBodyCopySpecsCpuMax).optional(),
+  "ram": zod.string().max(saveProductPromotionBodyCopySpecsRamMax).optional(),
+  "storage": zod.string().max(saveProductPromotionBodyCopySpecsStorageMax).optional(),
+  "gpu": zod.string().max(saveProductPromotionBodyCopySpecsGpuMax).optional(),
+  "display": zod.string().max(saveProductPromotionBodyCopySpecsDisplayMax).optional(),
+  "os": zod.string().max(saveProductPromotionBodyCopySpecsOsMax).optional(),
+  "warranty": zod.string().max(saveProductPromotionBodyCopySpecsWarrantyMax).optional(),
+  "grade": zod.string().max(saveProductPromotionBodyCopySpecsGradeMax).optional()
+}).optional().describe('The eight spec tiles of the Computers template.')
+})
+})
+
+export const saveProductPromotionResponseCopyHeadlineMax = 200;
+
+export const saveProductPromotionResponseCopySubtitleMax = 200;
+
+export const saveProductPromotionResponseCopyBannerMax = 200;
+
+export const saveProductPromotionResponseCopyFeaturesItemMax = 200;
+
+export const saveProductPromotionResponseCopyFeaturesMax = 5;
+
+export const saveProductPromotionResponseCopyPitchMax = 300;
+
+export const saveProductPromotionResponseCopyBlurbMax = 600;
+
+export const saveProductPromotionResponseCopySpecsCpuMax = 200;
+
+export const saveProductPromotionResponseCopySpecsRamMax = 200;
+
+export const saveProductPromotionResponseCopySpecsStorageMax = 200;
+
+export const saveProductPromotionResponseCopySpecsGpuMax = 200;
+
+export const saveProductPromotionResponseCopySpecsDisplayMax = 200;
+
+export const saveProductPromotionResponseCopySpecsOsMax = 200;
+
+export const saveProductPromotionResponseCopySpecsWarrantyMax = 200;
+
+export const saveProductPromotionResponseCopySpecsGradeMax = 200;
+
+
+
+export const SaveProductPromotionResponse = zod.object({
+  "productId": zod.number(),
+  "template": zod.enum(['classic', 'products', 'computers']),
+  "copy": zod.object({
+  "headline": zod.string().max(saveProductPromotionResponseCopyHeadlineMax).optional().describe('Printed instead of the product name when set.'),
+  "subtitle": zod.string().max(saveProductPromotionResponseCopySubtitleMax).optional(),
+  "banner": zod.string().max(saveProductPromotionResponseCopyBannerMax).optional().describe('Condition strip on the square templates, e.g. \"Refurbished - works perfectly - fully tested\". Blank hides the words.'),
+  "features": zod.array(zod.string().max(saveProductPromotionResponseCopyFeaturesItemMax)).max(saveProductPromotionResponseCopyFeaturesMax).optional(),
+  "pitch": zod.string().max(saveProductPromotionResponseCopyPitchMax).optional().describe('One-line sales pitch (the classic card\'s tagline, the square cards\' pitch-box heading).'),
+  "blurb": zod.string().max(saveProductPromotionResponseCopyBlurbMax).optional().describe('Short paragraph in the square cards\' pitch box.'),
+  "specs": zod.object({
+  "cpu": zod.string().max(saveProductPromotionResponseCopySpecsCpuMax).optional(),
+  "ram": zod.string().max(saveProductPromotionResponseCopySpecsRamMax).optional(),
+  "storage": zod.string().max(saveProductPromotionResponseCopySpecsStorageMax).optional(),
+  "gpu": zod.string().max(saveProductPromotionResponseCopySpecsGpuMax).optional(),
+  "display": zod.string().max(saveProductPromotionResponseCopySpecsDisplayMax).optional(),
+  "os": zod.string().max(saveProductPromotionResponseCopySpecsOsMax).optional(),
+  "warranty": zod.string().max(saveProductPromotionResponseCopySpecsWarrantyMax).optional(),
+  "grade": zod.string().max(saveProductPromotionResponseCopySpecsGradeMax).optional()
+}).optional().describe('The eight spec tiles of the Computers template.')
+}),
+  "updatedAt": zod.coerce.date()
+})
+
+
+/**
+ * @summary Forget a product's saved promo copy
+ */
+export const DeleteProductPromotionParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+
+/**
+ * Uses the merchant's connected Claude account when there is one, and otherwise pulls bullets and specs out of the description and technical specs. Nothing is saved — the caller saves what it keeps.
+
+ * @summary Draft promo card copy (features, pitch, blurb, PC specs) from the product's own data
+ */
+export const GenerateProductPromotionParams = zod.object({
+  "productId": zod.coerce.number()
+})
+
+export const generateProductPromotionResponseCopyHeadlineMax = 200;
+
+export const generateProductPromotionResponseCopySubtitleMax = 200;
+
+export const generateProductPromotionResponseCopyBannerMax = 200;
+
+export const generateProductPromotionResponseCopyFeaturesItemMax = 200;
+
+export const generateProductPromotionResponseCopyFeaturesMax = 5;
+
+export const generateProductPromotionResponseCopyPitchMax = 300;
+
+export const generateProductPromotionResponseCopyBlurbMax = 600;
+
+export const generateProductPromotionResponseCopySpecsCpuMax = 200;
+
+export const generateProductPromotionResponseCopySpecsRamMax = 200;
+
+export const generateProductPromotionResponseCopySpecsStorageMax = 200;
+
+export const generateProductPromotionResponseCopySpecsGpuMax = 200;
+
+export const generateProductPromotionResponseCopySpecsDisplayMax = 200;
+
+export const generateProductPromotionResponseCopySpecsOsMax = 200;
+
+export const generateProductPromotionResponseCopySpecsWarrantyMax = 200;
+
+export const generateProductPromotionResponseCopySpecsGradeMax = 200;
+
+
+
+export const GenerateProductPromotionResponse = zod.object({
+  "copy": zod.object({
+  "headline": zod.string().max(generateProductPromotionResponseCopyHeadlineMax).optional().describe('Printed instead of the product name when set.'),
+  "subtitle": zod.string().max(generateProductPromotionResponseCopySubtitleMax).optional(),
+  "banner": zod.string().max(generateProductPromotionResponseCopyBannerMax).optional().describe('Condition strip on the square templates, e.g. \"Refurbished - works perfectly - fully tested\". Blank hides the words.'),
+  "features": zod.array(zod.string().max(generateProductPromotionResponseCopyFeaturesItemMax)).max(generateProductPromotionResponseCopyFeaturesMax).optional(),
+  "pitch": zod.string().max(generateProductPromotionResponseCopyPitchMax).optional().describe('One-line sales pitch (the classic card\'s tagline, the square cards\' pitch-box heading).'),
+  "blurb": zod.string().max(generateProductPromotionResponseCopyBlurbMax).optional().describe('Short paragraph in the square cards\' pitch box.'),
+  "specs": zod.object({
+  "cpu": zod.string().max(generateProductPromotionResponseCopySpecsCpuMax).optional(),
+  "ram": zod.string().max(generateProductPromotionResponseCopySpecsRamMax).optional(),
+  "storage": zod.string().max(generateProductPromotionResponseCopySpecsStorageMax).optional(),
+  "gpu": zod.string().max(generateProductPromotionResponseCopySpecsGpuMax).optional(),
+  "display": zod.string().max(generateProductPromotionResponseCopySpecsDisplayMax).optional(),
+  "os": zod.string().max(generateProductPromotionResponseCopySpecsOsMax).optional(),
+  "warranty": zod.string().max(generateProductPromotionResponseCopySpecsWarrantyMax).optional(),
+  "grade": zod.string().max(generateProductPromotionResponseCopySpecsGradeMax).optional()
+}).optional().describe('The eight spec tiles of the Computers template.')
+}),
+  "source": zod.enum(['ai', 'product']).describe('`ai` when Claude wrote it, `product` when it was pulled from the description\/specs.'),
+  "suggestedTemplate": zod.enum(['products', 'computers']).describe('Computers for anything that reads as a laptop\/desktop\/PC, else products.'),
+  "aiError": zod.string().optional().describe('Set when an AI account is connected but the call failed and the product data was used instead.')
+})
+
+
+/**
  * Returns the top 10 customers by loyalty points for the merchant.
  * @summary Top loyalty earners
  */

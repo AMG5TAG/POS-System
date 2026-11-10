@@ -32,9 +32,17 @@
 //
 // Files and folders starting with "_" or "." (the starter template) are never
 // published.
+//
+// Every relative link to a published file (href/src in a page, url() in a page
+// or a stylesheet) gets the file's content hash appended: "assets/menu.css" is
+// published as "assets/menu.css?v=3f9a1c02be". The server caches those files
+// for an hour, so without it a TV kept last hour's stylesheet under a new page
+// (prices ran together as "10P$17.9020P$29.90"). A changed file is a new URL,
+// so screens pick it up at once.
 
-import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync, copyFileSync } from "node:fs";
+import { readdirSync, readFileSync, writeFileSync, mkdirSync, rmSync, existsSync } from "node:fs";
 import { fileURLToPath } from "node:url";
+import { createHash } from "node:crypto";
 import { dirname, resolve, join } from "node:path";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -108,6 +116,30 @@ function walk(dir, rel = "") {
 const all = walk(SRC);
 const files = all.filter((f) => f.endsWith(".html"));
 const assets = all.filter((f) => !f.endsWith(".html"));
+
+// What a published file's bytes will be (a stylesheet's after its own links
+// are fingerprinted, so a new image changes the stylesheet's hash too).
+const outputs = new Map();
+function output(rel) {
+  if (outputs.has(rel)) return outputs.get(rel);
+  if (!assets.includes(rel)) return null;
+  outputs.set(rel, null); // guards against a stylesheet that links itself
+  let body = readFileSync(join(SRC, rel));
+  if (rel.endsWith(".css")) body = Buffer.from(fingerprint(body.toString("utf8"), rel));
+  outputs.set(rel, body);
+  return body;
+}
+function fingerprint(text, fromFile) {
+  const dir = dirname(fromFile);
+  const tag = (ref) => {
+    if (/^(?:[a-z][a-z0-9+.-]*:|\/|#)/i.test(ref) || ref.includes("?")) return ref;
+    const body = output(join(dir, ref).split("\\").join("/"));
+    return body ? `${ref}?v=${createHash("sha256").update(body).digest("hex").slice(0, 10)}` : ref;
+  };
+  return text
+    .replace(/\b(href|src)=(["'])([^"']+)\2/g, (_, attr, q, ref) => `${attr}=${q}${tag(ref)}${q}`)
+    .replace(/url\((["']?)([^"')]+)\1\)/g, (_, q, ref) => `url(${q}${tag(ref)}${q})`);
+}
 const failures = [];
 const pages = [];
 for (const file of files) {
@@ -115,7 +147,7 @@ for (const file of files) {
   const html = readFileSync(join(SRC, file), "utf8");
   const problems = check(name, html);
   if (problems.length) failures.push(`  tv/${file}:\n${problems.map((p) => `    - ${p}`).join("\n")}`);
-  else pages.push({ name, html: build(name, html) });
+  else pages.push({ name, html: build(name, fingerprint(html, file)) });
 }
 if (failures.length) {
   console.error(`build-tv-pages: ${failures.length} page(s) not published:\n${failures.join("\n")}`);
@@ -130,7 +162,7 @@ for (const { name, html } of pages) {
 }
 for (const file of assets) {
   mkdirSync(dirname(join(OUT, file)), { recursive: true });
-  copyFileSync(join(SRC, file), join(OUT, file));
+  writeFileSync(join(OUT, file), output(file));
 }
 
 const today = new Date().toISOString().slice(0, 10);

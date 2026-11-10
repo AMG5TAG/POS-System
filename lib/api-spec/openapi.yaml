@@ -40,6 +40,8 @@ tags:
     description: Per-merchant invoicing defaults, reminders and sending options
   - name: service-settings
     description: Per-merchant service job settings (custom notes)
+  - name: promotions
+    description: Inventory › Promotions — saved 6x4 promo card copy per product
   - name: Storage
     description: Object storage upload and serving endpoints.
   - name: cameras
@@ -2025,6 +2027,83 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/ServiceSettings"
+
+  /promotions:
+    get:
+      operationId: listProductPromotions
+      tags: [promotions]
+      summary: Saved promo card copy for every product that has some
+      responses:
+        "200":
+          description: Saved promo copy
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ProductPromotion"
+
+  /promotions/{productId}:
+    put:
+      operationId: saveProductPromotion
+      tags: [promotions]
+      summary: Save a product's promo card template and copy
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ProductPromotionInput"
+      responses:
+        "200":
+          description: Saved promo copy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPromotion"
+        "404":
+          description: No such product
+    delete:
+      operationId: deleteProductPromotion
+      tags: [promotions]
+      summary: Forget a product's saved promo copy
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "204":
+          description: Deleted
+
+  /promotions/{productId}/generate:
+    post:
+      operationId: generateProductPromotion
+      tags: [promotions]
+      summary: Draft promo card copy (features, pitch, blurb, PC specs) from the product's own data
+      description: >
+        Uses the merchant's connected Claude account when there is one, and
+        otherwise pulls bullets and specs out of the description and technical
+        specs. Nothing is saved — the caller saves what it keeps.
+      parameters:
+        - name: productId
+          in: path
+          required: true
+          schema: { type: integer }
+      responses:
+        "200":
+          description: Drafted copy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ProductPromotionDraft"
+        "404":
+          description: No such product
 
   /loyalty/leaderboard:
     get:
@@ -13612,6 +13691,81 @@ components:
           type: array
           items:
             $ref: "#/components/schemas/ServiceCustomNote"
+    PromoSpecs:
+      type: object
+      description: The eight spec tiles of the Computers template.
+      properties:
+        cpu: { type: string, maxLength: 200 }
+        ram: { type: string, maxLength: 200 }
+        storage: { type: string, maxLength: 200 }
+        gpu: { type: string, maxLength: 200 }
+        display: { type: string, maxLength: 200 }
+        os: { type: string, maxLength: 200 }
+        warranty: { type: string, maxLength: 200 }
+        grade: { type: string, maxLength: 200 }
+    PromoCopy:
+      type: object
+      properties:
+        headline:
+          type: string
+          maxLength: 200
+          description: Printed instead of the product name when set.
+        subtitle: { type: string, maxLength: 200 }
+        banner:
+          type: string
+          maxLength: 200
+          description: Condition strip on the square templates, e.g. "Refurbished - works perfectly - fully tested". Blank hides the words.
+        features:
+          type: array
+          maxItems: 5
+          items: { type: string, maxLength: 200 }
+        pitch:
+          type: string
+          maxLength: 300
+          description: One-line sales pitch (the classic card's tagline, the square cards' pitch-box heading).
+        blurb:
+          type: string
+          maxLength: 600
+          description: Short paragraph in the square cards' pitch box.
+        specs:
+          $ref: "#/components/schemas/PromoSpecs"
+    ProductPromotion:
+      type: object
+      required: [productId, template, copy, updatedAt]
+      properties:
+        productId: { type: integer }
+        template:
+          type: string
+          enum: [classic, products, computers]
+        copy:
+          $ref: "#/components/schemas/PromoCopy"
+        updatedAt: { type: string, format: date-time }
+    ProductPromotionInput:
+      type: object
+      required: [template, copy]
+      properties:
+        template:
+          type: string
+          enum: [classic, products, computers]
+        copy:
+          $ref: "#/components/schemas/PromoCopy"
+    ProductPromotionDraft:
+      type: object
+      required: [copy, source, suggestedTemplate]
+      properties:
+        copy:
+          $ref: "#/components/schemas/PromoCopy"
+        source:
+          type: string
+          enum: [ai, product]
+          description: "`ai` when Claude wrote it, `product` when it was pulled from the description/specs."
+        suggestedTemplate:
+          type: string
+          enum: [products, computers]
+          description: Computers for anything that reads as a laptop/desktop/PC, else products.
+        aiError:
+          type: string
+          description: Set when an AI account is connected but the call failed and the product data was used instead.
     ServiceSettingsInput:
       type: object
       properties:

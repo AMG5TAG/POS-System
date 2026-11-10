@@ -161,6 +161,7 @@ const INVENTORY_SUBNAV = [
   { name: "Recalls",         href: "/inventory/recalls",         icon: AlertTriangle },
   { name: "Warranty",        href: "/inventory/warranty",        icon: ShieldCheck },
   { name: "Wastage",         href: "/inventory/wastage",        icon: AlertTriangle },
+  { name: "Promotions",      href: "/inventory/promotions",     icon: Megaphone },
 ];
 
 // Nav types and the Management tree itself live in ./management-hubs, which
@@ -250,6 +251,7 @@ const SEARCH_INDEX = [
   { label: "Tax Settings",       href: "/management/settings-integrations/tax",                        icon: Receipt,      group: "Management" },
   { label: "Reports",             href: "/management/marketing-reports/sales-overview",   icon: TrendingUp,      group: "Management" },
   { label: "Wastage / Write-off",         href: "/inventory/wastage",                            icon: AlertTriangle, group: "Inventory"  },
+  { label: "Promotions (print promo cards)", href: "/inventory/promotions",                       icon: Megaphone,     group: "Inventory"  },
   { label: "Marketing · Overview",             href: "/marketing/overview",                          icon: BarChart2,  group: "Marketing" },
   { label: "Marketing · Google (Search, Analytics, Maps, Reviews)", href: "/marketing/google",          icon: Globe,      group: "Marketing" },
   { label: "Marketing · Email Campaigns",       href: "/marketing/email/campaigns",          icon: Send,       group: "Marketing" },
