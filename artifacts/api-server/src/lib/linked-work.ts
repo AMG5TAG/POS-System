@@ -88,7 +88,8 @@ export async function completeLinkedWork(
         // closed by taking payment earns the same warranty as one closed by
         // hand. Only ever set on the transition in, which the terminal-status
         // filter above already guarantees.
-        .set({ status: "completed", completedAt: new Date() })
+        // A completed job also leaves Service Jobs › Archive, as everywhere else.
+        .set({ status: "completed", completedAt: new Date(), archivedAt: null, archiveReason: null })
         .where(and(
           inArray(serviceJobsTable.id, open.map((j) => j.id)),
           eq(serviceJobsTable.merchantId, merchantId),

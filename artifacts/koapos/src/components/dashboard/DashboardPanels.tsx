@@ -131,7 +131,9 @@ function ServiceJobRow({ job, onClick }: { job: ServiceJob; onClick: () => void 
 // ─── All Service Jobs Panel ───────────────────────────────────────────────────
 
 function AllServiceJobsPanel() {
-  const { data: jobs = [], isLoading } = useListServiceJobs({ query: { queryKey: ["service-jobs-panel"] } });
+  const { data: allJobs = [], isLoading } = useListServiceJobs({ query: { queryKey: ["service-jobs-panel"] } });
+  // Archived jobs are parked (Service Jobs › Archive); they stay off the dashboard.
+  const jobs = allJobs.filter((j) => !j.archivedAt);
   const [selectedJob, setSelectedJob] = useState<ServiceJob | null>(null);
 
   // Completed and cancelled jobs are closed — they linger on the dashboard only

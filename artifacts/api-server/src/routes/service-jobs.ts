@@ -12,7 +12,9 @@ import { sendEmail } from "../services/email";
 import { registerServiceQr, registerQrBestEffort } from "../services/entityQr";
 import { sendSms } from "../services/sms";
 import { customerPortalUrl } from "../lib/publicUrl";
-import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams } from "@workspace/api-zod";
+import { UpdateServiceJobParams, DeleteServiceJobParams, SendServiceJobEmailParams, ArchiveServiceJobsBody } from "@workspace/api-zod";
+import { appendNote } from "../lib/service-job-notes";
+import { archiveLogText, canArchive, clearsArchive } from "../lib/service-job-archive";
 import { SERVICE_WARRANTY_DEFAULTS } from "../lib/service-job-defaults";
 import { summariseJobQuotes, NO_QUOTE } from "../lib/service-job-quotes";
 
@@ -57,6 +59,8 @@ function formatJob(
     completedAt: job.completedAt ? job.completedAt.toISOString() : null,
     reworkOfJobId: job.reworkOfJobId ?? null,
     reopenedFromJobId: job.reopenedFromJobId ?? null,
+    archivedAt: job.archivedAt ? job.archivedAt.toISOString() : null,
+    archiveReason: job.archiveReason ?? null,
     estimateApprovedAt: job.estimateApprovedAt ? job.estimateApprovedAt.toISOString() : null,
     estimateApprovedVia: job.estimateApprovedVia ?? null,
     depositRequired: job.depositRequired != null ? parseFloat(job.depositRequired) : null,
@@ -213,6 +217,46 @@ router.post("/service-jobs", requireAuth, async (req, res): Promise<void> => {
   res.status(201).json(formatJob(job, customer));
 });
 
+/* Service Jobs › Archive: park open jobs (customer declined, long-term) or
+   restore them. Rules in lib/service-job-archive.ts. */
+router.post("/service-jobs/archive", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = ArchiveServiceJobsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const { ids, archived, reason, note } = parsed.data;
+
+  const rows = await db.select().from(serviceJobsTable)
+    .where(and(eq(serviceJobsTable.merchantId, merchantId), inArray(serviceJobsTable.id, [...new Set(ids)])));
+  // Only what actually changes: open jobs not already in the requested state.
+  const targets = rows.filter((j) => (archived ? canArchive(j.status) && !j.archivedAt : !!j.archivedAt));
+  const logText = archiveLogText(archived, reason ?? null, note ?? null);
+
+  const changed: Array<typeof serviceJobsTable.$inferSelect> = [];
+  for (const j of targets) {
+    const [row] = await db.update(serviceJobsTable)
+      .set({
+        archivedAt: archived ? new Date() : null,
+        archiveReason: archived ? (reason ?? "other") : null,
+        notes: appendNote(j.notes, logText),
+      })
+      .where(and(eq(serviceJobsTable.id, j.id), eq(serviceJobsTable.merchantId, merchantId)))
+      .returning();
+    if (row) changed.push(row);
+  }
+
+  const customerIds = [...new Set(changed.map((j) => j.customerId).filter((id): id is number => id != null))];
+  const customers = customerIds.length
+    ? await db.select().from(customersTable).where(and(eq(customersTable.merchantId, merchantId), inArray(customersTable.id, customerIds)))
+    : [];
+  const byId = new Map(customers.map((c) => [c.id, {
+    name: customerDisplayName(c.firstName, c.lastName, c.company), phone: c.phone ?? null, email: c.email ?? null, portalToken: c.portalToken ?? null,
+  }]));
+  res.json({
+    jobs: changed.map((j) => formatJob(j, j.customerId ? (byId.get(j.customerId) ?? null) : null)),
+    skipped: ids.length - changed.length,
+  });
+});
+
 router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> => {
   const paramsResult = UpdateServiceJobParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
@@ -280,6 +324,11 @@ router.patch("/service-jobs/:id", requireAuth, async (req, res): Promise<void> =
     // the repair-warranty window).
     if (current && body.status !== current.status && body.status === "completed") {
       updates.completedAt = new Date();
+    }
+    // Finishing a job takes it out of the archive: it belongs in Service History.
+    if (current && body.status !== current.status && clearsArchive(body.status)) {
+      updates.archivedAt = null;
+      updates.archiveReason = null;
     }
     if (current && body.status !== current.status) {
       const STATUS_LABELS: Record<string, string> = {

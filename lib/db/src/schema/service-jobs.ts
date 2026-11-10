@@ -37,6 +37,12 @@ export const serviceJobsTable = pgTable("service_jobs", {
   // repair), the original job it continues from. Distinct from reworkOfJobId:
   // a rework is a no-charge redo, a reopen is a new repair linked for history.
   reopenedFromJobId: integer("reopened_from_job_id"),
+  /* Service Jobs › Archive: set while a job is parked — the customer declined,
+     or it's a long-term job. The job keeps its status, so Restore puts it back
+     where it was. Cleared when the job is completed or cancelled.
+     Added by scripts/src/add-service-job-archive.ts. */
+  archivedAt: timestamp("archived_at", { withTimezone: true }),
+  archiveReason: text("archive_reason"),
   // Estimate approval (customer authorised the quoted work before it begins).
   // Set when a linked quote is accepted via the portal or recorded in-store.
   estimateApprovedAt: timestamp("estimate_approved_at", { withTimezone: true }),

@@ -4,7 +4,7 @@ import {
   serviceJobsTable, appointmentsTable, invoicesTable, transactionsTable,
   dashboardNotesTable, customersTable,
 } from "@workspace/db";
-import { eq, and, gte, lte, lt, ne, notInArray, desc, sql } from "drizzle-orm";
+import { eq, and, gte, lte, lt, ne, notInArray, desc, sql, isNull } from "drizzle-orm";
 import rateLimit from "express-rate-limit";
 import { customerDisplayName } from "../lib/customer-name";
 import { DEVICE_HEADER, gateDevice, isValidDeviceSecret } from "../lib/dashboard-devices";
@@ -124,7 +124,8 @@ router.get("/public/dashboard/:token", badCodeLimiter, async (req, res): Promise
         createdAt: serviceJobsTable.createdAt,
       })
       .from(serviceJobsTable)
-      .where(eq(serviceJobsTable.merchantId, merchantId))
+      // Archived jobs (Service Jobs › Archive) are parked, not active work.
+      .where(and(eq(serviceJobsTable.merchantId, merchantId), isNull(serviceJobsTable.archivedAt)))
       .orderBy(desc(serviceJobsTable.createdAt));
 
     const active = jobs.filter((j) => !FINISHED.includes(j.status));
@@ -165,7 +166,7 @@ router.get("/public/dashboard/:token", badCodeLimiter, async (req, res): Promise
         .where(and(eq(invoicesTable.merchantId, merchantId), notInArray(invoicesTable.status, ["paid", "draft", "cancelled"]))),
       db.select({ count: sql<string>`COUNT(*)` })
         .from(serviceJobsTable)
-        .where(and(eq(serviceJobsTable.merchantId, merchantId), notInArray(serviceJobsTable.status, FINISHED))),
+        .where(and(eq(serviceJobsTable.merchantId, merchantId), notInArray(serviceJobsTable.status, FINISHED), isNull(serviceJobsTable.archivedAt))),
       db.select({ count: sql<string>`COUNT(*)` })
         .from(appointmentsTable)
         .where(and(eq(appointmentsTable.merchantId, merchantId), gte(appointmentsTable.scheduledAt, now), lte(appointmentsTable.scheduledAt, in14Days), ne(appointmentsTable.status, "cancelled"))),

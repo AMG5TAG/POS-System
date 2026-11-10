@@ -18,8 +18,10 @@ import {
   Wrench, Shield, Handshake, AlertCircle, User, Calendar, MonitorSmartphone,
   Hash, ClipboardList, KeyRound, Layers, Package, Palette, StickyNote, Camera, Upload, X,
   Trash2, Eye, ChevronLeft, ChevronRight, FileText, PhoneCall, MessageSquare, Check,
+  Archive, ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
+import { archiveReasonLabel } from "@/components/service-jobs/ArchiveJobsDialog";
 import { useQueryClient } from "@tanstack/react-query";
 import { cn, telHref } from "@/lib/utils";
 import { FormsAttachmentPanel } from "@/components/forms/FormsAttachmentPanel";
@@ -102,6 +104,9 @@ export interface ServiceJobDetailDialogProps {
   onDelete?: (job: ServiceJob) => void;
   deleteIsPending?: boolean;
   onPrint?: (job: ServiceJob, mode: "sheet" | "sticker") => void;
+  /** Service Jobs › Archive. Shown only where the caller handles them. */
+  onArchive?: (job: ServiceJob) => void;
+  onRestore?: (job: ServiceJob) => void;
   onRefresh?: () => void;
   queryKeys?: string[][];
 }
@@ -127,6 +132,8 @@ export function ServiceJobDetailDialog({
   onDelete,
   deleteIsPending,
   onPrint,
+  onArchive,
+  onRestore,
   onRefresh,
   queryKeys,
 }: ServiceJobDetailDialogProps) {
@@ -397,6 +404,11 @@ export function ServiceJobDetailDialog({
                           ))}
                         </SelectContent>
                       </Select>
+                    )}
+                    {job.archivedAt && job.status !== "completed" && job.status !== "cancelled" && (
+                      <span className="inline-flex items-center gap-1 h-7 px-2.5 rounded-md border bg-muted text-muted-foreground text-[11px] font-medium" title="In Service Jobs › Archive">
+                        <Archive className="w-3 h-3" />Archived · {archiveReasonLabel(job.archiveReason)}
+                      </span>
                     )}
                     <button
                       type="button"
@@ -910,6 +922,18 @@ export function ServiceJobDetailDialog({
                 >
                   <Trash2 className="w-4 h-4" />
                 </Button>
+              )}
+              {/* Archive parks an open job; finished jobs are history instead. */}
+              {job.status !== "completed" && job.status !== "cancelled" && (job.archivedAt ? onRestore : onArchive) && (
+                job.archivedAt ? (
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => onRestore!(job)} title="Restore to Services, at the status it had">
+                    <ArchiveRestore className="w-3.5 h-3.5" /> Restore
+                  </Button>
+                ) : (
+                  <Button variant="outline" size="sm" className="h-8 gap-1.5" onClick={() => onArchive!(job)} title="Archive — customer declined or long-term">
+                    <Archive className="w-3.5 h-3.5" /> Archive
+                  </Button>
+                )
               )}
               <Button variant="outline" size="sm" className="h-8 px-3" onClick={goPrevTab} disabled={tabIndex === 0} title="Previous tab">
                 <ChevronLeft className="w-4 h-4" />

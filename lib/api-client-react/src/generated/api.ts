@@ -28,6 +28,8 @@ import type {
   AppleOAuthCallbackBody,
   Appointment,
   AppointmentInput,
+  ArchiveServiceJobs200,
+  ArchiveServiceJobsBody,
   AuthEvent,
   Backup,
   BackupConfig,
@@ -458,6 +460,10 @@ import type {
   StoreCreditResult,
   Supplier,
   SupplierInput,
+  SupplierInvoiceImportInput,
+  SupplierInvoiceImportResult,
+  SupplierInvoiceMatch,
+  SupplierInvoiceMatchInput,
   SupplierListResponse,
   SweepMerchantAssetOrphansParams,
   SweepOrphansResponse,
@@ -9089,6 +9095,79 @@ export const useCreateServiceJobRework = <TError = ErrorType<unknown>,
       return useMutation(getCreateServiceJobReworkMutationOptions(options));
     }
 
+export const getArchiveServiceJobsUrl = () => {
+
+
+
+
+  return `/api/service-jobs/archive`
+}
+
+/**
+ * Archiving parks open jobs the customer declined or that are long-term — they leave the active list, the dashboard counts and the Tech App work list but keep their status. Restoring puts them back. Completed and cancelled jobs live in Service History and are skipped. Each change is logged in the job's notes.
+
+ * @summary Move service jobs into the Archive, or restore them
+ */
+export const archiveServiceJobs = async (archiveServiceJobsBody: ArchiveServiceJobsBody, options?: RequestInit): Promise<ArchiveServiceJobs200> => {
+
+  return customFetch<ArchiveServiceJobs200>(getArchiveServiceJobsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      archiveServiceJobsBody,)
+  }
+);}
+
+
+
+
+export const getArchiveServiceJobsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveServiceJobs>>, TError,{data: BodyType<ArchiveServiceJobsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof archiveServiceJobs>>, TError,{data: BodyType<ArchiveServiceJobsBody>}, TContext> => {
+
+const mutationKey = ['archiveServiceJobs'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof archiveServiceJobs>>, {data: BodyType<ArchiveServiceJobsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  archiveServiceJobs(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ArchiveServiceJobsMutationResult = NonNullable<Awaited<ReturnType<typeof archiveServiceJobs>>>
+    export type ArchiveServiceJobsMutationBody = BodyType<ArchiveServiceJobsBody>
+    export type ArchiveServiceJobsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Move service jobs into the Archive, or restore them
+ */
+export const useArchiveServiceJobs = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof archiveServiceJobs>>, TError,{data: BodyType<ArchiveServiceJobsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof archiveServiceJobs>>,
+        TError,
+        {data: BodyType<ArchiveServiceJobsBody>},
+        TContext
+      > => {
+      return useMutation(getArchiveServiceJobsMutationOptions(options));
+    }
+
 export const getReopenServiceJobUrl = (id: number,) => {
 
 
@@ -13811,6 +13890,152 @@ export const useDeletePurchaseOrder = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getDeletePurchaseOrderMutationOptions(options));
+    }
+
+export const getMatchSupplierInvoiceUrl = () => {
+
+
+
+
+  return `/api/purchase-orders/import/match`
+}
+
+/**
+ * Read-only. Given what was read off a supplier's invoice, says which supplier and which products it already corresponds to, and whether the invoice number is already used as a PO number.
+
+ * @summary Match a parsed supplier invoice to existing suppliers and products
+ */
+export const matchSupplierInvoice = async (supplierInvoiceMatchInput: SupplierInvoiceMatchInput, options?: RequestInit): Promise<SupplierInvoiceMatch> => {
+
+  return customFetch<SupplierInvoiceMatch>(getMatchSupplierInvoiceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      supplierInvoiceMatchInput,)
+  }
+);}
+
+
+
+
+export const getMatchSupplierInvoiceMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof matchSupplierInvoice>>, TError,{data: BodyType<SupplierInvoiceMatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof matchSupplierInvoice>>, TError,{data: BodyType<SupplierInvoiceMatchInput>}, TContext> => {
+
+const mutationKey = ['matchSupplierInvoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof matchSupplierInvoice>>, {data: BodyType<SupplierInvoiceMatchInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  matchSupplierInvoice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type MatchSupplierInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof matchSupplierInvoice>>>
+    export type MatchSupplierInvoiceMutationBody = BodyType<SupplierInvoiceMatchInput>
+    export type MatchSupplierInvoiceMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Match a parsed supplier invoice to existing suppliers and products
+ */
+export const useMatchSupplierInvoice = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof matchSupplierInvoice>>, TError,{data: BodyType<SupplierInvoiceMatchInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof matchSupplierInvoice>>,
+        TError,
+        {data: BodyType<SupplierInvoiceMatchInput>},
+        TContext
+      > => {
+      return useMutation(getMatchSupplierInvoiceMutationOptions(options));
+    }
+
+export const getImportSupplierInvoiceUrl = () => {
+
+
+
+
+  return `/api/purchase-orders/import`
+}
+
+/**
+ * One transaction: creates the supplier if asked, creates basic products for lines that match nothing, then the purchase order (status Ordered). Receiving is a separate call to /purchase-orders/{id}/receive.
+
+ * @summary Create a purchase order (and any new supplier/products) from a reviewed supplier invoice
+ */
+export const importSupplierInvoice = async (supplierInvoiceImportInput: SupplierInvoiceImportInput, options?: RequestInit): Promise<SupplierInvoiceImportResult> => {
+
+  return customFetch<SupplierInvoiceImportResult>(getImportSupplierInvoiceUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      supplierInvoiceImportInput,)
+  }
+);}
+
+
+
+
+export const getImportSupplierInvoiceMutationOptions = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importSupplierInvoice>>, TError,{data: BodyType<SupplierInvoiceImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof importSupplierInvoice>>, TError,{data: BodyType<SupplierInvoiceImportInput>}, TContext> => {
+
+const mutationKey = ['importSupplierInvoice'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof importSupplierInvoice>>, {data: BodyType<SupplierInvoiceImportInput>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  importSupplierInvoice(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type ImportSupplierInvoiceMutationResult = NonNullable<Awaited<ReturnType<typeof importSupplierInvoice>>>
+    export type ImportSupplierInvoiceMutationBody = BodyType<SupplierInvoiceImportInput>
+    export type ImportSupplierInvoiceMutationError = ErrorType<void>
+
+    /**
+ * @summary Create a purchase order (and any new supplier/products) from a reviewed supplier invoice
+ */
+export const useImportSupplierInvoice = <TError = ErrorType<void>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof importSupplierInvoice>>, TError,{data: BodyType<SupplierInvoiceImportInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof importSupplierInvoice>>,
+        TError,
+        {data: BodyType<SupplierInvoiceImportInput>},
+        TContext
+      > => {
+      return useMutation(getImportSupplierInvoiceMutationOptions(options));
     }
 
 export const getReceivePurchaseOrderItemsUrl = (id: number,) => {

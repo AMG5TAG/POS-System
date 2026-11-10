@@ -10,6 +10,7 @@ import { sendSms } from "../services/sms";
 import { triggerInstantSync } from "../services/autoSyncScheduler";
 import { customerPortalUrl } from "../lib/publicUrl";
 import { NOTE_SEP, parseNotes, buildNoteTimestamp } from "../lib/service-job-notes";
+import { clearsArchive } from "../lib/service-job-archive";
 import { isSoleMerchantEmail } from "../lib/sole-merchant";
 import { isMerchantActive } from "../middlewares/requireAuth";
 
@@ -257,8 +258,9 @@ router.get("/tech/service-jobs", async (req, res): Promise<void> => {
   const customerMap = new Map(customers.map((c) => [c.id, c]));
 
   /* "Current" services — everything not finished. Completed/cancelled are
-     excluded from the technician's work list. */
-  const current = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled");
+     excluded from the technician's work list, and so are archived jobs
+     (Service Jobs › Archive) — a parked job is still opened by its QR. */
+  const current = jobs.filter((j) => j.status !== "completed" && j.status !== "cancelled" && !j.archivedAt);
   res.json({
     items: current.map((j) => formatJobSummary(j, j.customerId ? customerMap.get(j.customerId) ?? null : null)),
   });
@@ -470,7 +472,9 @@ router.patch("/tech/service-jobs/:id/status", async (req, res): Promise<void> =>
   const completion = status === "completed" && job.status !== "completed"
     ? { completedAt: new Date() }
     : {};
-  await db.update(serviceJobsTable).set({ status, notes, ...completion }).where(eq(serviceJobsTable.id, job.id));
+  // Finishing a job takes it out of the archive, as in the admin app.
+  const unarchive = clearsArchive(status) ? { archivedAt: null, archiveReason: null } : {};
+  await db.update(serviceJobsTable).set({ status, notes, ...completion, ...unarchive }).where(eq(serviceJobsTable.id, job.id));
   logTechEvent(tech.merchantId, tech.staffId, tech.staffName, "status_changed", `Changed service job ${job.jobNumber} status to ${toLabel}`);
 
   /* Auto-send SMS on key status transitions — mirrors the admin endpoint */

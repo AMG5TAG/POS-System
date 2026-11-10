@@ -2650,6 +2650,48 @@ paths:
               schema:
                 $ref: "#/components/schemas/ServiceJob"
 
+  /service-jobs/archive:
+    post:
+      operationId: archiveServiceJobs
+      summary: Move service jobs into the Archive, or restore them
+      description: >
+        Archiving parks open jobs the customer declined or that are long-term —
+        they leave the active list, the dashboard counts and the Tech App work
+        list but keep their status. Restoring puts them back. Completed and
+        cancelled jobs live in Service History and are skipped. Each change is
+        logged in the job's notes.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [ids, archived]
+              properties:
+                ids:
+                  type: array
+                  minItems: 1
+                  maxItems: 500
+                  items: { type: integer }
+                archived: { type: boolean }
+                reason:
+                  type: string
+                  enum: [declined, long-term, other]
+                note: { type: string, maxLength: 500 }
+      responses:
+        "200":
+          description: The jobs changed, and how many were skipped
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [jobs, skipped]
+                properties:
+                  jobs:
+                    type: array
+                    items: { $ref: "#/components/schemas/ServiceJob" }
+                  skipped: { type: integer }
+
   /service-jobs/{id}/reopen:
     post:
       operationId: reopenServiceJob
@@ -3939,6 +3981,56 @@ paths:
                 type: object
                 properties:
                   success: { type: boolean }
+
+  /purchase-orders/import/match:
+    post:
+      operationId: matchSupplierInvoice
+      tags: [purchase-orders]
+      summary: Match a parsed supplier invoice to existing suppliers and products
+      description: >
+        Read-only. Given what was read off a supplier's invoice, says which
+        supplier and which products it already corresponds to, and whether the
+        invoice number is already used as a PO number.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInvoiceMatchInput"
+      responses:
+        "200":
+          description: Matches
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierInvoiceMatch"
+
+  /purchase-orders/import:
+    post:
+      operationId: importSupplierInvoice
+      tags: [purchase-orders]
+      summary: Create a purchase order (and any new supplier/products) from a reviewed supplier invoice
+      description: >
+        One transaction: creates the supplier if asked, creates basic products
+        for lines that match nothing, then the purchase order (status Ordered).
+        Receiving is a separate call to /purchase-orders/{id}/receive.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SupplierInvoiceImportInput"
+      responses:
+        "201":
+          description: Created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SupplierInvoiceImportResult"
+        "400":
+          description: Invalid
+        "409":
+          description: The PO number is already used
 
   /purchase-orders/{id}/receive:
     post:
@@ -11996,6 +12088,13 @@ components:
           type: ["integer", "null"]
         reopenedFromJobId:
           type: ["integer", "null"]
+        archivedAt:
+          type: ["string", "null"]
+          format: date-time
+          description: Set while the job is in Service Jobs › Archive. It keeps its status underneath.
+        archiveReason:
+          type: ["string", "null"]
+          description: "declined, long-term or other"
         estimateApprovedAt:
           type: ["string", "null"]
           format: date-time
@@ -13836,6 +13935,134 @@ components:
               receiptNumber: { type: string, nullable: true }
               quantity: { type: integer }
               saleAt: { type: string }
+    SupplierInvoiceMatchInput:
+      type: object
+      required: [supplierName, lines]
+      properties:
+        supplierName: { type: string, maxLength: 200 }
+        supplierAbn: { type: string, maxLength: 20 }
+        accountCode:
+          type: string
+          maxLength: 60
+          description: Your account/customer code at the supplier, as printed on the invoice.
+        poNumber: { type: string, maxLength: 60 }
+        lines:
+          type: array
+          maxItems: 500
+          items:
+            type: object
+            required: [stockCode]
+            properties:
+              stockCode: { type: string, maxLength: 120 }
+              manufCode: { type: string, maxLength: 120 }
+    SupplierInvoiceMatch:
+      type: object
+      required: [supplier, poNumberTaken, lines]
+      properties:
+        supplier:
+          type: object
+          nullable: true
+          required: [id, name, matchedBy]
+          properties:
+            id: { type: integer }
+            name: { type: string }
+            matchedBy: { type: string, enum: [account, name] }
+        poNumberTaken:
+          type: object
+          nullable: true
+          required: [id, poNumber]
+          properties:
+            id: { type: integer }
+            poNumber: { type: string }
+        lines:
+          type: array
+          items:
+            type: object
+            nullable: true
+            required: [productId, name, matchedBy]
+            properties:
+              productId: { type: integer }
+              name: { type: string }
+              sku: { type: string, nullable: true }
+              price: { type: number }
+              matchedBy: { type: string, enum: [sku, supplierCode, manufCode] }
+    SupplierInvoiceImportInput:
+      type: object
+      required: [poNumber, orderDate, lines]
+      properties:
+        supplierId:
+          type: integer
+          description: An existing supplier. Omit and send newSupplier to create one.
+        newSupplier:
+          type: object
+          required: [name]
+          properties:
+            name: { type: string, minLength: 1, maxLength: 200 }
+            accountNumber: { type: string, maxLength: 60 }
+            website: { type: string, maxLength: 200 }
+            phone: { type: string, maxLength: 60 }
+            notes: { type: string, maxLength: 1000 }
+        accountCode:
+          type: string
+          maxLength: 60
+          description: Saved on an existing supplier that has no account number yet, so the next invoice matches by it.
+        poNumber: { type: string, minLength: 1, maxLength: 60 }
+        orderNumber: { type: string, maxLength: 60 }
+        orderDate: { type: string, description: "YYYY-MM-DD" }
+        notes: { type: string, maxLength: 2000 }
+        invoiceUrls:
+          type: array
+          maxItems: 10
+          items: { type: string, maxLength: 1000 }
+        lines:
+          type: array
+          minItems: 1
+          maxItems: 500
+          items:
+            type: object
+            required: [productName, quantity, unitCost]
+            properties:
+              productId:
+                type: integer
+                description: Existing product. Omit with newProduct to create one, or omit both for a line that isn't stocked (freight, etc.).
+              newProduct:
+                type: object
+                required: [name]
+                properties:
+                  name: { type: string, minLength: 1, maxLength: 300 }
+                  sku: { type: string, maxLength: 120 }
+                  manufCode: { type: string, maxLength: 120 }
+                  sellPrice:
+                    type: number
+                    minimum: 0
+                    description: Inc-GST. Blank or 0 creates the product hidden from the till until it is priced.
+              productName: { type: string, maxLength: 300 }
+              stockCode: { type: string, maxLength: 120 }
+              quantity: { type: integer, minimum: 1, maximum: 100000 }
+              unitCost: { type: number, minimum: 0, description: "Ex-GST" }
+              serials:
+                type: array
+                maxItems: 1000
+                items: { type: string, maxLength: 120 }
+    SupplierInvoiceImportResult:
+      type: object
+      required: [purchaseOrder, newProducts, supplierCreated]
+      properties:
+        purchaseOrder:
+          $ref: "#/components/schemas/PurchaseOrder"
+        supplierCreated: { type: boolean }
+        newProducts:
+          type: array
+          items:
+            type: object
+            required: [id, name, hidden]
+            properties:
+              id: { type: integer }
+              name: { type: string }
+              sku: { type: string, nullable: true }
+              hidden:
+                type: boolean
+                description: Created with no sell price, so hidden from the till until priced.
     PurchaseOrder:
       type: object
       required: [id, poNumber, status, orderDate, totalCost, createdAt]

@@ -36,6 +36,8 @@ import {
   Search,
   Check,
   X,
+  Archive,
+  ArchiveRestore,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useQueryClient } from "@tanstack/react-query";
@@ -43,6 +45,7 @@ import { cn, formatCurrency } from "@/lib/utils";
 import { useStickerPrinter } from "@/lib/sticker-config";
 import { serviceJobQrUrl } from "@/lib/public-url";
 import { ServiceJobDetailDialog } from "@/components/service-jobs/ServiceJobDetailDialog";
+import { ArchiveJobsDialog, archiveReasonLabel, useArchiveJobs } from "@/components/service-jobs/ArchiveJobsDialog";
 import { callTimes, messageTimes } from "@/lib/service-job-notes";
 import { SendButton } from "@/components/send/send-dialog";
 import { useSalesTemplate } from "@/lib/use-sales-template";
@@ -310,8 +313,15 @@ function PrintChoiceDialog({
 
 /* ─── Page ───────────────────────────────────────────────────────────────── */
 
+/* Services = open work; Archive = open jobs parked (customer declined,
+   long-term); Service History = completed and cancelled. */
+type JobsTab = "active" | "archive" | "history";
+
 export default function ServiceJobsPage() {
-  const [tab, setTab]                       = useState<"active" | "history">("active");
+  const [tab, setTab]                       = useState<JobsTab>("active");
+  /* Jobs waiting on the archive dialog's reason; null when it's closed. */
+  const [archiving, setArchiving]           = useState<ServiceJob[] | null>(null);
+  const archiveJobs                         = useArchiveJobs();
   const [collapsed, setCollapsed]           = useState(false);
   const [priority, setPriority]             = useState("all");
   const [statusFilter, setStatus]           = useState("all");
@@ -477,13 +487,17 @@ export default function ServiceJobsPage() {
   /* History holds finished jobs — marking one completed (or cancelled) moves
      it there, mirroring the Appointments page. */
   const isFinished  = (j: ServiceJob) => j.status === "completed" || j.status === "cancelled";
-  const historyJobs = jobs.filter(isFinished);
-  const activeJobs  = jobs.filter((j) => !isFinished(j));
-  const tabJobs     = tab === "history" ? historyJobs : activeJobs;
+  /* Archived = parked open jobs (Service Jobs › Archive). A finished job is
+     history whatever its flag — completing a job clears it anyway. */
+  const isArchived  = (j: ServiceJob) => !isFinished(j) && !!j.archivedAt;
+  const historyJobs  = jobs.filter(isFinished);
+  const archivedJobs = jobs.filter(isArchived);
+  const activeJobs   = jobs.filter((j) => !isFinished(j) && !j.archivedAt);
+  const tabJobs      = tab === "history" ? historyJobs : tab === "archive" ? archivedJobs : activeJobs;
   const active      = activeJobs.length;
 
   /* Switching tabs resets the filters/selection and sorts most-recent-first */
-  const switchTab = (t: "active" | "history") => {
+  const switchTab = (t: JobsTab) => {
     setTab(t);
     setPriority("all");
     setStatus("all");
@@ -501,6 +515,7 @@ export default function ServiceJobsPage() {
       setViewing(job);
       /* Land on the tab the job lives in so closing the dialog shows it */
       if (isFinished(job)) switchTab("history");
+      else if (isArchived(job)) switchTab("archive");
     }
   }, [routeParams?.id, jobs]);
 
@@ -551,6 +566,20 @@ export default function ServiceJobsPage() {
       return key;
     });
   }, []);
+
+  /* Selected jobs on the tab being looked at (a selection never crosses tabs). */
+  const selectedHere = sorted.filter((j) => selected.has(j.id));
+
+  const restore = async (list: ServiceJob[]) => {
+    try {
+      const n = await archiveJobs.run(list.map((j) => j.id), false);
+      toast.success(n === 1 && list.length === 1 ? `${list[0]!.jobNumber} restored to Services` : `${n} jobs restored to Services`);
+      setSelected(new Set());
+      setViewing(null);
+    } catch {
+      toast.error("Couldn't restore — please try again");
+    }
+  };
 
   /* Multi-select */
   const allSelected = sorted.length > 0 && sorted.every((j) => selected.has(j.id));
@@ -618,12 +647,17 @@ export default function ServiceJobsPage() {
         </div>
 
         {/* Active / History tabs */}
-        <Tabs value={tab} onValueChange={(v) => switchTab(v as "active" | "history")}>
+        <Tabs value={tab} onValueChange={(v) => switchTab(v as JobsTab)}>
           <TabsList>
             <TabsTrigger value="active" className="gap-1.5">
               <Wrench className="w-3.5 h-3.5" />
               Services
               <span className="text-xs text-muted-foreground tabular-nums">({activeJobs.length})</span>
+            </TabsTrigger>
+            <TabsTrigger value="archive" className="gap-1.5">
+              <Archive className="w-3.5 h-3.5" />
+              Archive
+              <span className="text-xs text-muted-foreground tabular-nums">({archivedJobs.length})</span>
             </TabsTrigger>
             <TabsTrigger value="history" className="gap-1.5">
               <History className="w-3.5 h-3.5" />
@@ -636,11 +670,13 @@ export default function ServiceJobsPage() {
         {/* Panel header */}
         <div className="flex items-center justify-between bg-background border border-border rounded-t-xl px-5 py-3">
           <h2 className="text-base font-semibold">
-            {tab === "history" ? "Service History" : "All Services"}{" "}
+            {tab === "history" ? "Service History" : tab === "archive" ? "Archived Services" : "All Services"}{" "}
             <span className="font-normal text-muted-foreground text-sm">
               {tab === "history"
                 ? `(${historyJobs.length} past)`
-                : `(${active} active job${active !== 1 ? "s" : ""})`}
+                : tab === "archive"
+                  ? `(${archivedJobs.length} parked — customer declined or long-term)`
+                  : `(${active} active job${active !== 1 ? "s" : ""})`}
             </span>
           </h2>
           <div className="flex items-center gap-3">
@@ -690,7 +726,7 @@ export default function ServiceJobsPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="all">All Statuses</SelectItem>
-                    {tab === "active" ? (
+                    {tab !== "history" ? (
                       <>
                         <SelectItem value="pending">Pending</SelectItem>
                         <SelectItem value="in-progress">In Progress</SelectItem>
@@ -712,6 +748,17 @@ export default function ServiceJobsPage() {
                 </Select>
               </div>
               <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                {/* Bulk: archive from Services, restore from Archive. */}
+                {selectedHere.length > 0 && tab === "active" && (
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" onClick={() => setArchiving(selectedHere)}>
+                    <Archive className="w-3.5 h-3.5" /> Archive {selectedHere.length} selected
+                  </Button>
+                )}
+                {selectedHere.length > 0 && tab === "archive" && (
+                  <Button size="sm" variant="outline" className="h-8 text-xs gap-1.5" disabled={archiveJobs.isPending} onClick={() => void restore(selectedHere)}>
+                    <ArchiveRestore className="w-3.5 h-3.5" /> Restore {selectedHere.length} selected
+                  </Button>
+                )}
                 <span>{sorted.length} of {tabJobs.length}</span>
                 <Button variant="outline" size="sm" className="h-8 text-xs gap-1.5" onClick={() => window.print()}>
                   <Printer className="w-3.5 h-3.5" />
@@ -726,7 +773,11 @@ export default function ServiceJobsPage() {
                 <div className="py-16 text-center text-sm text-muted-foreground">Loading service jobs...</div>
               ) : sorted.length === 0 ? (
                 <div className="py-16 text-center text-sm text-muted-foreground">
-                  {tab === "history"
+                  {tab === "archive"
+                    ? (archivedJobs.length === 0
+                        ? "Nothing archived. Archive a job the customer has declined, or a long-term job, to park it here without closing it."
+                        : "No archived jobs match the current filters.")
+                    : tab === "history"
                     ? (historyJobs.length === 0
                         ? "No completed service jobs yet. When a job is marked completed it moves here."
                         : "No past service jobs match the current filters.")
@@ -755,6 +806,7 @@ export default function ServiceJobsPage() {
                             not completed, so on that tab the column would be a
                             full column of dashes. */}
                         {tab === "history" && <SortableHeader {...sh("Completed", "completedAt")} />}
+                        {tab === "archive" && <th className="px-3 py-3 text-left font-medium select-none">Archived</th>}
                         <SortableHeader {...sh("Status",      "status")} />
                         <SortableHeader {...sh("Device Type", "deviceType")} />
                         <SortableHeader {...sh("Description", "description")} />
@@ -812,6 +864,15 @@ export default function ServiceJobsPage() {
 
                             {/* A cancelled job was never completed, so it has no
                                 date to show — a dash, not today's date. */}
+                            {tab === "archive" && (
+                              <td className="px-3 py-3 whitespace-nowrap text-xs">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded-md border bg-muted text-muted-foreground font-medium">
+                                  {archiveReasonLabel(job.archiveReason)}
+                                </span>
+                                {job.archivedAt && <span className="ml-2 text-muted-foreground">{formatCompletedDate(job.archivedAt)}</span>}
+                              </td>
+                            )}
+
                             {tab === "history" && (
                               <td className="px-3 py-3 whitespace-nowrap text-muted-foreground text-xs">
                                 {job.completedAt ? (
@@ -943,6 +1004,27 @@ export default function ServiceJobsPage() {
                                   <Printer className="w-3 h-3" />
                                   Print
                                 </button>
+                                {tab === "active" && (
+                                  <button
+                                    onClick={() => setArchiving([job])}
+                                    title="Archive — customer declined or long-term"
+                                    className="flex items-center gap-1 text-xs text-muted-foreground font-medium hover:text-foreground transition-colors"
+                                  >
+                                    <Archive className="w-3 h-3" />
+                                    Archive
+                                  </button>
+                                )}
+                                {tab === "archive" && (
+                                  <button
+                                    onClick={() => void restore([job])}
+                                    disabled={archiveJobs.isPending}
+                                    title="Restore to Services, at the status it had"
+                                    className="flex items-center gap-1 text-xs text-primary font-medium hover:underline disabled:opacity-40"
+                                  >
+                                    <ArchiveRestore className="w-3 h-3" />
+                                    Restore
+                                  </button>
+                                )}
                                 <button
                                   onClick={() => handleDelete(job)}
                                   disabled={deleteMutation.isPending}
@@ -962,7 +1044,7 @@ export default function ServiceJobsPage() {
                         what was quoted over the period being looked at. */}
                     <tfoot>
                       <tr className="border-t-2 border-border bg-muted/30 text-xs">
-                        <td colSpan={tab === "history" ? 10 : 9} className="px-4 py-3 text-right font-medium text-muted-foreground">
+                        <td colSpan={tab === "active" ? 9 : 10} className="px-4 py-3 text-right font-medium text-muted-foreground">
                           {quotedCount === 1 ? "Total of 1 quote" : `Total of ${quotedCount} quotes`}
                         </td>
                         <td className="px-3 py-3 text-right tabular-nums font-semibold text-foreground whitespace-nowrap">
@@ -979,9 +1061,17 @@ export default function ServiceJobsPage() {
         )}
       </div>
 
+      <ArchiveJobsDialog
+        jobs={archiving}
+        onClose={() => setArchiving(null)}
+        onDone={() => { setSelected(new Set()); setViewing(null); }}
+      />
+
       <ServiceJobDetailDialog
         job={viewing}
         onClose={() => setViewing(null)}
+        onArchive={(job) => setArchiving([job])}
+        onRestore={(job) => void restore([job])}
         onDelete={handleDelete}
         deleteIsPending={deleteMutation.isPending}
         onPrint={(job, mode) => {

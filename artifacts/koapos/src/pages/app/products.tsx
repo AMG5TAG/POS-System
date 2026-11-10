@@ -3110,7 +3110,16 @@ export default function ProductsPage() {
                       <span>
                         Margin: <span className={cn("font-semibold", marginPct < 20 ? "text-destructive" : "text-emerald-600")}>{marginPct}%</span>
                         {" · "}Profit: <span className="font-semibold text-foreground">${(marginInfo?.profit ?? 0).toFixed(2)}</span>
-                        {" · "}<span className="text-xs">ex-GST</span>
+                        {" "}<span className="text-xs">ex-GST</span>
+                        {/* Inc-GST profit is the ex-GST profit grossed up by the
+                            product's tax rate (sell inc-GST − cost inc-GST). The
+                            margin % is the same either way, so it isn't repeated. */}
+                        {(parseFloat(form.taxRate) || 0) > 0 && (
+                          <>
+                            {" · "}<span className="font-semibold text-foreground">${((marginInfo?.profit ?? 0) * (1 + (parseFloat(form.taxRate) || 0) / 100)).toFixed(2)}</span>
+                            {" "}<span className="text-xs">inc-GST</span>
+                          </>
+                        )}
                       </span>
                     </div>
                   )}

@@ -18,7 +18,9 @@ vi.mock("@workspace/db", () => {
     },
   });
   const tableProxy = new Proxy({} as any, { get: () => tableProxy });
-  const db = {
+  const db: any = {
+    // Items and their stock moves commit together in the route.
+    transaction: async (fn: (tx: any) => Promise<unknown>) => fn(db),
     select: () => chain,
     update: () => chain,
     insert: (_table: any) => ({

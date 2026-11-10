@@ -1,6 +1,6 @@
 import { Router, type IRouter } from "express";
 import { foreignIdError } from "../lib/owned-ids";
-import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable, productOversellLedgerTable } from "@workspace/db";
+import { db, purchaseOrdersTable, purchaseOrderItemsTable, purchaseOrderReceiptsTable, suppliersTable, merchantsTable, productsTable, productPriceHistoryTable, productSerialsTable, productOversellLedgerTable, productTypesTable, lowStockAlertSettingsTable } from "@workspace/db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 import { requireAuth } from "../middlewares/requireAuth";
 import { allocateArrivals, notifyArrivals, type PreOrderArrival } from "../lib/pre-order-sales";
@@ -15,7 +15,11 @@ import {
   DeletePurchaseOrderParams,
   ReceivePurchaseOrderItemsParams,
   SendPurchaseOrderEmailParams,
+  MatchSupplierInvoiceBody,
+  ImportSupplierInvoiceBody,
 } from "@workspace/api-zod";
+import { registerProductQr, registerQrBestEffort } from "../services/entityQr";
+import { cleanSerials, matchProducts, matchSupplier, serialsNote } from "../lib/supplier-invoice";
 import { sendEmail } from "../services/email";
 import { escapeHtml } from "../lib/html-escape";
 
@@ -232,6 +236,38 @@ router.get("/purchase-orders", requireAuth, async (req, res) => {
 });
 
 // POST /purchase-orders
+/** Units received per product, summed over a PO's lines (free-text lines have no product). */
+export function receivedByProduct(rows: Array<{ productId?: number | null; received?: number | null }>): Map<number, number> {
+  const m = new Map<number, number>();
+  for (const r of rows) {
+    if (r.productId) m.set(r.productId, (m.get(r.productId) ?? 0) + (r.received ?? 0));
+  }
+  return m;
+}
+
+type DbTx = Parameters<Parameters<typeof db.transaction>[0]>[0];
+
+/**
+ * Move each tracked product's stock by its delta (units received, or the
+ * change in units received on an edit), keeping the backorder ledger in step.
+ * Products that don't track inventory, or belong to another business, are
+ * skipped. Shared by create and edit so the two can't drift again.
+ */
+async function applyReceivedToStock(tx: DbTx, merchantId: number, deltas: Map<number, number>): Promise<void> {
+  for (const [productId, delta] of deltas) {
+    if (!delta) continue;
+    const [product] = await tx.select({ trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity })
+      .from(productsTable)
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+    if (product?.trackInventory !== "true") continue;
+    const newStock = product.stockQuantity + delta;
+    await tx.update(productsTable)
+      .set({ stockQuantity: newStock })
+      .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
+    await reconcileOversellLedger(tx, { merchantId, productId, prevStock: product.stockQuantity, newStock });
+  }
+}
+
 router.post("/purchase-orders", requireAuth, async (req, res) => {
   const merchantId = req.session.merchantId!;
   const body = CreatePurchaseOrderBody.parse(req.body);
@@ -315,17 +351,25 @@ router.post("/purchase-orders", requireAuth, async (req, res) => {
     throw err;
   }
   if (body.items?.length) {
-    await db.insert(purchaseOrderItemsTable).values(
-      body.items.map((i) => ({
-        poId: po.id,
-        productId: i.productId ?? null,
-        productName: i.productName ?? "",
-        quantity: i.quantity ?? 1,
-        received: i.received ?? 0,
-        unitCost: String(i.unitCost ?? 0),
-        notes: i.notes ?? null,
-      }))
-    );
+    // An order can be created already received (status "Fully Received" with
+    // the received counts filled in). Those units must reach stock exactly as
+    // they would through PUT or the Receive worksheet — this used to record
+    // `received` and move no stock at all. Items and stock commit together.
+    const items = body.items;
+    await db.transaction(async (tx) => {
+      await tx.insert(purchaseOrderItemsTable).values(
+        items.map((i) => ({
+          poId: po.id,
+          productId: i.productId ?? null,
+          productName: i.productName ?? "",
+          quantity: i.quantity ?? 1,
+          received: i.received ?? 0,
+          unitCost: String(i.unitCost ?? 0),
+          notes: i.notes ?? null,
+        }))
+      );
+      await applyReceivedToStock(tx, merchantId, receivedByProduct(items));
+    });
     await applyTracksSerialFromItems(merchantId, body.items);
   }
   // Sync product cost prices and log pricing history
@@ -409,13 +453,6 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
     // transaction so the item rewrite and the stock adjustments can't split apart.
     await db.transaction(async (tx) => {
       const oldItems = await tx.select().from(purchaseOrderItemsTable).where(eq(purchaseOrderItemsTable.poId, id));
-      const receivedByProduct = (rows: Array<{ productId?: number | null; received?: number | null }>) => {
-        const m = new Map<number, number>();
-        for (const r of rows) {
-          if (r.productId) m.set(r.productId, (m.get(r.productId) ?? 0) + (r.received ?? 0));
-        }
-        return m;
-      };
       const oldReceived = receivedByProduct(oldItems);
       const newReceived = receivedByProduct(body.items ?? []);
 
@@ -434,25 +471,11 @@ router.put("/purchase-orders/:id", requireAuth, async (req, res) => {
         );
       }
 
-      const affected = new Set<number>([...oldReceived.keys(), ...newReceived.keys()]);
-      for (const productId of affected) {
-        const delta = (newReceived.get(productId) ?? 0) - (oldReceived.get(productId) ?? 0);
-        if (delta === 0) continue;
-        const [product] = await tx.select({ trackInventory: productsTable.trackInventory, stockQuantity: productsTable.stockQuantity })
-          .from(productsTable)
-          .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
-        if (product?.trackInventory === "true") {
-          const newStock = product.stockQuantity + delta;
-          await tx.update(productsTable)
-            .set({ stockQuantity: newStock })
-            .where(and(eq(productsTable.id, productId), eq(productsTable.merchantId, merchantId)));
-          // Keep the backorder ledger in step whichever way the edit moves stock.
-          await reconcileOversellLedger(tx, {
-            merchantId, productId,
-            prevStock: product.stockQuantity, newStock,
-          });
-        }
+      const deltas = new Map<number, number>();
+      for (const productId of new Set<number>([...oldReceived.keys(), ...newReceived.keys()])) {
+        deltas.set(productId, (newReceived.get(productId) ?? 0) - (oldReceived.get(productId) ?? 0));
       }
+      await applyReceivedToStock(tx, merchantId, deltas);
     });
     // Sync product cost prices and log pricing history
     const [updatedPO] = await db.select().from(purchaseOrdersTable)
@@ -557,6 +580,202 @@ router.delete("/purchase-orders/:id", requireAuth, async (req, res) => {
   });
 
   res.json({ success: true });
+});
+
+/* ── Import a supplier invoice ────────────────────────────────────────────
+   Purchase Orders › Import supplier invoice. The browser reads the PDF; these
+   two routes match it (read-only) and then create everything in one
+   transaction. Receiving stays the ordinary /:id/receive call, so stock,
+   serials, pre-orders and the sale-ticket prompt behave exactly as they do
+   for any PO. Rules in lib/supplier-invoice.ts. */
+
+router.post("/purchase-orders/import/match", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = MatchSupplierInvoiceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const body = parsed.data;
+
+  const suppliers = await db
+    .select({ id: suppliersTable.id, name: suppliersTable.name, accountNumber: suppliersTable.accountNumber, creditAccountNumber: suppliersTable.creditAccountNumber })
+    .from(suppliersTable).where(eq(suppliersTable.merchantId, merchantId));
+  const products = await db
+    .select({ id: productsTable.id, name: productsTable.name, sku: productsTable.sku, supplierCode: productsTable.supplierCode, price: productsTable.price, isActive: productsTable.isActive })
+    .from(productsTable).where(eq(productsTable.merchantId, merchantId));
+
+  let poNumberTaken: { id: number; poNumber: string } | null = null;
+  if (body.poNumber?.trim()) {
+    const [hit] = await db.select({ id: purchaseOrdersTable.id, poNumber: purchaseOrdersTable.poNumber }).from(purchaseOrdersTable)
+      .where(and(eq(purchaseOrdersTable.merchantId, merchantId), eq(purchaseOrdersTable.poNumber, body.poNumber.trim())));
+    poNumberTaken = hit ?? null;
+  }
+
+  res.json({
+    supplier: matchSupplier(suppliers, { name: body.supplierName, accountCode: body.accountCode }),
+    poNumberTaken,
+    lines: matchProducts(
+      products.map((p) => ({ ...p, price: parseFloat(String(p.price)) || 0, isActive: p.isActive === "true" })),
+      body.lines.map((l) => ({ stockCode: l.stockCode, manufCode: l.manufCode })),
+    ),
+  });
+});
+
+router.post("/purchase-orders/import", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = ImportSupplierInvoiceBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: parsed.error.message }); return; }
+  const body = parsed.data;
+  const poNumber = body.poNumber.trim();
+  if (!poNumber) { res.status(400).json({ error: "The invoice number is needed as the PO number" }); return; }
+  if (!body.supplierId && !body.newSupplier?.name.trim()) { res.status(400).json({ error: "Choose a supplier or create a new one" }); return; }
+  {
+    const foreign = await foreignIdError(merchantId, { supplierId: body.supplierId });
+    if (foreign) { res.status(400).json({ error: foreign }); return; }
+  }
+  // Existing products named on lines must be this business's.
+  const linkedIds = [...new Set(body.lines.map((l) => l.productId).filter((id): id is number => id != null))];
+  if (linkedIds.length) {
+    const owned = await db.select({ id: productsTable.id }).from(productsTable)
+      .where(and(eq(productsTable.merchantId, merchantId), inArray(productsTable.id, linkedIds)));
+    if (owned.length !== linkedIds.length) { res.status(400).json({ error: "A line names a product that doesn't exist" }); return; }
+  }
+
+  // Defaults a product made in the product form would get.
+  const [standardType] = await db.select().from(productTypesTable)
+    .where(and(eq(productTypesTable.slug, "standard"), eq(productTypesTable.merchantId, merchantId)));
+  if (!standardType && body.lines.some((l) => !l.productId && l.newProduct)) {
+    res.status(400).json({ error: "No standard product type found; please set up product types first" });
+    return;
+  }
+  const [lowStock] = await db.select({ globalThreshold: lowStockAlertSettingsTable.globalThreshold })
+    .from(lowStockAlertSettingsTable).where(eq(lowStockAlertSettingsTable.merchantId, merchantId)).limit(1);
+
+  // The invoice number is the PO number, so importing the same invoice twice
+  // is refused here (and by the unique index, should two imports race).
+  const alreadyImported = `PO number "${poNumber}" already exists — this invoice looks like it has already been imported.`;
+  {
+    const [taken] = await db.select({ id: purchaseOrdersTable.id }).from(purchaseOrdersTable)
+      .where(and(eq(purchaseOrdersTable.merchantId, merchantId), eq(purchaseOrdersTable.poNumber, poNumber)));
+    if (taken) { res.status(409).json({ error: alreadyImported }); return; }
+  }
+
+  const itemsSubtotal = round2(body.lines.reduce((s, l) => s + l.quantity * l.unitCost, 0));
+
+  let result: { poId: number; supplierName: string; supplierCreated: boolean; newProducts: Array<{ id: number; name: string; sku: string | null; hidden: boolean }>; items: Array<{ productId: number | null; quantity: number; unitCost: number }> };
+  try {
+    result = await db.transaction(async (tx) => {
+      // Supplier
+      let supplierId = body.supplierId ?? null;
+      let supplierName = "";
+      let supplierCreated = false;
+      if (supplierId) {
+        const [sup] = await tx.select().from(suppliersTable)
+          .where(and(eq(suppliersTable.id, supplierId), eq(suppliersTable.merchantId, merchantId)));
+        supplierName = sup!.name;
+        // Learn the account code, so the next invoice matches by it — only
+        // into an empty field, never over one staff typed.
+        const code = body.accountCode?.trim();
+        if (code && !sup!.accountNumber?.trim()) {
+          await tx.update(suppliersTable).set({ accountNumber: code }).where(eq(suppliersTable.id, supplierId));
+        }
+      } else {
+        const ns = body.newSupplier!;
+        const [sup] = await tx.insert(suppliersTable).values({
+          merchantId,
+          name: ns.name.trim(),
+          accountNumber: ns.accountNumber?.trim() || null,
+          website: ns.website?.trim() || null,
+          phone: ns.phone?.trim() || null,
+          notes: ns.notes?.trim() || null,
+        }).returning();
+        supplierId = sup!.id;
+        supplierName = sup!.name;
+        supplierCreated = true;
+      }
+
+      // Products: new ones are basic, and hidden from the till until priced.
+      const newProducts: Array<{ id: number; name: string; sku: string | null; hidden: boolean }> = [];
+      const items: Array<{ productId: number | null; productName: string; quantity: number; unitCost: number; notes: string | null }> = [];
+      for (const l of body.lines) {
+        let productId = l.productId ?? null;
+        let productName = (l.productName || l.newProduct?.name || "").trim();
+        if (!productId && l.newProduct) {
+          const np = l.newProduct;
+          const sellPrice = np.sellPrice && np.sellPrice > 0 ? round2(np.sellPrice) : 0;
+          const sku = np.sku?.trim() || l.stockCode?.trim() || null;
+          const [p] = await tx.insert(productsTable).values({
+            merchantId,
+            name: np.name.trim(),
+            sku,
+            price: String(sellPrice),
+            costPrice: String(round2(l.unitCost)),
+            supplier: supplierName,
+            supplierCode: l.stockCode?.trim() || null,
+            technicalSpecs: np.manufCode?.trim() ? `Manufacturer code: ${np.manufCode.trim()}` : null,
+            productTypeId: standardType!.id,
+            lowStockThreshold: lowStock?.globalThreshold ?? null,
+            trackInventory: "true",
+            isActive: sellPrice > 0 ? "true" : "false",
+          }).returning();
+          productId = p!.id;
+          productName = p!.name;
+          newProducts.push({ id: p!.id, name: p!.name, sku: p!.sku, hidden: sellPrice <= 0 });
+        }
+        items.push({
+          productId,
+          productName: productName || l.stockCode || "Item",
+          quantity: l.quantity,
+          unitCost: round2(l.unitCost),
+          notes: serialsNote(cleanSerials(l.serials)),
+        });
+      }
+
+      // The purchase order: Ordered — receiving is its own step.
+      const [po] = await tx.insert(purchaseOrdersTable).values({
+        merchantId,
+        supplierId,
+        poNumber,
+        orderNumber: body.orderNumber?.trim() || null,
+        status: "Ordered",
+        orderDate: body.orderDate,
+        notes: body.notes?.trim() || null,
+        invoiceUrls: body.invoiceUrls?.length ? JSON.stringify(body.invoiceUrls) : null,
+        totalCost: String(itemsSubtotal),
+        deliveryCharge: "0",
+        deliveryTaxMode: "exclusive",
+        distributeDelivery: "false",
+        amountPaid: "0",
+        paymentStatus: "unpaid",
+      }).returning();
+      await tx.insert(purchaseOrderItemsTable).values(items.map((i) => ({
+        poId: po!.id,
+        productId: i.productId,
+        productName: i.productName,
+        quantity: i.quantity,
+        received: 0,
+        unitCost: String(i.unitCost),
+        notes: i.notes,
+      })));
+      return { poId: po!.id, supplierName, supplierCreated, newProducts, items };
+    });
+  } catch (err) {
+    // Inside a transaction the driver error arrives wrapped, with Postgres's on `.cause`.
+    const cause = (err as { cause?: unknown } | null)?.cause;
+    if (isUniqueViolation(err, "purchase_orders_merchant_po_number_unique") || isUniqueViolation(cause, "purchase_orders_merchant_po_number_unique")) {
+      res.status(409).json({ error: alreadyImported });
+      return;
+    }
+    throw err;
+  }
+
+  // Same follow-ups as a PO created by hand: cost prices + price history, QR codes.
+  await syncCostPricesFromPO(merchantId, result.poId, poNumber, result.items, result.supplierName, 0);
+  for (const p of result.newProducts) registerQrBestEffort(registerProductQr(merchantId, p.id, p.name));
+
+  res.status(201).json({
+    purchaseOrder: await getPOWithItems(result.poId, merchantId),
+    supplierCreated: result.supplierCreated,
+    newProducts: result.newProducts,
+  });
 });
 
 // POST /purchase-orders/:id/receive

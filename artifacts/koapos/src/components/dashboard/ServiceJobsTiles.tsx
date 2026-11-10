@@ -259,7 +259,9 @@ export function ServiceJobsTiles({
 
   const { data: ordersData } = useListDeliveryOrders({ query: { queryKey: getListDeliveryOrdersQueryKey(), refetchInterval: 60_000 } });
 
-  const jobs = jobsData ?? [];
+  // Archived jobs (Service Jobs › Archive) are parked, not work in hand —
+  // they don't count in the tiles or the overdue banner.
+  const jobs = (jobsData ?? []).filter((j) => !j.archivedAt);
   // Online orders not yet finished (delivered/cancelled) — Online › Orders' "Open" tab.
   const orders = ordersData?.items ?? [];
   const openOrders = orders.filter((o) => OPEN_ORDER_STATUSES.has(o.status)).length;

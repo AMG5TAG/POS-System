@@ -38,6 +38,7 @@
     "add-customer-portal-auth": "tsx ./src/add-customer-portal-auth.ts",
     "add-customer-business-contact": "tsx ./src/add-customer-business-contact.ts",
     "add-product-promotions-table": "tsx ./src/add-product-promotions-table.ts",
+    "add-service-job-archive": "tsx ./src/add-service-job-archive.ts",
     "add-merchant-default-phone-country": "tsx ./src/add-merchant-default-phone-country.ts",
     "add-merchant-phone-display": "tsx ./src/add-merchant-phone-display.ts",
     "drop-receipt-paper-size": "tsx ./src/drop-receipt-paper-size.ts",

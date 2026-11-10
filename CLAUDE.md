@@ -452,6 +452,21 @@ Deposit, Diagnostics, Technician Time, Sign-off and Shipping off. Warranty
 windows are `SERVICE_WARRANTY_DEFAULTS` (14 days) and Print always opens the
 chooser.
 
+**Archive** (Service Jobs › Archive tab) parks open jobs the customer
+declined or that are long-term. It is a flag — `service_jobs.archived_at` +
+`archive_reason` (`declined` / `long-term` / `other`, added by
+`scripts/src/add-service-job-archive.ts`) — **not a status**, so the job keeps
+"Awaiting Customer" or whatever it was and Restore puts it back unchanged.
+`POST /service-jobs/archive {ids, archived, reason, note}` archives or restores
+one or many, skips completed/cancelled jobs (those are Service History), and
+logs each change in the job's notes. Archived jobs are left out of the Services
+tab, the dashboard tiles/overdue banner/jobs panel, the wall dashboard
+(`dashboard-app-public.ts`) and the Tech App work list (its QR deep link still
+opens them). Completing or cancelling a job clears the flag wherever it
+happens — admin status change, Tech App, and `linked-work.ts` when a linked sale
+or invoice is paid. Rules in `lib/service-job-archive.ts`, pinned by
+`service-job-archive.test.ts`.
+
 **Custom notes** are preset texts set under Management › Invoices & Services ›
 Services (`routes/service-settings.ts`, `GET/PUT /service-settings`). They
 live in `service_settings.config.customNotes` — the table the old Service
@@ -1021,6 +1036,34 @@ Every failure carries a `code` (`classifyGoogleError`) that the page turns
 into one action: enable the API, reconnect with every box ticked, or wait for
 Google to approve Business Profile API access (quota 0 until then). Replies
 post publicly on Google. Pinned by `google-insights.test.ts`.
+
+### Importing a supplier invoice (Purchase Orders › Create via Import)
+
+The supplier's PDF tax invoice is read **in the browser** with pdf.js
+(`koapos/src/lib/supplier-invoice-parse.ts`, pure, pinned against the text of
+a real Leader invoice in `supplier-invoice-parse.test.ts`). It reads by column
+heading (Stock Code / Manuf Code / Description / Qty / Unit Price Excl. /
+Gross / GST / Total), not fixed positions: rows without numbers continue the
+line above (Leader wraps descriptions and stock codes), `SN:` rows are that
+line's serials, and the footer totals are checked against the lines. Header
+fields: the invoice number ("Our Ref", under the barcode) becomes the **PO
+number**, "Customer Code" is our account with the supplier. A scanned PDF has
+no text and is refused with that reason.
+
+Matching is the server's (`lib/supplier-invoice.ts`, `supplier-invoice.test.ts`):
+supplier by account code (`suppliers.account_number`), then by name with
+company suffixes stripped; product by stock code = SKU, then = supplier code,
+then manufacturer code = SKU. An ambiguous match matches nothing.
+`POST /purchase-orders/import/match` is read-only; `POST /purchase-orders/import`
+creates the supplier (if new), basic products for unmatched lines (name, SKU =
+stock code, supplier code, cost, "Manufacturer code:" spec line; **no sell price
+→ created inactive**, so nothing sells at $0) and the PO as Ordered, in one
+transaction; the invoice number already in use is a 409. Picking an existing
+supplier saves the invoice's account code onto it when its account number is
+empty, so the next invoice matches by it. Serials go on each PO line's notes.
+Receiving is then the ordinary `/:id/receive` call (stock, serials for
+serial-tracked products, pre-orders, sale-ticket prompt). The PDF is attached
+to the PO.
 
 ### Merging brands and suppliers
 

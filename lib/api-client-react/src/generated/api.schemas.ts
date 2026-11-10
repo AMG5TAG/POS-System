@@ -1914,6 +1914,16 @@ export interface ServiceJob {
   reworkOfJobId?: number | null;
   /** @nullable */
   reopenedFromJobId?: number | null;
+  /**
+     * Set while the job is in Service Jobs › Archive. It keeps its status underneath.
+     * @nullable
+     */
+  archivedAt?: string | null;
+  /**
+     * declined, long-term or other
+     * @nullable
+     */
+  archiveReason?: string | null;
   /** @nullable */
   estimateApprovedAt?: string | null;
   /** @nullable */
@@ -3651,6 +3661,163 @@ export interface PurchaseOrderItem {
   oversellSales?: PurchaseOrderItemOversellSalesItem[];
 }
 
+export type SupplierInvoiceMatchInputLinesItem = {
+  /** @maxLength 120 */
+  stockCode: string;
+  /** @maxLength 120 */
+  manufCode?: string;
+};
+
+export interface SupplierInvoiceMatchInput {
+  /** @maxLength 200 */
+  supplierName: string;
+  /** @maxLength 20 */
+  supplierAbn?: string;
+  /**
+     * Your account/customer code at the supplier, as printed on the invoice.
+     * @maxLength 60
+     */
+  accountCode?: string;
+  /** @maxLength 60 */
+  poNumber?: string;
+  /** @maxItems 500 */
+  lines: SupplierInvoiceMatchInputLinesItem[];
+}
+
+export type SupplierInvoiceMatchSupplierMatchedBy = typeof SupplierInvoiceMatchSupplierMatchedBy[keyof typeof SupplierInvoiceMatchSupplierMatchedBy];
+
+
+export const SupplierInvoiceMatchSupplierMatchedBy = {
+  account: 'account',
+  name: 'name',
+} as const;
+
+export type SupplierInvoiceMatchSupplier = {
+  id: number;
+  name: string;
+  matchedBy: SupplierInvoiceMatchSupplierMatchedBy;
+} | null;
+
+export type SupplierInvoiceMatchPoNumberTaken = {
+  id: number;
+  poNumber: string;
+} | null;
+
+export type SupplierInvoiceMatchLinesItemMatchedBy = typeof SupplierInvoiceMatchLinesItemMatchedBy[keyof typeof SupplierInvoiceMatchLinesItemMatchedBy];
+
+
+export const SupplierInvoiceMatchLinesItemMatchedBy = {
+  sku: 'sku',
+  supplierCode: 'supplierCode',
+  manufCode: 'manufCode',
+} as const;
+
+export type SupplierInvoiceMatchLinesItem = {
+  productId: number;
+  name: string;
+  sku?: string | null;
+  price?: number;
+  matchedBy: SupplierInvoiceMatchLinesItemMatchedBy;
+} | null;
+
+export interface SupplierInvoiceMatch {
+  supplier: SupplierInvoiceMatchSupplier;
+  poNumberTaken: SupplierInvoiceMatchPoNumberTaken;
+  lines: SupplierInvoiceMatchLinesItem[];
+}
+
+export type SupplierInvoiceImportInputNewSupplier = {
+  /**
+     * @minLength 1
+     * @maxLength 200
+     */
+  name: string;
+  /** @maxLength 60 */
+  accountNumber?: string;
+  /** @maxLength 200 */
+  website?: string;
+  /** @maxLength 60 */
+  phone?: string;
+  /** @maxLength 1000 */
+  notes?: string;
+};
+
+export type SupplierInvoiceImportInputLinesItemNewProduct = {
+  /**
+     * @minLength 1
+     * @maxLength 300
+     */
+  name: string;
+  /** @maxLength 120 */
+  sku?: string;
+  /** @maxLength 120 */
+  manufCode?: string;
+  /**
+     * Inc-GST. Blank or 0 creates the product hidden from the till until it is priced.
+     * @minimum 0
+     */
+  sellPrice?: number;
+};
+
+export type SupplierInvoiceImportInputLinesItem = {
+  /** Existing product. Omit with newProduct to create one, or omit both for a line that isn't stocked (freight, etc.). */
+  productId?: number;
+  newProduct?: SupplierInvoiceImportInputLinesItemNewProduct;
+  /** @maxLength 300 */
+  productName: string;
+  /** @maxLength 120 */
+  stockCode?: string;
+  /**
+     * @minimum 1
+     * @maximum 100000
+     */
+  quantity: number;
+  /**
+     * Ex-GST
+     * @minimum 0
+     */
+  unitCost: number;
+  /** @maxItems 1000 */
+  serials?: string[];
+};
+
+export interface SupplierInvoiceImportInput {
+  /** An existing supplier. Omit and send newSupplier to create one. */
+  supplierId?: number;
+  newSupplier?: SupplierInvoiceImportInputNewSupplier;
+  /**
+     * Saved on an existing supplier that has no account number yet, so the next invoice matches by it.
+     * @maxLength 60
+     */
+  accountCode?: string;
+  /**
+     * @minLength 1
+     * @maxLength 60
+     */
+  poNumber: string;
+  /** @maxLength 60 */
+  orderNumber?: string;
+  /** YYYY-MM-DD */
+  orderDate: string;
+  /** @maxLength 2000 */
+  notes?: string;
+  /** @maxItems 10 */
+  invoiceUrls?: string[];
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  lines: SupplierInvoiceImportInputLinesItem[];
+}
+
+export type SupplierInvoiceImportResultNewProductsItem = {
+  id: number;
+  name: string;
+  sku?: string | null;
+  /** Created with no sell price, so hidden from the till until priced. */
+  hidden: boolean;
+};
+
 export type PurchaseOrderPreOrderArrivalsItem = {
   preOrderId: number;
   number: string;
@@ -3685,6 +3852,12 @@ export interface PurchaseOrder {
   items?: PurchaseOrderItem[];
   receipts?: POReceiptLog[];
   createdAt: string;
+}
+
+export interface SupplierInvoiceImportResult {
+  purchaseOrder: PurchaseOrder;
+  supplierCreated: boolean;
+  newProducts: SupplierInvoiceImportResultNewProductsItem[];
 }
 
 export interface PurchaseOrderInput {
@@ -7081,6 +7254,32 @@ export type SendServiceJobEmail200 = {
   success?: boolean;
   provider?: string;
   error?: string | null;
+};
+
+export type ArchiveServiceJobsBodyReason = typeof ArchiveServiceJobsBodyReason[keyof typeof ArchiveServiceJobsBodyReason];
+
+
+export const ArchiveServiceJobsBodyReason = {
+  declined: 'declined',
+  'long-term': 'long-term',
+  other: 'other',
+} as const;
+
+export type ArchiveServiceJobsBody = {
+  /**
+     * @minItems 1
+     * @maxItems 500
+     */
+  ids: number[];
+  archived: boolean;
+  reason?: ArchiveServiceJobsBodyReason;
+  /** @maxLength 500 */
+  note?: string;
+};
+
+export type ArchiveServiceJobs200 = {
+  jobs: ServiceJob[];
+  skipped: number;
 };
 
 export type GetDeviceHistoryParams = {

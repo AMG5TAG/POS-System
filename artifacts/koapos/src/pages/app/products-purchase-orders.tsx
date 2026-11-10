@@ -30,8 +30,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { cn } from "@/lib/utils";
-import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown, Bell } from "lucide-react";
+import { Plus, ShoppingCart, Pencil, Truck, Search, Trash2, PackageSearch, X, Package, Printer, Mail, Loader2, Eye, PackageCheck, History, Clock, AlertCircle, AlertTriangle, Paperclip, FileText, ExternalLink, ShieldCheck, Tags, Calculator, ChevronDown, Bell, FileUp, PackagePlus, EyeOff } from "lucide-react";
 import { toast } from "sonner";
+import { useLocation } from "wouter";
+import { ImportSupplierInvoiceDialog, type ImportDone } from "@/components/purchase-orders/ImportSupplierInvoiceDialog";
 import { uploadFile } from "@/lib/upload";
 import { useStickerPrinter, type PrintStickersArgs } from "@/lib/sticker-config";
 import { loadCodePrefixes } from "@/pages/app/management-misc";
@@ -222,6 +224,20 @@ export default function ProductsPurchaseOrdersPage() {
      print choice, which waits in `afterArrivals` until this is dismissed. */
   const [arrivals, setArrivals] = useState<NonNullable<PurchaseOrder["preOrderArrivals"]> | null>(null);
   const [afterArrivals, setAfterArrivals] = useState<PurchaseOrder | null>(null);
+  /* Import supplier invoice: the dialog, then (when it created products) a
+     prompt to finish them, then the usual arrivals → print-choice sequence. */
+  const [importOpen, setImportOpen] = useState(false);
+  const [importDone, setImportDone] = useState<ImportDone | null>(null);
+  const [, navigate] = useLocation();
+  const { data: importSuppliersData } = useListSuppliers({}, { query: { enabled: importOpen, queryKey: ["suppliers"] } });
+  const importSuppliers = [...((importSuppliersData as { items?: { id: number; name: string }[] })?.items ?? [])].sort((a, b) => a.name.localeCompare(b.name));
+  /* What follows a finished import: a received PO goes on to the pre-order
+     arrivals (if any) and the print choice, exactly as Receive Inventory does. */
+  const afterImport = (r: ImportDone) => {
+    if (!r.received) return;
+    if (r.po.preOrderArrivals?.length) { setArrivals(r.po.preOrderArrivals); setAfterArrivals(r.po); }
+    else setPrintChoicePO(r.po);
+  };
   const [viewingPO, setViewingPO] = useState<PurchaseOrder | null>(null);
   const [emailLoading, setEmailLoading] = useState(false);
   const [emailModalOpen, setEmailModalOpen] = useState(false);
@@ -465,15 +481,20 @@ export default function ProductsPurchaseOrdersPage() {
         ? { payFull: true, paymentMethod: form.paymentMethod }
         : { paymentAmount: Math.round(entered * 100) / 100, paymentMethod: form.paymentMethod };
     }
+    // Completing an order brings stock in, so offer the sale tickets (and the
+    // PO itself) straight away — the same choice the Receive worksheet ends on.
+    const completing = isFullyReceived({ status: form.status });
     if (editingId !== null) {
+      const wasComplete = orders.some((o) => o.id === editingId && isFullyReceived(o));
       updatePO.mutate(
         { id: editingId, data: payload },
         {
-          onSuccess: () => {
+          onSuccess: (updated) => {
             invalidateList();
             queryClient.invalidateQueries({ queryKey: ["products"] });
             toast.success("Purchase order updated");
             setDialogOpen(false);
+            if (completing && !wasComplete) setTimeout(() => setPrintChoicePO(updated), 100);
           },
           onError: () => toast.error("Failed to update"),
         }
@@ -486,7 +507,9 @@ export default function ProductsPurchaseOrdersPage() {
           queryClient.invalidateQueries({ queryKey: ["products"] });
           toast.success(`${data.poNumber} created`);
           setDialogOpen(false);
-          setTimeout(() => setPrintPO(data), 100);
+          // A new order that arrives already received gets the print choice
+          // (PO or sale tickets); an order still to come prints the PO to send.
+          setTimeout(() => (completing ? setPrintChoicePO(data) : setPrintPO(data)), 100);
         },
         onError: () => toast.error("Failed to create purchase order"),
       });
@@ -534,7 +557,10 @@ export default function ProductsPurchaseOrdersPage() {
             <h1 className="text-2xl font-bold">Purchase Orders</h1>
             <p className="text-sm text-muted-foreground">Create and track purchase orders to suppliers for stock replenishment.</p>
           </div>
-          <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setImportOpen(true)}><FileUp className="w-4 h-4 mr-2" /> Create via Import</Button>
+            <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
+          </div>
         </div>
 
         <Tabs value={tab} onValueChange={(v) => setTab(v as "active" | "history")}>
@@ -578,7 +604,10 @@ export default function ProductsPurchaseOrdersPage() {
                     <p className="font-medium text-lg">No purchase orders yet</p>
                     <p className="text-muted-foreground text-sm">Create purchase orders to track stock ordered from suppliers.</p>
                   </div>
-                  <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
+                  <div className="flex flex-wrap justify-center gap-2">
+                    <Button variant="outline" onClick={() => setImportOpen(true)}><FileUp className="w-4 h-4 mr-2" /> Create via Import</Button>
+                    <Button onClick={openCreate}><Plus className="w-4 h-4 mr-2" /> New PO</Button>
+                  </div>
                 </>
               )}
             </CardContent>
@@ -1427,6 +1456,57 @@ export default function ProductsPurchaseOrdersPage() {
       </Dialog>
 
       {/* ── Print choice (A4 PO vs. sale tickets) ────────────────────── */}
+      <ImportSupplierInvoiceDialog
+        open={importOpen}
+        onOpenChange={setImportOpen}
+        products={(allProductsData?.items ?? []) as ProductRecord[]}
+        suppliers={importSuppliers}
+        onDone={(r) => {
+          invalidateList();
+          queryClient.invalidateQueries({ queryKey: ["products"] });
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+          if (r.newProducts.length) setImportDone(r);
+          else afterImport(r);
+        }}
+      />
+
+      {/* New products made by an import: say so, and offer to finish them. */}
+      <Dialog open={!!importDone} onOpenChange={(o) => { if (!o && importDone) { const r = importDone; setImportDone(null); afterImport(r); } }}>
+        <DialogContent className="max-w-lg">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2"><PackagePlus className="w-5 h-5 text-primary" />{importDone?.newProducts.length} new product{importDone?.newProducts.length === 1 ? "" : "s"} added</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            They were created with just the basics from the invoice — name, SKU, cost and supplier. Fill in their details (sell price, category, photos, description) before selling them.
+            {importDone?.newProducts.some((p) => p.hidden) && " Those without a sell price are hidden from the till until you price them."}
+          </p>
+          <div className="divide-y rounded-lg border max-h-72 overflow-y-auto">
+            {importDone?.newProducts.map((p) => (
+              <div key={p.id} className="flex items-center gap-3 px-3 py-2">
+                <div className="min-w-0 flex-1">
+                  <p className="text-sm font-medium truncate">{p.name}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-2">
+                    {p.sku ?? "no SKU"}
+                    {p.hidden && <span className="inline-flex items-center gap-1 text-amber-600"><EyeOff className="w-3 h-3" />Hidden — needs a price</span>}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => {
+                  // The Products page opens this product on arrival.
+                  try { sessionStorage.setItem("koapos_open_product", String(p.id)); } catch { /* opens the list instead */ }
+                  setImportDone(null);
+                  navigate("/inventory/products");
+                }}>Fill in details</Button>
+              </div>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button onClick={() => { if (importDone) { const r = importDone; setImportDone(null); afterImport(r); } }}>
+              {importDone?.received ? "Later — continue to printing" : "Later"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
       <POPrintChoiceDialog
         po={printChoicePO}
         ticketCount={ticketsForPO(printChoicePO).count}

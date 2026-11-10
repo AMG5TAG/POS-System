@@ -1416,6 +1416,8 @@ export const GetCustomerHistoryResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "reworkOfJobId": zod.number().nullish(),
   "reopenedFromJobId": zod.number().nullish(),
+  "archivedAt": zod.coerce.date().nullish().describe('Set while the job is in Service Jobs › Archive. It keeps its status underneath.'),
+  "archiveReason": zod.string().nullish().describe('declined, long-term or other'),
   "estimateApprovedAt": zod.coerce.date().nullish(),
   "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
   "depositRequired": zod.number().nullish(),
@@ -4067,6 +4069,8 @@ export const ListServiceJobsResponseItem = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "reworkOfJobId": zod.number().nullish(),
   "reopenedFromJobId": zod.number().nullish(),
+  "archivedAt": zod.coerce.date().nullish().describe('Set while the job is in Service Jobs › Archive. It keeps its status underneath.'),
+  "archiveReason": zod.string().nullish().describe('declined, long-term or other'),
   "estimateApprovedAt": zod.coerce.date().nullish(),
   "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
   "depositRequired": zod.number().nullish(),
@@ -4196,6 +4200,8 @@ export const UpdateServiceJobResponse = zod.object({
   "completedAt": zod.coerce.date().nullish(),
   "reworkOfJobId": zod.number().nullish(),
   "reopenedFromJobId": zod.number().nullish(),
+  "archivedAt": zod.coerce.date().nullish().describe('Set while the job is in Service Jobs › Archive. It keeps its status underneath.'),
+  "archiveReason": zod.string().nullish().describe('declined, long-term or other'),
   "estimateApprovedAt": zod.coerce.date().nullish(),
   "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
   "depositRequired": zod.number().nullish(),
@@ -4244,6 +4250,78 @@ export const SendServiceJobEmailResponse = zod.object({
  */
 export const CreateServiceJobReworkParams = zod.object({
   "id": zod.coerce.number()
+})
+
+
+/**
+ * Archiving parks open jobs the customer declined or that are long-term — they leave the active list, the dashboard counts and the Tech App work list but keep their status. Restoring puts them back. Completed and cancelled jobs live in Service History and are skipped. Each change is logged in the job's notes.
+
+ * @summary Move service jobs into the Archive, or restore them
+ */
+export const archiveServiceJobsBodyIdsMax = 500;
+
+export const archiveServiceJobsBodyNoteMax = 500;
+
+
+
+export const ArchiveServiceJobsBody = zod.object({
+  "ids": zod.array(zod.number()).min(1).max(archiveServiceJobsBodyIdsMax),
+  "archived": zod.boolean(),
+  "reason": zod.enum(['declined', 'long-term', 'other']).optional(),
+  "note": zod.string().max(archiveServiceJobsBodyNoteMax).optional()
+})
+
+export const ArchiveServiceJobsResponse = zod.object({
+  "jobs": zod.array(zod.object({
+  "id": zod.number(),
+  "merchantId": zod.number(),
+  "customerId": zod.number().nullish(),
+  "staffId": zod.number().nullish(),
+  "jobNumber": zod.string(),
+  "customerName": zod.string().nullish(),
+  "customerPhone": zod.string().nullish(),
+  "customerEmail": zod.string().nullish(),
+  "status": zod.enum(['pending', 'in-progress', 'awaiting-parts', 'awaiting-stock', 'at-repairer', 'awaiting-partner-approval', 'partner-replacement', 'awaiting-customer', 'awaiting-pickup', 'completed', 'cancelled']),
+  "bookInDate": zod.string(),
+  "deviceType": zod.string().nullish(),
+  "deviceDescription": zod.string().nullish(),
+  "deviceColour": zod.string().nullish(),
+  "deviceQuantity": zod.number().nullish().describe('How many items were booked in — asked for media types (VHS, DVD, cassette, pictures) where a job is a stack, not one device.'),
+  "serialNumber": zod.string().nullish(),
+  "condition": zod.string().nullish(),
+  "partnerRepairCode": zod.string().nullish(),
+  "isPartnerRepair": zod.boolean(),
+  "isCritical": zod.boolean(),
+  "isUnderWarranty": zod.boolean(),
+  "workDescription": zod.string().nullish(),
+  "additionalEquipment": zod.string().nullish(),
+  "passwordOrPin": zod.string().nullish(),
+  "accounts": zod.string().nullish(),
+  "signature": zod.string().nullish(),
+  "photos": zod.array(zod.string()).optional(),
+  "estimatedCost": zod.number().nullish(),
+  "repairWarrantyDays": zod.number().optional(),
+  "completedAt": zod.coerce.date().nullish(),
+  "reworkOfJobId": zod.number().nullish(),
+  "reopenedFromJobId": zod.number().nullish(),
+  "archivedAt": zod.coerce.date().nullish().describe('Set while the job is in Service Jobs › Archive. It keeps its status underneath.'),
+  "archiveReason": zod.string().nullish().describe('declined, long-term or other'),
+  "estimateApprovedAt": zod.coerce.date().nullish(),
+  "estimateApprovedVia": zod.union([zod.literal('portal'),zod.literal('in-store'),zod.literal(null)]).nullish(),
+  "depositRequired": zod.number().nullish(),
+  "depositPaid": zod.number().optional(),
+  "isMailIn": zod.boolean().optional(),
+  "shippingCarrier": zod.string().nullish(),
+  "inboundTracking": zod.string().nullish(),
+  "returnTracking": zod.string().nullish(),
+  "returnAddress": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "hasQuote": zod.boolean().optional().describe('True when at least one quote has been raised against this job, in any status. Computed only on the list endpoint (GET \/service-jobs), which is the one screen that shows a quoted\/not-quoted column; absent elsewhere rather than run a per-job query nothing reads.'),
+  "quoteTotal": zod.number().nullish().describe('What the job\'s most recent quote came to, or null when it has never been quoted. The latest quote rather than the sum of every quote on the job: a job\'s quote is revised in place and re-raised once one is converted or declined, so summing them would add a superseded price to the one that replaced it. Computed only on the list endpoint, alongside hasQuote.'),
+  "createdAt": zod.coerce.date(),
+  "updatedAt": zod.coerce.date()
+})),
+  "skipped": zod.number()
 })
 
 
@@ -5971,6 +6049,141 @@ export const DeletePurchaseOrderParams = zod.object({
 
 export const DeletePurchaseOrderResponse = zod.object({
   "success": zod.boolean().optional()
+})
+
+
+/**
+ * Read-only. Given what was read off a supplier's invoice, says which supplier and which products it already corresponds to, and whether the invoice number is already used as a PO number.
+
+ * @summary Match a parsed supplier invoice to existing suppliers and products
+ */
+export const matchSupplierInvoiceBodySupplierNameMax = 200;
+
+export const matchSupplierInvoiceBodySupplierAbnMax = 20;
+
+export const matchSupplierInvoiceBodyAccountCodeMax = 60;
+
+export const matchSupplierInvoiceBodyPoNumberMax = 60;
+
+export const matchSupplierInvoiceBodyLinesItemStockCodeMax = 120;
+
+export const matchSupplierInvoiceBodyLinesItemManufCodeMax = 120;
+
+export const matchSupplierInvoiceBodyLinesMax = 500;
+
+
+
+export const MatchSupplierInvoiceBody = zod.object({
+  "supplierName": zod.string().max(matchSupplierInvoiceBodySupplierNameMax),
+  "supplierAbn": zod.string().max(matchSupplierInvoiceBodySupplierAbnMax).optional(),
+  "accountCode": zod.string().max(matchSupplierInvoiceBodyAccountCodeMax).optional().describe('Your account\/customer code at the supplier, as printed on the invoice.'),
+  "poNumber": zod.string().max(matchSupplierInvoiceBodyPoNumberMax).optional(),
+  "lines": zod.array(zod.object({
+  "stockCode": zod.string().max(matchSupplierInvoiceBodyLinesItemStockCodeMax),
+  "manufCode": zod.string().max(matchSupplierInvoiceBodyLinesItemManufCodeMax).optional()
+})).max(matchSupplierInvoiceBodyLinesMax)
+})
+
+export const MatchSupplierInvoiceResponse = zod.object({
+  "supplier": zod.object({
+  "id": zod.number(),
+  "name": zod.string(),
+  "matchedBy": zod.enum(['account', 'name'])
+}).nullable(),
+  "poNumberTaken": zod.object({
+  "id": zod.number(),
+  "poNumber": zod.string()
+}).nullable(),
+  "lines": zod.array(zod.object({
+  "productId": zod.number(),
+  "name": zod.string(),
+  "sku": zod.string().nullish(),
+  "price": zod.number().optional(),
+  "matchedBy": zod.enum(['sku', 'supplierCode', 'manufCode'])
+}).nullable())
+})
+
+
+/**
+ * One transaction: creates the supplier if asked, creates basic products for lines that match nothing, then the purchase order (status Ordered). Receiving is a separate call to /purchase-orders/{id}/receive.
+
+ * @summary Create a purchase order (and any new supplier/products) from a reviewed supplier invoice
+ */
+export const importSupplierInvoiceBodyNewSupplierNameMax = 200;
+
+export const importSupplierInvoiceBodyNewSupplierAccountNumberMax = 60;
+
+export const importSupplierInvoiceBodyNewSupplierWebsiteMax = 200;
+
+export const importSupplierInvoiceBodyNewSupplierPhoneMax = 60;
+
+export const importSupplierInvoiceBodyNewSupplierNotesMax = 1000;
+
+export const importSupplierInvoiceBodyAccountCodeMax = 60;
+
+export const importSupplierInvoiceBodyPoNumberMax = 60;
+
+export const importSupplierInvoiceBodyOrderNumberMax = 60;
+
+export const importSupplierInvoiceBodyNotesMax = 2000;
+
+export const importSupplierInvoiceBodyInvoiceUrlsItemMax = 1000;
+
+export const importSupplierInvoiceBodyInvoiceUrlsMax = 10;
+
+export const importSupplierInvoiceBodyLinesItemNewProductNameMax = 300;
+
+export const importSupplierInvoiceBodyLinesItemNewProductSkuMax = 120;
+
+export const importSupplierInvoiceBodyLinesItemNewProductManufCodeMax = 120;
+
+export const importSupplierInvoiceBodyLinesItemNewProductSellPriceMin = 0;
+
+export const importSupplierInvoiceBodyLinesItemProductNameMax = 300;
+
+export const importSupplierInvoiceBodyLinesItemStockCodeMax = 120;
+
+export const importSupplierInvoiceBodyLinesItemQuantityMax = 100000;
+
+export const importSupplierInvoiceBodyLinesItemUnitCostMin = 0;
+
+export const importSupplierInvoiceBodyLinesItemSerialsItemMax = 120;
+
+export const importSupplierInvoiceBodyLinesItemSerialsMax = 1000;
+
+export const importSupplierInvoiceBodyLinesMax = 500;
+
+
+
+export const ImportSupplierInvoiceBody = zod.object({
+  "supplierId": zod.number().optional().describe('An existing supplier. Omit and send newSupplier to create one.'),
+  "newSupplier": zod.object({
+  "name": zod.string().min(1).max(importSupplierInvoiceBodyNewSupplierNameMax),
+  "accountNumber": zod.string().max(importSupplierInvoiceBodyNewSupplierAccountNumberMax).optional(),
+  "website": zod.string().max(importSupplierInvoiceBodyNewSupplierWebsiteMax).optional(),
+  "phone": zod.string().max(importSupplierInvoiceBodyNewSupplierPhoneMax).optional(),
+  "notes": zod.string().max(importSupplierInvoiceBodyNewSupplierNotesMax).optional()
+}).optional(),
+  "accountCode": zod.string().max(importSupplierInvoiceBodyAccountCodeMax).optional().describe('Saved on an existing supplier that has no account number yet, so the next invoice matches by it.'),
+  "poNumber": zod.string().min(1).max(importSupplierInvoiceBodyPoNumberMax),
+  "orderNumber": zod.string().max(importSupplierInvoiceBodyOrderNumberMax).optional(),
+  "orderDate": zod.string().describe('YYYY-MM-DD'),
+  "notes": zod.string().max(importSupplierInvoiceBodyNotesMax).optional(),
+  "invoiceUrls": zod.array(zod.string().max(importSupplierInvoiceBodyInvoiceUrlsItemMax)).max(importSupplierInvoiceBodyInvoiceUrlsMax).optional(),
+  "lines": zod.array(zod.object({
+  "productId": zod.number().optional().describe('Existing product. Omit with newProduct to create one, or omit both for a line that isn\'t stocked (freight, etc.).'),
+  "newProduct": zod.object({
+  "name": zod.string().min(1).max(importSupplierInvoiceBodyLinesItemNewProductNameMax),
+  "sku": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductSkuMax).optional(),
+  "manufCode": zod.string().max(importSupplierInvoiceBodyLinesItemNewProductManufCodeMax).optional(),
+  "sellPrice": zod.number().min(importSupplierInvoiceBodyLinesItemNewProductSellPriceMin).optional().describe('Inc-GST. Blank or 0 creates the product hidden from the till until it is priced.')
+}).optional(),
+  "productName": zod.string().max(importSupplierInvoiceBodyLinesItemProductNameMax),
+  "stockCode": zod.string().max(importSupplierInvoiceBodyLinesItemStockCodeMax).optional(),
+  "quantity": zod.number().min(1).max(importSupplierInvoiceBodyLinesItemQuantityMax),
+  "unitCost": zod.number().min(importSupplierInvoiceBodyLinesItemUnitCostMin).describe('Ex-GST'),
+  "serials": zod.array(zod.string().max(importSupplierInvoiceBodyLinesItemSerialsItemMax)).max(importSupplierInvoiceBodyLinesItemSerialsMax).optional()
+})).min(1).max(importSupplierInvoiceBodyLinesMax)
 })
 
 
