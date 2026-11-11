@@ -46,10 +46,8 @@ tags:
     description: Object storage upload and serving endpoints.
   - name: cameras
     description: IP camera management and snapshots
-  - name: openai
-    description: AI assistant, served by Claude. (Path name is historical.)
   - name: ai
-    description: AI feature settings and kill-switch
+    description: AI assistant (Claude), AI feature settings and kill-switch
   - name: brands
     description: Brand management
   - name: tags
@@ -5198,10 +5196,10 @@ paths:
                   ok: { type: boolean }
                 required: [ok]
 
-  /openai/conversations:
+  /ai/conversations:
     get:
-      operationId: listOpenaiConversations
-      tags: [openai]
+      operationId: listAiConversations
+      tags: [ai]
       summary: List all conversations for the merchant
       responses:
         "200":
@@ -5211,29 +5209,29 @@ paths:
               schema:
                 type: array
                 items:
-                  $ref: "#/components/schemas/OpenaiConversation"
+                  $ref: "#/components/schemas/AiConversation"
     post:
-      operationId: createOpenaiConversation
-      tags: [openai]
+      operationId: createAiConversation
+      tags: [ai]
       summary: Create or fetch conversation by mode
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OpenaiConversationInput"
+              $ref: "#/components/schemas/AiConversationInput"
       responses:
         "201":
           description: Conversation
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OpenaiConversation"
+                $ref: "#/components/schemas/AiConversation"
 
-  /openai/conversations/{id}:
+  /ai/conversations/{id}:
     get:
-      operationId: getOpenaiConversation
-      tags: [openai]
+      operationId: getAiConversation
+      tags: [ai]
       summary: Get conversation with messages
       parameters:
         - name: id
@@ -5247,16 +5245,16 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OpenaiConversationWithMessages"
+                $ref: "#/components/schemas/AiConversationWithMessages"
         "404":
           description: Not found
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OpenaiError"
+                $ref: "#/components/schemas/AiError"
     delete:
-      operationId: deleteOpenaiConversation
-      tags: [openai]
+      operationId: deleteAiConversation
+      tags: [ai]
       summary: Delete a conversation
       parameters:
         - name: id
@@ -5272,12 +5270,12 @@ paths:
           content:
             application/json:
               schema:
-                $ref: "#/components/schemas/OpenaiError"
+                $ref: "#/components/schemas/AiError"
 
-  /openai/conversations/{id}/messages:
+  /ai/conversations/{id}/messages:
     post:
-      operationId: sendOpenaiMessage
-      tags: [openai]
+      operationId: sendAiMessage
+      tags: [ai]
       summary: Send a message and receive a streaming AI response
       parameters:
         - name: id
@@ -5290,7 +5288,7 @@ paths:
         content:
           application/json:
             schema:
-              $ref: "#/components/schemas/OpenaiMessageInput"
+              $ref: "#/components/schemas/AiMessageInput"
       responses:
         "200":
           description: SSE stream of assistant text chunks
@@ -14398,7 +14396,7 @@ components:
         createdAt: { type: string }
     ProductUrlImport:
       type: object
-      required: [url, product, aiFilled, aiUsed]
+      required: [url, product, aiFilled, aiUsed, site]
       properties:
         url: { type: string, description: The page actually read, after redirects }
         product:
@@ -14427,6 +14425,23 @@ components:
           items: { type: string }
         aiUsed: { type: boolean }
         aiError: { type: string }
+        site:
+          type: object
+          description: >-
+            The site the page is on. supplier is the supplier whose saved
+            website is this site (same host or a subdomain), else null; name is
+            the site's own name, offered when creating a new supplier.
+          required: [host, name, supplier]
+          properties:
+            host: { type: string }
+            name: { type: string, nullable: true }
+            supplier:
+              type: object
+              nullable: true
+              required: [id, name]
+              properties:
+                id: { type: integer }
+                name: { type: string }
     PurchaseOrderInput:
       type: object
       required: [orderDate]
@@ -14932,7 +14947,7 @@ components:
       properties:
         aiEnabled: { type: boolean }
 
-    OpenaiConversation:
+    AiConversation:
       type: object
       required: [id, merchantId, mode, title, createdAt]
       properties:
@@ -14942,13 +14957,13 @@ components:
         title:      { type: string }
         createdAt:  { type: string, format: date-time }
 
-    OpenaiConversationInput:
+    AiConversationInput:
       type: object
       properties:
         mode:  { type: string }
         title: { type: string }
 
-    OpenaiMessage:
+    AiMessage:
       type: object
       required: [id, conversationId, role, content, createdAt]
       properties:
@@ -14958,13 +14973,13 @@ components:
         content:        { type: string }
         createdAt:      { type: string, format: date-time }
 
-    OpenaiMessageInput:
+    AiMessageInput:
       type: object
       required: [content]
       properties:
         content: { type: string }
 
-    OpenaiConversationWithMessages:
+    AiConversationWithMessages:
       type: object
       required: [id, merchantId, mode, title, createdAt, messages]
       properties:
@@ -14976,9 +14991,9 @@ components:
         messages:
           type: array
           items:
-            $ref: "#/components/schemas/OpenaiMessage"
+            $ref: "#/components/schemas/AiMessage"
 
-    OpenaiError:
+    AiError:
       type: object
       required: [error]
       properties:

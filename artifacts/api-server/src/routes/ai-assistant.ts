@@ -6,18 +6,15 @@ import { z } from "zod/v4";
 import { aiText, aiStream, aiJson, NoAiProviderError, type AiMessage } from "../services/ai";
 
 /*
- * Historical name: these paths were built when OpenAI was the only provider,
- * and the frontend and OpenAPI spec still address them as `/openai/...`. The
- * provider is now chosen by `services/ai` — Claude; the OpenAI provider itself
- * has been removed — so nothing here names a vendor beyond the URL it cannot change without a
- * breaking API change.
+ * The AI assistant (Management › AI Assistant) and the till's upsell coach.
+ * Every call goes through services/ai — Claude, on the merchant's own key.
  */
 
 const router = Router();
 router.use(requireAuth);
 
 /* ── List conversations ─────────────────────────────────────────────────── */
-router.get("/openai/conversations", async (req, res) => {
+router.get("/ai/conversations", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const rows = await db.select()
     .from(conversations)
@@ -27,7 +24,7 @@ router.get("/openai/conversations", async (req, res) => {
 });
 
 /* ── Create or upsert conversation by mode ──────────────────────────────── */
-router.post("/openai/conversations", async (req, res) => {
+router.post("/ai/conversations", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const { mode = "general", title } = req.body as { mode?: string; title?: string };
 
@@ -52,7 +49,7 @@ router.post("/openai/conversations", async (req, res) => {
 });
 
 /* ── Get conversation with messages ─────────────────────────────────────── */
-router.get("/openai/conversations/:id", async (req, res) => {
+router.get("/ai/conversations/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
@@ -66,7 +63,7 @@ router.get("/openai/conversations/:id", async (req, res) => {
 });
 
 /* ── Delete conversation ─────────────────────────────────────────────────── */
-router.delete("/openai/conversations/:id", async (req, res) => {
+router.delete("/ai/conversations/:id", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) return res.status(400).json({ error: "Invalid id" });
@@ -213,7 +210,7 @@ Your role: Generate creative, localised marketing ideas, social media copy, prom
 }
 
 /* ── Send message + SSE stream ──────────────────────────────────────────── */
-router.post("/openai/conversations/:id/messages", async (req, res) => {
+router.post("/ai/conversations/:id/messages", async (req, res) => {
   const merchantId = req.session.merchantId!;
   const id = parseInt(req.params.id, 10);
   if (isNaN(id)) { res.status(400).json({ error: "Invalid id" }); return; }

@@ -3959,6 +3959,20 @@ export type ProductUrlImportProduct = {
   images: string[];
 };
 
+export type ProductUrlImportSiteSupplier = {
+  id: number;
+  name: string;
+} | null;
+
+/**
+ * The site the page is on. supplier is the supplier whose saved website is this site (same host or a subdomain), else null; name is the site's own name, offered when creating a new supplier.
+ */
+export type ProductUrlImportSite = {
+  host: string;
+  name: string | null;
+  supplier: ProductUrlImportSiteSupplier;
+};
+
 export interface ProductUrlImport {
   /** The page actually read */
   url: string;
@@ -3967,6 +3981,8 @@ export interface ProductUrlImport {
   aiFilled: string[];
   aiUsed: boolean;
   aiError?: string;
+  /** The site the page is on. supplier is the supplier whose saved website is this site (same host or a subdomain), else null; name is the site's own name, offered when creating a new supplier. */
+  site: ProductUrlImportSite;
 }
 
 export interface PurchaseOrderInput {
@@ -4373,7 +4389,7 @@ export interface AiSettingsInput {
   aiEnabled: boolean;
 }
 
-export interface OpenaiConversation {
+export interface AiConversation {
   id: number;
   merchantId: number;
   mode: string;
@@ -4381,12 +4397,12 @@ export interface OpenaiConversation {
   createdAt: string;
 }
 
-export interface OpenaiConversationInput {
+export interface AiConversationInput {
   mode?: string;
   title?: string;
 }
 
-export interface OpenaiMessage {
+export interface AiMessage {
   id: number;
   conversationId: number;
   role: string;
@@ -4394,20 +4410,20 @@ export interface OpenaiMessage {
   createdAt: string;
 }
 
-export interface OpenaiMessageInput {
+export interface AiMessageInput {
   content: string;
 }
 
-export interface OpenaiConversationWithMessages {
+export interface AiConversationWithMessages {
   id: number;
   merchantId: number;
   mode: string;
   title: string;
   createdAt: string;
-  messages: OpenaiMessage[];
+  messages: AiMessage[];
 }
 
-export interface OpenaiError {
+export interface AiError {
   error: string;
 }
 

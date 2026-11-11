@@ -14,7 +14,7 @@ import {
   AlertTriangle, Sparkles, RotateCcw, ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
-import { useCreateOpenaiConversation, useDeleteOpenaiConversation, useSendOpenaiMessage, getOpenaiConversation } from "@workspace/api-client-react";
+import { useCreateAiConversation, useDeleteAiConversation, useSendAiMessage, getAiConversation } from "@workspace/api-client-react";
 
 type Mode = "budget" | "stock" | "marketing";
 type Message = { role: "user" | "assistant"; content: string };
@@ -103,7 +103,7 @@ export default function ManagementAIPage() {
   const [input, setInput] = useState("");
   const [isLoadingConv, setIsLoadingConv] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
-  const sendMsgMutation = useSendOpenaiMessage();
+  const sendMsgMutation = useSendAiMessage();
 
   const currentMessages = messages[activeMode];
   const currentConversation = conversations[activeMode];
@@ -115,15 +115,15 @@ export default function ManagementAIPage() {
     }
   }, [currentMessages, sendMsgMutation.isPending]);
 
-  const createConvMutation = useCreateOpenaiConversation();
-  const deleteConvMutation = useDeleteOpenaiConversation();
+  const createConvMutation = useCreateAiConversation();
+  const deleteConvMutation = useDeleteAiConversation();
 
   const loadOrCreateConversation = useCallback(async (mode: Mode) => {
     if (conversations[mode]) return conversations[mode];
     setIsLoadingConv(true);
     try {
       const conv = await createConvMutation.mutateAsync({ data: { mode } }) as Conversation;
-      const detail = await getOpenaiConversation(conv.id) as { messages: Message[] };
+      const detail = await getAiConversation(conv.id) as { messages: Message[] };
       setConversations(prev => ({ ...prev, [mode]: conv }));
       setMessages(prev => ({ ...prev, [mode]: detail.messages ?? [] }));
       return conv;

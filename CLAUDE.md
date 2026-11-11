@@ -1159,8 +1159,16 @@ tables / `<dl>`s; a barcode is kept only with a valid GTIN check digit. When
 the AI switch is on and Claude is connected, Claude fills **only fields the
 page left empty** (`aiFilled`, marked ✨ in the dialog). Nothing is saved: each
 field is shown ticked, editable, or "Not on page" for staff to type in; a field
-the form already holds starts unticked. Brand/category match existing ones by
-name or are created on apply. Photos are copied into our own storage through
+the form already holds starts unticked. Brand matches an existing one by name
+or is created on apply. Category is picked in the dialog from the category
+tree (`TreeCategorySelect`, with its New button), preselected when the page's
+category name matches one. **The site is the supplier**: the response's
+`site.supplier` is the supplier whose saved `website` is the page's host
+(`matchSupplierBySite` — same host or subdomain, `www.` ignored, two matches
+= none); with no match the dialog offers a new supplier named from
+`og:site_name`, created with the site as its website so the next import
+matches. The page's SKU is the supplier's own code, so it fills Supplier code
+and the SKU row starts unticked. Photos are copied into our own storage through
 `GET /products/import-from-url/image` (images only, 15 MB) and appended after
 existing photos. Pages built in the browser (JB Hi-Fi) carry no product data
 in their HTML — the maker's own page usually does. Pinned by
@@ -1830,7 +1838,7 @@ route talks to a vendor SDK directly, and nothing but that module names a model.
   to. It never displaces a key a merchant actually connected.
 - **Streams fail before the first byte where they can.** `aiStream` primes the
   first event, so an open failure (revoked key, rate limit) surfaces before
-  `routes/openai.ts` writes SSE headers. `withFallback` is kept so a second
+  `routes/ai-assistant.ts` writes SSE headers. `withFallback` is kept so a second
   provider could slot back in; once a delta has reached the client the provider
   is committed, since retrying elsewhere would splice two completions together.
 - **`aiJson` returns `unknown` on purpose.** Claude enforces the JSON Schema
@@ -1840,8 +1848,15 @@ route talks to a vendor SDK directly, and nothing but that module names a model.
 - Claude uses `thinking: {type: "adaptive"}` and `output_config.effort`. Effort
   is the cost/latency dial (`"low"` for the in-checkout upsell coach), *not* a
   cheaper model. `budget_tokens` is removed on current models — do not add it.
-- `routes/openai.ts` keeps its `/openai/...` paths for compatibility with the
-  frontend and the OpenAPI spec. The name is historical; the provider is not.
+- The AI Assistant and upsell coach are `routes/ai-assistant.ts`, at
+  `/ai/conversations…` and `/ai/upsell-suggestions` (operation ids and schemas
+  `…AiConversation…`). They were `/openai/...` until 2026-11; nothing in the
+  code names OpenAI now except `ai-provider.test.ts` (a leftover key must stay
+  ignored) and the already-run `migrate-ai-keys-to-vault.ts`.
+- **What uses Claude:** the AI Assistant, the till's upsell coach, promo card
+  copy (`/promotions/:id/generate`) and product Import Details. Each falls back
+  to non-AI behaviour (or says AI isn't connected) when the merchant has no key
+  or has switched AI off in `ai_settings`.
 
 ## Product surface
 

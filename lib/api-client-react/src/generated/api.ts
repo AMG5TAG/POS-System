@@ -23,6 +23,11 @@ import type {
   AcceptTradeInBody,
   AccountLockStatus,
   AddLaybyPaymentBody,
+  AiConversation,
+  AiConversationInput,
+  AiConversationWithMessages,
+  AiError,
+  AiMessageInput,
   AiSettings,
   AiSettingsInput,
   AppleOAuthCallbackBody,
@@ -272,11 +277,6 @@ import type {
   NextcloudLoginFlowStart,
   NextcloudLoginFlowStartInput,
   OkResult,
-  OpenaiConversation,
-  OpenaiConversationInput,
-  OpenaiConversationWithMessages,
-  OpenaiError,
-  OpenaiMessageInput,
   ParkedSale,
   ParkedSaleInput,
   PartCompatibilityInput,
@@ -18239,20 +18239,20 @@ export const useSaveAiSettings = <TError = ErrorType<unknown>,
       return useMutation(getSaveAiSettingsMutationOptions(options));
     }
 
-export const getListOpenaiConversationsUrl = () => {
+export const getListAiConversationsUrl = () => {
 
 
 
 
-  return `/api/openai/conversations`
+  return `/api/ai/conversations`
 }
 
 /**
  * @summary List all conversations for the merchant
  */
-export const listOpenaiConversations = async ( options?: RequestInit): Promise<OpenaiConversation[]> => {
+export const listAiConversations = async ( options?: RequestInit): Promise<AiConversation[]> => {
 
-  return customFetch<OpenaiConversation[]>(getListOpenaiConversationsUrl(),
+  return customFetch<AiConversation[]>(getListAiConversationsUrl(),
   {
     ...options,
     method: 'GET'
@@ -18265,45 +18265,45 @@ export const listOpenaiConversations = async ( options?: RequestInit): Promise<O
 
 
 
-export const getListOpenaiConversationsQueryKey = () => {
+export const getListAiConversationsQueryKey = () => {
     return [
-    `/api/openai/conversations`
+    `/api/ai/conversations`
     ] as const;
     }
 
 
-export const getListOpenaiConversationsQueryOptions = <TData = Awaited<ReturnType<typeof listOpenaiConversations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOpenaiConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getListAiConversationsQueryOptions = <TData = Awaited<ReturnType<typeof listAiConversations>>, TError = ErrorType<unknown>>( options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getListOpenaiConversationsQueryKey();
+  const queryKey =  queryOptions?.queryKey ?? getListAiConversationsQueryKey();
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof listOpenaiConversations>>> = ({ signal }) => listOpenaiConversations({ signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof listAiConversations>>> = ({ signal }) => listAiConversations({ signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listOpenaiConversations>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type ListOpenaiConversationsQueryResult = NonNullable<Awaited<ReturnType<typeof listOpenaiConversations>>>
-export type ListOpenaiConversationsQueryError = ErrorType<unknown>
+export type ListAiConversationsQueryResult = NonNullable<Awaited<ReturnType<typeof listAiConversations>>>
+export type ListAiConversationsQueryError = ErrorType<unknown>
 
 
 /**
  * @summary List all conversations for the merchant
  */
 
-export function useListOpenaiConversations<TData = Awaited<ReturnType<typeof listOpenaiConversations>>, TError = ErrorType<unknown>>(
-  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listOpenaiConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useListAiConversations<TData = Awaited<ReturnType<typeof listAiConversations>>, TError = ErrorType<unknown>>(
+  options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof listAiConversations>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getListOpenaiConversationsQueryOptions(options)
+  const queryOptions = getListAiConversationsQueryOptions(options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -18316,37 +18316,37 @@ export function useListOpenaiConversations<TData = Awaited<ReturnType<typeof lis
 
 
 
-export const getCreateOpenaiConversationUrl = () => {
+export const getCreateAiConversationUrl = () => {
 
 
 
 
-  return `/api/openai/conversations`
+  return `/api/ai/conversations`
 }
 
 /**
  * @summary Create or fetch conversation by mode
  */
-export const createOpenaiConversation = async (openaiConversationInput: OpenaiConversationInput, options?: RequestInit): Promise<OpenaiConversation> => {
+export const createAiConversation = async (aiConversationInput: AiConversationInput, options?: RequestInit): Promise<AiConversation> => {
 
-  return customFetch<OpenaiConversation>(getCreateOpenaiConversationUrl(),
+  return customFetch<AiConversation>(getCreateAiConversationUrl(),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      openaiConversationInput,)
+      aiConversationInput,)
   }
 );}
 
 
 
 
-export const getCreateOpenaiConversationMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOpenaiConversation>>, TError,{data: BodyType<OpenaiConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof createOpenaiConversation>>, TError,{data: BodyType<OpenaiConversationInput>}, TContext> => {
+export const getCreateAiConversationMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAiConversation>>, TError,{data: BodyType<AiConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof createAiConversation>>, TError,{data: BodyType<AiConversationInput>}, TContext> => {
 
-const mutationKey = ['createOpenaiConversation'];
+const mutationKey = ['createAiConversation'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -18356,10 +18356,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createOpenaiConversation>>, {data: BodyType<OpenaiConversationInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof createAiConversation>>, {data: BodyType<AiConversationInput>}> = (props) => {
           const {data} = props ?? {};
 
-          return  createOpenaiConversation(data,requestOptions)
+          return  createAiConversation(data,requestOptions)
         }
 
 
@@ -18369,38 +18369,38 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type CreateOpenaiConversationMutationResult = NonNullable<Awaited<ReturnType<typeof createOpenaiConversation>>>
-    export type CreateOpenaiConversationMutationBody = BodyType<OpenaiConversationInput>
-    export type CreateOpenaiConversationMutationError = ErrorType<unknown>
+    export type CreateAiConversationMutationResult = NonNullable<Awaited<ReturnType<typeof createAiConversation>>>
+    export type CreateAiConversationMutationBody = BodyType<AiConversationInput>
+    export type CreateAiConversationMutationError = ErrorType<unknown>
 
     /**
  * @summary Create or fetch conversation by mode
  */
-export const useCreateOpenaiConversation = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createOpenaiConversation>>, TError,{data: BodyType<OpenaiConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useCreateAiConversation = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof createAiConversation>>, TError,{data: BodyType<AiConversationInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof createOpenaiConversation>>,
+        Awaited<ReturnType<typeof createAiConversation>>,
         TError,
-        {data: BodyType<OpenaiConversationInput>},
+        {data: BodyType<AiConversationInput>},
         TContext
       > => {
-      return useMutation(getCreateOpenaiConversationMutationOptions(options));
+      return useMutation(getCreateAiConversationMutationOptions(options));
     }
 
-export const getGetOpenaiConversationUrl = (id: number,) => {
+export const getGetAiConversationUrl = (id: number,) => {
 
 
 
 
-  return `/api/openai/conversations/${id}`
+  return `/api/ai/conversations/${id}`
 }
 
 /**
  * @summary Get conversation with messages
  */
-export const getOpenaiConversation = async (id: number, options?: RequestInit): Promise<OpenaiConversationWithMessages> => {
+export const getAiConversation = async (id: number, options?: RequestInit): Promise<AiConversationWithMessages> => {
 
-  return customFetch<OpenaiConversationWithMessages>(getGetOpenaiConversationUrl(id),
+  return customFetch<AiConversationWithMessages>(getGetAiConversationUrl(id),
   {
     ...options,
     method: 'GET'
@@ -18413,45 +18413,45 @@ export const getOpenaiConversation = async (id: number, options?: RequestInit): 
 
 
 
-export const getGetOpenaiConversationQueryKey = (id: number,) => {
+export const getGetAiConversationQueryKey = (id: number,) => {
     return [
-    `/api/openai/conversations/${id}`
+    `/api/ai/conversations/${id}`
     ] as const;
     }
 
 
-export const getGetOpenaiConversationQueryOptions = <TData = Awaited<ReturnType<typeof getOpenaiConversation>>, TError = ErrorType<OpenaiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOpenaiConversation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export const getGetAiConversationQueryOptions = <TData = Awaited<ReturnType<typeof getAiConversation>>, TError = ErrorType<AiError>>(id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 ) => {
 
 const {query: queryOptions, request: requestOptions} = options ?? {};
 
-  const queryKey =  queryOptions?.queryKey ?? getGetOpenaiConversationQueryKey(id);
+  const queryKey =  queryOptions?.queryKey ?? getGetAiConversationQueryKey(id);
 
 
 
-    const queryFn: QueryFunction<Awaited<ReturnType<typeof getOpenaiConversation>>> = ({ signal }) => getOpenaiConversation(id, { signal, ...requestOptions });
+    const queryFn: QueryFunction<Awaited<ReturnType<typeof getAiConversation>>> = ({ signal }) => getAiConversation(id, { signal, ...requestOptions });
 
 
 
 
 
-   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getOpenaiConversation>>, TError, TData> & { queryKey: QueryKey }
+   return  { queryKey, queryFn, enabled: !!(id), ...queryOptions} as UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData> & { queryKey: QueryKey }
 }
 
-export type GetOpenaiConversationQueryResult = NonNullable<Awaited<ReturnType<typeof getOpenaiConversation>>>
-export type GetOpenaiConversationQueryError = ErrorType<OpenaiError>
+export type GetAiConversationQueryResult = NonNullable<Awaited<ReturnType<typeof getAiConversation>>>
+export type GetAiConversationQueryError = ErrorType<AiError>
 
 
 /**
  * @summary Get conversation with messages
  */
 
-export function useGetOpenaiConversation<TData = Awaited<ReturnType<typeof getOpenaiConversation>>, TError = ErrorType<OpenaiError>>(
- id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getOpenaiConversation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
+export function useGetAiConversation<TData = Awaited<ReturnType<typeof getAiConversation>>, TError = ErrorType<AiError>>(
+ id: number, options?: { query?:UseQueryOptions<Awaited<ReturnType<typeof getAiConversation>>, TError, TData>, request?: SecondParameter<typeof customFetch>}
 
  ):  UseQueryResult<TData, TError> & { queryKey: QueryKey } {
 
-  const queryOptions = getGetOpenaiConversationQueryOptions(id,options)
+  const queryOptions = getGetAiConversationQueryOptions(id,options)
 
   const query = useQuery(queryOptions) as  UseQueryResult<TData, TError> & { queryKey: QueryKey };
 
@@ -18464,20 +18464,20 @@ export function useGetOpenaiConversation<TData = Awaited<ReturnType<typeof getOp
 
 
 
-export const getDeleteOpenaiConversationUrl = (id: number,) => {
+export const getDeleteAiConversationUrl = (id: number,) => {
 
 
 
 
-  return `/api/openai/conversations/${id}`
+  return `/api/ai/conversations/${id}`
 }
 
 /**
  * @summary Delete a conversation
  */
-export const deleteOpenaiConversation = async (id: number, options?: RequestInit): Promise<void> => {
+export const deleteAiConversation = async (id: number, options?: RequestInit): Promise<void> => {
 
-  return customFetch<void>(getDeleteOpenaiConversationUrl(id),
+  return customFetch<void>(getDeleteAiConversationUrl(id),
   {
     ...options,
     method: 'DELETE'
@@ -18489,11 +18489,11 @@ export const deleteOpenaiConversation = async (id: number, options?: RequestInit
 
 
 
-export const getDeleteOpenaiConversationMutationOptions = <TError = ErrorType<OpenaiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOpenaiConversation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof deleteOpenaiConversation>>, TError,{id: number}, TContext> => {
+export const getDeleteAiConversationMutationOptions = <TError = ErrorType<AiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiConversation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof deleteAiConversation>>, TError,{id: number}, TContext> => {
 
-const mutationKey = ['deleteOpenaiConversation'];
+const mutationKey = ['deleteAiConversation'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -18503,10 +18503,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteOpenaiConversation>>, {id: number}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof deleteAiConversation>>, {id: number}> = (props) => {
           const {id} = props ?? {};
 
-          return  deleteOpenaiConversation(id,requestOptions)
+          return  deleteAiConversation(id,requestOptions)
         }
 
 
@@ -18516,56 +18516,56 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type DeleteOpenaiConversationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteOpenaiConversation>>>
+    export type DeleteAiConversationMutationResult = NonNullable<Awaited<ReturnType<typeof deleteAiConversation>>>
 
-    export type DeleteOpenaiConversationMutationError = ErrorType<OpenaiError>
+    export type DeleteAiConversationMutationError = ErrorType<AiError>
 
     /**
  * @summary Delete a conversation
  */
-export const useDeleteOpenaiConversation = <TError = ErrorType<OpenaiError>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteOpenaiConversation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useDeleteAiConversation = <TError = ErrorType<AiError>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof deleteAiConversation>>, TError,{id: number}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof deleteOpenaiConversation>>,
+        Awaited<ReturnType<typeof deleteAiConversation>>,
         TError,
         {id: number},
         TContext
       > => {
-      return useMutation(getDeleteOpenaiConversationMutationOptions(options));
+      return useMutation(getDeleteAiConversationMutationOptions(options));
     }
 
-export const getSendOpenaiMessageUrl = (id: number,) => {
+export const getSendAiMessageUrl = (id: number,) => {
 
 
 
 
-  return `/api/openai/conversations/${id}/messages`
+  return `/api/ai/conversations/${id}/messages`
 }
 
 /**
  * @summary Send a message and receive a streaming AI response
  */
-export const sendOpenaiMessage = async (id: number,
-    openaiMessageInput: OpenaiMessageInput, options?: RequestInit): Promise<unknown> => {
+export const sendAiMessage = async (id: number,
+    aiMessageInput: AiMessageInput, options?: RequestInit): Promise<unknown> => {
 
-  return customFetch<unknown>(getSendOpenaiMessageUrl(id),
+  return customFetch<unknown>(getSendAiMessageUrl(id),
   {
     ...options,
     method: 'POST',
     headers: { 'Content-Type': 'application/json', ...options?.headers },
     body: JSON.stringify(
-      openaiMessageInput,)
+      aiMessageInput,)
   }
 );}
 
 
 
 
-export const getSendOpenaiMessageMutationOptions = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOpenaiMessage>>, TError,{id: number;data: BodyType<OpenaiMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
-): UseMutationOptions<Awaited<ReturnType<typeof sendOpenaiMessage>>, TError,{id: number;data: BodyType<OpenaiMessageInput>}, TContext> => {
+export const getSendAiMessageMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAiMessage>>, TError,{id: number;data: BodyType<AiMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof sendAiMessage>>, TError,{id: number;data: BodyType<AiMessageInput>}, TContext> => {
 
-const mutationKey = ['sendOpenaiMessage'];
+const mutationKey = ['sendAiMessage'];
 const {mutation: mutationOptions, request: requestOptions} = options ?
       options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
       options
@@ -18575,10 +18575,10 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
 
 
-      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendOpenaiMessage>>, {id: number;data: BodyType<OpenaiMessageInput>}> = (props) => {
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof sendAiMessage>>, {id: number;data: BodyType<AiMessageInput>}> = (props) => {
           const {id,data} = props ?? {};
 
-          return  sendOpenaiMessage(id,data,requestOptions)
+          return  sendAiMessage(id,data,requestOptions)
         }
 
 
@@ -18588,22 +18588,22 @@ const {mutation: mutationOptions, request: requestOptions} = options ?
 
   return  { mutationFn, ...mutationOptions }}
 
-    export type SendOpenaiMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendOpenaiMessage>>>
-    export type SendOpenaiMessageMutationBody = BodyType<OpenaiMessageInput>
-    export type SendOpenaiMessageMutationError = ErrorType<unknown>
+    export type SendAiMessageMutationResult = NonNullable<Awaited<ReturnType<typeof sendAiMessage>>>
+    export type SendAiMessageMutationBody = BodyType<AiMessageInput>
+    export type SendAiMessageMutationError = ErrorType<unknown>
 
     /**
  * @summary Send a message and receive a streaming AI response
  */
-export const useSendOpenaiMessage = <TError = ErrorType<unknown>,
-    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendOpenaiMessage>>, TError,{id: number;data: BodyType<OpenaiMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
+export const useSendAiMessage = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof sendAiMessage>>, TError,{id: number;data: BodyType<AiMessageInput>}, TContext>, request?: SecondParameter<typeof customFetch>}
  ): UseMutationResult<
-        Awaited<ReturnType<typeof sendOpenaiMessage>>,
+        Awaited<ReturnType<typeof sendAiMessage>>,
         TError,
-        {id: number;data: BodyType<OpenaiMessageInput>},
+        {id: number;data: BodyType<AiMessageInput>},
         TContext
       > => {
-      return useMutation(getSendOpenaiMessageMutationOptions(options));
+      return useMutation(getSendAiMessageMutationOptions(options));
     }
 
 export const getGetFloorPlanUrl = () => {

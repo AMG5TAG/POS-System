@@ -6270,7 +6270,15 @@ export const ImportProductFromUrlResponse = zod.object({
 }),
   "aiFilled": zod.array(zod.string()).describe('Fields Claude filled because the page\'s own data left them empty.'),
   "aiUsed": zod.boolean(),
-  "aiError": zod.string().optional()
+  "aiError": zod.string().optional(),
+  "site": zod.object({
+  "host": zod.string(),
+  "name": zod.string().nullable(),
+  "supplier": zod.object({
+  "id": zod.number(),
+  "name": zod.string()
+}).nullable()
+}).describe('The site the page is on. supplier is the supplier whose saved website is this site (same host or a subdomain), else null; name is the site\'s own name, offered when creating a new supplier.')
 })
 
 
@@ -7533,20 +7541,20 @@ export const SaveAiSettingsResponse = zod.object({
 /**
  * @summary List all conversations for the merchant
  */
-export const ListOpenaiConversationsResponseItem = zod.object({
+export const ListAiConversationsResponseItem = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "mode": zod.string(),
   "title": zod.string(),
   "createdAt": zod.coerce.date()
 })
-export const ListOpenaiConversationsResponse = zod.array(ListOpenaiConversationsResponseItem)
+export const ListAiConversationsResponse = zod.array(ListAiConversationsResponseItem)
 
 
 /**
  * @summary Create or fetch conversation by mode
  */
-export const CreateOpenaiConversationBody = zod.object({
+export const CreateAiConversationBody = zod.object({
   "mode": zod.string().optional(),
   "title": zod.string().optional()
 })
@@ -7555,11 +7563,11 @@ export const CreateOpenaiConversationBody = zod.object({
 /**
  * @summary Get conversation with messages
  */
-export const GetOpenaiConversationParams = zod.object({
+export const GetAiConversationParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const GetOpenaiConversationResponse = zod.object({
+export const GetAiConversationResponse = zod.object({
   "id": zod.number(),
   "merchantId": zod.number(),
   "mode": zod.string(),
@@ -7578,7 +7586,7 @@ export const GetOpenaiConversationResponse = zod.object({
 /**
  * @summary Delete a conversation
  */
-export const DeleteOpenaiConversationParams = zod.object({
+export const DeleteAiConversationParams = zod.object({
   "id": zod.coerce.number()
 })
 
@@ -7586,11 +7594,11 @@ export const DeleteOpenaiConversationParams = zod.object({
 /**
  * @summary Send a message and receive a streaming AI response
  */
-export const SendOpenaiMessageParams = zod.object({
+export const SendAiMessageParams = zod.object({
   "id": zod.coerce.number()
 })
 
-export const SendOpenaiMessageBody = zod.object({
+export const SendAiMessageBody = zod.object({
   "content": zod.string()
 })
 

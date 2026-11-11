@@ -7,9 +7,9 @@
  * every entry point here takes a `merchantId` — there is no such thing as an
  * AI request that is not on behalf of a merchant.
  *
- * **Claude is the only provider.** An OpenAI fallback used to sit behind it and
- * was removed; `withFallback` and the `onFallback` hooks are kept so a second
- * provider can slot back in without touching any caller.
+ * **Claude is the only provider**, for every AI feature: the AI Assistant, the
+ * till's upsell coach, promo card copy and product Import Details. A leftover
+ * key for any other vendor is ignored (`ai-provider.test.ts`).
  *
  * Four rules hold this together:
  *

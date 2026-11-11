@@ -21,15 +21,18 @@ import { Badge } from "@/components/ui/badge";
 import { uploadFile } from "@/lib/upload";
 import { cn } from "@/lib/utils";
 import { parseWarranty, matchByName } from "@/lib/product-url-import";
+import { TreeCategorySelect } from "@/components/ui/tree-category-select";
 
 type FieldKey =
-  | "name" | "description" | "sku" | "barcode" | "brand" | "category" | "price"
+  | "name" | "description" | "sku" | "barcode" | "brand" | "category" | "price" | "supplier" | "supplierCode"
   | "weightKg" | "lengthCm" | "widthCm" | "heightCm" | "warranty" | "technicalSpecs";
 
 const FIELDS: { key: FieldKey; label: string; long?: boolean; numeric?: boolean; hint?: string }[] = [
   { key: "name", label: "Name" },
   { key: "brand", label: "Brand" },
   { key: "category", label: "Category" },
+  { key: "supplier", label: "Supplier" },
+  { key: "supplierCode", label: "Supplier code", hint: "The supplier's own code for this item, from their page." },
   { key: "sku", label: "SKU / model" },
   { key: "barcode", label: "Barcode" },
   { key: "price", label: "Sell price", numeric: true, hint: "The price on that site — check it's the price you want." },
@@ -45,7 +48,7 @@ const FIELDS: { key: FieldKey; label: string; long?: boolean; numeric?: boolean;
 /** What the form holds now, so a filled field starts unticked. */
 export interface ImportCurrent {
   name: string; description: string; sku: string; barcode: string;
-  brandId: string; categoryId: string; price: string;
+  brandId: string; categoryId: string; price: string; supplier: string; supplierCode: string;
   weight: string; lengthCm: string; widthCm: string; heightCm: string;
   warrantyDuration: string; technicalSpecs: string; photoCount: number;
 }
@@ -56,12 +59,22 @@ export interface ImportApply {
   technicalSpecs?: string;
   warranty?: { duration: string; unit: "months" | "years" };
   brand?: { id: string } | { createName: string };
-  category?: { id: string } | { createName: string };
+  category?: { id: string };
+  /** An existing supplier by name, or a new one to create with the site as its website. */
+  supplier?: { name: string } | { createName: string; website: string };
+  supplierCode?: string;
   /** Uploaded to this business's storage, in order. */
   photos: string[];
 }
 
 interface Named { id: number; name: string }
+interface Category extends Named { parentId?: number | null }
+
+/** "australiancomputertraders.com.au" → "Australiancomputertraders", when the site gives no name. */
+const siteLabel = (host: string) => {
+  const base = host.split(".")[0] ?? "";
+  return base ? base[0]!.toUpperCase() + base.slice(1) : "";
+};
 
 const currentOf = (c: ImportCurrent, k: FieldKey): string => {
   switch (k) {
@@ -73,13 +86,15 @@ const currentOf = (c: ImportCurrent, k: FieldKey): string => {
 };
 
 export function ImportProductDetailsDialog({
-  open, onOpenChange, current, brands, categories, onApply,
+  open, onOpenChange, current, brands, categories, suppliers, onCreateCategory, onApply,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   current: ImportCurrent;
   brands: Named[];
-  categories: Named[];
+  categories: Category[];
+  suppliers: Named[];
+  onCreateCategory: (name: string, onCreated: (id: number) => void) => void;
   onApply: (patch: ImportApply) => Promise<void> | void;
 }) {
   const fetchPage = useImportProductFromUrl();
@@ -89,8 +104,9 @@ export function ImportProductDetailsDialog({
   const [ticked, setTicked] = useState<Record<FieldKey, boolean>>({} as Record<FieldKey, boolean>);
   const [photos, setPhotos] = useState<{ url: string; on: boolean; broken?: boolean }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
+  const [categoryHint, setCategoryHint] = useState("");
 
-  const reset = () => { setResult(null); setValues({} as Record<FieldKey, string>); setTicked({} as Record<FieldKey, boolean>); setPhotos([]); setBusy(null); };
+  const reset = () => { setCategoryHint(""); setResult(null); setValues({} as Record<FieldKey, string>); setTicked({} as Record<FieldKey, boolean>); setPhotos([]); setBusy(null); };
   const close = (o: boolean) => { if (!o && busy) return; if (!o) { reset(); setUrl(""); } onOpenChange(o); };
 
   const read = () => {
@@ -106,6 +122,18 @@ export function ImportProductDetailsDialog({
           // Tick what the page gave us, unless the form already has its own value.
           t[f.key] = v[f.key] !== "" && !currentOf(current, f.key);
         }
+        // The site is a supplier: their page's SKU is *their* code, not ours, so
+        // it goes to Supplier code and the SKU row starts unticked.
+        v.supplier = r.site.supplier?.name ?? r.site.name ?? siteLabel(r.site.host);
+        t.supplier = v.supplier !== "" && !current.supplier;
+        v.supplierCode = v.sku ?? "";
+        t.supplierCode = v.supplierCode !== "" && !current.supplierCode;
+        t.sku = false;
+        // Category is picked from the tree; start on the one whose name matches.
+        const cat = matchByName(categories, v.category);
+        setCategoryHint(v.category ?? "");
+        v.category = cat ? String(cat.id) : "";
+        t.category = !!cat && !current.categoryId;
         setValues(v); setTicked(t);
         setPhotos(r.product.images.map((u) => ({ url: u, on: true })));
         setResult(r);
@@ -121,7 +149,7 @@ export function ImportProductDetailsDialog({
   };
 
   const brandMatch = useMemo(() => matchByName(brands, values.brand), [brands, values.brand]);
-  const categoryMatch = useMemo(() => matchByName(categories, values.category), [categories, values.category]);
+  const supplierMatch = useMemo(() => matchByName(suppliers, values.supplier), [suppliers, values.supplier]);
   const warranty = parseWarranty(values.warranty ?? "");
   const aiFilled = new Set(result?.aiFilled ?? []);
 
@@ -144,7 +172,13 @@ export function ImportProductDetailsDialog({
     }
     if (use("warranty") && warranty) patch.warranty = warranty;
     if (use("brand")) patch.brand = brandMatch ? { id: String(brandMatch.id) } : { createName: values.brand!.trim() };
-    if (use("category")) patch.category = categoryMatch ? { id: String(categoryMatch.id) } : { createName: values.category!.trim() };
+    if (use("category")) patch.category = { id: values.category! };
+    if (use("supplier")) {
+      patch.supplier = supplierMatch
+        ? { name: supplierMatch.name }
+        : { createName: values.supplier!.trim(), website: result?.site.host ?? "" };
+    }
+    if (use("supplierCode")) patch.supplierCode = values.supplierCode!.trim();
 
     // Photos are copied into our own storage: the shop can't show a hot-linked
     // image, and the other site may move or block it later.
@@ -260,10 +294,18 @@ export function ImportProductDetailsDialog({
                       <div className="pt-2 text-sm font-medium leading-tight">
                         {f.label}
                         {aiFilled.has(f.key) && <Sparkles className="inline w-3 h-3 ml-1 text-violet-500" aria-label="Filled by Claude" />}
-                        {!has && <Badge variant="outline" className="mt-1 text-[10px] font-normal text-amber-700 border-amber-300 dark:text-amber-400">Not on page</Badge>}
+                        {!has && !(f.key === "category" && categoryHint) && <Badge variant="outline" className="mt-1 text-[10px] font-normal text-amber-700 border-amber-300 dark:text-amber-400">Not on page</Badge>}
                       </div>
                       <div className="space-y-1 min-w-0">
-                        {f.long ? (
+                        {f.key === "category" ? (
+                          <TreeCategorySelect
+                            categories={categories}
+                            value={values.category ?? ""}
+                            onChange={(v) => { setValues((prev) => ({ ...prev, category: v })); setTicked((prev) => ({ ...prev, category: !!v })); }}
+                            onCreateCategory={onCreateCategory}
+                            placeholder="Pick a category"
+                          />
+                        ) : f.long ? (
                           <Textarea rows={f.key === "description" ? 5 : 4} value={values[f.key] ?? ""} onChange={(e) => setValue(f.key, e.target.value)}
                             placeholder={has ? undefined : "Not found — type it here to add it"} />
                         ) : (
@@ -274,8 +316,19 @@ export function ImportProductDetailsDialog({
                         {f.key === "brand" && has && (
                           <p className="text-[11px] text-muted-foreground">{brandMatch ? `Matches your brand "${brandMatch.name}".` : `New brand — "${values.brand!.trim()}" will be created.`}</p>
                         )}
-                        {f.key === "category" && has && (
-                          <p className="text-[11px] text-muted-foreground">{categoryMatch ? `Matches your category "${categoryMatch.name}".` : `New category — "${values.category!.trim()}" will be created. Untick to pick one yourself.`}</p>
+                        {f.key === "category" && categoryHint && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {has ? `The page files it under "${categoryHint}".` : `The page files it under "${categoryHint}" — you have no category by that name. Pick one, or use New in the list to create it.`}
+                          </p>
+                        )}
+                        {f.key === "supplier" && has && (
+                          <p className="text-[11px] text-muted-foreground">
+                            {result?.site.supplier && supplierMatch?.id === result.site.supplier.id
+                              ? `Your supplier — its website is ${result.site.host}.`
+                              : supplierMatch
+                                ? `Matches your supplier "${supplierMatch.name}".`
+                                : `No supplier has ${result?.site.host} as its website — "${values.supplier!.trim()}" will be created with it, so the next import from this site matches.`}
+                          </p>
                         )}
                         {f.key === "warranty" && has && (
                           <p className={cn("text-[11px]", warranty ? "text-muted-foreground" : "text-destructive")}>

@@ -5,11 +5,11 @@
  */
 import { Router, type IRouter } from "express";
 import { eq } from "drizzle-orm";
-import { db, aiSettingsTable } from "@workspace/db";
+import { db, aiSettingsTable, suppliersTable } from "@workspace/db";
 import { ImportProductFromUrlBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { safeFetch, SafeFetchError } from "../lib/safe-fetch";
-import { extractProduct, mergeAiFields, pageTextForAi, AI_JSON_SCHEMA, type ImportField } from "../lib/product-page-import";
+import { extractProduct, mergeAiFields, pageTextForAi, AI_JSON_SCHEMA, matchSupplierBySite, siteHost, siteName, type ImportField } from "../lib/product-page-import";
 import { aiJson, isAiAvailable, NoAiProviderError } from "../services/ai";
 
 const router: IRouter = Router();
@@ -85,7 +85,17 @@ router.post("/products/import-from-url", requireAuth, async (req, res): Promise<
     }
   }
 
-  res.json({ url: page.url, product, aiFilled, aiUsed, ...(aiError ? { aiError } : {}) });
+  // The site is usually one of our suppliers, whose record carries its website.
+  const suppliers = await db.select({ id: suppliersTable.id, name: suppliersTable.name, website: suppliersTable.website })
+    .from(suppliersTable).where(eq(suppliersTable.merchantId, merchantId));
+  const supplier = matchSupplierBySite(suppliers, page.url) ?? matchSupplierBySite(suppliers, target);
+  const site = {
+    host: siteHost(page.url) ?? "",
+    name: siteName(html) ?? null,
+    supplier: supplier ? { id: supplier.id, name: supplier.name } : null,
+  };
+
+  res.json({ url: page.url, product, aiFilled, aiUsed, site, ...(aiError ? { aiError } : {}) });
 });
 
 router.get("/products/import-from-url/image", requireAuth, async (req, res): Promise<void> => {

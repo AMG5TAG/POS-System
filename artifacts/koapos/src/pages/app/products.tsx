@@ -33,6 +33,7 @@ import {
   useCreateDigitalCode,
   useDeleteDigitalCode,
   useListSuppliers,
+  useCreateSupplier,
   useBulkUpdateProducts,
   useGetInventorySettings,
   useGetLowStockAlertSettings,
@@ -1391,15 +1392,16 @@ export default function ProductsPage() {
         } catch { toast.error(`Couldn't create brand "${p.brand.createName}" — pick one on the form.`); }
       }
     }
-    let categoryId: string | undefined;
-    if (p.category) {
-      if ("id" in p.category) categoryId = p.category.id;
+    const categoryId = p.category?.id;
+    let supplierName: string | undefined;
+    if (p.supplier) {
+      if ("name" in p.supplier) supplierName = p.supplier.name;
       else {
         try {
-          const c = await createCategoryMutation.mutateAsync({ data: { name: p.category.createName } }) as { id: number };
-          queryClient.invalidateQueries({ queryKey: ["categories"] });
-          categoryId = String(c.id);
-        } catch { toast.error(`Couldn't create category "${p.category.createName}" — pick one on the form.`); }
+          await createSupplierMutation.mutateAsync({ data: { name: p.supplier.createName, website: p.supplier.website || undefined } });
+          queryClient.invalidateQueries({ queryKey: ["suppliers"] });
+          supplierName = p.supplier.createName;
+        } catch { toast.error(`Couldn't create supplier "${p.supplier.createName}" — pick one on the Pricing tab.`); }
       }
     }
     setFormTouched(true);
@@ -1421,6 +1423,8 @@ export default function ProductsPage() {
         ...(p.warranty ? { warrantyDuration: p.warranty.duration, warrantyUnit: p.warranty.unit } : {}),
         ...(brandId ? { brandId } : {}),
         ...(categoryId ? { categoryId } : {}),
+        ...(supplierName ? { supplier: supplierName } : {}),
+        ...(p.supplierCode !== undefined ? { supplierCode: p.supplierCode } : {}),
         ...(p.photos.length ? {
           imageUrl: photos[0] ?? "",
           media: [
@@ -1601,6 +1605,7 @@ export default function ProductsPage() {
   const bulkUpdateMutation = useBulkUpdateProducts();
   const { data: suppliersListData } = useListSuppliers(undefined, { query: { queryKey: ["suppliers"] } });
   const suppliersList = ((suppliersListData?.items ?? []) as { id: number; name: string }[]);
+  const createSupplierMutation = useCreateSupplier();
 
   useEffect(() => {
     if (!dialogOpen) return;
@@ -3821,12 +3826,15 @@ export default function ProductsPage() {
         current={{
           name: form.name, description: form.description, sku: form.sku, barcode: form.barcode,
           brandId: form.brandId, categoryId: form.categoryId, price: form.price,
+          supplier: form.supplier, supplierCode: form.supplierCode,
           weight: form.weight, lengthCm: form.lengthCm, widthCm: form.widthCm, heightCm: form.heightCm,
           warrantyDuration: form.warrantyDuration, technicalSpecs: form.technicalSpecs,
           photoCount: [form.imageUrl, ...form.media.filter((m) => m.type === "image").map((m) => m.url)].filter(Boolean).length,
         }}
         brands={brandsList}
         categories={categories}
+        suppliers={suppliersList}
+        onCreateCategory={createCategoryInline}
         onApply={applyImportedDetails}
       />
 

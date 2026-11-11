@@ -137,6 +137,23 @@ export function parseDimensions(v: string): [number, number, number] | undefined
   return [round1(parseFloat(m[1]!) * f), round1(parseFloat(m[3]!) * f), round1(parseFloat(m[5]!) * f)];
 }
 
+/**
+ * "Width: 14.09” / 357.80 mm Depth: 9.19” / 233.30 mm Height: 0.78” / 19.87 mm"
+ * → [length(depth), width, height] in cm. Metric is preferred when both are given.
+ */
+export function labelledDimensions(v: string): [number, number, number] | undefined {
+  const text = v.replace(/[”″“]/g, '"');
+  const read = (label: RegExp): number | undefined => {
+    const m = text.match(label);
+    if (!m) return undefined;
+    const rest = text.slice(m.index! + m[0].length).split(/\b(?:width|depth|length|height|weight)\b/i)[0]!;
+    const metric = rest.match(/(\d+(?:\.\d+)?)\s*(mm|cm)\b/i);
+    return toCm(metric ? metric[0] : rest);
+  };
+  const l = read(/\b(?:depth|length)\b\s*:?/i), w = read(/\bwidth\b\s*:?/i), h = read(/\bheight\b\s*:?/i);
+  return l != null && w != null && h != null ? [l, w, h] : undefined;
+}
+
 /** A barcode is kept only when its GTIN check digit is right. */
 export function validGtin(code: string): boolean {
   if (!/^\d{8}$|^\d{12,14}$/.test(code)) return false;
@@ -298,7 +315,7 @@ function applySpecs(out: ImportedProduct, specs: [string, string][]): void {
     const l = label.toLowerCase();
     if (out.weightKg == null && /\bweight\b/.test(l) && !/capacity|load|max/.test(l)) out.weightKg = toKg(value);
     if (/dimension|size \(|^size$|measurements/.test(l)) {
-      const d = parseDimensions(value);
+      const d = parseDimensions(value) ?? labelledDimensions(value);
       if (d && out.lengthCm == null && out.widthCm == null && out.heightCm == null) [out.lengthCm, out.widthCm, out.heightCm] = d;
     }
     if (out.lengthCm == null && /^(length|depth)\b/.test(l)) out.lengthCm = toCm(value);
@@ -316,6 +333,18 @@ function applySpecs(out: ImportedProduct, specs: [string, string][]): void {
 
 /* ── Whole page ─────────────────────────────────────────────────────────── */
 
+/**
+ * A page title is the product name plus shop chrome: "Buy X | ACT",
+ * "X - Shop Name". Only used for names taken from titles/meta, never JSON-LD.
+ */
+export function cleanTitleName(t: string | undefined): string | undefined {
+  if (!t) return undefined;
+  let s = t.replace(/^\s*(buy|shop)\s+/i, "");
+  const m = s.match(/^(.*\S)\s+(?:\||–|—|-|::)\s+([^|–—]{1,40})$/);
+  if (m && m[1]!.length >= 8) s = m[1]!;
+  return s.trim() || undefined;
+}
+
 export function extractProduct(html: string, pageUrl: string): ImportedProduct {
   const ld = fromJsonLd(html, pageUrl);
   const meta = metaTags(html);
@@ -323,7 +352,9 @@ export function extractProduct(html: string, pageUrl: string): ImportedProduct {
   const h1 = clean(html.match(/<h1\b[^>]*>([\s\S]*?)<\/h1>/i)?.[1], 200);
 
   const out: ImportedProduct = {
-    name: ld.name ?? clean(meta.get("og:title"), 200) ?? h1 ?? title,
+    name: ld.name ?? cleanTitleName(clean(meta.get("og:title"), 200))
+      ?? h1?.replace(/\s+(SKU|Item|Model|Code)\s*(#|no\.?)?\s*:\s*\S+\s*$/i, "")
+      ?? cleanTitleName(title),
     description: ld.description ?? cleanLong(meta.get("og:description")) ?? cleanLong(meta.get("description")),
     sku: ld.sku ?? clean(meta.get("product:retailer_item_id") ?? meta.get("sku"), 80),
     barcode: ld.barcode,
@@ -341,6 +372,10 @@ export function extractProduct(html: string, pageUrl: string): ImportedProduct {
     if (!seen.has(row[0].toLowerCase())) { seen.add(row[0].toLowerCase()); specs.push(row); }
   }
   applySpecs(out, specs);
+  if (!out.warranty && out.description) {
+    const w = out.description.match(/\b(\d{1,3})[\s-]*(months?|years?|yrs?)(?:'s)?\s+(?:[a-z]+\s+)?warranty\b/i);
+    if (w) out.warranty = `${w[1]} ${w[2]}`;
+  }
   if (specs.length) out.technicalSpecs = specs.slice(0, SPEC_LIMIT).map(([k, v]) => `${k}: ${v}`).join("\n");
 
   const imgs = [...(ld.images ?? []), absUrl(meta.get("og:image:secure_url") ?? meta.get("og:image"), pageUrl), absUrl(meta.get("twitter:image"), pageUrl)];
@@ -405,4 +440,39 @@ export function mergeAiFields(page: ImportedProduct, ai: Record<string, unknown>
     if (val !== undefined) { (product as unknown as Record<string, unknown>)[f] = val; aiFilled.push(f); }
   }
   return { product, aiFilled };
+}
+
+/* ── Which supplier is this site? ───────────────────────────────────────── */
+
+/** "https://www.Example.com.au/x" or "example.com.au" → "example.com.au". */
+export function siteHost(raw: string | null | undefined): string | undefined {
+  const s = (raw ?? "").trim();
+  if (!s) return undefined;
+  try {
+    const host = new URL(/^[a-z][a-z0-9+.-]*:\/\//i.test(s) ? s : `https://${s}`).hostname.toLowerCase();
+    return host.replace(/^www\d?\./, "") || undefined;
+  } catch { return undefined; }
+}
+
+/**
+ * The supplier whose saved website is the page's site — same host, or one a
+ * subdomain of the other (shop.example.com vs example.com). Ambiguous → none.
+ */
+export function matchSupplierBySite<T extends { website: string | null }>(suppliers: T[], pageUrl: string): T | undefined {
+  const host = siteHost(pageUrl);
+  if (!host) return undefined;
+  const hits = suppliers.filter((s) => {
+    const h = siteHost(s.website);
+    return !!h && (h === host || host.endsWith(`.${h}`) || h.endsWith(`.${host}`));
+  });
+  // Prefer an exact host over a parent domain; two exact hits is ambiguous.
+  const exact = hits.filter((s) => siteHost(s.website) === host);
+  if (exact.length === 1) return exact[0];
+  return hits.length === 1 ? hits[0] : undefined;
+}
+
+/** The site's own name (og:site_name / application-name), for a new supplier. */
+export function siteName(html: string): string | undefined {
+  const meta = metaTags(html);
+  return clean(meta.get("og:site_name") ?? meta.get("application-name"), 120);
 }

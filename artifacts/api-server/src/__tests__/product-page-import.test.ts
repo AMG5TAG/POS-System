@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractProduct, mergeAiFields, parseDimensions, toKg, validGtin, specRows } from "../lib/product-page-import";
+import { extractProduct, mergeAiFields, parseDimensions, toKg, validGtin, specRows, matchSupplierBySite, siteHost, siteName, cleanTitleName, labelledDimensions } from "../lib/product-page-import";
 import { assertPublicUrl } from "../lib/safe-fetch";
 
 const PAGE = `<!doctype html><html><head>
@@ -100,5 +100,49 @@ describe("assertPublicUrl", () => {
   });
   it("allows a public IP", async () => {
     await expect(assertPublicUrl("https://1.1.1.1/")).resolves.toBeInstanceOf(URL);
+  });
+});
+
+describe("matchSupplierBySite", () => {
+  const sups = [
+    { id: 1, name: "Australian Computer Traders", website: "www.australiancomputertraders.com.au" },
+    { id: 2, name: "Leader", website: "https://leadersystems.com.au/" },
+    { id: 3, name: "No site", website: null },
+  ];
+  it("matches the page's site to the supplier's saved website, however it was typed", () => {
+    expect(matchSupplierBySite(sups, "https://www.australiancomputertraders.com.au/dell-latitude-5520-intel-i5-1145g7-2.60ghz-16gb-ra")?.name)
+      .toBe("Australian Computer Traders");
+    expect(matchSupplierBySite(sups, "https://shop.leadersystems.com.au/p/1")?.id).toBe(2);
+  });
+  it("matches nothing for an unknown site, or a look-alike domain", () => {
+    expect(matchSupplierBySite(sups, "https://example.com/x")).toBeUndefined();
+    expect(matchSupplierBySite(sups, "https://notleadersystems.com.au/x")).toBeUndefined();
+  });
+  it("is ambiguous, not a guess, when two suppliers share a site", () => {
+    expect(matchSupplierBySite([...sups, { id: 4, name: "ACT 2", website: "australiancomputertraders.com.au" }],
+      "https://australiancomputertraders.com.au/x")).toBeUndefined();
+  });
+  it("reads host and site name", () => {
+    expect(siteHost("WWW.Example.COM.au/path")).toBe("example.com.au");
+    expect(siteName('<meta property="og:site_name" content="Australian Computer Traders">')).toBe("Australian Computer Traders");
+  });
+});
+
+describe("a supplier's page (Australian Computer Traders shape)", () => {
+  const page = `<title>Buy Dell Latitude 5520 Intel i5 16GB RAM 256GB SSD | ACT</title>
+    <meta name="description" content="Buy Refurbished Dell Latitude 5520. 12 Month Warranty &amp; Free Shipping AU Wide">
+    <table><tr><td>Dimensions</td><td>Width: 14.09” / 357.80 mm Depth: 9.19” / 233.30 mm Height: 0.78” / 19.87 mm</td></tr></table>`;
+  const p = extractProduct(page, "https://www.australiancomputertraders.com.au/x");
+  it("cleans shop chrome off a title-derived name", () => {
+    expect(p.name).toBe("Dell Latitude 5520 Intel i5 16GB RAM 256GB SSD");
+    expect(cleanTitleName("Widget Pro 3000 - Some Shop")).toBe("Widget Pro 3000");
+    expect(cleanTitleName("USB-C - HDMI")).toBe("USB-C - HDMI"); // too short to be name + shop
+  });
+  it("reads a warranty written in the description", () => {
+    expect(p.warranty).toBe("12 Month");
+  });
+  it("reads labelled dimensions, preferring metric", () => {
+    expect([p.lengthCm, p.widthCm, p.heightCm]).toEqual([23.3, 35.8, 2]);
+    expect(labelledDimensions("Width: 30cm")).toBeUndefined();
   });
 });

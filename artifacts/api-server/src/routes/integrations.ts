@@ -56,7 +56,7 @@ export const INTEGRATIONS = [
      It is `useVault: true` — an API key is a bearer credential with a live
      billing account behind it and belongs encrypted at rest, not in the
      plaintext `credentials` column. */
-  { key: "anthropic",           label: "Claude (Anthropic)",  section: "ai",    category: "AI Providers", description: "Connect your own Anthropic account to power the AI store designer, business advisor and upsell coach. Usage is billed to your Anthropic account.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: true },
+  { key: "anthropic",           label: "Claude (Anthropic)",  section: "ai",    category: "AI Providers", description: "Connect your own Anthropic account to power every AI feature — the AI Assistant, the till's upsell coach, promo card copy and product Import Details. Usage is billed to your Anthropic account.", authType: "credentials" as const, fields: [{ name: "apiKey", label: "API Key", type: "password" }] as F[], useVault: true },
 ] as const;
 
 type F = { name: string; label: string; type: string };
