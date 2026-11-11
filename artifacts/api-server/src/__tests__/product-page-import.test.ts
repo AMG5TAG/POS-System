@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { extractProduct, mergeAiFields, parseDimensions, toKg, validGtin, specRows, matchSupplierBySite, siteHost, siteName, cleanTitleName, labelledDimensions } from "../lib/product-page-import";
+import { extractProduct, mergeAiFields, parseDimensions, toKg, validGtin, specRows, matchSupplierBySite, siteHost, siteName, cleanTitleName, labelledDimensions, cleanSuggestedTags, fallbackTags, tagPrompt } from "../lib/product-page-import";
 import { assertPublicUrl } from "../lib/safe-fetch";
 
 const PAGE = `<!doctype html><html><head>
@@ -144,5 +144,37 @@ describe("a supplier's page (Australian Computer Traders shape)", () => {
   it("reads labelled dimensions, preferring metric", () => {
     expect([p.lengthCm, p.widthCm, p.heightCm]).toEqual([23.3, 35.8, 2]);
     expect(labelledDimensions("Width: 30cm")).toBeUndefined();
+  });
+});
+
+describe("imported product tags", () => {
+  const known = [{ name: "Laptop", count: 40 }, { name: "Refurbished", count: 22 }, { name: "Business", count: 9 }, { name: "Dell", count: 7 }];
+
+  it("keeps 5, de-duplicated, using an existing tag's spelling", () => {
+    const tags = cleanSuggestedTags(["laptop", "LAPTOP", " Refurbished ", "#Intel i5", "Windows 11", "16GB RAM", "Extra"], known);
+    expect(tags).toEqual([
+      { name: "Laptop", existing: true },
+      { name: "Refurbished", existing: true },
+      { name: "Intel i5", existing: false },
+      { name: "Windows 11", existing: false },
+      { name: "16GB RAM", existing: false },
+    ]);
+  });
+
+  it("drops non-strings, blanks and over-long tags", () => {
+    expect(cleanSuggestedTags([1, null, "", "x".repeat(31), "Ok"], known)).toEqual([{ name: "Ok", existing: false }]);
+    expect(cleanSuggestedTags("not an array", known)).toEqual([]);
+  });
+
+  it("without Claude, offers only category tags the product mentions — never invents", () => {
+    const tags = fallbackTags({ name: "Refurbished Dell Latitude 5520 laptop", technicalSpecs: "Form Factor: Laptop" }, known);
+    expect(tags.map((t) => t.name)).toEqual(["Laptop", "Refurbished", "Dell"]);
+  });
+
+  it("gives Claude the category's tags with counts", () => {
+    const p = tagPrompt({ name: "Dell Latitude 5520" }, "Laptops", known.slice(0, 2), [{ name: "Gaming", count: 3 }]);
+    expect(p).toContain("Category: Laptops");
+    expect(p).toContain("Laptop (40), Refurbished (22)");
+    expect(p).toContain("Gaming (3)");
   });
 });

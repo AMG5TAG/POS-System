@@ -7556,6 +7556,40 @@ export type ImportProductFromUrlBody = {
   url: string;
 };
 
+export type SuggestImportedProductTagsBodyProduct = {
+  name?: string;
+  brand?: string;
+  /** The page's own category name */
+  category?: string;
+  description?: string;
+  technicalSpecs?: string;
+};
+
+export type SuggestImportedProductTagsBody = {
+  categoryId?: number | null;
+  product: SuggestImportedProductTagsBodyProduct;
+};
+
+export type SuggestImportedProductTags200TagsItem = {
+  name: string;
+  /** Already used on another product */
+  existing: boolean;
+};
+
+export type SuggestImportedProductTags200Source = typeof SuggestImportedProductTags200Source[keyof typeof SuggestImportedProductTags200Source];
+
+
+export const SuggestImportedProductTags200Source = {
+  ai: 'ai',
+  category: 'category',
+} as const;
+
+export type SuggestImportedProductTags200 = {
+  tags: SuggestImportedProductTags200TagsItem[];
+  source: SuggestImportedProductTags200Source;
+  aiError?: string;
+};
+
 export type GetProductUrlImportImageParams = {
 url: string;
 };

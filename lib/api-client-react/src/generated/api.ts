@@ -464,6 +464,8 @@ import type {
   StockTakeProgressInput,
   StoreCreditInput,
   StoreCreditResult,
+  SuggestImportedProductTags200,
+  SuggestImportedProductTagsBody,
   Supplier,
   SupplierInput,
   SupplierInvoiceImportInput,
@@ -14272,6 +14274,79 @@ export const useImportProductFromUrl = <TError = ErrorType<void>,
         TContext
       > => {
       return useMutation(getImportProductFromUrlMutationOptions(options));
+    }
+
+export const getSuggestImportedProductTagsUrl = () => {
+
+
+
+
+  return `/api/products/import-from-url/tags`
+}
+
+/**
+ * Claude suggests 5 tags from the product's details, reusing the tags already used in the chosen category (and its subcategories) and across the shop wherever they fit. Without Claude (not connected, AI off, or a failure) it offers the category's own tags whose words appear in the product — fewer than 5, never invented. Nothing is saved.
+
+ * @summary Suggest 5 tags for an imported product
+ */
+export const suggestImportedProductTags = async (suggestImportedProductTagsBody: SuggestImportedProductTagsBody, options?: RequestInit): Promise<SuggestImportedProductTags200> => {
+
+  return customFetch<SuggestImportedProductTags200>(getSuggestImportedProductTagsUrl(),
+  {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      suggestImportedProductTagsBody,)
+  }
+);}
+
+
+
+
+export const getSuggestImportedProductTagsMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestImportedProductTags>>, TError,{data: BodyType<SuggestImportedProductTagsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof suggestImportedProductTags>>, TError,{data: BodyType<SuggestImportedProductTagsBody>}, TContext> => {
+
+const mutationKey = ['suggestImportedProductTags'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof suggestImportedProductTags>>, {data: BodyType<SuggestImportedProductTagsBody>}> = (props) => {
+          const {data} = props ?? {};
+
+          return  suggestImportedProductTags(data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SuggestImportedProductTagsMutationResult = NonNullable<Awaited<ReturnType<typeof suggestImportedProductTags>>>
+    export type SuggestImportedProductTagsMutationBody = BodyType<SuggestImportedProductTagsBody>
+    export type SuggestImportedProductTagsMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Suggest 5 tags for an imported product
+ */
+export const useSuggestImportedProductTags = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof suggestImportedProductTags>>, TError,{data: BodyType<SuggestImportedProductTagsBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof suggestImportedProductTags>>,
+        TError,
+        {data: BodyType<SuggestImportedProductTagsBody>},
+        TContext
+      > => {
+      return useMutation(getSuggestImportedProductTagsMutationOptions(options));
     }
 
 export const getGetProductUrlImportImageUrl = (params: GetProductUrlImportImageParams,) => {

@@ -6283,6 +6283,32 @@ export const ImportProductFromUrlResponse = zod.object({
 
 
 /**
+ * Claude suggests 5 tags from the product's details, reusing the tags already used in the chosen category (and its subcategories) and across the shop wherever they fit. Without Claude (not connected, AI off, or a failure) it offers the category's own tags whose words appear in the product — fewer than 5, never invented. Nothing is saved.
+
+ * @summary Suggest 5 tags for an imported product
+ */
+export const SuggestImportedProductTagsBody = zod.object({
+  "categoryId": zod.number().nullish(),
+  "product": zod.object({
+  "name": zod.string().optional(),
+  "brand": zod.string().optional(),
+  "category": zod.string().optional().describe('The page\'s own category name'),
+  "description": zod.string().optional(),
+  "technicalSpecs": zod.string().optional()
+})
+})
+
+export const SuggestImportedProductTagsResponse = zod.object({
+  "tags": zod.array(zod.object({
+  "name": zod.string(),
+  "existing": zod.boolean().describe('Already used on another product')
+})),
+  "source": zod.enum(['ai', 'category']),
+  "aiError": zod.string().optional()
+})
+
+
+/**
  * Proxies one image (public addresses only, images only, 15 MB cap) so the product form can copy it into this business's storage — the shop can't show a hot-linked photo, and most sites send no CORS.
 
  * @summary Fetch an image from another site so the browser can upload it

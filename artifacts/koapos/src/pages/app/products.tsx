@@ -1425,6 +1425,7 @@ export default function ProductsPage() {
         ...(categoryId ? { categoryId } : {}),
         ...(supplierName ? { supplier: supplierName } : {}),
         ...(p.supplierCode !== undefined ? { supplierCode: p.supplierCode } : {}),
+        ...(p.tags.length ? { tags: [...f.tags, ...p.tags.filter((t) => !f.tags.some((x) => x.toLowerCase() === t.toLowerCase()))] } : {}),
         ...(p.photos.length ? {
           imageUrl: photos[0] ?? "",
           media: [
@@ -3826,7 +3827,7 @@ export default function ProductsPage() {
         current={{
           name: form.name, description: form.description, sku: form.sku, barcode: form.barcode,
           brandId: form.brandId, categoryId: form.categoryId, price: form.price,
-          supplier: form.supplier, supplierCode: form.supplierCode,
+          supplier: form.supplier, supplierCode: form.supplierCode, tags: form.tags,
           weight: form.weight, lengthCm: form.lengthCm, widthCm: form.widthCm, heightCm: form.heightCm,
           warrantyDuration: form.warrantyDuration, technicalSpecs: form.technicalSpecs,
           photoCount: [form.imageUrl, ...form.media.filter((m) => m.type === "image").map((m) => m.url)].filter(Boolean).length,

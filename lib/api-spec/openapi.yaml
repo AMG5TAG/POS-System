@@ -4161,6 +4161,55 @@ paths:
         "502":
           description: The site could not be read
 
+  /products/import-from-url/tags:
+    post:
+      operationId: suggestImportedProductTags
+      tags: [products]
+      summary: Suggest 5 tags for an imported product
+      description: >
+        Claude suggests 5 tags from the product's details, reusing the tags
+        already used in the chosen category (and its subcategories) and across
+        the shop wherever they fit. Without Claude (not connected, AI off, or a
+        failure) it offers the category's own tags whose words appear in the
+        product — fewer than 5, never invented. Nothing is saved.
+      security: [{ session: [] }]
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [product]
+              properties:
+                categoryId: { type: integer, nullable: true }
+                product:
+                  type: object
+                  properties:
+                    name: { type: string }
+                    brand: { type: string }
+                    category: { type: string, description: The page's own category name }
+                    description: { type: string }
+                    technicalSpecs: { type: string }
+      responses:
+        "200":
+          description: Suggested tags
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [tags, source]
+                properties:
+                  tags:
+                    type: array
+                    items:
+                      type: object
+                      required: [name, existing]
+                      properties:
+                        name: { type: string }
+                        existing: { type: boolean, description: Already used on another product }
+                  source: { type: string, enum: [ai, category] }
+                  aiError: { type: string }
+
   /products/import-from-url/image:
     get:
       operationId: getProductUrlImportImage

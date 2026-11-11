@@ -1168,7 +1168,17 @@ category name matches one. **The site is the supplier**: the response's
 = none); with no match the dialog offers a new supplier named from
 `og:site_name`, created with the site as its website so the next import
 matches. The page's SKU is the supplier's own code, so it fills Supplier code
-and the SKU row starts unticked. Photos are copied into our own storage through
+and the SKU row starts unticked.
+**Tags**: once the page is read, and again whenever the dialog's category
+changes, `POST /products/import-from-url/tags` asks Claude for exactly 5 tags,
+given the tags the chosen category and its subcategories already use (with
+counts, recursive CTE) and the shop's most-used others, told to reuse those
+spellings and invent only when nothing fits. `cleanSuggestedTags` caps at 5,
+dedupes, and snaps a case/space variant onto the existing spelling, so the
+catalogue doesn't grow "laptop" beside "Laptop". Without Claude it offers only
+the category's tags whose words appear in the product (`fallbackTags`) —
+never invented. Chips start on (off if the product already has it), staff may
+add their own, and applying **adds** to the product's tags, never replaces. Photos are copied into our own storage through
 `GET /products/import-from-url/image` (images only, 15 MB) and appended after
 existing photos. Pages built in the browser (JB Hi-Fi) carry no product data
 in their HTML — the maker's own page usually does. Pinned by

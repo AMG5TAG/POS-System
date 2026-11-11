@@ -8,10 +8,10 @@
  * still has to be saved. A field the form already holds starts unticked, so an
  * import never silently overwrites what someone typed.
  */
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { toast } from "sonner";
-import { Link2, Loader2, Sparkles, ImageOff, ExternalLink } from "lucide-react";
-import { useImportProductFromUrl, type ProductUrlImport } from "@workspace/api-client-react";
+import { Link2, Loader2, Sparkles, ImageOff, ExternalLink, Tag, RefreshCw, Plus, X } from "lucide-react";
+import { useImportProductFromUrl, useSuggestImportedProductTags, type ProductUrlImport } from "@workspace/api-client-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -51,6 +51,8 @@ export interface ImportCurrent {
   brandId: string; categoryId: string; price: string; supplier: string; supplierCode: string;
   weight: string; lengthCm: string; widthCm: string; heightCm: string;
   warrantyDuration: string; technicalSpecs: string; photoCount: number;
+  /** Tags the product already has — a suggestion matching one is shown as already on. */
+  tags: string[];
 }
 
 export interface ImportApply {
@@ -65,6 +67,8 @@ export interface ImportApply {
   supplierCode?: string;
   /** Uploaded to this business's storage, in order. */
   photos: string[];
+  /** Tags to add to the product's own (never replaces them). */
+  tags: string[];
 }
 
 interface Named { id: number; name: string }
@@ -105,8 +109,14 @@ export function ImportProductDetailsDialog({
   const [photos, setPhotos] = useState<{ url: string; on: boolean; broken?: boolean }[]>([]);
   const [busy, setBusy] = useState<string | null>(null);
   const [categoryHint, setCategoryHint] = useState("");
+  type TagChip = { name: string; existing: boolean; on: boolean; own?: boolean };
+  const [tags, setTags] = useState<TagChip[]>([]);
+  const [tagSource, setTagSource] = useState<"ai" | "category" | null>(null);
+  const [newTag, setNewTag] = useState("");
+  const suggestTags = useSuggestImportedProductTags();
+  const tagRequest = useRef(0);
 
-  const reset = () => { setCategoryHint(""); setResult(null); setValues({} as Record<FieldKey, string>); setTicked({} as Record<FieldKey, boolean>); setPhotos([]); setBusy(null); };
+  const reset = () => { tagRequest.current++; setTags([]); setTagSource(null); setNewTag(""); setCategoryHint(""); setResult(null); setValues({} as Record<FieldKey, string>); setTicked({} as Record<FieldKey, boolean>); setPhotos([]); setBusy(null); };
   const close = (o: boolean) => { if (!o && busy) return; if (!o) { reset(); setUrl(""); } onOpenChange(o); };
 
   const read = () => {
@@ -160,10 +170,53 @@ export function ImportProductDetailsDialog({
   };
 
   const use = (k: FieldKey) => ticked[k] && (values[k] ?? "").trim() !== "";
-  const tickedCount = FIELDS.filter((f) => use(f.key)).length + photos.filter((p) => p.on && !p.broken).length;
+  const tickedCount = FIELDS.filter((f) => use(f.key)).length + photos.filter((p) => p.on && !p.broken).length
+    + tags.filter((t) => t.on && !current.tags.some((c) => c.toLowerCase() === t.name.toLowerCase())).length;
+
+  /* ── Tags: 5 from Claude, drawn from what the chosen category already uses ── */
+  const hasTag = (list: string[], name: string) => list.some((t) => t.toLowerCase() === name.toLowerCase());
+  const requestTags = () => {
+    if (!result) return;
+    const id = ++tagRequest.current;
+    suggestTags.mutate({ data: {
+      categoryId: values.category ? Number(values.category) : null,
+      product: {
+        name: values.name || undefined, brand: values.brand || undefined, category: categoryHint || undefined,
+        description: values.description || undefined, technicalSpecs: values.technicalSpecs || undefined,
+      },
+    } }, {
+      onSuccess: (r) => {
+        if (id !== tagRequest.current) return; // a newer request (category changed) wins
+        setTagSource(r.source);
+        if (r.aiError) toast.warning(r.aiError);
+        // Keep tags staff typed themselves; replace the suggestions.
+        setTags((prev) => [
+          ...r.tags
+            .filter((t) => !prev.some((p) => p.own && p.name.toLowerCase() === t.name.toLowerCase()))
+            .map((t) => ({ ...t, on: !hasTag(current.tags, t.name) })),
+          ...prev.filter((p) => p.own),
+        ]);
+      },
+      onError: () => { if (id === tagRequest.current) toast.error("Couldn't suggest tags"); },
+    });
+  };
+  // Ask once the page is read, and again whenever the category changes.
+  useEffect(() => {
+    if (!result) return;
+    const t = setTimeout(requestTags, 300);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [result, values.category]);
+
+  const addOwnTag = () => {
+    const name = newTag.replace(/^#/, "").replace(/\s+/g, " ").trim().slice(0, 30);
+    if (!name) return;
+    setTags((prev) => (hasTag(prev.map((p) => p.name), name) ? prev.map((p) => (p.name.toLowerCase() === name.toLowerCase() ? { ...p, on: true } : p)) : [...prev, { name, existing: false, on: true, own: true }]));
+    setNewTag("");
+  };
 
   const apply = async () => {
-    const patch: ImportApply = { photos: [] };
+    const patch: ImportApply = { photos: [], tags: [] };
     for (const f of ["name", "description", "sku", "barcode", "technicalSpecs"] as const) if (use(f)) patch[f] = values[f]!.trim();
     for (const f of ["price", "weightKg", "lengthCm", "widthCm", "heightCm"] as const) {
       if (!use(f)) continue;
@@ -179,6 +232,7 @@ export function ImportProductDetailsDialog({
         : { createName: values.supplier!.trim(), website: result?.site.host ?? "" };
     }
     if (use("supplierCode")) patch.supplierCode = values.supplierCode!.trim();
+    patch.tags = tags.filter((t) => t.on && !hasTag(current.tags, t.name)).map((t) => t.name);
 
     // Photos are copied into our own storage: the shop can't show a hot-linked
     // image, and the other site may move or block it later.
@@ -243,6 +297,67 @@ export function ImportProductDetailsDialog({
                 {result.aiUsed && aiFilled.size > 0 && (
                   <span className="inline-flex items-center gap-1"><Sparkles className="w-3 h-3 text-violet-500" /> marks fields Claude read from the page text — check those closely.</span>
                 )}
+              </div>
+
+              {/* Tags */}
+              <div className="rounded-lg border p-3 space-y-2">
+                <div className="flex items-center justify-between gap-2">
+                  <p className="text-sm font-medium flex items-center gap-1.5">
+                    <Tag className="w-3.5 h-3.5" /> Tags
+                    <span className="text-muted-foreground font-normal">
+                      — {suggestTags.isPending
+                        ? "suggesting…"
+                        : tagSource === "ai"
+                          ? "suggested by Claude from this category's tags"
+                          : tagSource === "category"
+                            ? "this category's tags that match the product (connect Claude for 5 suggestions)"
+                            : values.category ? "" : "pick a category for tags that match it"}
+                    </span>
+                  </p>
+                  <Button type="button" variant="ghost" size="sm" className="h-7 text-xs gap-1" onClick={requestTags} disabled={suggestTags.isPending}>
+                    {suggestTags.isPending ? <Loader2 className="w-3 h-3 animate-spin" /> : <RefreshCw className="w-3 h-3" />} Suggest again
+                  </Button>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {tags.map((t) => {
+                    const already = current.tags.some((c) => c.toLowerCase() === t.name.toLowerCase());
+                    return (
+                      <button
+                        key={t.name}
+                        type="button"
+                        disabled={already}
+                        onClick={() => setTags((prev) => prev.map((x) => (x.name === t.name ? { ...x, on: !x.on } : x)))}
+                        title={already ? "The product already has this tag" : t.on ? "Click to leave out" : "Click to add"}
+                        className={cn(
+                          "inline-flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs transition-colors",
+                          already ? "opacity-50 cursor-default" : t.on ? "border-primary bg-primary/10 text-primary" : "text-muted-foreground line-through",
+                        )}
+                      >
+                        {t.name}
+                        {!t.existing && !already && <span className="text-[10px] uppercase tracking-wide opacity-70">new</span>}
+                        {already && <span className="text-[10px] opacity-70">already on</span>}
+                        {t.own && (
+                          <X className="w-3 h-3" onClick={(e) => { e.stopPropagation(); setTags((prev) => prev.filter((x) => x.name !== t.name)); }} />
+                        )}
+                      </button>
+                    );
+                  })}
+                  {!suggestTags.isPending && tags.length === 0 && <span className="text-xs text-muted-foreground">No tags yet — add your own below.</span>}
+                </div>
+                <div className="flex gap-2">
+                  <Input
+                    value={newTag}
+                    onChange={(e) => setNewTag(e.target.value)}
+                    onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); addOwnTag(); } }}
+                    placeholder="Add a tag"
+                    className="h-8 text-sm"
+                    noPhoneFormat
+                  />
+                  <Button type="button" variant="outline" size="sm" className="h-8" onClick={addOwnTag} disabled={!newTag.trim()}>
+                    <Plus className="w-3.5 h-3.5" />
+                  </Button>
+                </div>
+                <p className="text-[11px] text-muted-foreground">Tags are added to the product's own — "new" ones aren't used on any product yet.</p>
               </div>
 
               {/* Photos */}

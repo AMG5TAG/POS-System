@@ -476,3 +476,89 @@ export function siteName(html: string): string | undefined {
   const meta = metaTags(html);
   return clean(meta.get("og:site_name") ?? meta.get("application-name"), 120);
 }
+
+/* ── Tags for an imported product ───────────────────────────────────────── */
+
+export interface TagCount { name: string; count: number }
+export interface SuggestedTag { name: string; existing: boolean }
+
+export const TAG_COUNT = 5;
+const TAG_MAX_LEN = 30;
+
+export const TAGS_JSON_SCHEMA = {
+  type: "object",
+  additionalProperties: false,
+  properties: { tags: { type: "array", items: { type: "string" } } },
+  required: ["tags"],
+} as const;
+
+export function tagPrompt(
+  product: { name?: string; brand?: string; category?: string; description?: string; technicalSpecs?: string },
+  categoryName: string | null,
+  categoryTags: TagCount[],
+  businessTags: TagCount[],
+): string {
+  const list = (t: TagCount[]) => (t.length ? t.map((x) => `${x.name} (${x.count})`).join(", ") : "(none)");
+  return [
+    `Suggest exactly ${TAG_COUNT} tags for this product in our shop's catalogue.`,
+    "",
+    `Category: ${categoryName ?? product.category ?? "(not chosen yet)"}`,
+    `Tags already used in this category, with how many products carry each: ${list(categoryTags)}`,
+    `Other tags used across the shop: ${list(businessTags)}`,
+    "",
+    "Rules:",
+    "- Reuse an existing tag, spelled exactly as listed, whenever it fits this product — prefer the category's tags.",
+    "- Only invent a new tag when no existing tag covers something important, and match the existing tags' style (casing, wording, length).",
+    "- Tags are short (1–3 words), describe the product (type, brand, key feature, use), and never repeat each other.",
+    "- No prices, no SKUs, no words like 'sale' or 'new'.",
+    "",
+    "Product:",
+    `Name: ${product.name ?? ""}`,
+    `Brand: ${product.brand ?? ""}`,
+    `Description: ${(product.description ?? "").slice(0, 2000)}`,
+    `Specifications:\n${(product.technicalSpecs ?? "").slice(0, 3000)}`,
+  ].join("\n");
+}
+
+/**
+ * Claude's tags → at most 5, trimmed and de-duplicated; a tag matching an
+ * existing one (ignoring case and spacing) takes the existing spelling, so the
+ * catalogue doesn't grow "laptop" next to "Laptop".
+ */
+export function cleanSuggestedTags(raw: unknown, known: TagCount[]): SuggestedTag[] {
+  const norm = (s: string) => s.toLowerCase().replace(/\s+/g, " ").trim();
+  const byNorm = new Map(known.map((k) => [norm(k.name), k.name]));
+  const out: SuggestedTag[] = [];
+  const seen = new Set<string>();
+  for (const t of Array.isArray(raw) ? raw : []) {
+    if (typeof t !== "string") continue;
+    const s = t.replace(/^#/, "").replace(/\s+/g, " ").trim();
+    if (!s || s.length > TAG_MAX_LEN) continue;
+    const key = norm(s);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    const existing = byNorm.get(key);
+    out.push({ name: existing ?? s, existing: existing != null });
+    if (out.length === TAG_COUNT) break;
+  }
+  return out;
+}
+
+/**
+ * Without Claude: the category's own tags whose words appear in the product's
+ * text, most-used first. Never invents a tag; may return fewer than 5.
+ */
+export function fallbackTags(
+  product: { name?: string; brand?: string; description?: string; technicalSpecs?: string },
+  categoryTags: TagCount[],
+): SuggestedTag[] {
+  const text = ` ${[product.name, product.brand, product.description, product.technicalSpecs].join(" ").toLowerCase().replace(/[^a-z0-9]+/g, " ")} `;
+  return [...categoryTags]
+    .sort((a, b) => b.count - a.count)
+    .filter((t) => {
+      const words = t.name.toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      return words && text.includes(` ${words} `);
+    })
+    .slice(0, TAG_COUNT)
+    .map((t) => ({ name: t.name, existing: true }));
+}

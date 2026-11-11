@@ -4,12 +4,15 @@
  * complete before the ordinary product save. Rules in lib/product-page-import.ts.
  */
 import { Router, type IRouter } from "express";
-import { eq } from "drizzle-orm";
-import { db, aiSettingsTable, suppliersTable } from "@workspace/db";
-import { ImportProductFromUrlBody } from "@workspace/api-zod";
+import { and, eq, sql } from "drizzle-orm";
+import { db, aiSettingsTable, suppliersTable, categoriesTable } from "@workspace/db";
+import { ImportProductFromUrlBody, SuggestImportedProductTagsBody } from "@workspace/api-zod";
 import { requireAuth } from "../middlewares/requireAuth";
 import { safeFetch, SafeFetchError } from "../lib/safe-fetch";
-import { extractProduct, mergeAiFields, pageTextForAi, AI_JSON_SCHEMA, matchSupplierBySite, siteHost, siteName, type ImportField } from "../lib/product-page-import";
+import {
+  extractProduct, mergeAiFields, pageTextForAi, AI_JSON_SCHEMA, matchSupplierBySite, siteHost, siteName, type ImportField,
+  tagPrompt, cleanSuggestedTags, fallbackTags, TAGS_JSON_SCHEMA, type TagCount,
+} from "../lib/product-page-import";
 import { aiJson, isAiAvailable, NoAiProviderError } from "../services/ai";
 
 const router: IRouter = Router();
@@ -96,6 +99,70 @@ router.post("/products/import-from-url", requireAuth, async (req, res): Promise<
   };
 
   res.json({ url: page.url, product, aiFilled, aiUsed, site, ...(aiError ? { aiError } : {}) });
+});
+
+// POST /products/import-from-url/tags — 5 tags for the product being imported,
+// drawn from the tags the category (and its subcategories) already uses.
+router.post("/products/import-from-url/tags", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const parsed = SuggestImportedProductTagsBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "Invalid request" }); return; }
+  const { categoryId, product } = parsed.data;
+
+  let categoryName: string | null = null;
+  let categoryTags: TagCount[] = [];
+  if (categoryId) {
+    const [cat] = await db.select({ name: categoriesTable.name }).from(categoriesTable)
+      .where(and(eq(categoriesTable.id, categoryId), eq(categoriesTable.merchantId, merchantId)));
+    if (cat) {
+      categoryName = cat.name;
+      const rows = await db.execute<{ name: string; count: number }>(sql`
+        WITH RECURSIVE tree AS (
+          SELECT id FROM categories WHERE id = ${categoryId} AND merchant_id = ${merchantId}
+          UNION ALL
+          SELECT c.id FROM categories c JOIN tree ON c.parent_id = tree.id WHERE c.merchant_id = ${merchantId}
+        )
+        SELECT elem AS name, COUNT(*)::int AS count
+        FROM products p, jsonb_array_elements_text(p.tags_json) AS t(elem)
+        WHERE p.merchant_id = ${merchantId} AND p.category_id IN (SELECT id FROM tree)
+          AND p.tags_json IS NOT NULL AND elem <> ''
+        GROUP BY elem ORDER BY count DESC, elem LIMIT 80
+      `);
+      categoryTags = rows.rows;
+    }
+  }
+  const businessRows = await db.execute<{ name: string; count: number }>(sql`
+    SELECT elem AS name, COUNT(*)::int AS count
+    FROM products, jsonb_array_elements_text(tags_json) AS t(elem)
+    WHERE merchant_id = ${merchantId} AND tags_json IS NOT NULL AND elem <> ''
+    GROUP BY elem ORDER BY count DESC, elem LIMIT 60
+  `);
+  const inCategory = new Set(categoryTags.map((t) => t.name));
+  const businessTags = businessRows.rows.filter((t) => !inCategory.has(t.name));
+  const known = [...categoryTags, ...businessTags];
+
+  const [aiSettings] = await db.select({ aiEnabled: aiSettingsTable.aiEnabled })
+    .from(aiSettingsTable).where(eq(aiSettingsTable.merchantId, merchantId));
+  if (aiSettings?.aiEnabled !== false && (await isAiAvailable(merchantId))) {
+    try {
+      const { data } = await aiJson(merchantId, {
+        system: "You tag products for a retail shop's catalogue so staff and shoppers can filter them. Answer only with the requested JSON.",
+        messages: [{ role: "user", content: tagPrompt(product, categoryName, categoryTags, businessTags) }],
+        maxTokens: 2000,
+        effort: "low",
+        schema: TAGS_JSON_SCHEMA,
+      });
+      const tags = cleanSuggestedTags((data as { tags?: unknown } | null)?.tags, known);
+      if (tags.length) { res.json({ tags, source: "ai" }); return; }
+    } catch (err) {
+      if (!(err instanceof NoAiProviderError)) {
+        req.log.warn({ err }, "AI tag suggestion failed; using category tags");
+        res.json({ tags: fallbackTags(product, categoryTags), source: "category", aiError: "Claude couldn't suggest tags this time, so these are this category's tags that match the product." });
+        return;
+      }
+    }
+  }
+  res.json({ tags: fallbackTags(product, categoryTags), source: "category" });
 });
 
 router.get("/products/import-from-url/image", requireAuth, async (req, res): Promise<void> => {
