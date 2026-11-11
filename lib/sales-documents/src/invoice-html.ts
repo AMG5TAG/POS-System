@@ -56,6 +56,8 @@ export interface InvoiceDocOptions {
   // Visibility toggles
   showLogo?: boolean;
   showAbn?: boolean;
+  /** Business phone under the name. Unset counts as on. */
+  showPhone?: boolean;
   showWebsite?: boolean;
   showTagline?: boolean;
   showGstBreakdown?: boolean;
@@ -193,6 +195,7 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
   const address = esc(addressParts);
 
   const showAbn = opts.showAbn !== false;
+  const showPhone = opts.showPhone !== false;
   const showWebsite = opts.showWebsite !== false;
   const showTagline = opts.showTagline === true;
   const showGst = opts.showGstBreakdown !== false;
@@ -207,7 +210,7 @@ export function buildInvoiceHtml(input: InvoiceDocInput): string {
   // ── Business contact lines (under the name) ──
   const bizMetaLines = [
     address,
-    phone,
+    showPhone ? phone : "",
     contactEmail,
     showAbn && abn ? `ABN ${abn}` : "",
     showWebsite && website ? `<span class="link">${website}</span>` : "",

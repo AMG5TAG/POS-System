@@ -44,7 +44,7 @@ const expectations = [
   {
     icon: Store,
     title: "In the Mannering Park store",
-    body: "The range is going into our existing shopfront at 1/64 Vales Road — the same counter you already bring your laptop to. Come in for a repair, browse the shelves while you wait.",
+    body: "The range is going into our existing shopfront at Shop 1/64 Vales Road — the same counter you already bring your laptop to. Come in for a repair, browse the shelves while you wait.",
   },
   {
     icon: Bell,
@@ -76,7 +76,7 @@ const faqs = [
   },
   {
     q: "Where will the range be?",
-    a: "At our Mannering Park store, 1/64 Vales Road, Mannering Park NSW 2259 — serving collectors across the Central Coast and Lake Macquarie. Same location, same family-run team that has been doing repairs here since 2011.",
+    a: "At our Mannering Park store, Shop 1/64 Vales Road, Mannering Park, NSW, 2259 — serving collectors across the Central Coast and Lake Macquarie. Same location, same family-run team that has been doing repairs here since 2011.",
   },
 ];
 
@@ -291,7 +291,7 @@ export default function PopCulturePage() {
             Koastal Kollective has been a family-run computer repair shop in Mannering Park since 2011, serving
             the Central Coast and Lake Macquarie. The Pop Culture range is the next thing we are
             building — a curated selection of merchandise, trading card games, collectables, statues,
-            art and prints, in the same shopfront at 1/64 Vales Road that people already bring their
+            art and prints, in the same shopfront at Shop 1/64 Vales Road that people already bring their
             laptops and MacBooks to.
           </p>
           <p>
@@ -378,8 +378,8 @@ export default function PopCulturePage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -431,7 +431,7 @@ export default function PopCulturePage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -481,7 +481,7 @@ export default function PopCulturePage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

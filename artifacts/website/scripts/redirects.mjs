@@ -27,6 +27,8 @@ const SECTION_REDIRECTS = {
   "/koasoft/portfolio": "/media/portfolio",
   // No longer MATE dealers: the partner page is gone.
   "/mate-telecom": "/nbn-wifi-setup",
+  // Starlink is no longer offered: the page is gone.
+  "/starlink": "/nbn-wifi-setup",
 };
 
 // Suburb pages were cut to the hub towns within 20 km of the workshop

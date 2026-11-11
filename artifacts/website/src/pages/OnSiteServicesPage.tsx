@@ -175,7 +175,7 @@ export default function OnSiteServicesPage() {
               Family-Run, Locally Trusted Since 2011
             </h2>
             <p>
-              Aaron and Larissa Gregory have been keeping the Central Coast connected for over {yearsExperience} years. As a family-run business we take the time to explain what's wrong, what we're doing about it, and how to prevent it in the future. We won't use jargon, won't upsell you on things you don't need and won't rush you. Call{" "}
+              Aaron G. and Larissa G. have been keeping the Central Coast connected for over {yearsExperience} years. As a family-run business we take the time to explain what's wrong, what we're doing about it, and how to prevent it in the future. We won't use jargon, won't upsell you on things you don't need and won't rush you. Call{" "}
               <a href="tel:+61493145179" className="font-bold text-[#007b7d] hover:underline">
                 0493 145 179
               </a>{" "}
@@ -325,8 +325,8 @@ export default function OnSiteServicesPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -382,7 +382,7 @@ export default function OnSiteServicesPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -432,7 +432,7 @@ export default function OnSiteServicesPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

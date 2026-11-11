@@ -7304,7 +7304,9 @@ export const CancelLaybyParams = zod.object({
 })
 
 export const CancelLaybyBody = zod.object({
-  "reason": zod.string().optional()
+  "reason": zod.string().optional(),
+  "refundAmount": zod.number().optional().describe('Money handed back to the customer now (0 to amountPaid). Recorded as a negative layby payment on today, so takings show it on the day it left the till. Omit or 0 to keep what was paid.'),
+  "refundMethod": zod.string().optional().describe('How the refund was given (cash')
 })
 
 export const CancelLaybyResponse = zod.object({

@@ -527,33 +527,48 @@ router.post("/laybys/:id/cancel", requireAuth, requireManagerOrApproval, async (
   const paramsResult = CancelLaybyParams.safeParse(req.params);
   if (!paramsResult.success) { res.status(400).json({ error: paramsResult.error.message }); return; }
   const { id } = paramsResult.data;
-  const { reason } = req.body ?? {};
+  const { reason, refundAmount, refundMethod } = (req.body ?? {}) as { reason?: string; refundAmount?: unknown; refundMethod?: unknown };
+  const refund = refundAmount == null || refundAmount === "" ? 0 : round2(Number(refundAmount));
+  if (!Number.isFinite(refund) || refund < 0) { res.status(400).json({ error: "Invalid refund amount" }); return; }
+  const method = typeof refundMethod === "string" ? refundMethod.trim() : "";
+  if (refund > 0 && !method) { res.status(400).json({ error: "Say how the refund was given" }); return; }
 
-  const [layby] = await db
-    .select()
-    .from(laybysTable)
-    .where(and(eq(laybysTable.id, id), eq(laybysTable.merchantId, merchantId)));
+  // A refund handed back on cancel is money leaving the till today, so it is a
+  // negative layby payment (view_layby_payment_legs counts each payment on its
+  // own day). Row lock + status check in one transaction: a double click can't
+  // refund twice.
+  type CancelOutcome = { status: number; error: string } | { row: typeof laybysTable.$inferSelect };
+  const result: CancelOutcome = await db.transaction(async (tx): Promise<CancelOutcome> => {
+    const [layby] = await tx.select().from(laybysTable)
+      .where(and(eq(laybysTable.id, id), eq(laybysTable.merchantId, merchantId)))
+      .for("update");
+    if (!layby) return { status: 404, error: "Layby not found" } as const;
+    // Completion is terminal — a completed layby (stock already deducted, spend
+    // already credited) cannot be cancelled.
+    if (layby.status === "completed") return { status: 400, error: "Cannot cancel a completed layby" } as const;
+    if (layby.status === "cancelled") return { status: 400, error: "This layby is already cancelled" } as const;
+    const paid = round2(parseFloat(layby.amountPaid ?? "0"));
+    if (refund > paid + 0.005) return { status: 400, error: `Only ${paid.toFixed(2)} has been paid on this layby` } as const;
 
-  if (!layby) {
-    res.status(404).json({ error: "Layby not found" });
-    return;
-  }
-  // Completion is terminal — a completed layby (stock already deducted, spend
-  // already credited) cannot be cancelled.
-  if (layby.status === "completed") {
-    res.status(400).json({ error: "Cannot cancel a completed layby" });
-    return;
-  }
-
-  const [updated] = await db
-    .update(laybysTable)
-    .set({
+    if (refund > 0) {
+      await tx.insert(laybyPaymentsTable).values({
+        laybyId: id,
+        amount: String(-refund),
+        paymentMethod: method,
+        note: "Refund on cancellation",
+      });
+    }
+    const [row] = await tx.update(laybysTable).set({
       status: "cancelled",
       cancelReason: reason ?? null,
+      amountPaid: String(round2(paid - refund)),
       updatedAt: new Date(),
-    })
-    .where(eq(laybysTable.id, id))
-    .returning();
+    }).where(eq(laybysTable.id, id)).returning();
+    return { row } as const;
+  });
+
+  if ("error" in result) { res.status(result.status).json({ error: result.error }); return; }
+  const updated = result.row;
 
   let customer: CustomerRow | undefined;
   if (updated.customerId) {

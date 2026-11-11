@@ -48,6 +48,7 @@ export interface InvoicePdfData {
   showLogo?: boolean;
   /** Whether to show the ABN line in the header (default true). */
   showAbn?: boolean;
+  showPhone?: boolean;
   /** Whether to show the website in the header (default true). */
   showWebsite?: boolean;
   /** Whether to show the business tagline (default false). */
@@ -240,6 +241,7 @@ function mapToDoc(data: InvoicePdfData): InvoiceDocInput {
     options: {
       showLogo: data.showLogo,
       showAbn: data.showAbn,
+      showPhone: data.showPhone,
       showWebsite: data.showWebsite,
       showTagline: data.showTagline,
       showGstBreakdown: data.showGstBreakdown,
@@ -322,6 +324,7 @@ async function buildInvoicePdfLegacy(data: InvoicePdfData): Promise<Buffer> {
 
   const showLogo         = data.showLogo !== false;
   const showAbn          = data.showAbn  !== false;
+  const showPhone        = data.showPhone !== false;
   const showWebsite      = data.showWebsite !== false;
   const showTagline      = data.showTagline === true;
   const showGstBreakdown = data.showGstBreakdown !== false;
@@ -367,7 +370,7 @@ async function buildInvoicePdfLegacy(data: InvoicePdfData): Promise<Buffer> {
     doc.font("Helvetica").fontSize(9).fillColor(GRAY);
     if (showTagline && data.businessTagline) { doc.text(data.businessTagline,           ML, leftY); leftY += 13; }
     if (addrParts)                           { doc.text(addrParts,                      ML, leftY); leftY += 13; }
-    if (data.businessPhone)                  { doc.text(data.businessPhone,             ML, leftY); leftY += 13; }
+    if (showPhone && data.businessPhone)     { doc.text(data.businessPhone,             ML, leftY); leftY += 13; }
     if (data.businessEmail)                  { doc.text(data.businessEmail,             ML, leftY); leftY += 13; }
     if (showAbn && data.businessAbn)         { doc.text(`ABN: ${data.businessAbn}`,     ML, leftY); leftY += 13; }
     if (showWebsite && data.businessWebsite) { doc.text(data.businessWebsite,           ML, leftY); leftY += 13; }

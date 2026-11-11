@@ -507,7 +507,7 @@ export default function DigitalConversionsPage() {
           </div>
           <div className="mt-8 bg-[#007b7d] text-white rounded-xl p-6 text-center">
             <p className="font-bold text-lg mb-1">Drop In at Our Mannering Park Store</p>
-            <p className="text-white/80 text-sm">1/64 Vales Road, Mannering Park NSW 2259 · Open Tuesday–Saturday 10am–5pm</p>
+            <p className="text-white/80 text-sm">Shop 1/64 Vales Road, Mannering Park, NSW, 2259 · Open Monday–Friday 10am–5pm</p>
           </div>
         </div>
       </section>
@@ -581,8 +581,8 @@ export default function DigitalConversionsPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -634,7 +634,7 @@ export default function DigitalConversionsPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -684,7 +684,7 @@ export default function DigitalConversionsPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

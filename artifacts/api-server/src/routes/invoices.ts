@@ -1537,6 +1537,7 @@ router.get("/invoices/:id/pdf", requireAuth, async (req, res): Promise<void> => 
     // ── Template settings ────────────────────────────────────────────────
     showLogo:              tplRow ? tplRow.showLogo : true,
     showAbn:               tplOpts.showAbn !== undefined ? Boolean(tplOpts.showAbn) : true,
+    showPhone:             tplOpts.showPhone !== undefined ? Boolean(tplOpts.showPhone) : true,
     showWebsite:           tplOpts.showWebsite !== undefined ? Boolean(tplOpts.showWebsite) : true,
     showTagline:           Boolean(tplOpts.showTagline),
     businessTagline:       bp?.tagline || null,
@@ -1935,6 +1936,7 @@ export async function sendInvoiceEmailInternal(
     // ── Template settings ────────────────────────────────────────────────
     showLogo:              invoiceTplRow ? invoiceTplRow.showLogo : true,
     showAbn:               invoiceTplOpts.showAbn !== undefined ? Boolean(invoiceTplOpts.showAbn) : true,
+    showPhone:             invoiceTplOpts.showPhone !== undefined ? Boolean(invoiceTplOpts.showPhone) : true,
     showWebsite:           invoiceTplOpts.showWebsite !== undefined ? Boolean(invoiceTplOpts.showWebsite) : true,
     showTagline:           Boolean(invoiceTplOpts.showTagline),
     businessTagline:       bp?.tagline || null,

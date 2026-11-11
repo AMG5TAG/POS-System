@@ -90,7 +90,7 @@ export const CENTRAL_COAST: Region = {
     { q: "Is there a call-out fee anywhere on the Central Coast?",
       a: "No call-out fee within our service area, and no diagnostic fee at the workshop. You get a fixed quote before any work starts, so the number you agree to is the number you pay." },
     { q: "Where exactly is the workshop?",
-      a: "Shop 1/64 Vales Road, Mannering Park NSW 2259 — the northern end of the Central Coast, just off the Pacific Highway near Doyalson. Open Monday 10am to 2:00pm and Tuesday to Friday 10am to 5pm." },
+      a: "Shop 1/64 Vales Road, Mannering Park, NSW, 2259 — the northern end of the Central Coast, just off the Pacific Highway near Doyalson. Open Monday to Friday, 10am to 5pm." },
     { q: "Can you help with NBN and Wi-Fi problems, not just broken computers?",
       a: "Yes. NBN connection faults, router setup, Wi-Fi dead spots and mesh installs are a large part of what we do on-site across the Central Coast, particularly in the larger homes and semi-rural properties around Kariong, Somersby and Matcham." },
     { q: "Do you repair Apple machines as well as Windows PCs?",

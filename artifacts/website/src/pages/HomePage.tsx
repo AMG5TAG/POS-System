@@ -74,38 +74,6 @@ const services = [
     imageLeft: true,
   },
   {
-    id: "starlink",
-    label: "Satellite Internet Installation",
-    heading: "Starlink Satellite Internet",
-    headingLine2: "Installation & Setup",
-    subheading: "Official Starlink Installation Partner — Central Coast & Lake Macquarie",
-    intro:
-      "As an official Starlink installation partner, we supply, mount, and configure Starlink hardware for homes and businesses across the Central Coast and Lake Macquarie.",
-    points: [
-      {
-        title: "Professional Dish Mounting",
-        text: "Roof, wall, or ground mounting with weatherproof cable routing for the cleanest possible installation.",
-      },
-      {
-        title: "Coverage Where NBN Can't Reach",
-        text: "Starlink reaches rural and semi-rural properties around Mangrove Mountain, Kulnura, Dooralong, and beyond — where copper, fibre, and fixed wireless simply can't go.",
-      },
-      {
-        title: "Whole-Home Network Setup",
-        text: "We integrate your Starlink connection with mesh Wi-Fi to extend coverage across large properties, granny flats, and outbuildings.",
-      },
-      {
-        title: "Supply & Activation",
-        text: "We can supply the hardware, handle activation, and configure your router — one call, fully sorted.",
-      },
-    ],
-    link: "/starlink",
-    linkText: "Starlink Installation Details",
-    image: "/images/starlink-section.webp",
-    imageAlt: "Starlink satellite internet dish professionally mounted on an Australian suburban rooftop pointing at a clear blue sky",
-    imageLeft: false,
-  },
-  {
     id: "vhs-digital",
     label: "VHS to DVD or Digital",
     heading: "Legacy Media & Memorial Services",
@@ -352,7 +320,7 @@ export default function HomePage() {
           <div className="relative overflow-hidden rounded-xl">
             <p>
               A Pop Culture and gaming range is coming to the Mannering Park store, in the same
-              shopfront at 1/64 Vales Road where you already bring your laptop for repair. Fans
+              shopfront at Shop 1/64 Vales Road where you already bring your laptop for repair. Fans
               will find trading cards, collectables, statues, figures, apparel and art from their
               favourite franchises, alongside new video games, game consoles and gaming
               accessories for PlayStation, Xbox and Nintendo Switch.
@@ -556,8 +524,8 @@ export default function HomePage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -635,7 +603,7 @@ export default function HomePage() {
                     rel="noopener noreferrer"
                     className="font-bold text-white hover:text-[#7bb8bd] transition-colors"
                   >
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -690,8 +658,8 @@ export default function HomePage() {
                   <a href="https://hover.cards/0b70cf8e" target="_blank" rel="noopener noreferrer">
                     <img
                       src="/images/vcard-aaron.webp"
-                      alt="QR code to add Aaron Gregory — Koastal Kollective IT technician — to your contacts"
-                      title="Scan to save Aaron Gregory contact details"
+                      alt="QR code to add Aaron G. — Koastal Kollective IT technician — to your contacts"
+                      title="Scan to save Aaron G. contact details"
                       className="w-28 h-28 rounded"
                       loading="lazy"
                     />
@@ -708,7 +676,7 @@ export default function HomePage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

@@ -245,7 +245,7 @@ export default function CustomBuiltComputersPage() {
               Built by Locals, for Locals
             </h2>
             <p>
-              Aaron and Larissa Gregory have been building, repairing and upgrading computers on the Central Coast since 2011. Every machine we build is assembled by hand right here in Mannering Park, stress-tested before it leaves the shop, and backed by our no-fix no-fee guarantee. When you need support after the sale, you're calling a local — not a call centre.
+              Aaron G. and Larissa G. have been building, repairing and upgrading computers on the Central Coast since 2011. Every machine we build is assembled by hand right here in Mannering Park, stress-tested before it leaves the shop, and backed by our no-fix no-fee guarantee. When you need support after the sale, you're calling a local — not a call centre.
             </p>
           </div>
           <div>
@@ -488,8 +488,8 @@ export default function CustomBuiltComputersPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -541,7 +541,7 @@ export default function CustomBuiltComputersPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -591,7 +591,7 @@ export default function CustomBuiltComputersPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

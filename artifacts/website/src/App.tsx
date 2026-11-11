@@ -24,7 +24,6 @@ import NbnWifiPage from "@/pages/NbnWifiPage";
 import PhotoRestorationPage from "@/pages/PhotoRestorationPage";
 import BusinessItSupportPage from "@/pages/BusinessItSupportPage";
 import KasperskyPage from "@/pages/KasperskyPage";
-import StarlinkPage from "@/pages/StarlinkPage";
 import MacPawPage from "@/pages/MacPawPage";
 import AdGuardPage from "@/pages/AdGuardPage";
 import SyncBackPage from "@/pages/SyncBackPage";
@@ -83,6 +82,8 @@ function legacyTarget(path: string): string | null {
   if (suburb) return retiredSuburbTarget(suburb[1]);
   // No longer MATE dealers; the old partner page goes to our own NBN service.
   if (path === "/mate-telecom") return "/nbn-wifi-setup";
+  // No longer offering Starlink; its page goes to our own NBN service.
+  if (path === "/starlink") return "/nbn-wifi-setup";
   if (path === "/koasoft") return "/media";
   if (path.startsWith("/koasoft/")) return `/media/${path.slice("/koasoft/".length)}`;
   return null;
@@ -287,14 +288,6 @@ function Router() {
         component={() => (
           <Layout>
             <KasperskyPage />
-          </Layout>
-        )}
-      />
-      <Route
-        path="/starlink"
-        component={() => (
-          <Layout>
-            <StarlinkPage />
           </Layout>
         )}
       />

@@ -295,7 +295,7 @@ export default function SuburbPage() {
                 <p className="mt-3 text-gray-600 flex items-center justify-center gap-1.5">
                   <MapPin className="h-4 w-4 text-[#007b7d]" />
                   {atWorkshop
-                    ? `${suburb} is home to our workshop at 1/64 Vales Road`
+                    ? `${suburb} is home to our workshop at Shop 1/64 Vales Road`
                     : `${Math.round(distance.km)} km ${distance.direction} of our Mannering Park workshop`}
                 </p>
               )}
@@ -412,7 +412,7 @@ export default function SuburbPage() {
               We are professional IT technicians specialising in all things I.T
             </h2>
             <p className="text-gray-700 leading-relaxed mb-8">
-              Hello, our names are Aaron and Larissa Gregory. For over {yearsExperience} years, we&rsquo;ve served as
+              Hello, our names are Aaron G. and Larissa G.. For over {yearsExperience} years, we&rsquo;ve served as
               computer technicians, assisting residents, retirees, and business owners in and around{" "}
               {suburb}. We prioritise respect for our clients and understand the value of their time.
               You can rely on us for prompt, professional, and reliable service.
@@ -709,8 +709,8 @@ export default function SuburbPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -807,7 +807,7 @@ export default function SuburbPage() {
                     rel="noopener noreferrer"
                     className="font-bold text-white hover:text-[#7bb8bd] transition-colors"
                   >
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -858,8 +858,8 @@ export default function SuburbPage() {
                   <a href="https://hover.cards/0b70cf8e" target="_blank" rel="noopener noreferrer">
                     <img
                       src="/images/vcard-aaron.webp"
-                      alt="QR code to add Aaron Gregory — Koastal Kollective IT technician — to your contacts"
-                      title="Scan to save Aaron Gregory contact details"
+                      alt="QR code to add Aaron G. — Koastal Kollective IT technician — to your contacts"
+                      title="Scan to save Aaron G. contact details"
                       className="w-28 h-28 rounded"
                       loading="lazy"
                     />
@@ -875,7 +875,7 @@ export default function SuburbPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

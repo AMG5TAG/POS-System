@@ -58,6 +58,7 @@ function toReceiptOpts(opts: TplOpts, fontCss: string, extra?: ReceiptOptsExtra)
   return {
     showLogo: opts.showLogo,
     showAbn: opts.showAbn,
+    showPhone: opts.showPhone,
     showGstBreakdown: opts.showGstBreakdown,
     showWebsite: opts.showWebsite,
     showPaymentMethods: opts.showPaymentMethods,

@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/select";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import { formatPhoneForDisplay } from "@/lib/phone-format";
 import { Link } from "wouter";
 import Barcode from "react-barcode";
 import {
@@ -94,6 +95,8 @@ export interface TplOpts {
   // Toggles
   showLogo:             boolean;
   showAbn:              boolean;
+  /** Business phone number (Business Details) in the document header. */
+  showPhone:            boolean;
   showWebsite:          boolean;
   showTagline:          boolean;
   showPaymentMethods:   boolean;
@@ -167,7 +170,7 @@ export const DEFAULT_OPTS: TplOpts = {
   bankDetails: "",
   paymentSectionHeading: "",
   loyaltyQrText: "",
-  showLogo: true, showAbn: true, showWebsite: true, showTagline: false,
+  showLogo: true, showAbn: true, showPhone: true, showWebsite: true, showTagline: false,
   showPaymentMethods: true, showGstBreakdown: true, showSocialLinks: false, socialIconBrandColors: false,
   showLoyaltyEarned: false, showCustomerQr: false, showAllCustomerDetails: false,
   showCustomQr: false, customQrImage: "", customQrCaption: "",
@@ -304,6 +307,7 @@ function optionsConfig(category: Category): FieldDef[] {
       { section: "Header", key: "showLogo",          label: "Show Business Logo",  type: "toggle" },
       { section: "Header", key: "showTagline",        label: "Show Tagline",        type: "toggle" },
       { section: "Header", key: "showAbn",            label: "Show ABN",            type: "toggle" },
+      { section: "Header", key: "showPhone",          label: "Show Number",         type: "toggle", hint: "Prints your business phone number from Business Details" },
       { section: "Header", key: "headerText",         label: "Custom Header Text",  type: "text",     placeholder: "e.g. Welcome to {{business.name}}", quickCodes: true },
       { section: "Body",   key: "fontFamily",         label: "Font Family",         type: "fontpicker" },
       { section: "Body",   key: "showGstBreakdown",   label: "Show GST Breakdown",  type: "toggle" },
@@ -327,6 +331,7 @@ function optionsConfig(category: Category): FieldDef[] {
     case "Invoice": return [
       { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
       { section: "Header",   key: "showAbn",                 label: "Show ABN",                  type: "toggle" },
+      { section: "Header",   key: "showPhone",               label: "Show Number",               type: "toggle", hint: "Prints your business phone number from Business Details" },
       { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
       { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. TAX INVOICE / RECEIPT", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the invoice" },
@@ -356,6 +361,7 @@ function optionsConfig(category: Category): FieldDef[] {
     case "Quote": return [
       { section: "Header",   key: "showLogo",                label: "Show Business Logo",        type: "toggle" },
       { section: "Header",   key: "showAbn",                 label: "Show ABN",                  type: "toggle" },
+      { section: "Header",   key: "showPhone",               label: "Show Number",               type: "toggle", hint: "Prints your business phone number from Business Details" },
       { section: "Header",   key: "showTagline",             label: "Show Tagline",              type: "toggle" },
       { section: "Header",   key: "headerText",              label: "Custom Header HTML",        type: "textarea", placeholder: "e.g. QUOTE / ESTIMATE", quickCodes: true },
       { section: "Customer", key: "showAllCustomerDetails",  label: "Show All Customer Details", type: "toggle", hint: "Name, email, phone, address on the quote" },
@@ -1079,6 +1085,8 @@ export const ACTIVE_STORAGE_KEY = "koapos_active_templates";
 interface PreviewProps {
   templateId: string;
   businessName: string; abn: string; tagline: string; website: string;
+  /** Business phone, already in the merchant's display format. */
+  phone?: string;
   email: string; address: string; brandColor: string; logo?: string;
   socialLinks?: Record<string, string>;
   paymentTypes?: string[];
@@ -1134,7 +1142,7 @@ function QRCodeVisual({ label = "CUS-0042", size = 44 }: { label?: string; size?
   );
 }
 
-function ReceiptPreview({ templateId, businessName, abn, website, email, brandColor, tagline, logo, socialLinks, paymentTypes, referralCode, referralUrl, opts }: PreviewProps) {
+function ReceiptPreview({ templateId, businessName, abn, phone, website, email, brandColor, tagline, logo, socialLinks, paymentTypes, referralCode, referralUrl, opts }: PreviewProps) {
   const items = [{ name: "Flat White", qty: 2, price: 8.00 }, { name: "Banana Bread", qty: 1, price: 6.50 }, { name: "Orange Juice", qty: 1, price: 5.00 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal / 11;
@@ -1197,6 +1205,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <p className="text-center font-bold uppercase">{businessName}</p>
         {opts.showTagline && tagline && <p className="text-center text-[9px]">{tagline}</p>}
         {opts.showAbn && abn && <p className="text-center">ABN: {abn}</p>}
+        {opts.showPhone !== false && phone && <p className="text-center">{phone}</p>}
         <p className="text-center">{date}</p>
         <p className="text-center">─────────────────</p>
         {items.map((i) => <div key={i.name} className="flex justify-between"><span>{i.name} ×{i.qty}</span><span>${(i.qty * i.price).toFixed(2)}</span></div>)}
@@ -1229,6 +1238,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
           <p className="font-bold text-base">{businessName}</p>
           {opts.showTagline && tagline && <p className="text-gray-400 text-[10px] italic">{tagline}</p>}
           {opts.showAbn && abn && <p className="text-gray-400 text-[9px]">ABN {abn}</p>}
+          {opts.showPhone !== false && phone && <p className="text-gray-400 text-[9px]">{phone}</p>}
           <p className="text-gray-500 text-[10px]">{date}</p>
         </div>
         <div className="bg-gray-50 rounded p-2 space-y-1 text-[10px]">
@@ -1263,6 +1273,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
         <p className="font-bold text-sm uppercase tracking-wide">{businessName}</p>
         {opts.showTagline && tagline && <p className="text-[9px] text-gray-500 italic">{tagline}</p>}
         {opts.showAbn && abn && <p className="text-[10px] text-gray-500">ABN {abn}</p>}
+        {opts.showPhone !== false && phone && <p className="text-[10px] text-gray-500">{phone}</p>}
         <p className="text-[10px] text-gray-400">{date}</p>
       </div>
       <table className="w-full text-[10px]">
@@ -1289,7 +1300,7 @@ function ReceiptPreview({ templateId, businessName, abn, website, email, brandCo
   );
 }
 
-function InvoicePreview({ templateId, businessName, abn, website, email, address, brandColor, tagline, logo, socialLinks, paymentTypes, referralCode, referralUrl, opts }: PreviewProps) {
+function InvoicePreview({ templateId, businessName, abn, phone, website, email, address, brandColor, tagline, logo, socialLinks, paymentTypes, referralCode, referralUrl, opts }: PreviewProps) {
   const items = [{ name: "Product Design Services", qty: 3, price: 150 }, { name: "Logo Package", qty: 1, price: 450 }];
   const subtotal = items.reduce((s, i) => s + i.qty * i.price, 0);
   const gst = subtotal * 0.1;
@@ -1400,6 +1411,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
       <div className="text-[10px] font-mono text-gray-800 space-y-1.5">
         <div className="flex justify-between font-bold text-xs"><span>{businessName}</span><span>INVOICE #1042</span></div>
         {opts.showAbn && abn && <p className="text-gray-500">ABN: {abn}</p>}
+        {opts.showPhone !== false && phone && <p className="text-gray-500">{phone}</p>}
         <p className="text-gray-500">Date: 18/05/2026 · Due: 01/06/2026</p>
         <HeaderBlock />
         <Separator />
@@ -1439,6 +1451,7 @@ function InvoicePreview({ templateId, businessName, abn, website, email, address
             <p className="text-gray-400">From</p>
             <p className="font-medium">{businessName}</p>
             {opts.showAbn && abn && <p className="text-gray-500">ABN {abn}</p>}
+            {opts.showPhone !== false && phone && <p className="text-gray-500">{phone}</p>}
           </div>
           <div className="flex items-start justify-between gap-2">
             <div className="min-w-0">
@@ -2063,6 +2076,7 @@ export default function ManagementTemplatesPage({ section = "sales" }: { section
   const previewProps: PreviewProps = {
     templateId: previewId, businessName,
     abn:      profile.abn      || "12 345 678 901",
+    phone:    formatPhoneForDisplay((merchant as { phone?: string } | undefined)?.phone) || "0400 000 000",
     tagline:  profile.tagline  || "",
     website:  profile.website  || "www.yourbusiness.com.au",
     email:    profile.contactEmail || merchant?.email || "",

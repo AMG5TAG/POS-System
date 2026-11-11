@@ -302,8 +302,8 @@ export default function AboutPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp", role: "IT Technician & Web Developer" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp", role: "IT Technician & Web Developer" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp", role: "IT Technician & Web Developer" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp", role: "IT Technician & Web Developer" },
             ].map(({ name, image, role }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-offset-2" style={{ outline: `4px solid ${G1}`, outlineOffset: "2px" }}>
@@ -366,7 +366,7 @@ export default function AboutPage() {
                     rel="noopener noreferrer"
                     className="font-bold text-white transition-colors hover:opacity-80"
                   >
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -419,7 +419,7 @@ export default function AboutPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

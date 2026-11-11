@@ -285,7 +285,7 @@ export default function MacBookRepairPage() {
               { title: "All Models Supported", body: "From 2012 MacBooks to the latest M3 MacBook Pro. We source parts for vintage, current and everything in between." },
               { title: "Free Diagnostic", body: "We identify the exact problem before any work begins. No charge for assessment. No pressure to proceed." },
               { title: "24-Month Warranty", body: "Every Mac repair is covered by a 24-month warranty on parts and labour — longer than Apple's own repair warranty." },
-              { title: "Local & Personal", body: "Aaron and Larissa Gregory run Koastal Kollective from Mannering Park. You deal directly with the technicians who work on your Mac." },
+              { title: "Local & Personal", body: "Aaron G. and Larissa G. run Koastal Kollective from Mannering Park. You deal directly with the technicians who work on your Mac." },
             ].map(({ title, body }) => (
               <div key={title} className="bg-white border border-gray-200 rounded-xl p-6 text-center">
                 <h3 className="text-lg font-bold text-gray-900 mb-2">{title}</h3>
@@ -395,8 +395,8 @@ export default function MacBookRepairPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -448,7 +448,7 @@ export default function MacBookRepairPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -498,7 +498,7 @@ export default function MacBookRepairPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

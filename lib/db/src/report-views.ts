@@ -55,13 +55,23 @@ export const REPORT_VIEW_STATEMENTS: readonly string[] = [
   `,
 
   // ── Layby payment legs ─────────────────────────────────────────────────────
+  // Money moved on a layby, on the day it moved: every layby_payments row
+  // (deposit, instalment, or a negative refund given on cancel) at its own
+  // created_at, whatever the layby's status — so takings and End of Week match
+  // the terminal and the drawer. Until 2026-11 these counted only once the
+  // layby completed, all on that day, and a cancelled layby's deposit never
+  // counted at all. A completion with no matching payment (force-complete)
+  // still adds the unpaid remainder on the completion day.
+  // Revenue/GST (view_daily_sales_summary) still recognise a layby when it
+  // completes. The column keeps its old name, completed_at, because
+  // CREATE OR REPLACE VIEW cannot rename one; it means "when the money moved".
   `
     CREATE OR REPLACE VIEW view_layby_payment_legs AS
-    SELECT l.merchant_id, COALESCE(l.completed_at, l.updated_at) AS completed_at,
+    SELECT l.merchant_id, lp.created_at AS completed_at,
       lp.payment_method AS method, lp.amount::numeric AS amount
     FROM laybys l
     JOIN layby_payments lp ON lp.layby_id = l.id
-    WHERE l.status = 'completed'
+    WHERE lp.amount::numeric <> 0
     UNION ALL
     SELECT l.merchant_id, COALESCE(l.completed_at, l.updated_at) AS completed_at,
       COALESCE((SELECT lp2.payment_method FROM layby_payments lp2 WHERE lp2.layby_id = l.id ORDER BY lp2.created_at DESC LIMIT 1), 'layby') AS method,

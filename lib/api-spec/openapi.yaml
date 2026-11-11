@@ -4991,6 +4991,14 @@ paths:
               type: object
               properties:
                 reason: { type: string }
+                refundAmount:
+                  type: number
+                  description: >-
+                    Money handed back to the customer now (0 to amountPaid).
+                    Recorded as a negative layby payment on today, so takings
+                    show it on the day it left the till. Omit or 0 to keep
+                    what was paid.
+                refundMethod: { type: string, description: How the refund was given (cash, eftpos, …). Required with a refund. }
       responses:
         "200":
           description: Cancelled layby

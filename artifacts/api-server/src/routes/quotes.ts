@@ -445,6 +445,7 @@ router.get("/quotes/:id/pdf", requireAuth, async (req, res): Promise<void> => {
     logoUrl:         bp?.logo || null,
     showLogo:              tplRow ? tplRow.showLogo : true,
     showAbn:               tplOpts.showAbn !== undefined ? Boolean(tplOpts.showAbn) : true,
+    showPhone:             tplOpts.showPhone !== undefined ? Boolean(tplOpts.showPhone) : true,
     showWebsite:           tplOpts.showWebsite !== undefined ? Boolean(tplOpts.showWebsite) : true,
     showTagline:           Boolean(tplOpts.showTagline),
     businessTagline:       bp?.tagline || null,

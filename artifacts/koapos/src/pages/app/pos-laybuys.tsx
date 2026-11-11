@@ -125,6 +125,9 @@ export default function POSLaybuysPage() {
   ]);
   const paymentLegsTotal = paymentLegs.reduce((s, l) => s + (parseFloat(l.amount) || 0), 0);
   const [cancelReason, setCancelReason] = useState("");
+  // Money handed back on cancel — recorded as a refund on today's takings.
+  const [cancelRefund, setCancelRefund] = useState("");
+  const [cancelRefundMethod, setCancelRefundMethod] = useState("cash");
 
   const { data: productsData } = useListProducts({ limit: 100000 });
   const allProducts = productsData?.items ?? [];
@@ -235,14 +238,19 @@ export default function POSLaybuysPage() {
     try {
       await cancelMutation.mutateAsync({
         id: cancelLayby.id,
-        data: { reason: cancelReason || undefined },
+        data: {
+          reason: cancelReason || undefined,
+          ...(parseFloat(cancelRefund) > 0 ? { refundAmount: Math.round(parseFloat(cancelRefund) * 100) / 100, refundMethod: cancelRefundMethod } : {}),
+        },
       });
       queryClient.invalidateQueries({ queryKey: ["/api/laybys"] });
-      toast.success("Layby cancelled");
+      toast.success(parseFloat(cancelRefund) > 0 ? `Layby cancelled — ${formatCurrency(parseFloat(cancelRefund))} refunded` : "Layby cancelled");
       setCancelLayby(null);
       setCancelReason("");
-    } catch {
-      toast.error("Failed to cancel layby");
+      setCancelRefund("");
+    } catch (err) {
+      const msg = (err as { data?: { error?: string } })?.data?.error;
+      toast.error(msg ?? "Failed to cancel layby");
     }
   }
 
@@ -395,7 +403,7 @@ export default function POSLaybuysPage() {
                           size="sm"
                           variant="ghost"
                           className="text-destructive hover:bg-destructive/10"
-                          onClick={() => { setCancelLayby(l); setCancelReason(""); }}
+                          onClick={() => { setCancelLayby(l); setCancelReason(""); setCancelRefund(String(l.amountPaid ?? 0)); setCancelRefundMethod("cash"); }}
                         >
                           <XCircle className="w-3.5 h-3.5" />
                         </Button>
@@ -683,6 +691,30 @@ export default function POSLaybuysPage() {
               This will cancel the layby. The customer has paid {formatCurrency(cancelLayby?.amountPaid ?? 0)} so far.
             </AlertDialogDescription>
           </AlertDialogHeader>
+          <div className="grid grid-cols-2 gap-3">
+            <div className="space-y-1.5">
+              <Label>Refund to customer</Label>
+              <Input
+                type="number" step="0.01" min="0" max={cancelLayby?.amountPaid ?? 0}
+                value={cancelRefund}
+                onChange={(e) => setCancelRefund(e.target.value)}
+              />
+            </div>
+            <div className="space-y-1.5">
+              <Label>Refunded by</Label>
+              <Select value={cancelRefundMethod} onValueChange={setCancelRefundMethod}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="cash">Cash</SelectItem>
+                  <SelectItem value="card">Card</SelectItem>
+                  <SelectItem value="eftpos">EFTPOS</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <p className="col-span-2 text-xs text-muted-foreground">
+              Set to 0 if the deposit is kept. A refund shows in today's takings as money out on that method.
+            </p>
+          </div>
           <div className="px-0 space-y-1.5">
             <Label>Cancellation reason <span className="text-muted-foreground text-xs">(optional)</span></Label>
             <Textarea

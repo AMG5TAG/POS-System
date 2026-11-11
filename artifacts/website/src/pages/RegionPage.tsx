@@ -311,7 +311,7 @@ export default function RegionPage() {
               <div>
                 <p className="font-bold text-white/80 mb-0.5">Workshop:</p>
                 <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                  Shop 1/64 Vales Road, Mannering Park NSW 2259
+                  Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                 </a>
               </div>
             </div>
@@ -337,8 +337,7 @@ export default function RegionPage() {
             </div>
             <div className="space-y-2 text-sm ml-8">
               {[
-                { day: "Monday", hours: "10am to 2:00pm" },
-                { day: "Tuesday to Friday", hours: "10am to 5pm" },
+                { day: "Monday to Friday", hours: "10am to 5pm" },
                 { day: "Saturday & Sunday", hours: "Closed" },
                 { day: "Public Holidays", hours: "Closed" },
               ].map(({ day, hours }) => (

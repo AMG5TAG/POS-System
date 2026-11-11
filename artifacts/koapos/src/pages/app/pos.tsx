@@ -21,7 +21,7 @@ import { useSidebar } from "@/components/ui/sidebar";
 import {
   useListProducts, useListCategories, useCreateTransaction,
   useListCustomers, useGetCustomer, useGetLoyaltySettings, useListStaff,
-  useListServiceJobs, useListAppointments,
+  useListServiceJobs, useListAppointments, useCreateLayby,
   listQuotes, useConvertQuote, getListQuotesQueryKey, type Quote,
   useListParkedSales, useCreateParkedSale, useDeleteParkedSale,
   useGetMerchant, useListPosRegisters,
@@ -1290,6 +1290,13 @@ export default function POSPage() {
   const exactOverpaid = isPartPayableExact && numpadInput !== "" && enteredAmount > effectiveTotal + 0.009;
   const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - effectiveTotal) : 0;
   const amountRemaining = payMethod === "cash" ? Math.max(0, effectiveTotal - enteredAmount) : 0;
+  /* A part payment: less keyed than the total on cash or an exact tender.
+     Offered two ways on — take the rest now (split), or a layby that holds the
+     goods with this as the deposit. Not while paying off an invoice, which
+     already takes part payments. */
+  const partShortfall = invoicePay ? 0
+    : payMethod === "cash" ? (numpadInput !== "" && enteredAmount > 0 ? amountRemaining : 0)
+    : exactShortfall;
 
   /* Restore a parked sale that was triggered from the /pos/parked page.
      pos-parked writes the full sale payload to a module store and then
@@ -2933,6 +2940,75 @@ export default function POSPage() {
       costPrice: (i.product as Product & { costPrice?: number }).costPrice ?? null,
     };
   });
+
+  /* ── Part payment → split or layby ───────────────────────────────────── */
+  const createLaybyMutation = useCreateLayby();
+  const [laybyCreating, setLaybyCreating] = useState(false);
+
+  /** Turn a part payment into a split with the keyed leg filled in. */
+  const splitTheRemainder = () => {
+    const paid = Math.round(enteredAmount * 100) / 100;
+    const rest = Math.round((effectiveTotal - paid) * 100) / 100;
+    setSplitLegs([
+      { method: payMethod, amount: paid.toFixed(2) },
+      { method: payMethod === "cash" ? "eftpos" : "cash", amount: rest.toFixed(2) },
+    ]);
+    setPayMethod("split");
+    toast.info(`${formatCurrency(paid)} taken — choose how the remaining ${formatCurrency(rest)} is paid.`);
+  };
+
+  /** Why this cart can't become a layby, or null. Layby lines must be real
+   *  catalogue products, and the layby total must be what its lines add to. */
+  const laybyLines = () => cart.map((i) => {
+    const modAdj = (i.modifiers ?? []).reduce((s, m) => s + (m.priceAdjustment ?? 0), 0);
+    const lineAfterDisc = Math.max(0, (unitPriceFor(i) + modAdj) * i.quantity - i.itemDiscount - (i.pricingRuleDiscount ?? 0));
+    return { productId: i.product.id, productName: i.product.name, quantity: i.quantity, price: Math.round((lineAfterDisc / i.quantity) * 100) / 100 };
+  });
+  const laybyBlocker = (): string | null => {
+    if (!selectedCustomer || walkIn) return "A layby needs a saved customer — pick or add one first.";
+    if (cart.some((i) => i.giftCardNumber || i.preOrderDeposit || !(i.product.id > 0)))
+      return "Gift cards, pre-order deposits and one-off items can't go on a layby.";
+    const linesTotal = laybyLines().reduce((s, l) => s + l.price * l.quantity, 0);
+    if (Math.abs(linesTotal - effectiveTotal) > 0.02)
+      return "A discount on the whole sale can't carry onto a layby — put it on the lines instead.";
+    return null;
+  };
+
+  /** Start a layby from the cart: the part payment is the deposit, the goods
+   *  stay in the shop (stock comes off when it completes), the rest is owing. */
+  const startLaybyFromCart = async () => {
+    const blocker = laybyBlocker();
+    if (blocker) { toast.error(blocker); return; }
+    const lines = laybyLines();
+    const totalAmount = Math.round(lines.reduce((s, l) => s + l.price * l.quantity, 0) * 100) / 100;
+    const deposit = Math.round(enteredAmount * 100) / 100;
+    setLaybyCreating(true);
+    try {
+      const created = await createLaybyMutation.mutateAsync({ data: {
+        customerId: selectedCustomer!.id,
+        staffId: currentStaff?.id ?? null,
+        items: lines,
+        totalAmount,
+        depositAmount: deposit,
+        paymentMethod: payMethod,
+        notes: [saleNotes.trim() || null, "Started at the till from a part payment"].filter(Boolean).join(" | "),
+      } }) as { reference: string };
+      queryClient.invalidateQueries({ queryKey: ["/api/laybys"] });
+      clearCart();
+      setSelectedCustomer(null);
+      setWalkIn(null);
+      setPaymentModalOpen(false);
+      toast.success(`Layby ${created.reference} started — ${formatCurrency(deposit)} paid, ${formatCurrency(totalAmount - deposit)} owing. Goods are held until it's paid off.`, {
+        action: { label: "Open Laybys", onClick: () => setLocation("/pos/laybys") },
+        duration: 10000,
+      });
+    } catch (err) {
+      const msg = (err as { data?: { error?: string } })?.data?.error;
+      toast.error(msg ?? "Couldn't start the layby");
+    } finally {
+      setLaybyCreating(false);
+    }
+  };
 
   const handleCreateInvoice = async () => {
     if (!selectedCustomer) { toast.error("Select a customer to create an invoice"); return; }
@@ -4842,10 +4918,26 @@ export default function POSPage() {
                       {numpadInput || "0.00"}
                     </span>
                   </div>
-                  {isPartPayableExact && exactShortfall > 0.009 && (
-                    <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-2 text-sm text-amber-800 dark:text-amber-300">
-                      Part payment — <span className="font-semibold tabular-nums">{formatCurrency(exactShortfall)}</span> still to pay.
-                      The next step asks how the rest is paid.
+                  {partShortfall > 0.009 && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-2.5 text-sm text-amber-800 dark:text-amber-300 space-y-2">
+                      <p>
+                        Part payment — <span className="font-semibold tabular-nums">{formatCurrency(enteredAmount)}</span> paid,{" "}
+                        <span className="font-semibold tabular-nums">{formatCurrency(partShortfall)}</span> still to pay.
+                      </p>
+                      <div className="grid grid-cols-2 gap-2">
+                        <Button type="button" size="sm" variant="outline" className="bg-background" onClick={splitTheRemainder} disabled={laybyCreating}>
+                          Take remaining now
+                        </Button>
+                        <Button
+                          type="button" size="sm" variant="outline" className="bg-background"
+                          onClick={() => void startLaybyFromCart()}
+                          disabled={laybyCreating}
+                          title={laybyBlocker() ?? "Hold the goods; this payment is the deposit"}
+                        >
+                          {laybyCreating ? "Starting layby…" : "Layby — hold goods"}
+                        </Button>
+                      </div>
+                      {laybyBlocker() && <p className="text-[11px]">{laybyBlocker()}</p>}
                     </div>
                   )}
                   {exactOverpaid && (
@@ -4998,17 +5090,7 @@ export default function POSPage() {
                   }
                   // Part paid on EFTPOS/card/deposit: turn it into a split with
                   // that leg filled in, and ask for the rest — never complete.
-                  if (isPartPayableExact && exactShortfall > 0.009) {
-                    const paid = Math.round(enteredAmount * 100) / 100;
-                    const rest = Math.round((effectiveTotal - paid) * 100) / 100;
-                    setSplitLegs([
-                      { method: payMethod, amount: paid.toFixed(2) },
-                      { method: payMethod === "eftpos" ? "cash" : "eftpos", amount: rest.toFixed(2) },
-                    ]);
-                    setPayMethod("split");
-                    toast.info(`${formatCurrency(paid)} taken — choose how the remaining ${formatCurrency(rest)} is paid.`);
-                    return;
-                  }
+                  if (isPartPayableExact && exactShortfall > 0.009) { splitTheRemainder(); return; }
                   // For integration methods, preserve the integration key in
                   // notes so the transaction stays auditable per integration.
                   // Compute the tag locally and pass it through handleCheckout

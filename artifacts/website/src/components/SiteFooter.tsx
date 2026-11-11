@@ -25,8 +25,7 @@ export default function SiteFooter() {
         {/* Operating Hours */}
         <div className="space-y-1 text-sm">
           <p className="font-bold text-base">Operating Hours</p>
-          <p><span className="font-bold">Monday:</span> 10am to 2:00pm</p>
-          <p><span className="font-bold">Tuesday to Friday:</span> 10am to 5pm</p>
+          <p><span className="font-bold">Monday to Friday:</span> 10am to 5pm</p>
           <p><span className="font-bold">Saturday and Sunday:</span> Closed</p>
           <p><span className="font-bold">Public Holidays:</span> Closed</p>
           <p>

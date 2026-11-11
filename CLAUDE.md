@@ -1571,6 +1571,21 @@ inside the DB transaction that records the money, never by a pre-check:
   before this the keyed amount was ignored and the sale recorded as paid in
   full (KR67799). No amount sent still means the total. Pinned by
   `transactions-part-payment.test.ts`.
+- **Part paid = layby.** A short payment on the till (cash or an exact
+  tender) shows "Take remaining now" (split) and "Layby — hold goods". The
+  layby is the business's choice for part payment: goods stay in the shop
+  (stock comes off at completion) and the payment is the deposit
+  (`startLaybyFromCart` in `pos.tsx`). Needs a saved customer, catalogue
+  products only (no gift cards / pre-order deposits / one-offs), and no
+  whole-sale discount, since layby lines must sum to the layby total.
+  **Layby payments count in takings on the day taken** —
+  `view_layby_payment_legs` emits every `layby_payments` row at its own
+  `created_at`, any status (its `completed_at` column now means "when the
+  money moved"; a view can't rename a column). Revenue/GST still recognise the
+  layby at completion. Cancelling takes an optional `refundAmount` +
+  `refundMethod`, written as a negative layby payment in the same locked
+  transaction. Before 2026-11 layby money counted only at completion and a
+  cancelled layby's deposit never counted. Pinned by `layby-takings.test.ts`.
 - **Deleting a sale** (POS › History, owner only) needs the sale **voided or
   refunded first** (409 `void_before_delete`): the delete removes only the row
   and reverses nothing, so a live sale would leave stock, loyalty, store credit

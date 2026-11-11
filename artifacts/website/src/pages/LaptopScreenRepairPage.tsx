@@ -72,7 +72,7 @@ const faqs = [
   },
   {
     q: "How do I send my laptop for a mail-in repair?",
-    a: "Contact us first for a quote. Once confirmed, pack your laptop securely in a sturdy box with bubble wrap and send it via tracked post to 1/64 Vales Road, Mannering Park NSW 2259. We handle the rest.",
+    a: "Contact us first for a quote. Once confirmed, pack your laptop securely in a sturdy box with bubble wrap and send it via tracked post to Shop 1/64 Vales Road, Mannering Park, NSW, 2259. We handle the rest.",
   },
   {
     q: "Will my data be safe during the repair?",
@@ -207,7 +207,7 @@ export default function LaptopScreenRepairPage() {
               Trusted Local Technicians Since 2011
             </h2>
             <p>
-              Aaron and Larissa Gregory have been repairing laptops on the Central Coast for over {yearsExperience} years. We use quality replacement panels, never cheap knockoffs, and every repair comes with our no-fix no-fee guarantee. You'll get an honest quote upfront with no hidden costs. Call us on{" "}
+              Aaron G. and Larissa G. have been repairing laptops on the Central Coast for over {yearsExperience} years. We use quality replacement panels, never cheap knockoffs, and every repair comes with our no-fix no-fee guarantee. You'll get an honest quote upfront with no hidden costs. Call us on{" "}
               <a href="tel:+61493145179" className="font-bold text-[#007b7d] hover:underline">0493 145 179</a>{" "}
               or send a WhatsApp message to get started.
             </p>
@@ -378,8 +378,8 @@ export default function LaptopScreenRepairPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -431,7 +431,7 @@ export default function LaptopScreenRepairPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -481,7 +481,7 @@ export default function LaptopScreenRepairPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

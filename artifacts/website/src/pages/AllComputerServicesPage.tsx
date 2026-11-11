@@ -122,7 +122,7 @@ const whyChoose = [
   },
   {
     title: "Local Family-Run Business",
-    body: "We're not a chain store. Aaron and Larissa Gregory run Koastal Kollective from Mannering Park with genuine care for every customer.",
+    body: "We're not a chain store. Aaron G. and Larissa G. run Koastal Kollective from Mannering Park with genuine care for every customer.",
   },
   {
     title: "On-Site or In-Store",
@@ -257,7 +257,7 @@ export default function AllComputerServicesPage() {
             Our workshop handles everything from <strong>PC repairs, laptop repairs and MacBook servicing</strong> to <strong>virus removal, data recovery, SSD upgrades and screen replacements</strong>. We also offer a full range of <strong>on-site IT services</strong> — we come to your home or workplace to fix internet issues, set up networks, configure printers and resolve any technology problem you're facing. Every service includes a <strong>free diagnostic</strong>, a <strong>no-fix, no-fee guarantee</strong>, and a <strong>10% pensioner discount</strong> for seniors.
           </p>
           <p>
-            Whether you need a <strong>same-day emergency repair</strong>, a <strong>custom-built gaming PC</strong>, a <strong>refurbished business computer</strong>, or simply someone to make your Wi-Fi work properly, Koastal Kollective is your local one-stop technology solution. Call us on <a href="tel:+61493145179" className="font-bold text-[#007b7d] hover:underline">0493 145 179</a> or drop into our store at <strong>1/64 Vales Road, Mannering Park</strong>.
+            Whether you need a <strong>same-day emergency repair</strong>, a <strong>custom-built gaming PC</strong>, a <strong>refurbished business computer</strong>, or simply someone to make your Wi-Fi work properly, Koastal Kollective is your local one-stop technology solution. Call us on <a href="tel:+61493145179" className="font-bold text-[#007b7d] hover:underline">0493 145 179</a> or drop into our store at <strong>Shop 1/64 Vales Road, Mannering Park, NSW, 2259</strong>.
           </p>
         </div>
       </section>
@@ -502,8 +502,8 @@ export default function AllComputerServicesPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -555,7 +555,7 @@ export default function AllComputerServicesPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -605,7 +605,7 @@ export default function AllComputerServicesPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

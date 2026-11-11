@@ -276,7 +276,7 @@ export default function DataRecoveryPage() {
               { title: "Free Assessment", body: "We diagnose your drive's condition at no charge and provide an honest assessment of recovery probability before you commit to anything." },
               { title: "Complete Confidentiality", body: "Your data is your business. We never browse files, maintain strict confidentiality, encrypt all recovered data during processing, and securely wipe it after delivery." },
               { title: "All Storage Media", body: "HDDs, SSDs, USB drives, SD cards, NAS arrays, RAID configurations, phones, tablets — if it stores data, we can recover from it." },
-              { title: "Local & Accountable", body: "We're Aaron and Larissa Gregory in Mannering Park — not a remote service or anonymous mail-in centre. You meet the person handling your data." },
+              { title: "Local & Accountable", body: "We're Aaron G. and Larissa G. in Mannering Park — not a remote service or anonymous mail-in centre. You meet the person handling your data." },
               { title: "Backup Solutions", body: "After recovery, we set up automated backup systems so this never happens again. Prevention is always cheaper than recovery." },
             ].map(({ title, body }) => (
               <div key={title} className="bg-white border border-gray-200 rounded-xl p-6 text-center">
@@ -387,8 +387,8 @@ export default function DataRecoveryPage() {
           </h2>
           <div className="flex flex-wrap justify-center gap-16">
             {[
-              { name: "Aaron Gregory", image: "/images/aaron-gregory.webp" },
-              { name: "Larissa Gregory", image: "/images/larissa-gregory.webp" },
+              { name: "Aaron G.", image: "/images/aaron-gregory.webp" },
+              { name: "Larissa G.", image: "/images/larissa-gregory.webp" },
             ].map(({ name, image }) => (
               <div key={name} className="flex flex-col items-center gap-3">
                 <div className="w-40 h-40 rounded-full overflow-hidden ring-4 ring-[#007b7d] ring-offset-2">
@@ -440,7 +440,7 @@ export default function DataRecoveryPage() {
                 <div>
                   <p className="font-bold text-white/80 mb-0.5">Visit:</p>
                   <a href="https://maps.app.goo.gl/V6MedKW2n1fCybob7" target="_blank" rel="noopener noreferrer" className="font-bold text-white hover:text-[#7bb8bd] transition-colors">
-                    1/64 Vales Road, Mannering Park, NSW, 2259
+                    Shop 1/64 Vales Road, Mannering Park, NSW, 2259
                   </a>
                 </div>
               </div>
@@ -490,7 +490,7 @@ export default function DataRecoveryPage() {
               </div>
               <div className="space-y-2 text-sm ml-8">
                 {[
-                  { day: "Monday", hours: "10am to 2:00pm" },
+                  { day: "Monday", hours: "10am to 5pm" },
                   { day: "Tuesday", hours: "10am to 5pm" },
                   { day: "Wednesday", hours: "10am to 5pm" },
                   { day: "Thursday", hours: "10am to 5pm" },

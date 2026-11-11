@@ -74,7 +74,6 @@ export const SITE_NAV: NavItem[] = [
     href: "#",
     children: [
       { label: "SolvUp Retail Repair", href: "/solvup" },
-      { label: "Starlink Internet", href: "/starlink" },
       { label: "Kaspersky Security", href: "/kaspersky" },
       { label: "MacPaw CleanMyMac", href: "/macpaw" },
       { label: "AdGuard Privacy", href: "/adguard" },

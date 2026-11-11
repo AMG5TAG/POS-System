@@ -43,6 +43,8 @@ export function normalizeReceiptStyle(style?: string): ReceiptStyleVariant {
 export interface ReceiptTemplateOpts {
   showLogo?: boolean;
   showAbn?: boolean;
+  /** Business phone in the header. Unset counts as on. */
+  showPhone?: boolean;
   showGstBreakdown?: boolean;
   showWebsite?: boolean;
   showPaymentMethods?: boolean;
@@ -280,12 +282,14 @@ export async function printReceipt(
   const rawBrandColor = businessInfo?.brandColor ?? "#374151";
   const businessName = esc(rawBusinessName);
   const abn = esc(rawAbn);
+  const bizPhone = esc(formatPhoneForDisplay(businessInfo?.phone));
   const website = esc(rawWebsite);
   const brandColor = /^#[0-9a-fA-F]{3,8}$/.test(rawBrandColor) ? rawBrandColor : "#374151";
 
   const tpl: ReceiptTemplateOpts = {
     showLogo: true,
     showAbn: true,
+    showPhone: true,
     showGstBreakdown: true,
     showWebsite: true,
     showPaymentMethods: true,
@@ -347,6 +351,7 @@ export async function printReceipt(
         ${tpl.showLogo ? `<div class="logo-square" style="background:${brandColor}"></div>` : ""}
         <p class="bold upper tracking">${businessName}</p>
         ${tpl.showAbn && abn ? `<p class="gray small">ABN ${abn}</p>` : ""}
+        ${tpl.showPhone !== false && bizPhone ? `<p class="gray small">${bizPhone}</p>` : ""}
         ${tpl.showWebsite && website ? `<p class="gray small">${website}</p>` : ""}
         <p class="gray small">${dateStr} ${timeStr}</p>
         ${receiptNum ? `<p class="gray small">Receipt: ${escReceiptNum}</p>` : ""}
@@ -514,6 +519,7 @@ function printA4Document(
   // the shared renderer, so existing print output stays equivalent.
   const baseOptions: ReceiptTemplateOpts = {
     showAbn: true,
+    showPhone: true,
     showGstBreakdown: true,
     showWebsite: true,
     thankYouMsg: "Thank you for your business.",
@@ -550,6 +556,7 @@ function printA4Document(
     business: {
       name: businessInfo?.businessName ?? "Your Store",
       abn: businessInfo?.abn ?? null,
+      phone: formatPhoneForDisplay(businessInfo?.phone) || null,
       website: businessInfo?.website ?? null,
       email: businessInfo?.email ?? null,
       tagline: businessInfo?.tagline ?? null,
@@ -631,6 +638,7 @@ export async function printA4Receipt(
   const rawLogo = businessInfo?.logo ?? "";
   const businessName = esc(rawBusinessName);
   const abn = esc(rawAbn);
+  const bizPhone = esc(formatPhoneForDisplay(businessInfo?.phone));
   const website = esc(rawWebsite);
   const contactEmail = esc(rawEmail);
   const tagline = esc(rawTagline);
@@ -640,6 +648,7 @@ export async function printA4Receipt(
   const tpl: ReceiptTemplateOpts = {
     showLogo: true,
     showAbn: true,
+    showPhone: true,
     showGstBreakdown: true,
     showWebsite: true,
     showPaymentMethods: true,
@@ -808,6 +817,7 @@ export async function printA4Receipt(
           ${tpl.showTagline && tagline ? `<div class="tagline">${tagline}</div>` : ""}
           <div class="biz-meta">
             ${tpl.showAbn && abn ? `ABN ${abn}<br>` : ""}
+            ${tpl.showPhone !== false && bizPhone ? `${bizPhone}<br>` : ""}
             ${contactEmail ? `${contactEmail}<br>` : ""}
             ${tpl.showWebsite && website ? `${website}` : ""}
           </div>
@@ -855,6 +865,7 @@ export async function printA4Receipt(
           <div class="muted-label">From</div>
           <div class="strong">${businessName}</div>
           ${tpl.showAbn && abn ? `<div class="muted">ABN ${abn}</div>` : ""}
+          ${tpl.showPhone !== false && bizPhone ? `<div class="muted">${bizPhone}</div>` : ""}
           ${contactEmail ? `<div class="muted">${contactEmail}</div>` : ""}
           <div class="muted">${dateStr}</div>
         </div>
@@ -888,6 +899,7 @@ export async function printA4Receipt(
       ${logoHtml}
       <div class="min-hdr"><span class="strong">${businessName}</span><span class="strong">RECEIPT ${escReceiptNum}</span></div>
       ${tpl.showAbn && abn ? `<div class="muted">ABN: ${abn}</div>` : ""}
+      ${tpl.showPhone !== false && bizPhone ? `<div class="muted">Ph: ${bizPhone}</div>` : ""}
       <div class="muted">Date: ${dateStr}</div>
       ${header ? `<p class="custom-header">${header}</p>` : ""}
       <div class="sep"></div>
@@ -1083,6 +1095,7 @@ export function buildServiceJobPrintHtml(
     showDeviceDetails: true,
     showWorkDescription: true,
     showAbn: true,
+    showPhone: true,
     showWebsite: true,
     showServiceQr: true,
     footerText: "",

@@ -9,7 +9,7 @@
  *
  * Write from what is actually true of the place and of your work there: jobs
  * you've done, the kind of customers (retirees, tradies, holiday homes),
- * NBN/Starlink conditions, how you get there, landmarks people know. Aim for
+ * NBN conditions, how you get there, landmarks people know. Aim for
  * 150–300 words of intro plus a section or two. Never copy one suburb's text
  * into another and swap the name — that is exactly the pattern being removed.
  *
@@ -126,13 +126,13 @@ export const suburbContent: Record<string, SuburbContent> = {
       "Computer repairs and home internet set-up for Catherine Hill Bay and Moonee, about 8 km from our Mannering Park workshop. Free diagnostic.",
     intro: [
       "Catherine Hill Bay is the old mining village on the coast east of us, with Moonee next door — small, quiet, and only a short drive from our Mannering Park workshop.",
-      "Being tucked away, connectivity is often the first problem: Wi-Fi that won't reach the whole house, a modem that needs setting up, or whether Starlink would do better. We also handle the usual repairs on laptops, desktops and Macs.",
+      "Being tucked away, connectivity is often the first problem: Wi-Fi that won't reach the whole house, or a modem that needs setting up. We also handle the usual repairs on laptops, desktops and Macs.",
     ],
     sections: [
       {
-        heading: "Starlink installation",
+        heading: "Home internet set-up",
         body: [
-          "We supply and install Starlink, including roof mounting and setting up the home network behind it, and we'll check your options first so you only go satellite if it's genuinely the better choice for your address.",
+          "We set up NBN modems and routers and extend Wi-Fi to every room, so the connection you pay for reaches where you actually use it.",
         ],
       },
     ],
@@ -200,7 +200,7 @@ export const suburbContent: Record<string, SuburbContent> = {
       {
         heading: "Internet out in the valleys",
         body: [
-          "Further out towards Martinsville the internet options get thinner. We install and set up Starlink, and we can help you work out whether it's a better fit than what you have now before you spend money on it.",
+          "Further out towards Martinsville the internet options get thinner. We set up NBN connections and extend Wi-Fi across the property, and we can help you work out the best option for your address before you spend money on it.",
         ],
       },
     ],
@@ -344,7 +344,7 @@ export const suburbContent: Record<string, SuburbContent> = {
   "Mannering Park": {
     title: "Computer Repairs Mannering Park | Local Workshop",
     description:
-      "Our workshop is in Mannering Park — walk in at 1/64 Vales Road for PC, Mac and laptop repairs. Free diagnostic, no fix no fee. Call 0493 145 179.",
+      "Our workshop is in Mannering Park — walk in at Shop 1/64 Vales Road for PC, Mac and laptop repairs. Free diagnostic, no fix no fee. Call 0493 145 179.",
     intro: [
       "Mannering Park is home. Our workshop and store is at Shop 1/64 Vales Road, so if you live here you can walk your laptop in, talk to the technician who will actually fix it, and usually collect it again within the week.",
       "Because there is no travel involved, Mannering Park is where we can be most flexible: drop a machine in on the way past, have us look at it while you wait if it's a quick job, or book a home visit if your desktop, printer or Wi-Fi isn't the kind of thing you can carry down the road.",
@@ -353,7 +353,7 @@ export const suburbContent: Record<string, SuburbContent> = {
       {
         heading: "Walk-in repairs on Vales Road",
         body: [
-          "We're open 10am to 2:30pm on Mondays and 10am to 5pm Tuesday to Friday. Every machine gets a free diagnostic and a fixed quote before we touch it, and if we can't fix it you don't pay for the labour.",
+          "We're open 10am to 5pm, Monday to Friday. Every machine gets a free diagnostic and a fixed quote before we touch it, and if we can't fix it you don't pay for the labour.",
           "Pensioners get 10% off, and locals often use us for the small things too: a new phone set up, photos moved off an old computer, or a printer that has stopped talking to the laptop.",
         ],
       },
@@ -532,10 +532,10 @@ export const suburbContent: Record<string, SuburbContent> = {
   "Warnervale": {
     title: "Computer Repairs Warnervale | Rural & Home IT",
     description:
-      "Computer repairs and internet set-up for Warnervale, Jilliby, Dooralong, Durren Durren and Halloran. Starlink installs. Free diagnostic.",
+      "Computer repairs and internet set-up for Warnervale, Jilliby, Dooralong, Durren Durren and Halloran. NBN and Wi-Fi set-up. Free diagnostic.",
     intro: [
       "Warnervale, with its station and airfield, sits at the edge of the Wyong valleys. This page also covers the rural properties out through Jilliby, Little Jilliby, Dooralong, Durren Durren and Halloran.",
-      "Out in the valleys, the internet is often the problem before the computer is. We set up Starlink and NBN fixed wireless, extend Wi-Fi to sheds and outbuildings, and repair the computers, laptops and printers that run the farm or home business.",
+      "Out in the valleys, the internet is often the problem before the computer is. We set up NBN fixed wireless, extend Wi-Fi to sheds and outbuildings, and repair the computers, laptops and printers that run the farm or home business.",
     ],
     sections: [
       {

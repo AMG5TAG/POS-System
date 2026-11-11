@@ -7663,6 +7663,10 @@ export type ListLaybys200 = {
 
 export type CancelLaybyBody = {
   reason?: string;
+  /** Money handed back to the customer now (0 to amountPaid). Recorded as a negative layby payment on today, so takings show it on the day it left the till. Omit or 0 to keep what was paid. */
+  refundAmount?: number;
+  /** How the refund was given (cash */
+  refundMethod?: string;
 };
 
 export type ListCameraSnapshotsParams = {
