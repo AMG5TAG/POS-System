@@ -1562,6 +1562,23 @@ inside the DB transaction that records the money, never by a pre-check:
   `rotateSessionKeeping` (`lib/session-rotate.ts`), which keeps the session's
   contents: a plain regenerate would sign the POS out in the same browser.
 
+- **Part payments on EFTPOS / card / direct deposit.** The till pre-fills the
+  exact total for these, but a cashier can key less. That is a part payment:
+  the button becomes "Take remaining $X", which switches to Split with the
+  keyed leg filled in, and keying more than the total is refused. The server
+  refuses any of the three with `amountTendered` below the total (400
+  `underpaid`, `PART_PAYABLE_EXACT_METHODS` in `routes/transactions.ts`) —
+  before this the keyed amount was ignored and the sale recorded as paid in
+  full (KR67799). No amount sent still means the total. Pinned by
+  `transactions-part-payment.test.ts`.
+- **Deleting a sale** (POS › History, owner only) needs the sale **voided or
+  refunded first** (409 `void_before_delete`): the delete removes only the row
+  and reverses nothing, so a live sale would leave stock, loyalty, store credit
+  and gift cards wrong. `payment_attempts`, `quotes.converted_transaction_id`
+  and `product_oversell_ledger` reference the sale with no cascade — the
+  database refused the delete whenever one did — so their links are set to
+  NULL (rows kept) in the same DB transaction. Pinned by
+  `transaction-delete.test.ts` (real DB).
 - **Returns & swaps** (Customer › History › Return / swap, `ReturnSaleDialog`).
   A return is its own **completed** transaction with
   `return_of_transaction_id` = the sale (`scripts/src/add-transaction-returns.ts`):

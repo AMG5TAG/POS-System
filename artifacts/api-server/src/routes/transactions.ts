@@ -1,6 +1,6 @@
 import { requireManagerOrApproval, requireOwner } from "../middlewares/requireManagerOrOwner";
 import { Router, type IRouter } from "express";
-import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable } from "@workspace/db";
+import { db, transactionsTable, customersTable, productsTable, serviceJobsTable, appointmentsTable, loyaltySettingsTable, merchantsTable, giftCardsTable, giftCardLedgerTable, storeCreditLedgerTable, merchantIntegrationsTable, digitalCodesTable, productTypesTable, productSerialsTable, quotesTable, customerSettingsTable, paymentAttemptsTable, productOversellLedgerTable } from "@workspace/db";
 import { checkReferralAfterSale } from "../services/referralRewards";
 import { enforceDiscountLimit, discountApprovalToken } from "../lib/discount-authority";
 import { loyaltySpentMessage } from "../lib/loyalty";
@@ -178,7 +178,7 @@ export interface FinalizeSaleOptions {
 type CreateTransactionInput = Extract<ReturnType<typeof CreateTransactionBody.safeParse>, { success: true }>["data"];
 export type FinalizeSaleResult =
   | { ok: true; transaction: typeof transactionsTable.$inferSelect; customer: typeof customersTable.$inferSelect | null }
-  | { ok: false; status: number; error: string; expected?: unknown };
+  | { ok: false; status: number; error: string; expected?: unknown; code?: string };
 
 /* Whether a sold line takes a code from the product's digital code pool. Only a
  * digital_code-type product does, and not one marked "Physical or Printed Card"
@@ -191,6 +191,10 @@ export function drawsFromCodePool(
   if (product.isEpay === "true") return false;
   return !!pt && !!pt.isDigital && !!pt.printCode;
 }
+
+/** Tenders the till lets the cashier key an amount for, charged exactly on a
+ *  terminal or by bank transfer — less than the total is a part payment. */
+export const PART_PAYABLE_EXACT_METHODS = ["eftpos", "card", "direct_deposit"] as const;
 
 export async function finalizeSale(
   merchantId: number,
@@ -640,6 +644,8 @@ export async function finalizeSale(
   //   - Cash: cashier hands over >= total; we accept the actual tendered
   //     amount (no upper cap) and derive change ourselves. Reject under-tender.
   //   - Loyalty: tender equals the required points (in dollars), change = 0.
+  //   - EFTPOS / card / direct deposit: an amount under the total is refused
+  //     (take the rest as a split); otherwise tendered = total.
   //   - All other methods: force tendered = total, change = 0.
   // What the customer actually pays. (Payment-method surcharges were removed;
   // `surcharge_amount` is left at its 0 default on new sales.)
@@ -656,6 +662,17 @@ export async function finalizeSale(
   } else if (paymentMethod === "loyalty") {
     persistedTendered = requiredLoyaltyPoints;
     persistedChange = 0;
+  } else if (
+    (PART_PAYABLE_EXACT_METHODS as readonly string[]).includes(paymentMethod) &&
+    amountTendered != null && amountTendered < payable - 0.009
+  ) {
+    // A terminal/bank tender that doesn't cover the sale was recorded as paid
+    // in full (KR67799: $550 on EFTPOS against a larger total). The rest must
+    // be taken as a split payment — never assumed.
+    return {
+      ok: false, status: 400, code: "underpaid",
+      error: `Only ${amountTendered.toFixed(2)} of ${payable.toFixed(2)} was taken — take the remaining ${(payable - amountTendered).toFixed(2)} as a split payment.`,
+    };
   } else {
     persistedTendered = payable;
     persistedChange = 0;
@@ -1104,7 +1121,7 @@ router.post("/transactions", requireAuth, async (req, res): Promise<void> => {
     if (result.expected !== undefined) {
       res.status(result.status).json({ error: result.error, expected: result.expected });
     } else {
-      res.status(result.status).json({ error: result.error });
+      res.status(result.status).json({ error: result.error, ...(result.code ? { code: result.code } : {}) });
     }
     return;
   }
@@ -1811,26 +1828,51 @@ router.post("/transactions/:id/modify", requireAuth, requireManagerOrApproval, a
   }
 });
 
+// DELETE /transactions/:id — owner only, and only once the sale has been voided
+// or refunded. Deleting removes just the row; it reverses nothing, so a live
+// sale must go through void/refund first (which put back stock, loyalty, store
+// credit and gift cards) or deleting it would leave all of those wrong.
+// Three tables may point at the sale; those links are set to NULL, never their
+// rows deleted: a payment attempt is a record of a card charge, a converted
+// quote stays converted, and the oversell ledger keeps the receipt number.
+export const DELETABLE_SALE_STATUSES = ["voided", "refunded"] as const;
+
 router.delete("/transactions/:id", requireAuth, requireOwner, async (req, res): Promise<void> => {
   const params = DeleteTransactionParams.safeParse(req.params);
   if (!params.success) {
     res.status(400).json({ error: params.error.message });
     return;
   }
+  const merchantId = req.session.merchantId!;
+  const id = params.data.id;
 
   const [existing] = await db
-    .select({ id: transactionsTable.id })
+    .select({ id: transactionsTable.id, status: transactionsTable.status, receiptNumber: transactionsTable.receiptNumber })
     .from(transactionsTable)
-    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)));
+    .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)));
 
   if (!existing) {
     res.status(404).json({ error: "Transaction not found" });
     return;
   }
+  if (!(DELETABLE_SALE_STATUSES as readonly string[]).includes(existing.status)) {
+    res.status(409).json({
+      error: `Void or refund ${existing.receiptNumber ?? "this sale"} before deleting it — deleting alone doesn't put back stock, loyalty, store credit or gift cards.`,
+      code: "void_before_delete",
+    });
+    return;
+  }
 
-  await db
-    .delete(transactionsTable)
-    .where(and(eq(transactionsTable.id, params.data.id), eq(transactionsTable.merchantId, req.session.merchantId!)));
+  await db.transaction(async (tx) => {
+    await tx.update(paymentAttemptsTable).set({ transactionId: null })
+      .where(eq(paymentAttemptsTable.transactionId, id));
+    await tx.update(quotesTable).set({ convertedTransactionId: null })
+      .where(and(eq(quotesTable.convertedTransactionId, id), eq(quotesTable.merchantId, merchantId)));
+    await tx.update(productOversellLedgerTable).set({ transactionId: null })
+      .where(and(eq(productOversellLedgerTable.transactionId, id), eq(productOversellLedgerTable.merchantId, merchantId)));
+    await tx.delete(transactionsTable)
+      .where(and(eq(transactionsTable.id, id), eq(transactionsTable.merchantId, merchantId)));
+  });
 
   res.status(204).send();
 });

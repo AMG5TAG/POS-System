@@ -255,7 +255,10 @@ export default function POSHistoryPage() {
         setDeleteTx(null);
         toast.success("Transaction deleted");
       },
-      onError: () => toast.error("Failed to delete transaction"),
+      onError: (err: unknown) => {
+        const msg = (err as { data?: { error?: string } })?.data?.error;
+        toast.error(msg ?? "Failed to delete transaction");
+      },
     },
   });
 

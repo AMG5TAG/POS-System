@@ -1276,13 +1276,18 @@ export default function POSPage() {
   const splitRemaining = Math.max(0, effectiveTotal - splitTotal);
   const splitComplete = Math.abs(splitTotal - effectiveTotal) < 0.005;
 
-  /* Numpad derived — only cash and loyalty use the numpad for amount entry.
-     For all other methods (EFTPOS, card, voucher, etc.) the tendered amount
-     always equals the total since the terminal/processor charges exact. */
-  const numpadIsRelevant = payMethod === "cash" || payMethod === "loyalty";
+  /* Numpad derived. Cash and loyalty key the amount handed over. EFTPOS, card
+     and direct deposit pre-fill the exact total, but the cashier can key less
+     (the customer is paying part on the card) — that is a PART payment, and
+     the rest must be taken by another method, never assumed paid. Before this,
+     a keyed amount was ignored and the sale recorded as paid in full (KR67799). */
+  const isPartPayableExact = payMethod === "eftpos" || payMethod === "card" || payMethod === "direct_deposit";
+  const numpadIsRelevant = payMethod === "cash" || payMethod === "loyalty" || isPartPayableExact;
   const enteredAmount = numpadIsRelevant
     ? (numpadInput ? (parseFloat(numpadInput) || 0) : effectiveTotal)
     : effectiveTotal;
+  const exactShortfall = isPartPayableExact && numpadInput !== "" ? Math.max(0, effectiveTotal - enteredAmount) : 0;
+  const exactOverpaid = isPartPayableExact && numpadInput !== "" && enteredAmount > effectiveTotal + 0.009;
   const changeDue = payMethod === "cash" ? Math.max(0, enteredAmount - effectiveTotal) : 0;
   const amountRemaining = payMethod === "cash" ? Math.max(0, effectiveTotal - enteredAmount) : 0;
 
@@ -4837,6 +4842,17 @@ export default function POSPage() {
                       {numpadInput || "0.00"}
                     </span>
                   </div>
+                  {isPartPayableExact && exactShortfall > 0.009 && (
+                    <div className="rounded-xl border border-amber-300 bg-amber-50 dark:bg-amber-900/20 dark:border-amber-800 px-4 py-2 text-sm text-amber-800 dark:text-amber-300">
+                      Part payment — <span className="font-semibold tabular-nums">{formatCurrency(exactShortfall)}</span> still to pay.
+                      The next step asks how the rest is paid.
+                    </div>
+                  )}
+                  {exactOverpaid && (
+                    <div className="rounded-xl border border-destructive/40 bg-destructive/5 px-4 py-2 text-sm text-destructive">
+                      More than the {formatCurrency(effectiveTotal)} total — the terminal can't give change. Key the amount actually charged.
+                    </div>
+                  )}
 
                   {/* Direct Deposit reference/description */}
                   {payMethod === "direct_deposit" && (
@@ -4920,6 +4936,8 @@ export default function POSPage() {
                   (payMethod === "direct_deposit" && !depositDesc.trim()) ||
                   (payMethod === "split" && !splitComplete) ||
                   (payMethod === "cash" && !!numpadInput && amountRemaining > 0.009) ||
+                  exactOverpaid ||
+                  (isPartPayableExact && numpadInput !== "" && !(enteredAmount > 0)) ||
                   (payMethod === "loyalty" && (!selectedCustomer || walkIn !== null)) ||
                   (payMethod === "loyalty" && loyaltySettings?.programType === "stamp") ||
                   (payMethod === "loyalty" && selectedCustomer != null && (() => {
@@ -4978,6 +4996,19 @@ export default function POSPage() {
                     handleCheckout("split", effectiveTotal, `[Split: ${legDetails}]`);
                     return;
                   }
+                  // Part paid on EFTPOS/card/deposit: turn it into a split with
+                  // that leg filled in, and ask for the rest — never complete.
+                  if (isPartPayableExact && exactShortfall > 0.009) {
+                    const paid = Math.round(enteredAmount * 100) / 100;
+                    const rest = Math.round((effectiveTotal - paid) * 100) / 100;
+                    setSplitLegs([
+                      { method: payMethod, amount: paid.toFixed(2) },
+                      { method: payMethod === "eftpos" ? "cash" : "eftpos", amount: rest.toFixed(2) },
+                    ]);
+                    setPayMethod("split");
+                    toast.info(`${formatCurrency(paid)} taken — choose how the remaining ${formatCurrency(rest)} is paid.`);
+                    return;
+                  }
                   // For integration methods, preserve the integration key in
                   // notes so the transaction stays auditable per integration.
                   // Compute the tag locally and pass it through handleCheckout
@@ -5020,7 +5051,9 @@ export default function POSPage() {
               >
                 {isInvoiceMethod
                   ? (invoiceCreating ? "Creating Invoice…" : "Create Invoice")
-                  : (createTransactionMutation.isPending || invoicePayPending) ? "Processing…" : "Complete Sale"}
+                  : (createTransactionMutation.isPending || invoicePayPending) ? "Processing…"
+                  : isPartPayableExact && exactShortfall > 0.009 ? `Take remaining ${formatCurrency(exactShortfall)}`
+                  : "Complete Sale"}
               </Button>
             </div>
           </div>
