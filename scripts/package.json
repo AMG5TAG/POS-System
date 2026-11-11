@@ -41,6 +41,7 @@
     "add-service-job-archive": "tsx ./src/add-service-job-archive.ts",
     "add-transaction-returns": "tsx ./src/add-transaction-returns.ts",
     "add-service-job-due-date": "tsx ./src/add-service-job-due-date.ts",
+    "add-po-receipt-urls": "tsx ./src/add-po-receipt-urls.ts",
     "add-merchant-default-phone-country": "tsx ./src/add-merchant-default-phone-country.ts",
     "add-merchant-phone-display": "tsx ./src/add-merchant-phone-display.ts",
     "drop-receipt-paper-size": "tsx ./src/drop-receipt-paper-size.ts",

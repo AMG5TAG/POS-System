@@ -3931,6 +3931,8 @@ export interface PurchaseOrder {
   paymentMethod?: string | null;
   paidAt?: string | null;
   invoiceUrls?: string[];
+  /** Payment receipts (proof the supplier was paid). */
+  receiptUrls?: string[];
   items?: PurchaseOrderItem[];
   receipts?: POReceiptLog[];
   createdAt: string;
@@ -7596,7 +7598,14 @@ url: string;
 
 export type SetPurchaseOrderPaymentBody = {
   paid: boolean;
+  /** card, bank_transfer (direct deposit), cash, … */
   paymentMethod?: string;
+  /** Day the supplier was paid (YYYY-MM-DD, not in the future). Defaults to today. */
+  paidDate?: string;
+};
+
+export type SetPurchaseOrderReceiptFilesBody = {
+  receiptUrls: string[];
 };
 
 export type SendPurchaseOrderEmailBody = {

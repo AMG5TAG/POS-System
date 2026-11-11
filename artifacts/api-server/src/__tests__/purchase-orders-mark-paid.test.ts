@@ -28,7 +28,7 @@ vi.mock("@workspace/db", () => {
   (globalThis as any).__resetSelects = () => { selects = 0; };
   const chain = makeChain(() => []);
   const tableProxy = new Proxy({} as any, { get: () => tableProxy });
-  const db: any = { select, update: () => chain, insert: () => chain, transaction: async (fn: any) => fn(db) };
+  const db: any = { select, update: () => makeChain(poRows), insert: () => chain, transaction: async (fn: any) => fn(db) };
   const t = tableProxy;
   return {
     db, purchaseOrdersTable: t, purchaseOrderItemsTable: t, purchaseOrderReceiptsTable: t, suppliersTable: t,
@@ -69,6 +69,19 @@ describe("POST /purchase-orders/:id/payment", () => {
     expect(updates[0]).toEqual({ amountPaid: "0", paymentStatus: "unpaid", paymentMethod: null, paidAt: null });
   });
 
+  it("records the method and the day the supplier was paid", async () => {
+    await request(app).post("/api/purchase-orders/7/payment").send({ paid: true, paymentMethod: "cash", paidDate: "2026-11-03" }).expect(200);
+    expect(updates[0]).toMatchObject({ paymentStatus: "paid", paymentMethod: "cash" });
+    expect(updates[0].paidAt.toISOString()).toBe("2026-11-03T12:00:00.000Z");
+  });
+
+  it("refuses a future or invalid payment date", async () => {
+    const future = new Date(Date.now() + 5 * 86400_000).toISOString().slice(0, 10);
+    await request(app).post("/api/purchase-orders/7/payment").send({ paid: true, paidDate: future }).expect(400);
+    await request(app).post("/api/purchase-orders/7/payment").send({ paid: true, paidDate: "2026-02-30" }).expect(400);
+    expect(updates).toHaveLength(0);
+  });
+
   it("404s another business's order", async () => {
     stored = null;
     await request(app).post("/api/purchase-orders/7/payment").send({ paid: true }).expect(404);
@@ -78,5 +91,23 @@ describe("POST /purchase-orders/:id/payment", () => {
   it("rejects a body without paid", async () => {
     await request(app).post("/api/purchase-orders/7/payment").send({}).expect((r) => expect(r.status).toBeGreaterThanOrEqual(400));
     expect(updates).toHaveLength(0);
+  });
+
+  describe("PUT /purchase-orders/:id/receipt-files", () => {
+    const own = "/api/storage/objects/merchants/1/assets/abc";
+    it("saves receipts from this business's own storage", async () => {
+      await request(app).put("/api/purchase-orders/7/receipt-files").send({ receiptUrls: [own, own] }).expect(200);
+      expect(updates[0]).toEqual({ receiptUrls: JSON.stringify([own]) });
+    });
+    it("refuses another business's file, a backup or a web link", async () => {
+      for (const bad of ["/api/storage/objects/merchants/2/assets/x", "/api/storage/objects/backups/b", "https://example.com/r.pdf", "/api/storage/objects/merchants/1/../2/x"]) {
+        await request(app).put("/api/purchase-orders/7/receipt-files").send({ receiptUrls: [bad] }).expect(400);
+      }
+      expect(updates).toHaveLength(0);
+    });
+    it("clears the list", async () => {
+      await request(app).put("/api/purchase-orders/7/receipt-files").send({ receiptUrls: [] }).expect(200);
+      expect(updates[0]).toEqual({ receiptUrls: null });
+    });
   });
 });

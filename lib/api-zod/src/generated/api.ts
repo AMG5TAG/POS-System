@@ -5918,6 +5918,7 @@ export const ListPurchaseOrdersResponseItem = zod.object({
   "paymentMethod": zod.string().nullish(),
   "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
+  "receiptUrls": zod.array(zod.string()).optional().describe('Payment receipts (proof the supplier was paid).'),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -6022,6 +6023,7 @@ export const GetPurchaseOrderResponse = zod.object({
   "paymentMethod": zod.string().nullish(),
   "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
+  "receiptUrls": zod.array(zod.string()).optional().describe('Payment receipts (proof the supplier was paid).'),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -6121,6 +6123,7 @@ export const UpdatePurchaseOrderResponse = zod.object({
   "paymentMethod": zod.string().nullish(),
   "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
+  "receiptUrls": zod.array(zod.string()).optional().describe('Payment receipts (proof the supplier was paid).'),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -6478,6 +6481,7 @@ export const ReceivePurchaseOrderItemsResponse = zod.object({
   "paymentMethod": zod.string().nullish(),
   "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
+  "receiptUrls": zod.array(zod.string()).optional().describe('Payment receipts (proof the supplier was paid).'),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),
@@ -6515,7 +6519,8 @@ export const SetPurchaseOrderPaymentParams = zod.object({
 
 export const SetPurchaseOrderPaymentBody = zod.object({
   "paid": zod.boolean(),
-  "paymentMethod": zod.string().optional()
+  "paymentMethod": zod.string().optional().describe('card, bank_transfer (direct deposit), cash, …'),
+  "paidDate": zod.string().optional().describe('Day the supplier was paid (YYYY-MM-DD, not in the future). Defaults to today.')
 })
 
 export const SetPurchaseOrderPaymentResponse = zod.object({
@@ -6546,6 +6551,75 @@ export const SetPurchaseOrderPaymentResponse = zod.object({
   "paymentMethod": zod.string().nullish(),
   "paidAt": zod.string().nullish(),
   "invoiceUrls": zod.array(zod.string()).optional(),
+  "receiptUrls": zod.array(zod.string()).optional().describe('Payment receipts (proof the supplier was paid).'),
+  "items": zod.array(zod.object({
+  "id": zod.number().optional(),
+  "productId": zod.number().nullish(),
+  "productName": zod.string().optional(),
+  "quantity": zod.number().optional(),
+  "received": zod.number().optional(),
+  "unitCost": zod.number().optional(),
+  "notes": zod.string().nullish(),
+  "tracksSerial": zod.boolean().optional(),
+  "currentStock": zod.number().nullish().describe('Current on-hand stock for this line\'s product (negative = oversold). Null for non-catalogued lines.'),
+  "oversoldUnits": zod.number().optional().describe('Total units this product is currently oversold by (0 if none).'),
+  "oversellSales": zod.array(zod.object({
+  "receiptNumber": zod.string().nullish(),
+  "quantity": zod.number().optional(),
+  "saleAt": zod.string().optional()
+})).optional().describe('Sales that oversold this product and remain uncovered, oldest first.')
+})).optional(),
+  "receipts": zod.array(zod.object({
+  "id": zod.number(),
+  "processedBy": zod.string(),
+  "processedAt": zod.string(),
+  "notes": zod.string()
+})).optional(),
+  "createdAt": zod.string()
+})
+
+
+/**
+ * Each URL must be a file in this business's own storage (uploaded first through /storage/uploads). Up to 10.
+ * @summary Replace the payment receipts attached to a purchase order
+ */
+export const SetPurchaseOrderReceiptFilesParams = zod.object({
+  "id": zod.coerce.number()
+})
+
+export const SetPurchaseOrderReceiptFilesBody = zod.object({
+  "receiptUrls": zod.array(zod.string())
+})
+
+export const SetPurchaseOrderReceiptFilesResponse = zod.object({
+  "preOrderArrivals": zod.array(zod.object({
+  "preOrderId": zod.number(),
+  "number": zod.string(),
+  "customerName": zod.string(),
+  "productName": zod.string(),
+  "quantity": zod.number(),
+  "allocatedQuantity": zod.number(),
+  "complete": zod.boolean()
+})).optional().describe('Only on a receive response: pre-orders the received stock was allocated to, oldest first, for the till to call out.'),
+  "id": zod.number(),
+  "supplierId": zod.number().nullish(),
+  "supplierName": zod.string().nullish(),
+  "poNumber": zod.string(),
+  "orderNumber": zod.string().nullish(),
+  "status": zod.string(),
+  "orderDate": zod.string(),
+  "expectedDate": zod.string().nullish(),
+  "receivedDate": zod.string().nullish(),
+  "notes": zod.string().nullish(),
+  "totalCost": zod.number(),
+  "deliveryCharge": zod.number().optional(),
+  "deliveryTaxMode": zod.string().optional(),
+  "amountPaid": zod.number().optional(),
+  "paymentStatus": zod.string().optional(),
+  "paymentMethod": zod.string().nullish(),
+  "paidAt": zod.string().nullish(),
+  "invoiceUrls": zod.array(zod.string()).optional(),
+  "receiptUrls": zod.array(zod.string()).optional().describe('Payment receipts (proof the supplier was paid).'),
   "items": zod.array(zod.object({
   "id": zod.number().optional(),
   "productId": zod.number().nullish(),

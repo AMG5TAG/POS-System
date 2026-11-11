@@ -1139,10 +1139,21 @@ CORS) and uploads it through `uploadFile`; the import refuses an `imageUrl`
 outside the business's own storage.
 
 **Paid / unpaid and History.** The PO list has a Payment column (Paid /
-Part paid / Unpaid); clicking the badge, or Mark Paid / Mark Unpaid in the
-detail dialog, calls `POST /purchase-orders/:id/payment {paid}` — paid settles
-`amount_paid` at the stored `total_cost` and stamps `paid_at`, unpaid clears
-all four payment columns. An order moves to the **History** tab only when it is
+Part paid / Unpaid). An unpaid row has a **Mark Paid** button (also in the
+detail dialog) that asks how (Card, Direct Deposit — stored as
+`bank_transfer` — or Cash) and the date paid; clicking a Paid badge asks to
+confirm Mark Unpaid. Both call `POST /purchase-orders/:id/payment {paid,
+paymentMethod, paidDate}` — paid settles `amount_paid` at the stored
+`total_cost` and stores `paid_at` as that day (midday UTC, so it reads as the
+same day in Australia; no future dates), unpaid clears all four payment
+columns.
+**Payment receipts** (proof the supplier was paid) are
+`purchase_orders.receipt_urls`, a JSON array of storage URLs kept apart from
+the supplier's `invoice_urls` (`scripts/src/add-po-receipt-urls.ts`, in the
+`db:push` chain). Added from the list's Receipt column, the Mark Paid form or
+the detail dialog (which can remove them) via `PUT
+/purchase-orders/:id/receipt-files {receiptUrls}`, which accepts only this
+business's own uploads (`/api/storage/objects/merchants/<id>/…`), up to 10. An order moves to the **History** tab only when it is
 fully received **and** paid (`isClosed` in `products-purchase-orders.tsx`), so
 a received order still owing the supplier stays on the working list. Pinned by
 `purchase-orders-mark-paid.test.ts`.

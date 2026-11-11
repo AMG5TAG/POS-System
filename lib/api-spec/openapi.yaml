@@ -4308,7 +4308,42 @@ paths:
               required: [paid]
               properties:
                 paid: { type: boolean }
-                paymentMethod: { type: string }
+                paymentMethod: { type: string, description: "card, bank_transfer (direct deposit), cash, …" }
+                paidDate:
+                  type: string
+                  description: Day the supplier was paid (YYYY-MM-DD, not in the future). Defaults to today.
+      responses:
+        "200":
+          description: Updated purchase order
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/PurchaseOrder"
+
+  /purchase-orders/{id}/receipt-files:
+    put:
+      operationId: setPurchaseOrderReceiptFiles
+      summary: Replace the payment receipts attached to a purchase order
+      description: >-
+        Each URL must be a file in this business's own storage (uploaded first
+        through /storage/uploads). Up to 10.
+      security: [{ session: [] }]
+      parameters:
+        - in: path
+          name: id
+          required: true
+          schema: { type: integer }
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [receiptUrls]
+              properties:
+                receiptUrls:
+                  type: array
+                  items: { type: string }
       responses:
         "200":
           description: Updated purchase order
@@ -14441,6 +14476,10 @@ components:
         paidAt: { type: string, nullable: true }
         invoiceUrls:
           type: array
+          items: { type: string }
+        receiptUrls:
+          type: array
+          description: Payment receipts (proof the supplier was paid).
           items: { type: string }
         items:
           type: array

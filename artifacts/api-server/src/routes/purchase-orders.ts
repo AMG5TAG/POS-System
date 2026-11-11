@@ -17,6 +17,8 @@ import {
   SendPurchaseOrderEmailParams,
   SetPurchaseOrderPaymentParams,
   SetPurchaseOrderPaymentBody,
+  SetPurchaseOrderReceiptFilesParams,
+  SetPurchaseOrderReceiptFilesBody,
   MatchSupplierInvoiceBody,
   ImportSupplierInvoiceBody,
 } from "@workspace/api-zod";
@@ -89,6 +91,8 @@ function fmtReceipt(r: ReceiptRow) {
 function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null, receipts: ReceiptRow[] = [], oversellByProduct?: Map<number, OversellInfo>) {
   let invoiceUrls: string[] = [];
   try { if (po.invoiceUrls) invoiceUrls = JSON.parse(po.invoiceUrls); } catch {}
+  let receiptUrls: string[] = [];
+  try { if (po.receiptUrls) receiptUrls = JSON.parse(po.receiptUrls); } catch {}
   return {
     id: po.id,
     supplierId: po.supplierId ?? null,
@@ -101,6 +105,7 @@ function fmtPO(po: PORow, items: POItemRow[] = [], supplierName?: string | null,
     receivedDate: po.receivedDate ?? null,
     notes: po.notes ?? null,
     invoiceUrls,
+    receiptUrls,
     totalCost: parseFloat(po.totalCost),
     deliveryCharge: parseFloat(po.deliveryCharge ?? "0"),
     deliveryTaxMode: po.deliveryTaxMode ?? "exclusive",
@@ -512,16 +517,51 @@ router.post("/purchase-orders/:id/payment", requireAuth, async (req, res): Promi
     .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
   if (!po) { res.status(404).json({ error: "Not found" }); return; }
   const totalCost = round2(parseFloat(po.totalCost));
+  // The day the supplier was actually paid (often not today — the bill was paid
+  // by direct deposit last week). Stored at midday UTC so it reads as the same
+  // calendar day in Australia.
+  let paidAt = new Date();
+  if (body.paid && body.paidDate) {
+    const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(body.paidDate);
+    const d = m ? new Date(Date.UTC(+m[1]!, +m[2]! - 1, +m[3]!, 12)) : null;
+    if (!d || isNaN(d.getTime()) || d.toISOString().slice(0, 10) !== body.paidDate) {
+      res.status(400).json({ error: "Invalid payment date" }); return;
+    }
+    if (d.getTime() - Date.now() > 36 * 3600 * 1000) { res.status(400).json({ error: "The payment date can't be in the future" }); return; }
+    paidAt = d;
+  }
   await db.update(purchaseOrdersTable).set(
     body.paid
       ? {
           amountPaid: String(totalCost),
           paymentStatus: "paid",
           paymentMethod: body.paymentMethod?.trim() || po.paymentMethod || null,
-          paidAt: po.paymentStatus === "paid" && po.paidAt ? po.paidAt : new Date(),
+          paidAt,
         }
       : { amountPaid: "0", paymentStatus: "unpaid", paymentMethod: null, paidAt: null },
   ).where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)));
+  res.json(await getPOWithItems(id, merchantId));
+});
+
+// PUT /purchase-orders/:id/receipt-files — the payment receipts on a PO.
+// Only files in this business's own storage, so a receipt link can't point at
+// another business's upload or a backup.
+router.put("/purchase-orders/:id/receipt-files", requireAuth, async (req, res): Promise<void> => {
+  const merchantId = req.session.merchantId!;
+  const { id } = SetPurchaseOrderReceiptFilesParams.parse({ id: Number(req.params.id) });
+  const parsed = SetPurchaseOrderReceiptFilesBody.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "receiptUrls must be a list of links" }); return; }
+  const urls = [...new Set(parsed.data.receiptUrls.map((u) => u.trim()).filter(Boolean))];
+  if (urls.length > 10) { res.status(400).json({ error: "Up to 10 receipts per order" }); return; }
+  const own = `/api/storage/objects/merchants/${merchantId}/`;
+  if (urls.some((u) => !u.startsWith(own) || u.split("/").includes(".."))) {
+    res.status(400).json({ error: "Receipts must be files uploaded to this business" }); return;
+  }
+  const [updated] = await db.update(purchaseOrdersTable)
+    .set({ receiptUrls: urls.length ? JSON.stringify(urls) : null })
+    .where(and(eq(purchaseOrdersTable.id, id), eq(purchaseOrdersTable.merchantId, merchantId)))
+    .returning({ id: purchaseOrdersTable.id });
+  if (!updated) { res.status(404).json({ error: "Not found" }); return; }
   res.json(await getPOWithItems(id, merchantId));
 });
 

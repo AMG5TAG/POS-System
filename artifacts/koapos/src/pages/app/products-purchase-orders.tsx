@@ -8,6 +8,7 @@ import {
   useDeletePurchaseOrder,
   useReceivePurchaseOrderItems,
   useSetPurchaseOrderPayment,
+  useSetPurchaseOrderReceiptFiles,
   useSendPurchaseOrderEmail,
   useListProducts,
   useListSuppliers,
@@ -71,7 +72,7 @@ const PO_STATUSES: POStatus[] = ["Draft", "Ordered", "Partially Received", "Full
 
 // Supplier payment tenders offered when recording a payment on a PO.
 const PO_PAYMENT_METHODS: { value: string; label: string }[] = [
-  { value: "bank_transfer", label: "Bank Transfer" },
+  { value: "bank_transfer", label: "Direct Deposit" },
   { value: "card",          label: "Credit / Debit Card" },
   { value: "eftpos",        label: "EFTPOS" },
   { value: "cash",          label: "Cash" },
@@ -368,22 +369,84 @@ export default function ProductsPurchaseOrdersPage() {
     .filter(searchMatch)
     .filter((o) => (tab === "history" ? isClosed(o) : !isClosed(o)));
 
-  const togglePaid = (po: PurchaseOrder) => {
-    const paid = po.paymentStatus !== "paid";
+  /* Marking paid asks how and when the supplier was paid; marking unpaid
+     asks for confirmation. Both open from the row's Payment cell or the
+     order's detail view. */
+  const localToday = () => {
+    const d = new Date();
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+  };
+  const [payPO, setPayPO] = useState<PurchaseOrder | null>(null);
+  const [payForm, setPayForm] = useState({ method: "bank_transfer", date: "" });
+  const [unpayPO, setUnpayPO] = useState<PurchaseOrder | null>(null);
+  const openMarkPaid = (po: PurchaseOrder) => {
+    setPayForm({ method: "bank_transfer", date: localToday() });
+    setPayReceiptFile(null);
+    setPayPO(po);
+  };
+  const submitPayment = (po: PurchaseOrder, paid: boolean) => {
     setPayment.mutate(
-      { id: po.id, data: { paid } },
+      { id: po.id, data: paid ? { paid, paymentMethod: payForm.method, paidDate: payForm.date } : { paid } },
       {
         onSuccess: (updated) => {
           invalidateList();
           setViewingPO((v) => (v && v.id === updated.id ? updated : v));
+          setPayPO(null);
+          setUnpayPO(null);
+          if (paid && payReceiptFile) { void uploadReceipts(updated, [payReceiptFile]); setPayReceiptFile(null); }
           toast.success(paid
             ? (isFullyReceived(updated) ? `${updated.poNumber} paid — moved to History` : `${updated.poNumber} marked paid`)
             : `${updated.poNumber} marked unpaid`);
         },
-        onError: () => toast.error("Failed to update payment"),
+        onError: (err: unknown) => {
+          const msg = (err as { data?: { error?: string } })?.data?.error;
+          toast.error(msg ?? "Failed to update payment");
+        },
       },
     );
   };
+  const paymentMethodLabel = (m?: string | null) => PO_PAYMENT_METHODS.find((x) => x.value === m)?.label ?? m ?? "";
+  /* ── Payment receipts (proof the supplier was paid) ── */
+  const setReceiptFiles = useSetPurchaseOrderReceiptFiles();
+  const receiptInputRef = useRef<HTMLInputElement>(null);
+  const [receiptTarget, setReceiptTarget] = useState<PurchaseOrder | null>(null);
+  const [uploadingReceiptFor, setUploadingReceiptFor] = useState<number | null>(null);
+  const [payReceiptFile, setPayReceiptFile] = useState<File | null>(null);
+  const receiptsOf = (po: PurchaseOrder) => ((po as { receiptUrls?: string[] }).receiptUrls ?? []);
+  const saveReceipts = (po: PurchaseOrder, receiptUrls: string[], done?: string) =>
+    new Promise<void>((resolve) => {
+      setReceiptFiles.mutate({ id: po.id, data: { receiptUrls } }, {
+        onSuccess: (updated) => {
+          invalidateList();
+          setViewingPO((v) => (v && v.id === updated.id ? updated : v));
+          if (done) toast.success(done);
+          resolve();
+        },
+        onError: (err: unknown) => {
+          const msg = (err as { data?: { error?: string } })?.data?.error;
+          toast.error(msg ?? "Couldn't save the receipt");
+          resolve();
+        },
+      });
+    });
+  const uploadReceipts = async (po: PurchaseOrder, files: File[]) => {
+    if (!files.length) return;
+    setUploadingReceiptFor(po.id);
+    try {
+      const urls: string[] = [];
+      for (const file of files) urls.push((await uploadFile(file)).url);
+      await saveReceipts(po, [...receiptsOf(po), ...urls], files.length === 1 ? `Receipt added to ${po.poNumber}` : `${files.length} receipts added to ${po.poNumber}`);
+    } catch {
+      toast.error("Couldn't upload the receipt");
+    } finally {
+      setUploadingReceiptFor(null);
+    }
+  };
+  const pickReceipt = (po: PurchaseOrder) => {
+    setReceiptTarget(po);
+    receiptInputRef.current?.click();
+  };
+  const paidDateLabel = (iso?: string | null) => iso ? new Date(iso).toLocaleDateString("en-AU", { day: "2-digit", month: "2-digit", year: "numeric" }) : "";
 
   const paymentBadge = (po: PurchaseOrder) =>
     po.paymentStatus === "paid" ? (
@@ -662,6 +725,7 @@ export default function ProductsPurchaseOrdersPage() {
                   <th className="text-left p-3 font-medium hidden lg:table-cell">Expected</th>
                   <th className="text-left p-3 font-medium">Status</th>
                   <th className="text-left p-3 font-medium">Payment</th>
+                  <th className="text-left p-3 font-medium hidden sm:table-cell">Receipt</th>
                   <th className="text-right p-3 font-medium">Total</th>
                   <th className="p-3 w-20" />
                 </tr>
@@ -685,15 +749,52 @@ export default function ProductsPurchaseOrdersPage() {
                       {(() => { const b = getStatusBadge(po.status); return <Badge variant={b.variant} className={b.className}>{po.status}</Badge>; })()}
                     </td>
                     <td className="p-3">
-                      <button
-                        type="button"
-                        className="rounded-full disabled:opacity-50"
-                        title={po.paymentStatus === "paid" ? "Click to mark unpaid" : "Click to mark paid"}
-                        disabled={setPayment.isPending}
-                        onClick={(e) => { e.stopPropagation(); togglePaid(po); }}
-                      >
-                        {paymentBadge(po)}
-                      </button>
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        {po.paymentStatus === "paid" ? (
+                          <button
+                            type="button"
+                            className="rounded-full text-left"
+                            title={`Paid${po.paymentMethod ? ` by ${paymentMethodLabel(po.paymentMethod)}` : ""}${po.paidAt ? ` on ${paidDateLabel(po.paidAt)}` : ""} — click to mark unpaid`}
+                            onClick={(e) => { e.stopPropagation(); setUnpayPO(po); }}
+                          >
+                            {paymentBadge(po)}
+                          </button>
+                        ) : (
+                          <>
+                            {paymentBadge(po)}
+                            <Button
+                              size="sm" variant="outline" className="h-7 px-2 text-xs gap-1"
+                              onClick={(e) => { e.stopPropagation(); openMarkPaid(po); }}
+                            >
+                              <CircleDollarSign className="w-3.5 h-3.5" /> Mark Paid
+                            </Button>
+                          </>
+                        )}
+                      </div>
+                      {po.paymentStatus === "paid" && (po.paymentMethod || po.paidAt) && (
+                        <p className="text-[11px] text-muted-foreground mt-0.5">
+                          {[paymentMethodLabel(po.paymentMethod), paidDateLabel(po.paidAt)].filter(Boolean).join(" · ")}
+                        </p>
+                      )}
+                    </td>
+                    <td className="p-3 hidden sm:table-cell" onClick={(e) => e.stopPropagation()}>
+                      <div className="flex flex-col items-start gap-0.5">
+                        {receiptsOf(po).map((url, i) => (
+                          <a key={url} href={url} target="_blank" rel="noopener noreferrer"
+                            className="inline-flex items-center gap-1 text-xs text-primary hover:underline">
+                            <Paperclip className="w-3 h-3" /> Receipt{receiptsOf(po).length > 1 ? ` ${i + 1}` : ""}
+                          </a>
+                        ))}
+                        <Button
+                          size="sm" variant="ghost" className="h-7 px-1.5 text-xs gap-1 text-muted-foreground"
+                          disabled={uploadingReceiptFor === po.id}
+                          onClick={() => pickReceipt(po)}
+                          title="Attach a payment receipt (photo or PDF)"
+                        >
+                          {uploadingReceiptFor === po.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />}
+                          {receiptsOf(po).length ? "Add" : "Add receipt"}
+                        </Button>
+                      </div>
                     </td>
                     <td className="p-3 text-right font-medium" onClick={() => setViewingPO(po)}>
                       {formatCurrency(po.totalCost ?? 0)}
@@ -717,6 +818,100 @@ export default function ProductsPurchaseOrdersPage() {
           </div>
         )}
       </div>
+
+      <input
+        ref={receiptInputRef} type="file" accept="image/*,application/pdf" multiple className="hidden"
+        onChange={(e) => {
+          const files = Array.from(e.target.files ?? []);
+          e.target.value = "";
+          if (receiptTarget) void uploadReceipts(receiptTarget, files);
+          setReceiptTarget(null);
+        }}
+      />
+
+      {/* ── Mark paid: how and when the supplier was paid ─────────────────── */}
+      <Dialog open={!!payPO} onOpenChange={(o) => { if (!o && !setPayment.isPending) setPayPO(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark {payPO?.poNumber} paid</DialogTitle>
+          </DialogHeader>
+          {payPO && (
+            <div className="space-y-4">
+              <div className="rounded-lg border bg-muted/30 px-3 py-2 text-sm flex justify-between">
+                <span className="text-muted-foreground">{payPO.supplierName ?? "Supplier"}</span>
+                <span className="font-semibold tabular-nums">{formatCurrency(payPO.totalCost ?? 0)}</span>
+              </div>
+              <div className="space-y-1.5">
+                <Label>Paid by</Label>
+                <div className="grid grid-cols-3 gap-2">
+                  {[
+                    { value: "card", label: "Card" },
+                    { value: "bank_transfer", label: "Direct Deposit" },
+                    { value: "cash", label: "Cash" },
+                  ].map((m) => (
+                    <Button
+                      key={m.value} type="button"
+                      variant={payForm.method === m.value ? "default" : "outline"}
+                      onClick={() => setPayForm((f) => ({ ...f, method: m.value }))}
+                    >
+                      {m.label}
+                    </Button>
+                  ))}
+                </div>
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="po-paid-date">Date paid</Label>
+                <Input
+                  id="po-paid-date" type="date" max={localToday()}
+                  value={payForm.date}
+                  onChange={(e) => setPayForm((f) => ({ ...f, date: e.target.value }))}
+                />
+              </div>
+              <div className="space-y-1.5">
+                <Label htmlFor="po-paid-receipt">Receipt <span className="text-muted-foreground text-xs">(optional — photo or PDF)</span></Label>
+                <Input
+                  id="po-paid-receipt" type="file" accept="image/*,application/pdf"
+                  onChange={(e) => setPayReceiptFile(e.target.files?.[0] ?? null)}
+                />
+              </div>
+              {isFullyReceived(payPO) && (
+                <p className="text-xs text-muted-foreground">This order is fully received, so it moves to History once paid.</p>
+              )}
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setPayPO(null)} disabled={setPayment.isPending}>Cancel</Button>
+            <Button
+              onClick={() => payPO && submitPayment(payPO, true)}
+              disabled={setPayment.isPending || !payForm.date || payForm.date > localToday()}
+            >
+              {setPayment.isPending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <CircleDollarSign className="w-4 h-4 mr-2" />}
+              Mark Paid
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* ── Mark unpaid: confirm, since it clears the payment record ────────── */}
+      <Dialog open={!!unpayPO} onOpenChange={(o) => { if (!o && !setPayment.isPending) setUnpayPO(null); }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Mark {unpayPO?.poNumber} unpaid?</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            This clears the recorded payment
+            {unpayPO?.paymentMethod ? ` (${paymentMethodLabel(unpayPO.paymentMethod)}` : ""}
+            {unpayPO?.paidAt ? `${unpayPO?.paymentMethod ? ", " : " ("}${paidDateLabel(unpayPO.paidAt)})` : unpayPO?.paymentMethod ? ")" : ""}.
+            {unpayPO && isFullyReceived(unpayPO) ? " The order moves back from History to the working list." : ""}
+          </p>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setUnpayPO(null)} disabled={setPayment.isPending}>Keep as Paid</Button>
+            <Button variant="destructive" onClick={() => unpayPO && submitPayment(unpayPO, false)} disabled={setPayment.isPending}>
+              Mark Unpaid
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* ── Purchase Order Detail Dialog ────────────────────────────────── */}
       {viewingPO && (() => {
@@ -793,6 +988,14 @@ export default function ProductsPurchaseOrdersPage() {
                     <p className="font-medium mt-0.5 font-mono text-xs">{(po as { orderNumber?: string | null }).orderNumber}</p>
                   </div>
                 )}
+                {po.paymentStatus === "paid" && (
+                  <div>
+                    <p className="text-muted-foreground text-xs uppercase tracking-wide">Paid</p>
+                    <p className="font-medium mt-0.5">
+                      {[paymentMethodLabel(po.paymentMethod), paidDateLabel(po.paidAt)].filter(Boolean).join(" · ") || "Yes"}
+                    </p>
+                  </div>
+                )}
                 {po.receivedDate && (
                   <div>
                     <p className="text-muted-foreground text-xs uppercase tracking-wide">Received</p>
@@ -857,6 +1060,40 @@ export default function ProductsPurchaseOrdersPage() {
                 </div>
               )}
 
+              {/* Payment receipts */}
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1.5">
+                    <Paperclip className="w-3.5 h-3.5" /> Payment Receipts
+                  </p>
+                  <Button size="sm" variant="outline" className="h-7 text-xs gap-1" disabled={uploadingReceiptFor === po.id} onClick={() => pickReceipt(po)}>
+                    {uploadingReceiptFor === po.id ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Plus className="w-3.5 h-3.5" />} Add receipt
+                  </Button>
+                </div>
+                {receiptsOf(po).length === 0 ? (
+                  <p className="text-xs text-muted-foreground">No receipt attached yet.</p>
+                ) : (
+                  <div className="space-y-1.5">
+                    {receiptsOf(po).map((url, idx) => (
+                      <div key={url} className="flex items-center gap-2 rounded-lg border bg-muted/20 px-3 py-2">
+                        <FileText className="w-4 h-4 text-muted-foreground shrink-0" />
+                        <a href={url} target="_blank" rel="noopener noreferrer" className="flex-1 text-sm truncate hover:underline">
+                          Receipt {idx + 1}
+                        </a>
+                        <Button
+                          size="icon" variant="ghost" className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                          title="Remove this receipt from the order"
+                          disabled={setReceiptFiles.isPending}
+                          onClick={() => void saveReceipts(po, receiptsOf(po).filter((u) => u !== url), "Receipt removed")}
+                        >
+                          <X className="w-3.5 h-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+
               {/* Invoice attachments */}
               {((po as { invoiceUrls?: string[] }).invoiceUrls ?? []).length > 0 && (
                 <div className="space-y-2">
@@ -909,7 +1146,7 @@ export default function ProductsPurchaseOrdersPage() {
                   <Button variant="outline" onClick={() => { setViewingPO(null); openEdit(po); }}>
                     <Pencil className="w-4 h-4 mr-1.5" /> Edit
                   </Button>
-                  <Button variant="outline" disabled={setPayment.isPending} onClick={() => togglePaid(po)} className="gap-1.5">
+                  <Button variant="outline" disabled={setPayment.isPending} onClick={() => (po.paymentStatus === "paid" ? setUnpayPO(po) : openMarkPaid(po))} className="gap-1.5">
                     <CircleDollarSign className="w-4 h-4" />
                     {po.paymentStatus === "paid" ? "Mark Unpaid" : "Mark Paid"}
                   </Button>

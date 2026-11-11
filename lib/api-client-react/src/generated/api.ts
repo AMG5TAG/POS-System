@@ -421,6 +421,7 @@ import type {
   SetActiveLocation200,
   SetActiveLocationBody,
   SetPurchaseOrderPaymentBody,
+  SetPurchaseOrderReceiptFilesBody,
   ShippingCarrier,
   ShippingCarrierCredentialsInput,
   ShippingCarrierListResponse,
@@ -14651,6 +14652,79 @@ export const useSetPurchaseOrderPayment = <TError = ErrorType<unknown>,
         TContext
       > => {
       return useMutation(getSetPurchaseOrderPaymentMutationOptions(options));
+    }
+
+export const getSetPurchaseOrderReceiptFilesUrl = (id: number,) => {
+
+
+
+
+  return `/api/purchase-orders/${id}/receipt-files`
+}
+
+/**
+ * Each URL must be a file in this business's own storage (uploaded first through /storage/uploads). Up to 10.
+ * @summary Replace the payment receipts attached to a purchase order
+ */
+export const setPurchaseOrderReceiptFiles = async (id: number,
+    setPurchaseOrderReceiptFilesBody: SetPurchaseOrderReceiptFilesBody, options?: RequestInit): Promise<PurchaseOrder> => {
+
+  return customFetch<PurchaseOrder>(getSetPurchaseOrderReceiptFilesUrl(id),
+  {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(
+      setPurchaseOrderReceiptFilesBody,)
+  }
+);}
+
+
+
+
+export const getSetPurchaseOrderReceiptFilesMutationOptions = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPurchaseOrderReceiptFiles>>, TError,{id: number;data: BodyType<SetPurchaseOrderReceiptFilesBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+): UseMutationOptions<Awaited<ReturnType<typeof setPurchaseOrderReceiptFiles>>, TError,{id: number;data: BodyType<SetPurchaseOrderReceiptFilesBody>}, TContext> => {
+
+const mutationKey = ['setPurchaseOrderReceiptFiles'];
+const {mutation: mutationOptions, request: requestOptions} = options ?
+      options.mutation && 'mutationKey' in options.mutation && options.mutation.mutationKey ?
+      options
+      : {...options, mutation: {...options.mutation, mutationKey}}
+      : {mutation: { mutationKey, }, request: undefined};
+
+
+
+
+      const mutationFn: MutationFunction<Awaited<ReturnType<typeof setPurchaseOrderReceiptFiles>>, {id: number;data: BodyType<SetPurchaseOrderReceiptFilesBody>}> = (props) => {
+          const {id,data} = props ?? {};
+
+          return  setPurchaseOrderReceiptFiles(id,data,requestOptions)
+        }
+
+
+
+
+
+
+  return  { mutationFn, ...mutationOptions }}
+
+    export type SetPurchaseOrderReceiptFilesMutationResult = NonNullable<Awaited<ReturnType<typeof setPurchaseOrderReceiptFiles>>>
+    export type SetPurchaseOrderReceiptFilesMutationBody = BodyType<SetPurchaseOrderReceiptFilesBody>
+    export type SetPurchaseOrderReceiptFilesMutationError = ErrorType<unknown>
+
+    /**
+ * @summary Replace the payment receipts attached to a purchase order
+ */
+export const useSetPurchaseOrderReceiptFiles = <TError = ErrorType<unknown>,
+    TContext = unknown>(options?: { mutation?:UseMutationOptions<Awaited<ReturnType<typeof setPurchaseOrderReceiptFiles>>, TError,{id: number;data: BodyType<SetPurchaseOrderReceiptFilesBody>}, TContext>, request?: SecondParameter<typeof customFetch>}
+ ): UseMutationResult<
+        Awaited<ReturnType<typeof setPurchaseOrderReceiptFiles>>,
+        TError,
+        {id: number;data: BodyType<SetPurchaseOrderReceiptFilesBody>},
+        TContext
+      > => {
+      return useMutation(getSetPurchaseOrderReceiptFilesMutationOptions(options));
     }
 
 export const getSendPurchaseOrderEmailUrl = (id: number,) => {

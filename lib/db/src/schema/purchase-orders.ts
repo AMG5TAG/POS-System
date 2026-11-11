@@ -18,6 +18,10 @@ export const purchaseOrdersTable = pgTable("purchase_orders", {
   receivedDate: text("received_date"),
   notes:        text("notes"),
   invoiceUrls:  text("invoice_urls"),
+  // Proof the supplier was paid (bank receipt, card slip) — JSON array of
+  // storage URLs, kept apart from the supplier's invoices. Added by
+  // scripts/src/add-po-receipt-urls.ts.
+  receiptUrls:  text("receipt_urls"),
   totalCost:       numeric("total_cost",       { precision: 10, scale: 2 }).notNull().default("0"),
   deliveryCharge:  numeric("delivery_charge",  { precision: 10, scale: 2 }).notNull().default("0"),
   deliveryTaxMode: text("delivery_tax_mode").notNull().default("exclusive"),
