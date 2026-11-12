@@ -2993,32 +2993,6 @@ export interface UploadUrlResponse {
   metadata?: UploadUrlRequest;
 }
 
-export interface TvAppUpdate {
-  /** @pattern ^[a-z0-9]{1,32}$ */
-  app: string;
-  versionCode: number;
-  versionName: string;
-  uploadedAt: string;
-}
-
-export interface TvAppUpdateListResponse {
-  apps: TvAppUpdate[];
-}
-
-export interface TvAppUpdatePublishBody {
-  /** @pattern ^[a-z0-9]{1,32}$ */
-  app: string;
-  /** APK file, maximum size 100 MiB. */
-  apk: Blob;
-  /** JSON file named update.json with a strictly newer versionCode. */
-  updateJson: Blob;
-}
-
-export interface TvAppUpdatePublishResponse {
-  message: string;
-  publicUrl: string;
-}
-
 export interface ConfirmUploadBody {
   /**
      * The normalized objectPath returned by POST /storage/uploads/request-url.
@@ -7197,12 +7171,6 @@ export type GenerateMissingReferralCodes200 = {
 export type MergeCustomerProfilesBody = {
   /** Optional reason or note for the merge, recorded in the audit trail */
   reason?: string;
-};
-
-export type GetPublicTvAppManifest200 = {
-  versionCode: number;
-  versionName: string;
-  apk: string;
 };
 
 export type ListMerchantAssetsParams = {

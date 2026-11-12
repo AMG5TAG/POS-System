@@ -292,7 +292,7 @@ export class ObjectStorageService {
   }
 }
 
-export function parseObjectPath(path: string): {
+function parseObjectPath(path: string): {
   bucketName: string;
   objectName: string;
 } {
@@ -313,7 +313,7 @@ export function parseObjectPath(path: string): {
   };
 }
 
-export async function signObjectURL({
+async function signObjectURL({
   bucketName,
   objectName,
   method,

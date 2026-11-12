@@ -1789,67 +1789,6 @@ export const RequestUploadUrlResponse = zod.object({
 
 
 /**
- * @summary List published Android TV apps
- */
-export const listTvAppUpdatesResponseAppsItemAppRegExp = new RegExp('^[a-z0-9]{1,32}$');
-
-
-export const ListTvAppUpdatesResponse = zod.object({
-  "apps": zod.array(zod.object({
-  "app": zod.string().regex(listTvAppUpdatesResponseAppsItemAppRegExp),
-  "versionCode": zod.number(),
-  "versionName": zod.string(),
-  "uploadedAt": zod.coerce.date()
-}))
-})
-
-
-/**
- * @summary Fetch an Android TV update manifest
- */
-export const getPublicTvAppManifestPathAppRegExp = new RegExp('^[a-z0-9]{1,32}$');
-
-
-export const GetPublicTvAppManifestParams = zod.object({
-  "app": zod.coerce.string().regex(getPublicTvAppManifestPathAppRegExp)
-})
-
-export const GetPublicTvAppManifestResponse = zod.object({
-  "versionCode": zod.number(),
-  "versionName": zod.string(),
-  "apk": zod.string()
-})
-
-
-/**
- * @summary Fetch a public Android TV APK
- */
-export const getPublicTvAppApkPathAppRegExp = new RegExp('^[a-z0-9]{1,32}$');
-export const getPublicTvAppApkPathFilenameRegExp = new RegExp('^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\\\\.apk$');
-
-
-export const GetPublicTvAppApkParams = zod.object({
-  "app": zod.coerce.string().regex(getPublicTvAppApkPathAppRegExp),
-  "filename": zod.coerce.string().regex(getPublicTvAppApkPathFilenameRegExp)
-})
-
-
-/**
- * Platform-owner only. Stores the APK first and replaces update.json last. Older APKs are retained. APK size is limited to 100 MiB.
-
- * @summary Publish a TV app APK and manifest
- */
-export const publishTvAppUpdateBodyAppRegExp = new RegExp('^[a-z0-9]{1,32}$');
-
-
-export const PublishTvAppUpdateBody = zod.object({
-  "app": zod.string().regex(publishTvAppUpdateBodyAppRegExp),
-  "apk": zod.instanceof(File).describe('APK file, maximum size 100 MiB.'),
-  "updateJson": zod.instanceof(File).describe('JSON file named update.json with a strictly newer versionCode.')
-})
-
-
-/**
  * Called by the client after a direct-to-storage upload completes. The server sets an ACL policy on the object (owner = authenticated merchant, visibility = private) so that ACL-based access checks can enforce ownership independently of the path-prefix check.
 
  * @summary Confirm a completed upload and tag the file with an ACL policy

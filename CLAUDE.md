@@ -672,18 +672,6 @@ overwrite each page with the SPA. They are framed only by our own pages
 (`frame-ancestors 'self'`), so the TV app must load the URL directly in its
 WebView rather than inside an iframe on another site.
 
-### Android TV app updates
-
-This is separate from the Koastal TV Streamer HTML pages above. The platform
-owner publishes APKs and `update.json` at `/tv-app-updates`; the API checks the
-existing Koastal owner session and rejects staff sessions. Public Android TV
-clients use `/tv/<app>/update.json` and `/tv/<app>/<apk-file>`. The website
-server forwards only those manifest/APK requests to the API, leaving existing
-`/tv/<name>` display pages unchanged. Both files live in the existing
-Replit Object Storage public path under `tv/<app>/`; APKs are written before
-the no-cache manifest, old APKs are retained, and publishing an update does
-not require an app redeploy.
-
 ### Online shop (koastal.com.au/shop)
 
 A second front end on the SAME database, so nothing is synced: products,

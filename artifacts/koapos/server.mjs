@@ -18,7 +18,6 @@
 import { createServer } from "node:http";
 import { createReadStream, readFileSync, statSync } from "node:fs";
 import path from "node:path";
-import { Readable } from "node:stream";
 import { fileURLToPath } from "node:url";
 import { productIdFromPath, withProductShare } from "./share-meta.mjs";
 
@@ -181,44 +180,6 @@ async function serveShopProduct(req, res, id, shopPath) {
   res.end(req.method === "HEAD" ? undefined : body);
 }
 
-async function serveTvAppUpdate(req, res, app, filename) {
-  const apiOrigin = process.env.API_INTERNAL_ORIGIN?.trim() || "http://127.0.0.1:8080";
-  let upstream;
-  try {
-    upstream = await fetch(
-      `${apiOrigin}/api/tv-updates/public/${app}/${encodeURIComponent(filename)}`,
-      { method: req.method },
-    );
-  } catch (error) {
-    console.error("TV app update API unavailable:", error);
-    res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" }).end("Update service unavailable");
-    return;
-  }
-
-  const headers = {};
-  for (const name of [
-    "content-type",
-    "cache-control",
-    "content-length",
-    "content-disposition",
-    "last-modified",
-    "etag",
-    "x-content-type-options",
-  ]) {
-    const value = upstream.headers.get(name);
-    if (value) headers[name] = value;
-  }
-  res.writeHead(upstream.status, headers);
-  if (req.method === "HEAD" || !upstream.body) {
-    res.end();
-    return;
-  }
-  Readable.fromWeb(upstream.body).on("error", (error) => {
-    console.error("TV app update stream failed:", error);
-    res.destroy(error);
-  }).pipe(res);
-}
-
 createServer((req, res) => {
   if (req.method !== "GET" && req.method !== "HEAD") {
     res.writeHead(404, { "Content-Type": "text/plain" }).end("Not found");
@@ -227,16 +188,9 @@ createServer((req, res) => {
   const url = new URL(req.url || "/", "http://x");
   const host = toHost(req.headers.host || "");
   for (const [name, value] of SECURITY_HEADERS) res.setHeader(name, value);
-  const tvUpdateMatch = /^\/tv\/([a-z0-9]{1,32})\/(update\.json|[A-Za-z0-9][A-Za-z0-9._-]{0,119}\.apk)$/.exec(url.pathname);
 
   try {
-    if (tvUpdateMatch) {
-      serveTvAppUpdate(req, res, tvUpdateMatch[1], tvUpdateMatch[2]).catch((error) => {
-        console.error("TV app update request failed:", error);
-        if (!res.headersSent) res.writeHead(502, { "Content-Type": "text/plain; charset=utf-8" });
-        res.end("Update service unavailable");
-      });
-    } else if (host === `www.${siteHost}`) {
+    if (host === `www.${siteHost}`) {
       redirect(res, `https://${siteHost}${url.pathname}${url.search}`);
     } else if (websiteHosts.has(host)) {
       if (url.pathname === SHOP_PREFIX) {

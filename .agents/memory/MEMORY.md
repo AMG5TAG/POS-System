@@ -5,3 +5,4 @@
 - [Express 5 + Drizzle patterns](express5-drizzle-patterns.md) — Express 5 params are string|string[]; use String(req.params.id). Drizzle partial update: conditional spread {...(d.field !== undefined && { field: d.field })} not Record<string,unknown> cast.
 - [esbuild externalized transitive deps](esbuild-externalized-transitive-deps.md) — api-server externalizes native pkgs (ssh2 etc); transitive ones must be added as DIRECT deps or boot crashes "Cannot find module" though build passes.
 - [Drizzle JSON snapshot restore](drizzle-json-snapshot-restore.md) — reinserting JSON rows into Drizzle date-mode timestamp cols needs new Date(v); detect via getTableColumns dataType==='date'.
+- [POS and TV app scope separation](pos-tv-scope.md) — Android TV app management belongs in a separate Replit app and must not interact with this live POS.

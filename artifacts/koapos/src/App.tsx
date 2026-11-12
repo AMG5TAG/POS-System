@@ -37,7 +37,6 @@ const TermsPage = lazyWithRetry(() => import("@/pages/marketing/terms"));
 const PrivacyPage = lazyWithRetry(() => import("@/pages/marketing/privacy"));
 
 const DashboardPage = lazyWithRetry(() => import("@/pages/app/dashboard"));
-const TvAppUpdatesPage = lazyWithRetry(() => import("@/pages/app/tv-app-updates"));
 
 const POSPage = lazyWithRetry(() => import("@/pages/app/pos"));
 const POSHistoryPage = lazyWithRetry(() => import("@/pages/app/pos-history"));
@@ -373,9 +372,6 @@ function Router() {
 
       <Route path="/dashboard">
         <ProtectedRoute component={DashboardPage} />
-      </Route>
-      <Route path="/tv-app-updates">
-        <ProtectedRoute component={TvAppUpdatesPage} />
       </Route>
 
       {/* POS section */}
