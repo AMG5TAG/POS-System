@@ -629,6 +629,18 @@ export default function ManagementIntegrationsPage() {
           </div>
         </div>
 
+        {/* ── Koastal Tech Tools (API token) ── */}
+        <div className="rounded-2xl border p-4 flex items-center gap-3 flex-wrap">
+          <div className="rounded-xl p-2 bg-primary/10 shrink-0">
+            <KeyRound className="w-5 h-5 text-primary" />
+          </div>
+          <div className="flex-1 min-w-[220px]">
+            <h3 className="font-semibold text-sm">Koastal Tech Tools (KTT)</h3>
+            <p className="text-xs text-muted-foreground">Sync customers and service jobs with KTT and receive its reports. Connect it with an API token - tokens don't expire.</p>
+          </div>
+          <Button size="sm" onClick={() => setLocation("/management/settings-integrations/api-tokens")}>Manage API tokens</Button>
+        </div>
+
         {/* ── Reconnect banner ── */}
         {reconnectList.length > 0 && (
           <div className="rounded-2xl border border-amber-300 bg-amber-50 dark:bg-amber-950/30 dark:border-amber-800 p-4 flex items-start gap-3">

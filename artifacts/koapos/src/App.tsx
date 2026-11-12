@@ -75,6 +75,7 @@ const SettingsPage = lazy(() => import("@/pages/app/settings"));
 const SettingsBusinessPage = lazy(() => import("@/pages/app/settings-business"));
 const SettingsRegionalPage = lazy(() => import("@/pages/app/settings-regional"));
 const SettingsAccountPage = lazy(() => import("@/pages/app/settings-account"));
+const SettingsApiTokensPage = lazy(() => import("@/pages/app/settings-api-tokens"));
 const SettingsCustomersPage = lazy(() => import("@/pages/app/settings-customers"));
 const SettingsPOSPage = lazy(() => import("@/pages/app/settings-pos"));
 const AppointmentsPage = lazy(() => import("@/pages/app/appointments"));
@@ -631,6 +632,9 @@ function Router() {
       </Route>
       <Route path="/management/settings-integrations/tax">
         <ManagementProtectedRoute component={SettingsTaxPage} />
+      </Route>
+      <Route path="/management/settings-integrations/api-tokens">
+        <ManagementProtectedRoute component={SettingsApiTokensPage} />
       </Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />

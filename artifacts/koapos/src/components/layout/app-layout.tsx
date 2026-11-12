@@ -19,7 +19,7 @@ import {
   Cpu, Calculator, HardDrive, Target, StickyNote, Link2, Mail, Keyboard,
   Megaphone, QrCode, BarChart2, Send, Zap, Share2, UserPlus, Sparkles,
   ShoppingBag, Map, MoreHorizontal, MessageSquare, Camera, Brain, ReceiptText,
-  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync,
+  CreditCard, Plug, Scale, Lock, TabletSmartphone, ShieldCheck, FolderSync, KeyRound,
 } from "lucide-react";
 import { KEYBOARD_SHORTCUTS, getEnabledShortcuts } from "@/lib/keyboard-shortcuts";
 import { useEmbedded } from "@/lib/embedded-context";
@@ -248,6 +248,7 @@ const MANAGEMENT_SUBNAV: NavItem[] = [
       { name: "Emails",            href: "/management/marketing-reports/email",         icon: Mail           },
       { name: "Integrations",      href: "/management/settings-integrations/integrations",  icon: Plug,
         matchPaths: ["/management/settings-integrations/integrations/tyro-eftpos", "/management/settings-integrations/integrations/xero"] },
+      { name: "API Tokens",        href: "/management/settings-integrations/api-tokens",    icon: KeyRound       },
       { name: "Sync",              href: "/management/settings-integrations/sync",          icon: FolderSync,
         matchPaths: ["/management/settings-integrations/sync/backup"] },
       { name: "Import / Export",   href: "/management/settings-integrations/import-export", icon: ArrowLeftRight },
