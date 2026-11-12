@@ -6,6 +6,7 @@ import pinoHttp from "pino-http";
 import router from "./routes";
 import { logger } from "./lib/logger";
 import { publicOrigin } from "./lib/publicUrl";
+import { sessionOrApiToken } from "./middlewares/apiTokenAuth";
 
 const PgSession = connectPgSimple(session);
 
@@ -75,7 +76,8 @@ app.use(
   })
 );
 
-app.use(
+// Cookie sessions for the web app; `Authorization: Bearer kpos_...` API tokens for connected apps (see apiTokenAuth.ts).
+app.use(sessionOrApiToken(
   session({
     store: new PgSession({
       conString: process.env.DATABASE_URL,
@@ -91,7 +93,7 @@ app.use(
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })
-);
+));
 
 app.use(express.json({ limit: "10mb" }));
 app.use(express.urlencoded({ extended: true, limit: "10mb" }));

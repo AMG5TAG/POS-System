@@ -123,6 +123,7 @@ import techRouter from "./tech";
 import techAppAdminRouter from "./tech-app-admin";
 import dashboardAppAdminRouter from "./dashboard-app-admin";
 import dashboardAppPublicRouter from "./dashboard-app-public";
+import apiTokensRouter from "./api-tokens";
 
 const router: IRouter = Router();
 
@@ -250,5 +251,6 @@ router.use(unsubscribeRouter);
 router.use(staffTimesheetsRouter);
 router.use(tyroSettingsRouter);
 router.use(demoDataRouter);
+router.use(apiTokensRouter);
 
 export default router;

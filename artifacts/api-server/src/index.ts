@@ -12,6 +12,7 @@ import { scheduleBackups } from "./services/backupScheduler";
 import { scheduleSocialPosts } from "./services/socialPostScheduler";
 import { assertVaultKeyConfigured, invalidateUnreadableVaultEntries, reEncryptVaultEntries } from "./services/tokenVault";
 import { checkSchemaDrift } from "./services/schemaDriftCheck";
+import { ensureApiTokensTable } from "./services/apiTokensSetup";
 
 assertVaultKeyConfigured();
 
@@ -34,6 +35,8 @@ if (Number.isNaN(port) || port <= 0) {
 // one by one at runtime. Aborting here surfaces exactly what's missing in the
 // boot logs. (Set SKIP_SCHEMA_DRIFT_CHECK=true to override in an emergency.)
 async function bootstrap() {
+  // Additive: create the api_tokens table if a deploy hasn't run db:push yet (before the drift check).
+  await ensureApiTokensTable(logger);
   try {
     await checkSchemaDrift(logger);
   } catch (err) {
