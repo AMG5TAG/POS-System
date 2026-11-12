@@ -15,6 +15,7 @@ import { htmlResponseCsp } from "./middlewares/htmlResponseCsp";
 import { publicOrigin, legacyDomains, siteDomain } from "./lib/publicUrl";
 import { legacyDomainRedirect } from "./middlewares/legacyDomainRedirect";
 import { SHORT_DOMAIN } from "@workspace/shortlinks-shared";
+import { sessionOrApiToken } from "./middlewares/apiTokenAuth";
 
 const PgSession = connectPgSimple(session);
 
@@ -141,7 +142,8 @@ app.use(
     : { origin: true, credentials: true })
 );
 
-app.use(
+// Cookie sessions for the web app; `Authorization: Bearer kpos_...` API tokens for connected apps (see apiTokenAuth.ts).
+app.use(sessionOrApiToken(
   session({
     store: new PgSession({
       conString: process.env.DATABASE_URL,
@@ -157,7 +159,7 @@ app.use(
       maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
     },
   })
-);
+));
 
 // Capture the raw request body so webhook handlers (e.g. Zip Pay) can verify
 // provider HMAC signatures over the exact bytes received.

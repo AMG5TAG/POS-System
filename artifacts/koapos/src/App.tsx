@@ -83,6 +83,7 @@ const SettingsPage = lazyWithRetry(() => import("@/pages/app/settings"));
 const SettingsBusinessPage = lazyWithRetry(() => import("@/pages/app/settings-business"));
 const SettingsRegionalPage = lazyWithRetry(() => import("@/pages/app/settings-regional"));
 const SettingsAccountPage = lazyWithRetry(() => import("@/pages/app/settings-account"));
+const SettingsApiTokensPage = lazyWithRetry(() => import("@/pages/app/settings-api-tokens"));
 const SettingsThemesPage = lazyWithRetry(() => import("@/pages/app/settings-themes"));
 const SettingsCustomersPage = lazyWithRetry(() => import("@/pages/app/settings-customers"));
 const SettingsPOSPage = lazyWithRetry(() => import("@/pages/app/settings-pos"));
@@ -758,6 +759,9 @@ function Router() {
         <ManagementProtectedRoute component={SettingsTaxPage} />
       </Route>
       <Route path="/management/settings-integrations/themes"><Redirect to="/management/customisation/themes" /></Route>
+      <Route path="/management/settings-integrations/api-tokens">
+        <ManagementProtectedRoute component={SettingsApiTokensPage} />
+      </Route>
       <Route path="/management/settings-integrations/integrations">
         <ManagementProtectedRoute component={ManagementIntegrationsPage} />
       </Route>

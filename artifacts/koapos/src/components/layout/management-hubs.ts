@@ -181,6 +181,7 @@ export const MANAGEMENT_SUBNAV: NavItem[] = [
           "/management/settings-integrations/integrations/xero",
           "/management/settings-integrations/integrations/help",
         ] },
+      { name: "API Tokens",       href: "/management/settings-integrations/api-tokens",       icon: KeyRound },
       { name: "Sync",             href: "/management/settings-integrations/sync",             icon: FolderSync    },
       { name: "Import / Export",  href: "/management/settings-integrations/import-export",    icon: ArrowLeftRight },
       { name: "Misc",             href: "/management/settings-integrations/system/misc",      icon: MoreHorizontal,

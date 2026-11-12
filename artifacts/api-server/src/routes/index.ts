@@ -139,6 +139,7 @@ import onlineStoreRouter from "./online-store";
 import shopFeedRouter from "./shop-feed";
 import shopStatsRouter from "./shop-stats";
 import googleInsightsRouter from "./google-insights";
+import apiTokensRouter from "./api-tokens";
 
 const router: IRouter = Router();
 
@@ -309,5 +310,6 @@ router.use(modifierGroupsRouter);
 router.use(authSecuritySettingsRouter);
 router.use(backupsRouter);
 router.use(staffTimesheetsRouter);
+router.use(apiTokensRouter);
 
 export default router;
