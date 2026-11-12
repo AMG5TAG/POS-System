@@ -44,6 +44,8 @@ tags:
     description: Inventory › Promotions — saved 6x4 promo card copy per product
   - name: Storage
     description: Object storage upload and serving endpoints.
+  - name: TV app updates
+    description: Owner-only Android TV update publishing.
   - name: cameras
     description: IP camera management and snapshots
   - name: ai
@@ -1208,6 +1210,124 @@ paths:
                 $ref: '#/components/schemas/ErrorEnvelope'
         '500':
           description: Failed to generate upload URL.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+
+  /tv-updates/admin/apps:
+    get:
+      tags: [TV app updates]
+      operationId: listTvAppUpdates
+      summary: List published Android TV apps
+      responses:
+        '200':
+          description: Current published version for each TV app.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvAppUpdateListResponse'
+        '401':
+          description: Sign-in required.
+        '403':
+          description: Platform owner access required.
+
+  /tv-updates/public/{app}/update.json:
+    get:
+      tags: [TV app updates]
+      operationId: getPublicTvAppManifest
+      summary: Fetch an Android TV update manifest
+      parameters:
+        - name: app
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]{1,32}$' }
+      responses:
+        '200':
+          description: Current update manifest.
+          headers:
+            Cache-Control:
+              schema: { type: string, example: no-cache }
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [versionCode, versionName, apk]
+                properties:
+                  versionCode: { type: integer }
+                  versionName: { type: string }
+                  apk: { type: string }
+        '404':
+          description: Manifest does not exist.
+
+  /tv-updates/public/{app}/{filename}:
+    get:
+      tags: [TV app updates]
+      operationId: getPublicTvAppApk
+      summary: Fetch a public Android TV APK
+      parameters:
+        - name: app
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[a-z0-9]{1,32}$' }
+        - name: filename
+          in: path
+          required: true
+          schema: { type: string, pattern: '^[A-Za-z0-9][A-Za-z0-9._-]{0,119}\\.apk$' }
+      responses:
+        '200':
+          description: Android package file.
+          content:
+            application/vnd.android.package-archive:
+              schema: { type: string, format: binary }
+        '404':
+          description: APK does not exist.
+
+  /tv-updates/admin/publish:
+    post:
+      tags: [TV app updates]
+      operationId: publishTvAppUpdate
+      summary: Publish a TV app APK and manifest
+      description: >
+        Platform-owner only. Stores the APK first and replaces update.json last.
+        Older APKs are retained. APK size is limited to 100 MiB.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              $ref: '#/components/schemas/TvAppUpdatePublishBody'
+      responses:
+        '201':
+          description: APK and manifest published.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/TvAppUpdatePublishResponse'
+        '400':
+          description: Invalid app name, APK, or manifest.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '401':
+          description: Sign-in required.
+        '403':
+          description: Platform owner access required.
+        '409':
+          description: Version code is not newer or APK filename already exists.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '413':
+          description: APK exceeds the 100 MiB limit.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/ErrorEnvelope'
+        '500':
+          description: Storage or publishing failure.
           content:
             application/json:
               schema:
@@ -13503,6 +13623,56 @@ components:
           description: Media library id, present when deduped is true.
         metadata:
           $ref: '#/components/schemas/UploadUrlRequest'
+
+    TvAppUpdate:
+      type: object
+      required: [app, versionCode, versionName, uploadedAt]
+      properties:
+        app:
+          type: string
+          pattern: '^[a-z0-9]{1,32}$'
+        versionCode:
+          type: integer
+        versionName:
+          type: string
+        uploadedAt:
+          type: string
+          format: date-time
+
+    TvAppUpdateListResponse:
+      type: object
+      required: [apps]
+      properties:
+        apps:
+          type: array
+          items:
+            $ref: '#/components/schemas/TvAppUpdate'
+
+    TvAppUpdatePublishBody:
+      type: object
+      required: [app, apk, updateJson]
+      properties:
+        app:
+          type: string
+          pattern: '^[a-z0-9]{1,32}$'
+        apk:
+          type: string
+          format: binary
+          description: APK file, maximum size 100 MiB.
+        updateJson:
+          type: string
+          format: binary
+          description: JSON file named update.json with a strictly newer versionCode.
+
+    TvAppUpdatePublishResponse:
+      type: object
+      required: [message, publicUrl]
+      properties:
+        message:
+          type: string
+        publicUrl:
+          type: string
+          format: uri
 
     ConfirmUploadBody:
       type: object
